@@ -4,9 +4,9 @@ The app is a static bundle — no backend, no server-side rendering, no API (SPE
 is a file copy. `.github/workflows/deploy.yml` builds on every push to `main` and publishes `dist/`
 through the official Pages actions.
 
-**Only the app is published. Data is not.** `.metacool` files are served from a bucket configured
-per [hosting.md](hosting.md); nothing under `data/` is committed or uploaded, and a dropped local
-file still never leaves the browser.
+**What is published is the app plus three demo files** (see below). Real datasets are served from a
+bucket configured per [hosting.md](hosting.md); nothing under `data/` is committed or uploaded, and
+a dropped local file still never leaves the browser.
 
 ## One-time setup
 
@@ -45,6 +45,35 @@ BASE_PATH=/<repo>/ npm run preview   # then open http://localhost:4173/<repo>/
 mounts at `/` while the bundle asks for `/<repo>/assets/...`. Its 404 fallback answers those
 requests with `index.html` and a `200`, so the mismatch shows up as a blank page rather than as a
 missing file.
+
+## The demo files
+
+`public/demo/` holds three MM133 datasets — `MM133.metacool` (14 MB), `MM133.mmetacool` (35 MB) and
+`MM133.cool` (14 MB) — so the deployed site opens something real without anyone first standing up a
+bucket. Vite copies `public/` into `dist/` verbatim, so they land at:
+
+```
+https://<owner>.github.io/<repo>/demo/MM133.metacool
+```
+
+They are deliberately **same-origin with the app**, which removes the entire class of failure
+[hosting.md](hosting.md) is written about: no CORS preflight, no `AllowedOrigins`, no
+`ExposeHeaders`. What it does *not* remove is the range requirement — the reader still issues a
+`HEAD` and then bounded `GET`s, and a host that ignores `Range` makes it download the whole file.
+Pages serves static assets through Fastly, which honours byte ranges; confirm it once after the
+first deploy with the two `curl` calls in hosting.md pointed at the URL above, rather than assuming
+it.
+
+Two things to keep in mind:
+
+- `MM133.cool` is committed ahead of its use. The app *detects* plain cool and refuses it with a
+  message saying so until M7 lands; the file is here so that work has a fixture on the deployed
+  site the day it does.
+- This is ~60 MB in git history and in every Pages artifact. It is a fixed cost, not a per-release
+  one — keep it that way. New or larger datasets belong on a bucket and in the catalog, not here.
+
+The picker already accepts an `examples` list (`ui/FilePicker.ts`), but nothing passes one yet, so
+these are reachable by URL and not yet offered as buttons.
 
 ## Why Pages works at all for this app
 
