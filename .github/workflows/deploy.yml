@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages
+
+# The viewer is a static bundle with no backend (SPECS C1), so publishing it is
+# just "build and upload the directory". Data files are never part of it: they
+# live on a bucket configured per docs/hosting.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a newer commit cancel an in-flight build, but never a deployment that has
+# already started — a half-published site is worse than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # Vite writes asset URLs at build time, so the sub-path the site will be
+      # served from has to be known now. A project site lives under
+      # /<repo>/; a user or org site (<name>.github.io) and any custom domain
+      # live at the root. Set the BASE_PATH repository variable to override.
+      - name: Resolve base path
+        id: base
+        run: |
+          override='${{ vars.BASE_PATH }}'
+          repo='${{ github.event.repository.name }}'
+          if [ -n "$override" ]; then
+            base="$override"
+          elif [ -f public/CNAME ] || [ "${repo%.github.io}" != "$repo" ]; then
+            base='/'
+          else
+            base="/$repo/"
+          fi
+          echo "path=$base" >> "$GITHUB_OUTPUT"
+          echo "Building with base $base"
+
+      - run: npm ci
+
+      # `npm run build` typechecks first, so a type error fails the deploy
+      # rather than publishing a bundle that no longer matches the source.
+      - run: npm run build
+        env:
+          BASE_PATH: ${{ steps.base.outputs.path }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

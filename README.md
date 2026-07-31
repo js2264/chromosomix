@@ -108,6 +108,7 @@ test/
   fixtures/ (generated)   golden/ (committed)   unit/
 docs/
   hosting.md     bucket configuration for published files
+  deploy.md      publishing the app itself to GitHub Pages
 SPECS.md         the specification — section numbers are cited throughout the source
 IMPLEMENTATION.md  the build plan, and nine corrections where the docs were wrong
 ```
@@ -138,7 +139,7 @@ not the plan.
 | M5 | Remote sources | **mostly** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals) and `docs/hosting.md` exist; the §12 request-budget regression tests do not |
 | M6 | bigWig tracks | **not started** — no `src/tracks/`, and the `.bw` fixtures are not built |
 | M7 | cool / mcool | **not started** — both are *detected*, and refused with a message saying so; the synthesised single-genome view is not built yet, though the contigs table and breadcrumb already expect it |
-| M8 | Catalog, deploy, benchmarks | **not started** — no `scripts/make_catalog.py`, no deployment |
+| M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 
 Other gaps worth naming rather than discovering:
 

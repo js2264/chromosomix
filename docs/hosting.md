@@ -1,7 +1,8 @@
 # Hosting `.metacool` files for the viewer
 
 Implements SPECS.md §11. Everything here is object-storage configuration — there is no server-side
-component to deploy, and adding one would violate constraint C1.
+component to deploy, and adding one would violate constraint C1. Publishing the *app* is a separate
+and much shorter story: [deploy.md](deploy.md).
 
 ## The short version
 

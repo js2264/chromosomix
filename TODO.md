@@ -111,6 +111,8 @@
 - [ ] Cursor as arrow over the heatmap. 
 - [ ] Buttons in the view card for plot options, eg crosshair, dividers, others? 
 - [ ] Serve on github pages
+  - workflow + runbook are in (`.github/workflows/deploy.yml`, `docs/deploy.md`); still needs a
+    GitHub remote and *Settings -> Pages -> Source: GitHub Actions* before it can go live.
 
 ## IN FUTURE  
 
