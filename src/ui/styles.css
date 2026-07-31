@@ -188,6 +188,15 @@ p {
   font-size: var(--step--1);
 }
 
+/* Title block, with the sidebar fold button to its left: the control points at
+   the panel it folds. */
+.head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
 .head-actions {
   display: flex;
   gap: 0.4rem;

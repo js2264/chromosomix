@@ -29,6 +29,7 @@ import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
 import { RegionView } from './ui/RegionView'
+import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
@@ -63,6 +64,7 @@ class App {
   private readonly sideHost: HTMLElement
   private readonly overviewButton: HTMLButtonElement
   private readonly picker: FilePicker
+  private readonly sidebar: SidebarToggle
   private readonly status: StatusBar
 
   private file: OpenFile | null = null
@@ -85,11 +87,7 @@ class App {
     })
     this.overviewButton.hidden = true
 
-    const infoToggle = button('ⓘ', () => this.sideHost.classList.toggle('collapsed'), {
-      class: 'btn btn-icon',
-      title: 'Show or hide the file info sidebar',
-    })
-    infoToggle.setAttribute('aria-label', 'file info')
+    this.sidebar = new SidebarToggle(this.sideHost)
 
     this.status = new StatusBar({ client: this.client })
 
@@ -99,18 +97,22 @@ class App {
         { class: 'app-head' },
         el(
           'div',
-          { class: 'brand' },
-          el('span', { class: 'brand-name', text: '(meta)cooler' }),
-          el('span', {
-            class: 'brand-sub',
-            text: '(multi-genome) cool files, in the browser',
-          }),
+          { class: 'head-left' },
+          this.sidebar.el,
+          el(
+            'div',
+            { class: 'brand' },
+            el('span', { class: 'brand-name', text: '(meta)cooler' }),
+            el('span', {
+              class: 'brand-sub',
+              text: '(multi-genome) cool files, in the browser',
+            }),
+          ),
         ),
         el(
           'div',
           { class: 'head-actions' },
           this.overviewButton,
-          infoToggle,
           new ThemeToggle().el,
         ),
       ),
@@ -173,6 +175,7 @@ class App {
       })
       this.infoPanel = new InfoPanel({ info })
       this.sideHost.replaceChildren(this.infoPanel.el)
+      this.sidebar.setAvailable(true)
       this.status.reset()
       this.overviewButton.hidden = info.layout.kind !== 'metacool'
       this.overview = null
@@ -244,6 +247,7 @@ class App {
       this.file = null
       this.breadcrumb = null
       this.sideHost.replaceChildren()
+      this.sidebar.setAvailable(false)
       this.overviewButton.hidden = true
       this.showContent(this.picker.el)
       return
