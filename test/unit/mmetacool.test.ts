@@ -38,7 +38,7 @@ import { openHdf5 } from '../../src/h5/Hdf5File'
 import { detectLayout, listEntryNames } from '../../src/metacooler/detect'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
-import { allIntegers } from '../../src/ui/FilePicker'
+import { allIntegers, firstEntry } from '../../src/ui/FilePicker'
 import { parseUri } from '../../src/uri'
 
 const LADDER = new URL('../fixtures/ladder.mmetacool', import.meta.url).pathname
@@ -250,5 +250,31 @@ describe.skipIf(!hasFixtures)('mmetacool fixtures', () => {
     } finally {
       mc.close()
     }
+  })
+})
+
+describe('which entry an mmetacool opens at', () => {
+  const rootError = (entries: string[]): ViewerError =>
+    new ViewerError('mmetacool-root', 'No metacool entry at root', { entries })
+
+  it('opens the finest level of a zoomify ladder, not the alphabetically first', () => {
+    // HDF5 group order is alphabetical, which puts '1000' before '500'. The
+    // base resolution is the one every other level was derived from, so a
+    // string sort would land the user on a coarsened view of their own data.
+    expect(firstEntry(rootError(['1000', '2000', '4000']))).toBe('1000')
+    expect(firstEntry(rootError(['1000', '500', '2000']))).toBe('500')
+    expect(firstEntry(rootError(['10000', '2000']))).toBe('2000')
+  })
+
+  it('keeps file order for a sample collection, where the names carry no order', () => {
+    expect(firstEntry(rootError(['rep1', 'rep2']))).toBe('rep1')
+    expect(firstEntry(rootError(['treated', 'control']))).toBe('treated')
+  })
+
+  it('declines to redirect for anything that is not an mmetacool root', () => {
+    expect(firstEntry(new ViewerError('bad-ordering', 'nope', { entries: ['1000'] }))).toBeNull()
+    expect(firstEntry(rootError([]))).toBeNull()
+    expect(firstEntry(new Error('unrelated'))).toBeNull()
+    expect(firstEntry(null)).toBeNull()
   })
 })

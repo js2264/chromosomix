@@ -1,5 +1,11 @@
 /**
- * The genome × genome overview (spec §7.3) — available, gated, never automatic.
+ * The whole-metagenome overview (spec §7.3) — available, gated, never automatic.
+ *
+ * Two levels over the same scan: **genome × genome**, the phage-host and HGT
+ * picture, and **contig × contig**, which is the same question one level down
+ * for anyone who does not trust the binning. Both cost exactly one pass over
+ * every non-zero pixel, so the level is chosen before the scan rather than
+ * derived from it.
  *
  * This is the only operation in the app that costs the whole file: summing all
  * genome pairs is inherently a full pixel scan and there is no index that
@@ -42,6 +48,10 @@ export interface OverviewProps {
   /** Sidecar edge list advertised by a catalog, if any. */
   edgeListUrl?: string
   onOpenPair(rowGenome: string, colGenome: string): void
+  /** A diagonal cell: one genome with itself, which is the genome view. */
+  onOpenGenome(genome: string): void
+  /** A contig-level cell: one contig, or the block between two. */
+  onOpenContig(rowContig: string, colContig?: string): void
   onError(err: unknown): void
 }
 
@@ -54,6 +64,7 @@ export class Overview {
   private readonly panelHost: HTMLElement
   private panel: MatrixPanel | null = null
   private running: Cancellable<OverviewResult> | null = null
+  private level: 'genome' | 'contig' = 'genome'
 
   constructor(private readonly props: OverviewProps) {
     this.gate = el('div', { class: 'gate' })
@@ -75,13 +86,14 @@ export class Overview {
       el(
         'header',
         { class: 'view-head' },
-        el('h2', { text: 'Genome × genome overview' }),
+        el('h2', { text: 'Whole metagenome' }),
         el('p', {
           class: 'hint',
           text:
             'Every other view in this app costs a bounded read. This one costs a pass over ' +
             'every non-zero pixel, so it only runs when you ask for it.',
         }),
+        this.levelPicker(),
       ),
       this.gate,
       this.progressBox,
@@ -94,6 +106,34 @@ export class Overview {
   destroy(): void {
     this.cancel()
     this.panel?.destroy()
+  }
+
+  /**
+   * Genome or contig axes, chosen before the scan.
+   *
+   * Switching level after a result discards it: the two levels are different
+   * accumulations of the same pass, and there is no way to derive one from the
+   * other without re-reading the pixels.
+   */
+  private levelPicker(): HTMLElement {
+    const select = el('select', { class: 'select' })
+    select.appendChild(el('option', { value: 'genome', text: 'genome × genome' }))
+    select.appendChild(el('option', { value: 'contig', text: 'contig × contig' }))
+    select.value = this.level
+    select.addEventListener('change', () => {
+      this.level = select.value as 'genome' | 'contig'
+      this.panel?.destroy()
+      this.panel = null
+      this.panelHost.replaceChildren()
+      this.gate.classList.remove('hidden')
+      this.renderGate()
+    })
+    return el(
+      'div',
+      { class: 'field' },
+      el('span', { class: 'field-label', text: 'level' }),
+      select,
+    )
   }
 
   private renderGate(): void {
@@ -153,10 +193,13 @@ export class Overview {
     this.progressBar.value = 0
     this.progressText.textContent = 'starting…'
 
-    const task = this.props.client.cancellable<'overview'>({ kind: 'overview' }, (done, total) => {
-      this.progressBar.value = total === 0 ? 0 : done / total
-      this.progressText.textContent = `${fmt.int(done)} of ${fmt.int(total)} pixels`
-    })
+    const task = this.props.client.cancellable<'overview'>(
+      { kind: 'overview', level: this.level },
+      (done, total) => {
+        this.progressBar.value = total === 0 ? 0 : done / total
+        this.progressText.textContent = `${fmt.int(done)} of ${fmt.int(total)} pixels`
+      },
+    )
     this.running = task
     try {
       this.show(await task.promise)
@@ -195,18 +238,28 @@ export class Overview {
         binsize: this.props.binsize,
         onCellClick: (_cell, groups) => {
           if (groups.row === undefined || groups.col === undefined) return
-          if (groups.row.label === groups.col.label) return
-          // §5.5: an off-diagonal cell in an aggregated view opens the pair it
-          // stands for — which is exactly the phage–host lead this view is for.
-          this.props.onOpenPair(groups.row.label, groups.col.label)
+          const row = groups.row.label
+          const col = groups.col.label
+          // §5.5: a cell in an aggregated view opens what it stands for. Off the
+          // diagonal that is the *pair* — the phage-host lead this view exists
+          // for. On the diagonal the pair would be a genome with itself, which
+          // is just the genome, so open that instead of a degenerate pair view.
+          if (this.level === 'contig') {
+            this.props.onOpenContig(row, row === col ? undefined : col)
+            return
+          }
+          if (row === col) this.props.onOpenGenome(row)
+          else this.props.onOpenPair(row, col)
         },
       })
       this.panelHost.appendChild(this.panel.el)
     }
 
+    const unit = result.level === 'genome' ? 'genomes' : 'contigs'
+    const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
     const title = result.restricted
-      ? `${result.n} densest genomes of ${result.totalGenomes} (${result.source === 'scan' ? 'full scan' : 'edge list'})`
-      : `${result.n} genomes (${result.source === 'scan' ? 'full scan' : 'edge list'})`
+      ? `${result.n} densest ${unit} of ${result.totalUnits} (${provenance})`
+      : `${result.n} ${unit} (${provenance})`
     this.panel.setData(toMatrixResult(result), title)
 
     this.panelHost.querySelector('.overview-note')?.remove()
@@ -214,9 +267,13 @@ export class Overview {
       el('p', {
         class: 'hint overview-note',
         text: result.restricted
-          ? `A ${result.totalGenomes} × ${result.totalGenomes} picture is neither renderable nor readable, so the ` +
-            `${result.n} genomes with the most non-zero pixels are shown. __unbinned__ is excluded, as everywhere.`
-          : 'Click an off-diagonal cell to open that genome pair. __unbinned__ is excluded, as everywhere.',
+          ? `A ${result.totalUnits} × ${result.totalUnits} picture is neither renderable nor readable, so the ` +
+            `${result.n} ${unit} with the most non-zero pixels are shown. __unbinned__ is excluded, as everywhere.`
+          : result.level === 'genome'
+            ? 'Click an off-diagonal cell to open that genome pair, or a diagonal cell to open the genome. ' +
+              '__unbinned__ is excluded, as everywhere.'
+            : 'Click a cell to open that contig, or the block between two contigs. ' +
+              'Contigs of __unbinned__ are excluded, as everywhere.',
       }),
     )
   }

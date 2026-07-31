@@ -57,8 +57,10 @@ export class GenomeView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       levels: ['bin', 'contig'],
-      // The controls live in this view's sidebar, stacked above the contig list.
+      // The controls live in this view's sidebar, stacked above the contig list,
+      // and the `<h2>` above already names the genome.
       detachedControls: true,
+      hideTitle: true,
       initial: { ...props.scale, level: props.level },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {

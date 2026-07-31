@@ -16,6 +16,7 @@
 import { button, el } from './dom'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
+import { ViewerError } from '../errors'
 
 /**
  * Dismissal is remembered across sessions, not just this one: the claim is
@@ -205,6 +206,27 @@ export class FilePicker {
     const { path } = splitUri(url)
     this.props.onOpen(url, { kind: 'remote', url: path })
   }
+}
+
+/**
+ * The entry to land on when an `.mmetacool` was addressed at its root, or
+ * `null` when the error is anything else.
+ *
+ * For a `zoomify` ladder every name is an integer and the one to open is the
+ * **smallest** — the base resolution, the finest data, and the level the others
+ * are derived from. HDF5 group order is alphabetical, which puts `1000` before
+ * `500`, so sorting numerically is not cosmetic.
+ *
+ * For a sample collection the names are datasets with no order to exploit, so
+ * the file's own order wins.
+ */
+export function firstEntry(err: unknown): string | null {
+  if (!(err instanceof ViewerError) || err.code !== 'mmetacool-root') return null
+  const entries = err.detail['entries']
+  if (!Array.isArray(entries) || entries.length === 0) return null
+  const names = entries as string[]
+  if (!allIntegers(names)) return names[0]
+  return [...names].sort((a, b) => Number(a) - Number(b))[0]
 }
 
 /** `true` when every entry name parses as a positive integer (§3.4). */

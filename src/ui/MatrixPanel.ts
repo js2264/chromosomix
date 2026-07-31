@@ -42,10 +42,19 @@ export interface MatrixPanelOptions {
   onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
   /**
    * Keep the colour controls out of the panel so the owning view can place them
-   * elsewhere — the genome view stacks them in its sidebar, above the contig
-   * list. The panel still owns them; only their mount point moves.
+   * elsewhere — the genome and region views stack them in their sidebar, above
+   * the contig list. The panel still owns them; only their mount point moves.
    */
   detachedControls?: boolean
+  /**
+   * Suppress the panel's own title line.
+   *
+   * Every view already names what it is showing in its `<h2>`, so the panel
+   * title repeated it one line lower ("metator_00001_00000" then
+   * "metator_00001_00000 — contig level"). The level is in the controls; the
+   * name is in the heading; the line said nothing either did not.
+   */
+  hideTitle?: boolean
 }
 
 export class MatrixPanel {
@@ -62,6 +71,7 @@ export class MatrixPanel {
   private readonly heatmap: HeatmapView
   private readonly colorbar: ColorbarView
   private readonly readout: HTMLElement
+  private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly vmaxInput: HTMLInputElement
   private readonly autoVmax: HTMLInputElement
@@ -84,6 +94,11 @@ export class MatrixPanel {
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
     this.barCanvas = el('canvas', { class: 'colorbar-canvas' })
     this.readout = el('div', { class: 'readout', text: '' })
+    // A tooltip follows the pointer with the same three facts as the readout.
+    // Both exist on purpose: the tooltip answers "what is under my cursor"
+    // without a glance away from the matrix, and the readout keeps the last
+    // answer visible after the pointer has moved on.
+    this.tooltip = el('div', { class: 'cell-tip hidden' })
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
@@ -96,7 +111,7 @@ export class MatrixPanel {
       // too many contigs to label should not reserve a gutter at all.
       autoMargin: true,
       onChange: () => this.schedule(),
-      onHover: (cell) => this.describe(cell),
+      onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
     })
     this.heatmap.attach()
@@ -167,7 +182,7 @@ export class MatrixPanel {
       el('div', { class: 'panel-controls' }, ...controls),
     )
 
-    const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay)
+    const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay, this.tooltip)
 
     // The colourbar sits immediately right of the plot and is deliberately
     // short: it is a legend, and a legend as tall as the figure reads as a
@@ -182,12 +197,16 @@ export class MatrixPanel {
     this.el = el(
       'section',
       { class: 'panel' },
-      el(
-        'header',
-        { class: 'panel-head' },
-        this.titleNode,
-        ...(options.detachedControls === true ? [] : [this.controlsEl]),
-      ),
+      ...(options.hideTitle === true && options.detachedControls === true
+        ? []
+        : [
+            el(
+              'header',
+              { class: 'panel-head' },
+              ...(options.hideTitle === true ? [] : [this.titleNode]),
+              ...(options.detachedControls === true ? [] : [this.controlsEl]),
+            ),
+          ]),
       body,
       this.readout,
     )
@@ -278,18 +297,54 @@ export class MatrixPanel {
     })
   }
 
-  private describe(cell: Cell | null): void {
+  private describe(cell: Cell | null, at?: { x: number; y: number }): void {
     if (cell === null || this.data === null) {
       this.readout.textContent = ''
+      this.tooltip.classList.add('hidden')
       return
     }
     const data = this.data
     const rowGroup = groupAt(data.rowGroups, cell.row)
     const colGroup = groupAt(data.colGroups, cell.col)
-    this.readout.textContent =
-      `${describeAxis(rowGroup, cell.row, data.level, this.options.binsize)}  ×  ` +
-      `${describeAxis(colGroup, cell.col, data.level, this.options.binsize)}   ` +
-      `count ${fmt.num(cell.value)}`
+    const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize)
+    const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize)
+    const count = Number.isNaN(cell.value) ? 'NaN (unbalanced)' : fmt.num(cell.value)
+
+    this.readout.textContent = `${rowLabel}  ×  ${colLabel}   count ${count}`
+
+    // The names in full, unabbreviated: the axis labels are elided when the
+    // blocks are narrow, so the tooltip is often the only place the pair is
+    // spelled out.
+    this.tooltip.replaceChildren(
+      el('div', { class: 'cell-tip-pair' },
+        el('span', { class: 'cell-tip-name', text: rowGroup?.label ?? '—' }),
+        el('span', { class: 'cell-tip-x', text: '×' }),
+        el('span', { class: 'cell-tip-name', text: colGroup?.label ?? '—' }),
+      ),
+      el('div', { class: 'cell-tip-pos', text: `${rowLabel}  ×  ${colLabel}` }),
+      el('div', { class: 'cell-tip-count', text: `count ${count}` }),
+    )
+    this.tooltip.classList.remove('hidden')
+    if (at !== undefined) this.placeTooltip(at.x, at.y)
+  }
+
+  /**
+   * Keep the tooltip inside the panel.
+   *
+   * Offset from the pointer so it never sits under it, and flipped to the other
+   * side near an edge — a tooltip clipped by the panel border is worse than no
+   * tooltip, because it looks like the value is missing.
+   */
+  private placeTooltip(x: number, y: number): void {
+    const host = this.tooltip.parentElement
+    if (host === null) return
+    const pad = 14
+    const tipWidth = this.tooltip.offsetWidth
+    const tipHeight = this.tooltip.offsetHeight
+    const left = x + pad + tipWidth > host.clientWidth ? x - pad - tipWidth : x + pad
+    const top = y + pad + tipHeight > host.clientHeight ? y - pad - tipHeight : y + pad
+    this.tooltip.style.left = `${Math.max(0, left)}px`
+    this.tooltip.style.top = `${Math.max(0, top)}px`
   }
 }
 

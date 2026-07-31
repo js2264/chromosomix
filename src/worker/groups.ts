@@ -67,6 +67,7 @@ export function aggregatedAxes(
   }
 }
 
+/** `bin → contig index` for the whole file, for the contig-level overview. */
 /**
  * `bin → genome index` for the whole file, for the full-scan overview only.
  *
@@ -74,6 +75,10 @@ export function aggregatedAxes(
  * against a scan that touches every pixel anyway. Ids are the file's own; §7.4's
  * "nothing is renumbered" holds here as everywhere.
  */
+export function binContigArray(mc: MetaCooler): Int32Array {
+  return mc.coords.contigsOfBins(0, mc.nBins)
+}
+
 export function binGenomeArray(mc: MetaCooler): Int32Array {
   const contigs = mc.coords.contigsOfBins(0, mc.nBins)
   const out = new Int32Array(contigs.length)

@@ -201,16 +201,19 @@ export interface MatrixResult {
 }
 
 export interface OverviewResult {
-  /** Genome names along both axes, `__unbinned__` excluded (§7.3, §7.4). */
+  /** Whether the axes are genomes or contigs. */
+  level: 'genome' | 'contig'
+  /** Axis names, `__unbinned__` and its contigs excluded (§7.3, §7.4). */
   labels: string[]
   /** Row-major `n × n`. */
   values: Float32Array
   n: number
   /** Whether the numbers came from a full pixel scan or a sidecar edge list. */
   source: 'scan' | 'edge-list'
-  /** `true` when the genome set was capped for memory; see `totalGenomes`. */
+  /** `true` when the axis set was capped for memory; see `totalUnits`. */
   restricted: boolean
-  totalGenomes: number
+  /** Displayable units at this level, before any cap. */
+  totalUnits: number
 }
 
 export interface StatsResult {
@@ -253,7 +256,7 @@ export type WorkerRequest =
   // `balance=False`, so the reader refuses a balanced query outright (§6.4).
   | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent }
   | { id: number; kind: 'aggregate'; rows: Extent; cols?: Extent; level: 'contig' | 'genome' }
-  | { id: number; kind: 'overview'; maxGenomes?: number }
+  | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
   | { id: number; kind: 'validateDeep' }
   | { id: number; kind: 'stats' }

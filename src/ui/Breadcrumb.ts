@@ -97,31 +97,68 @@ export class Breadcrumb {
     this.el.appendChild(select)
   }
 
-  /** The genomes/contigs table picker. */
+  /**
+   * The root crumb: a link *plus* a picker, not a picker alone.
+   *
+   * Making the whole crumb a `<select>` cost the trail its main job — one click
+   * back to the table you came from. Going up is the common action and stays a
+   * one-click link; switching table is the rare one and gets the arrow beside
+   * it.
+   */
   private pushRootPicker(state: ViewState): void {
     const { rootChoices, rootKind } = this.props
-    const atRoot = state.view === 'genomes' || state.view === 'contigs'
-    const active = atRoot ? state.view : rootKind
+    const active: 'genomes' | 'contigs' =
+      state.view === 'genomes' || state.view === 'contigs' ? state.view : rootKind
+    const atRoot = state.view === active
+
+    this.separator()
+
+    const label = el('button', {
+      class: `crumb${atRoot ? ' current' : ''}`,
+      type: 'button',
+      text: active,
+      title: `Back to the ${active} table`,
+    })
+    label.addEventListener('click', () =>
+      this.props.onNavigate({ uri: state.uri, view: active }),
+    )
 
     if (rootChoices.length < 2) {
-      const root: ViewState = { uri: state.uri, view: rootKind }
-      this.push(rootKind, () => this.props.onNavigate(root), state.view === rootKind)
+      this.el.appendChild(label)
       return
     }
 
-    const select = el('select', {
-      class: `crumb-select${atRoot ? ' current' : ''}`,
-      title: 'Which table to browse',
+    const other = rootChoices.filter((kind) => kind !== active)
+    const arrow = el('button', {
+      class: 'crumb-arrow',
+      type: 'button',
+      text: '▾',
+      title: `Switch to the ${other.join(' or ')} table`,
+      attrs: { 'aria-label': 'choose which table to browse' },
     })
+    const menu = el('div', { class: 'crumb-menu hidden' })
     for (const kind of rootChoices) {
-      select.appendChild(el('option', { value: kind, text: kind }))
+      const item = el('button', {
+        class: `crumb-menu-item${kind === active ? ' current' : ''}`,
+        type: 'button',
+        text: kind,
+      })
+      item.addEventListener('click', () => {
+        menu.classList.add('hidden')
+        this.props.onNavigate({ uri: state.uri, view: kind })
+      })
+      menu.appendChild(item)
     }
-    select.value = active
-    select.addEventListener('change', () => {
-      this.props.onNavigate({ uri: state.uri, view: select.value as 'genomes' | 'contigs' })
+    arrow.addEventListener('click', (event) => {
+      event.stopPropagation()
+      const opening = menu.classList.contains('hidden')
+      menu.classList.toggle('hidden', !opening)
+      if (opening) {
+        // One outside click closes it; `once` means no listener outlives the menu.
+        window.addEventListener('click', () => menu.classList.add('hidden'), { once: true })
+      }
     })
-    this.separator()
-    this.el.appendChild(select)
+    this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))
   }
 
   private separator(): void {

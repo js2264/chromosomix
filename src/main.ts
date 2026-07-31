@@ -22,13 +22,15 @@ import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from './wor
 import { Breadcrumb } from './ui/Breadcrumb'
 import { ContigsTable } from './ui/ContigsTable'
 import { ErrorView } from './ui/ErrorView'
-import { FilePicker } from './ui/FilePicker'
+import { FilePicker, firstEntry } from './ui/FilePicker'
 import { GenomeView, type ScaleState } from './ui/GenomeView'
 import { GenomesTable } from './ui/GenomesTable'
 import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
 import { RegionView } from './ui/RegionView'
+import { StatusBar } from './ui/StatusBar'
+import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
 import { button, el } from './ui/dom'
 import { fileLabel, splitUri } from './ui/labels'
@@ -61,6 +63,7 @@ class App {
   private readonly sideHost: HTMLElement
   private readonly overviewButton: HTMLButtonElement
   private readonly picker: FilePicker
+  private readonly status: StatusBar
 
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
@@ -76,15 +79,19 @@ class App {
     this.breadcrumbHost = el('div', { class: 'breadcrumb-host' })
     this.content = el('main', { class: 'content' })
     this.sideHost = el('div', { class: 'side-host' })
-    this.overviewButton = button('genome × genome overview', () => this.toggleOverview(), {
+    this.overviewButton = button('whole metagenome', () => this.toggleOverview(), {
       class: 'btn btn-quiet',
       title: 'Costs a full pixel scan — it never starts on its own (§7.3).',
     })
     this.overviewButton.hidden = true
 
-    const infoToggle = button('info', () => this.sideHost.classList.toggle('collapsed'), {
-      class: 'btn btn-quiet',
+    const infoToggle = button('ⓘ', () => this.sideHost.classList.toggle('collapsed'), {
+      class: 'btn btn-icon',
+      title: 'Show or hide the file info sidebar',
     })
+    infoToggle.setAttribute('aria-label', 'file info')
+
+    this.status = new StatusBar({ client: this.client })
 
     root.append(
       el(
@@ -93,18 +100,25 @@ class App {
         el(
           'div',
           { class: 'brand' },
-          el('span', { class: 'brand-name', text: 'metacooler' }),
-          el('span', { class: 'brand-sub', text: 'multi-genome Hi-C, in the browser' }),
+          el('span', { class: 'brand-name', text: '(meta)cooler' }),
+          el('span', {
+            class: 'brand-sub',
+            text: '(multi-genome) cool files, in the browser',
+          }),
         ),
-        el('div', { class: 'head-actions' }, this.overviewButton, infoToggle),
+        el(
+          'div',
+          { class: 'head-actions' },
+          this.overviewButton,
+          infoToggle,
+          new ThemeToggle().el,
+        ),
       ),
       this.breadcrumbHost,
       // `side-host` also carries `order: -1`, so it renders left; keeping it
       // second in the DOM keeps the tab order content-first.
       el('div', { class: 'app-body' }, this.content, this.sideHost),
-      el('footer', { class: 'app-foot' },
-        el('span', { text: 'Files are read in place. Nothing is uploaded, and there is no server.' }),
-      ),
+      this.status.el,
     )
 
     this.store.subscribe((state) => void this.render(state))
@@ -157,8 +171,9 @@ class App {
         onSelectEntry: (entry) =>
           void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
       })
-      this.infoPanel = new InfoPanel({ client: this.client, info })
+      this.infoPanel = new InfoPanel({ info })
       this.sideHost.replaceChildren(this.infoPanel.el)
+      this.status.reset()
       this.overviewButton.hidden = info.layout.kind !== 'metacool'
       this.overview = null
       this.showingOverview = false
@@ -176,6 +191,17 @@ class App {
       // same view twice.
       if (!willNotify) void this.render(target)
     } catch (err) {
+      // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
+      // reader mirrors that faithfully (§3.4). But a *user* who dropped a
+      // collection meant "show me this data", so the app answers by opening an
+      // entry and offering the rest in the breadcrumb picker, rather than
+      // handing back an error about a URI syntax they did not use.
+      const entry = firstEntry(err)
+      if (entry !== null) {
+        this.opening = null
+        await this.open(`${splitUri(uri).path}::entries/${entry}`, source)
+        return
+      }
       this.showError(err, uri, source)
     } finally {
       this.opening = null
@@ -259,7 +285,7 @@ class App {
         this.mountRegion(state)
         break
     }
-    this.infoPanel?.refreshStats()
+    this.status.refresh()
   }
 
   private mountGenomes(state: ViewState): void {
@@ -388,6 +414,19 @@ class App {
           this.showingOverview = false
           this.store.set({ uri: file.uri, view: 'pair', genome: a, genome2: b })
         },
+        onOpenGenome: (genome) => {
+          this.showingOverview = false
+          this.store.set({ uri: file.uri, view: 'genome', genome })
+        },
+        onOpenContig: (region, region2) => {
+          this.showingOverview = false
+          this.store.set({
+            uri: file.uri,
+            view: 'region',
+            region,
+            ...(region2 === undefined ? {} : { region2 }),
+          })
+        },
         onError: (err) => this.showError(err),
       })
     }
@@ -457,6 +496,9 @@ function inferSource(uri: string): SourceSpec | null {
   const { path } = splitUri(uri)
   return /^https?:\/\//i.test(path) ? { kind: 'remote', url: path } : null
 }
+
+// Before the app mounts, so a user who chose dark gets no flash of light.
+initTheme()
 
 const root = document.getElementById('app')
 if (root !== null) {

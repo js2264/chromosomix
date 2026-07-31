@@ -52,15 +52,58 @@
   of the sidebar. The card styling and the File block stay; those two sections
   would simply move out.
 
-## FOR NEXT 
 
-- [ ] Populate a bottom status bar with a bit of information about the data read, and display all the information currently in READS in the left sidebar when hovering over it. Remove READS from left sidebar. 
+## FOR ONOW 
 
-- [ ] When hovering over cells in the heatmap, display the contig/genome pair names of the cell in a tooltip, and the values of the cell. 
+- [x] Populate a bottom status bar with a bit of information about the data read, and display all the information currently in READS in the left sidebar when hovering over it. Remove READS from left sidebar. 
 
-- [ ] Validation should also be in the status bar with only "Validation" followed by a green tick (if ok), and clicking on it should trigger deep validation. Remove VALIDATION from left sidebar.
+- [x] When hovering over cells in the heatmap, display the contig/genome pair names of the cell in a tooltip, and the values of the cell. 
+
+- [x] Validation should also be in the status bar with only "Validation" followed by a green tick (if ok), and clicking on it should trigger deep validation. Remove VALIDATION from left sidebar.
+
+- [x] in genome x genome view (should be "whole metagenome", instead), there is only the option to view it as genome x genome OR contigs x contigs. 
+- [x] Also, when in this 'whole metagenome' view, when in genome x genome view, clicking on a cell redirects to a pairwise genome view (nice!) but only when the cell is on the diagonal. The same thing should happen when clicking on a cell in the diagonal and redirect to the single genome view.
+
+- [x] The fact that the "genomes" breadcrumb now is a dropdown picker makes it imposible to return to the genome table view when in a single genome view, in a single click. This should be fixed, either by making the "genomes" NOT a dropdown, but with a small arrow to the right of it to open the dropdown. Same for "contigs" in the breadcrumb. 
+
+- [x] When opening a mmetacool file, it should always open the genome table of the first metacool entry (and the dropdown entries would allow to switch to other metacool entries). 
+
+- [x] Add a dark/light/system mode toggle button in the top right corner of the app (after info). Info button should be an icon.
+
+- [x] The title of the app should be "(meta)cooler – (multi-genome) cool files, in the browser". 
+
+- [x] Single Contigs and Single Genome views are different for the location of settings of the heatmap (vmax, colormap, etc). The layout should stay the same, with just the "Contigs" card being hidden when in single contig view.
+
+- [x] Both in contigs and genome view, there is an unnecessary line (eg "metator_00001_00000 — bin/contig level"). Same for contigs view, where "NODE_8641_len_139153" should go up and replace "Region", the region search box spanning NEXT TO it, and the "matched contig NODE_8641_len_139153 · 35 bins · bins 13,432–13,466" below (like in Genome view).
+
+![alt text](image-5.png)
+![alt text](image-6.png)
 
 
+## NOTES ON THE BATCH ABOVE
+
+- **Status bar.** Reads and Validation left the sidebar for a one-line footer
+  that expands on hover; validation is per-file, so the tick resets on open
+  rather than vouching for a file that was never checked.
+- **Whole metagenome.** The level is chosen *before* the scan, because genome
+  and contig axes are two different accumulations of the same pass and neither
+  can be derived from the other without re-reading the pixels. Contig-level
+  picks its axis set from one read of `bin1_offset` rather than two reads per
+  contig — right for 4 k genomes, wrong for 154 k contigs. `__unbinned__` is
+  excluded at both levels: at contig level that means excluding *its* contigs,
+  the same rule one level down.
+- **Breadcrumb.** The root crumb is a link again, with a separate `▾` opening the
+  table picker. Going up is the common action and stays one click; switching
+  table is the rare one.
+- **mmetacool.** Opening one at its root still raises `mmetacool-root` in the
+  reader, mirroring Python's `KeyError` — the redirect is an app-layer decision,
+  so the reader keeps matching the spec. A ladder lands on the *smallest* entry:
+  HDF5 group order is alphabetical, which puts `1000` before `500`, so a string
+  sort would open a coarsened view of the user's own data. Pinned in
+  `test/unit/mmetacool.test.ts`.
+- **Theme.** "System" is the absence of an override, not a third palette:
+  `data-theme` on `<html>` wins in both directions over the media query, so a
+  user on a dark OS who picks light gets light.
 
 ## IN FUTURE  
 
@@ -70,5 +113,5 @@
 
 - M7, with specifically an option to view the FULL whole-genome (not just a region). This is currently against what specs/implementation say, but it would be nice to have an option to view the full genome in a single heatmap, even if it is very large.
 
-
+- [ ] Also, I want full, native support of cool/mcool files, WITHOUT HAVING TO RELY ON A METACOOLER FILE with "single genome" trick. enforce it!
 

@@ -227,8 +227,14 @@ export interface HeatmapOptions {
   onChange?: () => void
   /** Fired on a click that was not a drag, for §5.5 cross-navigation. */
   onCellClick?: (cell: Cell) => void
-  /** Fired as the pointer moves over the plot; `null` when it leaves. */
-  onHover?: (cell: Cell | null) => void
+  /**
+   * Fired as the pointer moves over the plot; `null` when it leaves.
+   *
+   * `at` is the pointer in canvas CSS pixels, so a tooltip can be positioned
+   * without the listener re-deriving coordinates the view has already computed.
+   * Absent on the leave event, where there is no position.
+   */
+  onHover?: (cell: Cell | null, at?: { x: number; y: number }) => void
 }
 
 type ResolvedOptions = Required<
@@ -284,7 +290,7 @@ export class HeatmapView {
   private readonly opts: ResolvedOptions
   private readonly onChange: (() => void) | null
   private readonly onCellClick: ((cell: Cell) => void) | null
-  private readonly onHover: ((cell: Cell | null) => void) | null
+  private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
   private matrix: DenseMatrix | null = null
   private raster: Raster | null = null
@@ -893,7 +899,7 @@ export class HeatmapView {
         this.panBy(dx, dy)
         this.draw()
       } else if (this.onHover !== null) {
-        this.onHover(this.cellAt(x, y))
+        this.onHover(this.cellAt(x, y), { x, y })
       }
     }
     const onUp = (e: MouseEvent): void => {

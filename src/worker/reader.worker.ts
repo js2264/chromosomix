@@ -10,12 +10,13 @@
  * `MetaCooler`; everything else codes against the protocol.
  */
 
+import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
-import { aggregatedAxes, binGenomeArray, contigRuns } from './groups'
+import { aggregatedAxes, binContigArray, binGenomeArray, contigRuns } from './groups'
 import {
   serialiseError,
   tableToPayload,
@@ -48,7 +49,7 @@ const SCAN_CHUNK = 1_000_000
  * picture with 19 million cells that no screen can show. Above the cap the
  * densest genomes are kept and the UI says so.
  */
-const OVERVIEW_MAX_GENOMES = 2048
+const OVERVIEW_MAX_UNITS = 2048
 
 interface Session {
   mc: MetaCooler
@@ -189,24 +190,35 @@ async function handleOverview(
 ): Promise<OverviewResult> {
   const { mc } = requireSession()
   const id = request.id
-  const displayed = mc.displayGenomes()
-  const cap = request.maxGenomes ?? OVERVIEW_MAX_GENOMES
+  const level = request.level ?? 'genome'
+  const cap = request.maxUnits ?? OVERVIEW_MAX_UNITS
+
+  // The unit of both axes: a genome, or a contig. `__unbinned__` is excluded at
+  // either level — at contig level that means excluding *its* contigs, which is
+  // the same rule (§7.4) applied one level down, not a different one.
+  const displayed =
+    level === 'genome' ? mc.displayGenomes() : displayableContigs(mc)
+  const density =
+    level === 'genome'
+      ? (unit: number) => mc.genomeDensity(unit)
+      : contigDensityLookup(mc)
 
   let selected = displayed
   const restricted = displayed.length > cap
   if (restricted) {
     selected = [...displayed]
-      .sort((a, b) => mc.genomeDensity(b) - mc.genomeDensity(a))
+      .sort((a, b) => density(b) - density(a))
       .slice(0, cap)
       .sort((a, b) => a - b)
   }
 
   const n = selected.length
-  const slot = new Int32Array(mc.nGenomes).fill(-1)
-  selected.forEach((genome, index) => {
-    slot[genome] = index
+  const unitCount = level === 'genome' ? mc.nGenomes : mc.nContigs
+  const slot = new Int32Array(unitCount).fill(-1)
+  selected.forEach((unit, index) => {
+    slot[unit] = index
   })
-  const binGenome = binGenomeArray(mc)
+  const binUnit = level === 'genome' ? binGenomeArray(mc) : binContigArray(mc)
   const acc = new Float64Array(n * n)
   const mirror = mc.storageMode === 'symmetric-upper'
 
@@ -215,9 +227,9 @@ async function handleOverview(
     onChunk: (chunk) => {
       if (cancelled.has(id)) return false
       for (let k = 0; k < chunk.length; k++) {
-        const a = slot[binGenome[chunk.bin1[k]]]
+        const a = slot[binUnit[chunk.bin1[k]]]
         if (a < 0) continue
-        const b = slot[binGenome[chunk.bin2[k]]]
+        const b = slot[binUnit[chunk.bin2[k]]]
         if (b < 0) continue
         const value = chunk.count[k]
         acc[a * n + b] += value
@@ -230,13 +242,48 @@ async function handleOverview(
 
   if (cancelled.has(id)) throw abortError()
 
+  const names = level === 'genome' ? mc.genomeNames : mc.chromnames
   return {
-    labels: selected.map((genome) => mc.genomeNames[genome]),
+    level,
+    labels: selected.map((unit) => names[unit]),
     values: Float32Array.from(acc),
     n,
     source: 'scan',
     restricted,
-    totalGenomes: displayed.length,
+    totalUnits: displayed.length,
+  }
+}
+
+/**
+ * Contig indices that may be displayed: every contig except those belonging to
+ * `__unbinned__`.
+ *
+ * Nothing is renumbered to achieve this (§7.4) — the excluded contigs keep
+ * their ids, and the ids are what index `slot` above.
+ */
+function displayableContigs(mc: MetaCooler): number[] {
+  const unbinned = mc.genomeNames.indexOf(UNBINNED_NAME)
+  const out: number[] = []
+  for (let i = 0; i < mc.nContigs; i++) {
+    if (mc.contigGenomeIds[i] !== unbinned) out.push(i)
+  }
+  return out
+}
+
+/**
+ * Per-contig non-zero pixel counts, from **one** read of `bin1_offset`.
+ *
+ * `MetaCooler.genomeDensity` does two tiny reads per call, which is right for a
+ * few thousand genomes and wrong for 154 k contigs. The caller is about to scan
+ * every pixel anyway, so one 3 MB read to pick the axis set is cheap by
+ * comparison. Not a contact count, exactly as in §4.
+ */
+function contigDensityLookup(mc: MetaCooler): (contig: number) => number {
+  const offsets = mc.handle.readNumeric('indexes/bin1_offset')
+  return (contig: number) => {
+    const [lo, hi] = mc.contigExtent(contig)
+    if (hi <= lo) return 0
+    return offsets[hi] - offsets[lo]
   }
 }
 
@@ -299,7 +346,16 @@ async function handleOverviewSidecar(
     values[j * n + i] = value
   }
 
-  return { labels, values, n, source: 'edge-list', restricted: false, totalGenomes: displayed.size }
+  // A `network --level genome` sidecar is genome-level by construction.
+  return {
+    level: 'genome',
+    labels,
+    values,
+    n,
+    source: 'edge-list',
+    restricted: false,
+    totalUnits: displayed.size,
+  }
 }
 
 async function handleValidateDeep(): Promise<DeepValidation> {

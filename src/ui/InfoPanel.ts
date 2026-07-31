@@ -13,82 +13,30 @@
  * being invisible, and no code path reaches the reserved genome through it —
  * this panel receives four integers, not an index.
  *
- * **The counters (§12).** Request and byte counts, per view change and in
- * total, instrumented from the first commit because they are also a paper
- * figure. If the open path ever starts costing dozens of requests, this is where
- * it shows.
- *
- * **Deep validation (§6.3).** The full Python `validate()` reads whole columns
- * and pixel windows. Fine on local disk, not fine over HTTP, so it is an
- * explicit button and never automatic.
+ * The §12 read counters and the §6.3 deep-validation control used to live here
+ * too. They moved to the status bar: both are glanced at rather than read, and
+ * a sidebar block spends permanent vertical space on something a single line
+ * can carry.
  */
 
-import type { OpenResult, StatsResult } from '../worker/protocol'
-import type { ReaderClient } from '../worker/client'
-import { button, el, fmt } from './dom'
+import type { OpenResult } from '../worker/protocol'
+import { el, fmt } from './dom'
 
 export interface InfoPanelProps {
-  client: ReaderClient
   info: OpenResult
 }
 
 export class InfoPanel {
   readonly el: HTMLElement
-  private readonly statsBody: HTMLElement
-  private readonly validationBox: HTMLElement
 
   constructor(private readonly props: InfoPanelProps) {
-    this.statsBody = el('div', { class: 'kv' })
-    this.validationBox = el('div', { class: 'validation' })
-
-    const validate = button('run deep validation', () => void this.runValidation(), {
-      title:
-        'Reads whole columns and pixel windows, exactly as `metacooler check --deep` does. ' +
-        'Cheap on a local file, expensive over the network — so it is never automatic.',
-    })
-
-    // Two stacks. The top one identifies the file and is what a reader looks at
-    // first; the bottom one is instrumentation, pinned to the foot of the
-    // sidebar so it stays out of the way without being hidden.
     this.el = el(
       'aside',
       { class: 'info-panel' },
-      el(
-        'div',
-        { class: 'info-top' },
-        el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
-        this.unassignedBlock(),
-        this.metadataBlock(),
-      ),
-      el(
-        'div',
-        { class: 'info-bottom' },
-        el('section', { class: 'card' }, el('h3', { text: 'Reads' }), this.statsBody),
-        el(
-          'section',
-          { class: 'card' },
-          el('h3', { text: 'Validation' }),
-          el('p', {
-            class: 'hint',
-            text: 'Light checks ran at open: attributes, group presence, table lengths, the /chroms soft link.',
-          }),
-          validate,
-          this.validationBox,
-        ),
-      ),
+      el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
+      this.unassignedBlock(),
+      this.metadataBlock(),
     )
-
-    this.refreshStats()
-  }
-
-  /** Poll the worker's counters; called after every view change. */
-  refreshStats(): void {
-    void this.props.client
-      .request<'stats'>({ kind: 'stats' })
-      .then((stats) => this.renderStats(stats))
-      .catch(() => {
-        /* counters are diagnostics; never let them break a view */
-      })
   }
 
   private fileTable(): HTMLElement {
@@ -159,34 +107,7 @@ export class InfoPanel {
     )
   }
 
-  private renderStats(stats: StatsResult): void {
-    this.statsBody.replaceChildren(
-      ...keyValue('requests, total', fmt.int(stats.total.requests)),
-      ...keyValue('bytes, total', fmt.bytes(stats.total.bytes)),
-      ...keyValue('requests, last view', fmt.int(stats.lastOp.requests)),
-      ...keyValue('bytes, last view', fmt.bytes(stats.lastOp.bytes)),
-      ...keyValue('worker calls', fmt.int(stats.calls)),
-    )
-  }
 
-  private async runValidation(): Promise<void> {
-    this.validationBox.replaceChildren(el('p', { class: 'hint', text: 'scanning…' }))
-    try {
-      const result = await this.props.client.request<'validateDeep'>({ kind: 'validateDeep' })
-      this.validationBox.replaceChildren(
-        el('p', {
-          class: result.ok ? 'ok' : 'inline-error',
-          text: result.ok ? `No problems found. ${result.note}` : `${result.problems.length} problem(s) found.`,
-        }),
-        ...result.problems.map((problem) => el('p', { class: 'inline-error', text: problem })),
-      )
-      this.refreshStats()
-    } catch (err) {
-      this.validationBox.replaceChildren(
-        el('p', { class: 'inline-error', text: err instanceof Error ? err.message : String(err) }),
-      )
-    }
-  }
 }
 
 function keyValue(key: string, value: string): HTMLElement[] {

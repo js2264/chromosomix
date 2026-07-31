@@ -47,6 +47,7 @@ export class RegionView {
   private readonly panel: MatrixPanel
   private readonly input: HTMLInputElement
   private readonly matched: HTMLElement
+  private readonly title: HTMLElement
   private readonly problem: HTMLElement
   private disposed = false
 
@@ -66,6 +67,11 @@ export class RegionView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       initial: props.scale,
+      // Same shape as the genome view: heading names the selection, controls
+      // live in the sidebar. Only the Contigs card is missing, because inside a
+      // single contig there is no list to offer.
+      detachedControls: true,
+      hideTitle: true,
       onScaleChange: (scale) => props.onScaleChange(scale),
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
@@ -74,23 +80,28 @@ export class RegionView {
       },
     })
 
+    // The heading *is* the region, as the genome view's heading is the genome;
+    // a literal "Region" above a box that already says which one was a line
+    // spent on the obvious.
+    this.title = el('h2', { class: 'region-title', text: props.region })
+
     this.el = el(
       'section',
       { class: 'view view-region' },
       el(
         'header',
         { class: 'view-head' },
-        el('h2', { text: 'Region' }),
         el(
           'div',
           { class: 'region-bar' },
+          this.title,
           this.input,
           button('go', () => props.onChangeRegion(this.input.value.trim())),
-          this.matched,
         ),
+        this.matched,
         this.problem,
       ),
-      this.panel.el,
+      el('div', { class: 'genome-body' }, this.panel.el, el('aside', { class: 'side' }, this.panel.controlsEl)),
     )
 
     void this.load()
@@ -118,6 +129,7 @@ export class RegionView {
           rows: [lo, hi],
         })
         if (this.disposed) return
+        this.title.textContent = this.props.region
         this.describeMatch(parsed, hi - lo)
         this.panel.setData(result, this.props.region)
         return
@@ -134,6 +146,7 @@ export class RegionView {
         cols: [lo2, hi2],
       })
       if (this.disposed) return
+      this.title.textContent = `${this.props.region} × ${this.props.region2}`
       this.describePair(parsed, other)
       this.panel.setData(result, `${this.props.region} × ${this.props.region2}`)
     } catch (err) {
