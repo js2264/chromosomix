@@ -1,0 +1,29 @@
+sample:
+  id: Hum53
+  description: Human_microbiome sample
+  sampling_date: July 2026
+  location: south America
+  other: NA
+
+assembly:
+  id: Hum53
+  bioproject: PRJNA1169674 
+  assembly_file: https://doi.org/10.5281/zenodo.14851636
+  assembler: Megahit
+  platform: Illumina NovaSeq 6000
+  reads_length: 2x150
+  assembly_stats:
+    total_length: 394937359
+    n_contigs: ND
+    n50: ND
+  
+HiC_library:
+  protocol: Arima
+  enzyme: DpnII,HinfI
+  reads_length: 2x150
+  date: July 2026
+  bioproject: PRJNA1169674
+
+binning:
+  pipeline: Metator v1.2.8
+  

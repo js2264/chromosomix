@@ -1,0 +1,3 @@
+# Golden oracles are generated, deterministic JSON; a diff in them means a real
+# format change, so keep them readable in review rather than collapsed.
+test/golden/*.json -diff=off

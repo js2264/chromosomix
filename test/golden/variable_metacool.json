@@ -1,0 +1,201 @@
+{
+ "attrs": {
+  "bin-size": {
+   "python_type": "str",
+   "value": "null"
+  },
+  "bin-type": {
+   "python_type": "str",
+   "value": "variable"
+  },
+  "contig-ordering": {
+   "python_type": "str",
+   "value": "genome-then-length"
+  },
+  "creation-date": {
+   "python_type": "str",
+   "volatile": true
+  },
+  "format": {
+   "python_type": "str",
+   "value": "HDF5::Cooler"
+  },
+  "format-url": {
+   "python_type": "str",
+   "value": "https://github.com/open2c/cooler"
+  },
+  "format-version": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 3
+  },
+  "generated-by": {
+   "python_type": "str",
+   "value": "metacooler-0.1.0"
+  },
+  "genome-assembly": {
+   "python_type": "str",
+   "value": "basic_assembly"
+  },
+  "metacooler-format": {
+   "python_type": "str",
+   "value": "HDF5::MetaCooler"
+  },
+  "metacooler-format-url": {
+   "python_type": "str",
+   "value": "https://github.com/js2264/metacooler"
+  },
+  "metacooler-format-version": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 1
+  },
+  "metadata": {
+   "python_type": "str",
+   "redacted": [
+    "commands"
+   ],
+   "value": "{}"
+  },
+  "nbins": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 2658
+  },
+  "nchroms": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 44
+  },
+  "ngenomes": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 11
+  },
+  "nnz": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 36744
+  },
+  "storage-mode": {
+   "python_type": "str",
+   "value": "symmetric-upper"
+  },
+  "sum": {
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
+   "value": 50000
+  }
+ },
+ "dtypes": {
+  "bins": {
+   "chrom": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 2658
+   },
+   "end": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 2658
+   },
+   "start": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 2658
+   }
+  },
+  "contigs": {
+   "genome_id": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 44
+   },
+   "length": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 44
+   },
+   "name": {
+    "dtype": "|S12",
+    "kind": "S",
+    "length": 44
+   }
+  },
+  "genomes": {
+   "length": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "n_bins": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 11
+   },
+   "n_contigs": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 11
+   },
+   "name": {
+    "dtype": "|S12",
+    "kind": "S",
+    "length": 11
+   }
+  },
+  "indexes": {
+   "bin1_offset": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 2659
+   },
+   "chrom_offset": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 45
+   },
+   "genome_offset": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 12
+   }
+  },
+  "pixels": {
+   "bin1_id": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 36744
+   },
+   "bin2_id": {
+    "dtype": "<i8",
+    "kind": "i",
+    "length": 36744
+   },
+   "count": {
+    "dtype": "<i4",
+    "kind": "i",
+    "length": 36744
+   }
+  }
+ },
+ "fixture": "variable.metacool",
+ "kind": "metacool",
+ "reason": "bin-type is 'variable' and bin-size is 'null'; the viewer is fixed-bin only so that /bins never has to be read (spec §3.3, §10).",
+ "refuse": "variable-bins",
+ "trigger": {
+  "bin-size": {
+   "python_type": "str",
+   "value": "null"
+  },
+  "bin-type": {
+   "python_type": "str",
+   "value": "variable"
+  },
+  "contig-ordering": {
+   "python_type": "str",
+   "value": "genome-then-length"
+  }
+ },
+ "uri": "variable.metacool"
+}

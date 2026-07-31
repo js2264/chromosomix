@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+
+# Fixtures and goldens are generated (`npm run fixtures`); the large real-world
+# datasets in data/ are never committed.
+test/fixtures/
+data/*.metacool
+data/*.mmetacool
+data/*.cool
+data/*.mcool
+data/*.pairs.gz
+data/*.txt
+data/*.tsv

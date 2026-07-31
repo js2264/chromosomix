@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>metacooler viewer — multi-genome Hi-C in the browser</title>
+    <meta
+      name="description"
+      content="Browse .metacool multi-genome Hi-C contact maps in the browser. No backend, no upload, no preprocessing: files are read in place."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231f5fa9'/%3E%3Crect x='2' y='2' width='5' height='5' fill='%23fff'/%3E%3Crect x='9' y='9' width='5' height='5' fill='%23fff'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <!--
+      The whole app mounts here. There is no server-rendered markup and no
+      framework: spec §1 forbids a backend of any kind, and the view layer is
+      small enough that a virtual DOM would cost more than it saves.
+    -->
+    <div id="app"></div>
+    <noscript>
+      This viewer reads HDF5 files in the browser, so it needs JavaScript. Nothing is uploaded and
+      there is no server to fall back to.
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

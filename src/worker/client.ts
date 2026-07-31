@@ -1,0 +1,120 @@
+/**
+ * Main-thread half of the worker protocol.
+ *
+ * A thin correlator: stamp an id on each request, park a promise, resolve it
+ * when the matching response arrives, and revive `ViewerError` so the UI can
+ * keep switching on `code`. It holds no reader state of its own — the worker is
+ * the only place a file is open.
+ */
+
+import { ViewerError } from '../errors'
+import {
+  reviveError,
+  type ProgressHandler,
+  type RequestKind,
+  type RequestOf,
+  type ResultMap,
+  type WorkerRequest,
+  type WorkerResponse,
+} from './protocol'
+
+interface Pending {
+  resolve(value: unknown): void
+  reject(reason: unknown): void
+  onProgress?: ProgressHandler
+}
+
+/** A long-running request that the user can call off (spec §7.3). */
+export interface Cancellable<T> {
+  promise: Promise<T>
+  cancel(): void
+}
+
+export class ReaderClient {
+  private readonly worker: Worker
+  private readonly pending = new Map<number, Pending>()
+  private nextId = 1
+
+  /**
+   * `new URL(..., import.meta.url)` is the form the bundler rewrites, and the
+   * module worker type is what lets the worker use `import` at all.
+   */
+  constructor(worker?: Worker) {
+    this.worker =
+      worker ?? new Worker(new URL('./reader.worker.ts', import.meta.url), { type: 'module' })
+    this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => this.receive(event.data)
+    this.worker.onerror = (event) => this.failAll(new Error(`reader worker failed: ${event.message}`))
+  }
+
+  private receive(response: WorkerResponse): void {
+    const entry = this.pending.get(response.id)
+    if (entry === undefined) return
+    switch (response.type) {
+      case 'progress':
+        entry.onProgress?.(response.done, response.total, response.note)
+        return
+      case 'result':
+        this.pending.delete(response.id)
+        entry.resolve(response.payload)
+        return
+      case 'error':
+        this.pending.delete(response.id)
+        entry.reject(reviveError(response.error))
+    }
+  }
+
+  private failAll(reason: Error): void {
+    for (const [id, entry] of this.pending) {
+      this.pending.delete(id)
+      entry.reject(reason)
+    }
+  }
+
+  /** Issue a request and await its single result. */
+  request<K extends RequestKind>(
+    payload: RequestOf<K>,
+    onProgress?: ProgressHandler,
+  ): Promise<ResultMap[K]> {
+    const id = this.nextId++
+    const message = { ...payload, id } as WorkerRequest
+    return new Promise<ResultMap[K]>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
+      this.worker.postMessage(message)
+    })
+  }
+
+  /**
+   * Issue a request that can be called off. Cancellation is cooperative: the
+   * worker checks between pixel chunks, so the scan stops at the next chunk
+   * boundary rather than being killed mid-write.
+   */
+  cancellable<K extends RequestKind>(
+    payload: RequestOf<K>,
+    onProgress?: ProgressHandler,
+  ): Cancellable<ResultMap[K]> {
+    const id = this.nextId
+    const promise = this.request<K>(payload, onProgress)
+    return {
+      promise,
+      cancel: () => {
+        void this.request<'cancel'>({ kind: 'cancel', target: id })
+      },
+    }
+  }
+
+  /** Drop the worker entirely. Any in-flight request rejects. */
+  terminate(): void {
+    this.failAll(new Error('reader worker terminated'))
+    this.worker.terminate()
+  }
+}
+
+/** `true` when a rejection is a user cancellation rather than a failure. */
+export function isCancellation(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
+}
+
+/** Narrow an unknown rejection to a {@link ViewerError} where possible. */
+export function asViewerError(err: unknown): ViewerError | null {
+  return err instanceof ViewerError ? err : null
+}

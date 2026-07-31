@@ -1,0 +1,212 @@
+{
+ "cooler_version": "0.10.4",
+ "fixtures": [
+  {
+   "coverage": "full",
+   "description": "fixed 1 kb bins, genome-then-length, 10 MAGs + __unbinned__ with real contigs",
+   "expect": "accept",
+   "fixture_bytes": 74498,
+   "golden": "basic_metacool.json",
+   "golden_bytes": 164507,
+   "kind": "metacool",
+   "name": "basic.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "basic plus /genomes metadata columns (taxonomy, completeness, …) and /contigs extras",
+   "expect": "accept",
+   "fixture_bytes": 78669,
+   "golden": "metadata_metacool.json",
+   "golden_bytes": 171691,
+   "kind": "metacool",
+   "name": "metadata.metacool"
+  },
+  {
+   "coverage": "partial",
+   "description": "non-ASCII genome AND contig names; S<n> columns sized by encoded byte length",
+   "expect": "accept",
+   "fixture_bytes": 43248,
+   "golden": "utf8_metacool.json",
+   "golden_bytes": 5424,
+   "kind": "metacool",
+   "name": "utf8.metacool",
+   "note": "cooler.Cooler() cannot open this file — cooler/core/_tableops.py does dset[lo:hi].astype('U'), an ASCII decode, on /chroms/name. The golden therefore carries raw tables and attributes only."
+  },
+  {
+   "coverage": "full",
+   "description": "non-ASCII /genomes/name with ASCII contig names — the UTF-8 fixture that still has a full Python oracle",
+   "expect": "accept",
+   "fixture_bytes": 74231,
+   "golden": "utf8_genomes_metacool.json",
+   "golden_bytes": 164926,
+   "kind": "metacool",
+   "name": "utf8_genomes.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "created with --drop-unassigned: no __unbinned__ row, genome 0 is a real MAG",
+   "expect": "accept",
+   "fixture_bytes": 70773,
+   "golden": "dropped_metacool.json",
+   "golden_bytes": 158665,
+   "kind": "metacool",
+   "name": "dropped.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "product of `metacooler binnify`: pixels/count is int64, bins are 2 kb",
+   "expect": "accept",
+   "fixture_bytes": 67156,
+   "golden": "int64_metacool.json",
+   "golden_bytes": 118503,
+   "kind": "metacool",
+   "name": "int64.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "float64 pixels/count preserved by resolve_count_dtype (correction #2)",
+   "expect": "accept",
+   "fixture_bytes": 79071,
+   "golden": "floatcount_metacool.json",
+   "golden_bytes": 188273,
+   "kind": "metacool",
+   "name": "floatcount.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "zoomify output: integer entry names drive the zoom control",
+   "entries": [
+    "1000",
+    "2000",
+    "4000"
+   ],
+   "entry_expect": "accept",
+   "entry_style": "ladder",
+   "entry_uris": [
+    "ladder.mmetacool::entries/1000",
+    "ladder.mmetacool::entries/2000",
+    "ladder.mmetacool::entries/4000"
+   ],
+   "expect": "refuse:mmetacool-root",
+   "fixture_bytes": 143925,
+   "golden": "ladder_mmetacool.json",
+   "golden_bytes": 457558,
+   "kind": "mmetacool",
+   "name": "ladder.mmetacool"
+  },
+  {
+   "coverage": "full",
+   "description": "stack output: non-integer entry names, so an entry picker rather than a ladder",
+   "entries": [
+    "rep1",
+    "rep2"
+   ],
+   "entry_expect": "accept",
+   "entry_style": "samples",
+   "entry_uris": [
+    "samples.mmetacool::entries/rep1",
+    "samples.mmetacool::entries/rep2"
+   ],
+   "expect": "refuse:mmetacool-root",
+   "fixture_bytes": 119502,
+   "golden": "samples_mmetacool.json",
+   "golden_bytes": 407906,
+   "kind": "mmetacool",
+   "name": "samples.mmetacool"
+  },
+  {
+   "coverage": "full",
+   "description": "contig-ordering=fasta: genomes are not contiguous in bin space",
+   "expect": "refuse:bad-ordering",
+   "fixture_bytes": 76282,
+   "golden": "fasta_order_metacool.json",
+   "golden_bytes": 3512,
+   "kind": "metacool",
+   "name": "fasta_order.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "DpnII fragment bins: bin-type='variable', bin-size stored as the string 'null'",
+   "expect": "refuse:variable-bins",
+   "fixture_bytes": 125545,
+   "golden": "variable_metacool.json",
+   "golden_bytes": 3481,
+   "kind": "metacool",
+   "name": "variable.metacool"
+  },
+  {
+   "coverage": "full",
+   "description": "non-metagenomic cooler; genome level is synthesised (spec §9)",
+   "expect": "accept",
+   "fixture_bytes": 68434,
+   "golden": "plain_cool.json",
+   "golden_bytes": 55145,
+   "kind": "cool",
+   "name": "plain.cool"
+  },
+  {
+   "coverage": "full",
+   "description": "multi-resolution cooler with a /bins/weight column (spec §6.4, §9)",
+   "entries": [
+    "1000",
+    "2000",
+    "5000"
+   ],
+   "entry_expect": "accept",
+   "entry_style": "ladder",
+   "entry_uris": [
+    "plain.mcool::resolutions/1000",
+    "plain.mcool::resolutions/2000",
+    "plain.mcool::resolutions/5000"
+   ],
+   "expect": "accept",
+   "fixture_bytes": 196359,
+   "golden": "plain_mcool.json",
+   "golden_bytes": 180256,
+   "kind": "mcool",
+   "name": "plain.mcool"
+  }
+ ],
+ "generator": "scripts/make_golden.py",
+ "info_volatile_keys": [
+  "creation-date"
+ ],
+ "metacooler_version": "0.1.0",
+ "metadata_volatile_keys": [
+  "commands"
+ ],
+ "non_finite_encoding": "null",
+ "reader_notes": {
+  "attributes": {
+   "h5_api_gap": "src/h5/api.ts's AttrValue union omits `bigint`; it needs adding, or attrsAt()/attrs() must narrow BigInt to Number at the boundary.",
+   "note": "An int64 attribute arrives as a JS BigInt, an int32 attribute as a Number, and a variable-bin file's bin-size as the string 'null'. All three reach the `_int_attr` mirror, so it must accept bigint — `typeof v === 'number'` is false for 1000n, and `Number('null')` is NaN while `Boolean('null')` is true. See the `attrs` block of basic.metacool (int64), floatcount.metacool (int32) and variable.metacool (string 'null')."
+  },
+  "dtype_strings": {
+   "kind_by_h5wasm_letter": {
+    "A": "S",
+    "B": "u",
+    "H": "u",
+    "I": "u",
+    "L": "u",
+    "Q": "u",
+    "S": "O",
+    "b": "i",
+    "d": "f",
+    "e": "f",
+    "f": "f",
+    "h": "i",
+    "i": "i",
+    "l": "i",
+    "q": "i"
+   },
+   "note": "h5wasm's Dataset.dtype is C-struct-style, not numpy-style: int64 is '<q', int32 '<i', float64 '<d', fixed-length strings 'A<n>', vlen strings 'S'. The `dtype` fields in these goldens are numpy strings ('<i8', '<i4', '<f8', '|S12') and the `kind` fields are numpy kinds. Map through `kind_by_h5wasm_letter` before comparing; do not slice dtype[1] and expect a numpy kind."
+  },
+  "non_finite": {
+   "note": "Optional /genomes columns carry NaN for any genome absent from the user's --genomes table (__unbinned__ always is, since /genomes rows are derived from the contigs table and the table only left-joins). JSON has no NaN, so these goldens encode it as null; the JS reader will see a real NaN and must treat the two as equal. metadata.metacool is the fixture with this shape."
+  },
+  "string_decoding": {
+   "note": "h5wasm decodes fixed-length 'A<n>' string datasets as Latin-1, not UTF-8: /contigs/name in utf8.metacool comes back as 'contig_Ã±_04' where the file holds 'contig_ñ_04'. Dataset.value is therefore unusable for name columns — read the raw bytes and decode with TextDecoder('utf-8'), stripping trailing NULs (spec §6.2). utf8.metacool and utf8_genomes.metacool exist to fail loudly on this."
+  }
+ },
+ "unbinned_name": "__unbinned__"
+}
