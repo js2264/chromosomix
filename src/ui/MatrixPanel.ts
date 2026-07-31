@@ -23,12 +23,53 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView } from '../render/colorbar'
 import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
-import { HeatmapView, type Cell, type SeparatorSet } from '../render/heatmap'
+import {
+  DEFAULT_PLOT_OPTIONS,
+  HeatmapView,
+  type Cell,
+  type PlotOptions,
+  type SeparatorSet,
+} from '../render/heatmap'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { button, el, field, fmt } from './dom'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
+
+/**
+ * Overlay state is a *preference*, not part of the view.
+ *
+ * It is not in the URL hash: §5.5 shares what is being looked at, and whether
+ * the recipient likes guide lines is not that. But the panel is rebuilt on
+ * every navigation, so holding it in the instance would lose the choice the
+ * moment you clicked a cell — hence `localStorage`, next to the theme, rather
+ * than the per-session `state/UiMemory`.
+ */
+const PLOT_OPTIONS_KEY = 'metacooler-viewer:plot-options'
+
+/** Stored state outlives the code that wrote it, so every field is checked. */
+function readPlotOptions(): PlotOptions {
+  try {
+    const raw = window.localStorage.getItem(PLOT_OPTIONS_KEY)
+    if (raw === null) return { ...DEFAULT_PLOT_OPTIONS }
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return { ...DEFAULT_PLOT_OPTIONS }
+    const record = parsed as Record<string, unknown>
+    const pick = (key: keyof PlotOptions): boolean =>
+      typeof record[key] === 'boolean' ? (record[key] as boolean) : DEFAULT_PLOT_OPTIONS[key]
+    return { dividers: pick('dividers'), labels: pick('labels'), crosshair: pick('crosshair') }
+  } catch {
+    return { ...DEFAULT_PLOT_OPTIONS }
+  }
+}
+
+function writePlotOptions(options: PlotOptions): void {
+  try {
+    window.localStorage.setItem(PLOT_OPTIONS_KEY, JSON.stringify(options))
+  } catch {
+    /* a browser that refuses storage still honours the toggle for this session */
+  }
+}
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -76,6 +117,7 @@ export class MatrixPanel {
   private readonly vmaxInput: HTMLInputElement
   private readonly autoVmax: HTMLInputElement
   private readonly overlay: HTMLElement
+  private readonly plotOptionsEl: HTMLElement
   private readonly observer: ResizeObserver | null
 
   private data: MatrixResult | null = null
@@ -102,7 +144,9 @@ export class MatrixPanel {
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
+    const plot = readPlotOptions()
     this.heatmap = new HeatmapView(this.canvas, {
+      plotOptions: plot,
       // Contig labels are drawn only below the Python threshold; above it they
       // would be a grey smear rather than information (`ops/show.py`).
       maxLabels: MAX_CATEGORICAL_TICKS,
@@ -164,6 +208,37 @@ export class MatrixPanel {
       button('reset view', () => this.heatmap.fit(), { title: 'Fit the block to the canvas (key: 0)' }),
     ]
 
+    /**
+     * One overlay toggle. Pressed state lives on `aria-pressed` rather than on
+     * a class, so the control announces itself correctly and the stylesheet has
+     * one thing to key off.
+     */
+    const optionToggle = (key: keyof PlotOptions, label: string, hint: string): HTMLElement => {
+      const node = el('button', { class: 'btn btn-toggle', type: 'button', text: label, title: hint })
+      const paint = (): void => node.setAttribute('aria-pressed', String(plot[key]))
+      node.addEventListener('click', () => {
+        plot[key] = !plot[key]
+        this.heatmap.setPlotOptions({ [key]: plot[key] })
+        writePlotOptions(plot)
+        paint()
+      })
+      paint()
+      return node
+    }
+
+    this.plotOptionsEl = el(
+      'div',
+      { class: 'plot-options' },
+      el('span', { class: 'field-label', text: 'overlays' }),
+      el(
+        'div',
+        { class: 'plot-option-row' },
+        optionToggle('crosshair', 'crosshair', 'Guide lines through the cell under the pointer.'),
+        optionToggle('dividers', 'dividers', 'Contig and genome boundaries, as `metacooler show` draws them.'),
+        optionToggle('labels', 'labels', 'Block names in the gutters. Off gives the gutters back to the plot.'),
+      ),
+    )
+
     if (options.levels && options.levels.length > 1) {
       const levelSelect = el('select', { class: 'select' })
       for (const name of options.levels) levelSelect.appendChild(el('option', { value: name, text: name }))
@@ -180,6 +255,7 @@ export class MatrixPanel {
       { class: 'controls-card' },
       el('h3', { class: 'controls-title', text: 'View' }),
       el('div', { class: 'panel-controls' }, ...controls),
+      this.plotOptionsEl,
     )
 
     const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay, this.tooltip)

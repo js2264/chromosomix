@@ -191,6 +191,30 @@ export interface Cell {
   value: number
 }
 
+/**
+ * What the plot draws over the pixels, toggled from the view card.
+ *
+ * All three are pure overlay: nothing here re-reads, re-rasterises or changes
+ * the data, so a toggle costs one repaint of an image that is already in
+ * memory. `dividers` and `labels` start on because they match `metacooler
+ * show`; `crosshair` starts off because a line that follows the pointer is
+ * help while you are aiming and clutter while you are reading.
+ */
+export interface PlotOptions {
+  /** Contig and genome boundary hairlines. */
+  dividers: boolean
+  /** Block labels in the gutters. Off also collapses the gutters they need. */
+  labels: boolean
+  /** Guide lines through the hovered cell. */
+  crosshair: boolean
+}
+
+export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
+  dividers: true,
+  labels: true,
+  crosshair: false,
+}
+
 export interface HeatmapOptions {
   margin?: Partial<Margin>
   /** Contig/genome boundary hairlines. `_SEP_COLOR` in `ops/show.py`. */
@@ -205,6 +229,10 @@ export interface HeatmapOptions {
   labelFont?: string
   /** Draw labels only when an axis has at most this many blocks. */
   maxLabels?: number
+  /** Guide lines for the hovered cell; distinct from every separator colour. */
+  crosshairColor?: string
+  /** Initial overlay state; each is toggled later by {@link HeatmapView.setPlotOptions}. */
+  plotOptions?: Partial<PlotOptions>
   /**
    * Size the label margins from the labels actually drawn, rather than using
    * fixed ones.
@@ -237,8 +265,10 @@ export interface HeatmapOptions {
   onHover?: (cell: Cell | null, at?: { x: number; y: number }) => void
 }
 
+// `plotOptions` is resolved into its own field rather than into `opts`,
+// because it is the only option that changes after construction.
 type ResolvedOptions = Required<
-  Omit<HeatmapOptions, 'margin' | 'onChange' | 'onCellClick' | 'onHover'>
+  Omit<HeatmapOptions, 'margin' | 'onChange' | 'onCellClick' | 'onHover' | 'plotOptions'>
 > & { margin: Margin }
 
 const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
@@ -298,6 +328,9 @@ export class HeatmapView {
   private separators: SeparatorSet = EMPTY_SEPARATORS
   private colorScale: ColorScale
   private dirtyRaster = false
+  private plot: PlotOptions
+  /** The cell under the pointer, for the crosshair. `null` when outside. */
+  private hoverCell: Cell | null = null
 
   private cssWidth = 0
   private cssHeight = 0
@@ -347,12 +380,14 @@ export class HeatmapView {
       labelHaloColor: options.labelHaloColor ?? 'rgba(255, 255, 255, 0.85)',
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
+      crosshairColor: options.crosshairColor ?? '#1f5fa9',
       autoMargin: options.autoMargin ?? false,
       devicePixelRatio: options.devicePixelRatio ?? 0,
       minVisibleCells: options.minVisibleCells ?? 4,
       maxZoomOut: options.maxZoomOut ?? 4,
     }
     this.computedMargin = this.opts.margin
+    this.plot = { ...DEFAULT_PLOT_OPTIONS, ...(options.plotOptions ?? {}) }
     this.onChange = options.onChange ?? null
     this.onCellClick = options.onCellClick ?? null
     this.onHover = options.onHover ?? null
@@ -369,6 +404,33 @@ export class HeatmapView {
   /** The margin actually in force, after any {@link measureMargin} pass. */
   get margin(): Margin {
     return this.computedMargin
+  }
+
+  /** The overlay state, as a copy: mutating it must not change the view. */
+  get plotOptions(): PlotOptions {
+    return { ...this.plot }
+  }
+
+  /**
+   * Turn overlays on or off.
+   *
+   * Hiding the labels also gives their gutters back, which is why this remeasures
+   * rather than only repainting: the margin exists *for* the labels, and leaving
+   * a 150 px band of nothing beside a plot with no names in it would be the dead
+   * space {@link measureMargin} was written to remove. The view keeps its zoom
+   * and origin, so the pixels under the pointer stay under the pointer.
+   */
+  setPlotOptions(next: Partial<PlotOptions>): void {
+    const merged = { ...this.plot, ...next }
+    const labelsChanged = merged.labels !== this.plot.labels
+    this.plot = merged
+    if (labelsChanged) {
+      this.measureMargin()
+      this.recomputeBaseZoom()
+      this.clampView()
+      this.syncScales()
+    }
+    this.changed()
   }
 
   /**
@@ -461,6 +523,7 @@ export class HeatmapView {
       ? { rows: separators, cols: separators }
       : separators
     this.dirtyRaster = true
+    this.hoverCell = null
     this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
     this.colScale.setFull([0, Math.max(1, matrix.ncols)])
     // Before `fit`, which divides by the plot area the gutters determine.
@@ -679,8 +742,9 @@ export class HeatmapView {
     ctx.restore()
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-    this.drawSeparators()
+    if (this.plot.dividers) this.drawSeparators()
     this.drawLabels()
+    if (this.plot.crosshair) this.drawCrosshair()
   }
 
   private rasterizeNow(): void {
@@ -717,8 +781,7 @@ export class HeatmapView {
       if (sep.at <= 0 || sep.at >= n) continue
       // Snap to the device-pixel grid: a hairline on a fractional coordinate is
       // antialiased into a two-pixel smudge that reads as a real feature.
-      const raw = base + scale.toPixel(sep.at)
-      const p = (Math.round(raw * this.dpr - 0.5) + 0.5) / this.dpr
+      const p = this.snap(base + scale.toPixel(sep.at))
       ctx.beginPath()
       if (vertical) {
         ctx.moveTo(p, plot.y)
@@ -729,6 +792,41 @@ export class HeatmapView {
       }
       ctx.stroke()
     }
+  }
+
+  /** Put a hairline on the device-pixel grid, so it stays one pixel wide. */
+  private snap(raw: number): number {
+    return (Math.round(raw * this.dpr - 0.5) + 0.5) / this.dpr
+  }
+
+  /**
+   * Guide lines through the hovered cell.
+   *
+   * Drawn through the cell's *centre* rather than its edges: at bin level a
+   * cell is often sub-pixel, and two lines around it would be one thick line
+   * beside the cell rather than a mark on it. Clipped to the plot so the lines
+   * never run through the labels they are helping you find.
+   */
+  private drawCrosshair(): void {
+    const cell = this.hoverCell
+    if (cell === null || this.matrix === null) return
+    const plot = this.plotRect
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.strokeStyle = this.opts.crosshairColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    const x = this.snap(plot.x + this.colScale.toPixel(cell.col + 0.5))
+    const y = this.snap(plot.y + this.rowScale.toPixel(cell.row + 0.5))
+    ctx.beginPath()
+    ctx.moveTo(x, plot.y)
+    ctx.lineTo(x, plot.y + plot.height)
+    ctx.moveTo(plot.x, y)
+    ctx.lineTo(plot.x + plot.width, y)
+    ctx.stroke()
+    ctx.restore()
   }
 
   private drawSeparators(): void {
@@ -759,6 +857,7 @@ export class HeatmapView {
    * tick per contig degenerates into an unreadable smear.
    */
   labelBlocks(axis: 'rows' | 'cols'): LabelBlock[] {
+    if (!this.plot.labels) return []
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     const blocks = separatorBlocks(this.separators[axis], n)
     return blocks.length > 0 && blocks.length <= this.opts.maxLabels ? blocks : []
@@ -898,8 +997,10 @@ export class HeatmapView {
         this.lastY = y
         this.panBy(dx, dy)
         this.draw()
-      } else if (this.onHover !== null) {
-        this.onHover(this.cellAt(x, y), { x, y })
+      } else {
+        const cell = this.cellAt(x, y)
+        this.setHover(cell)
+        this.onHover?.(cell, { x, y })
       }
     }
     const onUp = (e: MouseEvent): void => {
@@ -912,6 +1013,7 @@ export class HeatmapView {
     }
     const onLeave = (): void => {
       this.dragging = false
+      this.setHover(null)
       this.onHover?.(null)
     }
     const onWheel = (e: WheelEvent): void => {
@@ -940,6 +1042,23 @@ export class HeatmapView {
       () => canvas.removeEventListener('wheel', onWheel),
       () => canvas.removeEventListener('keydown', onKey),
     ]
+  }
+
+  /**
+   * Record the hovered cell, repainting only when the crosshair is on and the
+   * cell actually changed. With it off this is a field assignment, so pointer
+   * moves stay free — the §12 budget is for the frames a *drag* costs, and a
+   * redraw per mousemove would spend it on a line nobody asked to see.
+   */
+  private setHover(cell: Cell | null): void {
+    const same =
+      (cell === null && this.hoverCell === null) ||
+      (cell !== null &&
+        this.hoverCell !== null &&
+        cell.row === this.hoverCell.row &&
+        cell.col === this.hoverCell.col)
+    this.hoverCell = cell
+    if (!same && this.plot.crosshair) this.changed()
   }
 
   /** Remove every listener {@link attach} installed. Idempotent. */

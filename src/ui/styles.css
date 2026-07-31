@@ -860,6 +860,38 @@ p {
   grid-template-columns: none;
 }
 
+/* Overlay toggles take the same two-column shape as a field, so the card reads
+   as one list whether a row holds a select or three buttons. */
+.plot-options {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.plot-option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.panel-head > .controls-card .plot-options {
+  display: flex;
+  margin-top: 0;
+}
+
+.btn-toggle {
+  padding: 0.2rem 0.5rem;
+  color: var(--text-dim);
+}
+
+.btn-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .checkbox {
   accent-color: var(--accent);
 }
