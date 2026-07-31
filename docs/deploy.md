@@ -72,8 +72,10 @@ Two things to keep in mind:
 - This is ~60 MB in git history and in every Pages artifact. It is a fixed cost, not a per-release
   one — keep it that way. New or larger datasets belong on a bucket and in the catalog, not here.
 
-The picker already accepts an `examples` list (`ui/FilePicker.ts`), but nothing passes one yet, so
-these are reachable by URL and not yet offered as buttons.
+They are offered as buttons on the picker (`ui/examples.ts`), with URLs built from `BASE_URL` and
+made absolute against the page: the base differs between dev and Pages, and a *relative* URI in a
+shared link would not re-open, because `inferSource` follows a link only when its path is
+`http(s)://`.
 
 ## Why Pages works at all for this app
 

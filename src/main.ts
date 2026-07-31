@@ -34,6 +34,7 @@ import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
 import { button, el } from './ui/dom'
+import { demoExamples } from './ui/examples'
 import { fileLabel, splitUri } from './ui/labels'
 
 interface OpenFile {
@@ -76,7 +77,10 @@ class App {
   private current: { destroy?(): void } | null = null
 
   constructor(root: HTMLElement) {
-    this.picker = new FilePicker({ onOpen: (uri, source) => void this.open(uri, source) })
+    this.picker = new FilePicker({
+      onOpen: (uri, source) => void this.open(uri, source),
+      examples: demoExamples(),
+    })
 
     this.breadcrumbHost = el('div', { class: 'breadcrumb-host' })
     this.content = el('main', { class: 'content' })
