@@ -108,11 +108,41 @@
 
 ## FOR NEXT
 
-- [ ] Cursor as arrow over the heatmap. 
-- [ ] Buttons in the view card for plot options, eg crosshair, dividers, others? 
-- [ ] Serve on github pages
-  - workflow + runbook are in (`.github/workflows/deploy.yml`, `docs/deploy.md`); still needs a
-    GitHub remote and *Settings -> Pages -> Source: GitHub Actions* before it can go live.
+- [x] Cursor as arrow over the heatmap. 
+- [x] Buttons in the view card for plot options, eg crosshair, dividers, others? 
+- [x] Serve on github pages
+- [x] When the file listing is shown, the left sidebar should be hidden. 
+- [x] A button icon next to the app title to fold the left sidebar. 
+- [x] The files in `public/demo/` offered as examples on the picker. 
+
+
+## NOTES ON THE BATCH ABOVE
+
+- **Sidebar.** The fold control moved to the left of the title, where it points
+  at the panel it folds; the old (i) button in the right-hand actions did the
+  same job from the far end of the header and is gone rather than duplicated.
+  Folding is a preference, so it is in `localStorage` beside the theme, not in
+  the per-session `state/UiMemory`. With no file open the sidebar has nothing
+  to describe, so it and its button leave the layout — without touching the
+  stored choice, so folding is not something the picker can silently undo.
+- **Overlays.** `crosshair`, `dividers` and `labels` are pure paint over a
+  matrix already in memory, so each is one repaint and no I/O. `labels` also
+  gives its gutters back: the margin exists *for* the labels, and a 150 px band
+  beside a plot with no names in it is the dead space `measureMargin` was
+  written to remove. The crosshair is the only overlay that redraws on pointer
+  movement, so hover repaints are gated on it being on — a user who never turns
+  it on pays nothing. Pinned in `test/unit/plot-options.test.ts`.
+- **Cursor.** `default`, not `grab`: the canvas is a figure to read first and a
+  surface to drag second. `:active` still turns it into `grabbing` once a drag
+  actually starts, so the affordance survives where it is true.
+- **Examples.** Built from `BASE_URL` and made absolute against the page, for
+  two reasons: the base is `/` in dev and `/<repo>/` on Pages, and a *relative*
+  URI in a shared link would not re-open — `inferSource` follows a link only
+  when its path is `http(s)://`. Same-origin, so only the CORS half of
+  `docs/hosting.md` falls away; the range requirement is unchanged, and the
+  reader takes the identical remote path it takes for a bucket.
+- **Deploy.** The workflow, the remote and the push are done; enabling *Settings
+  -> Pages -> Source: GitHub Actions* is the one step that is not code.
 
 ## IN FUTURE  
 
