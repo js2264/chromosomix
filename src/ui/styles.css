@@ -778,7 +778,10 @@ p {
   display: block;
   width: 100%;
   height: 100%;
-  cursor: grab;
+  /* An arrow, not a grab hand. The canvas is a figure to read first and a
+     surface to drag second, and a permanent hand claims otherwise; `:active`
+     below still confirms a drag once one starts. */
+  cursor: default;
   outline: none;
 }
 
