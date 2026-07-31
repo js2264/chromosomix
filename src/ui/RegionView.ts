@@ -6,12 +6,19 @@
  *
  * 1. a **genome name** expands to the whole-genome extent, and a coordinate
  *    suffix on a genome name is an *error*, not something quietly ignored;
- * 2. otherwise a **contig**, optionally with 1-based fully-closed coordinates;
+ * 2. otherwise a **contig**, optionally with coordinates (0-based, half-open —
+ *    cooler's convention, verified against `parse_region`);
  * 3. neither → an error listing the available genomes and contigs.
  *
  * Genome and contig namespaces can collide and genome wins, as in Python, so
  * the view states which kind the search matched rather than leaving the user to
  * infer it from the picture.
+ *
+ * With a second region set, the block is the **rectangle between two contigs**
+ * rather than one contig's square. That is what clicking the intersection of two
+ * contigs in a genome view asks for, and the two axes are independent: the row
+ * range and the column range are resolved separately and the reader handles the
+ * transpose when the column range precedes the row range in bin space (§5.3).
  */
 
 import type { ParsedRange } from '../types'
@@ -26,6 +33,8 @@ export interface RegionViewProps {
   client: ReaderClient
   binsize: number
   region: string
+  /** Column-axis region; when set the block is rectangular, not square. */
+  region2?: string
   scale: ScaleState
   onChangeRegion(region: string): void
   onScaleChange(scale: ScaleState): void
@@ -102,13 +111,31 @@ export class RegionView {
         range: this.props.region,
       })
       const [lo, hi] = parsed.extent
+
+      if (this.props.region2 === undefined) {
+        const result: MatrixResult = await this.props.client.request<'matrix'>({
+          kind: 'matrix',
+          rows: [lo, hi],
+        })
+        if (this.disposed) return
+        this.describeMatch(parsed, hi - lo)
+        this.panel.setData(result, this.props.region)
+        return
+      }
+
+      const other: ParsedRange = await this.props.client.request<'range'>({
+        kind: 'range',
+        range: this.props.region2,
+      })
+      const [lo2, hi2] = other.extent
       const result: MatrixResult = await this.props.client.request<'matrix'>({
         kind: 'matrix',
         rows: [lo, hi],
+        cols: [lo2, hi2],
       })
       if (this.disposed) return
-      this.describeMatch(parsed, hi - lo)
-      this.panel.setData(result, this.props.region)
+      this.describePair(parsed, other)
+      this.panel.setData(result, `${this.props.region} × ${this.props.region2}`)
     } catch (err) {
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is
@@ -122,6 +149,17 @@ export class RegionView {
       }
       this.props.onError(err)
     }
+  }
+
+  /** The readout for a rectangular two-contig block. */
+  private describePair(row: ParsedRange, col: ParsedRange): void {
+    const rowBins = row.extent[1] - row.extent[0]
+    const colBins = col.extent[1] - col.extent[0]
+    this.matched.classList.remove('is-genome')
+    this.matched.replaceChildren(
+      `${row.label} × ${col.label} · ${fmt.int(rowBins)} × ${fmt.int(colBins)} bins · ` +
+        'contacts between the two contigs',
+    )
   }
 
   private describeMatch(parsed: ParsedRange, bins: number): void {

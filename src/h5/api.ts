@@ -22,6 +22,17 @@ export interface Hdf5Handle {
   readonly uri: string
   /** Group path this handle is rooted at ('/' for a plain file). */
   readonly group: string
+  /**
+   * Names under `/entries` at the **file root**, regardless of where this handle
+   * is rooted; `[]` when the file has no such group.
+   *
+   * Every other path on this interface resolves inside {@link group}, so a
+   * handle opened at `/entries/rep1` cannot see `rep2`. The entry picker needs
+   * exactly that, and it is free here: the open path already holds the root to
+   * validate the group, so this is a read of something in hand rather than a
+   * second traversal.
+   */
+  readonly rootEntries: string[]
 
   /** All attributes on the rooted group, decoded. */
   attrs(): Record<string, AttrValue>

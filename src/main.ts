@@ -15,6 +15,7 @@ import './ui/styles.css'
 import { UNBINNED_NAME } from './constants'
 import { ViewerError } from './errors'
 import { ViewStore, landingState, parseViewState, viewStateEquals } from './state/ViewState'
+import { recall, remember } from './state/UiMemory'
 import type { ViewState } from './types'
 import { ReaderClient } from './worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from './worker/protocol'
@@ -28,6 +29,7 @@ import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
 import { RegionView } from './ui/RegionView'
+import type { TableUiState } from './ui/VirtualTable'
 import { button, el } from './ui/dom'
 import { fileLabel, splitUri } from './ui/labels'
 
@@ -45,6 +47,10 @@ interface OpenFile {
   source: SourceSpec
   genomeNames: string[]
   displayNames: string[]
+  /** Entry names of the enclosing mmetacool; empty for a plain metacool (§3.4). */
+  entries: string[]
+  /** The entry this URI names, when it addresses one. */
+  currentEntry: string | undefined
 }
 
 class App {
@@ -93,6 +99,8 @@ class App {
         el('div', { class: 'head-actions' }, this.overviewButton, infoToggle),
       ),
       this.breadcrumbHost,
+      // `side-host` also carries `order: -1`, so it renders left; keeping it
+      // second in the DOM keeps the tab order content-first.
       el('div', { class: 'app-body' }, this.content, this.sideHost),
       el('footer', { class: 'app-foot' },
         el('span', { text: 'Files are read in place. Nothing is uploaded, and there is no server.' }),
@@ -116,6 +124,12 @@ class App {
       const info = await this.client.request<'open'>({ kind: 'open', uri, source })
       const genomes = await this.client.request<'genomes'>({ kind: 'genomes' })
       const names = genomes.table.data['name'] as string[]
+      // `entries` is non-empty only for a map inside an mmetacool; the group
+      // path is what says which of them is open (§3.4).
+      const entries = info.entries
+      const group = splitUri(uri).group
+      const match = /^\/entries\/(.+)$/.exec(group)
+      const currentEntry = match === null ? undefined : match[1]
       this.file = {
         uri,
         info,
@@ -126,12 +140,22 @@ class App {
         displayNames: Array.from(genomes.display, (index) => names[index]).filter(
           (name) => name !== UNBINNED_NAME,
         ),
+        entries,
+        currentEntry,
       }
+      const isMetacool = info.layout.kind === 'metacool'
       this.breadcrumb = new Breadcrumb({
-        rootKind: info.layout.kind === 'metacool' ? 'genomes' : 'contigs',
+        rootKind: isMetacool ? 'genomes' : 'contigs',
+        // A metacool offers both landing tables; a plain cooler has only one
+        // worth showing, since its genomes table is a synthesised single row.
+        rootChoices: isMetacool ? ['genomes', 'contigs'] : ['contigs'],
         fileLabel: fileLabel(uri),
+        entries,
+        ...(currentEntry === undefined ? {} : { currentEntry }),
         onNavigate: (state) => this.store.set(state),
         onOpenFilePicker: () => this.store.set(null),
+        onSelectEntry: (entry) =>
+          void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
       })
       this.infoPanel = new InfoPanel({ client: this.client, info })
       this.sideHost.replaceChildren(this.infoPanel.el)
@@ -155,6 +179,24 @@ class App {
       this.showError(err, uri, source)
     } finally {
       this.opening = null
+    }
+  }
+
+  /**
+   * Filter/sort memory for one table, scoped to the open file.
+   *
+   * Deliberately *not* in the URL: a shared link that silently carried "only
+   * rows where completeness > 90" would mislead whoever opened it. But leaving
+   * a filtered table to look at a genome and coming back to an unfiltered one
+   * means retyping rather than thinking, so it is remembered here instead.
+   */
+  private tableMemory(uri: string, scope: string): {
+    initial: TableUiState | null
+    save(state: TableUiState): void
+  } {
+    return {
+      initial: recall<TableUiState>(uri, `table:${scope}`),
+      save: (state) => remember(uri, `table:${scope}`, state),
     }
   }
 
@@ -225,6 +267,7 @@ class App {
     if (file === null) return
     const view = new GenomesTable({
       data: file.genomes,
+      persistence: this.tableMemory(state.uri, 'genomes'),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
       onOpenPair: (a, b) =>
         this.store.set({ uri: state.uri, view: 'pair', genome: a, genome2: b }),
@@ -245,6 +288,7 @@ class App {
         ? 'This file is a plain cooler, so there is no genome hierarchy to browse: pick a sequence, ' +
           'or type a region below it. Whole-genome views of standard Hi-C are deliberately out of scope.'
         : undefined,
+      persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
     })
@@ -266,6 +310,8 @@ class App {
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region) =>
         this.store.set({ uri: state.uri, view: 'region', region, genome: state.genome }),
+      onOpenContigPair: (region, region2) =>
+        this.store.set({ uri: state.uri, view: 'region', region, region2, genome: state.genome }),
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
@@ -304,8 +350,17 @@ class App {
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
+      ...(state.region2 === undefined ? {} : { region2: state.region2 }),
       scale: scaleOf(state),
-      onChangeRegion: (region) => this.store.set({ ...state, region }),
+      // Typing a new region replaces the whole selection, so the second axis
+      // goes with it: `contig_A × contig_B` then `contig_C` means contig_C, not
+      // contig_C against a column the user can no longer see named anywhere.
+      // Built by omission rather than `region2: undefined`, so the state object
+      // has no undefined-valued keys for a strict deep-equal to trip on.
+      onChangeRegion: (region) => {
+        const { region2: _dropped, ...rest } = state
+        this.store.set({ ...rest, region })
+      },
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
       onError: (err) => this.showError(err),

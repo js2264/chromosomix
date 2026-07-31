@@ -77,21 +77,41 @@ export async function openHdf5(
     throw err
   }
 
-  return new Hdf5File(uri, root, h5, file, source)
+  // Captured while the root is in hand; see `Hdf5Handle.rootEntries`.
+  let rootEntries: string[] = []
+  try {
+    if (file.keys().includes('entries')) {
+      const node = file.get('entries')
+      if (node instanceof h5.Group) rootEntries = node.keys()
+    }
+  } catch {
+    // A file with no readable `/entries` simply has no entries to pick.
+  }
+
+  return new Hdf5File(uri, root, h5, file, source, rootEntries)
 }
 
 class Hdf5File implements Hdf5Handle {
   readonly uri: string
   readonly group: string
+  readonly rootEntries: string[]
 
   private readonly h5: H5Module
   private readonly file: H5wasmFile
   private readonly source: ByteSource
   private closed = false
 
-  constructor(uri: string, group: string, h5: H5Module, file: H5wasmFile, source: ByteSource) {
+  constructor(
+    uri: string,
+    group: string,
+    h5: H5Module,
+    file: H5wasmFile,
+    source: ByteSource,
+    rootEntries: string[] = [],
+  ) {
     this.uri = uri
     this.group = group
+    this.rootEntries = rootEntries
     this.h5 = h5
     this.file = file
     this.source = source

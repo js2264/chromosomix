@@ -150,6 +150,8 @@ export interface OpenResult {
   nContigs: number
   nBins: number
   unassigned: UnassignedStats | null
+  /** Sibling entry names of the enclosing mmetacool; `[]` for a plain file (§3.4). */
+  entries: string[]
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
   sourceKind: SourceKind

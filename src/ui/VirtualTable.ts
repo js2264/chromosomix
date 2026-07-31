@@ -48,6 +48,25 @@ export interface VirtualTableOptions {
   searchKeys?: string[]
   searchPlaceholder?: string
   emptyMessage?: string
+  /**
+   * Save and restore the filter/sort/search state across navigation.
+   *
+   * The table calls `save` whenever the state changes and reads `initial` once
+   * at construction. It lives outside the table because *where* to keep it (per
+   * file, per scope) is the caller's question — see `state/UiMemory`.
+   */
+  persistence?: {
+    initial: TableUiState | null
+    save(state: TableUiState): void
+  }
+}
+
+/** The user-typed table state that survives leaving the view and coming back. */
+export interface TableUiState {
+  filters: Record<string, string>
+  search: string
+  sortKey: string | null
+  sortDir: 1 | -1
 }
 
 type Predicate = (row: number) => boolean
@@ -70,7 +89,10 @@ export class VirtualTable {
   private active = -1
 
   private readonly viewport: HTMLElement
-  private readonly spacer: HTMLElement
+  /** Intrinsic-width wrapper inside the scroller; keeps header and rows aligned. */
+  private readonly grid: HTMLElement
+  /** Sticky header block, whose height offsets every row coordinate. */
+  private readonly head: HTMLElement
   private readonly body: HTMLElement
   private readonly header: HTMLElement
   private readonly filterRow: HTMLElement
@@ -81,6 +103,22 @@ export class VirtualTable {
     this.options = { rowHeight: 28, ...options }
     this.source = options.rows
 
+    // Restored state is untrusted: it may have been written by an older build
+    // against a file whose columns have since changed, so every field is
+    // validated rather than assigned.
+    const saved = options.persistence?.initial ?? null
+    if (saved !== null) {
+      const known = new Set(options.columns.map((column) => column.key))
+      for (const [key, value] of Object.entries(saved.filters ?? {})) {
+        if (known.has(key) && typeof value === 'string' && value !== '') this.filters.set(key, value)
+      }
+      if (typeof saved.search === 'string') this.search = saved.search.trim().toLowerCase()
+      if (typeof saved.sortKey === 'string' && known.has(saved.sortKey)) {
+        this.sortKey = saved.sortKey
+        this.sortDir = saved.sortDir === -1 ? -1 : 1
+      }
+    }
+
     const template = this.gridTemplate()
     this.status = el('span', { class: 'table-status' })
     const searchBox = el('input', {
@@ -88,6 +126,7 @@ export class VirtualTable {
       type: 'search',
       placeholder: options.searchPlaceholder ?? 'search names…',
     })
+    searchBox.value = this.search
     searchBox.addEventListener(
       'input',
       debounce(() => {
@@ -100,7 +139,10 @@ export class VirtualTable {
       this.filters.clear()
       this.search = ''
       searchBox.value = ''
-      for (const input of this.filterRow.querySelectorAll('input')) input.value = ''
+      for (const input of this.filterRow.querySelectorAll('input')) {
+        input.value = ''
+        input.classList.remove('active')
+      }
       this.recompute()
     })
     this.toolbar = el('div', { class: 'table-toolbar' }, searchBox, this.status, reset)
@@ -108,25 +150,34 @@ export class VirtualTable {
     this.header = el('div', { class: 'thead-row', style: { gridTemplateColumns: template } })
     this.filterRow = el('div', { class: 'tfilter-row', style: { gridTemplateColumns: template } })
     this.buildHeader()
+    this.paintSortArrows()
 
     this.body = el('div', { class: 'tbody' })
-    this.spacer = el('div', { class: 'tspacer' })
+    this.head = el('div', { class: 'thead' }, this.header, this.filterRow)
+
+    // The header lives *inside* the scroller, sticky to its top.
+    //
+    // With the header outside it, a horizontal scroll moved the rows and left
+    // the headings behind, so the columns you scrolled to see were unlabelled —
+    // which is the one moment you need the labels. One scroll container makes
+    // horizontal movement shared and vertical stickiness automatic; `.tgrid`
+    // carries the intrinsic width so both stay aligned when the columns
+    // overflow.
+    this.grid = el(
+      'div',
+      { class: 'tgrid' },
+      this.head,
+      this.body,
+    )
     this.viewport = el(
       'div',
       { class: 'tviewport', attrs: { tabindex: '0', role: 'grid' } },
-      this.spacer,
-      this.body,
+      this.grid,
     )
     this.viewport.addEventListener('scroll', () => this.paint())
     this.viewport.addEventListener('keydown', (event) => this.onKeyDown(event))
 
-    this.el = el(
-      'div',
-      { class: 'table' },
-      this.toolbar,
-      el('div', { class: 'thead' }, this.header, this.filterRow),
-      this.viewport,
-    )
+    this.el = el('div', { class: 'table' }, this.toolbar, this.viewport)
 
     this.recompute()
     // The viewport has no height until it is in the document; repaint once the
@@ -192,6 +243,11 @@ export class VirtualTable {
             ? 'Numeric filter: >x, >=x, <x, <=x, =x, !=x, or a..b. Missing values never match.'
             : 'Text filter: substring, /regex/, or !substring. Missing values never match.',
       })
+      const restored = this.filters.get(column.key)
+      if (restored !== undefined) {
+        input.value = restored
+        input.classList.add('active')
+      }
       input.addEventListener(
         'input',
         debounce(() => {
@@ -217,6 +273,12 @@ export class VirtualTable {
       this.sortKey = key
       this.sortDir = 1
     }
+    this.paintSortArrows()
+    this.recompute()
+  }
+
+  /** Reflect `sortKey`/`sortDir` in the header, including a restored sort. */
+  private paintSortArrows(): void {
     for (const [index, cell] of [...this.header.querySelectorAll('.th')].entries()) {
       const offset = this.options.maxSelection !== undefined ? 1 : 0
       const column = this.options.columns[index - offset]
@@ -224,7 +286,16 @@ export class VirtualTable {
       if (arrow === null || column === undefined) continue
       arrow.textContent = this.sortKey === column.key ? (this.sortDir === 1 ? '▲' : '▼') : ''
     }
-    this.recompute()
+  }
+
+  /** Hand the user-typed state to the caller's store, if there is one. */
+  private persist(): void {
+    this.options.persistence?.save({
+      filters: Object.fromEntries(this.filters),
+      search: this.search,
+      sortKey: this.sortKey,
+      sortDir: this.sortDir,
+    })
   }
 
   private predicates(): Predicate[] {
@@ -276,7 +347,10 @@ export class VirtualTable {
     const total = this.source.length
     const shown = this.visible.length
     this.status.textContent = shown === total ? `${total.toLocaleString()} rows` : `${shown.toLocaleString()} of ${total.toLocaleString()} rows`
-    this.spacer.style.height = `${this.visible.length * this.options.rowHeight}px`
+    this.persist()
+    // The body reserves the full height of the virtual row set; only the rows
+    // in view exist as elements.
+    this.body.style.height = `${this.visible.length * this.options.rowHeight}px`
     this.viewport.scrollTop = 0
     this.paint()
   }
@@ -284,7 +358,10 @@ export class VirtualTable {
   private paint(): void {
     const { rowHeight } = this.options
     const height = this.viewport.clientHeight || 400
-    const first = Math.max(0, Math.floor(this.viewport.scrollTop / rowHeight) - OVERSCAN)
+    // The sticky header scrolls with the content, so it occupies the first
+    // `head.offsetHeight` pixels of `scrollTop`; row 0 begins after it.
+    const scrolled = Math.max(0, this.viewport.scrollTop - this.head.offsetHeight)
+    const first = Math.max(0, Math.floor(scrolled / rowHeight) - OVERSCAN)
     const count = Math.min(this.visible.length - first, Math.ceil(height / rowHeight) + 2 * OVERSCAN)
 
     if (this.visible.length === 0) {
@@ -415,9 +492,13 @@ export class VirtualTable {
     event.preventDefault()
     next = Math.min(Math.max(next, 0), this.visible.length - 1)
     this.active = this.visible[next]
-    const top = next * this.options.rowHeight
+    // Row coordinates are relative to the body, which starts below the sticky
+    // header; scroll positions are relative to the scroller. Hence the offset,
+    // and hence keeping the row clear of the header rather than under it.
+    const headHeight = this.head.offsetHeight
+    const top = next * this.options.rowHeight + headHeight
     const bottom = top + this.options.rowHeight
-    if (top < this.viewport.scrollTop) this.viewport.scrollTop = top
+    if (top - headHeight < this.viewport.scrollTop) this.viewport.scrollTop = top - headHeight
     else if (bottom > this.viewport.scrollTop + this.viewport.clientHeight) {
       this.viewport.scrollTop = bottom - this.viewport.clientHeight
     }

@@ -20,13 +20,15 @@
 
 import { payloadColumnIsText, type GenomesResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
-import { VirtualTable, type ColumnDef } from './VirtualTable'
+import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 /** Columns the format guarantees, in the order they are shown. */
 const CORE_ORDER = ['name', 'length', 'n_contigs', 'n_bins']
 
 export interface GenomesTableOptions {
   data: GenomesResult
+  /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
+  persistence?: VirtualTableOptions['persistence']
   onOpenGenome(name: string): void
   onOpenPair(rowGenome: string, colGenome: string): void
 }
@@ -55,6 +57,7 @@ export class GenomesTable {
       searchKeys: ['name'],
       searchPlaceholder: 'search genome names…',
       emptyMessage: 'No genomes match these filters.',
+      ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenGenome(this.names[row]),
       onSelect: (rows) => {
         compare.disabled = rows.length !== 2

@@ -167,13 +167,19 @@ p {
   padding: 1rem;
 }
 
+/* The file info sidebar sits on the *left*: it describes the open file, which
+   is context for everything to its right, and it is the one panel whose content
+   does not change as you navigate. */
 .side-host {
   width: 22rem;
   flex: 0 0 auto;
-  border-left: 1px solid var(--border);
+  order: -1;
+  border-right: 1px solid var(--border);
   background: var(--bg-sunken);
   overflow: auto;
-  padding: 0.75rem 1rem 2rem;
+  padding: 0.75rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .side-host.collapsed {
@@ -236,6 +242,29 @@ p {
 .crumb-file {
   color: var(--text-dim);
   font-family: var(--mono);
+}
+
+/* A crumb that selects rather than navigates: the table to browse, or which
+   nested metacool the rest of the trail describes. Styled as a crumb so the
+   trail still reads as one line. */
+.crumb-select {
+  font: inherit;
+  font-size: var(--step--1);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+
+.crumb-select:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.crumb-select.current {
+  font-weight: 600;
 }
 
 .crumb-sep {
@@ -361,12 +390,21 @@ p {
   margin-right: auto;
 }
 
+/* Inside the scroller, so a horizontal scroll carries the headings along with
+   the columns they name; sticky keeps them on screen vertically. */
 .thead {
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--border-strong);
+}
+
+/* Holds the intrinsic width of the columns, so header and rows overflow the
+   scroller by the same amount and stay aligned. */
+.tgrid {
+  min-width: max-content;
+  position: relative;
 }
 
 .thead-row,
@@ -432,13 +470,9 @@ p {
   outline: none;
 }
 
-.tspacer {
-  width: 1px;
-}
-
+/* Reserves the height of every virtual row; only those in view are elements. */
 .tbody {
-  position: absolute;
-  inset: 0 0 auto 0;
+  position: relative;
 }
 
 .tr {
@@ -446,6 +480,7 @@ p {
   left: 0;
   right: 0;
   top: 0;
+  min-width: max-content;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -522,9 +557,11 @@ p {
 
 .panel-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5.5rem;
-  gap: 0.5rem;
-  align-items: stretch;
+  /* `max-content` rather than a fixed rem width: the colourbar column is only
+     as wide as the bar plus its tick labels, so the plot keeps the rest. */
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0.6rem;
+  align-items: start;
 }
 
 .heatmap-wrap {
@@ -533,8 +570,10 @@ p {
   border-radius: var(--radius);
   background: var(--bg-sunken);
   overflow: hidden;
-  aspect-ratio: 1 / 1;
-  max-height: calc(100vh - 16rem);
+  /* Fill the space the view actually has instead of forcing a square. A square
+     wrap in a wide column leaves a band of dead canvas under the plot, which is
+     what used to sit below every heatmap. */
+  height: clamp(20rem, calc(100vh - 15rem), 60rem);
 }
 
 .heatmap-canvas {
@@ -554,11 +593,73 @@ p {
   outline-offset: -2px;
 }
 
+/* A legend, not a second figure: short, and level with the top of the plot. */
+.colorbar-slot {
+  padding-top: 0.25rem;
+}
+
 .colorbar-canvas {
   display: block;
   width: 5.5rem;
-  height: 100%;
-  min-height: 12rem;
+  height: 11rem;
+}
+
+/* --- view controls ----------------------------------------------------- */
+
+.controls-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: 0.5rem 0.7rem 0.7rem;
+}
+
+.controls-title {
+  margin: 0 0 0.4rem;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/* Stacked one per row when the card lives in a sidebar; the panel header keeps
+   the inline layout, which is what `.panel-head > .controls-card` restores. */
+.controls-card .panel-controls {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.controls-card .field {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.controls-card .select,
+.controls-card .input-num {
+  width: 100%;
+}
+
+.panel-head > .controls-card {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+.panel-head > .controls-card .controls-title {
+  display: none;
+}
+
+.panel-head > .controls-card .panel-controls {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.panel-head > .controls-card .field {
+  display: flex;
+  grid-template-columns: none;
 }
 
 .checkbox {
@@ -575,11 +676,21 @@ p {
   font-size: var(--step--1);
 }
 
+/* The coordinate readout under the plot.
+   `position: sticky` keeps it on screen when the view is taller than the
+   content area: it names the cell under the pointer, so a readout you have to
+   scroll to reach is a readout you cannot use while pointing. */
 .readout {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   font-family: var(--mono);
   font-size: var(--step--1);
   color: var(--text-dim);
   min-height: 1.2em;
+  padding: 0.35rem 0.1rem;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
 .summary {
@@ -606,15 +717,20 @@ p {
   }
 }
 
+/* The view's own sidebar: colour controls on top, contig list underneath. */
 .side {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.6rem;
-  background: var(--bg-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
 }
 
 .side h3 {
-  margin-top: 0.2rem;
+  margin-top: 0;
+}
+
+.contig-box {
+  min-width: 0;
 }
 
 .contig-list {
@@ -699,6 +815,9 @@ p {
 }
 
 .privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius);
@@ -707,6 +826,32 @@ p {
   margin-bottom: 1.2rem;
   font-size: var(--step-0);
   max-width: 80ch;
+}
+
+.privacy-text {
+  flex: 1 1 auto;
+}
+
+/* Reserves nothing once dismissed, but keeps the layout from jumping. */
+.privacy-slot {
+  display: block;
+}
+
+.btn-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--step-1);
+  line-height: 1;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-close:hover {
+  color: var(--text);
+  background: var(--bg-raised);
 }
 
 .dropzone {
@@ -786,22 +931,67 @@ p {
   white-space: nowrap;
 }
 
-.qc {
-  margin-top: 1rem;
+/* The bordered "card" treatment, now carrying the File block: that is the
+   identity of what you are looking at, and it earns the emphasis more than a
+   single QC number does. */
+.card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 0.7rem 0.7rem;
   background: var(--bg-raised);
 }
 
-.qc h3 {
-  margin-top: 0;
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.info-panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 100%;
+}
+
+.info-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* Instrumentation stacks up from the foot of the sidebar rather than down from
+   the top, so it never pushes the file description off screen. */
+.info-bottom {
+  margin-top: auto;
+  padding-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Plain, like Reads and Validation: it is one number, not a headline. */
+.qc {
+  padding: 0 0.1rem;
+}
+
+.qc-head {
+  margin: 0 0 0.2rem;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  font-weight: 600;
 }
 
 .qc-stat {
   font-family: var(--mono);
-  font-size: var(--step-1);
+  font-size: var(--step-0);
   font-variant-numeric: tabular-nums;
+  margin: 0 0 0.25rem;
 }
 
 .meta > summary {

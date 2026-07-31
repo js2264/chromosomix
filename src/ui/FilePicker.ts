@@ -17,6 +17,30 @@ import { button, el } from './dom'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
 
+/**
+ * Dismissal is remembered across sessions, not just this one: the claim is
+ * reassurance, and reassurance you have already read and accepted becomes
+ * furniture. The footer states the same thing permanently, so dismissing this
+ * removes the repetition rather than the disclosure.
+ */
+const PRIVACY_DISMISSED = 'metacooler-viewer:privacy-dismissed'
+
+function privacyDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(PRIVACY_DISMISSED) === '1'
+  } catch {
+    return false
+  }
+}
+
+function dismissPrivacy(): void {
+  try {
+    window.localStorage.setItem(PRIVACY_DISMISSED, '1')
+  } catch {
+    /* a browser that refuses storage just shows the note again next time */
+  }
+}
+
 export interface FilePickerProps {
   onOpen(uri: string, source: SourceSpec): void
   /** Optional example files, e.g. from a published catalog (§11). */
@@ -88,17 +112,7 @@ export class FilePicker {
     this.el = el(
       'section',
       { class: 'view view-picker' },
-      el(
-        'div',
-        { class: 'privacy' },
-        el('strong', { text: 'Nothing you drop here leaves your browser.' }),
-        el('span', {
-          text:
-            ' There is no upload, no account and no server: the file is read in place, ' +
-            'a few kilobytes at a time, by code running on this page. Close the tab and ' +
-            'nothing remains.',
-        }),
-      ),
+      this.privacyNote(),
       this.drop,
       fileInput,
       el(
@@ -143,6 +157,42 @@ export class FilePicker {
       ),
     )
     this.entryBox.classList.remove('hidden')
+  }
+
+  /**
+   * The privacy claim, with a dismiss button.
+   *
+   * Returns an empty placeholder once dismissed rather than skipping the node,
+   * so the surrounding layout does not shift depending on whether you have read
+   * it before.
+   */
+  private privacyNote(): HTMLElement {
+    if (privacyDismissed()) return el('div', { class: 'privacy-slot' })
+
+    const note = el(
+      'div',
+      { class: 'privacy' },
+      el(
+        'div',
+        { class: 'privacy-text' },
+        el('strong', { text: 'Nothing you drop here leaves your browser.' }),
+        el('span', {
+          text:
+            ' There is no upload, no account and no server: the file is read in place, ' +
+            'a few kilobytes at a time, by code running on this page. Close the tab and ' +
+            'nothing remains.',
+        }),
+      ),
+      button(
+        '×',
+        () => {
+          dismissPrivacy()
+          note.remove()
+        },
+        { class: 'btn-close', title: 'Dismiss. The footer keeps the same statement.' },
+      ),
+    )
+    return note
   }
 
   private openLocal(file: File): void {

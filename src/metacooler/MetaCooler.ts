@@ -93,6 +93,8 @@ export class MetaCooler {
   readonly uri: string
   /** Which of the four layouts the file turned out to be. */
   readonly layout: Layout
+  /** Sibling entry names when this map lives inside an mmetacool (§3.4). */
+  readonly entries: string[]
   /** Normalised root attributes (`MetaCooler.info`). */
   readonly info: Info
   /** The optional user `metadata` object, `{}` when absent. */
@@ -188,6 +190,7 @@ export class MetaCooler {
     this.uri = init.uri
     this.handle = init.handle
     this.layout = init.layout
+    this.entries = init.handle.rootEntries
     this.genomes = init.genomes
     this.contigs = init.contigs
     this.chromOffset = init.chromOffset

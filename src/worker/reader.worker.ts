@@ -100,6 +100,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     nContigs: mc.nContigs,
     nBins: mc.nBins,
     unassigned: mc.unassignedStats(),
+    entries: mc.entries,
     sourceBytes: source.size,
     sourceKind: request.source.kind,
   }

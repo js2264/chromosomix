@@ -31,6 +31,7 @@ const KEY_ORDER = [
   'genome',
   'genome2',
   'region',
+  'region2',
   'level',
   'transform',
   'colormap',
@@ -42,6 +43,7 @@ const OPTIONAL_KEYS = [
   'genome',
   'genome2',
   'region',
+  'region2',
   'level',
   'transform',
   'colormap',
@@ -110,6 +112,8 @@ export function parseViewState(hash: string): ViewState | null {
   if (genome2 !== undefined) state.genome2 = genome2
   const region = raw.get('region')
   if (region !== undefined) state.region = region
+  const region2 = raw.get('region2')
+  if (region2 !== undefined) state.region2 = region2
   const colormap = raw.get('colormap')
   if (colormap !== undefined) state.colormap = colormap
 

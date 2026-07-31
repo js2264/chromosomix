@@ -12,7 +12,7 @@
 
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
-import { VirtualTable, type ColumnDef } from './VirtualTable'
+import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 const CORE_ORDER = ['name', 'length']
 
@@ -24,6 +24,8 @@ export interface ContigsTableOptions {
   hideColumns?: string[]
   title?: string
   hint?: string
+  /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
+  persistence?: VirtualTableOptions['persistence']
   onOpenContig(name: string): void
 }
 
@@ -69,6 +71,7 @@ export class ContigsTable {
       searchKeys: ['name'],
       searchPlaceholder: 'search contig names…',
       emptyMessage: 'No contigs match these filters.',
+      ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenContig(names[row]),
     })
 

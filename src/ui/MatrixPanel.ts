@@ -40,10 +40,22 @@ export interface MatrixPanelOptions {
   onLevelChange?(level: 'bin' | 'contig'): void
   /** A cell was clicked; offsets are block-local, ids are absolute. */
   onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
+  /**
+   * Keep the colour controls out of the panel so the owning view can place them
+   * elsewhere — the genome view stacks them in its sidebar, above the contig
+   * list. The panel still owns them; only their mount point moves.
+   */
+  detachedControls?: boolean
 }
 
 export class MatrixPanel {
   readonly el: HTMLElement
+  /**
+   * The colour controls, as a self-contained card. Always built; mounted inside
+   * {@link el} unless `detachedControls` was set, in which case the owning view
+   * places it. Wired either way — the panel keeps the listeners.
+   */
+  readonly controlsEl: HTMLElement
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
@@ -79,7 +91,10 @@ export class MatrixPanel {
       // Contig labels are drawn only below the Python threshold; above it they
       // would be a grey smear rather than information (`ops/show.py`).
       maxLabels: MAX_CATEGORICAL_TICKS,
-      margin: { left: 78, bottom: 60, top: 6, right: 6 },
+      // Gutters are measured from the labels themselves: real contig names run
+      // to `NODE_7431_len_134871`, which no fixed margin fits, and a genome with
+      // too many contigs to label should not reserve a gutter at all.
+      autoMargin: true,
       onChange: () => this.schedule(),
       onHover: (cell) => this.describe(cell),
       onCellClick: (cell) => this.emitClick(cell),
@@ -145,13 +160,35 @@ export class MatrixPanel {
       controls.unshift(field('level', levelSelect, 'Summed from the loaded matrix — no further reads.'))
     }
 
+    this.controlsEl = el(
+      'div',
+      { class: 'controls-card' },
+      el('h3', { class: 'controls-title', text: 'View' }),
+      el('div', { class: 'panel-controls' }, ...controls),
+    )
+
     const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay)
+
+    // The colourbar sits immediately right of the plot and is deliberately
+    // short: it is a legend, and a legend as tall as the figure reads as a
+    // second panel competing with it.
+    const body = el(
+      'div',
+      { class: 'panel-body' },
+      wrap,
+      el('div', { class: 'colorbar-slot' }, this.barCanvas),
+    )
 
     this.el = el(
       'section',
       { class: 'panel' },
-      el('header', { class: 'panel-head' }, this.titleNode, el('div', { class: 'panel-controls' }, ...controls)),
-      el('div', { class: 'panel-body' }, wrap, this.barCanvas),
+      el(
+        'header',
+        { class: 'panel-head' },
+        this.titleNode,
+        ...(options.detachedControls === true ? [] : [this.controlsEl]),
+      ),
+      body,
       this.readout,
     )
 

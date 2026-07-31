@@ -30,6 +30,16 @@ const CASES: ViewState[] = [
     vmax: 12.5,
   },
   { uri: 'x.metacool', view: 'contigs', genome: '' },
+  // A rectangular contig × contig block: clicking the intersection of two
+  // contigs must produce a link that reopens the same off-diagonal block, not
+  // one contig's square map.
+  {
+    uri: 'Hum53.metacool',
+    view: 'region',
+    genome: 'MAG_1',
+    region: 'NODE_7431_len_134871',
+    region2: 'NODE_3115_len_927651',
+  },
   { uri: 'weird&name=with?chars.metacool', view: 'genomes', vmax: 1e-7 },
 ]
 
@@ -40,6 +50,15 @@ describe('serialiseViewState / parseViewState', () => {
       expect(parseViewState(`#${serialiseViewState(state)}`)).toStrictEqual(state)
     })
   }
+
+  it('carries the second region axis, and distinguishes it from a square block', () => {
+    const pair = parseViewState('#uri=a&view=region&region=c1&region2=c2')
+    expect(pair).toStrictEqual({ uri: 'a', view: 'region', region: 'c1', region2: 'c2' })
+    // Absent, not undefined-valued: a strict deep-equal is the whole contract.
+    const square = parseViewState('#uri=a&view=region&region=c1')
+    expect(square).toStrictEqual({ uri: 'a', view: 'region', region: 'c1' })
+    expect('region2' in (square as object)).toBe(false)
+  })
 
   it('returns null for a hash with no uri', () => {
     expect(parseViewState('')).toBeNull()

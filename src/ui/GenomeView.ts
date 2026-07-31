@@ -29,6 +29,11 @@ export interface GenomeViewProps {
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
+  /**
+   * Two contigs were named by one click on their intersection — the caller
+   * opens the rectangular block between them rather than either one's square.
+   */
+  onOpenContigPair(rowContig: string, colContig: string): void
   onError(err: unknown): void
 }
 
@@ -37,6 +42,7 @@ export class GenomeView {
   private readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly contigList: HTMLElement
+  private readonly contigBox: HTMLElement
   private readonly note: HTMLElement
   private extent: [number, number] | null = null
   private level: 'bin' | 'contig'
@@ -51,31 +57,50 @@ export class GenomeView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       levels: ['bin', 'contig'],
+      // The controls live in this view's sidebar, stacked above the contig list.
+      detachedControls: true,
       initial: { ...props.scale, level: props.level },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
         this.level = level
+        this.contigBox?.classList.toggle('hidden', level === 'contig')
         props.onLevelChange(level)
         void this.load()
       },
       onCellClick: (_cell, groups) => {
         if (groups.row === undefined) return
-        // §5.5: an off-diagonal cell is a relationship between two contigs; the
-        // region view addresses one range, so we open the row contig and name
-        // the column contig rather than pretend the click was on-diagonal.
+        // §5.5: an off-diagonal cell *is* the relationship between two contigs,
+        // so it opens the rectangular block between them. Opening either
+        // contig's own square map instead would answer a question the click did
+        // not ask, and would silently discard the other axis.
         if (groups.col !== undefined && groups.col.label !== groups.row.label) {
-          this.note.textContent = `Opening ${groups.row.label}; the cell you clicked pairs it with ${groups.col.label}.`
-          this.note.classList.remove('hidden')
+          props.onOpenContigPair(groups.row.label, groups.col.label)
+          return
         }
         props.onOpenRegion(groups.row.label)
       },
     })
 
+    // At contig level every cell already *is* a contig, labelled on both axes,
+    // so the list underneath would repeat the picture rather than add to it.
+    this.contigBox = el(
+      'section',
+      { class: 'card contig-box' },
+      el('h3', { text: 'Contigs' }),
+      this.contigList,
+    )
+    this.contigBox.classList.toggle('hidden', this.level === 'contig')
+
     this.el = el(
       'section',
       { class: 'view view-genome' },
       el('header', { class: 'view-head' }, el('h2', { text: props.genome }), this.summary, this.note),
-      el('div', { class: 'genome-body' }, this.panel.el, el('aside', { class: 'side' }, el('h3', { text: 'Contigs' }), this.contigList)),
+      el(
+        'div',
+        { class: 'genome-body' },
+        this.panel.el,
+        el('aside', { class: 'side' }, this.panel.controlsEl, this.contigBox),
+      ),
     )
 
     void this.load()

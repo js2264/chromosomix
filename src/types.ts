@@ -184,8 +184,17 @@ export interface ViewState {
   genome?: string
   /** Column genome for `pair`. */
   genome2?: string
-  /** `contig` or `contig:start-end` for `region`. */
+  /** `contig` or `contig:start-end` for `region` — the row axis. */
   region?: string
+  /**
+   * Column axis of a `region` view, making it a rectangular contig × contig
+   * block rather than a square one.
+   *
+   * Clicking the intersection of two contigs inside a genome asks about the
+   * contacts *between* them, so the answer is the off-diagonal block, not
+   * either contig's own square map. Absent means the region is on-diagonal.
+   */
+  region2?: string
   /** Aggregation level inside a genome view. */
   level?: 'bin' | 'contig'
   transform?: Transform

@@ -205,6 +205,18 @@ export interface HeatmapOptions {
   labelFont?: string
   /** Draw labels only when an axis has at most this many blocks. */
   maxLabels?: number
+  /**
+   * Size the label margins from the labels actually drawn, rather than using
+   * fixed ones.
+   *
+   * A fixed margin is wrong in both directions at once: too small and a contig
+   * name is clipped (`NODE_7431_len_134871` needs ~150 px, not the 78 px that
+   * looked generous while the fixtures had names like `contig_1_035`), too
+   * large and every view carries dead space no label ever occupies. Measuring
+   * is cheap — it happens once per matrix, not per frame — and it is the only
+   * way the same component can serve names of any length.
+   */
+  autoMargin?: boolean
   /** Override `devicePixelRatio`, mostly for tests. `0` means "detect". */
   devicePixelRatio?: number
   /** Never zoom in past this few cells across the shorter viewport axis. */
@@ -227,6 +239,15 @@ const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
 
 /** Minimum on-screen gap between two drawn labels, in CSS pixels. */
 const LABEL_MIN_GAP = 11
+
+/** Breathing room between a label and the plot edge, in CSS pixels. */
+const LABEL_GAP = 8
+
+/** Gutter left on an edge that carries no labels, in CSS pixels. */
+const EDGE_PAD = 6
+
+/** No label gutter may take more than this share of the canvas. */
+const MAX_LABEL_FRACTION = 0.34
 
 function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x
@@ -288,6 +309,13 @@ export class HeatmapView {
   private rowScale = new Scale([0, 1], 1)
   private colScale = new Scale([0, 1], 1)
 
+  /**
+   * The margin in force. Equals `opts.margin` unless `autoMargin` is set, in
+   * which case {@link measureMargin} recomputes it whenever the labels or the
+   * canvas size change.
+   */
+  private computedMargin: Margin
+
   private detachFns: Array<() => void> = []
   private dragging = false
   private dragMoved = false
@@ -313,10 +341,12 @@ export class HeatmapView {
       labelHaloColor: options.labelHaloColor ?? 'rgba(255, 255, 255, 0.85)',
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
+      autoMargin: options.autoMargin ?? false,
       devicePixelRatio: options.devicePixelRatio ?? 0,
       minVisibleCells: options.minVisibleCells ?? 4,
       maxZoomOut: options.maxZoomOut ?? 4,
     }
+    this.computedMargin = this.opts.margin
     this.onChange = options.onChange ?? null
     this.onCellClick = options.onCellClick ?? null
     this.onHover = options.onHover ?? null
@@ -330,9 +360,53 @@ export class HeatmapView {
 
   // -- geometry ------------------------------------------------------------
 
+  /** The margin actually in force, after any {@link measureMargin} pass. */
+  get margin(): Margin {
+    return this.computedMargin
+  }
+
+  /**
+   * Size the label gutters to the labels that will actually be drawn.
+   *
+   * Row labels are horizontal, so they need their text *width* on the left.
+   * Column labels are rotated a quarter turn (as matplotlib rotates categorical
+   * x ticks), so they need that same text width as *height* on top. Both are
+   * capped at {@link MAX_LABEL_FRACTION} of the canvas: a pathological contig
+   * name must cost its own legibility, never the plot's.
+   *
+   * When an axis draws no labels — more blocks than `maxLabels`, or none at all
+   * — its gutter collapses to {@link EDGE_PAD}. That is what stops a 4,000-bin
+   * genome from reserving 150 px for labels it will not draw, which is the dead
+   * space that used to sit under every heatmap.
+   */
+  measureMargin(): void {
+    if (!this.opts.autoMargin) return
+    const cols = this.labelBlocks('cols')
+    const rows = this.labelBlocks('rows')
+    this.ctx.save()
+    this.ctx.font = this.opts.labelFont
+    const widest = (blocks: LabelBlock[]): number => {
+      let max = 0
+      for (const block of blocks) {
+        const w = this.ctx.measureText(block.label).width
+        if (w > max) max = w
+      }
+      return max
+    }
+    const left = rows.length === 0 ? EDGE_PAD : widest(rows) + LABEL_GAP
+    const top = cols.length === 0 ? EDGE_PAD : widest(cols) + LABEL_GAP
+    this.ctx.restore()
+    this.computedMargin = {
+      left: Math.min(left, this.cssWidth * MAX_LABEL_FRACTION),
+      top: Math.min(top, this.cssHeight * MAX_LABEL_FRACTION),
+      right: EDGE_PAD,
+      bottom: EDGE_PAD,
+    }
+  }
+
   /** The plot area: the canvas minus the label margins. */
   get plotRect(): Rect {
-    const m = this.opts.margin
+    const m = this.computedMargin
     return {
       x: m.left,
       y: m.top,
@@ -354,6 +428,9 @@ export class HeatmapView {
     this.dpr = this.opts.devicePixelRatio > 0 ? this.opts.devicePixelRatio : detectDpr()
     this.canvas.width = Math.max(1, Math.round(this.cssWidth * this.dpr))
     this.canvas.height = Math.max(1, Math.round(this.cssHeight * this.dpr))
+    // The cap is a fraction of the canvas, so a resize can change the gutters
+    // even though the labels have not changed.
+    this.measureMargin()
     this.recomputeBaseZoom()
     this.clampView()
     this.syncScales()
@@ -380,6 +457,8 @@ export class HeatmapView {
     this.dirtyRaster = true
     this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
     this.colScale.setFull([0, Math.max(1, matrix.ncols)])
+    // Before `fit`, which divides by the plot area the gutters determine.
+    this.measureMargin()
     this.fit()
   }
 
@@ -682,7 +761,7 @@ export class HeatmapView {
   private drawLabels(): void {
     const ctx = this.ctx
     const plot = this.plotRect
-    const m = this.opts.margin
+    const m = this.computedMargin
     const cols = this.labelBlocks('cols')
     const rows = this.labelBlocks('rows')
     if (cols.length === 0 && rows.length === 0) return
@@ -697,7 +776,12 @@ export class HeatmapView {
     // Columns run a quarter turn anticlockwise, as matplotlib rotates
     // categorical x tick labels: a contig name needs the block's height, and a
     // block is rarely more than a few pixels wide.
-    const inMargin = m.top > 0
+    //
+    // `inMargin` asks whether the gutter can actually *hold* a rotated label,
+    // not merely whether it is non-zero. A 6 px gutter is non-zero and fits
+    // nothing, so the old test drew every column label upward off the top of
+    // the canvas — present in the DOM, invisible on screen.
+    const inMargin = m.top >= LABEL_GAP * 2
     ctx.textBaseline = 'middle'
     ctx.textAlign = inMargin ? 'left' : 'right'
     let last = -Infinity
@@ -707,14 +791,14 @@ export class HeatmapView {
       if (centre - last < LABEL_MIN_GAP) continue
       last = centre
       ctx.save()
-      ctx.translate(centre, inMargin ? plot.y - 3 : plot.y + 3)
+      ctx.translate(centre, plot.y - (inMargin ? 3 : -3))
       ctx.rotate(-Math.PI / 2)
       if (!inMargin) ctx.strokeText(block.label, 0, 0)
       ctx.fillText(block.label, 0, 0)
       ctx.restore()
     }
 
-    const rowsInMargin = m.left > 0
+    const rowsInMargin = m.left >= LABEL_GAP * 2
     ctx.textAlign = rowsInMargin ? 'right' : 'left'
     const rowX = rowsInMargin ? plot.x - 4 : plot.x + 4
     last = -Infinity

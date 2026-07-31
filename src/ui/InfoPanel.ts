@@ -47,22 +47,35 @@ export class InfoPanel {
         'Cheap on a local file, expensive over the network — so it is never automatic.',
     })
 
+    // Two stacks. The top one identifies the file and is what a reader looks at
+    // first; the bottom one is instrumentation, pinned to the foot of the
+    // sidebar so it stays out of the way without being hidden.
     this.el = el(
       'aside',
       { class: 'info-panel' },
-      el('h3', { text: 'File' }),
-      this.fileTable(),
-      this.unassignedBlock(),
-      this.metadataBlock(),
-      el('h3', { text: 'Reads' }),
-      this.statsBody,
-      el('h3', { text: 'Validation' }),
-      el('p', {
-        class: 'hint',
-        text: 'Light checks ran at open: attributes, group presence, table lengths, the /chroms soft link.',
-      }),
-      validate,
-      this.validationBox,
+      el(
+        'div',
+        { class: 'info-top' },
+        el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
+        this.unassignedBlock(),
+        this.metadataBlock(),
+      ),
+      el(
+        'div',
+        { class: 'info-bottom' },
+        el('section', { class: 'card' }, el('h3', { text: 'Reads' }), this.statsBody),
+        el(
+          'section',
+          { class: 'card' },
+          el('h3', { text: 'Validation' }),
+          el('p', {
+            class: 'hint',
+            text: 'Light checks ran at open: attributes, group presence, table lengths, the /chroms soft link.',
+          }),
+          validate,
+          this.validationBox,
+        ),
+      ),
     )
 
     this.refreshStats()
@@ -109,7 +122,7 @@ export class InfoPanel {
       return el(
         'div',
         { class: 'qc qc-clean' },
-        el('h3', { text: 'Binning QC' }),
+        el('h4', { class: 'qc-head', text: 'Binning QC' }),
         el('p', { text: 'This file has no __unbinned__ genome: every contig was assigned to a bin.' }),
       )
     }
@@ -118,7 +131,7 @@ export class InfoPanel {
     return el(
       'div',
       { class: 'qc' },
-      el('h3', { text: 'Binning QC' }),
+      el('h4', { class: 'qc-head', text: 'Binning QC' }),
       el('p', {
         class: 'qc-stat',
         text: `unassigned: ${fmt.int(stats.contigs)} contigs / ${fmt.pct(binFraction)} of bins`,
