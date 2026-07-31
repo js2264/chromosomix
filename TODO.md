@@ -105,6 +105,13 @@
   `data-theme` on `<html>` wins in both directions over the media query, so a
   user on a dark OS who picks light gets light.
 
+
+## FOR NEXT
+
+- [ ] Cursor as arrow over the heatmap. 
+- [ ] Buttons in the view card for plot options, eg crosshair, dividers, others? 
+- [ ] Serve on github pages
+
 ## IN FUTURE  
 
 - M5
