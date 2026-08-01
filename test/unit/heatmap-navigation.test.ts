@@ -14,6 +14,14 @@ import { HeatmapView } from '@/render/heatmap'
 import type { DenseMatrix } from '@/types'
 
 function fakeCanvas(size: number): HTMLCanvasElement {
+  return harness(size).canvas
+}
+
+/** A canvas that also hands back the listeners, so a drag can be driven. */
+function harness(size: number): {
+  canvas: HTMLCanvasElement
+  fire(type: string, event: Record<string, unknown>): void
+} {
   const ctx = {
     font: '',
     fillStyle: '',
@@ -43,7 +51,8 @@ function fakeCanvas(size: number): HTMLCanvasElement {
     setTransform: () => {},
     drawImage: () => {},
   }
-  return {
+  const listeners = new Map<string, (event: unknown) => void>()
+  const canvas = {
     width: 0,
     height: 0,
     clientWidth: size,
@@ -52,11 +61,12 @@ function fakeCanvas(size: number): HTMLCanvasElement {
     classList: { toggle: () => {} },
     getContext: () => ctx,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: size, height: size }),
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (type: string, fn: (event: unknown) => void) => listeners.set(type, fn),
+    removeEventListener: (type: string) => listeners.delete(type),
     focus: () => {},
     style: {},
   } as unknown as HTMLCanvasElement
+  return { canvas, fire: (type, event) => listeners.get(type)?.(event) }
 }
 
 function block(n: number): DenseMatrix {
@@ -135,5 +145,17 @@ describe('the edge of the data is a wall', () => {
     const after = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
     expect(after?.row).toBe(before?.row)
     expect(after?.col).toBe(before?.col)
+  })
+})
+
+describe('chrome stops at the data', () => {
+  it('shrinks the data rect when the matrix no longer fills the plot', () => {
+    const heatmap = view()
+    const plot = heatmap.plotRect
+    expect(heatmap.dataRect.width).toBeCloseTo(plot.width, 6)
+    // Zoom out below the fit: the matrix is now smaller than the area for it.
+    heatmap.handleKeyDown({ key: '-', preventDefault: () => {} } as KeyboardEvent)
+    expect(heatmap.dataRect.width).toBeLessThan(plot.width)
+    expect(heatmap.dataRect.height).toBeLessThan(plot.height)
   })
 })

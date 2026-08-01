@@ -532,6 +532,24 @@ export class HeatmapView {
   }
 
   /**
+   * The part of the plot the data actually occupies.
+   *
+   * Zoomed in it is the plot rect; zoomed out the matrix is smaller than the
+   * area reserved for it, and every piece of chrome — the frame, the boxes, the
+   * crosshair — has to stop at the data rather than at the panel. A divider
+   * running on past the last bin claims there is something out there.
+   */
+  get dataRect(): Rect {
+    const plot = this.plotRect
+    const { nrows, ncols } = this.dims()
+    const x0 = Math.max(plot.x, plot.x + this.colScale.toPixel(0))
+    const x1 = Math.min(plot.x + plot.width, plot.x + this.colScale.toPixel(ncols))
+    const y0 = Math.max(plot.y, plot.y + this.rowScale.toPixel(0))
+    const y1 = Math.min(plot.y + plot.height, plot.y + this.rowScale.toPixel(nrows))
+    return { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) }
+  }
+
+  /**
    * Re-read the canvas's CSS size and device pixel ratio and resize its backing
    * store. Call on a container resize; it never re-rasterises, because the
    * raster is at *matrix* resolution and is independent of the viewport.
@@ -839,16 +857,17 @@ export class HeatmapView {
    * so nothing overlaps it.
    */
   private drawPlotBorder(): void {
-    const plot = this.plotRect
+    const data = this.dataRect
+    if (data.width <= 0 || data.height <= 0) return
     const ctx = this.ctx
     ctx.save()
     ctx.strokeStyle = this.opts.plotBorderColor
     ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
     ctx.strokeRect(
-      this.snap(plot.x),
-      this.snap(plot.y),
-      Math.round(plot.width),
-      Math.round(plot.height)
+      this.snap(data.x),
+      this.snap(data.y),
+      Math.round(data.width),
+      Math.round(data.height)
     )
     ctx.restore()
   }
@@ -857,7 +876,7 @@ export class HeatmapView {
   private drawSelection(): void {
     const drag = this.drag
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
-    const plot = this.plotRect
+    const plot = this.dataRect
     const ctx = this.ctx
     const x = Math.min(drag.x0, drag.x)
     const y = Math.min(drag.y0, drag.y)
@@ -938,7 +957,7 @@ export class HeatmapView {
   private drawCrosshair(): void {
     const cell = this.hoverCell
     if (cell === null || this.matrix === null) return
-    const plot = this.plotRect
+    const plot = this.dataRect
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
@@ -946,8 +965,9 @@ export class HeatmapView {
     ctx.clip()
     ctx.strokeStyle = this.opts.crosshairColor
     ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
-    const x = this.snap(plot.x + this.colScale.toPixel(cell.col + 0.5))
-    const y = this.snap(plot.y + this.rowScale.toPixel(cell.row + 0.5))
+    const origin = this.plotRect
+    const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
+    const y = this.snap(origin.y + this.rowScale.toPixel(cell.row + 0.5))
     ctx.beginPath()
     ctx.moveTo(x, plot.y)
     ctx.lineTo(x, plot.y + plot.height)
@@ -976,7 +996,7 @@ export class HeatmapView {
     const rows = separatorBlocks(this.separators.rows, nrows)
     const cols = separatorBlocks(this.separators.cols, ncols)
     if (rows.length === 0 && cols.length === 0) return
-    const plot = this.plotRect
+    const plot = this.dataRect
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
@@ -1005,11 +1025,12 @@ export class HeatmapView {
 
   /** One box: rows give the vertical extent, cols the horizontal. */
   private strokeBlock(row: LabelBlock, col: LabelBlock): void {
-    const plot = this.plotRect
-    const x0 = this.snap(plot.x + this.colScale.toPixel(col.start))
-    const x1 = this.snap(plot.x + this.colScale.toPixel(col.end))
-    const y0 = this.snap(plot.y + this.rowScale.toPixel(row.start))
-    const y1 = this.snap(plot.y + this.rowScale.toPixel(row.end))
+    const plot = this.dataRect
+    const origin = this.plotRect
+    const x0 = this.snap(origin.x + this.colScale.toPixel(col.start))
+    const x1 = this.snap(origin.x + this.colScale.toPixel(col.end))
+    const y0 = this.snap(origin.y + this.rowScale.toPixel(row.start))
+    const y1 = this.snap(origin.y + this.rowScale.toPixel(row.end))
     // Off-screen boxes cost a stroke each on a 4 k-contig genome; skip them.
     if (x1 < plot.x || x0 > plot.x + plot.width) return
     if (y1 < plot.y || y0 > plot.y + plot.height) return
