@@ -127,94 +127,6 @@ class App {
       this.status.el,
     )
 
-    this.store.subscribe((state) => void this.render(state))
-    this.store.connectHash()
-    if (this.store.state === null) void this.render(null)
-  }
-
-  // -------------------------------------------------------------------------
-  // Opening
-  // -------------------------------------------------------------------------
-
-  private async open(uri: string, source: SourceSpec): Promise<void> {
-    if (this.opening === uri) return
-    this.opening = uri
-    this.showContent(el('div', { class: 'loading', text: `opening ${fileLabel(uri)}…` }))
-    try {
-      const info = await this.client.request<'open'>({ kind: 'open', uri, source })
-      const genomes = await this.client.request<'genomes'>({ kind: 'genomes' })
-      const names = genomes.table.data['name'] as string[]
-      // `entries` is non-empty only for a map inside an mmetacool; the group
-      // path is what says which of them is open (§3.4).
-      const entries = info.entries
-      const group = splitUri(uri).group
-      const match = /^\/entries\/(.+)$/.exec(group)
-      const currentEntry = match === null ? undefined : match[1]
-      this.file = {
-        uri,
-        info,
-        genomes,
-        contigs: null,
-        source,
-        genomeNames: names,
-        displayNames: Array.from(genomes.display, (index) => names[index]).filter(
-          (name) => name !== UNBINNED_NAME,
-        ),
-        entries,
-        currentEntry,
-      }
-      const isMetacool = info.layout.kind === 'metacool'
-      this.breadcrumb = new Breadcrumb({
-        rootKind: isMetacool ? 'genomes' : 'contigs',
-        // A metacool offers both landing tables; a plain cooler has only one
-        // worth showing, since its genomes table is a synthesised single row.
-        rootChoices: isMetacool ? ['genomes', 'contigs'] : ['contigs'],
-        fileLabel: fileLabel(uri),
-        entries,
-        ...(currentEntry === undefined ? {} : { currentEntry }),
-        onNavigate: (state) => this.store.set(state),
-        onOpenFilePicker: () => this.store.set(null),
-        onSelectEntry: (entry) =>
-          void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
-      })
-      this.infoPanel = new InfoPanel({ info })
-      this.sideHost.replaceChildren(this.infoPanel.el)
-      this.sidebar.setAvailable(true)
-      this.status.reset()
-      this.overviewButton.hidden = info.layout.kind !== 'metacool'
-      this.overview = null
-      this.showingOverview = false
-
-      // A link may already have named a view inside this file (§5.5); honour it
-      // rather than bouncing the recipient to the landing table.
-      const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
-      const wanted = this.store.state
-      const target =
-        wanted !== null && wanted.uri === uri ? wanted : landingState(uri, rootView)
-      const willNotify = !viewStateEquals(target, this.store.state)
-      this.store.set(target, { replace: true })
-      // `set` is a no-op when the state is already exactly `target`, so render
-      // explicitly in that case — and only in that case, to avoid mounting the
-      // same view twice.
-      if (!willNotify) void this.render(target)
-    } catch (err) {
-      // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
-      // reader mirrors that faithfully (§3.4). But a *user* who dropped a
-      // collection meant "show me this data", so the app answers by opening an
-      // entry and offering the rest in the breadcrumb picker, rather than
-      // handing back an error about a URI syntax they did not use.
-      const entry = firstEntry(err)
-      if (entry !== null) {
-        this.opening = null
-        await this.open(`${splitUri(uri).path}::entries/${entry}`, source)
-        return
-      }
-      this.showError(err, uri, source)
-    } finally {
-      this.opening = null
-    }
-  }
-
   /**
    * Filter/sort memory for one table, scoped to the open file.
    *
@@ -445,6 +357,20 @@ class App {
   // Shell
   // -------------------------------------------------------------------------
 
+  /**
+   * Show the file picker.
+   *
+   * `store.set(null)` is a no-op when the state is *already* null, which is
+   * precisely the case after a file failed to open from the picker: the failure
+   * never became a view state, so the store never left it. "Open another file"
+   * then did nothing at all. Rendering directly is the only thing that can
+   * work, because there is no transition to notify about.
+   */
+  private toPicker(): void {
+    if (this.store.state === null) void this.render(null)
+    else this.store.set(null)
+  }
+
   private showContent(node: HTMLElement, view?: { destroy?(): void }): void {
     this.current?.destroy?.()
     this.current = view ?? null
@@ -473,7 +399,7 @@ class App {
         : []
     const view = new ErrorView({
       error: err,
-      onOpenFilePicker: () => this.store.set(null),
+      onOpenFilePicker: () => this.toPicker(),
       onOpenEntry:
         entries.length > 0 && uri !== undefined && source !== undefined
           ? (entry) => void this.open(`${splitUri(uri).path}::entries/${entry}`, source)
