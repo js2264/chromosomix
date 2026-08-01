@@ -27,6 +27,7 @@ import { HeatmapView, type Cell, type PlotOptions, type SeparatorSet } from '../
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { button, el, field, fmt } from './dom'
+import { setReadout } from './readout'
 import {
   PLOT_OPTION_LABELS,
   getPlotOptions,
@@ -77,7 +78,6 @@ export class MatrixPanel {
   private readonly barCanvas: HTMLCanvasElement
   private readonly heatmap: HeatmapView
   private readonly colorbar: ColorbarView
-  private readonly readout: HTMLElement
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly vmaxInput: HTMLInputElement
@@ -104,7 +104,6 @@ export class MatrixPanel {
 
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
     this.barCanvas = el('canvas', { class: 'colorbar-canvas' })
-    this.readout = el('div', { class: 'readout', text: '' })
     // A tooltip follows the pointer with the same three facts as the readout.
     // Both exist on purpose: the tooltip answers "what is under my cursor"
     // without a glance away from the matrix, and the readout keeps the last
@@ -253,7 +252,6 @@ export class MatrixPanel {
             ),
           ]),
       body,
-      this.readout,
     )
 
     // Labels and the plot frame are page furniture, so they follow the theme.
@@ -291,6 +289,7 @@ export class MatrixPanel {
 
   /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
+    setReadout('')
     this.unsubscribePlotOptions()
     this.themeWatchers()
     this.observer?.disconnect()
@@ -362,7 +361,7 @@ export class MatrixPanel {
 
   private describe(cell: Cell | null, at?: { x: number; y: number }): void {
     if (cell === null || this.data === null) {
-      this.readout.textContent = ''
+      setReadout('')
       this.tooltip.classList.add('hidden')
       return
     }
@@ -373,7 +372,7 @@ export class MatrixPanel {
     const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize)
     const count = Number.isNaN(cell.value) ? 'NaN (unbalanced)' : fmt.num(cell.value)
 
-    this.readout.textContent = `${rowLabel}  ×  ${colLabel}   count ${count}`
+    setReadout(`${rowLabel}  ×  ${colLabel}   count ${count}`)
 
     // The names in full, unabbreviated, and each name written *once*: the axis
     // labels are elided when the blocks are narrow, so the tooltip is often the

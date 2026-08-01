@@ -14,6 +14,7 @@ import { icon } from './icons'
 import type { ReaderClient } from '../worker/client'
 import type { StatsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { subscribeReadout } from './readout'
 
 export interface StatusBarProps {
   client: ReaderClient
@@ -27,6 +28,8 @@ export class StatusBar {
   private readonly validationLabel: HTMLElement
   private readonly validationDetail: HTMLElement
   private readonly validationItem: HTMLElement
+  private readonly coordinates: HTMLElement
+  private readonly unsubscribeReadout: () => void
   private hasFile = false
 
   constructor(private readonly props: StatusBarProps) {
@@ -50,22 +53,32 @@ export class StatusBar {
     )
     this.validationItem.addEventListener('click', () => void this.runValidation())
 
+    // The coordinate readout leads the bar, because it changes with every
+    // pointer move and is the only thing here anyone reads continuously. The
+    // two instruments are pushed to the right, where a status bar keeps them.
+    this.coordinates = el('span', { class: 'status-coords' })
+    this.unsubscribeReadout = subscribeReadout((text) => {
+      this.coordinates.textContent = text
+    })
+
     this.el = el(
       'footer',
       { class: 'app-foot' },
+      this.coordinates,
       el(
         'div',
-        { class: 'status-item' },
+        { class: 'status-item status-right' },
         el('span', { class: 'status-key', text: 'read' }),
         this.readsSummary,
         this.readsDetail,
       ),
       this.validationItem,
-      el('span', {
-        class: 'status-note',
-        text: 'Files are read in place. Nothing is uploaded, and there is no server.',
-      }),
     )
+  }
+
+  /** Release the readout subscription. */
+  destroy(): void {
+    this.unsubscribeReadout()
   }
 
   /**
