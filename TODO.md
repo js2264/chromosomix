@@ -2,23 +2,17 @@
 
 - [x] Only `genomes` table is visible and opened by default when opening a file. It would be nice to have a way to open the `contigs` table if wanted. It could be done by using a dropdown menu to select which table to open here: 
 
-![alt text](image.png)
-
 - [x] Same thing with a mmetacooler, it could have a dropdown menu to select wich nested metacool it would open (inserted before the "> genomes"). 
 
 - [x] I'd rather have the file info sidebar on the left side
 
 - [x] When in contig or genome heatmap view, the bottom line that indicates coordinates of contigs/genomes is partially hidden, I need to scroll down to see it full. 
 
-![alt text](image-1.png)
-
 - [x] In the file info sidebar:  I like the layout of the BINNING QC div, but it's too prominent for the QC information, make it look like the READS and VALIDATION divs. Use the current BINNING QC style to wrap the FILE header+file info div (uri, layout, ...). Also, the READS and VALIDATION should look like the QC div, but stacked from the bottom of the sidebar, not from the top.
 
 - [x] In the heatmap canvas, the names of the contigs/genomes are not displayed well (they appearh truncated on the left side, and not at all visible on the top side). Also, there is some leftover empty space at the bottom of the heatmap canvas. Also, I want to color bar to be displayed immediately the right side of the heatmap canvas, and not as tall!! just a small color bar, not necessarily the full height of the heatmap canvas.
 
 - [x] Also, dropdown settings for viewing (scale, vmax, colormap, etc) could be displayed in a pretty div in a column style within the `aside` on top, and the CONTIGS would be underneath (and not visible when in contig view).
-
-![alt text](image-4.png)
 
 - [x] In the genome table, when we scroll horizontally to see the last columns, the headings don't scroll with the table, so we can't see what the columns are. 
 
@@ -50,7 +44,6 @@
   of the sidebar. The card styling and the File block stay; those two sections
   would simply move out.
 
-
 - [x] Populate a bottom status bar with a bit of information about the data read, and display all the information currently in READS in the left sidebar when hovering over it. Remove READS from left sidebar. 
 
 - [x] When hovering over cells in the heatmap, display the contig/genome pair names of the cell in a tooltip, and the values of the cell. 
@@ -71,10 +64,6 @@
 - [x] Single Contigs and Single Genome views are different for the location of settings of the heatmap (vmax, colormap, etc). The layout should stay the same, with just the "Contigs" card being hidden when in single contig view.
 
 - [x] Both in contigs and genome view, there is an unnecessary line (eg "metator_00001_00000 — bin/contig level"). Same for contigs view, where "NODE_8641_len_139153" should go up and replace "Region", the region search box spanning NEXT TO it, and the "matched contig NODE_8641_len_139153 · 35 bins · bins 13,432–13,466" below (like in Genome view).
-
-![alt text](image-5.png)
-![alt text](image-6.png)
-
 
 > NOTES ON THE BATCH ABOVE
 
@@ -101,16 +90,12 @@
   `data-theme` on `<html>` wins in both directions over the media query, so a
   user on a dark OS who picks light gets light.
 
-
-## DONE
-
 - [x] Cursor as arrow over the heatmap. 
 - [x] Buttons in the view card for plot options, eg crosshair, dividers, others? 
 - [x] Serve on github pages
 - [x] When the file listing is shown, the left sidebar should be hidden. 
 - [x] A button icon next to the app title to fold the left sidebar. 
 - [x] The files in `public/demo/` offered as examples on the picker. 
-
 
 > NOTES ON THE BATCH ABOVE
 
@@ -140,26 +125,88 @@
 - **Deploy.** The workflow, the remote and the push are done; enabling *Settings
   -> Pages -> Source: GitHub Actions* is the one step that is not code.
 
-## FOR NOW 
-
-- [ ] "open another file" button does not work (when trying a file that fails). 
-- [ ] Put the "Nothing you drop here leaves your browser" at the bottom after dropping area and remote file and example files. 
-- [ ] Make the "Public examples" files a dropdown menu
-- [ ] Public examples return "error - name not defined!"
-- [ ] In the top bar, next to dark/light/system, have more buttons for general app settings, like info, go to github repo, load new file, shortcut modals, any other? 
+- [x] "open another file" button does not work (when trying a file that fails). 
+- [x] Put the "Nothing you drop here leaves your browser" at the bottom after dropping area and remote file and example files. 
+- [x] Make the "Public examples" files a dropdown menu
+- [x] Public examples return "error - name not defined!"
+- [x] In the top bar, next to dark/light/system, have more buttons for general app settings, like info, go to github repo, load new file, shortcut modals, any other? 
 - By default: Crosshair should be on, dividers off, and labels off. Do you see any other toggles to add? 
 - The pointer in the heatmap should really be something like a arrowhead, not a standard pointer. 
-- [ ] The tooltip over the heatmap has redundant contig names. 
+- [x] The tooltip over the heatmap has redundant contig names. 
 
-![alt text](image-8.png)
+- [x] Implement shortcuts and a command palette (cmd+P), with a action bar in the center in the top bar (where title and side buttons are)
+- [x] The title "(meta)cooler" should redirect to the initial file selection page 
+- [x] Spanning next to the contig name (same in genome view!!), I could have < and > buttons to go to the previous and next contig/genome, instead of having to go back to the table view.
 
-- [ ] Implement shortcuts and a command palette (cmd+P), with a action bar in the center in the top bar (where title and side buttons are)
-- [ ] The title "(meta)cooler" should redirect to the initial file selection page 
-- [ ] Spanning next to the contig name (same in genome view!!), I could have < and > buttons to go to the previous and next contig/genome, instead of having to go back to the table view.
+## DONE 
 
-![alt text](image-7.png)
+- [x] For any icon-like thing (eg dropdown, info icon, buttons in top right bar, previous/next, fold, ...): Use real modern clean ICONS, NEVER glyphs or text or characters. This 
+- [x] For github button: use a github icon!
+- [x] The contigs/genomes dropdown is shown BEHIND the FILE card. 
 
+![alt text](image-9.png)
 
+- [x] For the heatmap canvas: I would like it to be cleaner, with less obvious wrapping divs. In particular, when labels are hidden, I want the heatmap to be pan-drag (already the case), but the wrapping div should be invisible, only as a border directly sitting over the heatmap edges (no round corners, no grey background, no padding, as it currently shows). When labels are shown, I would like them to appear OUTSIDE of this border, with no background. 
+
+![alt text](image-10.png)
+![alt text](image-11.png)
+
+- [x] Also, maybe more tricky: when dragging the heatmap, it should not be able to leave the heatmap area and "cut" the heatmap, but instead it should be able to pan-drag the heatmap, and when reaching the edge of the heatmap, it should be blocked and not be able to drag further.
+
+- [x] Rather than vertical/horizontal lines, the dividers should be actual rectangles around each contig/genome, with a transparent background and a border.
+
+- [x] I would like to be able to select a region in the heatmap by clicking and dragging, which should then directly zoom into that region. The selection rectangle should appear with a solid border and a semi-transparent fill color. The selection should be able to be done in any direction (eg from top-left to bottom-right, or bottom-right to top-left, etc). This should work for both contig and genome views. This should be by default, and the panning should be done by holding a modifier key (eg cmd/ctrl) and then click-dragging. This should make a pan hand cursor appear, and the user should be able to then pan-drag the heatmap. 
+
+- [x] Genomes table fr Hum53 and Hum66 metacools does not display well. 
+
+![alt text](image-12.png)
+
+- [x] Whole genome view should have the exact same layout as genome/region views, with the same settings and options, and the same heatmap layout.
+- [x] Whole genome view should be in the dropdown menu of the "genomes" breadcrumb, NOT in the top right bar!
+
+> NOTES ON THE BATCH ABOVE
+
+- **Icons** are drawn now (`ui/icons.ts`), not typed: stroked 24x24 outlines on
+  a 2px grid, one weight, `currentColor`, built with `createElementNS`. A glyph
+  is whatever font the OS picks — a different shape, weight and baseline on
+  every machine, and a box on an unlucky one — and it cannot take a stroke
+  width that matches anything else on screen. Inline SVG also means no font to
+  fetch and nothing for a CSP to block. The GitHub mark is filled rather than
+  stroked because it is a logo (octicons, MIT).
+- **The dropdown was not behind the FILE card**, it was clipped: `.breadcrumb`
+  scrolls horizontally, and `overflow-x: auto` computes `overflow-y` to `auto`
+  too, so a menu hanging below the crumb row was cut off by its own scroller and
+  the card showed through. It is placed against the viewport from the arrow's
+  rect now — which ancestor scrolls is not a popover's business.
+- **The Hum53/Hum66 genomes table was a CSS bug, not bad data.** The file on
+  disk is correct in every field; rows are positioned out of flow, and
+  `min-width: max-content` let each one shrink-to-fit its own content, so a row
+  with a long taxonomy string sized its `1fr` tracks differently from the header
+  and from every other row. Hence a different wrong heading per row.
+- **The panel's chrome is gone** — border, radius, grey fill, padding. The frame
+  is drawn on the plot's own edges by the canvas, because the plot is inset by
+  whatever the labels need and a border on the wrapper sits an arbitrary
+  distance from the data. Labels fall outside that frame, on the page
+  background, unhaloed. Their colour follows the theme now, which it could not
+  while it was `#333333`: that was unreadable in dark mode the moment the
+  wrapper stopped supplying a light fill of its own.
+- **Dividers are boxes**, drawn for the blocks that appear on *both* axes — the
+  diagonal. That is O(blocks); a full grid of boxes would be O(blocks^2), which
+  a 20k-contig genome cannot pay. When the axes share no labels at all (a genome
+  pair, a contig x contig block) the cross-product is used instead, but only
+  while both axes are small enough to label. Selection boundaries stay lines:
+  they mark where one query ends, which is a cut through the picture rather than
+  a region of it.
+- **Drag selects and zooms; ⌘/Ctrl+drag pans**, with the grab hand shown while
+  the modifier is held so the cursor says what a drag would do before it starts.
+  A press that does not travel is still a click in either mode. Leaving the
+  canvas mid-drag abandons the drag rather than finishing it on a corner nobody
+  chose.
+- **Panning stops at the data.** The view used to allow half a viewport of empty
+  space past every edge. Pinned, with the drag-zoom, in
+  `test/unit/heatmap-navigation.test.ts` — asserted through `cellAt`, the same
+  conversion the app uses to turn a pixel into a bin, so the tests fail if the
+  transform and the hit testing ever disagree.
 
 
 ## FOR FUTURE
