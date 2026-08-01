@@ -12,8 +12,12 @@ import { Modal } from './Modal'
 import { el } from './dom'
 import { keyLabel, type Command } from './commands'
 
-/** `render/heatmap.ts` → `handleKeyDown`. Keep in step with it. */
+/** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
+  ['drag', 'Select a region and zoom into it'],
+  ['⌘ / Ctrl + drag', 'Pan'],
+  ['wheel', 'Zoom about the pointer'],
+  ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
   ['+ / −', 'Zoom about the centre'],
   ['0 or Home', 'Fit the block to the canvas'],
@@ -55,7 +59,7 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
         el(
           'section',
           { class: 'shortcut-group' },
-          el('h3', { text: 'Heatmap (while it has focus)' }),
+          el('h3', { text: 'Heatmap' }),
           ...CANVAS_KEYS.map(([keys, text]) => keyRow(keys, text)),
         ),
       )

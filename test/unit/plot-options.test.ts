@@ -66,6 +66,9 @@ function fakeCanvas(cssWidth: number, cssHeight: number): {
     tabIndex: 0,
     getContext: () => ctx,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: cssWidth, height: cssHeight }),
+    // The pointer handler flags a would-be pan on the element itself, so the
+    // fake needs somewhere for that class to go.
+    classList: { toggle: () => {} },
     addEventListener: (type: string, fn: (event: unknown) => void) => listeners.set(type, fn),
     removeEventListener: (type: string) => listeners.delete(type),
     focus: () => {},

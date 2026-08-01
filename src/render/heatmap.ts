@@ -231,6 +231,11 @@ export interface HeatmapOptions {
   maxLabels?: number
   /** Guide lines for the hovered cell; distinct from every separator colour. */
   crosshairColor?: string
+  /** Rubber-band selection: solid edge, translucent fill. */
+  selectionColor?: string
+  selectionFill?: string
+  /** Below this, a drag is a slip during a click rather than a selection. */
+  minSelectPixels?: number
   /** Initial overlay state; each is toggled later by {@link HeatmapView.setPlotOptions}. */
   plotOptions?: Partial<PlotOptions>
   /**
@@ -267,6 +272,24 @@ export interface HeatmapOptions {
 
 // `plotOptions` is resolved into its own field rather than into `opts`,
 // because it is the only option that changes after construction.
+/**
+ * A drag in progress.
+ *
+ * `select` is the default and `pan` needs a modifier, which is the way round a
+ * *map* wants: zooming into a block is the frequent, precise action, and the
+ * one a mouse is bad at doing through a wheel. Panning is the occasional
+ * correction afterwards.
+ */
+interface Drag {
+  mode: 'select' | 'pan'
+  /** Where the button went down, in canvas CSS pixels. */
+  x0: number
+  y0: number
+  /** Where the pointer is now. */
+  x: number
+  y: number
+}
+
 type ResolvedOptions = Required<
   Omit<HeatmapOptions, 'margin' | 'onChange' | 'onCellClick' | 'onHover' | 'plotOptions'>
 > & { margin: Margin }
@@ -356,7 +379,7 @@ export class HeatmapView {
   private computedMargin: Margin
 
   private detachFns: Array<() => void> = []
-  private dragging = false
+  private drag: Drag | null = null
   private dragMoved = false
   private lastX = 0
   private lastY = 0
@@ -381,6 +404,9 @@ export class HeatmapView {
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
       crosshairColor: options.crosshairColor ?? '#1f5fa9',
+      selectionColor: options.selectionColor ?? '#1f5fa9',
+      selectionFill: options.selectionFill ?? 'rgba(31, 95, 169, 0.16)',
+      minSelectPixels: options.minSelectPixels ?? 6,
       autoMargin: options.autoMargin ?? false,
       devicePixelRatio: options.devicePixelRatio ?? 0,
       minVisibleCells: options.minVisibleCells ?? 4,
@@ -658,11 +684,12 @@ export class HeatmapView {
     const { nrows, ncols } = this.dims()
     const visW = plot.width / this.zoom
     const visH = plot.height / this.zoom
-    // Allow the matrix to be pushed half a viewport off either edge, so a
-    // corner of a large map can be brought to the centre of the screen, but no
-    // further — panning off into empty space is a bug report waiting to happen.
-    this.originX = clamp(this.originX, -visW / 2, ncols - visW / 2)
-    this.originY = clamp(this.originY, -visH / 2, nrows - visH / 2)
+    // An edge is a wall, not a hint: the data cannot be dragged out of its own
+    // frame, so a pan stops when the last row or column reaches the border
+    // rather than sliding the map into empty space. When the whole matrix fits,
+    // there is nothing to pan and it stays centred.
+    this.originX = visW >= ncols ? (ncols - visW) / 2 : clamp(this.originX, 0, ncols - visW)
+    this.originY = visH >= nrows ? (nrows - visH) / 2 : clamp(this.originY, 0, nrows - visH)
   }
 
   private syncScales(): void {
@@ -675,6 +702,38 @@ export class HeatmapView {
 
   private changed(): void {
     this.onChange?.()
+  }
+
+  /**
+   * Zoom to the box the user dragged, in canvas CSS pixels.
+   *
+   * The two corners arrive in whatever order they were drawn, so both are
+   * normalised: a selection made bottom-right to top-left is the same
+   * selection. The result is *centred* rather than pinned to the box's corner,
+   * because the zoom may be clamped and a clamped box that fills less than the
+   * plot should sit in the middle of it.
+   */
+  zoomToBox(ax: number, ay: number, bx: number, by: number): void {
+    const plot = this.plotRect
+    const left = Math.max(plot.x, Math.min(ax, bx))
+    const right = Math.min(plot.x + plot.width, Math.max(ax, bx))
+    const top = Math.max(plot.y, Math.min(ay, by))
+    const bottom = Math.min(plot.y + plot.height, Math.max(ay, by))
+    const wPx = right - left
+    const hPx = bottom - top
+    if (wPx < this.opts.minSelectPixels || hPx < this.opts.minSelectPixels) return
+
+    const cols = wPx / this.zoom
+    const rows = hPx / this.zoom
+    const centreCol = this.originX + (left - plot.x) / this.zoom + cols / 2
+    const centreRow = this.originY + (top - plot.y) / this.zoom + rows / 2
+
+    this.zoom = clamp(Math.min(plot.width / cols, plot.height / rows), this.minZoom(), this.maxZoom())
+    this.originX = centreCol - plot.width / this.zoom / 2
+    this.originY = centreRow - plot.height / this.zoom / 2
+    this.clampView()
+    this.syncScales()
+    this.changed()
   }
 
   // -- hit testing ---------------------------------------------------------
@@ -745,6 +804,29 @@ export class HeatmapView {
     if (this.plot.dividers) this.drawSeparators()
     this.drawLabels()
     if (this.plot.crosshair) this.drawCrosshair()
+    this.drawSelection()
+  }
+
+  /** The rubber band, while a selection drag is in progress. */
+  private drawSelection(): void {
+    const drag = this.drag
+    if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
+    const plot = this.plotRect
+    const ctx = this.ctx
+    const x = Math.min(drag.x0, drag.x)
+    const y = Math.min(drag.y0, drag.y)
+    const w = Math.abs(drag.x - drag.x0)
+    const h = Math.abs(drag.y - drag.y0)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.fillStyle = this.opts.selectionFill
+    ctx.fillRect(x, y, w, h)
+    ctx.strokeStyle = this.opts.selectionColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 1)
+    ctx.strokeRect(this.snap(x), this.snap(y), Math.round(w), Math.round(h))
+    ctx.restore()
   }
 
   private rasterizeNow(): void {
@@ -979,42 +1061,70 @@ export class HeatmapView {
       return [e.clientX - r.left, e.clientY - r.top]
     }
 
+    /**
+     * A modifier turns the drag into a pan. ⌘ on a Mac, Ctrl elsewhere — and
+     * the middle button, which means pan everywhere it exists.
+     */
+    const wantsPan = (e: MouseEvent): boolean => e.metaKey || e.ctrlKey || e.button === 1
+
+    /** Show the grab hand exactly while a pan is what a drag would do. */
+    const showPanCursor = (on: boolean): void => {
+      canvas.classList.toggle('panning', on)
+    }
+
     const onDown = (e: MouseEvent): void => {
-      this.dragging = true
-      this.dragMoved = false
       const [x, y] = local(e)
+      this.dragMoved = false
+      this.drag = { mode: wantsPan(e) ? 'pan' : 'select', x0: x, y0: y, x, y }
       this.lastX = x
       this.lastY = y
       canvas.focus()
     }
     const onMove = (e: MouseEvent): void => {
       const [x, y] = local(e)
-      if (this.dragging) {
-        const dx = x - this.lastX
-        const dy = y - this.lastY
-        if (Math.abs(dx) + Math.abs(dy) > 2) this.dragMoved = true
-        this.lastX = x
-        this.lastY = y
-        this.panBy(dx, dy)
+      const drag = this.drag
+      showPanCursor(drag === null ? wantsPan(e) : drag.mode === 'pan')
+      if (drag !== null) {
+        if (Math.abs(x - drag.x0) + Math.abs(y - drag.y0) > 2) this.dragMoved = true
+        if (drag.mode === 'pan') {
+          this.panBy(x - this.lastX, y - this.lastY)
+          this.lastX = x
+          this.lastY = y
+        } else {
+          drag.x = x
+          drag.y = y
+        }
         this.draw()
-      } else {
-        const cell = this.cellAt(x, y)
-        this.setHover(cell)
-        this.onHover?.(cell, { x, y })
+        return
       }
+      const cell = this.cellAt(x, y)
+      this.setHover(cell)
+      this.onHover?.(cell, { x, y })
     }
     const onUp = (e: MouseEvent): void => {
-      if (this.dragging && !this.dragMoved && this.onCellClick !== null) {
-        const [x, y] = local(e)
+      const drag = this.drag
+      this.drag = null
+      if (drag === null) return
+      const [x, y] = local(e)
+      // A press that did not travel is a click, in either mode: §5.5's
+      // cross-navigation must not need a steady hand.
+      if (!this.dragMoved) {
         const cell = this.cellAt(x, y)
-        if (cell !== null) this.onCellClick(cell)
+        if (cell !== null && this.onCellClick !== null) this.onCellClick(cell)
+        return
       }
-      this.dragging = false
+      if (drag.mode === 'select') this.zoomToBox(drag.x0, drag.y0, x, y)
+      this.draw()
     }
     const onLeave = (): void => {
-      this.dragging = false
+      // Abandon the drag rather than finish it blind: a selection whose second
+      // corner is off-canvas is not the selection anyone meant.
+      const wasDragging = this.drag !== null
+      this.drag = null
+      showPanCursor(false)
       this.setHover(null)
       this.onHover?.(null)
+      if (wasDragging) this.draw()
     }
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault()
