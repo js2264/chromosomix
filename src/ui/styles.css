@@ -484,11 +484,15 @@ p {
   background: var(--bg-raised);
 }
 
+/* `position: fixed`, and placed from the arrow's own rect when it opens.
+   `.breadcrumb` scrolls horizontally, and an `overflow-x: auto` box computes
+   `overflow-y` to `auto` as well — so an absolutely positioned menu hanging
+   below the crumb row was clipped by it, which read on screen as the dropdown
+   being painted *behind* the file card underneath. Nothing about a popover
+   should depend on which ancestor happens to scroll. */
 .crumb-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
+  position: fixed;
+  z-index: 40;
   min-width: 8rem;
   display: flex;
   flex-direction: column;
