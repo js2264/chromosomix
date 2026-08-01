@@ -161,8 +161,6 @@
 
 ![alt text](image-12.png)
 
-- [x] Whole genome view should have the exact same layout as genome/region views, with the same settings and options, and the same heatmap layout.
-- [x] Whole genome view should be in the dropdown menu of the "genomes" breadcrumb, NOT in the top right bar!
 
 > NOTES ON THE BATCH ABOVE
 
@@ -207,6 +205,73 @@
   `test/unit/heatmap-navigation.test.ts` — asserted through `cellAt`, the same
   conversion the app uses to turn a pixel into a bin, so the tests fail if the
   transform and the hit testing ever disagree.
+
+## DONE
+
+- [x] Whole genome view should have the exact same layout as genome/region views, with the same settings and options, and the same heatmap layout.
+- [x] Whole genome view should be in the dropdown menu of the "genomes" breadcrumb, NOT in the top right bar!
+- [x] In genome view, the dividers could be lines, but they should not extend beyond the heatmap boundaries, even when zooming out. 
+- [x] In the genome view and whole genome view and contig view, the area for heatmap should be exactly square and adapt to resizing of the window. It should center itself in the available space and the color scale should be sitting immediately to the right of the heatmap. Then VIEW and CONTIGS cards stay aligned to the right side of the screen. 
+- [x] Icons should really be existing logos rather than sketched SVGs! For example, the github icon should be the official github logo, and not a sketched SVG.
+- [x] Buttons in top right should be (from left to right): theme, shortcuts, github, info (no need for a "load new file" button, as the user can just click on the app title to go back to the file selection page).
+- [x] The coordinates that are printed BELOW the heatmap canvas should be in thebottom status bar, left side. READ/VALIDATION should be aligned to right. No "Files are read in place. Nothing is uploaded, and there is no server." needed. 
+
+![alt text](image-14.png)
+
+- [x] When the heatmap-canvas is "focus-visible", there currently is a blue outline around the heatmap canvas. It should be removed and invisible. 
+- [x] Actually, the default click should be to pan-drag, option+click should be to select a region and zoom into it, double-click should be to reset the zoom, and single-click to go to contigs/view. 
+
+![alt text](image-15.png)
+
+- [x] "genomes" should appear with cohoerent styling within the breadcrumb. It should be Uppercase (Genomes/Contigs/Whole Genome). 
+
+![alt text](image-16.png)
+
+- [x] The "opening MM133.mmetacool::1000…" loading message should be at the center, slightly more prominent and modern-looking, and modern-looking loading indicator. 
+- [x] In Whole-genome view, dividers in the contig x contig heatmap should show GENOMES !
+- [x] Whole-genome view should behave the same as genome/contig. Right now, "G" goes to genome view, "C" to contig view, "W" opens a whole-genome view but then "G" after that does not go back to genome view. I have to press again "W" to hide the whole genome view.
+
+> NOTES ON THE BATCH ABOVE
+
+- **The icons come from the packages that publish them** now: `npm run icons`
+  copies Lucide (ISC) and Simple Icons (CC0) into a committed
+  `src/ui/icons.generated.ts`. Both are devDependencies of the generator, so the
+  app still ships with no icon dependency and nothing to fetch at runtime. The
+  hand-drawn GitHub mark was the clearest case — a logo that is nearly right is
+  visibly wrong — but the interface icons had the same problem one level down:
+  corner radii and optical weight that did not match the set they imitated.
+- **The whole-genome view** was three complaints with one cause: it did not
+  look, sit or behave like the rest of the app. It has the standard layout now
+  (heading, summary, plot, controls in the sidebar), it lives in the root
+  crumb's menu beside Genomes and Contigs rather than in the corner of the
+  window, and `G`/`C` leave it. That last one was a real bug: those keys set a
+  view state the shell was already ignoring, so nothing happened until you
+  pressed `W` again. Both go through `navigate`, which drops the overview and
+  forces the render when the state being set is the one already there.
+- **Dividers were kept as boxes**, not returned to lines — the batch above asked
+  for boxes and this one said lines "could" be used. What was actually wrong is
+  fixed: every piece of chrome now clips to `dataRect`, the part of the plot the
+  data occupies, so nothing runs on past the last bin when you zoom out. Say the
+  word if you want lines back; it is one branch in `drawSeparators`.
+- **In the contig x contig overview the boundaries are genomes.** The reader
+  sends the genome each selected contig belongs to, and consecutive runs of it
+  become a second, coarser group set. The per-contig labels are untouched: the
+  tooltip answers with the thing under the pointer, the lines answer with the
+  thing you are looking for.
+- **Pan is the default drag and Option selects.** A single click still opens what
+  a cell refers to, but it waits out the double-click window first — otherwise
+  the second click of a "reset the zoom" lands after the first has navigated
+  away. 250 ms, which is what every toolkit guesses when the platform will not
+  say. The cursor now reports what is happening rather than what could: the
+  arrowhead at rest, a crosshair while Option is held, the closed hand mid-pan.
+- **The plot is square** — sized from the height the window can spare, capped by
+  the column, `aspect-ratio` keeping the two in step — and centred with its
+  legend against its edge, which leaves the sidebar cards where they were.
+- **The readout moved to the status bar** and took the standing privacy sentence
+  out with it. The picker states that at the moment it matters; a footer note
+  that never changes stops being read.
+- **Each of the eight commits typechecks on its own**, checked before committing
+  this time rather than after.
 
 
 ## FOR FUTURE
