@@ -12,7 +12,8 @@
  * closes it should still be where they were.
  */
 
-import { button, el } from './dom'
+import { el } from './dom'
+import { iconButton } from './icons'
 
 export interface ModalProps {
   title: string
@@ -43,7 +44,7 @@ export class Modal {
         'header',
         { class: 'modal-head' },
         el('h2', { class: 'modal-title', text: props.title }),
-        button('×', close, { class: 'btn-close', title: 'Close (Esc)' }),
+        iconButton('x', 'Close (Esc)', close, { class: 'btn-close', size: 16 }),
       ),
       props.body(close),
     )

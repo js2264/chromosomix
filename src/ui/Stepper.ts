@@ -11,7 +11,8 @@
  * opened is the difference between "broken" and "you are at the last one".
  */
 
-import { button, el } from './dom'
+import { el } from './dom'
+import { iconButton, type IconName } from './icons'
 
 export interface StepperProps {
   /** The names one step away; `null` disables that side. */
@@ -22,14 +23,15 @@ export interface StepperProps {
 }
 
 export function stepper(props: StepperProps): HTMLElement {
-  const make = (glyph: string, delta: number, name: string | null): HTMLButtonElement => {
-    const node = button(glyph, () => props.onStep(delta), {
-      class: 'btn btn-step',
-      title:
-        name === null
-          ? `No ${delta < 0 ? 'previous' : 'next'} ${props.noun}`
-          : `${delta < 0 ? 'Previous' : 'Next'} ${props.noun}: ${name}`,
-    })
+  const make = (glyph: IconName, delta: number, name: string | null): HTMLButtonElement => {
+    const node = iconButton(
+      glyph,
+      name === null
+        ? `No ${delta < 0 ? 'previous' : 'next'} ${props.noun}`
+        : `${delta < 0 ? 'Previous' : 'Next'} ${props.noun}: ${name}`,
+      () => props.onStep(delta),
+      { class: 'btn btn-step', size: 15 },
+    )
     node.disabled = name === null
     node.setAttribute('aria-label', `${delta < 0 ? 'previous' : 'next'} ${props.noun}`)
     return node
@@ -37,7 +39,7 @@ export function stepper(props: StepperProps): HTMLElement {
   return el(
     'div',
     { class: 'stepper' },
-    make('‹', -1, props.neighbours.prev),
-    make('›', 1, props.neighbours.next),
+    make('chevron-left', -1, props.neighbours.prev),
+    make('chevron-right', 1, props.neighbours.next),
   )
 }

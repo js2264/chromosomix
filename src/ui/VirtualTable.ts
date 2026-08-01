@@ -13,6 +13,7 @@
  * selects rows it can positively vouch for.
  */
 
+import { icon } from './icons'
 import { clear, debounce, el } from './dom'
 
 export type ColumnKind = 'string' | 'number'
@@ -284,7 +285,8 @@ export class VirtualTable {
       const column = this.options.columns[index - offset]
       const arrow = cell.querySelector('.sort-arrow')
       if (arrow === null || column === undefined) continue
-      arrow.textContent = this.sortKey === column.key ? (this.sortDir === 1 ? '▲' : '▼') : ''
+      if (this.sortKey !== column.key) arrow.replaceChildren()
+      else arrow.replaceChildren(icon(this.sortDir === 1 ? 'chevron-up' : 'chevron-down', { size: 13 }))
     }
   }
 

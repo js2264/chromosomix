@@ -16,6 +16,7 @@
  * `localStorage` alongside the theme, not in the per-session `state/UiMemory`.
  */
 
+import { icon } from './icons'
 import { el } from './dom'
 
 const KEY = 'metacooler-viewer:sidebar-collapsed'
@@ -70,7 +71,7 @@ export class SidebarToggle {
   private paint(): void {
     this.host.classList.toggle('collapsed', this.collapsed || !this.available)
     this.el.classList.toggle('hidden', !this.available)
-    this.el.textContent = this.collapsed ? '⇥' : '⇤'
+    this.el.replaceChildren(icon(this.collapsed ? 'panel-left-open' : 'panel-left-close'))
     this.el.title = this.collapsed ? 'Show the file info sidebar' : 'Fold the file info sidebar'
     this.el.setAttribute('aria-expanded', String(!this.collapsed))
   }

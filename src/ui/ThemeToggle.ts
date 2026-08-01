@@ -13,16 +13,17 @@
  */
 
 import { el } from './dom'
+import { icon, type IconName } from './icons'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 
 const KEY = 'metacooler-viewer:theme'
 const ORDER: ThemeChoice[] = ['system', 'light', 'dark']
 
-const ICON: Record<ThemeChoice, string> = {
-  system: '◐',
-  light: '☀',
-  dark: '☾',
+const ICON: Record<ThemeChoice, IconName> = {
+  system: 'monitor',
+  light: 'sun',
+  dark: 'moon',
 }
 
 function read(): ThemeChoice {
@@ -87,7 +88,7 @@ export class ThemeToggle {
   }
 
   private paint(): void {
-    this.el.textContent = ICON[this.choice]
+    this.el.replaceChildren(icon(ICON[this.choice]))
     this.el.title = `Theme: ${this.choice}. Click for ${this.next()}.`
   }
 }

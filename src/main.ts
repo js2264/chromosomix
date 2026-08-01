@@ -38,6 +38,7 @@ import type { TableUiState } from './ui/VirtualTable'
 import { isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
 import { openAbout, openShortcuts } from './ui/dialogs'
 import { button, el } from './ui/dom'
+import { icon, iconButton } from './ui/icons'
 import { demoExamples } from './ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
 import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from './ui/plotOptions'
@@ -125,10 +126,10 @@ class App {
     const source = el('a', {
       class: 'btn btn-icon',
       href: REPO_URL,
-      text: '↗',
       title: 'Source, issues and the format specification on GitHub',
       attrs: { target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'source on GitHub' },
     })
+    source.appendChild(icon('github'))
 
     root.append(
       el(
@@ -153,9 +154,9 @@ class App {
           'div',
           { class: 'head-actions' },
           this.overviewButton,
-          this.iconButton('⊕', 'Open a different file', () => this.toPicker()),
-          this.iconButton('⌨', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
-          this.iconButton('ⓘ', 'About this viewer', () => this.openAboutDialog()),
+          iconButton('file-plus', 'Open a different file', () => this.toPicker()),
+          iconButton('keyboard', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
+          iconButton('info', 'About this viewer', () => this.openAboutDialog()),
           source,
           this.theme.el,
         ),
@@ -172,12 +173,6 @@ class App {
     this.store.subscribe((state) => void this.render(state))
     this.store.connectHash()
     if (this.store.state === null) void this.render(null)
-  }
-
-  private iconButton(glyph: string, title: string, onClick: () => void): HTMLButtonElement {
-    const node = button(glyph, onClick, { class: 'btn btn-icon', title })
-    node.setAttribute('aria-label', title)
-    return node
   }
 
   // -------------------------------------------------------------------------

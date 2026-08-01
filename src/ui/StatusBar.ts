@@ -10,6 +10,7 @@
  * on the picker is a *reminder* and this is the standing disclosure.
  */
 
+import { icon } from './icons'
 import type { ReaderClient } from '../worker/client'
 import type { StatsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
@@ -114,7 +115,8 @@ export class StatusBar {
     this.validationItem.classList.remove('ok', 'bad')
     try {
       const result = await this.props.client.request<'validateDeep'>({ kind: 'validateDeep' })
-      this.validationLabel.textContent = result.ok ? '✓' : `${result.problems.length} problem(s)`
+      if (result.ok) this.validationLabel.replaceChildren(icon('check', { size: 14 }))
+      else this.validationLabel.textContent = `${result.problems.length} problem(s)`
       this.validationItem.classList.toggle('ok', result.ok)
       this.validationItem.classList.toggle('bad', !result.ok)
       this.validationDetail.replaceChildren(

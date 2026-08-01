@@ -13,6 +13,7 @@
  * whether it came off a disk or a bucket.
  */
 
+import { iconButton } from './icons'
 import { button, el } from './dom'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
@@ -216,13 +217,14 @@ export class FilePicker {
             'nothing remains.',
         }),
       ),
-      button(
-        '×',
+      iconButton(
+        'x',
+        'Dismiss. The footer keeps the same statement.',
         () => {
           dismissPrivacy()
           note.remove()
         },
-        { class: 'btn-close', title: 'Dismiss. The footer keeps the same statement.' },
+        { class: 'btn-close', size: 15 },
       ),
     )
     return note

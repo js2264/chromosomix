@@ -18,6 +18,7 @@
  * single-genome table has nothing to show (§9), so `contigs` is the only choice.
  */
 
+import { icon } from './icons'
 import type { ViewState } from '../types'
 import { el } from './dom'
 
@@ -132,10 +133,10 @@ export class Breadcrumb {
     const arrow = el('button', {
       class: 'crumb-arrow',
       type: 'button',
-      text: '▾',
       title: `Switch to the ${other.join(' or ')} table`,
       attrs: { 'aria-label': 'choose which table to browse' },
     })
+    arrow.appendChild(icon('chevron-down', { size: 14 }))
     const menu = el('div', { class: 'crumb-menu hidden' })
     for (const kind of rootChoices) {
       const item = el('button', {
@@ -154,6 +155,11 @@ export class Breadcrumb {
       const opening = menu.classList.contains('hidden')
       menu.classList.toggle('hidden', !opening)
       if (opening) {
+        // Placed against the viewport from the arrow's own rect: the crumb row
+        // scrolls horizontally, and a scroller clips what hangs out of it.
+        const rect = arrow.getBoundingClientRect()
+        menu.style.top = `${rect.bottom + 4}px`
+        menu.style.left = `${rect.left}px`
         // One outside click closes it; `once` means no listener outlives the menu.
         window.addEventListener('click', () => menu.classList.add('hidden'), { once: true })
       }
@@ -163,7 +169,7 @@ export class Breadcrumb {
 
   private separator(): void {
     if (this.el.childNodes.length > 0) {
-      this.el.appendChild(el('span', { class: 'crumb-sep', text: '›' }))
+      this.el.appendChild(el('span', { class: 'crumb-sep' }, icon('chevron-right', { size: 14 })))
     }
   }
 
