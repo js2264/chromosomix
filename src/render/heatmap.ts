@@ -927,6 +927,7 @@ export class HeatmapView {
   ): void {
     const ctx = this.ctx
     const plot = this.plotRect
+    const data = this.dataRect
     const vertical = axis === 'cols'
     const scale = vertical ? this.colScale : this.rowScale
     const base = vertical ? plot.x : plot.y
@@ -938,11 +939,11 @@ export class HeatmapView {
       const p = this.snap(base + scale.toPixel(sep.at))
       ctx.beginPath()
       if (vertical) {
-        ctx.moveTo(p, plot.y)
-        ctx.lineTo(p, plot.y + plot.height)
+        ctx.moveTo(p, data.y)
+        ctx.lineTo(p, data.y + data.height)
       } else {
-        ctx.moveTo(plot.x, p)
-        ctx.lineTo(plot.x + plot.width, p)
+        ctx.moveTo(data.x, p)
+        ctx.lineTo(data.x + data.width, p)
       }
       ctx.stroke()
     }
@@ -985,63 +986,40 @@ export class HeatmapView {
   }
 
   /**
-   * Block boundaries, drawn as boxes rather than as rules across the plot.
+   * Block boundaries, as rules across the data.
    *
-   * A full-width line says "something changes here"; a box says "this square is
-   * one contig", which is the question being asked of a metagenomic map. On a
-   * symmetric view every block that appears on both axes gets its own square —
-   * the diagonal boxes — which is O(blocks) rather than the O(blocks²) a whole
-   * grid of boxes would cost on a 20 k-contig genome.
+   * Lines rather than boxes, because a box only marks the blocks that appear on
+   * *both* axes — the diagonal — and the question a contact map is usually being
+   * asked is about the off-diagonal: where does this contig meet that one. A
+   * rule crosses every block on its way, so every boundary is visible from
+   * anywhere in the picture.
    *
-   * When the two axes share no labels at all (a genome pair, a contig × contig
-   * block) there is no diagonal to draw, so the cross-product is used instead —
-   * but only while both axes are small enough to label, which is the same
-   * threshold that keeps the picture readable in the first place.
+   * Clipped to the data, not to the plot: zoomed out, the matrix is smaller than
+   * the area reserved for it, and a divider running on past the last bin claims
+   * there is something out there.
    */
   private drawSeparators(): void {
     const { nrows, ncols } = this.dims()
-    const rows = separatorBlocks(this.separators.rows, nrows)
-    const cols = separatorBlocks(this.separators.cols, ncols)
-    if (rows.length === 0 && cols.length === 0) return
     const plot = this.dataRect
+    if (plot.width <= 0 || plot.height <= 0) return
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
     ctx.clip()
+
     ctx.strokeStyle = this.opts.separatorColor
     ctx.lineWidth = Math.max(this.opts.separatorWidth, 1 / this.dpr)
+    this.strokeBoundary(this.separators.cols, 'cols', ncols)
+    this.strokeBoundary(this.separators.rows, 'rows', nrows)
 
-    const byLabel = new Map(cols.map((block) => [block.label, block]))
-    const diagonal = rows.filter((block) => byLabel.has(block.label))
-    if (diagonal.length > 0) {
-      for (const block of diagonal) this.strokeBlock(block, byLabel.get(block.label) as LabelBlock)
-    } else if (rows.length <= this.opts.maxLabels && cols.length <= this.opts.maxLabels) {
-      for (const row of rows) for (const col of cols) this.strokeBlock(row, col)
-    }
-
-    // Selection-block boundaries stay lines: they mark where one *query* ends
-    // and the next begins, which is a cut through the picture rather than a
-    // region of it.
+    // The coarser set on top, heavier: genomes over contigs in a whole-genome
+    // view, and selection-block edges everywhere else.
     ctx.strokeStyle = this.opts.groupSeparatorColor
     ctx.lineWidth = Math.max(this.opts.groupSeparatorWidth, 1 / this.dpr)
     this.strokeBoundary(this.separators.groupCols ?? [], 'cols', ncols)
     this.strokeBoundary(this.separators.groupRows ?? [], 'rows', nrows)
     ctx.restore()
-  }
-
-  /** One box: rows give the vertical extent, cols the horizontal. */
-  private strokeBlock(row: LabelBlock, col: LabelBlock): void {
-    const plot = this.dataRect
-    const origin = this.plotRect
-    const x0 = this.snap(origin.x + this.colScale.toPixel(col.start))
-    const x1 = this.snap(origin.x + this.colScale.toPixel(col.end))
-    const y0 = this.snap(origin.y + this.rowScale.toPixel(row.start))
-    const y1 = this.snap(origin.y + this.rowScale.toPixel(row.end))
-    // Off-screen boxes cost a stroke each on a 4 k-contig genome; skip them.
-    if (x1 < plot.x || x0 > plot.x + plot.width) return
-    if (y1 < plot.y || y0 > plot.y + plot.height) return
-    this.ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
   }
 
   /**
