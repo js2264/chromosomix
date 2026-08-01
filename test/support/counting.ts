@@ -62,6 +62,7 @@ class MemoryXhr {
   responseType = ''
   private url = ''
   private range: [number, number] | null = null
+  private served: [number, number, number] = [0, 0, 0]
 
   open(_method: string, url: string, _async: boolean): void {
     this.url = url
@@ -84,9 +85,25 @@ class MemoryXhr {
       throw new Error(`${this.url}: a range request must carry a Range header`)
     }
     const [from, to] = this.range
-    const slice = bytes.subarray(from, Math.min(to + 1, bytes.byteLength))
+    const end = Math.min(to, bytes.byteLength - 1)
+    const slice = bytes.subarray(from, end + 1)
+    this.served = [from, end, bytes.byteLength]
     this.status = 206
     this.response = slice.slice().buffer
+  }
+
+  /**
+   * `Content-Range`, which the reader believes over everything else.
+   *
+   * Not optional furniture: `RemoteRangeSource.windowOf` uses this header to
+   * find where the body it got actually starts, because a host may answer 206
+   * and send the whole object anyway. A stub without it makes every read look
+   * like an offset-less one.
+   */
+  getResponseHeader(header: string): string | null {
+    if (header.toLowerCase() !== 'content-range') return null
+    const [from, to, total] = this.served
+    return `bytes ${from}-${to}/${total}`
   }
 }
 
