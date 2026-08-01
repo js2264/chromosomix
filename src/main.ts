@@ -20,6 +20,7 @@ import type { ViewState } from './types'
 import { ReaderClient } from './worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from './worker/protocol'
 import { Breadcrumb } from './ui/Breadcrumb'
+import { openCommandPalette } from './ui/CommandPalette'
 import { ContigsTable } from './ui/ContigsTable'
 import { ErrorView } from './ui/ErrorView'
 import { FilePicker, firstEntry } from './ui/FilePicker'
@@ -29,13 +30,20 @@ import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
 import { RegionView } from './ui/RegionView'
+import type { Modal } from './ui/Modal'
 import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
+import { isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
+import { openAbout, openShortcuts } from './ui/dialogs'
 import { button, el } from './ui/dom'
 import { demoExamples } from './ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
+import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from './ui/plotOptions'
+
+/** Where "source" points, from the about dialog and the header. */
+const REPO_URL = 'https://github.com/js2264/metacooler.js'
 
 interface OpenFile {
   /**
@@ -66,7 +74,10 @@ class App {
   private readonly overviewButton: HTMLButtonElement
   private readonly picker: FilePicker
   private readonly sidebar: SidebarToggle
+  private readonly theme: ThemeToggle
   private readonly status: StatusBar
+  /** At most one dialog at a time; it owns the keyboard while it is up. */
+  private modal: Modal | null = null
 
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
@@ -94,6 +105,30 @@ class App {
     this.sidebar = new SidebarToggle(this.sideHost)
 
     this.status = new StatusBar({ client: this.client })
+    this.theme = new ThemeToggle()
+
+    // The title is the way home. It reads as one, so it should behave as one:
+    // clicking it returns to the file picker, which is the only view above
+    // every other (§5.1).
+    const home = button('(meta)cooler', () => this.toPicker(), {
+      class: 'brand-name brand-home',
+      title: 'Back to the file picker',
+    })
+
+    const palette = button('', () => this.openPalette(), { class: 'action-bar' })
+    palette.replaceChildren(
+      el('span', { class: 'action-bar-text', text: 'Search commands…' }),
+      el('kbd', { class: 'kbd', text: keyLabel('mod+p') }),
+    )
+    palette.title = 'Every action in this app, searchable'
+
+    const source = el('a', {
+      class: 'btn btn-icon',
+      href: REPO_URL,
+      text: '↗',
+      title: 'Source, issues and the format specification on GitHub',
+      attrs: { target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'source on GitHub' },
+    })
 
     root.append(
       el(
@@ -106,18 +141,23 @@ class App {
           el(
             'div',
             { class: 'brand' },
-            el('span', { class: 'brand-name', text: '(meta)cooler' }),
+            home,
             el('span', {
               class: 'brand-sub',
               text: '(multi-genome) cool files, in the browser',
             }),
           ),
         ),
+        palette,
         el(
           'div',
           { class: 'head-actions' },
           this.overviewButton,
-          new ThemeToggle().el,
+          this.iconButton('⊕', 'Open a different file', () => this.toPicker()),
+          this.iconButton('⌨', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
+          this.iconButton('ⓘ', 'About this viewer', () => this.openAboutDialog()),
+          source,
+          this.theme.el,
         ),
       ),
       this.breadcrumbHost,
@@ -126,6 +166,189 @@ class App {
       el('div', { class: 'app-body' }, this.content, this.sideHost),
       this.status.el,
     )
+
+    window.addEventListener('keydown', (event) => this.onKeyDown(event))
+
+    this.store.subscribe((state) => void this.render(state))
+    this.store.connectHash()
+    if (this.store.state === null) void this.render(null)
+  }
+
+  private iconButton(glyph: string, title: string, onClick: () => void): HTMLButtonElement {
+    const node = button(glyph, onClick, { class: 'btn btn-icon', title })
+    node.setAttribute('aria-label', title)
+    return node
+  }
+
+  // -------------------------------------------------------------------------
+  // Commands
+  // -------------------------------------------------------------------------
+
+  /**
+   * Every action, rebuilt on demand so `enabled` reflects the state the user is
+   * actually in. One list feeds the palette, the shortcuts dialog and the key
+   * handler; a shortcut that works but is undocumented is how these rot.
+   */
+  private commands(): Command[] {
+    const state = this.store.state
+    const file = this.file
+    const isMetacool = file?.info.layout.kind === 'metacool'
+    const overlays = getPlotOptions()
+    const list: Command[] = [
+      {
+        id: 'palette',
+        group: 'App',
+        title: 'Search commands',
+        keys: 'mod+p',
+        run: () => this.openPalette(),
+      },
+      {
+        id: 'open-file',
+        group: 'File',
+        title: 'Open a different file',
+        keys: 'o',
+        run: () => this.toPicker(),
+      },
+      {
+        id: 'go-genomes',
+        group: 'Go',
+        title: 'Genomes table',
+        keys: 'g',
+        enabled: file !== null && isMetacool,
+        run: () => {
+          if (state !== null) this.store.set({ uri: state.uri, view: 'genomes' })
+        },
+      },
+      {
+        id: 'go-contigs',
+        group: 'Go',
+        title: 'Contigs table',
+        keys: 'c',
+        enabled: file !== null,
+        run: () => {
+          if (state !== null) this.store.set({ uri: state.uri, view: 'contigs' })
+        },
+      },
+      {
+        id: 'go-overview',
+        group: 'Go',
+        title: 'Whole metagenome',
+        hint: 'Costs a full pixel scan; it never starts on its own.',
+        keys: 'w',
+        enabled: file !== null && isMetacool,
+        run: () => this.toggleOverview(),
+      },
+      {
+        id: 'go-prev',
+        group: 'Go',
+        title: 'Previous genome or contig',
+        hint: this.stepTarget(-1) ?? undefined,
+        keys: '[',
+        enabled: this.stepTarget(-1) !== null,
+        run: () => this.step(-1),
+      },
+      {
+        id: 'go-next',
+        group: 'Go',
+        title: 'Next genome or contig',
+        hint: this.stepTarget(1) ?? undefined,
+        keys: ']',
+        enabled: this.stepTarget(1) !== null,
+        run: () => this.step(1),
+      },
+    ]
+
+    const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
+      ['crosshair', 'x'],
+      ['dividers', 'd'],
+      ['labels', 'l'],
+    ]
+    for (const [key, binding] of overlayKeys) {
+      list.push({
+        id: `overlay-${key}`,
+        group: 'View',
+        title: `${overlays[key] ? 'Hide' : 'Show'} ${PLOT_OPTION_LABELS[key].label}`,
+        hint: PLOT_OPTION_LABELS[key].hint,
+        keys: binding,
+        run: () => void togglePlotOption(key),
+      })
+    }
+
+    list.push(
+      {
+        id: 'fold-sidebar',
+        group: 'View',
+        title: 'Fold or show the file info sidebar',
+        keys: 'b',
+        enabled: file !== null,
+        run: () => this.sidebar.el.click(),
+      },
+      {
+        id: 'theme',
+        group: 'View',
+        title: 'Cycle the theme: system, light, dark',
+        keys: 't',
+        run: () => this.theme.el.click(),
+      },
+      {
+        id: 'shortcuts',
+        group: 'Help',
+        title: 'Keyboard shortcuts',
+        keys: '?',
+        run: () => this.openShortcutsDialog(),
+      },
+      { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
+      {
+        id: 'source',
+        group: 'Help',
+        title: 'Source on GitHub',
+        run: () => window.open(REPO_URL, '_blank', 'noopener'),
+      },
+    )
+    return list
+  }
+
+  /**
+   * Dispatch a keystroke.
+   *
+   * A dialog owns the keyboard while it is open, and anything typed into an
+   * input belongs to that input — `?` and `[` are legal in a contig name, and
+   * `o` is legal in every name there is. Chords survive both, because ⌘P from a
+   * text box is still ⌘P.
+   */
+  private onKeyDown(event: KeyboardEvent): void {
+    if (this.modal !== null) return
+    const typing = isTypingTarget(event.target)
+    for (const command of this.commands()) {
+      if (command.keys === undefined || command.enabled === false) continue
+      if (typing && !command.keys.startsWith('mod+')) continue
+      if (!matchesKeys(event, command.keys)) continue
+      event.preventDefault()
+      command.run()
+      return
+    }
+  }
+
+  private openPalette(): void {
+    if (this.modal !== null) return
+    this.modal = openCommandPalette(this.commands(), () => {
+      this.modal = null
+    })
+  }
+
+  private openShortcutsDialog(): void {
+    if (this.modal !== null) return
+    this.modal = openShortcuts(this.commands(), () => {
+      this.modal = null
+    })
+  }
+
+  private openAboutDialog(): void {
+    if (this.modal !== null) return
+    this.modal = openAbout(REPO_URL, () => {
+      this.modal = null
+    })
+  }
 
   // -------------------------------------------------------------------------
   // Stepping between neighbours

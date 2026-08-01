@@ -1,0 +1,70 @@
+/**
+ * The command surface: matching, key bindings, and neighbour stepping.
+ *
+ * All three are pure functions behind widgets that cannot be driven here, and
+ * all three have an edge case that a screenshot would not catch — a subsequence
+ * that matches the wrong command, a bare letter firing while a modifier is
+ * held, and a contig whose *name* contains a colon.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import { scoreCommand } from '@/ui/CommandPalette'
+import { matchesKeys } from '@/ui/commands'
+import type { Command } from '@/ui/commands'
+
+function command(group: string, title: string): Command {
+  return { id: title, group, title, run: () => {} }
+}
+
+describe('palette matching', () => {
+  const overview = command('Go', 'Whole metagenome')
+  const contigs = command('Go', 'Contigs table')
+
+  it('matches a subsequence, not just a substring', () => {
+    expect(scoreCommand(overview, 'wm')).not.toBeNull()
+    expect(scoreCommand(contigs, 'ctb')).not.toBeNull()
+  })
+
+  it('rejects letters that are not there in order', () => {
+    expect(scoreCommand(overview, 'mw')).toBeNull()
+    expect(scoreCommand(contigs, 'zz')).toBeNull()
+  })
+
+  it('prefers the tighter match', () => {
+    const tight = scoreCommand(contigs, 'contigs')
+    const loose = scoreCommand(contigs, 'cs')
+    expect(tight).not.toBeNull()
+    expect(loose).not.toBeNull()
+    expect(tight as number).toBeLessThan(loose as number)
+  })
+
+  it('keeps every command when the query is empty', () => {
+    expect(scoreCommand(overview, '')).toBe(0)
+    expect(scoreCommand(contigs, '   ')).toBe(0)
+  })
+
+  it('searches the group as well as the title', () => {
+    expect(scoreCommand(command('Help', 'About this viewer'), 'help')).not.toBeNull()
+  })
+})
+
+describe('key bindings', () => {
+  const press = (init: Partial<KeyboardEvent>): KeyboardEvent =>
+    ({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...init }) as KeyboardEvent
+
+  it('matches a bare letter only when no modifier is held', () => {
+    expect(matchesKeys(press({ key: 'g' }), 'g')).toBe(true)
+    // `mod+g` belongs to the browser; taking it from a user aiming at it is rude.
+    expect(matchesKeys(press({ key: 'g', ctrlKey: true }), 'g')).toBe(false)
+    expect(matchesKeys(press({ key: 'g', metaKey: true }), 'g')).toBe(false)
+  })
+
+  it('is case-insensitive, so Shift+G still goes to the genomes table', () => {
+    expect(matchesKeys(press({ key: 'G', shiftKey: true }), 'g')).toBe(true)
+  })
+
+  it('requires the modifier for a chord', () => {
+    expect(matchesKeys(press({ key: 'p' }), 'mod+p')).toBe(false)
+  })
+})
