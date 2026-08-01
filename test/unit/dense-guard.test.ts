@@ -129,10 +129,16 @@ describe('readDenseMatrix', () => {
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 13_000] }, DENSE_HINTS.range),
     ).toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
-    // 200000 × 12000 = 2.4e9 cells: under Python's limit and far over what a tab
-    // can draw, so the browser guard is the one that answers.
+    // 200000 × 12000 = 2.4e9 cells: under Python's limit, and past what a
+    // single Float32Array can be — so the browser guard answers, and with the
+    // one refusal no budget can argue with.
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range),
+    ).toThrowError(/single typed array/)
+    // 20000 × 12000 = 2.4e8 cells: inside the array limit and outside a laptop's
+    // budget, so this is the estimate talking.
+    expect(() =>
+      readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 12_000] }, DENSE_HINTS.range),
     ).toThrowError(/browser tab/)
   })
 
@@ -160,13 +166,41 @@ describe('the browser guard, which is stricter than the CLI', () => {
   it('refuses a human chromosome at 5 kb, which is the case §9 promises to refuse', () => {
     // chr1 is 248,956,422 bp: 49,792 bins, 2.479e9 cells — under Python's limit.
     expect(() => checkDenseSize(49_792, 49_792, HINT)).not.toThrow()
-    expect(() => checkBrowserDenseSize(49_792, 49_792, HINT)).toThrow(/browser tab/)
+    expect(() => checkBrowserDenseSize(49_792, 49_792, HINT)).toThrow(/Refusing to load/)
   })
 
   it('allows the largest MAG anyone actually opens', () => {
     // ~6,600 bins is the biggest genome in the Hum53 reference file at 1 kb.
     expect(() => checkBrowserDenseSize(6_600, 6_600, HINT)).not.toThrow()
     expect(() => checkBrowserDenseSize(10_000, 10_000, HINT)).not.toThrow()
+  })
+
+  it('allows a whole yeast genome at 1 kb, which is the point of the estimate', () => {
+    // 12.1 Mb at 1 kb is 12,100 bins: 1.46e8 cells, which every round fixed
+    // limit refuses and which actually costs about 1.2 GB pessimistically and
+    // far less once the file's sparsity is known.
+    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT, { budgetBytes: 2e9 })).not.toThrow()
+    // And with a real nnz — a few million non-zero pixels — it fits a laptop.
+    expect(() =>
+      checkBrowserDenseSize(12_100, 12_100, HINT, {
+        budgetBytes: 1e9,
+        nonZero: () => 8_000_000,
+      }),
+    ).not.toThrow()
+  })
+
+  it('asks the file how sparse it is only when the pessimistic estimate fails', () => {
+    let asked = 0
+    const nonZero = (): number => {
+      asked++
+      return 1_000
+    }
+    // Comfortably inside the budget: decided without touching the file.
+    checkBrowserDenseSize(1_000, 1_000, HINT, { budgetBytes: 1e9, nonZero })
+    expect(asked).toBe(0)
+    // Over it pessimistically, rescued by the real sparsity.
+    checkBrowserDenseSize(12_000, 12_000, HINT, { budgetBytes: 1e9, nonZero })
+    expect(asked).toBe(1)
   })
 
   it('says what it refused and what the limit is', () => {
@@ -178,7 +212,8 @@ describe('the browser guard, which is stricter than the CLI', () => {
     }
     expect(message).toContain('20000×20000')
     expect(message).toContain('400 million cells')
-    expect(message).toContain('10000 bins per axis')
+    expect(message).toMatch(/needs about [\d.]+ GB/)
+    expect(message).toMatch(/budgeting [\d.]+ GB/)
     expect(message).toContain(HINT)
   })
 
@@ -190,31 +225,5 @@ describe('the browser guard, which is stricter than the CLI', () => {
       expect((error as ViewerError).code).toBe('dense-too-large')
       expect((error as ViewerError).detail['where']).toBe('browser')
     }
-  })
-})
-
-describe('the canvas side limit', () => {
-  it('refuses an axis no canvas can be, however few cells it is', () => {
-    // Human chr1 at 1 kb is 248,957 bins. Against 300 columns that is 7.5e7
-    // cells — inside the cell budget — and still unrasterisable: a canvas is at
-    // most 32,767 pixels on a side.
-    expect(() => checkBrowserDenseSize(248_957, 300, HINT)).toThrowError(/cannot be rasterised/)
-    expect(() => checkBrowserDenseSize(300, 248_957, HINT)).toThrowError(/cannot be rasterised/)
-  })
-
-  it('lets a long block through while it is still drawable', () => {
-    expect(() => checkBrowserDenseSize(32_767, 3_000, HINT)).not.toThrow()
-    expect(() => checkBrowserDenseSize(32_768, 3_000, HINT)).toThrow(ViewerError)
-  })
-
-  it('names the axis and the limit', () => {
-    let message = ''
-    try {
-      checkBrowserDenseSize(248_957, 300, HINT)
-    } catch (error) {
-      message = (error as ViewerError).message
-    }
-    expect(message).toContain('248957-bin axis')
-    expect(message).toContain('32767 pixels on a side')
   })
 })

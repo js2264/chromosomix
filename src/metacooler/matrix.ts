@@ -14,11 +14,14 @@
  */
 
 import {
-  BROWSER_CANVAS_DIM_LIMIT,
-  BROWSER_DENSE_CELL_LIMIT,
   DENSE_MATRIX_BIN_LIMIT,
+  DEVICE_MEMORY_FALLBACK_GIB,
+  DEVICE_MEMORY_SHARE,
+  MAX_TYPED_ARRAY_CELLS,
+  MIN_DENSE_BUDGET_BYTES,
   type StorageMode,
 } from '../constants'
+import { rasterStride } from '../render/heatmap'
 import { ViewerError } from '../errors'
 import type { Hdf5Handle } from '../h5/api'
 import { dtypeKind } from '../h5/typed'
@@ -29,6 +32,9 @@ import type { DenseMatrix, Extent, MatrixQuery, PixelChunk } from '../types'
  * refuse an over-large selection with the same sentence. Diverging wording
  * here would make a support question about one unanswerable from the other.
  */
+/** cooler's own name for the balancing weights; `cooler balance` writes it. */
+export const DEFAULT_WEIGHT_COLUMN = 'weight'
+
 export const DENSE_HINTS = {
   /** `show --level genome` on a file with too many genomes. */
   genome: 'Use a smaller file.',
@@ -69,40 +75,117 @@ export function checkDenseSize(nRows: number, nCols: number, hint: string): void
 }
 
 /**
+ * What one displayed block costs, in bytes, before it is read.
+ *
+ * Not a limit — an estimate, from the three allocations that actually scale:
+ *
+ * - the dense values, `4 B` per cell, held for as long as the view is open;
+ * - the auto-`vmax` percentile buffer, `4 B` per *non-zero* value and transient.
+ *   A contact map is sparse, and the file knows its own `nnz`, so this is
+ *   `min(cells, nnz)` rather than `cells`;
+ * - the raster and its canvas, `8 B` per raster pixel — and the raster is
+ *   pooled at {@link RASTER_MAX_DIM}, so this is a constant ceiling (about
+ *   134 MB) rather than something that grows with the selection.
+ *
+ * The transformed copy that used to sit alongside the values is gone; the
+ * transform is applied during rasterisation.
+ */
+export function estimateBlockBytes(
+  nRows: number,
+  nCols: number,
+  options: { nonZero?: number } = {},
+): number {
+  const cells = nRows * nCols
+  const rasterPixels =
+    Math.ceil(nRows / rasterStride(nRows)) * Math.ceil(nCols / rasterStride(nCols))
+  const certain = cells * 4 + rasterPixels * 8
+
+  // Without `nnz` the sparse terms are bounded only by the cell count, and the
+  // percentile buffer is the one worth assuming: 4 B per cell, which in
+  // practice also covers the transient COO span. With `nnz` both are known
+  // exactly — the percentile buffer at 4 B and the span read (two Int32
+  // columns and a Float64, alive while it is scattered into the dense block)
+  // at 16 B per stored pixel — and the estimate stops guessing.
+  if (options.nonZero === undefined) return certain + cells * 4
+  const nonZero = Math.min(cells, options.nonZero)
+  return certain + nonZero * 4 + nonZero * 16
+}
+
+/**
+ * What this machine will lend one block.
+ *
+ * `navigator.deviceMemory` is a coarse, capped hint rather than a measurement,
+ * so the share taken from it is modest and the floor is generous. Absent — Node,
+ * Firefox, Safari — the fallback assumes a modest laptop.
+ */
+export function deviceDenseBudgetBytes(): number {
+  const reported = (globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory
+  const gib = typeof reported === 'number' && reported > 0 ? reported : DEVICE_MEMORY_FALLBACK_GIB
+  return Math.max(MIN_DENSE_BUDGET_BYTES, gib * 1024 ** 3 * DEVICE_MEMORY_SHARE)
+}
+
+/**
  * The same question asked of a browser tab, which is a smaller room.
  *
  * Separate from {@link checkDenseSize} rather than folded into it, because that
  * function's numbers and wording are Python's and are asserted verbatim. This
- * one speaks for the renderer: the block is not just allocated, it is
- * transformed, rasterised and put on a canvas, and the canvas has an area cap
- * no amount of memory gets around.
+ * one speaks for the renderer, and it is deliberately an *estimate against a
+ * budget* rather than a fixed cell count: a whole yeast genome at 1 kb is
+ * 12,100 bins — 1.5e8 cells, which any fixed limit round enough to state would
+ * refuse, and which actually costs about 600 MB and opens fine. Small genomes
+ * are exactly the case a cooler in this viewer is for, so the guard has to
+ * measure rather than guess.
+ *
+ * The one hard wall left is the values array itself: a `Float32Array` cannot
+ * exceed the runtime's typed-array maximum, and no budget makes that legal.
  *
  * @throws ViewerError `dense-too-large`.
  */
-export function checkBrowserDenseSize(nRows: number, nCols: number, hint: string): void {
+export function checkBrowserDenseSize(
+  nRows: number,
+  nCols: number,
+  hint: string,
+  options: { nonZero?: () => number; budgetBytes?: number } = {},
+): void {
   const cells = nRows * nCols
-  const longest = Math.max(nRows, nCols)
-  if (cells <= BROWSER_DENSE_CELL_LIMIT && longest <= BROWSER_CANVAS_DIM_LIMIT) return
+  const budget = options.budgetBytes ?? deviceDenseBudgetBytes()
 
-  // Two different refusals, because they are two different walls and the fix
-  // differs: too much of it, or too long a side to rasterise at all.
+  // Worst case first — every cell non-zero — because that costs no read. The
+  // file's own `nnz` is consulted only to *rescue* a block the pessimistic
+  // estimate would refuse, never to condemn one, so a selection that obviously
+  // fits is decided without touching the file at all.
+  let bytes = estimateBlockBytes(nRows, nCols)
+  if (bytes > budget && options.nonZero !== undefined) {
+    try {
+      bytes = estimateBlockBytes(nRows, nCols, { nonZero: options.nonZero() })
+    } catch {
+      // A guard that fails because its own optimisation failed is worse than a
+      // guard that is merely pessimistic. If the file will not say how sparse
+      // it is, the worst case stands and the block is refused.
+    }
+  }
+  if (bytes <= budget && cells <= MAX_TYPED_ARRAY_CELLS) return
+
   const message =
-    longest > BROWSER_CANVAS_DIM_LIMIT
-      ? `Refusing to draw a ${nRows}×${nCols} block in a browser tab: a ${longest}-bin axis cannot ` +
-        `be rasterised, because a canvas is at most ${BROWSER_CANVAS_DIM_LIMIT} pixels on a side.`
-      : `Refusing to draw a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells is ` +
-        `about ${((cells * 16) / 1e9).toFixed(1)} GB once the values, the colour mapping and the ` +
-        `canvas are counted. The limit here is ${fmtCells(BROWSER_DENSE_CELL_LIMIT)} cells — ` +
-        `roughly ${Math.round(Math.sqrt(BROWSER_DENSE_CELL_LIMIT))} bins per axis.`
+    cells > MAX_TYPED_ARRAY_CELLS
+      ? `Refusing to load a ${nRows}×${nCols} block: ${fmtCells(cells)} cells is more than a ` +
+        `single typed array can hold, whatever the machine has.`
+      : `Refusing to load a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells ` +
+        `needs about ${fmtBytes(bytes)}, and this tab is budgeting ${fmtBytes(budget)}.`
 
   throw new ViewerError('dense-too-large', `${message} ${hint}`, {
     nRows,
     nCols,
     cells,
-    limit: BROWSER_DENSE_CELL_LIMIT,
-    axisLimit: BROWSER_CANVAS_DIM_LIMIT,
+    bytes,
+    budget,
     where: 'browser',
   })
+}
+
+/** `1.6e9` → `1.6 GB`; small enough numbers get MB. */
+function fmtBytes(bytes: number): string {
+  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`
 }
 
 /** `2.5e9` → `2.5 billion`, for a sentence rather than a table. */
@@ -268,33 +351,77 @@ export function scatterDense(
  *   {@link DENSE_HINTS} so the wording matches the CLI's for that situation.
  */
 export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string): DenseMatrix {
-  if (q.balance) {
-    throw new ViewerError(
-      'unsupported',
-      'Balancing is unavailable in the viewer: weights live in the /bins table, which this ' +
-        'reader never reads (spec §3.3 — excluding variable-bin files is what removes every ' +
-        '/bins access). Use `metacooler show` for a balanced view.',
-      {},
-    )
-  }
-
   const rows = checkExtent(q.rows, src.nBins, 'rows')
   const cols = checkExtent(q.cols ?? q.rows, src.nBins, 'cols')
   const nRows = rows[1] - rows[0]
   const nCols = cols[1] - cols[0]
   checkDenseSize(nRows, nCols, hint)
-  checkBrowserDenseSize(nRows, nCols, hint)
+  // `nnz` is the dataset's *shape*, so this costs no pixel read — and it is the
+  // difference between assuming every cell is non-zero and knowing how sparse
+  // this file actually is.
+  checkBrowserDenseSize(nRows, nCols, hint, {
+    nonZero: () => src.handle.datasetLength('pixels/bin1_id'),
+  })
 
   const values = new Float32Array(nRows * nCols)
   if (nRows > 0 && nCols > 0) {
     const plan = planRead(rows, cols, src.storageMode)
     const chunk = readPixelSpan(src.handle, plan.span[0], plan.span[1])
     scatterDense(chunk, rows, cols, plan, values)
+    if (q.balance === true) applyWeights(src.handle, rows, cols, values)
   }
   return { nrows: nRows, ncols: nCols, values, rowExtent: rows, colExtent: cols }
 }
 
-/** Reject a bin range that is inverted or outside the matrix. */
+/**
+ * Multiply a block by its bin weights, which is what "balanced" means.
+ *
+ * `balanced[i][j] = raw[i][j] * w[i] * w[j]` — cooler's own definition, and the
+ * only normalisation a cooler ships. A `NaN` weight marks a bin the balancer
+ * threw out (low coverage, repeat-dense); the product is then `NaN`, which the
+ * renderer draws as transparent, so a filtered row reads as absent rather than
+ * as empty. That is matplotlib's "bad" colour and it is the diagnostically
+ * correct answer.
+ *
+ * **This is the one read of `/bins` in the reader**, and it is bounded: two
+ * slices of the weight column, one per axis, for the bins actually on screen —
+ * never the whole column, never `/bins/chrom`, and never at all unless the user
+ * asked for balanced counts. Spec §3.3's rule is that *coordinates* never come
+ * from `/bins`; they still do not.
+ */
+function applyWeights(
+  handle: Hdf5Handle,
+  rows: Extent,
+  cols: Extent,
+  values: Float32Array,
+): void {
+  const column = DEFAULT_WEIGHT_COLUMN
+  const path = `bins/${column}`
+  if (!handle.has(path)) {
+    throw new ViewerError(
+      'unsupported',
+      `This file has no /bins/${column} column, so there are no weights to balance with. ` +
+        'Run `cooler balance` on it, or view the raw counts.',
+      { column },
+    )
+  }
+  const rowWeights = handle.readNumeric(path, rows[0], rows[1])
+  const colWeights =
+    cols[0] === rows[0] && cols[1] === rows[1]
+      ? rowWeights
+      : handle.readNumeric(path, cols[0], cols[1])
+
+  const nCols = cols[1] - cols[0]
+  for (let r = 0; r < rows[1] - rows[0]; r++) {
+    const wr = rowWeights[r]
+    const base = r * nCols
+    for (let c = 0; c < nCols; c++) {
+      values[base + c] = values[base + c] * wr * colWeights[c]
+    }
+  }
+}
+
+/** Bin ranges, validated against the file's bin count. */
 function checkExtent(extent: Extent, nBins: number, which: string): Extent {
   const [lo, hi] = extent
   if (!Number.isInteger(lo) || !Number.isInteger(hi) || lo < 0 || hi < lo || hi > nBins) {

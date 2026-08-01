@@ -16,35 +16,37 @@ export const COOLER_FORMAT = 'HDF5::Cooler'
 export const DENSE_MATRIX_BIN_LIMIT = 50_000
 
 /**
- * The *browser's* ceiling on a dense block, in cells. Stricter than the CLI's.
+ * How much of the machine's memory one displayed block may claim.
  *
- * `DENSE_MATRIX_BIN_LIMIT` is Python's, and mirroring it is right for the
- * refusal wording — but a machine with 64 GB and a tab are different places.
- * The limit above allows 50,000 x 50,000 = 2.5e9 cells; on screen that block
- * costs about 16 bytes per cell — the Float32 values, the transformed copy
- * (`render/scale.ts`), the RGBA bytes and the canvas backing store — so 40 GB,
- * and its raster is nine times Chrome's 2^28-pixel canvas area cap. The tab
- * dies before anything is drawn.
- *
- * 1e8 cells is ~10,000 bins per axis: about 1.6 GB at the same accounting, and
- * under the canvas cap. It admits every MAG in a metagenome (the largest in
- * Hum53 is ~6,600 bins) and refuses a human chromosome at 5 kb (49,792 bins,
- * 2.5e9 cells) — which is exactly the whole-chromosome case SPECS §9 promises
- * to refuse rather than attempt.
+ * `navigator.deviceMemory` reports RAM in GiB, rounded down to a power of two
+ * and **capped at 8** by every browser that implements it, so a 64 GB
+ * workstation and an 8 GB laptop both say 8. It is a floor, not a measurement,
+ * which is why the share is modest: a third of what the browser admits to,
+ * never less than 1 GB. The floor matters for the machines that report 2 GiB
+ * or less, where a third would refuse blocks those machines can in fact draw.
  */
-export const BROWSER_DENSE_CELL_LIMIT = 100_000_000
+export const DEVICE_MEMORY_SHARE = 1 / 3
+
+/** Assumed RAM in GiB when the browser does not say. */
+export const DEVICE_MEMORY_FALLBACK_GIB = 4
+
+/** Never budget less than this, whatever the device claims. */
+export const MIN_DENSE_BUDGET_BYTES = 1e9
 
 /**
- * The longest a single axis may be, in bins.
+ * The most cells one dense block may have, whatever the machine has.
  *
- * A cell count is not the whole story: the raster is put on a canvas, and a
- * canvas has a maximum *side* as well as a maximum area. Firefox stops at
- * 32,767 px per dimension and Chrome at 65,535, so the smaller of the two is
- * the portable answer. Without this a long thin block — human chr1 at 1 kb is
- * 248,957 bins by whatever the other axis is — passes the cell limit and then
- * cannot be drawn at all.
+ * The values live in a `Float32Array`, and V8 will not allocate one past about
+ * 2^31 elements however much memory is free. This is the wall no budget can
+ * argue with; everything below it is a question of how much RAM to spend, which
+ * `metacooler/matrix.ts` answers by estimating rather than by a fixed limit.
+ *
+ * The canvas caps that used to sit here are gone: the raster is pooled to
+ * `RASTER_MAX_DIM` per axis, so no selection can ask for a canvas bigger than
+ * 4096 px on a side and neither Chrome's area cap nor Firefox's side cap is
+ * reachable any more.
  */
-export const BROWSER_CANVAS_DIM_LIMIT = 32_767
+export const MAX_TYPED_ARRAY_CELLS = 2 ** 31
 
 /** `storage-mode` values the reader understands. */
 export const STORAGE_MODES = ['symmetric-upper', 'square'] as const
