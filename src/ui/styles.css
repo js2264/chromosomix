@@ -755,12 +755,16 @@ p {
   position: relative;
 }
 
+/* No `min-width: max-content` here. Rows are out of flow, so that let each one
+   shrink-to-fit *its own* content: a row with a long taxonomy string sized its
+   `1fr` tracks differently from the header and from every other row, which is
+   why the Hum53 genomes table looked shuffled while the data on disk was
+   correct. `left`/`right` alone pin every row to the grid's width. */
 .tr {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  min-width: max-content;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
