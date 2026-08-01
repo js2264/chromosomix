@@ -138,7 +138,7 @@ not the plan.
 | M4 | Interaction | **mostly** — pan, zoom, level toggle and cross-navigation are all local and I/O-free; the mmetacool *zoom ladder* is classified but not yet wired to a zoom control (see below) |
 | M5 | Remote sources | **done** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals), `docs/hosting.md`, and the §12 request-budget regression tests in `test/budgets/` |
 | M6 | bigWig tracks | **not started** — no `src/tracks/`, and the `.bw` fixtures are not built |
-| M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and the contigs table is the landing view. An `.mcool` root is refused by name and the app opens its finest resolution; the ladder is the entry picker. A second, browser-side dense cap refuses the whole-chromosome blocks the CLI-parity limit would wave through |
+| M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 
 Other gaps worth naming rather than discovering:

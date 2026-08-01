@@ -93,7 +93,8 @@ Variable-bin files (fragment-level and contig-level metacools, `bin-type = "vari
 decision, and it removes a variable-width coordinate path from every layer of the app rather than
 one branch in one place.
 
-The consequence worth stating explicitly: **`/bins` never has to be read.** With a uniform bin size,
+The consequence worth stating explicitly: **`/bins` never has to be read** for coordinates (the one
+exception is the optional weight column of §6.4, read only when balancing is asked for).** With a uniform bin size,
 the entire coordinate model is arithmetic over two things already in memory —
 `/indexes/chrom_offset` and `/contigs/length`:
 
@@ -303,9 +304,16 @@ explicit debug action only.
 ### 6.4 Balancing
 
 The format specification defines no weights column and `show()` uses `balance=False`. Balancing is
-therefore **optional-if-present**: if a weight column exists in `/bins`, expose the toggle and
-propagate NaN weights as NaN (rendered as blank rows, which is correct and diagnostic). Otherwise the
-control is hidden. No default weighting is invented.
+therefore **optional-if-present**, and it is built: when `/bins/weight` exists the view card offers a
+toggle, and a balanced cell is `raw * w[i] * w[j]` — cooler's own definition. A `NaN` weight marks a
+bin the balancer dropped; the product is `NaN`, which renders transparent, so a filtered row reads as
+absent rather than as empty. Where there is no weight column the control is not offered, and asking
+for one anyway is refused by name. No default weighting is invented.
+
+This is the **one** read of `/bins` in the reader, and it is bounded: two slices of the weight column
+for the bins actually on screen, never the whole column, never `/bins/chrom`, and never at all unless
+the user asked for balanced counts. §3.3's rule is that *coordinates* never come from `/bins`; they
+still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbalanced path.
 
 ---
 
@@ -411,14 +419,28 @@ dishonestly: it put a row in the UI that is not in the file, it had to bypass th
 soft-link check anyway, and it left a `synthesised` flag every view had to special-case. The absence
 of a genome layer is a fact about the file, and the reader says so.
 
-**Region level only — confirmed scope.** A eukaryotic cooler reintroduces exactly the streaming
-problem §2 avoids, so these files are supported as *browse a region*, never *view the whole genome*.
-Concretely:
+**Whole-genome where it fits, measured rather than assumed.** The old rule was *region level only*,
+on the grounds that a eukaryotic cooler reintroduces the streaming problem §2 avoids. That is true of
+a human cooler and false of the genomes this viewer is most often pointed at: yeast is 12.1 Mb, which
+at 1 kb bins is 12,100 bins — one bounded read, about 600 MB on screen, and the single most useful
+picture of the file. Refusing it would be refusing the case cool support is *for*.
+
+So the size question is asked instead. `readDenseMatrix` estimates what a block costs — its cells,
+the file's own `nnz` for the percentile buffer, and a raster pooled to a fixed ceiling — and compares
+that to a budget derived from `navigator.deviceMemory`. Whole-genome is offered whenever the estimate
+fits, and refused with the numbers when it does not; contig level always fits and is one control away
+in the same view. Concretely:
 
 - the entry point is the **contigs table**, not the genomes table, because there are no genomes;
   the genomes table and the whole-genome view are not offered at all for these files
 - a region selection (`chrom` or `chrom:start-end`) loads and renders normally, using the same
   bounded-read path as a MAG
+- the whole matrix is a view of its own (`view=whole`), offered in the root menu beside the
+  chromosomes table. It is one bounded read, not a scan: the genome-wide view of a *metagenome*
+  (§7.3) still costs a full pixel pass, because summing genome pairs has no index to shortcut
+- the vocabulary follows the file: a cooler's sequences are **chromosomes**, and the genomes table is
+  shown greyed out with the reason rather than hidden, so "does this viewer have one" is answered
+  rather than raised
 - whole-genome and whole-chromosome selections are size-guarded and refused above the dense limit.
   Two guards, in order: `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a stricter
   browser cap (`BROWSER_DENSE_CELL_LIMIT`, 1e8 cells ≈ 10,000 bins per axis) because a tab is a
@@ -499,7 +521,8 @@ chromatin files. Held in reserve — adopting it would not change any file forma
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
 computation of any kind; required companion files; required preprocessing; support for orderings other
-than `genome-then-length`; whole-genome views of eukaryotic coolers; write access of any kind.
+than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
+not a category); write access of any kind.
 
 ---
 
@@ -512,7 +535,7 @@ why the spec got shorter as it got more specific.
 |---|---|---|
 | Variable-bin files | **Not supported.** Fixed-bin only (§3.3, §10) | The variable-width coordinate path throughout — and, as a second-order effect, every read of `/bins` |
 | `__unbinned__` | **Never displayable** (§7.4) | The toggle, the guarded-open path, and the largest counter-example to §2's small-MAG assumption |
-| cool / mcool | **Native, region level only** (§9) | Whole-genome cooler views, and with them the tiling architecture §2 exists to avoid — and, since the reader went native, the synthesised one-genome table and the `synthesised` flag every view carried |
+| cool / mcool | **Native; whole-genome where it fits** (§9) | The tiling architecture §2 exists to avoid — a block either fits in one read or is refused, and there is no third path — and, since the reader went native, the synthesised one-genome table and the `synthesised` flag every view carried |
 
 The through-line: each answer protects the assumption in §2 that a unit of display fits in memory in
 one bounded read. Variable bins broke the arithmetic, `__unbinned__` broke the size bound, and
