@@ -8,10 +8,40 @@
  * ever disagree, which is the failure that actually matters.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { HeatmapView } from '@/render/heatmap'
 import type { DenseMatrix } from '@/types'
+
+/**
+ * The pointer handlers repaint, and repainting rasterises through an
+ * `OffscreenCanvas` Node does not have. Two stubs are enough, and they make the
+ * drag tests exercise the real `draw()` rather than a version of it that skips
+ * the part where a mistake would land.
+ */
+beforeAll(() => {
+  const g = globalThis as Record<string, unknown>
+  g['ImageData'] = class {
+    constructor(
+      readonly data: Uint8ClampedArray,
+      readonly width: number,
+      readonly height: number,
+    ) {}
+  }
+  g['OffscreenCanvas'] = class {
+    width = 0
+    height = 0
+    getContext(): unknown {
+      return { putImageData: () => {} }
+    }
+  }
+})
+
+afterAll(() => {
+  const g = globalThis as Record<string, unknown>
+  delete g['ImageData']
+  delete g['OffscreenCanvas']
+})
 
 function fakeCanvas(size: number): HTMLCanvasElement {
   return harness(size).canvas
@@ -67,6 +97,18 @@ function harness(size: number): {
     style: {},
   } as unknown as HTMLCanvasElement
   return { canvas, fire: (type, event) => listeners.get(type)?.(event) }
+}
+
+/** A press, a move and a release, with whatever modifiers. */
+function dragWith(
+  fire: (type: string, event: Record<string, unknown>) => void,
+  from: [number, number],
+  to: [number, number],
+  modifiers: Record<string, unknown> = {},
+): void {
+  fire('mousedown', { clientX: from[0], clientY: from[1], button: 0, ...modifiers })
+  fire('mousemove', { clientX: to[0], clientY: to[1], button: 0, ...modifiers })
+  fire('mouseup', { clientX: to[0], clientY: to[1], button: 0, ...modifiers })
 }
 
 function block(n: number): DenseMatrix {
@@ -145,6 +187,51 @@ describe('the edge of the data is a wall', () => {
     const after = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
     expect(after?.row).toBe(before?.row)
     expect(after?.col).toBe(before?.col)
+  })
+})
+
+describe('what a drag does', () => {
+  it('pans by default, without changing the zoom', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.zoomToBox(80, 80, 160, 160)
+    const zoom = heatmap.zoomLevel
+    const plot = heatmap.plotRect
+    const before = heatmap.cellAt(plot.x + 5, plot.y + 5)
+
+    dragWith(fire, [200, 200], [140, 140])
+
+    expect(heatmap.zoomLevel).toBe(zoom)
+    const after = heatmap.cellAt(plot.x + 5, plot.y + 5)
+    expect(after?.col).toBeGreaterThan(before?.col ?? 0)
+  })
+
+  it('selects and zooms when Option is held', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    const zoom = heatmap.zoomLevel
+
+    dragWith(fire, [80, 80], [160, 160], { altKey: true })
+
+    expect(heatmap.zoomLevel).toBeGreaterThan(zoom)
+  })
+
+  it('puts the view back on a double click', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    const fitted = heatmap.zoomLevel
+    heatmap.zoomToBox(80, 80, 160, 160)
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+
+    fire('dblclick', { clientX: 200, clientY: 200, preventDefault: () => {} })
+
+    expect(heatmap.zoomLevel).toBeCloseTo(fitted, 6)
   })
 })
 

@@ -14,8 +14,9 @@ import { keyLabel, type Command } from './commands'
 
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
-  ['drag', 'Select a region and zoom into it'],
-  ['⌘ / Ctrl + drag', 'Pan'],
+  ['drag', 'Pan'],
+  ['⌥ / Alt + drag', 'Select a region and zoom into it'],
+  ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],

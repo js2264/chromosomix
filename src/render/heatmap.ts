@@ -156,6 +156,13 @@ function createRasterCanvas(width: number, height: number): RasterCanvas {
   )
 }
 
+/**
+ * How long a click waits to see whether it is the first half of a double one.
+ * The platform value is not exposed to script, and 250 ms is what every toolkit
+ * uses when it has to guess.
+ */
+const DOUBLE_CLICK_MS = 250
+
 /** Space reserved outside the plot area for tick labels, in CSS pixels. */
 export interface Margin {
   top: number
@@ -1167,28 +1174,49 @@ export class HeatmapView {
     }
 
     /**
-     * A modifier turns the drag into a pan. ⌘ on a Mac, Ctrl elsewhere — and
-     * the middle button, which means pan everywhere it exists.
+     * A drag pans; Option (Alt) turns it into a zoom selection.
+     *
+     * The two were the other way round, and moving a map is the thing a hand on
+     * a mouse expects a drag to do. Selecting a region to zoom into is the
+     * deliberate action, so it takes the deliberate modifier.
      */
-    const wantsPan = (e: MouseEvent): boolean => e.metaKey || e.ctrlKey || e.button === 1
+    const wantsSelect = (e: MouseEvent): boolean => e.altKey
 
-    /** Show the grab hand exactly while a pan is what a drag would do. */
-    const showPanCursor = (on: boolean): void => {
-      canvas.classList.toggle('panning', on)
+    /**
+     * The cursor stays the drawn arrowhead at rest — it is the one that points
+     * *at* a cell — and only changes to say what is happening: a crosshair while
+     * Option is held, the closed hand while a pan is under way.
+     */
+    const showCursor = (options: { selecting?: boolean; grabbing?: boolean }): void => {
+      if (options.selecting !== undefined) canvas.classList.toggle('selecting', options.selecting)
+      if (options.grabbing !== undefined) canvas.classList.toggle('grabbing', options.grabbing)
+    }
+
+    /**
+     * A click opens what the cell refers to, but only after the double-click
+     * window has passed: the second click of a "reset the zoom" would otherwise
+     * land after the first had already navigated away.
+     */
+    let clickTimer: ReturnType<typeof setTimeout> | null = null
+    const cancelPendingClick = (): void => {
+      if (clickTimer === null) return
+      clearTimeout(clickTimer)
+      clickTimer = null
     }
 
     const onDown = (e: MouseEvent): void => {
       const [x, y] = local(e)
       this.dragMoved = false
-      this.drag = { mode: wantsPan(e) ? 'pan' : 'select', x0: x, y0: y, x, y }
+      this.drag = { mode: wantsSelect(e) ? 'select' : 'pan', x0: x, y0: y, x, y }
       this.lastX = x
       this.lastY = y
+      showCursor({ grabbing: this.drag.mode === 'pan' })
       canvas.focus()
     }
     const onMove = (e: MouseEvent): void => {
       const [x, y] = local(e)
       const drag = this.drag
-      showPanCursor(drag === null ? wantsPan(e) : drag.mode === 'pan')
+      showCursor({ selecting: drag === null ? wantsSelect(e) : drag.mode === 'select' })
       if (drag !== null) {
         if (Math.abs(x - drag.x0) + Math.abs(y - drag.y0) > 2) this.dragMoved = true
         if (drag.mode === 'pan') {
@@ -1209,16 +1237,31 @@ export class HeatmapView {
     const onUp = (e: MouseEvent): void => {
       const drag = this.drag
       this.drag = null
+      showCursor({ grabbing: false })
       if (drag === null) return
       const [x, y] = local(e)
       // A press that did not travel is a click, in either mode: §5.5's
       // cross-navigation must not need a steady hand.
       if (!this.dragMoved) {
         const cell = this.cellAt(x, y)
-        if (cell !== null && this.onCellClick !== null) this.onCellClick(cell)
+        if (cell === null || this.onCellClick === null) return
+        cancelPendingClick()
+        const emit = this.onCellClick
+        clickTimer = setTimeout(() => {
+          clickTimer = null
+          emit(cell)
+        }, DOUBLE_CLICK_MS)
         return
       }
       if (drag.mode === 'select') this.zoomToBox(drag.x0, drag.y0, x, y)
+      this.draw()
+    }
+    const onDoubleClick = (e: MouseEvent): void => {
+      e.preventDefault()
+      // Beats the pending single click, which is the point: this is "put it
+      // back", not "go there and put it back".
+      cancelPendingClick()
+      this.fit()
       this.draw()
     }
     const onLeave = (): void => {
@@ -1226,7 +1269,7 @@ export class HeatmapView {
       // corner is off-canvas is not the selection anyone meant.
       const wasDragging = this.drag !== null
       this.drag = null
-      showPanCursor(false)
+      showCursor({ selecting: false, grabbing: false })
       this.setHover(null)
       this.onHover?.(null)
       if (wasDragging) this.draw()
@@ -1246,6 +1289,7 @@ export class HeatmapView {
     canvas.addEventListener('mousedown', onDown)
     canvas.addEventListener('mousemove', onMove)
     canvas.addEventListener('mouseup', onUp)
+    canvas.addEventListener('dblclick', onDoubleClick)
     canvas.addEventListener('mouseleave', onLeave)
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('keydown', onKey)
@@ -1253,6 +1297,8 @@ export class HeatmapView {
       () => canvas.removeEventListener('mousedown', onDown),
       () => canvas.removeEventListener('mousemove', onMove),
       () => canvas.removeEventListener('mouseup', onUp),
+      () => canvas.removeEventListener('dblclick', onDoubleClick),
+      () => cancelPendingClick(),
       () => canvas.removeEventListener('mouseleave', onLeave),
       () => canvas.removeEventListener('wheel', onWheel),
       () => canvas.removeEventListener('keydown', onKey),

@@ -929,19 +929,23 @@ p {
   outline: none;
 }
 
-/* The grab hand appears exactly while the modifier is held, so the cursor says
-   which of the two things a drag would do *before* the drag starts. */
-.heatmap-canvas.panning {
-  cursor: grab;
+/* The arrowhead stays the resting cursor — it is the one that points *at* a
+   cell. The other two are transient: a crosshair while Option is held, because
+   a selection is about to be drawn, and the closed hand while a pan is actually
+   under way. */
+.heatmap-canvas.selecting {
+  cursor: crosshair;
 }
 
-.heatmap-canvas.panning:active {
+.heatmap-canvas.grabbing {
   cursor: grabbing;
 }
 
+/* No focus ring. The canvas takes focus so it can receive keys, but it is a
+   picture: a blue rectangle around the data reads as part of the figure, and
+   the figure already has a frame of its own. */
 .heatmap-canvas:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: none;
 }
 
 /* A legend, not a second figure: short, and level with the top of the plot. */
