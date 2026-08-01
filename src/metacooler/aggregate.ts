@@ -121,7 +121,12 @@ export function aggregateDense(
       // whenever `r <= c`; the swap keeps the function total for a caller that
       // hands in an arbitrary permutation.
       const out = fold && a > b ? b * ncols + a : a * ncols + b
-      values[out] += m.values[inRow + c]
+      const value = m.values[inRow + c]
+      // A NaN is a bin the balancer dropped, not a value. It contributes
+      // nothing rather than turning its whole contig NaN — one filtered bin
+      // among 4,000 would otherwise blank the chromosome it sits in, and a
+      // balanced contig-level view of a real file would be empty.
+      if (!Number.isNaN(value)) values[out] += value
     }
   }
   if (fold) {

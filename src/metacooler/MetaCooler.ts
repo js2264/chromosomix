@@ -29,7 +29,7 @@ import type {
 import { aggregateMatrix, type AggregatedMatrix, type AggregationLevel } from './aggregate'
 import { Coords, searchOffset } from './coords'
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
-import { DENSE_HINTS, readDenseMatrix, resolveCountKind } from './matrix'
+import { DEFAULT_WEIGHT_COLUMN, DENSE_HINTS, readDenseMatrix, resolveCountKind } from './matrix'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -275,6 +275,16 @@ export class MetaCooler {
    */
   get hasGenomes(): boolean {
     return this.genomes !== null
+  }
+
+  /**
+   * `true` when `/bins/weight` exists — the file has been balanced.
+   *
+   * One `has` on a dataset path, no read. The UI offers the balance toggle only
+   * when this is true, so "balanced" is never an option that then fails.
+   */
+  get hasWeights(): boolean {
+    return this.handle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`)
   }
 
   /** Number of genomes, `__unbinned__` included; `0` for a plain cooler. */

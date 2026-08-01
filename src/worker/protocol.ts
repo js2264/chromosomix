@@ -159,6 +159,8 @@ export interface OpenResult {
   entryGroup: string
   /** `false` for a plain cooler, which has no genome layer to browse. */
   hasGenomes: boolean
+  /** `true` when `/bins/weight` exists, so balanced counts can be offered. */
+  hasWeights: boolean
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
   sourceKind: SourceKind
@@ -278,10 +280,18 @@ export type WorkerRequest =
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
   | { id: number; kind: 'range'; range: string }
-  // No `balance` flag: the format defines no weights column and `show()` uses
-  // `balance=False`, so the reader refuses a balanced query outright (§6.4).
-  | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent }
-  | { id: number; kind: 'aggregate'; rows: Extent; cols?: Extent; level: 'contig' | 'genome' }
+  // `balance` multiplies each cell by its two bin weights, which is cooler's
+  // own definition of a balanced matrix (§6.4). Off by default, matching
+  // `metacooler show`, and offered only when the file carries the column.
+  | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent; balance?: boolean }
+  | {
+      id: number
+      kind: 'aggregate'
+      rows: Extent
+      cols?: Extent
+      level: 'contig' | 'genome'
+      balance?: boolean
+    }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
   | { id: number; kind: 'validateDeep' }

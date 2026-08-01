@@ -104,6 +104,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     entries: mc.entries,
     entryGroup: mc.entryGroup,
     hasGenomes: mc.hasGenomes,
+    hasWeights: mc.hasWeights,
     sourceBytes: source.size,
     sourceKind: request.source.kind,
   }
@@ -157,7 +158,10 @@ async function handleMatrix(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const dense = await mc.matrix({ rows: request.rows, cols }, hintFor(request.rows, cols))
+  const dense = await mc.matrix(
+    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    hintFor(request.rows, cols),
+  )
   return binLevelResult(mc, dense)
 }
 
@@ -175,7 +179,10 @@ async function handleAggregate(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const dense = await mc.matrix({ rows: request.rows, cols }, hintFor(request.rows, cols))
+  const dense = await mc.matrix(
+    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    hintFor(request.rows, cols),
+  )
   const aggregated = mc.aggregate(dense, request.level)
   const axes = aggregatedAxes(mc, aggregated)
   return {

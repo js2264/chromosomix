@@ -267,3 +267,52 @@ describe('an mcool is a ladder of coolers', () => {
     }, 'plain.mcool::resolutions/5000')
   })
 })
+
+describe('balanced counts', () => {
+  it('multiplies each cell by its two bin weights, as cooler does', async () => {
+    // `plain.mcool` ships a /bins/weight column; `plain.cool` does not.
+    await withCool(async (mc) => {
+      expect(mc.hasWeights).toBe(true)
+      const rows: [number, number] = [0, 24]
+      const raw = await mc.matrix({ rows })
+      const balanced = await mc.matrix({ rows, balance: true })
+
+      const weights = mc.handle.readNumeric('bins/weight', rows[0], rows[1])
+      const width = raw.ncols
+      for (let r = 0; r < raw.nrows; r++) {
+        for (let c = 0; c < width; c++) {
+          const expected = raw.values[r * width + c] * weights[r] * weights[c]
+          const actual = balanced.values[r * width + c]
+          if (Number.isNaN(expected)) expect(Number.isNaN(actual)).toBe(true)
+          else expect(actual).toBeCloseTo(expected, 5)
+        }
+      }
+      // And it is a real normalisation, not a no-op: some cell changed.
+      expect(Array.from(balanced.values)).not.toEqual(Array.from(raw.values))
+    }, 'plain.mcool::resolutions/1000')
+  })
+
+  it('says so rather than silently returning raw counts when there are none', async () => {
+    await withCool(async (mc) => {
+      expect(mc.hasWeights).toBe(false)
+      await expect(mc.matrix({ rows: [0, 10], balance: true })).rejects.toThrow(/no \/bins\/weight/)
+    })
+  })
+})
+
+describe('a dropped bin does not blank the chromosome it sits in', () => {
+  it('skips NaN when rolling up to contig level', async () => {
+    await withCool(async (mc) => {
+      const rows: [number, number] = [0, mc.nBins]
+      const balanced = await mc.matrix({ rows, balance: true })
+      const rolled = mc.aggregate(balanced, 'contig')
+      // The fixture's weights include NaNs, so the bin-level block has some;
+      // rolled up, a contig is only NaN when *every* one of its cells was.
+      const nanCells = Array.from(balanced.values).filter((v) => Number.isNaN(v)).length
+      expect(nanCells).toBeGreaterThan(0)
+      const nanContigs = Array.from(rolled.values).filter((v) => Number.isNaN(v)).length
+      expect(nanContigs).toBeLessThan(rolled.values.length)
+      expect(Array.from(rolled.values).some((v) => v > 0)).toBe(true)
+    }, 'plain.mcool::resolutions/1000')
+  })
+})
