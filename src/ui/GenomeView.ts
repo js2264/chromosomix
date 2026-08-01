@@ -12,6 +12,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { MatrixPanel } from './MatrixPanel'
+import { stepper } from './Stepper'
 
 /** The colour-scale fields that are carried in the URL hash (§5.5). */
 export interface ScaleState {
@@ -35,6 +36,9 @@ export interface GenomeViewProps {
    */
   onOpenContigPair(rowContig: string, colContig: string): void
   onError(err: unknown): void
+  /** Genomes one step away in display order, for the `‹ ›` buttons. */
+  neighbours?: { prev: string | null; next: string | null }
+  onStep?(delta: number): void
 }
 
 export class GenomeView {
@@ -96,7 +100,20 @@ export class GenomeView {
     this.el = el(
       'section',
       { class: 'view view-genome' },
-      el('header', { class: 'view-head' }, el('h2', { text: props.genome }), this.summary, this.note),
+      el(
+        'header',
+        { class: 'view-head' },
+        el(
+          'div',
+          { class: 'title-bar' },
+          el('h2', { text: props.genome }),
+          ...(props.neighbours === undefined || props.onStep === undefined
+            ? []
+            : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: 'genome' })]),
+        ),
+        this.summary,
+        this.note,
+      ),
       el(
         'div',
         { class: 'genome-body' },

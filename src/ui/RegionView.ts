@@ -28,6 +28,7 @@ import type { ReaderClient } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel } from './MatrixPanel'
+import { stepper } from './Stepper'
 
 export interface RegionViewProps {
   client: ReaderClient
@@ -40,6 +41,12 @@ export interface RegionViewProps {
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   onError(err: unknown): void
+  /**
+   * Contigs one step away in file order. Absent for a two-contig block, which
+   * has two axes and so no single neighbour to step to.
+   */
+  neighbours?: { prev: string | null; next: string | null }
+  onStep?(delta: number): void
 }
 
 export class RegionView {
@@ -95,6 +102,9 @@ export class RegionView {
           'div',
           { class: 'region-bar' },
           this.title,
+          ...(props.neighbours === undefined || props.onStep === undefined
+            ? []
+            : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: 'contig' })]),
           this.input,
           button('go', () => props.onChangeRegion(this.input.value.trim())),
         ),

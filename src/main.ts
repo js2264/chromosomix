@@ -35,7 +35,7 @@ import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
 import { button, el } from './ui/dom'
 import { demoExamples } from './ui/examples'
-import { fileLabel, splitUri } from './ui/labels'
+import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
 
 interface OpenFile {
   /**
@@ -127,6 +127,133 @@ class App {
       this.status.el,
     )
 
+  // -------------------------------------------------------------------------
+  // Stepping between neighbours
+  // -------------------------------------------------------------------------
+
+  /**
+   * The genome or contig one step away, or `null` when there is none.
+   *
+   * Genomes step through the display order, which is the table's order minus
+   * `__unbinned__`; contigs step through the file's own contig order, which is
+   * what the contigs table shows. A two-contig block has two axes and no single
+   * "next", so it does not step at all rather than picking one silently.
+   */
+  private stepTarget(delta: number): string | null {
+    const state = this.store.state
+    const file = this.file
+    if (state === null || file === null) return null
+    if (state.view === 'genome' && state.genome !== undefined) {
+      return neighbour(file.displayNames, state.genome, delta)
+    }
+    if (state.view === 'region' && state.region !== undefined && state.region2 === undefined) {
+      const names = this.contigNames()
+      if (names === null) return null
+      const current = contigOf(state.region, names)
+      return current === null ? null : neighbour(names, current, delta)
+    }
+    return null
+  }
+
+  private step(delta: number): void {
+    const state = this.store.state
+    const target = this.stepTarget(delta)
+    if (state === null || target === null) return
+    if (state.view === 'genome') this.store.set({ uri: state.uri, view: 'genome', genome: target })
+    else this.store.set({ ...state, region: target })
+  }
+
+  /** Contig names, if the contigs table has already been read. */
+  private contigNames(): string[] | null {
+    const table = this.file?.contigs
+    if (table === undefined || table === null) return null
+    const names = table.table.data['name']
+    return Array.isArray(names) ? (names as string[]) : null
+  }
+
+  // -------------------------------------------------------------------------
+  // Opening
+  // -------------------------------------------------------------------------
+
+  private async open(uri: string, source: SourceSpec): Promise<void> {
+    if (this.opening === uri) return
+    this.opening = uri
+    this.showContent(el('div', { class: 'loading', text: `opening ${fileLabel(uri)}…` }))
+    try {
+      const info = await this.client.request<'open'>({ kind: 'open', uri, source })
+      const genomes = await this.client.request<'genomes'>({ kind: 'genomes' })
+      const names = genomes.table.data['name'] as string[]
+      // `entries` is non-empty only for a map inside an mmetacool; the group
+      // path is what says which of them is open (§3.4).
+      const entries = info.entries
+      const group = splitUri(uri).group
+      const match = /^\/entries\/(.+)$/.exec(group)
+      const currentEntry = match === null ? undefined : match[1]
+      this.file = {
+        uri,
+        info,
+        genomes,
+        contigs: null,
+        source,
+        genomeNames: names,
+        displayNames: Array.from(genomes.display, (index) => names[index]).filter(
+          (name) => name !== UNBINNED_NAME,
+        ),
+        entries,
+        currentEntry,
+      }
+      const isMetacool = info.layout.kind === 'metacool'
+      this.breadcrumb = new Breadcrumb({
+        rootKind: isMetacool ? 'genomes' : 'contigs',
+        // A metacool offers both landing tables; a plain cooler has only one
+        // worth showing, since its genomes table is a synthesised single row.
+        rootChoices: isMetacool ? ['genomes', 'contigs'] : ['contigs'],
+        fileLabel: fileLabel(uri),
+        entries,
+        ...(currentEntry === undefined ? {} : { currentEntry }),
+        onNavigate: (state) => this.store.set(state),
+        onOpenFilePicker: () => this.toPicker(),
+        onSelectEntry: (entry) =>
+          void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
+      })
+      this.infoPanel = new InfoPanel({ info })
+      this.sideHost.replaceChildren(this.infoPanel.el)
+      this.sidebar.setAvailable(true)
+      this.status.reset()
+      this.overviewButton.hidden = info.layout.kind !== 'metacool'
+      this.overview = null
+      this.showingOverview = false
+
+      // A link may already have named a view inside this file (§5.5); honour it
+      // rather than bouncing the recipient to the landing table.
+      const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
+      const wanted = this.store.state
+      const target =
+        wanted !== null && wanted.uri === uri ? wanted : landingState(uri, rootView)
+      const willNotify = !viewStateEquals(target, this.store.state)
+      this.store.set(target, { replace: true })
+      // `set` is a no-op when the state is already exactly `target`, so render
+      // explicitly in that case — and only in that case, to avoid mounting the
+      // same view twice.
+      if (!willNotify) void this.render(target)
+    } catch (err) {
+      // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
+      // reader mirrors that faithfully (§3.4). But a *user* who dropped a
+      // collection meant "show me this data", so the app answers by opening an
+      // entry and offering the rest in the breadcrumb picker, rather than
+      // handing back an error about a URI syntax they did not use.
+      const entry = firstEntry(err)
+      if (entry !== null) {
+        this.opening = null
+        await this.open(`${splitUri(uri).path}::entries/${entry}`, source)
+        return
+      }
+      this.showError(err, uri, source)
+    } finally {
+      this.opening = null
+    }
+  }
+
   /**
    * Filter/sort memory for one table, scoped to the open file.
    *
@@ -202,7 +329,7 @@ class App {
         this.mountPair(state)
         break
       case 'region':
-        this.mountRegion(state)
+        await this.mountRegion(state)
         break
     }
     this.status.refresh()
@@ -250,6 +377,8 @@ class App {
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       genome: state.genome,
+      neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
+      onStep: (delta) => this.step(delta),
       level: state.level ?? 'bin',
       scale: scaleOf(state),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
@@ -287,15 +416,22 @@ class App {
     this.showContent(view.el, view)
   }
 
-  private mountRegion(state: ViewState): void {
+  private async mountRegion(state: ViewState): Promise<void> {
     if (state.region === undefined) {
       this.store.set({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
+    // The contigs table is what "next contig" steps through. It is read once
+    // per file and cached, so this costs a read on the first region view and
+    // nothing afterwards.
+    if (this.file?.contigs == null) await this.contigs().catch(() => null)
+    if (this.store.state !== state) return
     const view = new RegionView({
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
+      neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
+      onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
       scale: scaleOf(state),
       // Typing a new region replaces the whole selection, so the second axis

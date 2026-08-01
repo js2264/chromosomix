@@ -1,0 +1,43 @@
+/**
+ * The `‹ ›` pair that walks to the neighbouring genome or contig.
+ *
+ * Going from one MAG to the next is the most common navigation there is, and
+ * doing it through the table means leaving the picture, finding the row you
+ * were on, and clicking the one below it. Two buttons beside the heading do the
+ * same thing without losing your place.
+ *
+ * The neighbour's *name* is the tooltip rather than "next": at either end there
+ * is nothing to go to, and a disabled button that says which name it would have
+ * opened is the difference between "broken" and "you are at the last one".
+ */
+
+import { button, el } from './dom'
+
+export interface StepperProps {
+  /** The names one step away; `null` disables that side. */
+  neighbours: { prev: string | null; next: string | null }
+  onStep(delta: number): void
+  /** What is being stepped through, for the tooltips. */
+  noun: string
+}
+
+export function stepper(props: StepperProps): HTMLElement {
+  const make = (glyph: string, delta: number, name: string | null): HTMLButtonElement => {
+    const node = button(glyph, () => props.onStep(delta), {
+      class: 'btn btn-step',
+      title:
+        name === null
+          ? `No ${delta < 0 ? 'previous' : 'next'} ${props.noun}`
+          : `${delta < 0 ? 'Previous' : 'Next'} ${props.noun}: ${name}`,
+    })
+    node.disabled = name === null
+    node.setAttribute('aria-label', `${delta < 0 ? 'previous' : 'next'} ${props.noun}`)
+    return node
+  }
+  return el(
+    'div',
+    { class: 'stepper' },
+    make('‹', -1, props.neighbours.prev),
+    make('›', 1, props.neighbours.next),
+  )
+}
