@@ -14,10 +14,12 @@ import { ViewerError } from '../../src/errors'
 import {
   assertAcceptable,
   detectLayout,
+  normaliseInfo,
   listEntryNames,
   resolveStorageMode,
 } from '../../src/metacooler/detect'
 import { loadGolden, manifest, openHandle, refusalCode, withHandle } from './_golden'
+import type { Hdf5Handle } from '../../src/h5/api'
 
 /** Run `body` and return whatever it threw, asserting that it threw at all. */
 function capture(body: () => unknown): ViewerError {
@@ -228,5 +230,78 @@ describe('storage-mode is read, never assumed (§3.2)', () => {
     expect(error.message).toBe(
       "attrs['storage-mode'] must be one of ['square', 'symmetric-upper'], got 'lower'",
     )
+  })
+})
+
+describe('a file that claims to be a metacool but is not one', () => {
+  it('is refused rather than quietly downgraded to a cooler', async () => {
+    // `cooler zoomify` on a metacool produces exactly this: /resolutions/<base>
+    // gets the chroms, the indexes and every root attribute — including
+    // metacooler-format — and no /genomes. Reading it as the plain cooler it
+    // also is would drop the MAGs with nothing said.
+    const handle = {
+      uri: 'zoomified.mcool::resolutions/1000',
+      group: '/',
+      attrs: () => ({
+        'metacooler-format': 'HDF5::MetaCooler',
+        'metacooler-format-version': 1,
+        format: 'HDF5::Cooler',
+        ngenomes: 11,
+      }),
+      has: (path: string) => path !== 'genomes',
+      keys: () => [],
+    } as unknown as Hdf5Handle
+
+    let thrown: unknown
+    try {
+      detectLayout(handle)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toContain('/genomes')
+    expect((thrown as Error).message).toContain('metacooler-format')
+  })
+
+  it('reports its own format, not a mixture of both', () => {
+    // A metacool that omitted its version must not be stamped with cooler's
+    // format-version 3 — a value the bad-format-version gate exists to refuse.
+    const info = normaliseInfo({
+      'metacooler-format': 'HDF5::MetaCooler',
+      format: 'HDF5::Cooler',
+      'format-url': 'https://github.com/open2c/cooler',
+      'format-version': 3,
+    } as never)
+    expect(info.format).toBe('HDF5::MetaCooler')
+    expect(info['format-version']).toBeNull()
+    expect(info['format-url']).toBeNull()
+  })
+})
+
+describe('a cooler carrying something called resolutions', () => {
+  it('is still a cooler when the name is not a group of resolutions', () => {
+    const handle = {
+      uri: 'odd.cool',
+      group: '/',
+      attrs: () => ({ format: 'HDF5::Cooler' }),
+      has: (path: string) => path === 'resolutions',
+      // `keys` answers [] for anything that is not a group, which is what tells
+      // a stray dataset apart from a real ladder.
+      keys: () => [],
+    } as unknown as Hdf5Handle
+    expect(detectLayout(handle).kind).toBe('cool')
+  })
+
+  it('is a ladder when the group actually holds resolutions, in numeric order', () => {
+    const handle = {
+      uri: 'ladder.mcool',
+      group: '/',
+      attrs: () => ({ format: 'HDF5::MCOOL' }),
+      has: () => true,
+      keys: () => ['10000', '1000', '500', '5000'],
+    } as unknown as Hdf5Handle
+    const layout = detectLayout(handle)
+    expect(layout.kind).toBe('mcool')
+    expect(layout.entries).toEqual(['500', '1000', '5000', '10000'])
   })
 })

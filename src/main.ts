@@ -398,7 +398,8 @@ class App {
       // path is what says which of them is open (§3.4).
       const entries = info.entries
       const group = splitUri(uri).group
-      const match = /^\/entries\/(.+)$/.exec(group)
+      // `/entries/rep1` in an mmetacool, `/resolutions/1000` in an mcool.
+      const match = /^\/(?:entries|resolutions)\/(.+)$/.exec(group)
       const currentEntry = match === null ? undefined : match[1]
       this.file = {
         uri,
@@ -417,17 +418,20 @@ class App {
       this.breadcrumb = new Breadcrumb({
         rootKind: isMetacool ? 'genomes' : 'contigs',
         // A metacool offers both landing tables and the whole-genome view; a
-        // plain cooler has only the one table worth showing, since its genomes
-        // table is a synthesised single row.
+        // plain cooler has only its chromosomes, because that is all it has.
         rootChoices: isMetacool ? ['genomes', 'contigs', 'overview'] : ['contigs'],
         fileLabel: fileLabel(uri),
         entries,
+        entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
         ...(currentEntry === undefined ? {} : { currentEntry }),
         onNavigate: (state) => this.navigate(state),
         onOpenFilePicker: () => this.toPicker(),
         onShowOverview: () => this.showOverview(),
         onSelectEntry: (entry) =>
-          void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
+          void this.open(
+            `${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`,
+            source,
+          ),
       })
       this.infoPanel = new InfoPanel({ info })
       this.sideHost.replaceChildren(this.infoPanel.el)
@@ -454,10 +458,10 @@ class App {
       // collection meant "show me this data", so the app answers by opening an
       // entry and offering the rest in the breadcrumb picker, rather than
       // handing back an error about a URI syntax they did not use.
-      const entry = firstEntry(err)
-      if (entry !== null) {
+      const landing = firstEntry(err)
+      if (landing !== null) {
         this.opening = null
-        await this.open(`${splitUri(uri).path}::entries/${entry}`, source)
+        await this.open(`${splitUri(uri).path}::${landing.group}/${landing.entry}`, source)
         return
       }
       this.showError(err, uri, source)
@@ -518,6 +522,16 @@ class App {
       return
     }
 
+    // A cooler has no genome layer (§9), and `genomes` is both the parse
+    // default for a hash with no `view=` and the fallback of every incomplete
+    // view below. Rewriting it here — rather than at each of those sites —
+    // covers the shared link, the hand-edited hash and the three redirects at
+    // once, and leaves nobody on an empty table with no way off it.
+    if (state.view === 'genomes' && this.file !== null && !this.file.info.hasGenomes) {
+      this.store.set({ uri: state.uri, view: 'contigs' }, { replace: true })
+      return
+    }
+
     this.breadcrumb?.render(state, { overview: this.showingOverview })
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
 
@@ -563,14 +577,17 @@ class App {
     const file = this.file
     if (file === null) return
     const data = await this.contigs()
-    const synthesised = file.info.layout.kind !== 'metacool'
+    // A plain cooler is opened as itself: no genome layer, no genome_id column,
+    // and the chrom table is the landing view rather than a consolation prize.
+    const cooler = !file.info.hasGenomes
     const view = new ContigsTable({
       data,
-      hideColumns: synthesised ? ['genome_id'] : [],
-      title: synthesised ? 'Chromosomes / contigs' : 'Contigs',
-      hint: synthesised
-        ? 'This file is a plain cooler, so there is no genome hierarchy to browse: pick a sequence, ' +
-          'or type a region below it. Whole-genome views of standard Hi-C are deliberately out of scope.'
+      hideColumns: cooler ? ['genome_id'] : [],
+      title: cooler ? 'Chromosomes' : 'Contigs',
+      hint: cooler
+        ? 'A cooler has no genome hierarchy, so this is the whole of it: pick a sequence, or type ' +
+          'a region below it. Whole-genome views of standard Hi-C stay out of scope — the ' +
+          'selection guard says so with a number when you try one.'
         : undefined,
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>

@@ -102,6 +102,8 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     nBins: mc.nBins,
     unassigned: mc.unassignedStats(),
     entries: mc.entries,
+    entryGroup: mc.entryGroup,
+    hasGenomes: mc.hasGenomes,
     sourceBytes: source.size,
     sourceKind: request.source.kind,
   }
@@ -109,12 +111,23 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
 
 function handleGenomes(): GenomesResult {
   const { mc } = requireSession()
+  const genomes = mc.genomes
+  // A plain cooler has no genome layer, and answers with an empty table rather
+  // than a fabricated row. The app never asks — it lands on the contigs table —
+  // but a hand-edited URL can, and an empty table is the honest answer.
+  if (genomes === null) {
+    return {
+      table: { columns: [], length: 0, data: {} },
+      display: new Int32Array(0),
+      density: new Float64Array(0),
+    }
+  }
   const display = Int32Array.from(mc.displayGenomes())
-  const density = new Float64Array(mc.genomes.length)
+  const density = new Float64Array(genomes.length)
   // Two lookups per genome into an index already in memory (§4). Doing it once
   // here rather than lazily per sort keeps the column free at every later click.
   for (const index of display) density[index] = mc.genomeDensity(index)
-  return { table: tableToPayload(mc.genomes), display, density }
+  return { table: tableToPayload(genomes), display, density }
 }
 
 function handleContigs(): ContigsResult {
@@ -193,6 +206,15 @@ async function handleOverview(
   const level = request.level ?? 'genome'
   const cap = request.maxUnits ?? OVERVIEW_MAX_UNITS
 
+  if (level === 'genome' && !mc.hasGenomes) {
+    throw new ViewerError(
+      'unsupported',
+      'This file is a plain cooler and has no genomes, so there is no genome × genome view of ' +
+        'it. The contig level is the same scan over the axes this file does have.',
+      { level },
+    )
+  }
+
   // The unit of both axes: a genome, or a contig. `__unbinned__` is excluded at
   // either level — at contig level that means excluding *its* contigs, which is
   // the same rule (§7.4) applied one level down, not a different one.
@@ -268,7 +290,9 @@ function displayableContigs(mc: MetaCooler): number[] {
   const unbinned = mc.genomeNames.indexOf(UNBINNED_NAME)
   const out: number[] = []
   for (let i = 0; i < mc.nContigs; i++) {
-    if (mc.contigGenomeIds[i] !== unbinned) out.push(i)
+    // With no genome layer there is nothing to exclude: every contig of a plain
+    // cooler is displayable, and `contigGenomeIds` is empty rather than zeroed.
+    if (!mc.hasGenomes || mc.contigGenomeIds[i] !== unbinned) out.push(i)
   }
   return out
 }

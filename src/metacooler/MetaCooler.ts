@@ -35,26 +35,36 @@ import { parseUri } from '../uri'
 
 /** Columns `schema.validate` requires; absence is a format error, not a crash. */
 const REQUIRED_GENOME_COLUMNS = ['name', 'length', 'n_contigs', 'n_bins'] as const
-const REQUIRED_CONTIG_COLUMNS = ['name', 'length', 'genome_id'] as const
+/** What any cooler's chrom/contig table must carry. */
+const REQUIRED_COOLER_COLUMNS = ['name', 'length'] as const
 
 /**
  * Everything `MetaCooler` needs, already read.
  *
  * Split out from the constructor so a synthesised view — a plain cooler
- * presented as a one-genome metacool (§9) — can be built without this class
- * knowing that such a thing exists.
+ * built from something other than a metacool's four tables — a plain cooler,
+ * which has two — can be constructed without this class growing a second
+ * constructor.
  */
 export interface MetaCoolerInit {
   uri: string
   handle: Hdf5Handle
   layout: Layout
   attrs: Record<string, AttrValue>
-  genomes: Table
   contigs: Table
   /** `indexes/chrom_offset`, length `nContigs + 1`. */
   chromOffset: Float64Array
-  /** `indexes/genome_offset`, length `nGenomes + 1`. */
-  genomeOffset: Float64Array
+  /**
+   * `/genomes`, or `undefined` for a plain cooler.
+   *
+   * Undefined rather than a synthesised one-row table: a cooler has no genomes,
+   * and inventing one named after the assembly would put a row in the UI that
+   * is not in the file, then require every genome path to special-case it. The
+   * genome layer is simply absent, and the accessors say so.
+   */
+  genomes?: Table
+  /** `indexes/genome_offset`, length `nGenomes + 1`; absent for a cooler. */
+  genomeOffset?: Float64Array
 }
 
 /** The §7.4 QC statistic: how much of the file binning failed to assign. */
@@ -93,14 +103,22 @@ export class MetaCooler {
   readonly uri: string
   /** Which of the four layouts the file turned out to be. */
   readonly layout: Layout
-  /** Sibling entry names when this map lives inside an mmetacool (§3.4). */
+  /**
+   * Sibling names when this map lives inside a collection: the other maps of an
+   * mmetacool (§3.4), or the other resolutions of an mcool (§9).
+   */
   readonly entries: string[]
+  /** The group those siblings live under — `entries` or `resolutions`. */
+  readonly entryGroup: string
   /** Normalised root attributes (`MetaCooler.info`). */
   readonly info: Info
   /** The optional user `metadata` object, `{}` when absent. */
   readonly metadata: Record<string, unknown>
-  /** `/genomes` with every column the creator wrote (spec §5.1). */
-  readonly genomes: Table
+  /**
+   * `/genomes` with every column the creator wrote (spec §5.1), or `null` for a
+   * plain cooler, which has no such table and is not pretending to.
+   */
+  readonly genomes: Table | null
   /** `/contigs` with every column the creator wrote. */
   readonly contigs: Table
   /** Uniform bin size in bp. Never `null` here — §3.2 refuses variable bins. */
@@ -116,12 +134,15 @@ export class MetaCooler {
   readonly chromnames: string[]
   /** Contig name → length in bp — cooler's `chromsizes`. */
   readonly chromsizes: Map<string, number>
-  /** Genome names, in file order, `__unbinned__` included. */
+  /** Genome names, in file order, `__unbinned__` included; `[]` for a cooler. */
   readonly genomeNames: string[]
   /**
    * `contigs/genome_id`, one entry per contig, exactly as written. Public
    * because the aggregation path needs contig → genome and must never invent
    * its own mapping (§7.4: nothing is renumbered).
+   *
+   * Empty for a plain cooler: there is no mapping to carry, and a filled-in one
+   * would be an invention the aggregation path could not tell from real data.
    */
   readonly contigGenomeIds: Int32Array
 
@@ -155,22 +176,30 @@ export class MetaCooler {
    * Build a map from an already-open handle: detect, gate, then read the four
    * small things §3.2 allows.
    *
-   * @throws ViewerError from {@link assertAcceptable} for a refused file, or
-   *   `unsupported` for a plain cool/mcool, which reaches this class only
-   *   through a synthesised {@link MetaCoolerInit} (§9).
+   * @throws ViewerError from {@link detectLayout} (`not-a-cooler`) or
+   *   {@link assertAcceptable} (`mmetacool-root`, `mcool-root`,
+   *   `bad-format-version`, `bad-ordering`, `variable-bins`), and
+   *   MetaCoolerFormatError for a metacool missing `indexes/genome_offset`.
    */
   static fromHandle(handle: Hdf5Handle): MetaCooler {
     const layout = detectLayout(handle)
     assertAcceptable(handle, layout)
+
+    // A plain cooler — including one resolution of an mcool — is opened as
+    // itself: its `/chroms` is the contig table, and there is no genome layer
+    // to read. Everything below this point is bin arithmetic over
+    // `chrom_offset` and contig lengths, which is the same in both files.
     if (layout.kind !== 'metacool') {
-      throw new ViewerError(
-        'unsupported',
-        `${handle.uri} is a ${layout.kind} file. Plain cooler files are supported at region ` +
-          `level through a synthesised single-genome view; construct MetaCooler from that ` +
-          `instead of opening the file directly.`,
-        { kind: layout.kind },
-      )
+      return new MetaCooler({
+        uri: handle.uri,
+        handle,
+        layout,
+        attrs: handle.attrs(),
+        contigs: handle.readTable('chroms'),
+        chromOffset: handle.readNumeric('indexes/chrom_offset'),
+      })
     }
+
     if (!handle.has('indexes/genome_offset')) {
       throw new MetaCoolerFormatError('indexes/genome_offset is missing')
     }
@@ -191,10 +220,11 @@ export class MetaCooler {
     this.handle = init.handle
     this.layout = init.layout
     this.entries = init.handle.rootEntries
-    this.genomes = init.genomes
+    this.entryGroup = init.handle.rootEntryGroup
+    this.genomes = init.genomes ?? null
     this.contigs = init.contigs
     this.chromOffset = init.chromOffset
-    this.genomeOffset = init.genomeOffset
+    this.genomeOffset = init.genomeOffset ?? new Float64Array(0)
 
     this.info = normaliseInfo(init.attrs)
     this.metadata = extractMetadata(init.attrs)
@@ -213,9 +243,10 @@ export class MetaCooler {
     this.binsize = binsize
 
     this.chromnames = this.contigs.strings('name')
-    this.genomeNames = this.genomes.strings('name')
+    this.genomeNames = this.genomes === null ? [] : this.genomes.strings('name')
     const contigLengths = Float64Array.from(this.contigs.numbers('length'))
-    this.contigGenomeIds = Int32Array.from(this.contigs.numbers('genome_id'))
+    this.contigGenomeIds =
+      this.genomes === null ? new Int32Array(0) : Int32Array.from(this.contigs.numbers('genome_id'))
     this.coords = new Coords(this.binsize, this.chromOffset, contigLengths)
 
     this.chromsizes = new Map()
@@ -235,9 +266,20 @@ export class MetaCooler {
   // Shape and identity
   // -------------------------------------------------------------------------
 
-  /** Number of genomes, `__unbinned__` included. */
+  /**
+   * `true` when this file has a genome layer — a metacool.
+   *
+   * The one thing callers branch on. A plain cooler answers `0`, `[]` and
+   * `null` from every genome accessor below rather than throwing, so the
+   * difference shows up as an empty list in the UI and not as an error screen.
+   */
+  get hasGenomes(): boolean {
+    return this.genomes !== null
+  }
+
+  /** Number of genomes, `__unbinned__` included; `0` for a plain cooler. */
   get nGenomes(): number {
-    return this.genomes.length
+    return this.genomes?.length ?? 0
   }
 
   /** Number of contigs. */
@@ -420,7 +462,7 @@ export class MetaCooler {
     const gid = this.genomeIds.get(UNBINNED_NAME)
     // Absence is normal, not an error: `create(drop_unassigned=True)` omits the
     // row, and `null` is what tells the info panel there is nothing to report.
-    if (gid === undefined) return null
+    if (gid === undefined || this.genomes === null) return null
     const contigs = Number(this.genomes.get('n_contigs', gid) ?? 0)
     const bins = Number(this.genomes.get('n_bins', gid) ?? 0)
     return {
@@ -670,42 +712,54 @@ export class MetaCooler {
       throw new MetaCoolerFormatError(message, detail)
     }
 
+    // Shared with every cooler: a contig table, its columns, and an offset
+    // array that brackets it.
     if (this.nContigs === 0) fail('/contigs table is empty')
-    if (this.nGenomes === 0) fail('/genomes table is empty')
-    for (const column of REQUIRED_GENOME_COLUMNS) {
-      if (!this.genomes.columns.includes(column)) fail(`Missing column in /genomes: ${column}`)
-    }
-    for (const column of REQUIRED_CONTIG_COLUMNS) {
+    for (const column of REQUIRED_COOLER_COLUMNS) {
       if (!this.contigs.columns.includes(column)) fail(`Missing column in /contigs: ${column}`)
     }
-
-    // The dual identity: a metacool must stay openable by cooler.Cooler(),
-    // which it does only because /chroms soft-links to /contigs.
-    if (!this.handle.isSoftLink('chroms')) {
-      fail('/chroms must be a soft link to /contigs for cooler compatibility')
-    }
-
     if (this.chromOffset.length !== this.nContigs + 1) {
       fail(`chrom_offset length (${this.chromOffset.length}) != ${this.nContigs + 1}`)
-    }
-    if (this.genomeOffset.length !== this.nGenomes + 1) {
-      fail(`genome_offset length (${this.genomeOffset.length}) != ${this.nGenomes + 1}`)
     }
     if (this.chromOffset[0] !== 0) {
       fail(`chrom_offset endpoints (${this.chromOffset[0]}, ${this.nBins}) do not bracket the table`)
     }
-    if (this.genomeOffset[0] !== 0 || this.genomeOffset[this.nGenomes] !== this.nContigs) {
-      fail(
-        `genome_offset endpoints (${this.genomeOffset[0]}, ${this.genomeOffset[this.nGenomes]}) ` +
-          `do not bracket the table (0, ${this.nContigs})`,
-      )
+
+    // The genome layer, only where there is one. A plain cooler fails the
+    // soft-link check by construction — its `/chroms` *is* the real group, and
+    // the check exists to prove a metacool is readable as one of these.
+    if (this.genomes !== null) {
+      if (this.nGenomes === 0) fail('/genomes table is empty')
+      for (const column of REQUIRED_GENOME_COLUMNS) {
+        if (!this.genomes.columns.includes(column)) fail(`Missing column in /genomes: ${column}`)
+      }
+      if (!this.contigs.columns.includes('genome_id')) fail('Missing column in /contigs: genome_id')
+      if (!this.handle.isSoftLink('chroms')) {
+        fail('/chroms must be a soft link to /contigs for cooler compatibility')
+      }
+      if (this.genomeOffset.length !== this.nGenomes + 1) {
+        fail(`genome_offset length (${this.genomeOffset.length}) != ${this.nGenomes + 1}`)
+      }
+      if (this.genomeOffset[0] !== 0 || this.genomeOffset[this.nGenomes] !== this.nContigs) {
+        fail(
+          `genome_offset endpoints (${this.genomeOffset[0]}, ${this.genomeOffset[this.nGenomes]}) ` +
+            `do not bracket the table (0, ${this.nContigs})`,
+        )
+      }
     }
 
     // Declared counts must agree with what is actually there. `nnz` is read
     // from the dataset *shape*, which costs nothing and never touches a pixel.
     const declared: [string, number | null, number, string][] = [
       ['nchroms', this.info.ncontigs, this.nContigs, 'len(/contigs)'],
-      ['ngenomes', this.info.ngenomes, this.nGenomes, 'len(/genomes)'],
+      ...(this.genomes === null
+        ? []
+        : ([['ngenomes', this.info.ngenomes, this.nGenomes, 'len(/genomes)']] as [
+            string,
+            number | null,
+            number,
+            string,
+          ][])),
       ['nbins', this.info.nbins, this.nBins, 'len(/bins)'],
       ['nnz', this.info.nnz, this.handle.datasetLength('pixels/bin1_id'), 'len(/pixels)'],
     ]

@@ -134,14 +134,31 @@ export function detectLayout(h: Hdf5Handle): Layout {
   if (format === MMETACOOLER_FORMAT && h.has('entries')) {
     return { kind: 'mmetacool', group: h.group, entries: listEntryNames(h) }
   }
-  if (
-    strAttr(attrs, 'metacooler-format') === METACOOLER_FORMAT &&
-    METACOOL_GROUPS.every((group) => h.has(group))
-  ) {
-    return { kind: 'metacool', group: h.group }
+  if (strAttr(attrs, 'metacooler-format') === METACOOLER_FORMAT) {
+    const missing = METACOOL_GROUPS.filter((group) => !h.has(group))
+    if (missing.length === 0) return { kind: 'metacool', group: h.group }
+    // A file that *claims* to be a metacool but has lost a group is refused,
+    // never reclassified. It would otherwise fall through to the cooler branch
+    // below and open as a contig-only view with its genomes silently gone —
+    // which is not hypothetical: `cooler zoomify` on a metacool copies the
+    // chroms, the indexes and every root attribute into `/resolutions/<base>`
+    // and drops `/genomes`, producing exactly this file.
+    throw new ViewerError(
+      'not-a-cooler',
+      `${h.uri} declares metacooler-format ${pyRepr(METACOOLER_FORMAT)} but is missing ` +
+        `${pyList(missing.map((group) => `/${group}`))}. It cannot be read as a metacool, and ` +
+        `reading it as the plain cooler it also is would drop the genome layer it says it has. ` +
+        `If this came out of \`cooler zoomify\`, re-derive the resolutions with ` +
+        `\`metacooler zoomify\` instead.`,
+      { missing: [...missing] },
+    )
   }
-  if (h.has('resolutions')) {
-    return { kind: 'mcool', group: h.group, entries: h.keys('resolutions') }
+  // On the group's *contents*, not its mere existence: a cooler that happens to
+  // carry a dataset called `resolutions` is a cooler, and classifying it as a
+  // ladder would refuse it while naming no resolution to open.
+  const resolutions = h.keys('resolutions')
+  if (resolutions.length > 0) {
+    return { kind: 'mcool', group: h.group, entries: orderEntries(resolutions) }
   }
   if (format === COOLER_FORMAT) {
     return { kind: 'cool', group: h.group }
@@ -178,6 +195,41 @@ export function refuseMMetacoolRoot(h: Hdf5Handle): never {
   )
 }
 
+/**
+ * An `.mcool` addressed at its root: name the resolutions and how to pick one.
+ *
+ * The mirror of {@link refuseMMetacoolRoot}, and the same shape of answer — a
+ * collection is not a map — but the group is `resolutions`, not `entries`, and
+ * the names are bin sizes, so the app can open the finest one on the user's
+ * behalf instead of making them retype a URI.
+ */
+/**
+ * Put entry names in the order a human expects.
+ *
+ * HDF5 lists group members lexicographically, which puts `10000` before `5000`
+ * and `1000` before `500`. When every name is an integer the names *are* bin
+ * sizes — a resolution ladder — and their numeric order is the meaningful one.
+ * Anything else is a sample collection with no order to exploit, and keeps the
+ * file's own.
+ */
+export function orderEntries(names: string[]): string[] {
+  const allIntegers = names.length > 0 && names.every((name) => /^\d+$/.test(name) && Number(name) > 0)
+  return allIntegers ? [...names].sort((a, b) => Number(a) - Number(b)) : names
+}
+
+export function refuseMcoolRoot(h: Hdf5Handle, entries: string[]): never {
+  const { path } = parseUri(h.uri)
+  const paths = entries.map((name) => `/resolutions/${name}`)
+  const example = paths.length > 0 ? paths[0] : '/resolutions/<binsize>'
+  throw new ViewerError(
+    'mcool-root',
+    `No cooler at root of ${path}: an .mcool is a collection of resolutions, each a complete ` +
+      `cooler. Resolutions found: ${pyList(paths)}. Use '::' to pick one, e.g. ` +
+      `${path}::${example}.`,
+    { path, entries, group: 'resolutions' },
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Acceptance gates (spec §3.2, §10)
 // ---------------------------------------------------------------------------
@@ -198,6 +250,11 @@ export function refuseMMetacoolRoot(h: Hdf5Handle): never {
  */
 export function assertAcceptable(h: Hdf5Handle, layout: Layout): void {
   if (layout.kind === 'mmetacool') refuseMMetacoolRoot(h)
+  // Before the bin-geometry gate, not after: an mcool root carries only
+  // `format` and `format-version`, so the fixed-bin check would refuse it as a
+  // variable-bin file and tell the user to run `metacooler binnify` on a file
+  // that is already binned four ways. What it needs is a resolution.
+  if (layout.kind === 'mcool') refuseMcoolRoot(h, layout.entries ?? [])
   const attrs = h.attrs()
 
   if (layout.kind === 'metacool') {
@@ -311,9 +368,20 @@ export function normaliseInfo(attrs: Record<string, AttrValue>): Info {
     return value
   }
 
-  const format = take('metacooler-format')
-  const formatUrl = take('metacooler-format-url')
-  const formatVersion = take('metacooler-format-version')
+  // One decision, not three: whose identity is this file reporting? A metacool
+  // reports the `metacooler-*` triple verbatim — including `null` where the
+  // writer omitted a member, as `MetaCooler.info` does — and a plain cooler
+  // reports cooler's, so the info panel is not told it has no format at all.
+  // Resolving each member separately would stamp a metacool that omitted its
+  // version with *cooler's* version 3, a value the `bad-format-version` gate
+  // exists to refuse.
+  const mcFormat = take('metacooler-format')
+  const mcUrl = take('metacooler-format-url')
+  const mcVersion = take('metacooler-format-version')
+  const isMetacool = mcFormat !== undefined && mcFormat !== null
+  const format = isMetacool ? mcFormat : base['format']
+  const formatUrl = isMetacool ? mcUrl : base['format-url']
+  const formatVersion = isMetacool ? mcVersion : base['format-version']
   const ordering = take('contig-ordering')
   const ncontigs = take('nchroms')
 

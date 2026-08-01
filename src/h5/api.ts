@@ -33,6 +33,12 @@ export interface Hdf5Handle {
    * second traversal.
    */
   readonly rootEntries: string[]
+  /**
+   * Which group {@link rootEntries} came from — `entries` for an mmetacool,
+   * `resolutions` for an mcool, `''` when there are none. The URI a caller
+   * builds to open a sibling needs the word, not just the names.
+   */
+  readonly rootEntryGroup: string
 
   /** All attributes on the rooted group, decoded. */
   attrs(): Record<string, AttrValue>

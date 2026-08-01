@@ -7,25 +7,22 @@
  * this file states an expected value of its own: if the JS and the Python
  * reader disagree about a file, this suite says so.
  *
- * Plain cool/mcool fixtures are absent on purpose: §9's synthesised
- * single-genome view is not built yet, and `MetaCooler.fromHandle` refuses
- * them with `unsupported`. That refusal is asserted at the end so the gap
- * stays visible.
+ * Plain cool/mcool fixtures are absent on purpose: their golden was written in
+ * the shape of §9's *synthesised* single-genome view, which is not what the
+ * reader builds now. `cool.test.ts` covers them natively, against the keys
+ * their golden actually carries.
  */
 
 import { describe, expect, it } from 'vitest'
 
-import { ViewerError } from '../../src/errors'
-import { MetaCooler } from '../../src/metacooler/MetaCooler'
-import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import {
   deepScrub,
-  fixturePath,
   goldenEquals,
   goldenMaps,
   manifest,
   withMap,
   withoutKeys,
+  requireGenomes,
 } from './_golden'
 
 const MAPS = goldenMaps({ full: true })
@@ -84,7 +81,7 @@ describe('every accepted map reproduces its golden', () => {
 
     it('/genomes, with every column the creator wrote', async () => {
       await withMap(map, (mc) => {
-        expectTable(mc.genomes, golden.genomes)
+        expectTable(requireGenomes(mc), golden.genomes)
       })
     })
 
@@ -117,7 +114,7 @@ describe('every accepted map reproduces its golden', () => {
           const [lo, hi] = ordered[g]
           if (hi === 0 && lo === 0) continue
           expect(lo).toBe(cursor)
-          expect(hi - lo).toBe(Number(mc.genomes.get('n_bins', g)))
+          expect(hi - lo).toBe(Number(requireGenomes(mc).get('n_bins', g)))
           cursor = hi
         }
         expect(cursor).toBe(mc.nBins)
@@ -198,25 +195,6 @@ describe('every accepted map reproduces its golden', () => {
         }
       })
     })
-  })
-})
-
-describe('plain cooler files are detected but not yet openable as maps (§9)', () => {
-  it.each(['plain.cool', 'plain.mcool::resolutions/1000'])('%s', async (uri) => {
-    const file = uri.split('::')[0]
-    const source = await LocalFileSource.open(fixturePath(file))
-    let thrown: unknown
-    try {
-      const mc = await MetaCooler.open(uri.replace(file, fixturePath(file)), source)
-      mc.close()
-    } catch (error) {
-      thrown = error
-    }
-    expect(thrown).toBeInstanceOf(ViewerError)
-    expect((thrown as ViewerError).code).toBe('unsupported')
-    // The synthesised single-genome view (§9) is M4 work; until it exists the
-    // refusal must say so rather than pretending the file is malformed.
-    expect((thrown as ViewerError).message).toContain('synthesised single-genome view')
   })
 })
 

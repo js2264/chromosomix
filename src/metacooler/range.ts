@@ -20,7 +20,8 @@ import type { Extent, ParsedRange, Table } from '../types'
  * narrower interface — be passed straight in.
  */
 export interface RangeTarget {
-  readonly genomes: Table
+  /** `null` for a plain cooler: there are no genome names to resolve. */
+  readonly genomes: Table | null
   readonly contigs: Table
   /** Row indices of {@link genomes} that may be shown (§7.4). */
   displayGenomes(): number[]
@@ -177,7 +178,7 @@ export function parseMetacoolerRange(mc: RangeTarget, rangeStr: string): ParsedR
   const label = rangeStr.split(':')[0]
   // Membership by scanning the name columns, exactly as `ops/range.py` tests
   // `label in mc.genomes["name"].tolist()`.
-  const genomeNames = mc.genomes.strings('name')
+  const genomeNames = mc.genomes === null ? [] : mc.genomes.strings('name')
   const contigNames = mc.contigs.strings('name')
 
   if (genomeNames.includes(label)) {

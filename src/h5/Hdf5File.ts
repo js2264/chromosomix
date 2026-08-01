@@ -16,6 +16,7 @@ import { MetaCoolerFormatError, ViewerError, truncateNames } from '../errors'
 import type { H5Module, H5wasmDataset, H5wasmFile, Metadata } from './bootstrap'
 import { getH5 } from './bootstrap'
 import { classify, readNumericSlice, readStringSlice, readTableGroup } from './readTable'
+import { orderEntries } from '../metacooler/detect'
 
 const UTF8 = new TextDecoder('utf-8')
 
@@ -78,23 +79,34 @@ export async function openHdf5(
   }
 
   // Captured while the root is in hand; see `Hdf5Handle.rootEntries`.
+  //
+  // Two group names, one idea: an mmetacool keeps its maps under `/entries`
+  // and an mcool keeps its resolutions under `/resolutions`. Both are ladders
+  // of sibling coolers, and the picker that offers them does not care which
+  // word the format chose.
   let rootEntries: string[] = []
+  let rootEntryGroup = ''
   try {
-    if (file.keys().includes('entries')) {
-      const node = file.get('entries')
-      if (node instanceof h5.Group) rootEntries = node.keys()
+    for (const group of ['entries', 'resolutions']) {
+      if (!file.keys().includes(group)) continue
+      const node = file.get(group)
+      if (!(node instanceof h5.Group)) continue
+      rootEntries = orderEntries(node.keys())
+      rootEntryGroup = group
+      break
     }
   } catch {
-    // A file with no readable `/entries` simply has no entries to pick.
+    // A file with no readable entry group simply has no entries to pick.
   }
 
-  return new Hdf5File(uri, root, h5, file, source, rootEntries)
+  return new Hdf5File(uri, root, h5, file, source, rootEntries, rootEntryGroup)
 }
 
 class Hdf5File implements Hdf5Handle {
   readonly uri: string
   readonly group: string
   readonly rootEntries: string[]
+  readonly rootEntryGroup: string
 
   private readonly h5: H5Module
   private readonly file: H5wasmFile
@@ -108,10 +120,12 @@ class Hdf5File implements Hdf5Handle {
     file: H5wasmFile,
     source: ByteSource,
     rootEntries: string[] = [],
+    rootEntryGroup = '',
   ) {
     this.uri = uri
     this.group = group
     this.rootEntries = rootEntries
+    this.rootEntryGroup = rootEntryGroup
     this.h5 = h5
     this.file = file
     this.source = source

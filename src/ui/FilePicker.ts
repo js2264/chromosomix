@@ -243,8 +243,13 @@ export class FilePicker {
 }
 
 /**
- * The entry to land on when an `.mmetacool` was addressed at its root, or
- * `null` when the error is anything else.
+ * The entry to land on when a *collection* was addressed at its root, or `null`
+ * when the error is anything else.
+ *
+ * Two formats, one shape of answer: an `.mmetacool` keeps complete metacools
+ * under `/entries`, an `.mcool` keeps complete coolers under `/resolutions`,
+ * and neither is a map at its root. The group comes back with the name because
+ * the caller has to build a URI out of both.
  *
  * For a `zoomify` ladder every name is an integer and the one to open is the
  * **smallest** — the base resolution, the finest data, and the level the others
@@ -254,13 +259,17 @@ export class FilePicker {
  * For a sample collection the names are datasets with no order to exploit, so
  * the file's own order wins.
  */
-export function firstEntry(err: unknown): string | null {
-  if (!(err instanceof ViewerError) || err.code !== 'mmetacool-root') return null
+export function firstEntry(err: unknown): { group: string; entry: string } | null {
+  if (!(err instanceof ViewerError)) return null
+  if (err.code !== 'mmetacool-root' && err.code !== 'mcool-root') return null
   const entries = err.detail['entries']
   if (!Array.isArray(entries) || entries.length === 0) return null
   const names = entries as string[]
-  if (!allIntegers(names)) return names[0]
-  return [...names].sort((a, b) => Number(a) - Number(b))[0]
+  const group = typeof err.detail['group'] === 'string' ? (err.detail['group'] as string) : 'entries'
+  // An mcool's resolutions are always integers, so this is the finest level —
+  // the same rule that lands an mmetacool ladder on its base resolution.
+  const entry = allIntegers(names) ? [...names].sort((a, b) => Number(a) - Number(b))[0] : names[0]
+  return { group, entry }
 }
 
 /** `true` when every entry name parses as a positive integer (§3.4). */

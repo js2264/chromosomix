@@ -159,7 +159,7 @@
     "plain.mcool::resolutions/2000",
     "plain.mcool::resolutions/5000"
    ],
-   "expect": "accept",
+   "expect": "refuse:mcool-root",
    "fixture_bytes": 196359,
    "golden": "plain_mcool.json",
    "golden_bytes": 180256,

@@ -610,7 +610,9 @@ def build(out: Path, data: Path) -> list[dict]:
     note(
         "plain.mcool",
         "mcool",
-        "accept",
+        # The *root* of an mcool is a collection, not a cooler, and is refused
+        # by name so the app can open a resolution; each entry accepts.
+        "refuse:mcool-root",
         "multi-resolution cooler with a /bins/weight column (spec §6.4, §9)",
         entries=["1000", "2000", "5000"],
         entry_expect="accept",

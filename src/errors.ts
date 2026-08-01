@@ -13,6 +13,7 @@ export type ErrorCode =
   | 'not-hdf5'
   | 'not-a-cooler'
   | 'mmetacool-root'
+  | 'mcool-root'
   | 'entry-not-found'
   | 'bad-format-version'
   | 'bad-ordering'

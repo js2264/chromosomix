@@ -14,6 +14,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openSync, readSync, statSync, closeSync } from 'node:fs'
+import { requireGenomes } from './_golden'
 
 const FILE = new URL('../../public/demo/MM133.metacool', import.meta.url).pathname
 const URL_FOR = (path: string): string => `https://example.test/${path.replace(/^\//, '')}`
@@ -136,7 +137,7 @@ describe('opening a file over ranged HTTP', () => {
       })
       const mc = await MetaCooler.open(URL_FOR(FILE), source)
       expect(mc.nGenomes).toBe(49)
-      expect(mc.genomes.columns).toContain('name')
+      expect(requireGenomes(mc).columns).toContain('name')
       mc.close()
       source.close()
     } finally {

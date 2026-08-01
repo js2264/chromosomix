@@ -51,6 +51,8 @@ export interface BreadcrumbProps {
   entries: string[]
   /** The entry currently open, when {@link entries} is non-empty. */
   currentEntry?: string
+  /** What one entry is called in this format: an entry, or a resolution. */
+  entryNoun?: string
   onNavigate(state: ViewState): void
   onOpenFilePicker(): void
   /** The whole-genome view was picked from the root menu. */
@@ -112,7 +114,11 @@ export class Breadcrumb {
   private pushEntryPicker(): void {
     const { entries, currentEntry, onSelectEntry } = this.props
     if (entries.length === 0 || onSelectEntry === undefined) return
-    const select = el('select', { class: 'crumb-select', title: 'Nested metacool to view' })
+    const noun = this.props.entryNoun ?? 'entry'
+    const select = el('select', {
+      class: 'crumb-select',
+      title: noun === 'resolution' ? 'Resolution to view' : 'Nested metacool to view',
+    })
     for (const name of entries) {
       select.appendChild(el('option', { value: name, text: name }))
     }

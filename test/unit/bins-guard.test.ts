@@ -21,7 +21,9 @@ import { describe, expect, it } from 'vitest'
 import type { Hdf5Handle } from '../../src/h5/api'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../../src/metacooler/range'
-import { goldenMaps, openHandle, withHandle } from './_golden'
+import { goldenMaps, openHandle, withHandle,
+  requireGenomes,
+} from './_golden'
 
 /** Every `Hdf5Handle` method that takes a path as its first argument. */
 const PATH_METHODS = [
@@ -138,7 +140,7 @@ describe('a full open never reads /bins', () => {
       // Everything the open path and the info panel need.
       expect(mc.shape).toEqual(map.golden.shape)
       expect(mc.chromnames).toEqual(map.golden.chromnames)
-      expect(mc.genomes.length).toBe(map.golden.genomes.length)
+      expect(requireGenomes(mc).length).toBe(map.golden.genomes.length)
       expect(mc.contigs.length).toBe(map.golden.contigs.length)
       expect(mc.countKind).toBe(map.golden.count_dtype_kind)
       expect(mc.nnz).toBe(map.golden.info.nnz)

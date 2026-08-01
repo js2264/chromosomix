@@ -33,7 +33,7 @@ const DEMO: Array<{ file: string; label: string; note: string }> = [
   {
     file: 'MM133.cool',
     label: 'MM133 — plain cool',
-    note: 'The same pixels without the genome hierarchy. Detected and refused for now: cool support is M7.',
+    note: 'The same pixels without the genome hierarchy: opened as a cooler, browsed by contig.',
   },
 ]
 

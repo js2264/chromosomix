@@ -150,8 +150,15 @@ export interface OpenResult {
   nContigs: number
   nBins: number
   unassigned: UnassignedStats | null
-  /** Sibling entry names of the enclosing mmetacool; `[]` for a plain file (§3.4). */
+  /**
+   * Sibling names of the enclosing collection; `[]` for a plain file. The other
+   * maps of an mmetacool (§3.4), or the other resolutions of an mcool (§9).
+   */
   entries: string[]
+  /** The group they live under: `entries` (mmetacool) or `resolutions` (mcool). */
+  entryGroup: string
+  /** `false` for a plain cooler, which has no genome layer to browse. */
+  hasGenomes: boolean
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
   sourceKind: SourceKind

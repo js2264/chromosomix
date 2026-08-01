@@ -51,8 +51,13 @@ export class InfoPanel {
       ['storage mode', String(info.info['storage-mode'] ?? '—')],
       ['assembly', String(info.info['assembly'] ?? '—')],
       ['format', `${String(info.info['format'] ?? '—')} v${String(info.info['format-version'] ?? '?')}`],
-      ['genomes', fmt.int(info.nGenomes)],
-      ['contigs', fmt.int(info.nContigs)],
+      // A cooler has no genome layer, and a row reading "genomes 0" invites the
+      // question of where they went. It is the contigs — cooler's chroms — that
+      // this file is made of.
+      ...(info.hasGenomes
+        ? ([['genomes', fmt.int(info.nGenomes)]] as Array<[string, string]>)
+        : []),
+      [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],
       ['non-zero pixels', info.info['nnz'] === null || info.info['nnz'] === undefined ? '—' : fmt.int(Number(info.info['nnz']))],
       ['sum', info.info['sum'] === null || info.info['sum'] === undefined ? '—' : fmt.int(Number(info.info['sum']))],
@@ -64,7 +69,11 @@ export class InfoPanel {
    * The single retained `__unbinned__` number, labelled as a QC statistic and
    * not as a genome.
    */
-  private unassignedBlock(): HTMLElement {
+  private unassignedBlock(): HTMLElement | null {
+    // A cooler was never binned, so there is no binning to report on — clean or
+    // otherwise. Saying "every contig was assigned to a bin" about a file with
+    // no bins is a false statement, not a reassuring one.
+    if (!this.props.info.hasGenomes) return null
     const stats = this.props.info.unassigned
     if (stats === null) {
       return el(

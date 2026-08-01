@@ -54,6 +54,13 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'Address one entry with the :: syntax, e.g. file.mmetacool::entries/<name>.',
     ],
   },
+  'mcool-root': {
+    title: 'This is a resolution ladder, not a single map',
+    advice: [
+      'An .mcool holds one complete cooler per resolution and is not itself a cooler, so it cannot be opened at its root.',
+      'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and the finest one opens.',
+    ],
+  },
   'entry-not-found': {
     title: 'No such entry in this collection',
     advice: ['Pick one of the entries listed below, or drop the :: suffix to see them all.'],

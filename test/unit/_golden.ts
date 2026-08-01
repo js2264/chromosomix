@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs'
 import type { Hdf5Handle } from '../../src/h5/api'
 import { openHdf5 } from '../../src/h5/Hdf5File'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
+import type { Table } from '../../src/types'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { parseUri } from '../../src/uri'
 
@@ -256,4 +257,16 @@ export function withoutKeys<T extends Record<string, unknown>>(
   const out: Record<string, unknown> = { ...value }
   for (const key of keys) delete out[key]
   return out
+}
+
+/**
+ * The genome table of a map that must have one.
+ *
+ * `MetaCooler.genomes` is `null` for a plain cooler, which these suites never
+ * open — they run over the metacool fixtures. Asserting it here says that once,
+ * where it is true, instead of at every call site.
+ */
+export function requireGenomes(mc: { genomes: Table | null }): Table {
+  if (mc.genomes === null) throw new Error('expected a metacool, got a file with no genome layer')
+  return mc.genomes
 }

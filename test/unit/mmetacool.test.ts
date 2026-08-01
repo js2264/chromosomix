@@ -261,14 +261,14 @@ describe('which entry an mmetacool opens at', () => {
     // HDF5 group order is alphabetical, which puts '1000' before '500'. The
     // base resolution is the one every other level was derived from, so a
     // string sort would land the user on a coarsened view of their own data.
-    expect(firstEntry(rootError(['1000', '2000', '4000']))).toBe('1000')
-    expect(firstEntry(rootError(['1000', '500', '2000']))).toBe('500')
-    expect(firstEntry(rootError(['10000', '2000']))).toBe('2000')
+    expect(firstEntry(rootError(['1000', '2000', '4000']))).toEqual({ group: 'entries', entry: '1000' })
+    expect(firstEntry(rootError(['1000', '500', '2000']))).toEqual({ group: 'entries', entry: '500' })
+    expect(firstEntry(rootError(['10000', '2000']))).toEqual({ group: 'entries', entry: '2000' })
   })
 
   it('keeps file order for a sample collection, where the names carry no order', () => {
-    expect(firstEntry(rootError(['rep1', 'rep2']))).toBe('rep1')
-    expect(firstEntry(rootError(['treated', 'control']))).toBe('treated')
+    expect(firstEntry(rootError(['rep1', 'rep2']))).toEqual({ group: 'entries', entry: 'rep1' })
+    expect(firstEntry(rootError(['treated', 'control']))).toEqual({ group: 'entries', entry: 'treated' })
   })
 
   it('declines to redirect for anything that is not an mmetacool root', () => {

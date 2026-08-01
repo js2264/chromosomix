@@ -34,6 +34,7 @@ import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../../src/metacooler/range'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { allIntegers } from '../../src/ui/FilePicker'
+import { requireGenomes } from './_golden'
 
 const METACOOL = new URL('../../data/Hum53.metacool', import.meta.url).pathname
 const MMETACOOL = new URL('../../data/Hum53.mmetacool', import.meta.url).pathname
@@ -194,9 +195,9 @@ describe.skipIf(!hasMetacool)('Hum53.metacool — the real 26 MB file', () => {
     const step = Math.floor(REAL.nGenomes / 40)
     for (let g = 0; g < REAL.nGenomes; g += step) {
       const [lo, hi] = mc.genomeExtent(g)
-      expect(hi - lo).toBe(Number(mc.genomes.get('n_bins', g)))
+      expect(hi - lo).toBe(Number(requireGenomes(mc).get('n_bins', g)))
       const [c0, c1] = mc.genomeContigExtent(g)
-      expect(c1 - c0).toBe(Number(mc.genomes.get('n_contigs', g)))
+      expect(c1 - c0).toBe(Number(requireGenomes(mc).get('n_contigs', g)))
       expect(lo).toBeGreaterThanOrEqual(previousEnd)
       previousEnd = hi
     }
