@@ -273,6 +273,91 @@
 - **Each of the eight commits typechecks on its own**, checked before committing
   this time rather than after.
 
+## DONE
+
+- [x] But I DO want to have lines, not boxes, for the dividers in the heatmap. I need to see dividers between all contigs/genomes, not just the ones that are in the diagonal.
+- [x] Whole genome view should have the exact same layout as genome/region views, with the same settings and options, and the same heatmap layout --> SAME COMMENT BUT FOR PAIRS OF GENOMES. 
+- [x] Start implementing support for native cool/mcool files, without having to rely on a metacooler file with "single genome" trick. Below is suggestions I got for this (line numbers might not be accurate): 
+
+```
+-> Can .cool be supported natively?
+
+Yes, and it's a seam extraction rather than a second reader. More of the codebase is already cool-native than the docs admit.
+
+Already genome-agnostic, no changes needed:
+
+Module	Why it already works
+src/metacooler/coords.ts	Coords takes only binsize, chrom_offset, contig lengths. A plain cool has all three (/chroms/length, /indexes/chrom_offset, bin-size attr). Zero genome concepts.
+src/metacooler/matrix.ts	MatrixSource is {handle, nBins, storageMode} — the seam is already cut. readPixelSpan/planRead/scatterDense are pure bin arithmetic.
+src/metacooler/range.ts	parseRegion/parseHumanized/regionToExtent are ports of cooler's own functions. Only parseMetacoolerRange layers genomes on top.
+src/metacooler/detect.ts	Already classifies cool/mcool correctly, and assertAcceptable already scopes the ordering and format-version gates to kind === 'metacool' (detect.ts:196).
+normaliseInfo	Handles a real cooler's attrs (nchroms→ncontigs, genome-assembly). Verified against test/golden/plain_cool.json.
+aggregate.ts at level: 'contig'	Needs only Coords. Contig = chromosome, which is exactly right for a cool.
+render / scale / colormaps / ViewState hash / RemoteRangeSource / h5/	Nothing genomic anywhere.
+The actual blockers — six, all in one file:
+
+MetaCooler.ts:165 — hard unsupported throw for kind !== 'metacool'.
+MetaCooler.ts:174 — requires indexes/genome_offset.
+MetaCooler.ts:182 — reads readTable('genomes'); and reads contigs, where a cool has /chroms.
+MetaCooler.ts:218 — contigs.numbers('genome_id').
+MetaCooler.ts:684 — validateLight requires isSoftLink('chroms'). Note the irony: this check exists to prove a metacool is also openable by cooler.Cooler(), and it is the one check a genuine cooler fails (its /chroms is a real group).
+worker/reader.worker.ts types the whole session as mc: MetaCooler, and parseMetacoolerRange is the only range entry point.
+The shape I'd argue for: promote a ContactMap base holding uri/layout/info/binsize/storageMode/countKind/coords/chromnames/chromsizes/handle plus extent/offset/contigExtent/matrix/scanPixels/validateDeep. MetaCooler extends ContactMap adds the genome layer; Cooler extends ContactMap adds nothing and points the contig table name at chroms. validateLight splits into shared + metacool-only.
+
+Why native beats the §9 synthesis, on its own terms: the synthesis has to fabricate n_bins/n_contigs columns, invent a genome name from the assembly, and bypass the softlink check anyway — the same work, done dishonestly, plus a fake row the UI then special-cases (main.ts:573 already carries const synthesised = ...). Going native deletes that flag instead of feeding it.
+
+Two live bugs found on the way:
+
+assertAcceptable runs before the kind !== 'metacool' refusal, so an .mcool opened at root hits the bin-size gate — its root carries only format and format-version (confirmed in plain_mcool.json) — and the user gets "The viewer supports fixed-bin files only… produce a fixed-bin file with metacooler binnify" instead of "pick a resolution". An mcool needs an refuseMcoolRoot sibling to refuseMMetacoolRoot.
+checkDenseSize mirrors Python's 50,000-bins-per-axis limit. On a machine with RAM that's fine; in a tab, 50,000² × 4 B (Float32) is 10 GB and past Chrome's canvas area cap. The guard will happily wave through an allocation that kills the tab. See below.
+mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, and detect.test.ts:114 already asserts "an mcool resolution is an ordinary cooler". The resolutions are the zoom ladder — the same control the mmetacool ladder is waiting on. That's HiGlass's pyramid without the tile server, because the mcool already ships the pyramid.
+```
+
+> NOTES ON THE BATCH ABOVE
+
+- **Dividers are lines again**, across every contig and genome rather than boxes
+  on the diagonal only — and still clipped to the data, so nothing runs past the
+  last bin when you zoom out.
+- **cool and mcool are native now**, not the synthesised single-genome metacool
+  the spec used to describe. A cooler is opened as itself: `/chroms` is the
+  contig table, `MetaCooler.genomes` is `null`, and every genome accessor
+  answers `0`, `[]` or `null`. Nothing downstream branches, because almost
+  nothing downstream was ever genome-specific — coordinates, the matrix read,
+  contig-level aggregation and the pixel scan are bin arithmetic over
+  `indexes/chrom_offset` and contig lengths, which both formats carry. The
+  `synthesised` flag the UI used to carry is gone rather than fed. SPECS §9,
+  IMPLEMENTATION M7 and the README now say this instead of the opposite.
+- **An `.mcool` root is refused by name** (`mcool-root`, listing its
+  resolutions) and the app opens the finest, exactly as it does for a zoomify
+  ladder. The resolutions are also the entry picker, so the ladder is navigable.
+  Entry names are ordered numerically at the two places that produce them:
+  HDF5 lists group members lexicographically, which puts `10000` before `5000`.
+- **A second dense guard**, for the browser rather than the CLI. Python's
+  `DENSE_MATRIX_BIN_LIMIT` allows 50,000 x 50,000 — 2.5e9 cells, ~40 GB of live
+  bytes once the values, the colour mapping and the canvas are counted, with a
+  raster nine times a canvas's area cap. The new one caps cells (1e8, about
+  10,000 bins per axis) *and* each axis (32,767, the smaller of the two browser
+  canvas side limits), because a 248,957-bin chromosome at 1 kb is only 7.5e7
+  cells against 300 columns and still cannot be rasterised. It refuses with the
+  same code, and the region view shows it inline above an intact region box
+  rather than on an error screen.
+- **An adversarial review of the above found thirteen real defects**, all fixed
+  here. The two worth naming: `cooler zoomify` run on a metacool copies the
+  chroms, the indexes and every root attribute into `/resolutions/<base>` and
+  drops `/genomes` — that file used to be *refused*, and with a native cool path
+  it would have opened silently as a contig-only view with its MAGs invisible,
+  so a file claiming `metacooler-format` while missing a required group is now
+  refused by name; and `normaliseInfo` resolved format, format-url and
+  format-version independently, which stamped a metacool that omitted its
+  version with cooler's version 3 — a value the `bad-format-version` gate exists
+  to refuse. It is one decision now.
+- **The request-budget suite had been broken since the range fix two batches
+  ago** and nobody noticed, because it lives in `test/budgets/` and I had only
+  been running `test/unit/`. Its fake XHR had no `getResponseHeader`, so every
+  read in it took the "host ignored the range" path — the same failure the
+  published demo files hit in dev. Fixed, and the whole suite runs now: 732
+  tests.
+
 
 ## FOR FUTURE
 
