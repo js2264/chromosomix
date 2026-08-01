@@ -231,6 +231,8 @@ export interface HeatmapOptions {
   maxLabels?: number
   /** Guide lines for the hovered cell; distinct from every separator colour. */
   crosshairColor?: string
+  /** The frame drawn on the plot's own edges, replacing the wrapper's border. */
+  plotBorderColor?: string
   /** Rubber-band selection: solid edge, translucent fill. */
   selectionColor?: string
   selectionFill?: string
@@ -404,6 +406,7 @@ export class HeatmapView {
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
       crosshairColor: options.crosshairColor ?? '#1f5fa9',
+      plotBorderColor: options.plotBorderColor ?? '#b9bec5',
       selectionColor: options.selectionColor ?? '#1f5fa9',
       selectionFill: options.selectionFill ?? 'rgba(31, 95, 169, 0.16)',
       minSelectPixels: options.minSelectPixels ?? 6,
@@ -430,6 +433,25 @@ export class HeatmapView {
   /** The margin actually in force, after any {@link measureMargin} pass. */
   get margin(): Margin {
     return this.computedMargin
+  }
+
+  /**
+   * Recolour the chrome the *page* owns — labels, their halo, and the plot
+   * frame.
+   *
+   * These are the only colours that have to follow the theme. The separator and
+   * crosshair colours deliberately do not: they are `ops/show.py`'s, so a
+   * browser screenshot and a CLI figure stay the same image.
+   */
+  setPalette(palette: {
+    labelColor?: string
+    labelHaloColor?: string
+    plotBorderColor?: string
+  }): void {
+    if (palette.labelColor !== undefined) this.opts.labelColor = palette.labelColor
+    if (palette.labelHaloColor !== undefined) this.opts.labelHaloColor = palette.labelHaloColor
+    if (palette.plotBorderColor !== undefined) this.opts.plotBorderColor = palette.plotBorderColor
+    this.changed()
   }
 
   /** The overlay state, as a copy: mutating it must not change the view. */
@@ -805,6 +827,30 @@ export class HeatmapView {
     this.drawLabels()
     if (this.plot.crosshair) this.drawCrosshair()
     this.drawSelection()
+    this.drawPlotBorder()
+  }
+
+  /**
+   * The frame, drawn on the plot's own edges.
+   *
+   * It belongs to the canvas rather than to the wrapping element: the plot is
+   * inset by however much the labels need, so a border on the wrapper sits some
+   * arbitrary distance away from the data with dead space between. Drawn last,
+   * so nothing overlaps it.
+   */
+  private drawPlotBorder(): void {
+    const plot = this.plotRect
+    const ctx = this.ctx
+    ctx.save()
+    ctx.strokeStyle = this.opts.plotBorderColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.strokeRect(
+      this.snap(plot.x),
+      this.snap(plot.y),
+      Math.round(plot.width),
+      Math.round(plot.height)
+    )
+    ctx.restore()
   }
 
   /** The rubber band, while a selection drag is in progress. */
@@ -911,25 +957,63 @@ export class HeatmapView {
     ctx.restore()
   }
 
+  /**
+   * Block boundaries, drawn as boxes rather than as rules across the plot.
+   *
+   * A full-width line says "something changes here"; a box says "this square is
+   * one contig", which is the question being asked of a metagenomic map. On a
+   * symmetric view every block that appears on both axes gets its own square —
+   * the diagonal boxes — which is O(blocks) rather than the O(blocks²) a whole
+   * grid of boxes would cost on a 20 k-contig genome.
+   *
+   * When the two axes share no labels at all (a genome pair, a contig × contig
+   * block) there is no diagonal to draw, so the cross-product is used instead —
+   * but only while both axes are small enough to label, which is the same
+   * threshold that keeps the picture readable in the first place.
+   */
   private drawSeparators(): void {
     const { nrows, ncols } = this.dims()
+    const rows = separatorBlocks(this.separators.rows, nrows)
+    const cols = separatorBlocks(this.separators.cols, ncols)
+    if (rows.length === 0 && cols.length === 0) return
     const plot = this.plotRect
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
     ctx.clip()
-
     ctx.strokeStyle = this.opts.separatorColor
     ctx.lineWidth = Math.max(this.opts.separatorWidth, 1 / this.dpr)
-    this.strokeBoundary(this.separators.cols, 'cols', ncols)
-    this.strokeBoundary(this.separators.rows, 'rows', nrows)
 
+    const byLabel = new Map(cols.map((block) => [block.label, block]))
+    const diagonal = rows.filter((block) => byLabel.has(block.label))
+    if (diagonal.length > 0) {
+      for (const block of diagonal) this.strokeBlock(block, byLabel.get(block.label) as LabelBlock)
+    } else if (rows.length <= this.opts.maxLabels && cols.length <= this.opts.maxLabels) {
+      for (const row of rows) for (const col of cols) this.strokeBlock(row, col)
+    }
+
+    // Selection-block boundaries stay lines: they mark where one *query* ends
+    // and the next begins, which is a cut through the picture rather than a
+    // region of it.
     ctx.strokeStyle = this.opts.groupSeparatorColor
     ctx.lineWidth = Math.max(this.opts.groupSeparatorWidth, 1 / this.dpr)
     this.strokeBoundary(this.separators.groupCols ?? [], 'cols', ncols)
     this.strokeBoundary(this.separators.groupRows ?? [], 'rows', nrows)
     ctx.restore()
+  }
+
+  /** One box: rows give the vertical extent, cols the horizontal. */
+  private strokeBlock(row: LabelBlock, col: LabelBlock): void {
+    const plot = this.plotRect
+    const x0 = this.snap(plot.x + this.colScale.toPixel(col.start))
+    const x1 = this.snap(plot.x + this.colScale.toPixel(col.end))
+    const y0 = this.snap(plot.y + this.rowScale.toPixel(row.start))
+    const y1 = this.snap(plot.y + this.rowScale.toPixel(row.end))
+    // Off-screen boxes cost a stroke each on a 4 k-contig genome; skip them.
+    if (x1 < plot.x || x0 > plot.x + plot.width) return
+    if (y1 < plot.y || y0 > plot.y + plot.height) return
+    this.ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
   }
 
   /**

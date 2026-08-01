@@ -848,11 +848,12 @@ p {
   align-items: start;
 }
 
+/* No chrome of its own: no border, no radius, no fill, no padding. The frame
+   the eye needs is the one drawn on the plot's own edges by the canvas, which
+   is the only thing that sits *on* the data — a wrapper border is however far
+   away the labels happen to need, with dead space in between. */
 .heatmap-wrap {
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
   overflow: hidden;
   /* Fill the space the view actually has instead of forcing a square. A square
      wrap in a wide column leaves a band of dead canvas under the plot, which is

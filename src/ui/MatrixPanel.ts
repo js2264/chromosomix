@@ -86,6 +86,7 @@ export class MatrixPanel {
   private readonly plotOptionsEl: HTMLElement
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
   private readonly unsubscribePlotOptions: () => void
+  private readonly themeWatchers: () => void
   private readonly observer: ResizeObserver | null
 
   private data: MatrixResult | null = null
@@ -114,6 +115,7 @@ export class MatrixPanel {
 
     this.heatmap = new HeatmapView(this.canvas, {
       plotOptions: getPlotOptions(),
+      ...readCanvasPalette(),
       // Contig labels are drawn only below the Python threshold; above it they
       // would be a grey smear rather than information (`ops/show.py`).
       maxLabels: MAX_CATEGORICAL_TICKS,
@@ -254,6 +256,15 @@ export class MatrixPanel {
       this.readout,
     )
 
+    // Labels and the plot frame are page furniture, so they follow the theme.
+    // The canvas cannot read a CSS variable, and the values are only correct
+    // for the theme that was in force when they were read — hence a watcher on
+    // both the explicit override and the system preference.
+    this.themeWatchers = watchTheme(() => {
+      this.heatmap.setPalette(readCanvasPalette())
+      this.schedule()
+    })
+
     this.observer =
       typeof ResizeObserver === 'undefined'
         ? null
@@ -281,6 +292,7 @@ export class MatrixPanel {
   /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
     this.unsubscribePlotOptions()
+    this.themeWatchers()
     this.observer?.disconnect()
     this.heatmap.detach()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
@@ -452,6 +464,50 @@ function positionIn(
 ): string | null {
   if (group === undefined || level !== 'bin') return null
   return fmt.bp((offset - group.start) * binsize)
+}
+
+/**
+ * The colours the canvas borrows from the stylesheet.
+ *
+ * Only three: the labels, their halo, and the plot frame. The separator and
+ * crosshair colours are `ops/show.py`'s and stay fixed, so a screenshot from
+ * the browser and a figure from the CLI remain the same image.
+ */
+function readCanvasPalette(): {
+  labelColor: string
+  labelHaloColor: string
+  plotBorderColor: string
+} {
+  const style = getComputedStyle(document.documentElement)
+  const pick = (name: string, fallback: string): string => {
+    const value = style.getPropertyValue(name).trim()
+    return value === '' ? fallback : value
+  }
+  return {
+    labelColor: pick('--text-dim', '#5b6169'),
+    labelHaloColor: pick('--bg', '#ffffff'),
+    plotBorderColor: pick('--border-strong', '#b9bec5'),
+  }
+}
+
+/**
+ * Call `onChange` whenever the effective theme changes: either the explicit
+ * `data-theme` override or, in its absence, the system preference. Returns the
+ * teardown.
+ */
+function watchTheme(onChange: () => void): () => void {
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+  const observer =
+    typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(() => onChange())
+  observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  const listener = (): void => onChange()
+  media?.addEventListener?.('change', listener)
+  return () => {
+    observer?.disconnect()
+    media?.removeEventListener?.('change', listener)
+  }
 }
 
 /** Separator positions: the first row/column of every group after the first. */
