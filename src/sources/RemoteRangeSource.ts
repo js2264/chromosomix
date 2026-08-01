@@ -322,12 +322,45 @@ export class RemoteRangeSource implements ByteSource {
     }
     const body = new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0))
     this.bytesRead += body.byteLength
-    if (xhr.status === 200 && body.byteLength > to - from + 1) {
-      // The server ignored the Range header and sent the whole object. Take
-      // the window we asked for rather than pretend the read failed.
-      return body.subarray(from, to + 1)
+    return this.windowOf(body, from, to, xhr.getResponseHeader('content-range'))
+  }
+
+  /**
+   * Reduce a response body to exactly the window that was asked for.
+   *
+   * A host can ignore `Range` in two ways. The obvious one is a 200 with the
+   * whole object. The dangerous one is a **206** whose `Content-Range` covers
+   * the whole object — vite's own dev server does this, as do several CDNs.
+   * The status says "partial" and the first chunk is genuinely correct, so
+   * nothing looks wrong until a later read returns bytes from the *start* of
+   * the file while the caller believes they came from `from`. HDF5 then reads
+   * structure out of noise and fails hundreds of lines away, as a missing
+   * column or an unreadable attribute, with nothing pointing back here.
+   *
+   * `Content-Range` is believed when it is present, since it is the server's
+   * own statement of what it sent. Without it, a body longer than the window
+   * can only mean the whole object, which starts at zero.
+   */
+  private windowOf(
+    body: Uint8Array,
+    from: number,
+    to: number,
+    contentRange: string | null,
+  ): Uint8Array {
+    const wanted = to - from + 1
+    const start = rangeStart(contentRange)
+    const skip = start === null ? (body.byteLength > wanted ? from : 0) : from - start
+    if (skip === 0 && body.byteLength <= wanted) return body
+    if (skip < 0 || skip >= body.byteLength) {
+      throw new ViewerError(
+        'remote-no-ranges',
+        `${hostOf(this.url)} answered a request for bytes ${from}-${to} of ${this.url} with ` +
+          `${body.byteLength} bytes starting at ${start ?? 'an unstated offset'}, which does ` +
+          'not contain what was asked for.',
+        { url: this.url, from, to, start, length: body.byteLength },
+      )
     }
-    return body
+    return body.subarray(skip, Math.min(skip + wanted, body.byteLength))
   }
 
   private store(index: number, chunk: Uint8Array): void {
@@ -436,6 +469,15 @@ function numberHeader(response: Response | null, name: string): number | null {
   const raw = response?.headers.get(name)
   if (raw === null || raw === undefined || raw.trim() === '') return null
   const value = Number(raw)
+  return Number.isFinite(value) ? value : null
+}
+
+/** `bytes 128-255/26520008` → `128`; `null` when the header is absent or odd. */
+function rangeStart(header: string | null): number | null {
+  if (!header) return null
+  const match = /bytes\s+(\d+)-/.exec(header)
+  if (!match) return null
+  const value = Number(match[1])
   return Number.isFinite(value) ? value : null
 }
 
