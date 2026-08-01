@@ -399,23 +399,36 @@ tracks never compute their own.
 
 ## 9. cool and mcool
 
-Supported as a by-product, not as a parallel implementation. On open, synthesise the metacool view:
-a one-row `/genomes` table named from the assembly, every contig's `genome_id = 0`, `genome_offset =
-[0, n_contigs]`. Every downstream path then works unchanged and the genome level collapses to a
-single cell the UI skips.
+Supported natively, and still not as a parallel implementation. A cooler is opened as itself: its
+`/chroms` is the contig table, `MetaCooler.genomes` is `null`, and every genome accessor answers
+`0`, `[]` or `null`. No downstream path branches, because none of them were genome-specific in the
+first place — coordinates, the matrix read, aggregation to contig level and the pixel scan are all
+bin arithmetic over `indexes/chrom_offset` and contig lengths, which both formats carry.
+
+*This replaces the earlier synthesis design* (a one-row `/genomes` table named from the assembly,
+every contig at `genome_id = 0`, `genome_offset = [0, n_contigs]`). Synthesis was the same work done
+dishonestly: it put a row in the UI that is not in the file, it had to bypass the `/chroms`
+soft-link check anyway, and it left a `synthesised` flag every view had to special-case. The absence
+of a genome layer is a fact about the file, and the reader says so.
 
 **Region level only — confirmed scope.** A eukaryotic cooler reintroduces exactly the streaming
 problem §2 avoids, so these files are supported as *browse a region*, never *view the whole genome*.
 Concretely:
 
-- the entry point is the **contigs table**, not the genomes table, since the synthesised genomes
-  table is a single meaningless row
+- the entry point is the **contigs table**, not the genomes table, because there are no genomes;
+  the genomes table and the whole-genome view are not offered at all for these files
 - a region selection (`chrom` or `chrom:start-end`) loads and renders normally, using the same
   bounded-read path as a MAG
-- whole-genome and whole-chromosome selections are size-guarded and refused above the dense limit,
-  with the same wording the CLI uses
+- whole-genome and whole-chromosome selections are size-guarded and refused above the dense limit.
+  Two guards, in order: `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a stricter
+  browser cap (`BROWSER_DENSE_CELL_LIMIT`, 1e8 cells ≈ 10,000 bins per axis) because a tab is a
+  smaller room than a workstation — 50,000 × 50,000 passes the CLI limit and is ~40 GB of live bytes
+  with a raster nine times a canvas's area cap. Human chr1 at 5 kb (49,792 bins) is exactly the case
+  the second guard exists for
 - `.mcool` resolution levels are each fixed-bin, so §3.3's arithmetic applies unchanged; the levels
-  drive the zoom control exactly as mmetacool entries do
+  drive the zoom control exactly as mmetacool entries do. An `.mcool` addressed at its **root** is
+  refused with `mcool-root`, naming its resolutions — the mirror of `mmetacool-root` — and the app
+  opens the finest of them, as it does for a zoomify ladder
 
 The app is therefore not a HiGlass replacement for standard Hi-C. Say so in the paper rather than let
 a reviewer discover it: the claim is zero-install regional inspection of any cooler, plus a genome
@@ -499,7 +512,7 @@ why the spec got shorter as it got more specific.
 |---|---|---|
 | Variable-bin files | **Not supported.** Fixed-bin only (§3.3, §10) | The variable-width coordinate path throughout — and, as a second-order effect, every read of `/bins` |
 | `__unbinned__` | **Never displayable** (§7.4) | The toggle, the guarded-open path, and the largest counter-example to §2's small-MAG assumption |
-| cool / mcool | **Region level only** (§9) | Whole-genome cooler views, and with them the tiling architecture §2 exists to avoid |
+| cool / mcool | **Native, region level only** (§9) | Whole-genome cooler views, and with them the tiling architecture §2 exists to avoid — and, since the reader went native, the synthesised one-genome table and the `synthesised` flag every view carried |
 
 The through-line: each answer protects the assumption in §2 that a unit of display fits in memory in
 one bounded read. Variable bins broke the arithmetic, `__unbinned__` broke the size bound, and

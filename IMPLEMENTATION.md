@@ -274,11 +274,16 @@ Budget an hour for the ESM/CommonJS bundler friction.
 
 ## M7 — cool and mcool, region level (1 week)
 
-Synthesise the single-genome view (one `/genomes` row, all `genome_id = 0`,
-`genome_offset = [0, n_contigs]`) so no downstream path branches. Entry point is the **contigs**
-table, not the genomes table. Whole-genome and whole-chromosome selections are size-guarded and
-refused with the CLI's wording. `.mcool` resolution levels drive the zoom control exactly as
-mmetacool entries do.
+Open a cooler as itself: `/chroms` is the contig table, `genomes` is `null`, and the genome
+accessors answer with emptiness. No synthesised row, and therefore no `synthesised` flag downstream.
+Entry point is the **contigs** table, not the genomes table. Whole-genome and whole-chromosome
+selections are size-guarded twice — the CLI's `DENSE_MATRIX_BIN_LIMIT` with its own wording, then a
+stricter browser cap, because the CLI limit permits a block no tab can draw. An `.mcool` root is
+refused with `mcool-root` and its resolutions; the app opens the finest. Resolution levels drive the
+zoom control exactly as mmetacool entries do.
+
+*Superseded:* the original plan here was to synthesise a one-row `/genomes` table. See SPECS §9 for
+why the native path is both smaller and more honest.
 
 ---
 
