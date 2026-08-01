@@ -363,16 +363,26 @@ export class MatrixPanel {
 
     this.readout.textContent = `${rowLabel}  ×  ${colLabel}   count ${count}`
 
-    // The names in full, unabbreviated: the axis labels are elided when the
-    // blocks are narrow, so the tooltip is often the only place the pair is
-    // spelled out.
+    // The names in full, unabbreviated, and each name written *once*: the axis
+    // labels are elided when the blocks are narrow, so the tooltip is often the
+    // only place the pair is spelled out — but on the diagonal of a contig map
+    // the old layout printed `NODE_8524_len_441121` four times, and the number
+    // the pointer is actually asking about was the last thing on the card.
+    const sameBlock = rowGroup !== undefined && colGroup !== undefined && rowGroup.label === colGroup.label
+    const heading = sameBlock
+      ? [el('span', { class: 'cell-tip-name', text: rowGroup.label })]
+      : [
+          el('span', { class: 'cell-tip-name', text: rowGroup?.label ?? '—' }),
+          el('span', { class: 'cell-tip-x', text: '×' }),
+          el('span', { class: 'cell-tip-name', text: colGroup?.label ?? '—' }),
+        ]
+    const rowPos = positionIn(rowGroup, cell.row, data.level, this.options.binsize)
+    const colPos = positionIn(colGroup, cell.col, data.level, this.options.binsize)
     this.tooltip.replaceChildren(
-      el('div', { class: 'cell-tip-pair' },
-        el('span', { class: 'cell-tip-name', text: rowGroup?.label ?? '—' }),
-        el('span', { class: 'cell-tip-x', text: '×' }),
-        el('span', { class: 'cell-tip-name', text: colGroup?.label ?? '—' }),
-      ),
-      el('div', { class: 'cell-tip-pos', text: `${rowLabel}  ×  ${colLabel}` }),
+      el('div', { class: 'cell-tip-pair' }, ...heading),
+      ...(rowPos === null || colPos === null
+        ? []
+        : [el('div', { class: 'cell-tip-pos', text: `${rowPos}  ×  ${colPos}` })]),
       el('div', { class: 'cell-tip-count', text: `count ${count}` }),
     )
     this.tooltip.classList.remove('hidden')
@@ -426,6 +436,22 @@ function describeAxis(
   if (group === undefined) return '—'
   if (level !== 'bin') return group.label
   return `${group.label}:${fmt.bp((offset - group.start) * binsize)}`
+}
+
+/**
+ * The offset inside a block, without its name — the tooltip's second line.
+ *
+ * `null` above bin level, where a cell *is* the block and a position inside it
+ * would be an invention.
+ */
+function positionIn(
+  group: AxisGroup | undefined,
+  offset: number,
+  level: 'bin' | 'contig' | 'genome',
+  binsize: number,
+): string | null {
+  if (group === undefined || level !== 'bin') return null
+  return fmt.bp((offset - group.start) * binsize)
 }
 
 /** Separator positions: the first row/column of every group after the first. */
