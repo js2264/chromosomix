@@ -94,26 +94,57 @@ export class FilePicker {
 
     this.entryBox = el('div', { class: 'entry-box hidden' })
 
+    // A dropdown rather than a row of buttons: the list is a *catalogue*, and a
+    // catalogue grows. Buttons put every entry on screen at equal weight and
+    // push the drop target down as the list gets longer; a select stays one
+    // line at any length. Choosing opens immediately — a second "go" button
+    // beside a list of three files would be ceremony.
+    const exampleSelect = el('select', { class: 'select select-examples' })
+    const exampleNote = el('p', { class: 'hint' })
+    if (props.examples && props.examples.length > 0) {
+      exampleSelect.appendChild(el('option', { value: '', text: 'choose an example…' }))
+      for (const example of props.examples) {
+        const option = el('option', { value: example.url, text: example.label })
+        option.title = example.note ?? example.url
+        exampleSelect.appendChild(option)
+      }
+      const describe = (): void => {
+        const chosen = props.examples?.find((example) => example.url === exampleSelect.value)
+        exampleNote.textContent = chosen?.note ?? ''
+      }
+      exampleSelect.addEventListener('change', () => {
+        const url = exampleSelect.value
+        if (url === '') {
+          describe()
+          return
+        }
+        describe()
+        this.urlInput.value = url
+        this.openRemote()
+      })
+    }
     const examples =
       props.examples && props.examples.length > 0
         ? el(
             'div',
             { class: 'examples' },
             el('h3', { text: 'Public examples' }),
-            ...props.examples.map((example) => {
-              const node = button(example.label, () => {
-                this.urlInput.value = example.url
-                this.openRemote()
-              }, { class: 'btn btn-quiet', title: example.note ?? example.url })
-              return node
+            el('p', {
+              class: 'hint',
+              text: 'Published beside this page, so they open the same way a bucket does.',
             }),
+            exampleSelect,
+            exampleNote,
           )
         : null
 
+    // The privacy note comes *last*. It is reassurance about what the controls
+    // above do, and reassurance reads better after the thing it is about than
+    // as a banner in front of it — which also put a paragraph between the page
+    // and the drop target it exists to explain.
     this.el = el(
       'section',
       { class: 'view view-picker' },
-      this.privacyNote(),
       this.drop,
       fileInput,
       el(
@@ -128,8 +159,9 @@ export class FilePicker {
         }),
         el('div', { class: 'remote-row' }, this.urlInput, button('open', () => this.openRemote())),
       ),
-      this.entryBox,
       examples,
+      this.entryBox,
+      this.privacyNote(),
     )
   }
 
