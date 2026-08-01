@@ -891,26 +891,32 @@ p {
   gap: 0.6rem;
 }
 
+/* The plot is square and the legend sits against its edge, so the pair is
+   centred as a unit in whatever width the column has. A `1fr` plot column
+   stretched the canvas across the window and left the colourbar stranded on the
+   far side of it. */
 .panel-body {
-  display: grid;
-  /* `max-content` rather than a fixed rem width: the colourbar column is only
-     as wide as the bar plus its tick labels, so the plot keeps the rest. */
-  grid-template-columns: minmax(0, 1fr) max-content;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
   gap: 0.6rem;
-  align-items: start;
 }
 
 /* No chrome of its own: no border, no radius, no fill, no padding. The frame
    the eye needs is the one drawn on the plot's own edges by the canvas, which
    is the only thing that sits *on* the data — a wrapper border is however far
-   away the labels happen to need, with dead space in between. */
+   away the labels happen to need, with dead space in between.
+
+   Square, because a contact map is: the width is driven by the height the
+   window can spare and capped by the column, and `aspect-ratio` keeps the two
+   in step through every resize. */
 .heatmap-wrap {
   position: relative;
   overflow: hidden;
-  /* Fill the space the view actually has instead of forcing a square. A square
-     wrap in a wide column leaves a band of dead canvas under the plot, which is
-     what used to sit below every heatmap. */
-  height: clamp(20rem, calc(100vh - 15rem), 60rem);
+  aspect-ratio: 1 / 1;
+  width: clamp(20rem, calc(100vh - 14rem), 60rem);
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 
 .heatmap-canvas {
