@@ -154,11 +154,12 @@ class App {
           'div',
           { class: 'head-actions' },
           this.overviewButton,
-          iconButton('file-plus', 'Open a different file', () => this.toPicker()),
-          iconButton('keyboard', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
-          iconButton('info', 'About this viewer', () => this.openAboutDialog()),
-          source,
+          // Theme, shortcuts, source, about. No "open a file" button: the
+          // title is the way back to the picker and says so on hover.
           this.theme.el,
+          iconButton('keyboard', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
+          source,
+          iconButton('info', 'About this viewer', () => this.openAboutDialog()),
         ),
       ),
       this.breadcrumbHost,

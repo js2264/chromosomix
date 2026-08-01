@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "fixtures": "${METACOOLER_PYTHON:-python3} scripts/make_fixtures.py && ${METACOOLER_PYTHON:-python3} scripts/make_golden.py"
+    "fixtures": "${METACOOLER_PYTHON:-python3} scripts/make_fixtures.py && ${METACOOLER_PYTHON:-python3} scripts/make_golden.py",
+    "icons": "node scripts/build-icons.mjs"
   },
   "dependencies": {
     "@gmod/bbi": "^4.0.6",
@@ -21,6 +22,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "lucide-static": "^1.28.0",
+    "simple-icons": "^16.27.1",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
