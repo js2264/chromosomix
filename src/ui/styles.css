@@ -1393,6 +1393,28 @@ p {
   max-width: 40ch;
 }
 
+/* In the sidebar card the pair controls stack, like every other control group
+   there; the flex row below is what the region bar still wants. */
+.side .pair-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.side .pair-controls .field {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.side .pair-controls .select-wide {
+  width: 100%;
+  min-width: 0;
+}
+
 .pair-controls,
 .region-bar {
   display: flex;

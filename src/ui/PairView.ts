@@ -61,6 +61,11 @@ export class PairView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       levels: ['bin', 'contig'],
+      // The same shape as the genome and region views: the heading names the
+      // selection, the controls live in the sidebar, and the panel draws only
+      // the plot. A pair is a view of this file like any other.
+      detachedControls: true,
+      hideTitle: true,
       initial: { ...props.scale, level: props.level },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
@@ -76,18 +81,38 @@ export class PairView {
       el(
         'header',
         { class: 'view-head' },
-        el('h2', { text: 'Genome pair' }),
         el(
           'div',
-          { class: 'pair-controls' },
-          field('rows', rowSelect),
-          field('columns', colSelect),
-          swap,
-          button('open rows genome →', () => props.onOpenGenome(props.rowGenome), { class: 'btn btn-quiet' }),
+          { class: 'title-bar' },
+          el('h2', { text: `${props.rowGenome} × ${props.colGenome}` }),
         ),
         this.summary,
       ),
-      this.panel.el,
+      el(
+        'div',
+        { class: 'genome-body' },
+        this.panel.el,
+        el(
+          'aside',
+          { class: 'side' },
+          this.panel.controlsEl,
+          el(
+            'section',
+            { class: 'card' },
+            el('h3', { text: 'Pair' }),
+            el(
+              'div',
+              { class: 'pair-controls' },
+              field('rows', rowSelect),
+              field('columns', colSelect),
+              swap,
+              button('open rows genome →', () => props.onOpenGenome(props.rowGenome), {
+                class: 'btn btn-quiet',
+              }),
+            ),
+          ),
+        ),
+      ),
     )
 
     void this.load()
@@ -121,7 +146,7 @@ export class PairView {
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
-      this.panel.setData(result, `${this.props.rowGenome} (rows) × ${this.props.colGenome} (columns)`)
+      this.panel.setData(result, '')
       this.renderSummary(result)
     } catch (err) {
       this.props.onError(err)
