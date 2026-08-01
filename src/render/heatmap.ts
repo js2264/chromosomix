@@ -15,7 +15,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { Scale, autoVmax, transformValues } from './scale'
+import { Scale, autoVmaxOf, transformValue } from './scale'
 
 // ---------------------------------------------------------------------------
 // Rasterisation — pure, no canvas, so it is testable under Node
@@ -23,22 +23,52 @@ import { Scale, autoVmax, transformValues } from './scale'
 
 /** RGBA bytes at matrix resolution, plus the colour scale actually used. */
 export interface Raster {
-  /** Matrix columns. */
+  /** Raster columns — matrix columns divided by {@link stride}. */
   width: number
-  /** Matrix rows. */
+  /** Raster rows — matrix rows divided by {@link stride}. */
   height: number
   /** `width * height * 4` bytes, row-major, ready for `new ImageData(...)`. */
   data: Uint8ClampedArray
   /** The scale with `vmin`/`vmax` resolved, so the colourbar can reuse it. */
   scale: ColorScale
-  /** The transformed values, kept so colourbar and tooltips cannot disagree. */
-  transformed: Float32Array
+  /**
+   * Matrix cells per raster pixel, **per axis**. `1` for an axis that fits.
+   *
+   * A whole yeast genome at 1 kb is 12,100 bins: rasterising it one pixel per
+   * bin would be 585 MB of RGBA and a canvas of the same size again, for an
+   * image no screen can show. Above {@link RASTER_MAX_DIM} the raster is
+   * pooled instead, and the caller multiplies its draw transform by these.
+   *
+   * Two numbers, not one: a 600 × 8,141 genome pair — the shape every pair
+   * involving a large MAG has — would otherwise halve the 600-bin axis to
+   * match the axis that actually needed pooling, losing resolution nothing was
+   * asking for and saving nothing.
+   */
+  strideX: number
+  strideY: number
+}
+
+/**
+ * The largest raster the renderer will build, per axis.
+ *
+ * Chosen well below every browser's canvas cap (Firefox stops at 32,767 px per
+ * side, Chrome's *area* cap is 2^28 px) and above any display: 4096 px is more
+ * than 4K across, so pooling above it costs no visible detail at fit zoom, and
+ * a zoomed-in view of a pooled block re-rasterises nothing because pooling is
+ * per matrix, not per view. It caps the two allocations that scale with the
+ * *picture* rather than with the data: 67 MB of RGBA and 67 MB of canvas.
+ */
+export const RASTER_MAX_DIM = 4096
+
+/** Matrix cells per raster pixel needed to fit one axis of `n` in the cap. */
+export function rasterStride(n: number, maxDim = RASTER_MAX_DIM): number {
+  return n <= maxDim ? 1 : Math.ceil(n / maxDim)
 }
 
 /**
  * Colour every cell of `matrix` into RGBA bytes.
  *
- * `scale.vmax` is honoured when finite and recomputed by {@link autoVmax}
+ * `scale.vmax` is honoured when finite and recomputed by {@link autoVmaxOf}
  * otherwise — pass `NaN` to ask for the `metacooler show` default. `vmin` is
  * likewise defaulted to `0`, which is the only value the CLI ever uses.
  *
@@ -47,35 +77,73 @@ export interface Raster {
  * result: a blank row is an unbalanced row (spec §6.4), and painting it black
  * or white would make it indistinguishable from a genuinely empty region.
  */
-export function rasterize(matrix: DenseMatrix, scale: ColorScale): Raster {
+export function rasterize(
+  matrix: DenseMatrix,
+  scale: ColorScale,
+  options: { maxDim?: number } = {},
+): Raster {
   const { nrows, ncols, values } = matrix
-  const n = nrows * ncols
-  const transformed = transformValues(values, scale.transform)
 
   const vmin = Number.isFinite(scale.vmin) ? scale.vmin : 0
-  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : autoVmax(transformed)
+  // Transformed on the fly rather than into an `n`-cell array: the transform is
+  // three arithmetic ops and the copy was the second-largest allocation in the
+  // renderer, kept alive for the lifetime of the raster and read by nobody.
+  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : autoVmaxOf(values, scale.transform)
   const span = vmax - vmin
 
+  const maxDim = options.maxDim ?? RASTER_MAX_DIM
+  const strideY = rasterStride(nrows, maxDim)
+  const strideX = rasterStride(ncols, maxDim)
+  const width = Math.ceil(ncols / strideX)
+  const height = Math.ceil(nrows / strideY)
   const lut = applyColormap(scale.colormap)
-  const data = new Uint8ClampedArray(n * 4)
-  for (let i = 0; i < n; i++) {
-    // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
-    // dividing by zero, so a constant matrix renders as the colormap's low end.
-    const t = span > 0 ? (transformed[i] - vmin) / span : 0
-    const k = colormapIndex(t)
-    const o = i * 4
-    if (k < 0) {
-      data[o + 3] = 0
-      continue
+  const data = new Uint8ClampedArray(width * height * 4)
+
+  for (let ry = 0; ry < height; ry++) {
+    const y0 = ry * strideY
+    const y1 = Math.min(y0 + strideY, nrows)
+    for (let rx = 0; rx < width; rx++) {
+      const x0 = rx * strideX
+      const x1 = Math.min(x0 + strideX, ncols)
+
+      // The *maximum* over the pooled cells, not the mean. A contact map is
+      // sparse and its signal is the bright cell; averaging it against its
+      // empty neighbours is how a loop disappears at fit zoom. NaN is not a
+      // value to maximise over — it means "unbalanced" — so it only survives
+      // when the whole block is NaN, and then the cell stays transparent, as
+      // one NaN cell does.
+      let best = Number.NaN
+      for (let y = y0; y < y1; y++) {
+        const row = y * ncols
+        for (let x = x0; x < x1; x++) {
+          const raw = values[row + x]
+          if (Number.isNaN(raw)) continue
+          const t = transformValue(raw, scale.transform)
+          if (Number.isNaN(best) || t > best) best = t
+        }
+      }
+
+      const o = (ry * width + rx) * 4
+      if (Number.isNaN(best)) {
+        data[o + 3] = 0
+        continue
+      }
+      // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
+      // dividing by zero, so a constant matrix renders as the colormap's low end.
+      const k = colormapIndex(span > 0 ? (best - vmin) / span : 0)
+      if (k < 0) {
+        data[o + 3] = 0
+        continue
+      }
+      const s = k * 4
+      data[o] = lut[s]
+      data[o + 1] = lut[s + 1]
+      data[o + 2] = lut[s + 2]
+      data[o + 3] = lut[s + 3]
     }
-    const s = k * 4
-    data[o] = lut[s]
-    data[o + 1] = lut[s + 1]
-    data[o + 2] = lut[s + 2]
-    data[o + 3] = lut[s + 3]
   }
 
-  return { width: ncols, height: nrows, data, scale: { ...scale, vmin, vmax }, transformed }
+  return { width, height, data, scale: { ...scale, vmin, vmax }, strideX, strideY }
 }
 
 // ---------------------------------------------------------------------------
@@ -833,14 +901,20 @@ export class HeatmapView {
     // single-bin features crisp. While minifying, let the browser filter: point
     // sampling drops most of a sparse contact map's non-zero cells, and a dimmed
     // pixel is a far better lie than a missing one.
-    ctx.imageSmoothingEnabled = this.zoom < 1
+    //
+    // `stride` is what a pooled raster costs the transform: one raster pixel
+    // covers that many matrix cells per axis, so the image is drawn that much
+    // larger. Everything else — hit testing, separators, labels — stays in
+    // matrix space and is unaffected.
+    const sx = this.raster?.strideX ?? 1
+    const sy = this.raster?.strideY ?? 1
+    ctx.imageSmoothingEnabled = this.zoom * Math.min(sx, sy) < 1
 
-    const k = this.zoom * this.dpr
     ctx.setTransform(
-      k,
+      this.zoom * sx * this.dpr,
       0,
       0,
-      k,
+      this.zoom * sy * this.dpr,
       this.dpr * (plot.x - this.originX * this.zoom),
       this.dpr * (plot.y - this.originY * this.zoom)
     )

@@ -169,6 +169,38 @@ export const AUTO_VMAX_PERCENTILE = 99
  * @returns `1.0` when nothing is positive, exactly as Python's fallback.
  */
 export function autoVmax(transformed: ArrayLike<number>): number {
+  return autoVmaxImpl(transformed)
+}
+
+/**
+ * The same percentile, from the **raw** values, applying `transform` as it
+ * goes — so no `n`-cell transformed array has to exist to hold them.
+ *
+ * Only the positive values are collected, and a contact map is sparse: for a
+ * whole yeast genome at 1 kb that is the difference between 585 MB and the
+ * size of the pixel list. Float32 because the values are Float32 either way —
+ * they come from a Float32 matrix and `transformValues` rounded them to Float32
+ * before, so the order and the two straddling values are identical.
+ *
+ * Pass raw counts, never transformed ones: transforming twice is silent and
+ * darkens the whole image.
+ */
+export function autoVmaxOf(values: ArrayLike<number>, transform: Transform): number {
+  const n = values.length
+  let count = 0
+  for (let i = 0; i < n; i++) if (transformValue(values[i], transform) > 0) count++
+  if (count === 0) return 1.0
+  const nz = new Float32Array(count)
+  let k = 0
+  for (let i = 0; i < n; i++) {
+    const x = transformValue(values[i], transform)
+    if (x > 0) nz[k++] = x
+  }
+  nz.sort()
+  return percentileLinear(nz, AUTO_VMAX_PERCENTILE)
+}
+
+function autoVmaxImpl(transformed: ArrayLike<number>): number {
   const n = transformed.length
   let count = 0
   for (let i = 0; i < n; i++) if (transformed[i] > 0) count++

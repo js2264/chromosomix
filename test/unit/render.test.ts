@@ -28,6 +28,7 @@ import { rasterize, separatorBlocks } from '@/render/heatmap'
 import {
   Scale,
   autoVmax,
+  autoVmaxOf,
   inverseTransform,
   percentileLinear,
   transformValue,
@@ -353,5 +354,85 @@ describe('colorbar', () => {
     expect(formatCount(12_500)).toBe('12.5k')
     expect(formatCount(3_000_000)).toBe('3M')
     expect(formatCount(0.25)).toBe('0.25')
+  })
+})
+
+describe('raster pooling', () => {
+  it('rasterises one pixel per cell while the matrix fits', () => {
+    const r = rasterize(block([0, 1, 2, 3], 2, 2), {
+      vmin: 0,
+      vmax: 3,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    })
+    expect(r.strideX).toBe(1)
+    expect(r.strideY).toBe(1)
+    expect(r.width).toBe(2)
+    expect(r.height).toBe(2)
+  })
+
+  it('pools above the cap, and reports how much', () => {
+    const n = 9
+    const r = rasterize(block(new Array(n * n).fill(1), n, n), {
+      vmin: 0,
+      vmax: 1,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    }, { maxDim: 3 })
+    expect(r.strideX).toBe(3)
+    expect(r.strideY).toBe(3)
+    expect(r.width).toBe(3)
+    expect(r.height).toBe(3)
+    expect(r.data.length).toBe(3 * 3 * 4)
+  })
+
+  it('takes the maximum of a pooled block, not the mean', () => {
+    // One bright cell among fifteen empty ones must survive the pooling: a loop
+    // that averages away at fit zoom is a loop nobody sees.
+    const values = new Array(16).fill(0)
+    values[5] = 10
+    const pooled = rasterize(block(values, 4, 4), {
+      vmin: 0,
+      vmax: 10,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    }, { maxDim: 1 })
+    const full = rasterize(block([10], 1, 1), {
+      vmin: 0,
+      vmax: 10,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    })
+    expect(pooled.width).toBe(1)
+    expect(Array.from(pooled.data)).toEqual(Array.from(full.data))
+  })
+
+  it('keeps a partial last block, and an all-NaN block transparent', () => {
+    const r = rasterize(block([1, 1, 1, 1, 1, Number.NaN, Number.NaN, 1, 1], 3, 3), {
+      vmin: 0,
+      vmax: 1,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    }, { maxDim: 2 })
+    // 3 cells at stride 2 → 2 raster pixels per axis, the last covering one cell.
+    expect(r.strideX).toBe(2)
+    expect(r.strideY).toBe(2)
+    expect(r.width).toBe(2)
+    expect(r.height).toBe(2)
+
+    const allNaN = rasterize(block([Number.NaN, Number.NaN, Number.NaN, Number.NaN], 2, 2), {
+      vmin: 0,
+      vmax: 1,
+      transform: 'none',
+      colormap: 'afmhot_r',
+    }, { maxDim: 1 })
+    expect(allNaN.data[3]).toBe(0)
+  })
+
+  it('computes the same auto vmax as the two-pass path it replaced', () => {
+    const values = Float32Array.from([0, 1, 2, 3, 4, 5, 0, 7, 11, 13, 0, 17])
+    for (const transform of ['none', 'log1p', 'log10'] as const) {
+      expect(autoVmaxOf(values, transform)).toBe(autoVmax(transformValues(values, transform)))
+    }
   })
 })
