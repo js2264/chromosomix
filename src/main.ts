@@ -72,7 +72,6 @@ class App {
   private readonly content: HTMLElement
   private readonly breadcrumbHost: HTMLElement
   private readonly sideHost: HTMLElement
-  private readonly overviewButton: HTMLButtonElement
   private readonly picker: FilePicker
   private readonly sidebar: SidebarToggle
   private readonly theme: ThemeToggle
@@ -97,12 +96,6 @@ class App {
     this.breadcrumbHost = el('div', { class: 'breadcrumb-host' })
     this.content = el('main', { class: 'content' })
     this.sideHost = el('div', { class: 'side-host' })
-    this.overviewButton = button('whole metagenome', () => this.toggleOverview(), {
-      class: 'btn btn-quiet',
-      title: 'Costs a full pixel scan — it never starts on its own (§7.3).',
-    })
-    this.overviewButton.hidden = true
-
     this.sidebar = new SidebarToggle(this.sideHost)
 
     this.status = new StatusBar({ client: this.client })
@@ -153,7 +146,6 @@ class App {
         el(
           'div',
           { class: 'head-actions' },
-          this.overviewButton,
           // Theme, shortcuts, source, about. No "open a file" button: the
           // title is the way back to the picker and says so on hover.
           this.theme.el,
@@ -212,7 +204,7 @@ class App {
         keys: 'g',
         enabled: file !== null && isMetacool,
         run: () => {
-          if (state !== null) this.store.set({ uri: state.uri, view: 'genomes' })
+          if (state !== null) this.navigate({ uri: state.uri, view: 'genomes' })
         },
       },
       {
@@ -222,7 +214,7 @@ class App {
         keys: 'c',
         enabled: file !== null,
         run: () => {
-          if (state !== null) this.store.set({ uri: state.uri, view: 'contigs' })
+          if (state !== null) this.navigate({ uri: state.uri, view: 'contigs' })
         },
       },
       {
@@ -232,7 +224,7 @@ class App {
         hint: 'Costs a full pixel scan; it never starts on its own.',
         keys: 'w',
         enabled: file !== null && isMetacool,
-        run: () => this.toggleOverview(),
+        run: () => this.showOverview(),
       },
       {
         id: 'go-prev',
@@ -424,14 +416,16 @@ class App {
       const isMetacool = info.layout.kind === 'metacool'
       this.breadcrumb = new Breadcrumb({
         rootKind: isMetacool ? 'genomes' : 'contigs',
-        // A metacool offers both landing tables; a plain cooler has only one
-        // worth showing, since its genomes table is a synthesised single row.
-        rootChoices: isMetacool ? ['genomes', 'contigs'] : ['contigs'],
+        // A metacool offers both landing tables and the whole-genome view; a
+        // plain cooler has only the one table worth showing, since its genomes
+        // table is a synthesised single row.
+        rootChoices: isMetacool ? ['genomes', 'contigs', 'overview'] : ['contigs'],
         fileLabel: fileLabel(uri),
         entries,
         ...(currentEntry === undefined ? {} : { currentEntry }),
-        onNavigate: (state) => this.store.set(state),
+        onNavigate: (state) => this.navigate(state),
         onOpenFilePicker: () => this.toPicker(),
+        onShowOverview: () => this.showOverview(),
         onSelectEntry: (entry) =>
           void this.open(`${splitUri(uri).path}::entries/${entry}`, source),
       })
@@ -439,7 +433,6 @@ class App {
       this.sideHost.replaceChildren(this.infoPanel.el)
       this.sidebar.setAvailable(true)
       this.status.reset()
-      this.overviewButton.hidden = info.layout.kind !== 'metacool'
       this.overview = null
       this.showingOverview = false
 
@@ -510,7 +503,6 @@ class App {
       this.breadcrumb = null
       this.sideHost.replaceChildren()
       this.sidebar.setAvailable(false)
-      this.overviewButton.hidden = true
       this.showContent(this.picker.el)
       return
     }
@@ -526,7 +518,7 @@ class App {
       return
     }
 
-    this.breadcrumb?.render(state)
+    this.breadcrumb?.render(state, { overview: this.showingOverview })
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
 
     if (this.showingOverview) {
@@ -669,9 +661,25 @@ class App {
     this.showContent(view.el, view)
   }
 
-  private toggleOverview(): void {
-    this.showingOverview = !this.showingOverview
+  private showOverview(): void {
+    if (this.showingOverview) return
+    this.showingOverview = true
     void this.render(this.store.state)
+  }
+
+  /**
+   * Go to a view state, leaving the whole-genome view if it is up.
+   *
+   * `store.set` is a no-op when the state is unchanged — picking "Genomes" from
+   * the root menu while already *at* `view=genomes` with the overview over it is
+   * exactly that case — so the render is forced rather than awaited.
+   */
+  private navigate(state: ViewState): void {
+    const same = viewStateEquals(state, this.store.state)
+    const leaving = this.showingOverview
+    this.showingOverview = false
+    this.store.set(state)
+    if (same && leaving) void this.render(state)
   }
 
   private mountOverview(): void {

@@ -22,11 +22,29 @@ import { icon } from './icons'
 import type { ViewState } from '../types'
 import { el } from './dom'
 
+/**
+ * The three things the root crumb can be.
+ *
+ * `overview` is not a {@link ViewState} view — it is a mode the shell holds, and
+ * it costs a full pixel scan — but it *is* a landing view of the whole file, the
+ * same kind of thing as the two tables. It belongs in the picker beside them
+ * rather than as a button in the corner of the window, which is where it was and
+ * where nothing else about this file lives.
+ */
+export type RootChoice = 'genomes' | 'contigs' | 'overview'
+
+/** Title Case, because these are the names of views, not field values. */
+const ROOT_LABEL: Record<RootChoice, string> = {
+  genomes: 'Genomes',
+  contigs: 'Contigs',
+  overview: 'Whole Genome',
+}
+
 export interface BreadcrumbProps {
   /** Root of the hierarchy: the landing view for this kind of file. */
   rootKind: 'genomes' | 'contigs'
-  /** Landing tables this file can offer. One entry hides the picker. */
-  rootChoices: Array<'genomes' | 'contigs'>
+  /** Landing views this file can offer. One entry hides the picker. */
+  rootChoices: RootChoice[]
   /** Short label for the open file, shown as the first crumb. */
   fileLabel: string
   /** Entry names of the enclosing mmetacool, or `[]` for a plain metacool. */
@@ -35,6 +53,8 @@ export interface BreadcrumbProps {
   currentEntry?: string
   onNavigate(state: ViewState): void
   onOpenFilePicker(): void
+  /** The whole-genome view was picked from the root menu. */
+  onShowOverview?(): void
   /** An mmetacool entry was picked; the caller re-opens the file at it. */
   onSelectEntry?(entry: string): void
 }
@@ -46,8 +66,12 @@ export class Breadcrumb {
     this.el = el('nav', { class: 'breadcrumb', attrs: { 'aria-label': 'breadcrumb' } })
   }
 
+  /** Whether the shell is showing the whole-genome view over this state. */
+  private overviewActive = false
+
   /** Re-render for a state. Safe to call on every state change. */
-  render(state: ViewState | null): void {
+  render(state: ViewState | null, options: { overview?: boolean } = {}): void {
+    this.overviewActive = options.overview === true
     this.el.replaceChildren()
     if (state === null) {
       this.el.appendChild(el('span', { class: 'crumb current', text: 'open a file' }))
@@ -108,28 +132,27 @@ export class Breadcrumb {
    */
   private pushRootPicker(state: ViewState): void {
     const { rootChoices, rootKind } = this.props
-    const active: 'genomes' | 'contigs' =
+    const table: 'genomes' | 'contigs' =
       state.view === 'genomes' || state.view === 'contigs' ? state.view : rootKind
-    const atRoot = state.view === active
+    const active: RootChoice = this.overviewActive ? 'overview' : table
+    const atRoot = this.overviewActive || state.view === table
 
     this.separator()
 
     const label = el('button', {
       class: `crumb${atRoot ? ' current' : ''}`,
       type: 'button',
-      text: active,
-      title: `Back to the ${active} table`,
+      text: ROOT_LABEL[active],
+      title: `Back to ${ROOT_LABEL[active]}`,
     })
-    label.addEventListener('click', () =>
-      this.props.onNavigate({ uri: state.uri, view: active }),
-    )
+    label.addEventListener('click', () => this.chooseRoot(active, state))
 
     if (rootChoices.length < 2) {
       this.el.appendChild(label)
       return
     }
 
-    const other = rootChoices.filter((kind) => kind !== active)
+    const other = rootChoices.filter((kind) => kind !== active).map((kind) => ROOT_LABEL[kind])
     const arrow = el('button', {
       class: 'crumb-arrow',
       type: 'button',
@@ -142,11 +165,11 @@ export class Breadcrumb {
       const item = el('button', {
         class: `crumb-menu-item${kind === active ? ' current' : ''}`,
         type: 'button',
-        text: kind,
+        text: ROOT_LABEL[kind],
       })
       item.addEventListener('click', () => {
         menu.classList.add('hidden')
-        this.props.onNavigate({ uri: state.uri, view: kind })
+        this.chooseRoot(kind, state)
       })
       menu.appendChild(item)
     }
@@ -165,6 +188,12 @@ export class Breadcrumb {
       }
     })
     this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))
+  }
+
+  /** Route a root choice: two of them are view states, one is a shell mode. */
+  private chooseRoot(kind: RootChoice, state: ViewState): void {
+    if (kind === 'overview') this.props.onShowOverview?.()
+    else this.props.onNavigate({ uri: state.uri, view: kind })
   }
 
   private separator(): void {

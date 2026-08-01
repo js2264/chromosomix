@@ -27,7 +27,7 @@
  * makes the picture readable — it otherwise dominates its own row and column.
  */
 
-import type { MatrixResult, OverviewResult } from '../worker/protocol'
+import type { AxisGroup, MatrixResult, OverviewResult } from '../worker/protocol'
 import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
@@ -62,7 +62,9 @@ export class Overview {
   private readonly progressText: HTMLElement
   private readonly progressBox: HTMLElement
   private readonly panelHost: HTMLElement
-  private panel: MatrixPanel | null = null
+  private readonly summary: HTMLElement
+  private readonly note: HTMLElement
+  private readonly panel: MatrixPanel
   private running: Cancellable<OverviewResult> | null = null
   private level: 'genome' | 'contig' = 'genome'
 
@@ -78,7 +80,20 @@ export class Overview {
       this.progressText,
       button('cancel', () => this.cancel(), { class: 'btn btn-quiet' }),
     )
-    this.panelHost = el('div', { class: 'overview-host' })
+    this.panelHost = el('div', { class: 'overview-host hidden' })
+    this.summary = el('p', { class: 'summary' })
+    this.note = el('p', { class: 'note hidden' })
+
+    // The same shape as the genome and region views: heading, summary, then the
+    // plot with its controls in the sidebar. This view used to be laid out on
+    // its own terms, which made switching to it feel like leaving the app.
+    this.panel = new MatrixPanel({
+      binsize: props.binsize,
+      detachedControls: true,
+      hideTitle: true,
+      onCellClick: (_cell, groups) => this.openCell(groups),
+    })
+    this.panelHost.appendChild(this.panel.el)
 
     this.el = el(
       'section',
@@ -86,26 +101,58 @@ export class Overview {
       el(
         'header',
         { class: 'view-head' },
-        el('h2', { text: 'Whole metagenome' }),
-        el('p', {
-          class: 'hint',
-          text:
-            'Every other view in this app costs a bounded read. This one costs a pass over ' +
-            'every non-zero pixel, so it only runs when you ask for it.',
-        }),
-        this.levelPicker(),
+        el('div', { class: 'title-bar' }, el('h2', { text: 'Whole genome' })),
+        this.summary,
+        this.note,
       ),
-      this.gate,
-      this.progressBox,
-      this.panelHost,
+      el(
+        'div',
+        { class: 'genome-body' },
+        el('div', { class: 'overview-main' }, this.gate, this.progressBox, this.panelHost),
+        el(
+          'aside',
+          { class: 'side' },
+          this.panel.controlsEl,
+          el(
+            'section',
+            { class: 'card' },
+            el('h3', { text: 'Scan' }),
+            this.levelPicker(),
+            el('p', {
+              class: 'hint',
+              text:
+                'Every other view costs a bounded read. This one costs a pass over every ' +
+                'non-zero pixel, so it only runs when you ask for it.',
+            }),
+          ),
+        ),
+      ),
     )
 
+    this.summary.textContent =
+      'One pass over every non-zero pixel, at the level chosen on the right.'
     this.renderGate()
   }
 
   destroy(): void {
     this.cancel()
-    this.panel?.destroy()
+    this.panel.destroy()
+  }
+
+  /** §5.5 cross-navigation from an aggregated cell. */
+  private openCell(groups: { row?: AxisGroup; col?: AxisGroup }): void {
+    if (groups.row === undefined || groups.col === undefined) return
+    const row = groups.row.label
+    const col = groups.col.label
+    // Off the diagonal a cell is the *pair* — the phage-host lead this view
+    // exists for. On the diagonal the pair would be a genome with itself, which
+    // is just the genome, so open that instead of a degenerate pair view.
+    if (this.level === 'contig') {
+      this.props.onOpenContig(row, row === col ? undefined : col)
+      return
+    }
+    if (row === col) this.props.onOpenGenome(row)
+    else this.props.onOpenPair(row, col)
   }
 
   /**
@@ -122,9 +169,10 @@ export class Overview {
     select.value = this.level
     select.addEventListener('change', () => {
       this.level = select.value as 'genome' | 'contig'
-      this.panel?.destroy()
-      this.panel = null
-      this.panelHost.replaceChildren()
+      // The result on screen was accumulated for the other level and cannot be
+      // converted into this one without re-reading the pixels, so it goes.
+      this.panelHost.classList.add('hidden')
+      this.note.classList.add('hidden')
       this.gate.classList.remove('hidden')
       this.renderGate()
     })
@@ -233,39 +281,18 @@ export class Overview {
   }
 
   private show(result: OverviewResult): void {
-    if (this.panel === null) {
-      this.panel = new MatrixPanel({
-        binsize: this.props.binsize,
-        onCellClick: (_cell, groups) => {
-          if (groups.row === undefined || groups.col === undefined) return
-          const row = groups.row.label
-          const col = groups.col.label
-          // §5.5: a cell in an aggregated view opens what it stands for. Off the
-          // diagonal that is the *pair* — the phage-host lead this view exists
-          // for. On the diagonal the pair would be a genome with itself, which
-          // is just the genome, so open that instead of a degenerate pair view.
-          if (this.level === 'contig') {
-            this.props.onOpenContig(row, row === col ? undefined : col)
-            return
-          }
-          if (row === col) this.props.onOpenGenome(row)
-          else this.props.onOpenPair(row, col)
-        },
-      })
-      this.panelHost.appendChild(this.panel.el)
-    }
-
     const unit = result.level === 'genome' ? 'genomes' : 'contigs'
     const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
-    const title = result.restricted
-      ? `${result.n} densest ${unit} of ${result.totalUnits} (${provenance})`
-      : `${result.n} ${unit} (${provenance})`
-    this.panel.setData(toMatrixResult(result), title)
+    this.summary.textContent = result.restricted
+      ? `${result.n} densest ${unit} of ${result.totalUnits} · ${provenance}`
+      : `${result.n} ${unit} · ${provenance}`
+    this.panelHost.classList.remove('hidden')
+    this.gate.classList.add('hidden')
+    this.panel.setData(toMatrixResult(result), '')
 
-    this.panelHost.querySelector('.overview-note')?.remove()
-    this.panelHost.appendChild(
-      el('p', {
-        class: 'hint overview-note',
+    this.note.classList.remove('hidden')
+    this.note.replaceChildren(
+      el('span', {
         text: result.restricted
           ? `A ${result.totalUnits} × ${result.totalUnits} picture is neither renderable nor readable, so the ` +
             `${result.n} ${unit} with the most non-zero pixels are shown. __unbinned__ is excluded, as everywhere.`

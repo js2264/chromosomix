@@ -1707,6 +1707,12 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* The gate, the progress line and the plot share the main column, so the view
+   keeps the shape of every other one whether or not a scan has run. */
+.overview-main {
+  min-width: 0;
+}
+
 .overview-host {
-  margin-top: 1rem;
+  min-width: 0;
 }
