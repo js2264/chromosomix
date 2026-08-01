@@ -30,6 +30,7 @@ import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
 import { RegionView } from './ui/RegionView'
+import { WholeView } from './ui/WholeView'
 import type { Modal } from './ui/Modal'
 import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
@@ -417,9 +418,21 @@ class App {
       const isMetacool = info.layout.kind === 'metacool'
       this.breadcrumb = new Breadcrumb({
         rootKind: isMetacool ? 'genomes' : 'contigs',
-        // A metacool offers both landing tables and the whole-genome view; a
-        // plain cooler has only its chromosomes, because that is all it has.
-        rootChoices: isMetacool ? ['genomes', 'contigs', 'overview'] : ['contigs'],
+        // A metacool offers both landing tables and the scanned whole-genome
+        // view. A cooler offers its chromosomes and, when it fits, the whole
+        // genome in one read — and still lists Genomes, greyed out, because
+        // "this file has none" is a more useful answer than an absent entry.
+        rootChoices: isMetacool
+          ? ['genomes', 'contigs', 'overview']
+          : ['genomes', 'contigs', 'whole'],
+        ...(isMetacool
+          ? {}
+          : {
+              disabledChoices: {
+                genomes: 'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
+              },
+              contigNoun: 'Chromosomes',
+            }),
         fileLabel: fileLabel(uri),
         entries,
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
@@ -527,6 +540,13 @@ class App {
     // view below. Rewriting it here — rather than at each of those sites —
     // covers the shared link, the hand-edited hash and the three redirects at
     // once, and leaves nobody on an empty table with no way off it.
+    // A link can carry `balance=true` to a file with no weight column; every
+    // read would then be refused for a reason the recipient did not choose.
+    if (state.balance === true && this.file !== null && !this.file.info.hasWeights) {
+      this.store.set({ ...state, balance: undefined }, { replace: true })
+      return
+    }
+
     if (state.view === 'genomes' && this.file !== null && !this.file.info.hasGenomes) {
       this.store.set({ uri: state.uri, view: 'contigs' }, { replace: true })
       return
@@ -555,6 +575,9 @@ class App {
         break
       case 'region':
         await this.mountRegion(state)
+        break
+      case 'whole':
+        this.mountWhole(state)
         break
     }
     this.status.refresh()
@@ -585,15 +608,42 @@ class App {
       hideColumns: cooler ? ['genome_id'] : [],
       title: cooler ? 'Chromosomes' : 'Contigs',
       hint: cooler
-        ? 'A cooler has no genome hierarchy, so this is the whole of it: pick a sequence, or type ' +
-          'a region below it. Whole-genome views of standard Hi-C stay out of scope — the ' +
-          'selection guard says so with a number when you try one.'
+        ? 'One genome, its chromosomes. Pick one to browse it, or open the whole genome at once ' +
+          'from the menu beside the crumb — that one is offered whenever the estimate says this ' +
+          'machine can hold it.'
         : undefined,
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
     })
     this.showContent(view.el)
+  }
+
+  private mountWhole(state: ViewState): void {
+    const file = this.file
+    if (file === null) return
+    const view = new WholeView({
+      client: this.client,
+      binsize: file.info.binsize ?? 1,
+      nBins: file.info.nBins,
+      level: state.level ?? 'bin',
+      scale: scaleOf(state),
+      balance: state.balance === true,
+      hasWeights: file.info.hasWeights,
+      noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+      onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
+      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
+      onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
+      onOpenRegion: (region, region2) =>
+        this.store.set({
+          uri: state.uri,
+          view: 'region',
+          region,
+          ...(region2 === undefined ? {} : { region2 }),
+        }),
+      onError: (err) => this.showError(err),
+    })
+    this.showContent(view.el, view)
   }
 
   private mountGenome(state: ViewState): void {
@@ -605,6 +655,9 @@ class App {
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       genome: state.genome,
+      balance: state.balance === true,
+      hasWeights: this.file?.info.hasWeights === true,
+      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: state.level ?? 'bin',
@@ -631,6 +684,9 @@ class App {
       client: this.client,
       binsize: file.info.binsize ?? 1,
       genomeNames: file.displayNames,
+      balance: state.balance === true,
+      hasWeights: file.info.hasWeights,
+      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: state.level ?? 'bin',
@@ -658,6 +714,10 @@ class App {
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
+      noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
+      balance: state.balance === true,
+      hasWeights: this.file?.info.hasWeights === true,
+      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),

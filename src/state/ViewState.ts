@@ -20,7 +20,7 @@
 
 import type { Transform, ViewKind, ViewState } from '../types'
 
-const VIEW_KINDS: ViewKind[] = ['genomes', 'contigs', 'genome', 'pair', 'region']
+const VIEW_KINDS: ViewKind[] = ['genomes', 'contigs', 'genome', 'pair', 'region', 'whole']
 const LEVELS = ['bin', 'contig'] as const
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
 
@@ -36,6 +36,7 @@ const KEY_ORDER = [
   'transform',
   'colormap',
   'vmax',
+  'balance',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -48,6 +49,7 @@ const OPTIONAL_KEYS = [
   'transform',
   'colormap',
   'vmax',
+  'balance',
 ] as const
 
 /**
@@ -124,6 +126,10 @@ export function parseViewState(hash: string): ViewState | null {
 
   const transform = raw.get('transform')
   if (transform !== undefined && isTransform(transform)) state.transform = transform
+
+  // Balanced or raw *is* part of what is being looked at, so a link carries it.
+  const balance = raw.get('balance')
+  if (balance !== undefined) state.balance = balance === '1' || balance === 'true'
 
   const vmax = raw.get('vmax')
   if (vmax !== undefined && vmax !== '') {

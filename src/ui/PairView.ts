@@ -30,6 +30,9 @@ export interface PairViewProps {
   colGenome: string
   level: 'bin' | 'contig'
   scale: ScaleState
+  balance: boolean
+  hasWeights: boolean
+  onBalanceChange(balance: boolean): void
   onChangeGenomes(rowGenome: string, colGenome: string): void
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
@@ -67,6 +70,9 @@ export class PairView {
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
+      balance: props.balance,
+      offerBalance: props.hasWeights,
+      onBalanceChange: (balance) => props.onBalanceChange(balance),
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
         this.level = level
@@ -140,7 +146,7 @@ export class PairView {
         this.props.client.request<'range'>({ kind: 'range', range: this.props.rowGenome }),
         this.props.client.request<'range'>({ kind: 'range', range: this.props.colGenome }),
       ])
-      const query = { rows: rows.extent, cols: cols.extent }
+      const query = { rows: rows.extent, cols: cols.extent, balance: this.props.balance }
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
@@ -158,7 +164,9 @@ export class PairView {
     let nonZero = 0
     for (let i = 0; i < result.values.length; i++) {
       const value = result.values[i]
-      if (value !== 0) {
+      // A NaN cell is a dropped bin, not a contact: counting it would report a
+      // pair as busy because its rows were filtered out.
+      if (value !== 0 && !Number.isNaN(value)) {
         sum += value
         nonZero++
       }

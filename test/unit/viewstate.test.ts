@@ -105,3 +105,22 @@ describe('ViewStore', () => {
     expect(store.state).toStrictEqual({ uri: 'a', view: 'genome', genome: 'MAG_1' })
   })
 })
+
+describe('the genome-wide view and balanced counts in the hash', () => {
+  it('round-trips view=whole', () => {
+    const state = { uri: 'yeast.cool', view: 'whole' as const, level: 'bin' as const }
+    expect(parseViewState(serialiseViewState(state))).toEqual(state)
+  })
+
+  it('round-trips balance, because it is part of the picture', () => {
+    const state = { uri: 'yeast.cool', view: 'whole' as const, balance: true }
+    const hash = serialiseViewState(state)
+    expect(hash).toContain('balance=true')
+    expect(parseViewState(hash)).toEqual(state)
+  })
+
+  it('omits balance when it is off, so a raw link stays short', () => {
+    const state = { uri: 'yeast.cool', view: 'region' as const, region: 'chrI' }
+    expect(serialiseViewState(state)).not.toContain('balance')
+  })
+})

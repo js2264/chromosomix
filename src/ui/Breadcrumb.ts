@@ -31,13 +31,22 @@ import { el } from './dom'
  * rather than as a button in the corner of the window, which is where it was and
  * where nothing else about this file lives.
  */
-export type RootChoice = 'genomes' | 'contigs' | 'overview'
+export type RootChoice = 'genomes' | 'contigs' | 'overview' | 'whole'
 
-/** Title Case, because these are the names of views, not field values. */
+/**
+ * Title Case, because these are the names of views, not field values.
+ *
+ * `contigs` is *Chromosomes* on a cooler. The word is not cosmetic: a cooler
+ * holds one genome's chromosomes, and calling them contigs asks the reader to
+ * translate on every screen. `overview` and `whole` share a label because they
+ * answer the same question — the whole file at once — by different means: a
+ * pixel scan for a metagenome, one bounded read for a genome small enough.
+ */
 const ROOT_LABEL: Record<RootChoice, string> = {
   genomes: 'Genomes',
   contigs: 'Contigs',
-  overview: 'Whole Genome',
+  overview: 'Whole genome',
+  whole: 'Whole genome',
 }
 
 export interface BreadcrumbProps {
@@ -45,6 +54,16 @@ export interface BreadcrumbProps {
   rootKind: 'genomes' | 'contigs'
   /** Landing views this file can offer. One entry hides the picker. */
   rootChoices: RootChoice[]
+  /**
+   * Choices to show but not offer, with the reason.
+   *
+   * A cooler has no genomes, and *hiding* the entry would leave the reader
+   * wondering whether this viewer has a genomes table at all. Greyed out with
+   * a reason answers the question instead of raising it.
+   */
+  disabledChoices?: Partial<Record<RootChoice, string>>
+  /** What a contig is called in this file: `Contigs`, or `Chromosomes`. */
+  contigNoun?: string
   /** Short label for the open file, shown as the first crumb. */
   fileLabel: string
   /** Entry names of the enclosing mmetacool, or `[]` for a plain metacool. */
@@ -145,11 +164,14 @@ export class Breadcrumb {
 
     this.separator()
 
+    const labelOf = (kind: RootChoice): string =>
+      kind === 'contigs' ? (this.props.contigNoun ?? ROOT_LABEL.contigs) : ROOT_LABEL[kind]
+
     const label = el('button', {
       class: `crumb${atRoot ? ' current' : ''}`,
       type: 'button',
-      text: ROOT_LABEL[active],
-      title: `Back to ${ROOT_LABEL[active]}`,
+      text: labelOf(active),
+      title: `Back to ${labelOf(active)}`,
     })
     label.addEventListener('click', () => this.chooseRoot(active, state))
 
@@ -158,7 +180,7 @@ export class Breadcrumb {
       return
     }
 
-    const other = rootChoices.filter((kind) => kind !== active).map((kind) => ROOT_LABEL[kind])
+    const other = rootChoices.filter((kind) => kind !== active).map(labelOf)
     const arrow = el('button', {
       class: 'crumb-arrow',
       type: 'button',
@@ -168,15 +190,21 @@ export class Breadcrumb {
     arrow.appendChild(icon('chevron-down', { size: 14 }))
     const menu = el('div', { class: 'crumb-menu hidden' })
     for (const kind of rootChoices) {
+      const why = this.props.disabledChoices?.[kind]
       const item = el('button', {
-        class: `crumb-menu-item${kind === active ? ' current' : ''}`,
+        class: `crumb-menu-item${kind === active ? ' current' : ''}${why === undefined ? '' : ' disabled'}`,
         type: 'button',
-        text: ROOT_LABEL[kind],
+        text: labelOf(kind),
+        ...(why === undefined ? {} : { title: why }),
       })
-      item.addEventListener('click', () => {
-        menu.classList.add('hidden')
-        this.chooseRoot(kind, state)
-      })
+      if (why !== undefined) {
+        item.disabled = true
+      } else {
+        item.addEventListener('click', () => {
+          menu.classList.add('hidden')
+          this.chooseRoot(kind, state)
+        })
+      }
       menu.appendChild(item)
     }
     arrow.addEventListener('click', (event) => {
@@ -200,6 +228,11 @@ export class Breadcrumb {
   private chooseRoot(kind: RootChoice, state: ViewState): void {
     if (kind === 'overview') this.props.onShowOverview?.()
     else this.props.onNavigate({ uri: state.uri, view: kind })
+  }
+
+  /** The active root, as a label — the shell uses it for the greyed entries. */
+  static label(kind: RootChoice): string {
+    return ROOT_LABEL[kind]
   }
 
   private separator(): void {

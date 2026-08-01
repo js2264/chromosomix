@@ -1,0 +1,144 @@
+/**
+ * The genome-wide view: the entire matrix, in one bounded read.
+ *
+ * SPECS §9 used to rule this out for cool files, on the grounds that a
+ * eukaryotic cooler reintroduces the streaming problem §2 exists to avoid. That
+ * is true of a *human* cooler and false of the genomes this viewer is most
+ * often pointed at: yeast is 12 Mb, which at 1 kb is 12,100 bins — one bounded
+ * read, about 600 MB on screen, and the single most useful picture of the file.
+ *
+ * So the size question is asked rather than assumed. `readDenseMatrix`
+ * estimates what the block will cost from its cell count and the file's own
+ * `nnz` and refuses only if the estimate does not fit this machine; when it
+ * does not, contig level always does, and it is one click away in the same
+ * view.
+ */
+
+import type { MatrixResult } from '../worker/protocol'
+import type { ReaderClient } from '../worker/client'
+import { ViewerError } from '../errors'
+import { el, fmt } from './dom'
+import type { ScaleState } from './GenomeView'
+import { MatrixPanel } from './MatrixPanel'
+
+export interface WholeViewProps {
+  client: ReaderClient
+  binsize: number
+  /** Total bins — the whole matrix is `[0, nBins)` on both axes. */
+  nBins: number
+  level: 'bin' | 'contig'
+  scale: ScaleState
+  balance: boolean
+  /** Whether the file carries a weight column at all. */
+  hasWeights: boolean
+  /** What one axis unit is called here: a chromosome, or a contig. */
+  noun: string
+  onLevelChange(level: 'bin' | 'contig'): void
+  onBalanceChange(balance: boolean): void
+  onScaleChange(scale: ScaleState): void
+  /** A cell was clicked: open that sequence, or the block between two. */
+  onOpenRegion(region: string, region2?: string): void
+  onError(err: unknown): void
+}
+
+export class WholeView {
+  readonly el: HTMLElement
+  private readonly panel: MatrixPanel
+  private readonly summary: HTMLElement
+  private readonly problem: HTMLElement
+  private level: 'bin' | 'contig'
+  private disposed = false
+
+  constructor(private readonly props: WholeViewProps) {
+    this.level = props.level
+    this.summary = el('p', { class: 'summary' })
+    this.problem = el('p', { class: 'inline-error hidden' })
+
+    this.panel = new MatrixPanel({
+      binsize: props.binsize,
+      levels: ['bin', 'contig'],
+      detachedControls: true,
+      hideTitle: true,
+      initial: { ...props.scale, level: props.level },
+      balance: props.balance,
+      offerBalance: props.hasWeights,
+      onScaleChange: (scale) => props.onScaleChange(scale),
+      onBalanceChange: (balance) => props.onBalanceChange(balance),
+      onLevelChange: (level) => {
+        this.level = level
+        props.onLevelChange(level)
+        void this.load()
+      },
+      onCellClick: (_cell, groups) => {
+        if (groups.row === undefined) return
+        if (groups.col !== undefined && groups.col.label !== groups.row.label) {
+          props.onOpenRegion(groups.row.label, groups.col.label)
+          return
+        }
+        props.onOpenRegion(groups.row.label)
+      },
+    })
+
+    this.el = el(
+      'section',
+      { class: 'view view-whole' },
+      el(
+        'header',
+        { class: 'view-head' },
+        el('div', { class: 'title-bar' }, el('h2', { text: 'Whole genome' })),
+        this.summary,
+        this.problem,
+      ),
+      el(
+        'div',
+        { class: 'genome-body' },
+        this.panel.el,
+        el('aside', { class: 'side' }, this.panel.controlsEl),
+      ),
+    )
+
+    void this.load()
+  }
+
+  destroy(): void {
+    this.disposed = true
+    this.panel.destroy()
+  }
+
+  private async load(): Promise<void> {
+    const { client, nBins, balance, noun } = this.props
+    const rows: [number, number] = [0, nBins]
+    this.panel.setBusy(true)
+    this.problem.classList.add('hidden')
+    try {
+      const result: MatrixResult =
+        this.level === 'bin'
+          ? await client.request<'matrix'>({ kind: 'matrix', rows, balance })
+          : await client.request<'aggregate'>({ kind: 'aggregate', rows, level: 'contig', balance })
+      if (this.disposed) return
+      this.panel.setData(result, '')
+      this.summary.textContent =
+        `${fmt.int(nBins)} bins across ${fmt.int(result.rowGroups.length)} ${noun}s · ` +
+        `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells rendered` +
+        (balance ? ' · balanced' : '')
+    } catch (err) {
+      // Too big is a fact about this machine, not a broken file: say it here,
+      // above a level control that offers the version which does fit, rather
+      // than on an error screen that offers a way back to the file picker.
+      if (err instanceof ViewerError && err.code === 'dense-too-large') {
+        this.panel.setBusy(false)
+        // Not "switch to contig level": that rolls up a block which has to be
+        // read first, so it is refused by the same guard for the same reason.
+        // What actually helps is fewer bins — a coarser resolution of an mcool,
+        // or one sequence at a time.
+        this.problem.textContent =
+          `${err.message} A coarser resolution of this file, if it has one, or a single ` +
+          `${noun} from the table, will fit.`
+        this.problem.classList.remove('hidden')
+        this.summary.textContent = ''
+        return
+      }
+      this.props.onError(err)
+    }
+  }
+}

@@ -27,6 +27,9 @@ export interface GenomeViewProps {
   genome: string
   level: 'bin' | 'contig'
   scale: ScaleState
+  balance: boolean
+  hasWeights: boolean
+  onBalanceChange(balance: boolean): void
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
@@ -66,6 +69,9 @@ export class GenomeView {
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
+      balance: props.balance,
+      offerBalance: props.hasWeights,
+      onBalanceChange: (balance) => props.onBalanceChange(balance),
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
         this.level = level

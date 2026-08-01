@@ -174,7 +174,7 @@ export interface Separator {
 // View state (spec §5.5)
 // ---------------------------------------------------------------------------
 
-export type ViewKind = 'genomes' | 'contigs' | 'genome' | 'pair' | 'region'
+export type ViewKind = 'genomes' | 'contigs' | 'genome' | 'pair' | 'region' | 'whole'
 
 export interface ViewState {
   /** The full URI, `file` or `file::group`. */
@@ -197,6 +197,14 @@ export interface ViewState {
   region2?: string
   /** Aggregation level inside a genome view. */
   level?: 'bin' | 'contig'
+  /**
+   * Multiply counts by their bin weights — cooler's balanced matrix (§6.4).
+   *
+   * Part of the shared view, not a preference: a balanced map and a raw one are
+   * different pictures of the same data, and a link that dropped which one you
+   * were looking at would mislead its recipient.
+   */
+  balance?: boolean
   transform?: Transform
   colormap?: string
   vmax?: number

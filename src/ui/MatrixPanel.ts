@@ -44,8 +44,13 @@ export interface MatrixPanelOptions {
   /** Offered aggregation levels; omit for views with no level toggle. */
   levels?: Array<'bin' | 'contig'>
   initial?: { transform?: Transform; colormap?: string; vmax?: number; level?: 'bin' | 'contig' }
+  /** Whether counts are currently multiplied by their bin weights (§6.4). */
+  balance?: boolean
+  /** Offer the balance control at all — only files with a weight column do. */
+  offerBalance?: boolean
   onScaleChange?(scale: { transform: Transform; colormap: string; vmax?: number }): void
   onLevelChange?(level: 'bin' | 'contig'): void
+  onBalanceChange?(balance: boolean): void
   /** A cell was clicked; offsets are block-local, ids are absolute. */
   onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
   /**
@@ -206,6 +211,31 @@ export class MatrixPanel {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
     })
+
+    if (options.offerBalance === true) {
+      const balance = el('input', { class: 'checkbox', type: 'checkbox' })
+      balance.checked = options.balance === true
+      balance.addEventListener('change', () => {
+        // Balanced values are fractions — cooler's weights normalise the matrix
+        // so most cells land below 1 — and `log10` of a value under 1 is
+        // negative. The auto-`vmax` rule counts positives, finds none, falls
+        // back to 1.0, and every cell maps below `vmin`: a blank panel. `log1p`
+        // is defined and positive on (0, 1), so it is what balanced counts get.
+        if (balance.checked && this.transform === 'log10') {
+          this.transform = 'log1p'
+          transformSelect.value = 'log1p'
+        }
+        options.onBalanceChange?.(balance.checked)
+      })
+      controls.unshift(
+        field(
+          'balanced',
+          balance,
+          'Multiply each cell by its two bin weights — cooler`s balanced matrix. ' +
+            'Bins the balancer dropped have no weight and show as blank.',
+        ),
+      )
+    }
 
     if (options.levels && options.levels.length > 1) {
       const levelSelect = el('select', { class: 'select' })

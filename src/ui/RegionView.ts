@@ -37,6 +37,12 @@ export interface RegionViewProps {
   /** Column-axis region; when set the block is rectangular, not square. */
   region2?: string
   scale: ScaleState
+  balance: boolean
+  /** Whether the file carries a weight column at all. */
+  hasWeights: boolean
+  /** What one sequence is called here: a contig, or a chromosome. */
+  noun: string
+  onBalanceChange(balance: boolean): void
   onChangeRegion(region: string): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
@@ -79,6 +85,9 @@ export class RegionView {
       // single contig there is no list to offer.
       detachedControls: true,
       hideTitle: true,
+      balance: props.balance,
+      offerBalance: props.hasWeights,
+      onBalanceChange: (balance) => props.onBalanceChange(balance),
       onScaleChange: (scale) => props.onScaleChange(scale),
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
@@ -104,7 +113,7 @@ export class RegionView {
           this.title,
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
-            : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: 'contig' })]),
+            : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
           this.input,
           button('go', () => props.onChangeRegion(this.input.value.trim())),
         ),
@@ -137,6 +146,7 @@ export class RegionView {
         const result: MatrixResult = await this.props.client.request<'matrix'>({
           kind: 'matrix',
           rows: [lo, hi],
+          balance: this.props.balance,
         })
         if (this.disposed) return
         this.title.textContent = this.props.region
@@ -154,6 +164,7 @@ export class RegionView {
         kind: 'matrix',
         rows: [lo, hi],
         cols: [lo2, hi2],
+        balance: this.props.balance,
       })
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
@@ -196,7 +207,7 @@ export class RegionView {
   }
 
   private describeMatch(parsed: ParsedRange, bins: number): void {
-    const kind = parsed.kind === 'genome' ? 'genome' : 'contig'
+    const kind = parsed.kind === 'genome' ? 'genome' : this.props.noun
     this.matched.textContent = `matched ${kind} ${parsed.label} · ${fmt.int(bins)} bins · bins ${fmt.int(parsed.extent[0])}–${fmt.int(parsed.extent[1] - 1)}`
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
     if (parsed.kind === 'genome') {

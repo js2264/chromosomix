@@ -555,6 +555,17 @@ p {
   padding: 0.2rem;
 }
 
+/* Shown, not offered: a cooler has no genomes, and hiding the entry would raise
+   the question this answers. */
+.crumb-menu-item.disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.crumb-menu-item.disabled:hover {
+  background: none;
+}
+
 .crumb-menu-item {
   font: inherit;
   font-size: var(--step--1);
