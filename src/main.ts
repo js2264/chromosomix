@@ -397,7 +397,7 @@ class App {
   private async open(uri: string, source: SourceSpec): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
-    this.showContent(el('div', { class: 'loading', text: `opening ${fileLabel(uri)}…` }))
+    this.showContent(loading(`Opening ${fileLabel(uri)}`))
     try {
       const info = await this.client.request<'open'>({ kind: 'open', uri, source })
       const genomes = await this.client.request<'genomes'>({ kind: 'genomes' })
@@ -762,6 +762,23 @@ class App {
     })
     this.showContent(view.el)
   }
+}
+
+/**
+ * The waiting state, centred in the content area.
+ *
+ * Opening a remote map is a few round trips before anything can be drawn, and a
+ * line of grey text at the top left reads as a page that failed rather than one
+ * that is working. The spinner is CSS, so it costs nothing and keeps moving
+ * while the worker is busy — a frozen indicator would be worse than none.
+ */
+function loading(message: string): HTMLElement {
+  return el(
+    'div',
+    { class: 'loading' },
+    el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } }),
+    el('p', { class: 'loading-text', text: `${message}…` }),
+  )
 }
 
 /** Colour-scale fields carried by a view state (§5.5). */

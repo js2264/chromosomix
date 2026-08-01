@@ -418,9 +418,51 @@ p {
   padding: 0.35rem;
 }
 
+/* Centred, and moving. A line of grey text in the corner reads as a page that
+   failed; this reads as one that is working. */
 .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  min-height: 50vh;
   color: var(--text-dim);
-  padding: 2rem 0;
+}
+
+.loading-text {
+  margin: 0;
+  font-size: var(--step-1);
+  letter-spacing: -0.01em;
+}
+
+.spinner {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Respect a user who has asked for less movement: the ring still says "busy",
+   it just pulses instead of spinning. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
 }
 
 /* --- breadcrumb -------------------------------------------------------- */
