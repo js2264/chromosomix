@@ -358,6 +358,51 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   published demo files hit in dev. Fixed, and the whole suite runs now: 732
   tests.
 
+## DONE
+
+- [x] Full-genome view for cool files, gated by a dynamic size estimate.
+- [x] Balancing from the weight column.
+- [x] A cooler reads as one genome with chromosomes.
+
+> NOTES ON THE BATCH ABOVE
+
+- **Genome-wide is a view now** (`view=whole`), offered in the root menu beside
+  the chromosomes table, and it is one bounded read rather than a scan. The old
+  rule — region level only for coolers — was written for human data and refused
+  the case cool support is actually for: yeast is 12.1 Mb, 12,100 bins at 1 kb,
+  which opens in about 700 MB.
+- **The size question is asked, not assumed.** `estimateBlockBytes` adds up what
+  a block really costs — the dense values, the auto-`vmax` percentile buffer,
+  the COO span read and a raster whose size is capped — and compares it to a
+  third of what `navigator.deviceMemory` admits to. The file's own `nnz` is
+  consulted only to *rescue* a block the pessimistic estimate would refuse, so a
+  selection that obviously fits is decided without touching the file.
+- **Two allocations went away** to make that affordable. The transformed copy of
+  the whole matrix was retained for the life of the raster and read by nobody;
+  the transform now happens during rasterisation. And the raster is pooled to
+  4096 px per axis — per axis, so a 600 x 8,141 genome pair keeps its short
+  side — by taking the *maximum* of each pooled block, because averaging is how
+  a loop disappears at fit zoom.
+- **Balancing is built** (§6.4 said "optional-if-present" and meant it): when
+  `/bins/weight` exists the view card offers a toggle and a cell becomes
+  `raw * w[i] * w[j]`, cooler's own definition. Dropped bins are NaN and render
+  transparent — but a NaN no longer poisons the contig it sits in when rolled
+  up, and it is not counted as a contact in the pair summary. Turning balancing
+  on switches `log10` to `log1p`, because balanced values are fractions and
+  log10 of a fraction is negative: the old combination rendered a blank panel.
+  This is the one read of `/bins` in the reader, it is two bounded slices, and
+  `bins-guard.test.ts` still proves every unbalanced path never touches it.
+- **A cooler now reads as one genome with chromosomes**: Chromosomes in the
+  crumb, the table title, the region view and the stepper, and Genomes greyed
+  out in the root menu with the reason rather than hidden.
+- **A second adversarial review** (35 agents) found fifteen more real defects in
+  this batch alone, all fixed here. The ones that would have hurt: pooling both
+  axes by the longest, `log10` + balanced rendering nothing, a shared
+  `balance=true` link refusing every read on a file with no weights, and a
+  refusal that offered an escape hatch — "switch to contig level" — which is
+  refused by the same guard for the same reason, because the roll-up reads the
+  same block first.
+
 
 ## FOR FUTURE
 
