@@ -509,11 +509,23 @@ function watchTheme(onChange: () => void): () => void {
   }
 }
 
-/** Separator positions: the first row/column of every group after the first. */
+/**
+ * Separator positions: the first row/column of every group after the first.
+ *
+ * A super-group set, when the reader supplies one, becomes the *group*
+ * separators — the heavier line — so a contig × contig overview shows its
+ * genome boundaries over its contig ones.
+ */
 export function separatorsFor(data: MatrixResult): SeparatorSet {
   const toSeparators = (groups: AxisGroup[]): Separator[] =>
     groups.map((group) => ({ at: group.start, label: group.label }))
-  return { rows: toSeparators(data.rowGroups), cols: toSeparators(data.colGroups) }
+  const set: SeparatorSet = {
+    rows: toSeparators(data.rowGroups),
+    cols: toSeparators(data.colGroups),
+  }
+  if (data.rowSuperGroups !== undefined) set.groupRows = toSeparators(data.rowSuperGroups)
+  if (data.colSuperGroups !== undefined) set.groupCols = toSeparators(data.colSuperGroups)
+  return set
 }
 
 /** Adapt a worker result to the renderer's {@link DenseMatrix}. */

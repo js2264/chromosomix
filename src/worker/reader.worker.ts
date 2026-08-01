@@ -246,6 +246,9 @@ async function handleOverview(
   return {
     level,
     labels: selected.map((unit) => names[unit]),
+    ...(level === 'contig'
+      ? { groups: selected.map((unit) => mc.genomeNames[mc.contigGenomeIds[unit]]) }
+      : {}),
     values: Float32Array.from(acc),
     n,
     source: 'scan',

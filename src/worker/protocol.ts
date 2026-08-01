@@ -197,6 +197,16 @@ export interface MatrixResult {
   /** Contig (or genome) runs along each axis, for separators and tick labels. */
   rowGroups: AxisGroup[]
   colGroups: AxisGroup[]
+  /**
+   * Coarser boundaries drawn over the ones above — genomes over contigs.
+   *
+   * Two levels of structure exist in a contig × contig picture and only one of
+   * them is worth a line: the tooltip wants the contig, the eye wants the
+   * genome. Kept separate rather than replacing `rowGroups`, because both
+   * answers are needed at once.
+   */
+  rowSuperGroups?: AxisGroup[]
+  colSuperGroups?: AxisGroup[]
   level: 'bin' | 'contig' | 'genome'
 }
 
@@ -205,6 +215,15 @@ export interface OverviewResult {
   level: 'genome' | 'contig'
   /** Axis names, `__unbinned__` and its contigs excluded (§7.3, §7.4). */
   labels: string[]
+  /**
+   * The genome each axis entry belongs to, at contig level only.
+   *
+   * A contig × contig picture of a whole metagenome is read *by genome* — the
+   * question is which bins hold together — so the boundaries worth drawing are
+   * the genome ones, not one per contig. The labels stay per contig, because
+   * that is what the pointer is over.
+   */
+  groups?: string[]
   /** Row-major `n × n`. */
   values: Float32Array
   n: number

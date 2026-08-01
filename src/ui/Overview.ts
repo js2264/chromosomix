@@ -309,6 +309,7 @@ export class Overview {
 /** Wrap an overview in the shape {@link MatrixPanel} draws. */
 function toMatrixResult(result: OverviewResult): MatrixResult {
   const groups = result.labels.map((label, index) => ({ label, start: index, end: index + 1 }))
+  const superGroups = runsOf(result.groups)
   return {
     nrows: result.n,
     ncols: result.n,
@@ -317,6 +318,28 @@ function toMatrixResult(result: OverviewResult): MatrixResult {
     colExtent: [0, result.n],
     rowGroups: groups,
     colGroups: groups,
+    ...(superGroups === undefined
+      ? {}
+      : { rowSuperGroups: superGroups, colSuperGroups: superGroups }),
     level: 'genome',
   }
+}
+
+/**
+ * Consecutive runs of the same name, as axis groups.
+ *
+ * The contigs arrive in file order, which is grouped by genome (C4), so a run
+ * *is* a genome's block. `undefined` in, `undefined` out: at genome level there
+ * is no coarser structure to draw.
+ */
+function runsOf(names: string[] | undefined): AxisGroup[] | undefined {
+  if (names === undefined || names.length === 0) return undefined
+  const runs: AxisGroup[] = []
+  let start = 0
+  for (let i = 1; i <= names.length; i++) {
+    if (i < names.length && names[i] === names[start]) continue
+    runs.push({ label: names[start], start, end: i })
+    start = i
+  }
+  return runs
 }
