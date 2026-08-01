@@ -1,4 +1,4 @@
-## FOR NOW
+## DONE 
 
 - [x] Only `genomes` table is visible and opened by default when opening a file. It would be nice to have a way to open the `contigs` table if wanted. It could be done by using a dropdown menu to select which table to open here: 
 
@@ -28,9 +28,7 @@
 
 - [x] when looking at a genome and clicking on the intersection of 2 contigs, the contig view currently opens a symmetric square map corresponding 1 of the two contigs. It should instead opens an assymetric, rectangular map of the intersection of the two contigs!
 
-
-
-## NOTES ON THE BATCH ABOVE
+> NOTES ON THE BATCH ABOVE
 
 - **Table state** is remembered per file and per table (genomes / contigs) in
   `sessionStorage` via `src/state/UiMemory.ts`: filters, free-text search, sort
@@ -52,8 +50,6 @@
   of the sidebar. The card styling and the File block stay; those two sections
   would simply move out.
 
-
-## FOR ONOW 
 
 - [x] Populate a bottom status bar with a bit of information about the data read, and display all the information currently in READS in the left sidebar when hovering over it. Remove READS from left sidebar. 
 
@@ -80,7 +76,7 @@
 ![alt text](image-6.png)
 
 
-## NOTES ON THE BATCH ABOVE
+> NOTES ON THE BATCH ABOVE
 
 - **Status bar.** Reads and Validation left the sidebar for a one-line footer
   that expands on hover; validation is per-file, so the tick resets on open
@@ -106,7 +102,7 @@
   user on a dark OS who picks light gets light.
 
 
-## FOR NEXT
+## DONE
 
 - [x] Cursor as arrow over the heatmap. 
 - [x] Buttons in the view card for plot options, eg crosshair, dividers, others? 
@@ -116,7 +112,7 @@
 - [x] The files in `public/demo/` offered as examples on the picker. 
 
 
-## NOTES ON THE BATCH ABOVE
+> NOTES ON THE BATCH ABOVE
 
 - **Sidebar.** The fold control moved to the left of the title, where it points
   at the panel it folds; the old (i) button in the right-hand actions did the
@@ -144,7 +140,29 @@
 - **Deploy.** The workflow, the remote and the push are done; enabling *Settings
   -> Pages -> Source: GitHub Actions* is the one step that is not code.
 
-## IN FUTURE  
+## FOR NOW 
+
+- [ ] "open another file" button does not work (when trying a file that fails). 
+- [ ] Put the "Nothing you drop here leaves your browser" at the bottom after dropping area and remote file and example files. 
+- [ ] Make the "Public examples" files a dropdown menu
+- [ ] Public examples return "error - name not defined!"
+- [ ] In the top bar, next to dark/light/system, have more buttons for general app settings, like info, go to github repo, load new file, shortcut modals, any other? 
+- By default: Crosshair should be on, dividers off, and labels off. Do you see any other toggles to add? 
+- The pointer in the heatmap should really be something like a arrowhead, not a standard pointer. 
+- [ ] The tooltip over the heatmap has redundant contig names. 
+
+![alt text](image-8.png)
+
+- [ ] Implement shortcuts and a command palette (cmd+P), with a action bar in the center in the top bar (where title and side buttons are)
+- [ ] The title "(meta)cooler" should redirect to the initial file selection page 
+- [ ] Spanning next to the contig name (same in genome view!!), I could have < and > buttons to go to the previous and next contig/genome, instead of having to go back to the table view.
+
+![alt text](image-7.png)
+
+
+
+
+## FOR FUTURE
 
 - M5
 
