@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 
 import { scoreCommand } from '@/ui/CommandPalette'
 import { matchesKeys } from '@/ui/commands'
+import { contigOf, neighbour } from '@/ui/labels'
 import type { Command } from '@/ui/commands'
 
 function command(group: string, title: string): Command {
@@ -66,5 +67,33 @@ describe('key bindings', () => {
 
   it('requires the modifier for a chord', () => {
     expect(matchesKeys(press({ key: 'p' }), 'mod+p')).toBe(false)
+  })
+})
+
+describe('stepping to a neighbour', () => {
+  const names = ['a', 'b', 'c']
+
+  it('walks the list and stops at both ends rather than wrapping', () => {
+    expect(neighbour(names, 'a', 1)).toBe('b')
+    expect(neighbour(names, 'c', -1)).toBe('b')
+    expect(neighbour(names, 'c', 1)).toBeNull()
+    expect(neighbour(names, 'a', -1)).toBeNull()
+  })
+
+  it('has no neighbour for a name that is not in the list', () => {
+    expect(neighbour(names, 'zzz', 1)).toBeNull()
+  })
+
+  it('finds the contig a region names, with or without coordinates', () => {
+    const contigs = ['NODE_1', 'NODE_2']
+    expect(contigOf('NODE_1', contigs)).toBe('NODE_1')
+    expect(contigOf('NODE_1:1000-2000', contigs)).toBe('NODE_1')
+    expect(contigOf('NODE_9:1-2', contigs)).toBeNull()
+  })
+
+  it('prefers a contig whose own name contains a colon', () => {
+    // A file may legally carry `NODE_1:2` as a name; reading it as coordinates
+    // on `NODE_1` would step through the wrong list.
+    expect(contigOf('NODE_1:2', ['NODE_1', 'NODE_1:2'])).toBe('NODE_1:2')
   })
 })
