@@ -13,7 +13,12 @@
  *    feature rather than erroring.
  */
 
-import { DENSE_MATRIX_BIN_LIMIT, type StorageMode } from '../constants'
+import {
+  BROWSER_CANVAS_DIM_LIMIT,
+  BROWSER_DENSE_CELL_LIMIT,
+  DENSE_MATRIX_BIN_LIMIT,
+  type StorageMode,
+} from '../constants'
 import { ViewerError } from '../errors'
 import type { Hdf5Handle } from '../h5/api'
 import { dtypeKind } from '../h5/typed'
@@ -61,6 +66,50 @@ export function checkDenseSize(nRows: number, nCols: number, hint: string): void
       { nRows, nCols, limit: DENSE_MATRIX_BIN_LIMIT },
     )
   }
+}
+
+/**
+ * The same question asked of a browser tab, which is a smaller room.
+ *
+ * Separate from {@link checkDenseSize} rather than folded into it, because that
+ * function's numbers and wording are Python's and are asserted verbatim. This
+ * one speaks for the renderer: the block is not just allocated, it is
+ * transformed, rasterised and put on a canvas, and the canvas has an area cap
+ * no amount of memory gets around.
+ *
+ * @throws ViewerError `dense-too-large`.
+ */
+export function checkBrowserDenseSize(nRows: number, nCols: number, hint: string): void {
+  const cells = nRows * nCols
+  const longest = Math.max(nRows, nCols)
+  if (cells <= BROWSER_DENSE_CELL_LIMIT && longest <= BROWSER_CANVAS_DIM_LIMIT) return
+
+  // Two different refusals, because they are two different walls and the fix
+  // differs: too much of it, or too long a side to rasterise at all.
+  const message =
+    longest > BROWSER_CANVAS_DIM_LIMIT
+      ? `Refusing to draw a ${nRows}×${nCols} block in a browser tab: a ${longest}-bin axis cannot ` +
+        `be rasterised, because a canvas is at most ${BROWSER_CANVAS_DIM_LIMIT} pixels on a side.`
+      : `Refusing to draw a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells is ` +
+        `about ${((cells * 16) / 1e9).toFixed(1)} GB once the values, the colour mapping and the ` +
+        `canvas are counted. The limit here is ${fmtCells(BROWSER_DENSE_CELL_LIMIT)} cells — ` +
+        `roughly ${Math.round(Math.sqrt(BROWSER_DENSE_CELL_LIMIT))} bins per axis.`
+
+  throw new ViewerError('dense-too-large', `${message} ${hint}`, {
+    nRows,
+    nCols,
+    cells,
+    limit: BROWSER_DENSE_CELL_LIMIT,
+    axisLimit: BROWSER_CANVAS_DIM_LIMIT,
+    where: 'browser',
+  })
+}
+
+/** `2.5e9` → `2.5 billion`, for a sentence rather than a table. */
+function fmtCells(cells: number): string {
+  if (cells >= 1e9) return `${(cells / 1e9).toFixed(1)} billion`
+  if (cells >= 1e6) return `${(cells / 1e6).toFixed(0)} million`
+  return String(cells)
 }
 
 /**
@@ -234,6 +283,7 @@ export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string)
   const nRows = rows[1] - rows[0]
   const nCols = cols[1] - cols[0]
   checkDenseSize(nRows, nCols, hint)
+  checkBrowserDenseSize(nRows, nCols, hint)
 
   const values = new Float32Array(nRows * nCols)
   if (nRows > 0 && nCols > 0) {

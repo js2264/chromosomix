@@ -163,7 +163,17 @@ export class RegionView {
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is
       // a real failure and belongs on the error screen.
-      if (err instanceof ViewerError && (err.code === 'unknown-label' || err.code === 'genome-coordinate-suffix' || err.code === 'unbinned-not-displayable')) {
+      // `dense-too-large` belongs here too: on a cooler, clicking a chromosome
+      // in the table is a one-click way to ask for a block no tab can draw, and
+      // the answer is a sentence above an intact region box — type a window and
+      // carry on — not a full-screen error with a "go back" button.
+      if (
+        err instanceof ViewerError &&
+        (err.code === 'unknown-label' ||
+          err.code === 'genome-coordinate-suffix' ||
+          err.code === 'unbinned-not-displayable' ||
+          err.code === 'dense-too-large')
+      ) {
         this.panel.setBusy(false)
         this.problem.textContent = err.message
         this.problem.classList.remove('hidden')

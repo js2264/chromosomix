@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest'
 import { DENSE_MATRIX_BIN_LIMIT } from '@/constants'
 import { ViewerError } from '@/errors'
 import {
+  checkBrowserDenseSize,
   checkDenseSize,
   DENSE_HINTS,
   readDenseMatrix,
@@ -117,14 +118,22 @@ describe('readDenseMatrix', () => {
 
   it('judges a rectangular selection on its cell count, not its longest axis', () => {
     const src = oversizedSource(200_000)
-    // 200000 × 12000 = 2.4e9 cells: under the limit, so the guard passes and
-    // the read is attempted — which the proxy handle reports by throwing.
-    expect(() => readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range))
+    // 20000 × 4000 = 8e7 cells and no axis past a canvas's side: it passes both
+    // guards, so the read is attempted — which the proxy handle reports by
+    // throwing. Its longest axis is still under `DENSE_MATRIX_BIN_LIMIT`, so
+    // the cell-count rule is what let it through, not the axis rule.
+    expect(() => readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 4_000] }, DENSE_HINTS.range))
       .toThrowError(/must refuse before touching the file/)
-    // 200000 × 13000 = 2.6e9 cells: over, so it never gets that far.
+    // 200000 × 13000 = 2.6e9 cells: over even the CLI-parity limit, so it never
+    // gets that far.
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 13_000] }, DENSE_HINTS.range),
     ).toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
+    // 200000 × 12000 = 2.4e9 cells: under Python's limit and far over what a tab
+    // can draw, so the browser guard is the one that answers.
+    expect(() =>
+      readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range),
+    ).toThrowError(/browser tab/)
   })
 
   it('rejects a malformed bin range before the size check', () => {
@@ -135,5 +144,77 @@ describe('readDenseMatrix', () => {
     expect(() => readDenseMatrix(src, { rows: [0, 2000] }, DENSE_HINTS.range)).toThrowError(
       /Bin range for rows is \[0, 2000\)/,
     )
+  })
+})
+
+const HINT = DENSE_HINTS.range
+
+describe('the browser guard, which is stricter than the CLI', () => {
+  it('refuses what the CLI-parity limit allows', () => {
+    // 50,000 x 50,000 is exactly what `checkDenseSize` permits, and it is 40 GB
+    // of live bytes on screen plus a raster nine times a canvas's area cap.
+    expect(() => checkDenseSize(50_000, 50_000, HINT)).not.toThrow()
+    expect(() => checkBrowserDenseSize(50_000, 50_000, HINT)).toThrow(ViewerError)
+  })
+
+  it('refuses a human chromosome at 5 kb, which is the case §9 promises to refuse', () => {
+    // chr1 is 248,956,422 bp: 49,792 bins, 2.479e9 cells — under Python's limit.
+    expect(() => checkDenseSize(49_792, 49_792, HINT)).not.toThrow()
+    expect(() => checkBrowserDenseSize(49_792, 49_792, HINT)).toThrow(/browser tab/)
+  })
+
+  it('allows the largest MAG anyone actually opens', () => {
+    // ~6,600 bins is the biggest genome in the Hum53 reference file at 1 kb.
+    expect(() => checkBrowserDenseSize(6_600, 6_600, HINT)).not.toThrow()
+    expect(() => checkBrowserDenseSize(10_000, 10_000, HINT)).not.toThrow()
+  })
+
+  it('says what it refused and what the limit is', () => {
+    let message = ''
+    try {
+      checkBrowserDenseSize(20_000, 20_000, HINT)
+    } catch (error) {
+      message = (error as ViewerError).message
+    }
+    expect(message).toContain('20000×20000')
+    expect(message).toContain('400 million cells')
+    expect(message).toContain('10000 bins per axis')
+    expect(message).toContain(HINT)
+  })
+
+  it('carries the same code, so the UI keeps one refusal screen', () => {
+    try {
+      checkBrowserDenseSize(50_000, 50_000, HINT)
+      expect.unreachable()
+    } catch (error) {
+      expect((error as ViewerError).code).toBe('dense-too-large')
+      expect((error as ViewerError).detail['where']).toBe('browser')
+    }
+  })
+})
+
+describe('the canvas side limit', () => {
+  it('refuses an axis no canvas can be, however few cells it is', () => {
+    // Human chr1 at 1 kb is 248,957 bins. Against 300 columns that is 7.5e7
+    // cells — inside the cell budget — and still unrasterisable: a canvas is at
+    // most 32,767 pixels on a side.
+    expect(() => checkBrowserDenseSize(248_957, 300, HINT)).toThrowError(/cannot be rasterised/)
+    expect(() => checkBrowserDenseSize(300, 248_957, HINT)).toThrowError(/cannot be rasterised/)
+  })
+
+  it('lets a long block through while it is still drawable', () => {
+    expect(() => checkBrowserDenseSize(32_767, 3_000, HINT)).not.toThrow()
+    expect(() => checkBrowserDenseSize(32_768, 3_000, HINT)).toThrow(ViewerError)
+  })
+
+  it('names the axis and the limit', () => {
+    let message = ''
+    try {
+      checkBrowserDenseSize(248_957, 300, HINT)
+    } catch (error) {
+      message = (error as ViewerError).message
+    }
+    expect(message).toContain('248957-bin axis')
+    expect(message).toContain('32767 pixels on a side')
   })
 })
