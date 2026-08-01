@@ -23,53 +23,19 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView } from '../render/colorbar'
 import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
-import {
-  DEFAULT_PLOT_OPTIONS,
-  HeatmapView,
-  type Cell,
-  type PlotOptions,
-  type SeparatorSet,
-} from '../render/heatmap'
+import { HeatmapView, type Cell, type PlotOptions, type SeparatorSet } from '../render/heatmap'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { button, el, field, fmt } from './dom'
+import {
+  PLOT_OPTION_LABELS,
+  getPlotOptions,
+  setPlotOption,
+  subscribePlotOptions,
+  type PlotOptionKey,
+} from './plotOptions'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
-
-/**
- * Overlay state is a *preference*, not part of the view.
- *
- * It is not in the URL hash: §5.5 shares what is being looked at, and whether
- * the recipient likes guide lines is not that. But the panel is rebuilt on
- * every navigation, so holding it in the instance would lose the choice the
- * moment you clicked a cell — hence `localStorage`, next to the theme, rather
- * than the per-session `state/UiMemory`.
- */
-const PLOT_OPTIONS_KEY = 'metacooler-viewer:plot-options'
-
-/** Stored state outlives the code that wrote it, so every field is checked. */
-function readPlotOptions(): PlotOptions {
-  try {
-    const raw = window.localStorage.getItem(PLOT_OPTIONS_KEY)
-    if (raw === null) return { ...DEFAULT_PLOT_OPTIONS }
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) return { ...DEFAULT_PLOT_OPTIONS }
-    const record = parsed as Record<string, unknown>
-    const pick = (key: keyof PlotOptions): boolean =>
-      typeof record[key] === 'boolean' ? (record[key] as boolean) : DEFAULT_PLOT_OPTIONS[key]
-    return { dividers: pick('dividers'), labels: pick('labels'), crosshair: pick('crosshair') }
-  } catch {
-    return { ...DEFAULT_PLOT_OPTIONS }
-  }
-}
-
-function writePlotOptions(options: PlotOptions): void {
-  try {
-    window.localStorage.setItem(PLOT_OPTIONS_KEY, JSON.stringify(options))
-  } catch {
-    /* a browser that refuses storage still honours the toggle for this session */
-  }
-}
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -118,6 +84,8 @@ export class MatrixPanel {
   private readonly autoVmax: HTMLInputElement
   private readonly overlay: HTMLElement
   private readonly plotOptionsEl: HTMLElement
+  private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
+  private readonly unsubscribePlotOptions: () => void
   private readonly observer: ResizeObserver | null
 
   private data: MatrixResult | null = null
@@ -144,9 +112,8 @@ export class MatrixPanel {
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
-    const plot = readPlotOptions()
     this.heatmap = new HeatmapView(this.canvas, {
-      plotOptions: plot,
+      plotOptions: getPlotOptions(),
       // Contig labels are drawn only below the Python threshold; above it they
       // would be a grey smear rather than information (`ops/show.py`).
       maxLabels: MAX_CATEGORICAL_TICKS,
@@ -209,20 +176,15 @@ export class MatrixPanel {
     ]
 
     /**
-     * One overlay toggle. Pressed state lives on `aria-pressed` rather than on
-     * a class, so the control announces itself correctly and the stylesheet has
-     * one thing to key off.
+     * One overlay toggle. It *writes* to the shared store and *reads* from the
+     * subscription below, so a toggle flipped from the command palette lights
+     * the same button up — the button never holds the state itself.
      */
-    const optionToggle = (key: keyof PlotOptions, label: string, hint: string): HTMLElement => {
+    const optionToggle = (key: PlotOptionKey): HTMLElement => {
+      const { label, hint } = PLOT_OPTION_LABELS[key]
       const node = el('button', { class: 'btn btn-toggle', type: 'button', text: label, title: hint })
-      const paint = (): void => node.setAttribute('aria-pressed', String(plot[key]))
-      node.addEventListener('click', () => {
-        plot[key] = !plot[key]
-        this.heatmap.setPlotOptions({ [key]: plot[key] })
-        writePlotOptions(plot)
-        paint()
-      })
-      paint()
+      node.addEventListener('click', () => setPlotOption(key, !getPlotOptions()[key]))
+      this.optionButtons.set(key, node)
       return node
     }
 
@@ -233,11 +195,16 @@ export class MatrixPanel {
       el(
         'div',
         { class: 'plot-option-row' },
-        optionToggle('crosshair', 'crosshair', 'Guide lines through the cell under the pointer.'),
-        optionToggle('dividers', 'dividers', 'Contig and genome boundaries, as `metacooler show` draws them.'),
-        optionToggle('labels', 'labels', 'Block names in the gutters. Off gives the gutters back to the plot.'),
+        optionToggle('crosshair'),
+        optionToggle('dividers'),
+        optionToggle('labels'),
       ),
     )
+    this.paintPlotOptions(getPlotOptions())
+    this.unsubscribePlotOptions = subscribePlotOptions((options) => {
+      this.heatmap.setPlotOptions(options)
+      this.paintPlotOptions(options)
+    })
 
     if (options.levels && options.levels.length > 1) {
       const levelSelect = el('select', { class: 'select' })
@@ -304,8 +271,16 @@ export class MatrixPanel {
     })
   }
 
-  /** Release the resize observer and the canvas listeners. */
+  /** Reflect the shared overlay state on the buttons. */
+  private paintPlotOptions(options: PlotOptions): void {
+    for (const [key, node] of this.optionButtons) {
+      node.setAttribute('aria-pressed', String(options[key]))
+    }
+  }
+
+  /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
+    this.unsubscribePlotOptions()
     this.observer?.disconnect()
     this.heatmap.detach()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
