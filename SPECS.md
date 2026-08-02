@@ -334,6 +334,13 @@ Both bounds are overridable, as one clip range: a two-handled slider over the bl
 extent, with either bound also typeable, and one control back to auto. The URL carries `vmin` and
 `vmax` independently, in transformed units, and their absence means auto.
 
+**The percentile is taken over the pixels that are drawn.** Above §7.2's raster
+cap a block is pooled, one pixel to many cells, and a scale fitted to the cells
+would describe a population no pixel on screen belongs to. Below the cap nothing
+is pooled, the two are the same set, and the resolved bounds are bit-identical —
+which is where the parity above actually lives, since `metacooler show` renders
+at a size that never pools.
+
 The rule above is for **raw counts**, where zero is a true floor. It does not survive balancing
 (§6.4), whose values are fractions: `log10` of them is negative almost everywhere — on a 10 kb *E.
 coli* map, 0.4% of cells transform positive and a `vmin` of 0 clips the other 99.6% to white. A
