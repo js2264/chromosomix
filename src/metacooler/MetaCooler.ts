@@ -10,6 +10,7 @@
  * never `/bins` at all (§3.3).
  */
 
+import { yieldToEventLoop } from '../async'
 import { UNBINNED_NAME } from '../constants'
 import type { StorageMode } from '../constants'
 import { MetaCoolerFormatError, truncateNames, ViewerError } from '../errors'
@@ -598,8 +599,9 @@ export class MetaCooler {
       const keepGoing = options.onChunk(chunk)
       options.onProgress?.(hi, total)
       if (keepGoing === false) return
-      // Yield to the event loop so a cancel message can actually be delivered.
-      await Promise.resolve()
+      // A *real* yield, not `await Promise.resolve()`: the cancel arrives as a
+      // message, and a microtask never lets the message queue run (`../async`).
+      await yieldToEventLoop()
     }
   }
 

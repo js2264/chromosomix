@@ -86,8 +86,13 @@ export class ContigsTable {
           class: 'hint',
           text:
             options.hint ??
+            // 0-based and half-open, because that is what the reader does:
+            // cooler's `parse_region` applies no 1-based conversion despite the
+            // UCSC-looking syntax, and `metacooler/range.ts` mirrors the code
+            // rather than the docstrings. Saying "1-based" here put every
+            // hand-typed start one base off the region the CLI would load.
             'Click a contig to open it as a region. Add coordinates in the region box ' +
-              'to narrow it further (contig:start-end, 1-based and fully closed).',
+              'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
         }),
       ),
       this.table.el,

@@ -194,6 +194,22 @@ export interface AxisGroup {
   start: number
   /** One past the last row/column of the group within the block. */
   end: number
+  /**
+   * Absolute bin index at which this group's contig (or genome) *itself*
+   * begins, which is not in general the bin the block begins at.
+   *
+   * `start` is block-local, so `(offset - start) * binsize` measures from the
+   * left edge of the picture. That is the same thing as a position in the
+   * contig only when the block starts on a contig boundary — true for a genome
+   * view and for a whole contig, false for `contig:start-end`, where the block
+   * begins at `chrom_offset[c] + floor(start / binsize)` and the readout
+   * restarted at zero. A base-pair position is
+   * `(rowExtent[0] + offset - unitStart) * binsize`.
+   *
+   * Absent above bin level, where a cell *is* a whole contig or genome and has
+   * no position inside anything.
+   */
+  unitStart?: number
 }
 
 export interface MatrixResult {

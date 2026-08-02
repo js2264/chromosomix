@@ -397,7 +397,17 @@ class App {
   // Opening
   // -------------------------------------------------------------------------
 
-  private async open(uri: string, source: SourceSpec): Promise<void> {
+  /**
+   * Open a file and mount the view the caller asked for.
+   *
+   * `carry` is the view state a *redirect* is forwarding. Opening an `.mcool`
+   * or `.mmetacool` at its root lands on one of its entries under a different
+   * URI, and without carrying the request across that hop the comparison below
+   * (`wanted.uri === uri`) can never match, so every shared link to a
+   * collection root lost its view, genome, region and colour scale on the way
+   * in (spec §5.5).
+   */
+  private async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
@@ -466,7 +476,7 @@ class App {
       // A link may already have named a view inside this file (§5.5); honour it
       // rather than bouncing the recipient to the landing table.
       const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
-      const wanted = this.store.state
+      const wanted = carry ?? this.store.state
       const target =
         wanted !== null && wanted.uri === uri ? wanted : landingState(uri, rootView)
       const willNotify = !viewStateEquals(target, this.store.state)
@@ -483,8 +493,16 @@ class App {
       // handing back an error about a URI syntax they did not use.
       const landing = firstEntry(err)
       if (landing !== null) {
+        const entryUri = `${splitUri(uri).path}::${landing.group}/${landing.entry}`
+        // The request was made against the collection's root URI; the file that
+        // answers it is one of its entries. Rewriting the URI is the whole of
+        // the translation — a region, a colour clip and a level all mean the
+        // same thing inside the entry as they did in the link.
+        const requested = carry ?? this.store.state
+        const forward =
+          requested !== null && requested.uri === uri ? { ...requested, uri: entryUri } : undefined
         this.opening = null
-        await this.open(`${splitUri(uri).path}::${landing.group}/${landing.entry}`, source)
+        await this.open(entryUri, source, forward)
         return
       }
       this.showError(err, uri, source)

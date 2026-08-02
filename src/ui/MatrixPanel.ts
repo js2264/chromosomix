@@ -24,7 +24,7 @@ import { MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
 import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
 import { HeatmapView, type Cell, type PlotOptions, type SeparatorSet } from '../render/heatmap'
-import { inverseTransform, valueExtentOf } from '../render/scale'
+import { inverseTransform } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
@@ -352,7 +352,6 @@ export class MatrixPanel {
     this.titleNode.textContent = title
     this.heatmap.setMatrix(toDense(data), separatorsFor(data))
     this.heatmap.setScale(this.scale())
-    this.syncClipExtent()
     this.setBusy(false)
     this.schedule()
   }
@@ -379,7 +378,6 @@ export class MatrixPanel {
 
   private rescale(): void {
     this.heatmap.setScale(this.scale())
-    this.syncClipExtent()
     this.options.onScaleChange?.({
       transform: this.transform,
       colormap: this.colormap,
@@ -391,17 +389,23 @@ export class MatrixPanel {
 
   /**
    * Re-span the clip slider over the loaded block, which is what makes both
-   * handles reach every value on screen. The transform decides the units, so
-   * this runs on a new block *and* on a new transform — but on nothing else:
-   * it is a pass over every cell, and dragging a handle emits an event per
-   * frame through the same `rescale`.
+   * handles reach every value on screen.
+   *
+   * The extent comes from the rasteriser, which measured it while pooling, so
+   * this is a field read rather than the second full pass over the block it
+   * used to be. It therefore has to run *after* a draw, and it still updates
+   * only when the block or the transform changed — the units are the
+   * transform's, and dragging a handle must not re-span the track under the
+   * hand doing the dragging.
    */
   private syncClipExtent(): void {
     const data = this.data
     if (data === null) return
     if (this.extentSource?.data === data && this.extentSource.transform === this.transform) return
+    const extent = this.heatmap.displayExtent
+    if (extent === null) return
     this.extentSource = { data, transform: this.transform }
-    this.clip.setExtent(valueExtentOf(data.values, this.transform, this.options.balance === true))
+    this.clip.setExtent(extent)
   }
 
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
@@ -410,6 +414,10 @@ export class MatrixPanel {
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
       this.heatmap.draw()
+      // After the draw, because both of these read numbers the rasteriser
+      // resolved: the extent it measured while pooling, and the bounds it
+      // actually used.
+      this.syncClipExtent()
       // `effectiveScale` is the scale the raster actually used, so this is where
       // the auto rule's numbers become visible — in the colourbar and, equally,
       // in the clip boxes, which is what a reader nudges rather than invents.
@@ -442,8 +450,12 @@ export class MatrixPanel {
     const data = this.data
     const rowGroup = groupAt(data.rowGroups, cell.row)
     const colGroup = groupAt(data.colGroups, cell.col)
-    const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize)
-    const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize)
+    // Positions are measured in absolute bin space, so each axis needs the bin
+    // its own block starts at — they differ on a rectangular two-contig block.
+    const rowStart = data.rowExtent[0]
+    const colStart = data.colExtent[0]
+    const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
+    const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize, colStart)
     const count = Number.isNaN(cell.value) ? 'NaN (unbalanced)' : fmt.num(cell.value)
 
     setReadout(`${rowLabel}  ×  ${colLabel}   count ${count}`)
@@ -461,8 +473,8 @@ export class MatrixPanel {
           el('span', { class: 'cell-tip-x', text: '×' }),
           el('span', { class: 'cell-tip-name', text: colGroup?.label ?? '—' }),
         ]
-    const rowPos = positionIn(rowGroup, cell.row, data.level, this.options.binsize)
-    const colPos = positionIn(colGroup, cell.col, data.level, this.options.binsize)
+    const rowPos = positionIn(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
+    const colPos = positionIn(colGroup, cell.col, data.level, this.options.binsize, colStart)
     this.tooltip.replaceChildren(
       el('div', { class: 'cell-tip-pair' }, ...heading),
       ...(rowPos === null || colPos === null
@@ -509,6 +521,27 @@ export function groupAt(groups: AxisGroup[], offset: number): AxisGroup | undefi
 }
 
 /**
+ * Base pairs from the start of the **contig** to the start of a cell.
+ *
+ * `group.start` is block-local, so `(offset - group.start) * binsize` measures
+ * from the left edge of the picture rather than from the contig — the same
+ * number only when the block begins on a contig boundary. A region view of
+ * `contig:139005-199005` begins at bin 139, and the readout used to call that
+ * cell 0 bp when it is 139 kb into the contig. `unitStart` is where the contig
+ * itself begins, so the absolute bin `blockStart + offset` resolves correctly
+ * (§3.3 arithmetic throughout; `/bins` is never consulted).
+ */
+export function bpWithin(
+  group: AxisGroup,
+  offset: number,
+  blockStart: number,
+  binsize: number,
+): number {
+  const first = group.unitStart ?? blockStart + group.start
+  return (blockStart + offset - first) * binsize
+}
+
+/**
  * One side of the hover readout. At bin level the position inside the contig is
  * exact arithmetic from the bin size (§3.3) — `/bins` is never consulted.
  */
@@ -517,10 +550,11 @@ function describeAxis(
   offset: number,
   level: 'bin' | 'contig' | 'genome',
   binsize: number,
+  blockStart: number,
 ): string {
   if (group === undefined) return '—'
   if (level !== 'bin') return group.label
-  return `${group.label}:${fmt.bp((offset - group.start) * binsize)}`
+  return `${group.label}:${fmt.bp(bpWithin(group, offset, blockStart, binsize))}`
 }
 
 /**
@@ -534,9 +568,10 @@ function positionIn(
   offset: number,
   level: 'bin' | 'contig' | 'genome',
   binsize: number,
+  blockStart: number,
 ): string | null {
   if (group === undefined || level !== 'bin') return null
-  return fmt.bp((offset - group.start) * binsize)
+  return fmt.bp(bpWithin(group, offset, blockStart, binsize))
 }
 
 /**

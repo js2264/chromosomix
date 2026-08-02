@@ -32,7 +32,7 @@ import {
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
-import { createSource } from './sources'
+import { createSource, releaseSources } from './sources'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -438,6 +438,9 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
     case 'close':
       session?.mc.close()
       session = null
+      // The handle's `close` returns the *borrowed* source; this is what
+      // actually releases the mount and its chunk cache (`worker/sources.ts`).
+      releaseSources()
       return null
   }
 }

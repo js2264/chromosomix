@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { scoreCommand } from '@/ui/CommandPalette'
-import { matchesKeys } from '@/ui/commands'
+import { keyLabel, matchesKeys } from '@/ui/commands'
 import { contigOf, neighbour } from '@/ui/labels'
 import type { Command } from '@/ui/commands'
 
@@ -95,5 +95,31 @@ describe('stepping to a neighbour', () => {
     // A file may legally carry `NODE_1:2` as a name; reading it as coordinates
     // on `NODE_1` would step through the wrong list.
     expect(contigOf('NODE_1:2', ['NODE_1', 'NODE_1:2'])).toBe('NODE_1:2')
+  })
+})
+
+/**
+ * Under Node there is no `navigator`, so `isMac()` is false and the labels come
+ * out in their `Ctrl+` form — which is the form that was wrong.
+ */
+describe('keyLabel', () => {
+  it('joins the modifier once', () => {
+    // `mod` used to render as the string 'Ctrl+' and then be joined on '+',
+    // so every non-Mac browser showed `Ctrl++P` in the action bar and in the
+    // shortcuts dialog.
+    expect(keyLabel('mod+p')).toBe('Ctrl+P')
+  })
+
+  it('upper-cases a single-character key and leaves named keys alone', () => {
+    expect(keyLabel('g')).toBe('G')
+    expect(keyLabel('?')).toBe('?')
+    expect(keyLabel('Enter')).toBe('Enter')
+  })
+
+  it('has no stray separator anywhere', () => {
+    for (const keys of ['mod+p', 'g', 'c', 'w', '[', ']', 'x', 'd', 'l', 'b', 't', '?']) {
+      expect(keyLabel(keys)).not.toContain('++')
+      expect(keyLabel(keys).endsWith('+')).toBe(false)
+    }
   })
 })

@@ -21,12 +21,21 @@ import type { SourceSpec } from './protocol'
  * property of the code rather than a promise in the README (spec §11).
  */
 export async function createSource(spec: SourceSpec): Promise<ByteSource> {
-  if (spec.kind === 'local') return new LocalFileSource(spec.file)
+  if (spec.kind === 'local') {
+    // A dropped file replaces whatever was retained; nothing else would ever
+    // free a 64 MiB chunk cache for a bucket the user has finished with.
+    releaseSources()
+    return new LocalFileSource(spec.file)
+  }
+  const reused = borrowRemote(spec.url)
+  if (reused !== null) return reused
   try {
-    return await RemoteRangeSource.open(spec.url)
+    return keep(spec.url, await RemoteRangeSource.open(spec.url))
   } catch (err) {
     if (err instanceof ViewerError && err.code === 'remote-compressed') {
-      return await wholeObject(spec.url, err)
+      // Retained like any other remote source, and here it matters most: this
+      // path has already downloaded the whole object once.
+      return keep(spec.url, await wholeObject(spec.url, err))
     }
     if (err instanceof ViewerError) throw err
     // A failed probe is almost always one of two things, and the two need
@@ -41,6 +50,71 @@ export async function createSource(spec: SourceSpec): Promise<ByteSource> {
       { url: spec.url, host },
     )
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reusing one remote file across opens
+// ---------------------------------------------------------------------------
+
+/**
+ * The remote file this worker currently has probed and mounted, if any.
+ *
+ * Opening a collection at its root is *two* opens of the same object: the first
+ * discovers that an `.mcool` or `.mmetacool` is a container and names its
+ * entries, the second opens the chosen entry, which is a group in the very same
+ * file. Building a second {@link RemoteRangeSource} for it re-issued the `HEAD`
+ * probe, the `bytes=0-0` range probe and every metadata chunk the first open had
+ * already fetched — measured at 10 requests against 6 for the same file
+ * addressed at its entry, with about 1.6 MB re-downloaded.
+ *
+ * So the source outlives the handle that borrowed it. It is released when a
+ * *different* URL is opened, or when the session is closed.
+ */
+let remote: { url: string; source: ByteSource } | null = null
+
+/** Retain `source` as the worker's one remote file, and lend it out. */
+function keep(url: string, source: ByteSource): ByteSource {
+  remote = { url, source }
+  return retained(source)
+}
+
+/**
+ * A view of `source` whose `close()` does nothing.
+ *
+ * `Hdf5Handle` documents that it takes ownership of its byte source and closes
+ * it, and that contract is worth keeping: it is what guarantees a dropped file
+ * is released. The lending is expressed here instead, where the lifetime is
+ * actually known, rather than by weakening the handle.
+ */
+function retained(source: ByteSource): ByteSource {
+  return {
+    id: source.id,
+    size: source.size,
+    mount: () => source.mount(),
+    stats: () => source.stats(),
+    close: () => {
+      // Deliberately empty: {@link releaseSources} owns this one.
+    },
+  }
+}
+
+/** The mounted remote file for `url`, if this worker still holds it. */
+function borrowRemote(url: string): ByteSource | null {
+  if (remote === null) return null
+  if (remote.url !== url) {
+    releaseSources()
+    return null
+  }
+  return retained(remote.source)
+}
+
+/**
+ * Drop the retained remote file. Called when the session closes, and whenever a
+ * different URL is opened — one file at a time is all the worker ever holds.
+ */
+export function releaseSources(): void {
+  remote?.source.close()
+  remote = null
 }
 
 /**

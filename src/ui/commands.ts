@@ -35,14 +35,20 @@ export function isMac(): boolean {
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 }
 
-/** `mod+p` → `⌘P` or `Ctrl+P`, for display. */
+/**
+ * `mod+p` → `⌘P` or `Ctrl+P`, for display.
+ *
+ * The separator is joined *between* parts, so `mod` renders as the bare key
+ * name and never carries its own trailing `+`. Spelling it `'Ctrl+'` and then
+ * joining on `'+'` is what produced `Ctrl++P` in the action bar and in the
+ * shortcuts dialog on every non-Mac browser.
+ */
 export function keyLabel(keys: string): string {
-  const mod = isMac() ? '⌘' : 'Ctrl+'
+  const mac = isMac()
   return keys
     .split('+')
-    .map((part) => (part === 'mod' ? mod : part.length === 1 ? part.toUpperCase() : part))
-    .join(isMac() ? '' : '+')
-    .replace(/\+$/, '')
+    .map((part) => (part === 'mod' ? (mac ? '⌘' : 'Ctrl') : part.length === 1 ? part.toUpperCase() : part))
+    .join(mac ? '' : '+')
 }
 
 /** Does this event match a binding such as `mod+p` or `?`. */
