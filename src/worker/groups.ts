@@ -15,14 +15,31 @@ import type { MetaCooler } from '../metacooler/MetaCooler'
 import type { Extent } from '../types'
 import type { AxisGroup } from './protocol'
 
-/** Collapse a per-cell id vector into labelled runs, in block-local offsets. */
-export function idRuns(ids: Int32Array, labelOf: (id: number) => string): AxisGroup[] {
+/**
+ * Collapse a per-cell id vector into labelled runs, in block-local offsets.
+ *
+ * `startOf` reports where each id's unit begins in *absolute* bin space, which
+ * is what lets the UI turn a cell offset back into a base-pair position even
+ * when the block starts partway into a contig (see {@link AxisGroup.unitStart}).
+ * Omitted where there is no such thing — an aggregated axis, an overview.
+ */
+export function idRuns(
+  ids: Int32Array,
+  labelOf: (id: number) => string,
+  startOf?: (id: number) => number,
+): AxisGroup[] {
   const runs: AxisGroup[] = []
   if (ids.length === 0) return runs
   let start = 0
   for (let i = 1; i <= ids.length; i++) {
     if (i === ids.length || ids[i] !== ids[start]) {
-      runs.push({ label: labelOf(ids[start]), start, end: i })
+      const id = ids[start]
+      runs.push({
+        label: labelOf(id),
+        start,
+        end: i,
+        ...(startOf === undefined ? {} : { unitStart: startOf(id) }),
+      })
       start = i
     }
   }
@@ -32,7 +49,11 @@ export function idRuns(ids: Int32Array, labelOf: (id: number) => string): AxisGr
 /** Contig runs covering a bin range. */
 export function contigRuns(mc: MetaCooler, extent: Extent): AxisGroup[] {
   const ids = mc.coords.contigsOfBins(extent[0], extent[1])
-  return idRuns(ids, (id) => mc.chromnames[id] ?? String(id))
+  return idRuns(
+    ids,
+    (id) => mc.chromnames[id] ?? String(id),
+    (id) => mc.coords.contigStartBin(id),
+  )
 }
 
 /** Genome runs covering a bin range, using the file's own `genome_id` mapping. */
@@ -40,7 +61,11 @@ export function genomeRuns(mc: MetaCooler, extent: Extent): AxisGroup[] {
   const contigs = mc.coords.contigsOfBins(extent[0], extent[1])
   const genomes = new Int32Array(contigs.length)
   for (let i = 0; i < contigs.length; i++) genomes[i] = mc.contigGenomeIds[contigs[i]]
-  return idRuns(genomes, (id) => mc.genomeNames[id] ?? String(id))
+  return idRuns(
+    genomes,
+    (id) => mc.genomeNames[id] ?? String(id),
+    (id) => mc.genomeExtent(id)[0],
+  )
 }
 
 /**

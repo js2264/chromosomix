@@ -66,6 +66,15 @@ export class Overview {
   private readonly note: HTMLElement
   private readonly panel: MatrixPanel
   private running: Cancellable<OverviewResult> | null = null
+  /**
+   * Which scan the panel is currently willing to paint.
+   *
+   * Cancellation is cooperative and therefore *late*: the worker stops at the
+   * next chunk boundary, and a scan already past its last chunk finishes and
+   * posts a result regardless. Without this counter that result painted the
+   * overview the user had just called off.
+   */
+  private generation = 0
   private level: 'genome' | 'contig' = 'genome'
 
   constructor(private readonly props: OverviewProps) {
@@ -231,6 +240,8 @@ export class Overview {
   private cancel(): void {
     this.running?.cancel()
     this.running = null
+    // Anything still in flight belongs to a generation the panel has left.
+    this.generation += 1
     this.progressBox.classList.add('hidden')
     this.gate.classList.remove('hidden')
   }
@@ -241,17 +252,22 @@ export class Overview {
     this.progressBar.value = 0
     this.progressText.textContent = 'starting…'
 
+    const generation = ++this.generation
     const task = this.props.client.cancellable<'overview'>(
       { kind: 'overview', level: this.level },
       (done, total) => {
+        if (generation !== this.generation) return
         this.progressBar.value = total === 0 ? 0 : done / total
         this.progressText.textContent = `${fmt.int(done)} of ${fmt.int(total)} pixels`
       },
     )
     this.running = task
     try {
-      this.show(await task.promise)
+      const result = await task.promise
+      if (generation !== this.generation) return
+      this.show(result)
     } catch (err) {
+      if (generation !== this.generation) return
       if (isCancellation(err)) {
         this.progressText.textContent = 'cancelled'
         this.progressBox.classList.add('hidden')
@@ -260,8 +276,10 @@ export class Overview {
       }
       this.props.onError(err)
     } finally {
-      this.running = null
-      this.progressBox.classList.add('hidden')
+      if (generation === this.generation) {
+        this.running = null
+        this.progressBox.classList.add('hidden')
+      }
     }
   }
 
@@ -271,12 +289,19 @@ export class Overview {
     this.gate.classList.add('hidden')
     this.progressBox.classList.remove('hidden')
     this.progressText.textContent = 'fetching edge list…'
+    const generation = ++this.generation
     try {
-      this.show(await this.props.client.request<'overviewSidecar'>({ kind: 'overviewSidecar', url }))
+      const result = await this.props.client.request<'overviewSidecar'>({
+        kind: 'overviewSidecar',
+        url,
+      })
+      if (generation !== this.generation) return
+      this.show(result)
     } catch (err) {
+      if (generation !== this.generation) return
       this.props.onError(err)
     } finally {
-      this.progressBox.classList.add('hidden')
+      if (generation === this.generation) this.progressBox.classList.add('hidden')
     }
   }
 

@@ -281,6 +281,65 @@ export function autoRangeOf(
 }
 
 /**
+ * {@link autoRangeOf} over values that have **already** been through
+ * {@link displayValue} — the pooled raster, rather than the matrix behind it.
+ *
+ * The two agree cell for cell when nothing was pooled, because the predicates
+ * below are the display-space spelling of the raw-space ones:
+ *
+ * - `display > 0` is `raw > 0` under `log1p` and `none`, and under `log10` it
+ *   is `raw > 1`, which is what the raw-space rule selects too (`log10` clamps
+ *   everything at or below 1 to `0`);
+ * - "carries a contact" is `raw > 0 && isFinite(display)`; every transform is
+ *   monotone in `raw`, so that is `isFinite(display) && display > display(0)`
+ *   — and `display(0)` is `-Infinity` exactly in the balanced `log10` case the
+ *   fallback exists for.
+ *
+ * Where pooling *has* happened the two deliberately differ, and that is the
+ * point: the percentile has to describe the pixels being drawn. Scaling
+ * 146 million cells and then drawing the maximum of every 3 × 3 block put
+ * ~8.6% of the picture above the 99th percentile instead of 1%, so a whole
+ * yeast genome came out visibly hotter in the browser than the same file does
+ * from `metacooler show` (spec §7.1).
+ */
+export function autoRangeOfDisplay(
+  display: ArrayLike<number>,
+  transform: Transform,
+  balanced = false,
+): ValueRange {
+  if (!balanced) {
+    const positive = collectWhere(display, (x) => x > 0)
+    if (positive.length > 0) {
+      return { vmin: 0, vmax: percentileLinear(positive, AUTO_VMAX_PERCENTILE) }
+    }
+  }
+  const floor = displayValue(0, transform, balanced)
+  const contacts = collectWhere(display, (x) => Number.isFinite(x) && x > floor)
+  if (contacts.length === 0) return { vmin: 0, vmax: 1.0 }
+  const vmin = percentileLinear(contacts, AUTO_VMIN_PERCENTILE)
+  const vmax = percentileLinear(contacts, AUTO_VMAX_PERCENTILE)
+  return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
+}
+
+/** The kept values, sorted ascending. Two passes so the array is sized once. */
+function collectWhere(
+  values: ArrayLike<number>,
+  keep: (x: number) => boolean,
+): Float32Array {
+  const n = values.length
+  let count = 0
+  for (let i = 0; i < n; i++) if (keep(values[i])) count++
+  const out = new Float32Array(count)
+  let k = 0
+  for (let i = 0; i < n; i++) {
+    const x = values[i]
+    if (keep(x)) out[k++] = x
+  }
+  out.sort()
+  return out
+}
+
+/**
  * The full extent of the drawable values, which is what a clip *slider* spans —
  * as opposed to {@link autoRangeOf}, which is where its two handles start.
  *

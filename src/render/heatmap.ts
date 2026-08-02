@@ -13,9 +13,9 @@
  */
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
-import type { ColorScale, DenseMatrix, Separator } from '../types'
+import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { Scale, autoRangeOf, displayValue } from './scale'
+import { Scale, autoRangeOfDisplay, displayValue, type ValueRange } from './scale'
 
 // ---------------------------------------------------------------------------
 // Rasterisation — pure, no canvas, so it is testable under Node
@@ -84,28 +84,50 @@ export function rasterize(
   scale: ColorScale,
   options: { maxDim?: number } = {},
 ): Raster {
-  const { nrows, ncols, values } = matrix
+  return colorize(poolDisplay(matrix, scale, options), scale)
+}
 
+/**
+ * One display value per raster pixel, plus the extent of the drawable ones.
+ *
+ * This is the only pass over the matrix, and it is what the two steps after it
+ * work from. Splitting it out is what makes a colour change cheap: the pooled
+ * values depend on the matrix, the transform and whether it is balanced, and on
+ * nothing else, so changing a colormap or dragging a clip handle re-colours a
+ * few million pooled pixels instead of re-scanning a hundred million cells.
+ */
+export interface PooledDisplay {
+  width: number
+  height: number
+  strideX: number
+  strideY: number
+  /** `width * height` display values; `NaN` where nothing was drawable. */
+  values: Float32Array
+  /** Extent of the finite values, or `null` when there are none. */
+  extent: ValueRange | null
+  /** What the pooling was computed for; the cache key. */
+  transform: Transform
+  balanced: boolean
+}
+
+export function poolDisplay(
+  matrix: DenseMatrix,
+  scale: ColorScale,
+  options: { maxDim?: number } = {},
+): PooledDisplay {
+  const { nrows, ncols, values } = matrix
   const balanced = scale.balanced === true
-  // Transformed on the fly rather than into an `n`-cell array: the transform is
-  // three arithmetic ops and the copy was the second-largest allocation in the
-  // renderer, kept alive for the lifetime of the raster and read by nobody.
-  const auto =
-    Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)
-      ? null
-      : autoRangeOf(values, scale.transform, balanced)
-  const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
-  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : (auto?.vmax ?? 1)
-  const span = vmax - vmin
+  const transform = scale.transform
 
   const maxDim = options.maxDim ?? RASTER_MAX_DIM
   const strideY = rasterStride(nrows, maxDim)
   const strideX = rasterStride(ncols, maxDim)
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
-  const lut = applyColormap(scale.colormap)
-  const data = new Uint8ClampedArray(width * height * 4)
+  const pooled = new Float32Array(width * height)
 
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
   for (let ry = 0; ry < height; ry++) {
     const y0 = ry * strideY
     const y1 = Math.min(y0 + strideY, nrows)
@@ -125,36 +147,82 @@ export function rasterize(
         for (let x = x0; x < x1; x++) {
           const raw = values[row + x]
           if (Number.isNaN(raw)) continue
-          const t = displayValue(raw, scale.transform, balanced)
+          const t = displayValue(raw, transform, balanced)
           if (Number.isNaN(best) || t > best) best = t
         }
       }
-
-      const o = (ry * width + rx) * 4
-      if (Number.isNaN(best)) {
-        data[o + 3] = 0
-        continue
+      pooled[ry * width + rx] = best
+      if (Number.isFinite(best)) {
+        if (best < lo) lo = best
+        if (best > hi) hi = best
       }
-      // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
-      // dividing by zero, so a constant matrix renders as the colormap's low
-      // end. `-Infinity` — a zero cell under `log10` of a balanced block — is
-      // below every bound there is, which is that same low end.
-      const k = colormapIndex(
-        span > 0 && Number.isFinite(best) ? (best - vmin) / span : 0,
-      )
-      if (k < 0) {
-        data[o + 3] = 0
-        continue
-      }
-      const s = k * 4
-      data[o] = lut[s]
-      data[o + 1] = lut[s + 1]
-      data[o + 2] = lut[s + 2]
-      data[o + 3] = lut[s + 3]
     }
   }
 
-  return { width, height, data, scale: { ...scale, vmin, vmax }, strideX, strideY }
+  return {
+    width,
+    height,
+    strideX,
+    strideY,
+    values: pooled,
+    extent: lo <= hi ? { vmin: lo, vmax: hi } : null,
+    transform,
+    balanced,
+  }
+}
+
+/**
+ * Colour a pooled raster. Either bound is honoured when finite and resolved by
+ * {@link autoRangeOfDisplay} otherwise — pass `NaN` for both to ask for the
+ * `metacooler show` default.
+ *
+ * They resolve *together*, because the fallback rule the CLI never reaches
+ * moves both: a `vmin` pinned at `0` beside an auto `vmax` is what made `log10`
+ * of a balanced matrix come out blank.
+ */
+export function colorize(pooled: PooledDisplay, scale: ColorScale): Raster {
+  const { width, height, values } = pooled
+  const auto =
+    Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)
+      ? null
+      : autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
+  const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
+  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : (auto?.vmax ?? 1)
+  const span = vmax - vmin
+
+  const lut = applyColormap(scale.colormap)
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let i = 0; i < values.length; i++) {
+    const best = values[i]
+    const o = i * 4
+    if (Number.isNaN(best)) {
+      data[o + 3] = 0
+      continue
+    }
+    // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
+    // dividing by zero, so a constant matrix renders as the colormap's low
+    // end. `-Infinity` — a zero cell under `log10` of a balanced block — is
+    // below every bound there is, which is that same low end.
+    const k = colormapIndex(span > 0 && Number.isFinite(best) ? (best - vmin) / span : 0)
+    if (k < 0) {
+      data[o + 3] = 0
+      continue
+    }
+    const s = k * 4
+    data[o] = lut[s]
+    data[o + 1] = lut[s + 1]
+    data[o + 2] = lut[s + 2]
+    data[o + 3] = lut[s + 3]
+  }
+
+  return {
+    width,
+    height,
+    data,
+    scale: { ...scale, vmin, vmax },
+    strideX: pooled.strideX,
+    strideY: pooled.strideY,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +503,12 @@ export class HeatmapView {
 
   private matrix: DenseMatrix | null = null
   private raster: Raster | null = null
+  /**
+   * The pooled display values behind {@link raster}, kept so that a change of
+   * colormap or of clip bounds re-colours them instead of walking the matrix
+   * again. Invalidated by a new matrix, a new transform, or balancing.
+   */
+  private pooled: PooledDisplay | null = null
   private offscreen: RasterCanvas | null = null
   private separators: SeparatorSet = EMPTY_SEPARATORS
   private colorScale: ColorScale
@@ -680,6 +754,7 @@ export class HeatmapView {
       ? { rows: separators, cols: separators }
       : separators
     this.dirtyRaster = true
+    this.pooled = null
     this.hoverCell = null
     this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
     this.colScale.setFull([0, Math.max(1, matrix.ncols)])
@@ -702,6 +777,24 @@ export class HeatmapView {
   /** The scale actually in force, with `vmax` resolved. Drives the colourbar. */
   get effectiveScale(): ColorScale {
     return this.raster?.scale ?? this.colorScale
+  }
+
+  /**
+   * Extent of the values actually drawn, in transformed units — what the clip
+   * slider spans.
+   *
+   * Read off the pooled raster rather than recomputed from the matrix. It is
+   * the same number when nothing was pooled, it is the *right* number when
+   * something was (the slider should reach the pixels on screen, not values no
+   * pixel shows), and it costs nothing: the pooling pass already tracked it.
+   * The pass it replaces was a second full walk of the block — two seconds on a
+   * whole yeast genome, on the main thread, for a control most users never
+   * touch.
+   *
+   * `null` before the first draw, and when nothing is drawable at all.
+   */
+  get displayExtent(): ValueRange | null {
+    return this.pooled?.extent ?? null
   }
 
   /** The block currently displayed. */
@@ -993,7 +1086,15 @@ export class HeatmapView {
 
   private rasterizeNow(): void {
     if (this.matrix === null) return
-    const raster = rasterize(this.matrix, this.colorScale)
+    const balanced = this.colorScale.balanced === true
+    if (
+      this.pooled === null ||
+      this.pooled.transform !== this.colorScale.transform ||
+      this.pooled.balanced !== balanced
+    ) {
+      this.pooled = poolDisplay(this.matrix, this.colorScale)
+    }
+    const raster = colorize(this.pooled, this.colorScale)
     const canvas = createRasterCanvas(raster.width, raster.height)
     canvas.width = raster.width
     canvas.height = raster.height
