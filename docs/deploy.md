@@ -48,12 +48,20 @@ missing file.
 
 ## The demo files
 
-`public/demo/` holds three MM133 datasets — `MM133.metacool` (14 MB), `MM133.mmetacool` (35 MB) and
-`MM133.cool` (14 MB) — so the deployed site opens something real without anyone first standing up a
-bucket. Vite copies `public/` into `dist/` verbatim, so they land at:
+`public/demo/` holds four published datasets, so the deployed site opens something real without
+anyone first standing up a bucket:
+
+| file | data | provenance |
+| --- | --- | --- |
+| `Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
+| `Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
+| `Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
+| `Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
+
+Vite copies `public/` into `dist/` verbatim, so they land at:
 
 ```
-https://<owner>.github.io/<repo>/demo/MM133.metacool
+https://<owner>.github.io/<repo>/demo/Mock_microbial_community.metacool
 ```
 
 They are deliberately **same-origin with the app**, which removes the entire class of failure
@@ -66,16 +74,16 @@ it.
 
 Two things to keep in mind:
 
-- `MM133.cool` is committed ahead of its use. The app *detects* plain cool and refuses it with a
-  message saying so until M7 lands; the file is here so that work has a fixture on the deployed
-  site the day it does.
-- This is ~60 MB in git history and in every Pages artifact. It is a fixed cost, not a per-release
+- The two `.mcool`s carry no genome layer, and that is deliberate: they are what exercises the
+  plain-cooler path on the deployed site — the resolution ladder landing on its finest level, and
+  a contig-only view with the genomes table absent rather than empty.
+- This is ~112 MB in git history and in every Pages artifact. It is a fixed cost, not a per-release
   one — keep it that way. New or larger datasets belong on a bucket and in the catalog, not here.
 
-They are offered as buttons on the picker (`ui/examples.ts`), with URLs built from `BASE_URL` and
-made absolute against the page: the base differs between dev and Pages, and a *relative* URI in a
-shared link would not re-open, because `inferSource` follows a link only when its path is
-`http(s)://`.
+They are offered in the example dropdown on the picker (`ui/examples.ts`), with URLs built from
+`BASE_URL` and made absolute against the page: the base differs between dev and Pages, and a
+*relative* URI in a shared link would not re-open, because `inferSource` follows a link only when
+its path is `http(s)://`.
 
 ## Why Pages works at all for this app
 

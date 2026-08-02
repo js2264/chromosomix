@@ -410,7 +410,3 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
 
 - M6
 
-- M7, with specifically an option to view the FULL whole-genome (not just a region). This is currently against what specs/implementation say, but it would be nice to have an option to view the full genome in a single heatmap, even if it is very large.
-
-- [ ] Also, I want full, native support of cool/mcool files, WITHOUT HAVING TO RELY ON A METACOOLER FILE with "single genome" trick. enforce it!
-

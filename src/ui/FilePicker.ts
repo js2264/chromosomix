@@ -99,7 +99,7 @@ export class FilePicker {
     // catalogue grows. Buttons put every entry on screen at equal weight and
     // push the drop target down as the list gets longer; a select stays one
     // line at any length. Choosing opens immediately — a second "go" button
-    // beside a list of three files would be ceremony.
+    // beside a handful of files would be ceremony.
     const exampleSelect = el('select', { class: 'select select-examples' })
     const exampleNote = el('p', { class: 'hint' })
     if (props.examples && props.examples.length > 0) {
@@ -109,18 +109,19 @@ export class FilePicker {
         option.title = example.note ?? example.url
         exampleSelect.appendChild(option)
       }
-      const describe = (): void => {
-        const chosen = props.examples?.find((example) => example.url === exampleSelect.value)
-        exampleNote.textContent = chosen?.note ?? ''
-      }
       exampleSelect.addEventListener('change', () => {
-        const url = exampleSelect.value
-        if (url === '') {
-          describe()
-          return
-        }
-        describe()
-        this.urlInput.value = url
+        const chosen = props.examples?.find((example) => example.url === exampleSelect.value)
+        // Snap back to the placeholder before opening, and keep the note of
+        // what was chosen. The picker is one long-lived DOM node — going back
+        // to it (the brand link, `o`, the palette) re-shows this same element
+        // — so a select left holding its last value fires no `change` when
+        // that value is picked again, and the most likely second click on the
+        // list is the entry you just looked at. Resetting makes every choice a
+        // change; the note below is what still says which one it was.
+        exampleSelect.value = ''
+        exampleNote.textContent = chosen?.note ?? ''
+        if (chosen === undefined) return
+        this.urlInput.value = chosen.url
         this.openRemote()
       })
     }
