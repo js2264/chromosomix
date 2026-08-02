@@ -27,12 +27,15 @@ import { colorbarTicks, formatCount } from '@/render/colorbar'
 import { rasterize, separatorBlocks } from '@/render/heatmap'
 import {
   Scale,
+  autoRangeOf,
   autoVmax,
   autoVmaxOf,
+  displayValue,
   inverseTransform,
   percentileLinear,
   transformValue,
   transformValues,
+  valueExtentOf,
 } from '@/render/scale'
 import type { DenseMatrix } from '@/types'
 
@@ -171,6 +174,100 @@ describe('autoVmax', () => {
     expect(percentileLinear([1, 2], 0)).toBe(1)
     expect(percentileLinear([1, 2], 100)).toBe(2)
     expect(percentileLinear([1, 2], 50)).toBeCloseTo(1.5, 12)
+  })
+})
+
+describe('a balanced matrix under log10', () => {
+  // Balanced values are fractions, so log10 of them is negative almost
+  // everywhere — and "almost" is the trap. A real E. coli map balances a little
+  // above 1 on the diagonal, so the show() rule finds positives, anchors vmin at
+  // 0, and clips the other 99.6% of the matrix to white.
+  const balanced = [1e-5, 1e-4, 1e-3, 1e-2]
+
+  it('keeps the CLI rule for raw counts, to the bit', () => {
+    expect(autoRangeOf(Float32Array.from([0, 0, 0, 4]), 'none')).toEqual({ vmin: 0, vmax: 4 })
+    const counts = Float32Array.from([0, 1, 10, 100, 1000])
+    expect(autoRangeOf(counts, 'log10')).toEqual({
+      vmin: 0,
+      vmax: autoVmaxOf(counts, 'log10'),
+    })
+  })
+
+  it('uses the percentile range for balanced values', () => {
+    const range = autoRangeOf(Float32Array.from(balanced), 'log10', true)
+    expect(range.vmin).toBeLessThan(0)
+    expect(range.vmax).toBeLessThan(0)
+    // p1 and p99 of [-5, -4, -3, -2]; the old rule answered { vmin: 0, vmax: 1 }.
+    expect(range.vmin).toBeCloseTo(-4.97, 2)
+    expect(range.vmax).toBeCloseTo(-2.03, 2)
+  })
+
+  it('is not rescued by the handful of cells that balance above 1', () => {
+    // The shape of the real file: one cell over 1, everything else well under.
+    const withDiagonal = Float32Array.from([...balanced, 1.9])
+    const range = autoRangeOf(withDiagonal, 'log10', true)
+    expect(range.vmin).toBeLessThan(0)
+    expect(range.vmax).toBeGreaterThan(range.vmin)
+    // What the CLI rule would have said, and what made the panel blank: a floor
+    // at zero, above every value in the block but one.
+    expect(autoRangeOf(withDiagonal, 'log10', false)).toEqual({
+      vmin: 0,
+      vmax: expect.closeTo(Math.log10(1.9), 5),
+    })
+  })
+
+  it('ignores empty cells, which a sparse block is mostly made of', () => {
+    // Under log1p the zeros stay finite and in range; counting them would put
+    // both percentiles on the background and blank the panel by another route.
+    const sparse = Float32Array.from([...new Array(200).fill(0), ...balanced])
+    const range = autoRangeOf(sparse, 'log1p', true)
+    expect(range.vmin).toBeGreaterThan(0)
+    expect(range.vmax).toBeGreaterThan(range.vmin)
+  })
+
+  it('draws zero at the low end and NaN as transparent', () => {
+    expect(displayValue(0, 'log10', true)).toBe(Number.NEGATIVE_INFINITY)
+    expect(displayValue(Number.NaN, 'log10', true)).toBeNaN()
+    // Unbalanced, it is still numpy's np.where(arr > 0, log10(arr), 0.0).
+    expect(displayValue(0, 'log10')).toBe(0)
+    expect(displayValue(Number.NaN, 'log10')).toBe(0)
+  })
+
+  it('spans the colormap instead of painting one flat colour', () => {
+    const r = rasterize(block([...balanced], 2, 2), {
+      vmin: Number.NaN,
+      vmax: Number.NaN,
+      transform: 'log10',
+      colormap: 'afmhot_r',
+      balanced: true,
+    })
+    const lut = applyColormap('afmhot_r')
+    const pixel = (i: number): number[] => [...r.data.slice(i * 4, i * 4 + 4)]
+    // The blank panel was every cell at lut[0]; now only the smallest is.
+    expect(pixel(0)).toEqual([...lut.slice(0, 4)])
+    expect(pixel(3)).toEqual([...lut.slice(255 * 4, 255 * 4 + 4)])
+    expect(new Set([0, 1, 2, 3].map((i) => pixel(i).join(','))).size).toBe(4)
+  })
+
+  it('puts an empty cell at the low end, not above the highest contact', () => {
+    const r = rasterize(block([0, ...balanced.slice(1)], 2, 2), {
+      vmin: Number.NaN,
+      vmax: Number.NaN,
+      transform: 'log10',
+      colormap: 'afmhot_r',
+      balanced: true,
+    })
+    const lut = applyColormap('afmhot_r')
+    // Under the numpy clamp this cell would transform to 0.0 — above a vmax of
+    // about -2 — and the background would come out darker than every contact.
+    expect([...r.data.slice(0, 4)]).toEqual([...lut.slice(0, 4)])
+  })
+
+  it('reports the extent a clip slider spans, ignoring zeros and NaN', () => {
+    const extent = valueExtentOf(Float32Array.from([0, Number.NaN, ...balanced]), 'log10', true)
+    expect(extent?.vmin).toBeCloseTo(-5, 5)
+    expect(extent?.vmax).toBeCloseTo(-2, 5)
+    expect(valueExtentOf(Float32Array.from([Number.NaN]), 'log10', true)).toBeNull()
   })
 })
 

@@ -157,10 +157,20 @@ export interface ParsedRange {
 export type Transform = 'log1p' | 'log10' | 'none'
 
 export interface ColorScale {
+  /** Low bound in transformed units. `NaN` asks for the auto rule. */
   vmin: number
+  /** High bound in transformed units. `NaN` asks for the auto rule. */
   vmax: number
   transform: Transform
   colormap: string
+  /**
+   * Whether these are balanced values rather than raw counts.
+   *
+   * Only `log10` reads it, and only to decide what zero means: the bottom of a
+   * balanced picture, the numpy-mirrored `0.0` of a count one. See
+   * `render/scale.ts`'s `displayValue`.
+   */
+  balanced?: boolean
 }
 
 /** A boundary line drawn across the heatmap, with the label it separates. */
@@ -207,5 +217,11 @@ export interface ViewState {
   balance?: boolean
   transform?: Transform
   colormap?: string
+  /**
+   * Colour-scale clip, in transformed units. Absent means auto — the §7.1
+   * percentile rule — and the two are independent: a link may pin the top of
+   * the scale and leave its floor to the data.
+   */
+  vmin?: number
   vmax?: number
 }

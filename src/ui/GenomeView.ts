@@ -18,6 +18,8 @@ import { stepper } from './Stepper'
 export interface ScaleState {
   transform?: Transform
   colormap?: string
+  /** Colour-scale clip in transformed units; absent means auto (§7.1). */
+  vmin?: number
   vmax?: number
 }
 

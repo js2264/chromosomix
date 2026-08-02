@@ -221,11 +221,21 @@ class App {
       {
         id: 'go-overview',
         group: 'Go',
-        title: 'Whole metagenome',
-        hint: 'Costs a full pixel scan; it never starts on its own.',
+        // One question — the whole file at once — answered two ways, exactly as
+        // the root menu offers it: a metacool scans every pixel to build the
+        // genome x genome matrix, a cooler reads its single matrix in one
+        // bounded block (§9). Binding the key to only the first left `w` dead on
+        // every cool file, beside a `C` that worked.
+        title: isMetacool ? 'Whole metagenome' : 'Whole genome',
+        hint: isMetacool
+          ? 'Costs a full pixel scan; it never starts on its own.'
+          : 'One bounded read; refused if it would not fit this machine.',
         keys: 'w',
-        enabled: file !== null && isMetacool,
-        run: () => this.showOverview(),
+        enabled: file !== null,
+        run: () => {
+          if (isMetacool) this.showOverview()
+          else if (state !== null) this.navigate({ uri: state.uri, view: 'whole' })
+        },
       },
       {
         id: 'go-prev',
@@ -871,6 +881,7 @@ function scaleOf(state: ViewState): ScaleState {
   const scale: ScaleState = {}
   if (state.transform !== undefined) scale.transform = state.transform
   if (state.colormap !== undefined) scale.colormap = state.colormap
+  if (state.vmin !== undefined) scale.vmin = state.vmin
   if (state.vmax !== undefined) scale.vmax = state.vmax
   return scale
 }

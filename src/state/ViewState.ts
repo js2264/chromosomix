@@ -35,6 +35,7 @@ const KEY_ORDER = [
   'level',
   'transform',
   'colormap',
+  'vmin',
   'vmax',
   'balance',
 ] as const
@@ -48,6 +49,7 @@ const OPTIONAL_KEYS = [
   'level',
   'transform',
   'colormap',
+  'vmin',
   'vmax',
   'balance',
 ] as const
@@ -130,6 +132,14 @@ export function parseViewState(hash: string): ViewState | null {
   // Balanced or raw *is* part of what is being looked at, so a link carries it.
   const balance = raw.get('balance')
   if (balance !== undefined) state.balance = balance === '1' || balance === 'true'
+
+  // A clip bound may legitimately be negative — `log10` of a balanced matrix is
+  // negative throughout — so the only thing rejected here is a non-number.
+  const vmin = raw.get('vmin')
+  if (vmin !== undefined && vmin !== '') {
+    const parsed = Number(vmin)
+    if (!Number.isNaN(parsed) || vmin === 'NaN') state.vmin = parsed
+  }
 
   const vmax = raw.get('vmax')
   if (vmax !== undefined && vmax !== '') {

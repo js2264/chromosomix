@@ -143,6 +143,15 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'Host the file on object storage with range support (any S3-compatible bucket), or download it and drop it here instead.',
     ],
   },
+  'remote-compressed': {
+    title: 'That host is compressing the file in transit',
+    advice: [
+      'With Content-Encoding set, a Range request addresses the compressed stream, not the file — so every read after the first returns bytes from the wrong place.',
+      'Browsers cannot ask for an uncompressed copy: Accept-Encoding is a forbidden header, so this has to be fixed on the host.',
+      'Object storage (S3, R2, GCS) serves application/octet-stream uncompressed by default. GitHub Pages compresses it and offers no way to turn that off.',
+      'Downloading the file and dropping it here always works.',
+    ],
+  },
   'remote-cors': {
     title: 'That host will not let this page read the file',
     advice: [

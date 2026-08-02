@@ -113,6 +113,34 @@ export class RemoteRangeSource implements ByteSource {
       )
     }
 
+    // Before anything is believed about sizes or ranges: a host that re-encodes
+    // the body makes both meaningless. `Range` addresses the octets of the
+    // *encoded* representation, so `bytes=1048576-2097151` is a slice out of the
+    // middle of a gzip stream — not a valid one — and `Content-Length` is the
+    // compressed size, several MB short of the file. The browser then hands back
+    // however many bytes that slice inflated to, which for the very first read
+    // is a correct prefix of the file: HDF5 opens, walks a few objects, and
+    // fails deep inside itself with `error - name not defined!`.
+    //
+    // This is not hypothetical or exotic. GitHub Pages compresses
+    // `application/octet-stream`, which is what it serves every `.metacool`,
+    // `.mcool` and `.cool` as, and no client can opt out — `Accept-Encoding` is
+    // a forbidden header name, so neither `fetch` nor `XMLHttpRequest` may set
+    // it. The caller's recourse is to stop using ranges (see
+    // `worker/sources.ts`), which is why this carries its own code.
+    const encoding = reEncoding(head)
+    if (encoding !== null) {
+      throw new ViewerError(
+        'remote-compressed',
+        `${host} is serving ${url} with \`Content-Encoding: ${encoding}\`, so byte ranges ` +
+          'address the compressed stream rather than the file. The viewer cannot read it a ' +
+          'slice at a time. Serve it without transfer compression — object storage (S3, R2, ' +
+          'GCS) does that by default for application/octet-stream; GitHub Pages does not and ' +
+          'offers no way to turn it off.',
+        { url, host, encoding, encodedLength: numberHeader(head, 'content-length') },
+      )
+    }
+
     const declaredLength = numberHeader(head, 'content-length')
     const acceptsRanges = (head?.headers.get('accept-ranges') ?? '').toLowerCase().includes('bytes')
 
@@ -340,6 +368,15 @@ export class RemoteRangeSource implements ByteSource {
    * `Content-Range` is believed when it is present, since it is the server's
    * own statement of what it sent. Without it, a body longer than the window
    * can only mean the whole object, which starts at zero.
+   *
+   * The third way is a body that does not match `Content-Range` *at all*, and
+   * it is caught first because believing the header is the whole strategy
+   * above. A 206 body is exactly its own range, so a disagreement means
+   * something between the server and here re-encoded it — transfer compression
+   * the probe in {@link RemoteRangeSource.open} did not see, because not every
+   * browser exposes `Content-Encoding` on a `fetch` response. Truncating the
+   * body to the window, which is what the arithmetic below would do, is exactly
+   * the silent corruption this class exists to refuse.
    */
   private windowOf(
     body: Uint8Array,
@@ -348,7 +385,25 @@ export class RemoteRangeSource implements ByteSource {
     contentRange: string | null,
   ): Uint8Array {
     const wanted = to - from + 1
-    const start = rangeStart(contentRange)
+    const claimed = parseContentRange(contentRange)
+    if (claimed !== null && claimed.end - claimed.start + 1 !== body.byteLength) {
+      throw new ViewerError(
+        'remote-compressed',
+        `${hostOf(this.url)} answered a request for bytes ${from}-${to} of ${this.url} with ` +
+          `\`Content-Range: ${contentRange}\` — ${claimed.end - claimed.start + 1} octets — but ` +
+          `the body is ${body.byteLength}. The response was re-encoded in transit (transfer ` +
+          'compression), so ranges do not address the file. Serve it without ' +
+          '`Content-Encoding`, or download it and drop it here.',
+        {
+          url: this.url,
+          from,
+          to,
+          claimed: claimed.end - claimed.start + 1,
+          received: body.byteLength,
+        },
+      )
+    }
+    const start = claimed?.start ?? rangeStart(contentRange)
     const skip = start === null ? (body.byteLength > wanted ? from : 0) : from - start
     if (skip === 0 && body.byteLength <= wanted) return body
     if (skip < 0 || skip >= body.byteLength) {
@@ -465,6 +520,19 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * The `Content-Encoding` a response was re-encoded with, or `null` when it was
+ * not — which includes the explicit `identity` and the empty header.
+ *
+ * A browser decodes the body transparently and leaves the header in place, so
+ * its presence is the signal; it is not asking us to decode anything.
+ */
+function reEncoding(response: Response | null): string | null {
+  const raw = (response?.headers.get('content-encoding') ?? '').trim().toLowerCase()
+  if (raw === '' || raw === 'identity') return null
+  return raw
+}
+
 function numberHeader(response: Response | null, name: string): number | null {
   const raw = response?.headers.get(name)
   if (raw === null || raw === undefined || raw.trim() === '') return null
@@ -474,11 +542,28 @@ function numberHeader(response: Response | null, name: string): number | null {
 
 /** `bytes 128-255/26520008` → `128`; `null` when the header is absent or odd. */
 function rangeStart(header: string | null): number | null {
+  return parseContentRange(header)?.start ?? null
+}
+
+/**
+ * `bytes 128-255/26520008` → `{ start: 128, end: 255, total: 26520008 }`.
+ *
+ * The **span** is what {@link RemoteRangeSource.windowOf} needs and neither of
+ * the older two accessors exposed: it is the server's own statement of how many
+ * octets it put in the body, and a body that disagrees with it did not come off
+ * the wire the way the server sent it.
+ */
+function parseContentRange(
+  header: string | null,
+): { start: number; end: number; total: number | null } | null {
   if (!header) return null
-  const match = /bytes\s+(\d+)-/.exec(header)
+  const match = /bytes\s+(\d+)-(\d+)\/\s*(\d+|\*)\s*$/.exec(header)
   if (!match) return null
-  const value = Number(match[1])
-  return Number.isFinite(value) ? value : null
+  const start = Number(match[1])
+  const end = Number(match[2])
+  const total = match[3] === '*' ? null : Number(match[3])
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null
+  return { start, end, total: total !== null && Number.isFinite(total) ? total : null }
 }
 
 /** `bytes 0-0/26520008` → `26520008`. */

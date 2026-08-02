@@ -159,8 +159,16 @@ export class Breadcrumb {
     const { rootChoices, rootKind } = this.props
     const table: 'genomes' | 'contigs' =
       state.view === 'genomes' || state.view === 'contigs' ? state.view : rootKind
-    const active: RootChoice = this.overviewActive ? 'overview' : table
-    const atRoot = this.overviewActive || state.view === table
+    // `whole` is a view state where `overview` is a shell mode, but both are
+    // landing views of the whole file and both belong in this crumb: leaving it
+    // out left the cooler's whole-genome view labelled "Chromosomes", so the
+    // only sign anything had happened was the heatmap itself.
+    const active: RootChoice = this.overviewActive
+      ? 'overview'
+      : state.view === 'whole'
+        ? 'whole'
+        : table
+    const atRoot = this.overviewActive || state.view === table || state.view === 'whole'
 
     this.separator()
 

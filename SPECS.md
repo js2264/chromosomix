@@ -330,6 +330,17 @@ diverges from what a reader reproduces locally.
   view change, with manual override
 - separators at genome or contig boundaries, thin grey
 
+Both bounds are overridable, as one clip range: a two-handled slider over the block's own value
+extent, with either bound also typeable, and one control back to auto. The URL carries `vmin` and
+`vmax` independently, in transformed units, and their absence means auto.
+
+The rule above is for **raw counts**, where zero is a true floor. It does not survive balancing
+(§6.4), whose values are fractions: `log10` of them is negative almost everywhere — on a 10 kb *E.
+coli* map, 0.4% of cells transform positive and a `vmin` of 0 clips the other 99.6% to white. A
+balanced block is therefore scaled to the 1st-to-99th percentile of the cells that carry a contact,
+and `log10` draws an empty cell at the low end rather than at numpy's `0.0`, which for these values
+sits above the whole picture. `metacooler show` never balances, so neither departure touches parity.
+
 ### 7.2 Technique
 
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to

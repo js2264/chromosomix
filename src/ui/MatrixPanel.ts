@@ -21,11 +21,13 @@
  */
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
-import { ColorbarView } from '../render/colorbar'
+import { ColorbarView, formatCount } from '../render/colorbar'
 import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
 import { HeatmapView, type Cell, type PlotOptions, type SeparatorSet } from '../render/heatmap'
+import { inverseTransform, valueExtentOf } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
+import { ClipRange } from './ClipRange'
 import { button, el, field, fmt } from './dom'
 import { setReadout } from './readout'
 import {
@@ -43,12 +45,23 @@ export interface MatrixPanelOptions {
   binsize: number
   /** Offered aggregation levels; omit for views with no level toggle. */
   levels?: Array<'bin' | 'contig'>
-  initial?: { transform?: Transform; colormap?: string; vmax?: number; level?: 'bin' | 'contig' }
+  initial?: {
+    transform?: Transform
+    colormap?: string
+    vmin?: number
+    vmax?: number
+    level?: 'bin' | 'contig'
+  }
   /** Whether counts are currently multiplied by their bin weights (§6.4). */
   balance?: boolean
   /** Offer the balance control at all — only files with a weight column do. */
   offerBalance?: boolean
-  onScaleChange?(scale: { transform: Transform; colormap: string; vmax?: number }): void
+  onScaleChange?(scale: {
+    transform: Transform
+    colormap: string
+    vmin?: number
+    vmax?: number
+  }): void
   onLevelChange?(level: 'bin' | 'contig'): void
   onBalanceChange?(balance: boolean): void
   /** A cell was clicked; offsets are block-local, ids are absolute. */
@@ -85,8 +98,7 @@ export class MatrixPanel {
   private readonly colorbar: ColorbarView
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
-  private readonly vmaxInput: HTMLInputElement
-  private readonly autoVmax: HTMLInputElement
+  private readonly clip: ClipRange
   private readonly overlay: HTMLElement
   private readonly plotOptionsEl: HTMLElement
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
@@ -97,13 +109,17 @@ export class MatrixPanel {
   private data: MatrixResult | null = null
   private transform: Transform
   private colormap: string
+  private manualVmin: number | undefined
   private manualVmax: number | undefined
   private level: 'bin' | 'contig'
   private frame = 0
+  /** What the clip slider's current span was measured from. */
+  private extentSource: { data: MatrixResult; transform: Transform } | null = null
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
     this.colormap = options.initial?.colormap ?? DEFAULT_COLORMAP
+    this.manualVmin = options.initial?.vmin
     this.manualVmax = options.initial?.vmax
     this.level = options.initial?.level ?? 'bin'
 
@@ -139,6 +155,11 @@ export class MatrixPanel {
     transformSelect.value = this.transform
     transformSelect.addEventListener('change', () => {
       this.transform = transformSelect.value as Transform
+      // A clip is a pair of numbers in transformed units, so it does not survive
+      // a change of transform: `vmax = 8` is a sensible ceiling under `log1p`
+      // and a black image under `none`. Back to auto, which is right for both.
+      this.manualVmin = undefined
+      this.manualVmax = undefined
       this.rescale()
     })
 
@@ -154,30 +175,33 @@ export class MatrixPanel {
       this.rescale()
     })
 
-    this.autoVmax = el('input', { class: 'checkbox', type: 'checkbox' })
-    this.autoVmax.checked = this.manualVmax === undefined
-    this.autoVmax.addEventListener('change', () => {
-      this.manualVmax = this.autoVmax.checked ? undefined : this.heatmap.effectiveScale.vmax
-      this.vmaxInput.disabled = this.autoVmax.checked
-      if (this.manualVmax !== undefined) this.vmaxInput.value = String(this.manualVmax)
-      this.rescale()
-    })
-
-    this.vmaxInput = el('input', { class: 'input input-num', type: 'number' })
-    this.vmaxInput.disabled = this.manualVmax === undefined
-    if (this.manualVmax !== undefined) this.vmaxInput.value = String(this.manualVmax)
-    this.vmaxInput.addEventListener('change', () => {
-      const parsed = Number(this.vmaxInput.value)
-      this.manualVmax = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-      this.autoVmax.checked = this.manualVmax === undefined
-      this.rescale()
+    this.clip = new ClipRange({
+      onChange: (clip) => {
+        this.manualVmin = clip?.vmin
+        this.manualVmax = clip?.vmax
+        this.rescale()
+      },
+      // The boxes are in transformed units; the caption says what those are in
+      // the units the colourbar and the tooltip use.
+      format: (value) => formatCount(inverseTransform(value, this.transform)),
     })
 
     const controls: HTMLElement[] = [
       field('transform', transformSelect, 'Value transform, matching `metacooler show --transform`.'),
       field('colormap', colormapSelect, 'afmhot_r is the CLI default (§7.1).'),
-      field('auto vmax', this.autoVmax, '99th percentile of the non-zero transformed values (§7.1).'),
-      field('vmax', this.vmaxInput),
+      // Not `field()`: that wraps its control in a `<label>`, and a label around
+      // four inputs and a button focuses whichever one it feels like.
+      el(
+        'div',
+        {
+          class: 'field field-clip',
+          title:
+            'Where the colourmap starts and saturates, in transformed units. ' +
+            'Auto is the §7.1 default: 0 to the 99th percentile of the values in view.',
+        },
+        el('span', { class: 'field-label', text: 'clip' }),
+        this.clip.el,
+      ),
       button('reset view', () => this.heatmap.fit(), { title: 'Fit the block to the canvas (key: 0)' }),
     ]
 
@@ -215,18 +239,13 @@ export class MatrixPanel {
     if (options.offerBalance === true) {
       const balance = el('input', { class: 'checkbox', type: 'checkbox' })
       balance.checked = options.balance === true
-      balance.addEventListener('change', () => {
-        // Balanced values are fractions — cooler's weights normalise the matrix
-        // so most cells land below 1 — and `log10` of a value under 1 is
-        // negative. The auto-`vmax` rule counts positives, finds none, falls
-        // back to 1.0, and every cell maps below `vmin`: a blank panel. `log1p`
-        // is defined and positive on (0, 1), so it is what balanced counts get.
-        if (balance.checked && this.transform === 'log10') {
-          this.transform = 'log1p'
-          transformSelect.value = 'log1p'
-        }
-        options.onBalanceChange?.(balance.checked)
-      })
+      // No transform is forced here any more. Balanced values are fractions, so
+      // `log10` of them is negative throughout, which the auto rule used to
+      // answer with `[0, 1]` — a blank panel — and this control used to dodge by
+      // switching the transform to `log1p` behind the user's back. Both the rule
+      // and `log10`'s treatment of zero now handle a sub-unit matrix, so the
+      // transform is the user's choice again (`render/scale.ts`).
+      balance.addEventListener('change', () => options.onBalanceChange?.(balance.checked))
       controls.unshift(
         field(
           'balanced',
@@ -327,12 +346,13 @@ export class MatrixPanel {
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
   }
 
-  /** Load a block. `HeatmapView` refits and recomputes the auto vmax (§7.1). */
+  /** Load a block. `HeatmapView` refits and recomputes the auto range (§7.1). */
   setData(data: MatrixResult, title: string): void {
     this.data = data
     this.titleNode.textContent = title
     this.heatmap.setMatrix(toDense(data), separatorsFor(data))
     this.heatmap.setScale(this.scale())
+    this.syncClipExtent()
     this.setBusy(false)
     this.schedule()
   }
@@ -344,26 +364,44 @@ export class MatrixPanel {
   }
 
   /**
-   * The colour scale as configured. `vmax` is `NaN` in auto mode, which is how
+   * The colour scale as configured. An unclipped bound is `NaN`, which is how
    * {@link HeatmapView} is asked for the `metacooler show` default.
    */
   scale(): ColorScale {
     return {
-      vmin: 0,
+      vmin: this.manualVmin ?? Number.NaN,
       vmax: this.manualVmax ?? Number.NaN,
       transform: this.transform,
       colormap: this.colormap,
+      balanced: this.options.balance === true,
     }
   }
 
   private rescale(): void {
     this.heatmap.setScale(this.scale())
+    this.syncClipExtent()
     this.options.onScaleChange?.({
       transform: this.transform,
       colormap: this.colormap,
+      vmin: this.manualVmin,
       vmax: this.manualVmax,
     })
     this.schedule()
+  }
+
+  /**
+   * Re-span the clip slider over the loaded block, which is what makes both
+   * handles reach every value on screen. The transform decides the units, so
+   * this runs on a new block *and* on a new transform — but on nothing else:
+   * it is a pass over every cell, and dragging a handle emits an event per
+   * frame through the same `rescale`.
+   */
+  private syncClipExtent(): void {
+    const data = this.data
+    if (data === null) return
+    if (this.extentSource?.data === data && this.extentSource.transform === this.transform) return
+    this.extentSource = { data, transform: this.transform }
+    this.clip.setExtent(valueExtentOf(data.values, this.transform, this.options.balance === true))
   }
 
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
@@ -372,11 +410,17 @@ export class MatrixPanel {
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
       this.heatmap.draw()
+      // `effectiveScale` is the scale the raster actually used, so this is where
+      // the auto rule's numbers become visible — in the colourbar and, equally,
+      // in the clip boxes, which is what a reader nudges rather than invents.
       const effective = this.heatmap.effectiveScale
       this.colorbar.setScale(effective)
       this.colorbar.draw()
-      if (this.autoVmax.checked && Number.isFinite(effective.vmax)) {
-        this.vmaxInput.value = effective.vmax.toPrecision(4)
+      if (Number.isFinite(effective.vmin) && Number.isFinite(effective.vmax)) {
+        this.clip.setValues(
+          { vmin: effective.vmin, vmax: effective.vmax },
+          this.manualVmin === undefined && this.manualVmax === undefined,
+        )
       }
     })
   }

@@ -64,13 +64,23 @@ Vite copies `public/` into `dist/` verbatim, so they land at:
 https://<owner>.github.io/<repo>/demo/Mock_microbial_community.metacool
 ```
 
-They are deliberately **same-origin with the app**, which removes the entire class of failure
+They are deliberately **same-origin with the app**, which removes one class of failure
 [hosting.md](hosting.md) is written about: no CORS preflight, no `AllowedOrigins`, no
-`ExposeHeaders`. What it does *not* remove is the range requirement — the reader still issues a
-`HEAD` and then bounded `GET`s, and a host that ignores `Range` makes it download the whole file.
-Pages serves static assets through Fastly, which honours byte ranges; confirm it once after the
-first deploy with the two `curl` calls in hosting.md pointed at the URL above, rather than assuming
-it.
+`ExposeHeaders`.
+
+It does not remove the rest, and Pages fails one of them. Pages honours `Range`, but it also
+**gzips `application/octet-stream`**, which is what it serves every `.metacool` and `.mcool` as — so
+ranges address the compressed stream and the reader gets bytes from the wrong offsets. The measured
+headers and the reasoning are in
+[hosting.md](hosting.md#transfer-compression-breaks-ranges); the short version is that no browser
+can opt out, because `Accept-Encoding` is a forbidden header name.
+
+So the demo files here open by a **fallback**: the probe sees `Content-Encoding`, refuses the ranged
+path, and the worker downloads the object whole into memory instead (`worker/sources.ts`). A
+complete gzip stream inflates correctly, so this works — but it transfers the entire file, which is
+the one property the remote path exists to avoid. That is the real reason to keep this directory
+small, and the reason **data belongs on a bucket, not on Pages**. Anything a reader is meant to
+explore rather than glance at should be published per hosting.md and reached by URL.
 
 Two things to keep in mind:
 

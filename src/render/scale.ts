@@ -8,6 +8,12 @@
  * same picture, and `vmax` is the single number that decides how a contact map
  * looks.
  *
+ * The mirror covers raw counts, which is everything the CLI can draw: `show()`
+ * reads `matrix(balance=False)`. Balanced values are the viewer's own, they are
+ * fractions rather than counts, and both the zero clamp and the anchored `vmin`
+ * are wrong for them — see {@link displayValue} and {@link autoRangeOf}, the two
+ * places where this file deliberately stops mirroring.
+ *
  * The {@link Scale} half is the coordinate model. Spec §8: heatmap and tracks
  * share *one* `Scale`, owned by the view state, so a bigWig track and the
  * matrix column under it can never drift apart by a pixel.
@@ -65,6 +71,31 @@ export function transformValues(
     default:
       throw new RangeError(`Unknown transform: '${String(transform)}'`)
   }
+}
+
+/**
+ * The value a **pixel** is coloured by, which is {@link transformValue} plus one
+ * exception.
+ *
+ * `log10`'s "non-positive becomes `0`" is numpy's rule and it is right for raw
+ * counts, where every stored value is at least `1` and `0` is therefore the
+ * bottom of the picture. It is exactly backwards for a *balanced* matrix, whose
+ * values are fractions: `log10` of those is negative, so the clamp puts the
+ * empty background *above* every contact in the file and paints it black.
+ *
+ * Balancing is a viewer feature — `metacooler show` reads `matrix(balance=False)`
+ * and has no `--balance` — so there is no parity to keep here. Zero becomes
+ * `-Infinity`, which {@link rasterize} draws at the low end of the colormap:
+ * matplotlib's `LogNorm` "under" colour, and byte-identical to the numpy rule
+ * for a count matrix, where `0` *is* the low end.
+ */
+export function displayValue(x: number, transform: Transform, balanced = false): number {
+  if (balanced && transform === 'log10') {
+    // NaN is not zero: an unbalanced bin has no value, and the raster leaves it
+    // transparent rather than drawing it at either end of the scale.
+    return Number.isNaN(x) ? Number.NaN : x > 0 ? Math.log10(x) : Number.NEGATIVE_INFINITY
+  }
+  return transformValue(x, transform)
 }
 
 /**
@@ -186,18 +217,119 @@ export function autoVmax(transformed: ArrayLike<number>): number {
  * darkens the whole image.
  */
 export function autoVmaxOf(values: ArrayLike<number>, transform: Transform): number {
+  const nz = collectDisplay(values, transform, false, (_raw, x) => x > 0)
+  return nz.length === 0 ? 1.0 : percentileLinear(nz, AUTO_VMAX_PERCENTILE)
+}
+
+/** The low percentile of the fallback rule in {@link autoRangeOf}. */
+export const AUTO_VMIN_PERCENTILE = 1
+
+/** A resolved pair of colour-scale bounds, in transformed units. */
+export interface ValueRange {
+  vmin: number
+  vmax: number
+}
+
+/**
+ * Both bounds at once — the auto rule the panel uses when neither has been set
+ * by hand.
+ *
+ * **Raw counts** get `show()`'s rule, unchanged and to the bit: `vmin = 0` and
+ * `vmax` at the 99th percentile of the positive transformed values. Zero is a
+ * true floor there — a count cannot go below it — so anchoring the scale to it
+ * is what makes two views of the same file comparable.
+ *
+ * **Balanced values** cannot use it. They are fractions, so `log10` of them is
+ * negative almost everywhere: on a real 10 kb E. coli map, 0.4% of the cells
+ * transform positive (the diagonal, which balances above 1) and the other 99.6%
+ * land below a `vmin` of zero — one white panel with a dark diagonal, which is
+ * the bug this branch exists to fix. Zero is not a floor for these values but an
+ * arbitrary point in the middle of nothing, so the range becomes the 1st to 99th
+ * percentile of the cells that carry a contact at all.
+ *
+ * Empty cells are excluded from that percentile on purpose. A metagenomic block
+ * is mostly zeros; including them would put both percentiles on the background
+ * and produce the same blank panel by a different route.
+ *
+ * @param balanced Whether the values are balanced fractions rather than counts.
+ * It decides both the branch here and how `log10` treats zero
+ * ({@link displayValue}).
+ */
+export function autoRangeOf(
+  values: ArrayLike<number>,
+  transform: Transform,
+  balanced = false,
+): ValueRange {
+  if (!balanced) {
+    const positive = collectDisplay(values, transform, false, (_raw, x) => x > 0)
+    if (positive.length > 0) {
+      return { vmin: 0, vmax: percentileLinear(positive, AUTO_VMAX_PERCENTILE) }
+    }
+  }
+  const contacts = collectDisplay(
+    values,
+    transform,
+    balanced,
+    (raw, x) => raw > 0 && Number.isFinite(x),
+  )
+  if (contacts.length === 0) return { vmin: 0, vmax: 1.0 }
+  const vmin = percentileLinear(contacts, AUTO_VMIN_PERCENTILE)
+  const vmax = percentileLinear(contacts, AUTO_VMAX_PERCENTILE)
+  // A constant matrix has no range to speak of; matplotlib collapses one to the
+  // colormap's low end, and `vmin + 1` is the span that reproduces that.
+  return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
+}
+
+/**
+ * The full extent of the drawable values, which is what a clip *slider* spans —
+ * as opposed to {@link autoRangeOf}, which is where its two handles start.
+ *
+ * `null` when nothing is drawable: an all-NaN block, or an all-zero one under
+ * `log10` of a balanced matrix.
+ */
+export function valueExtentOf(
+  values: ArrayLike<number>,
+  transform: Transform,
+  balanced = false,
+): ValueRange | null {
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  for (let i = 0; i < values.length; i++) {
+    const x = displayValue(values[i], transform, balanced)
+    if (!Number.isFinite(x)) continue
+    if (x < lo) lo = x
+    if (x > hi) hi = x
+  }
+  return lo <= hi ? { vmin: lo, vmax: hi } : null
+}
+
+/**
+ * The display values whose `(raw, display)` pair passes `keep`, sorted
+ * ascending.
+ *
+ * Float32 because the values are Float32 either way — they come from a Float32
+ * matrix — so the order and the two straddling values are identical to what a
+ * Float64 copy would give.
+ */
+function collectDisplay(
+  values: ArrayLike<number>,
+  transform: Transform,
+  balanced: boolean,
+  keep: (raw: number, display: number) => boolean,
+): Float32Array {
   const n = values.length
   let count = 0
-  for (let i = 0; i < n; i++) if (transformValue(values[i], transform) > 0) count++
-  if (count === 0) return 1.0
-  const nz = new Float32Array(count)
+  for (let i = 0; i < n; i++) {
+    if (keep(values[i], displayValue(values[i], transform, balanced))) count++
+  }
+  const out = new Float32Array(count)
   let k = 0
   for (let i = 0; i < n; i++) {
-    const x = transformValue(values[i], transform)
-    if (x > 0) nz[k++] = x
+    const x = displayValue(values[i], transform, balanced)
+    if (keep(values[i], x)) out[k++] = x
   }
-  nz.sort()
-  return percentileLinear(nz, AUTO_VMAX_PERCENTILE)
+  out.sort()
+  return out
 }
 
 function autoVmaxImpl(transformed: ArrayLike<number>): number {

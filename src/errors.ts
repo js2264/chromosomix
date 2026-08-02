@@ -26,6 +26,7 @@ export type ErrorCode =
   | 'unsupported'
   | 'bigwig-no-overlap'
   | 'remote-no-ranges'
+  | 'remote-compressed'
   | 'remote-cors'
   | 'remote-too-large'
   | 'bad-uri'

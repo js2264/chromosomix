@@ -390,6 +390,10 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   up, and it is not counted as a contact in the pair summary. Turning balancing
   on switches `log10` to `log1p`, because balanced values are fractions and
   log10 of a fraction is negative: the old combination rendered a blank panel.
+  *(Superseded — that switch was a workaround for the auto-`vmax` rule, not for
+  `log10`. A balanced block is now scaled to the 1st-to-99th percentile of its
+  contacts and the transform is the user's choice again. See the clip range
+  below.)*
   This is the one read of `/bins` in the reader, it is two bounded slices, and
   `bins-guard.test.ts` still proves every unbalanced path never touches it.
 - **A cooler now reads as one genome with chromosomes**: Chromosomes in the
@@ -402,6 +406,30 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   refusal that offered an escape hatch — "switch to contig level" — which is
   refused by the same guard for the same reason, because the roll-up reads the
   same block first.
+
+- **The colour scale is a clip range now**, not a `vmax` box beside an "auto
+  vmax" checkbox: a two-handled slider over the block's own value extent, both
+  bounds typeable, one button back to auto, and `vmin`/`vmax` carried
+  independently in the hash. That control is what `log10` of a balanced *E.
+  coli* map needed, and the rule behind it is the actual fix. The old rule
+  anchored `vmin` at 0 and put `vmax` at the 99th percentile of the *positive*
+  transformed values — right for counts, and on a balanced 10 kb E. coli map it
+  found the 0.4% of cells that balance above 1, anchored to them, and clipped
+  the other 99.6% to white. Balanced blocks now scale to the 1st-to-99th
+  percentile of the cells that carry a contact (empty cells excluded — a sparse
+  block is mostly zeros, and counting them blanks the panel by another route),
+  and `log10` draws an empty cell at the low end rather than at numpy's `0.0`,
+  which for sub-unit values sits *above* the whole picture and would have turned
+  the background black. `show()` reads `balance=False` and has no `--vmin`, so
+  neither departure touches §7.1 parity — the raw-count path is byte-identical
+  and the golden tests still pass.
+
+- **`W` works on a cool file.** It was bound to the metagenome overview alone,
+  so on a file with one genome the key was disabled while `C` beside it worked,
+  even though that file's whole-genome view existed and was reachable from the
+  root menu. The command now routes the way the menu does — scan for a metacool,
+  `view=whole` for a cooler — and the crumb finally marks that view as the
+  active root instead of leaving "Chromosomes" lit.
 
 
 ## FOR FUTURE

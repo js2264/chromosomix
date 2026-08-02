@@ -15,7 +15,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { Scale, autoVmaxOf, transformValue } from './scale'
+import { Scale, autoRangeOf, displayValue } from './scale'
 
 // ---------------------------------------------------------------------------
 // Rasterisation — pure, no canvas, so it is testable under Node
@@ -68,9 +68,11 @@ export function rasterStride(n: number, maxDim = RASTER_MAX_DIM): number {
 /**
  * Colour every cell of `matrix` into RGBA bytes.
  *
- * `scale.vmax` is honoured when finite and recomputed by {@link autoVmaxOf}
- * otherwise — pass `NaN` to ask for the `metacooler show` default. `vmin` is
- * likewise defaulted to `0`, which is the only value the CLI ever uses.
+ * Either bound is honoured when finite and resolved by {@link autoRangeOf}
+ * otherwise — pass `NaN` for both to ask for the `metacooler show` default.
+ * They resolve *together*, because the fallback rule the CLI never reaches
+ * moves both: a `vmin` pinned at `0` beside an auto `vmax` is what made `log10`
+ * of a balanced matrix come out blank.
  *
  * NaN cells come out fully transparent rather than as a colour. That is
  * matplotlib's default "bad" colour and it is the diagnostically correct
@@ -84,11 +86,16 @@ export function rasterize(
 ): Raster {
   const { nrows, ncols, values } = matrix
 
-  const vmin = Number.isFinite(scale.vmin) ? scale.vmin : 0
+  const balanced = scale.balanced === true
   // Transformed on the fly rather than into an `n`-cell array: the transform is
   // three arithmetic ops and the copy was the second-largest allocation in the
   // renderer, kept alive for the lifetime of the raster and read by nobody.
-  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : autoVmaxOf(values, scale.transform)
+  const auto =
+    Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)
+      ? null
+      : autoRangeOf(values, scale.transform, balanced)
+  const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
+  const vmax = Number.isFinite(scale.vmax) ? scale.vmax : (auto?.vmax ?? 1)
   const span = vmax - vmin
 
   const maxDim = options.maxDim ?? RASTER_MAX_DIM
@@ -118,7 +125,7 @@ export function rasterize(
         for (let x = x0; x < x1; x++) {
           const raw = values[row + x]
           if (Number.isNaN(raw)) continue
-          const t = transformValue(raw, scale.transform)
+          const t = displayValue(raw, scale.transform, balanced)
           if (Number.isNaN(best) || t > best) best = t
         }
       }
@@ -129,8 +136,12 @@ export function rasterize(
         continue
       }
       // matplotlib's `Normalize` collapses a degenerate range to 0 rather than
-      // dividing by zero, so a constant matrix renders as the colormap's low end.
-      const k = colormapIndex(span > 0 ? (best - vmin) / span : 0)
+      // dividing by zero, so a constant matrix renders as the colormap's low
+      // end. `-Infinity` — a zero cell under `log10` of a balanced block — is
+      // below every bound there is, which is that same low end.
+      const k = colormapIndex(
+        span > 0 && Number.isFinite(best) ? (best - vmin) / span : 0,
+      )
       if (k < 0) {
         data[o + 3] = 0
         continue
@@ -496,10 +507,15 @@ export class HeatmapView {
     this.onCellClick = options.onCellClick ?? null
     this.onHover = options.onHover ?? null
 
-    // The `metacooler show` defaults, verbatim (spec §7.1). `vmax: NaN` means
-    // "the 99th percentile of the non-zero transformed values", recomputed on
-    // every view change until the user overrides it.
-    this.colorScale = { vmin: 0, vmax: Number.NaN, transform: 'log1p', colormap: 'afmhot_r' }
+    // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
+    // "vmin 0, vmax at the 99th percentile of the non-zero transformed values",
+    // recomputed on every view change until the user clips it by hand.
+    this.colorScale = {
+      vmin: Number.NaN,
+      vmax: Number.NaN,
+      transform: 'log1p',
+      colormap: 'afmhot_r',
+    }
     this.resize()
   }
 
@@ -673,9 +689,9 @@ export class HeatmapView {
   }
 
   /**
-   * Set the colour scale. Pass `vmax: NaN` for the `metacooler show` default —
-   * the 99th percentile of the non-zero transformed values — which is then
-   * recomputed on every matrix change, as spec §7.1 requires.
+   * Set the colour scale. Pass `NaN` for a bound to have {@link autoRangeOf}
+   * resolve it — the `metacooler show` default, recomputed on every matrix
+   * change, as spec §7.1 requires.
    */
   setScale(scale: ColorScale): void {
     this.colorScale = { ...scale }

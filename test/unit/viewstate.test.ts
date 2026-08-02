@@ -124,3 +124,36 @@ describe('the genome-wide view and balanced counts in the hash', () => {
     expect(serialiseViewState(state)).not.toContain('balance')
   })
 })
+
+describe('the clip in the hash', () => {
+  it('round-trips a negative floor, which log10 of a balanced map needs', () => {
+    const state = {
+      uri: 'ecoli.cool',
+      view: 'whole' as const,
+      transform: 'log10' as const,
+      vmin: -4.7,
+      vmax: -2.1,
+      balance: true,
+    }
+    expect(parseViewState(serialiseViewState(state))).toStrictEqual(state)
+  })
+
+  it('carries the two bounds independently', () => {
+    expect(parseViewState('#uri=a&view=whole&vmax=3')).toStrictEqual({
+      uri: 'a',
+      view: 'whole',
+      vmax: 3,
+    })
+    expect(parseViewState('#uri=a&view=whole&vmin=-1')).toStrictEqual({
+      uri: 'a',
+      view: 'whole',
+      vmin: -1,
+    })
+  })
+
+  it('drops both when the clip goes back to auto', () => {
+    const store = new ViewStore({ uri: 'a', view: 'whole', vmin: -4, vmax: -2 })
+    store.patch({ vmin: undefined, vmax: undefined })
+    expect(store.state).toStrictEqual({ uri: 'a', view: 'whole' })
+  })
+})

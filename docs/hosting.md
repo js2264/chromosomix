@@ -6,15 +6,16 @@ and much shorter story: [deploy.md](deploy.md).
 
 ## The short version
 
-A published `.metacool` is a plain object on an S3-compatible bucket that satisfies four
+A published `.metacool` is a plain object on an S3-compatible bucket that satisfies five
 requirements. Miss any one and the viewer fails in a way the error messages of §10 are written to
 distinguish.
 
 | Requirement | Why |
 |---|---|
 | `Accept-Ranges: bytes` | The whole design is bounded range reads. Without it the browser downloads the entire file to read a 4 kB table. |
+| **No `Content-Encoding`** | See [below](#transfer-compression-breaks-ranges). This is the one that fails silently and the one no client can work around. |
 | CORS allowing `GET` and `HEAD` and the `Range` **request** header, and exposing `Content-Length` and `Content-Range` | The app runs on a different origin from the data. Exposing the two response headers is the part most often forgotten: without them the reader cannot learn the file size or verify what it got back. |
-| `Content-Type: application/octet-stream` | Some CDNs will otherwise sniff, transform or compress the body, which silently breaks byte offsets. |
+| `Content-Type: application/octet-stream` | Keeps a CDN from sniffing and transforming the body. Note that it does **not** keep every CDN from compressing it — GitHub Pages compresses exactly this type. |
 | Long TTL on immutable, versioned object names | Range reads are repetitive; caching is what keeps the §12 budgets achievable on a cold connection. |
 
 **Cloudflare R2 is the recommended host**, because egress is free and the Hi-C use case is
@@ -54,9 +55,47 @@ For an S3-compatible bucket:
 Widen `AllowedOrigins` to `["*"]` only for genuinely public data; it is a reasonable choice for
 released datasets and a poor one for anything under review.
 
+## Transfer compression breaks ranges
+
+A host that sets `Content-Encoding` on the response makes byte ranges meaningless, because `Range`
+addresses the octets of the **encoded** representation. Concretely, measured against GitHub Pages
+serving a 14,497,503-byte `.metacool`:
+
+```
+$ curl -sSI -H 'Accept-Encoding: gzip' "$URL"
+content-type: application/octet-stream
+content-encoding: gzip
+accept-ranges: bytes
+content-length: 11066465          # the compressed size, 3.4 MB short of the file
+```
+
+Two things follow, and the second is the dangerous one:
+
+- The size the reader learns is the compressed size, so the mounted file claims a length HDF5 reads
+  past.
+- `bytes=0-2047` returns 2048 *compressed* octets, which the browser inflates to 6,990 bytes of a
+  **correct prefix** of the file — so the superblock parses and the open looks like it worked. Any
+  later range is a slice out of the middle of a gzip stream and inflates to nothing coherent. The
+  symptom is `error - name not defined!` raised from inside the wasm, hundreds of frames from the
+  cause.
+
+**No client can work around this.** `Accept-Encoding` is a forbidden header name in the Fetch
+standard, so neither `fetch` nor `XMLHttpRequest` may ask for an identity encoding; the browser
+always offers gzip. It has to be fixed on the host.
+
+S3, R2 and GCS do not compress `application/octet-stream`. GitHub Pages does, on a rule keyed to
+content type — it serves `image/png` uncompressed and `application/octet-stream` gzipped — and
+exposes no way to change response headers. **Pages cannot host data for this viewer**, only the app.
+
+The viewer refuses the case rather than reading corrupt bytes: `RemoteRangeSource.open` checks
+`Content-Encoding` on the probe, and `windowOf` checks every response body against the span its own
+`Content-Range` claims, for browsers that do not expose the header to JS. The worker then falls back
+to a single whole-object `GET` — a complete encoded stream *does* inflate correctly — which is what
+keeps the demo files in `public/demo/` working on Pages, at the cost of the bounded-read property.
+
 ## Verifying a bucket before you trust it
 
-Two `curl` calls answer every question. Run them against the real published URL, not a redirect:
+Three `curl` calls answer every question. Run them against the real published URL, not a redirect:
 
 ```bash
 URL=https://<bucket-host>/<path>/Hum53.metacool
@@ -67,11 +106,18 @@ curl -sSI "$URL" | grep -iE 'accept-ranges|content-length|content-type'
 # 2. An actual range read, and the CORS headers a browser would see.
 curl -sSI -H 'Range: bytes=0-1023' -H 'Origin: https://example.org' "$URL" \
   | grep -iE 'http/|content-range|access-control-'
+
+# 3. What a browser gets, which always offers gzip. There must be no
+#    content-encoding, and content-length must equal the real file size.
+curl -sSI -H 'Accept-Encoding: gzip, deflate, br' "$URL" \
+  | grep -iE 'content-encoding|content-length'
 ```
 
 The second call must return `206 Partial Content`, a `Content-Range`, and
 `access-control-expose-headers` naming `Content-Range`. A `200` instead of a `206` means ranges are
 being ignored — the viewer refuses this case explicitly rather than silently downloading gigabytes.
+The third must print no `content-encoding` at all; omitting the `Accept-Encoding` header is what
+makes this check pass against a host that would have failed a browser.
 
 ## The catalog
 
