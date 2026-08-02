@@ -432,6 +432,78 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   active root instead of leaving "Chromosomes" lit.
 
 
+## DONE
+
+- [x] A full review of every implemented feature — technical and biological — plus
+  a measured verdict on how the app handles large data. Seven defects, all fixed
+  below.
+
+> NOTES ON THE BATCH ABOVE
+
+- **The readout lied inside a sub-contig region.** `AxisGroup.start` is
+  block-local, so `(offset - start) * binsize` measures from the left edge of the
+  *picture*, which is a position in the contig only when the block begins on a
+  contig boundary. It does for a genome view and for a whole contig, and it does
+  not for `contig:start-end`: the first cell of
+  `NODE_17248_len_278011:139005-199005` was reported as 2 kb when it is 141 kb
+  into the contig. Groups carry `unitStart` now — the absolute bin the contig
+  itself begins at — and the tooltip and the status line resolve against it.
+  Pinned in `test/unit/axis-position.test.ts`.
+- **The colour scale was fitted to pixels that are not on screen.** Above
+  `RASTER_MAX_DIM` the raster is max-pooled, and the auto range was still the
+  99th percentile of every *cell*, so a pooled block was scaled to a population
+  no drawn pixel belonged to. It comes from the pooled values now. Below the cap
+  nothing is pooled and the resolved bounds are bit-identical, so §7.1 parity —
+  and `render.test.ts`'s byte-for-byte matplotlib comparison — is untouched.
+  *(The review guessed this made the picture ~9x more saturated. Measured, the
+  shift is small and its sign depends on the data; the defect was that the scale
+  and the pixels described different populations, not its magnitude.)*
+- **The contigs table named the wrong convention** — `1-based and fully closed`
+  over a reader that implements cooler's actual 0-based half-open, deliberately
+  and at length (`metacooler/range.ts`). One sentence, and it was the only one
+  the user actually reads.
+- **The scan could not be cancelled.** `scanPixels` yielded with
+  `await Promise.resolve()`, and a microtask queue is drained *inside* the task
+  that scheduled it: the worker's `onmessage` never ran, so the cancel arrived
+  only after the scan it was meant to stop had finished — reading the whole file
+  and then painting the overview the user had called off. `src/async.ts` yields
+  with a `MessageChannel` round trip (a real task, and not clamped to 4 ms the
+  way a nested `setTimeout` is), and `Overview` keeps a generation counter so a
+  late result is discarded. Pinned in `test/unit/cancellation.test.ts`.
+- **A shared link lost its view on a collection root.** Redirecting an `.mcool`
+  or `.mmetacool` root to one of its entries changes the URI, so the pending
+  state never matched it and `view`, `genome`, `region` and the colour scale were
+  dropped — `#uri=Ecoli.mcool&view=whole` landed on the chromosomes table. The
+  request is carried across the hop with its URI rewritten.
+- **And that redirect cost a second open handshake**, because it built a fresh
+  byte source with an empty chunk cache: 10 requests against 6 for the same file
+  addressed at its entry, with the HEAD probe, the range probe and ~1.6 MB of
+  metadata chunks fetched twice. The worker retains one remote source and lends
+  it out (`worker/sources.ts`); back to 6.
+- **`Ctrl++P`**, in the action bar and the shortcuts dialog, on every non-Mac
+  browser, since the day the palette shipped.
+- **Rasterising is two steps now**, which is what made the scale fix possible and
+  is also the largest speed-up in the app: pool once into display values, then
+  colour from those. A colormap change or a clip drag re-colours a few million
+  pooled pixels instead of re-scanning a hundred million cells, and the clip
+  slider reads the extent the pooling already measured rather than walking the
+  block a second time.
+
+  | block | first paint | colormap change |
+  |---|---|---|
+  | 1,200 bins (a MAG) | 104 -> 71 ms | 85 -> 36 ms |
+  | 4,600 bins (*E. coli* at 1 kb) | 870 -> 427 ms | 687 -> 116 ms |
+  | 12,100 bins (yeast at 1 kb) | 5,726 -> 2,267 ms | 4,097 -> 624 ms |
+
+- **There was no test job**, only the Pages deploy, so nothing on a fresh clone
+  verified the goldens, the `/bins` guard or the request budgets. Half the suite
+  needs `test/fixtures/`, which are generated from the Python package and are not
+  in the repo; `npm run test:nofixtures` is the half that is not, CI runs it on
+  every push, and the full suite runs in a second job whenever metacooler can be
+  installed.
+- **Still true after all of it:** pan, zoom, hover and the bin/contig level
+  toggle perform zero I/O, measured in a real browser against the demo files.
+
 ## FOR FUTURE
 
 - M5

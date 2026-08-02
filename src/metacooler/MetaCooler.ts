@@ -653,7 +653,7 @@ export class MetaCooler {
     }
 
     let sum = 0
-    let integral = this.countKind !== 'f'
+    const integral = this.countKind !== 'f'
     let previous: [number, number] | null = null
     let row = 0
     await this.scanPixels({
@@ -688,8 +688,7 @@ export class MetaCooler {
     })
 
     // Only integer counts are totalled: attrs['sum'] is an integer contact
-    // count, so there is nothing to reconcile a float weight column against.
-    if (!integral) integral = false
+    // count, so there is nothing to reconcile a float count column against.
     const declaredSum = this.info.sum
     if (integral && declaredSum !== null && declaredSum !== sum) {
       problems.push(`attrs['sum'] (${declaredSum}) != the sum of pixels/count (${sum})`)
