@@ -1152,7 +1152,7 @@ the state at `269f380` and are deliberately not rewritten; this is the delta.
 | 6 | `sparseAggregator` rolls contig/genome level up from the stored pixels — no `DenseMatrix` at all. 2,366 MB and 2,090 ms → 139 ms and a `Float64Array(17²)` | `metacooler/aggregate.ts`, `MetaCooler.aggregateSparse` |
 | 7 | `poolsRawMax()` pools raw counts and transforms once per *pooled* pixel, with a stride-1 fast path | `render/heatmap.ts` |
 | 8 | `colorize(pooled, scale, into?)` writes into a reused buffer; `rasterizeNow` reuses its canvas; `raster.data` is not retained | `render/heatmap.ts` |
-| 9 | separators batched into two `Path2D`s, culled to the visible domain, deduped; `labelBlocks` bails early; `separatorsFor` reuses array identity | `render/heatmap.ts` |
+| 9 | separators batched into two `Path2D`s, culled to the visible domain, deduped; `separatorsFor` reuses array identity. The `labelBlocks` early bail was superseded on rebase by `blockCache` + `labelPolicy` + binary-search `visibleRange`, which cache the same work and support the zoom-dependent label policy the bail could not | `render/heatmap.ts` |
 | 10 | `TriangleAccumulator` — upper triangle only, `idx = lo·n − lo(lo−1)/2 + (hi−lo)`; one `Float64Array` instead of two `n²` | `worker/overview.ts` |
 | 11 | `READER_CONTIG_COLUMNS` / `READER_GENOME_COLUMNS` — the open reads what the landing view shows | `metacooler/MetaCooler.ts` |
 | 12 | `forEachPixelSpan` chunks the read at `PIXEL_CHUNK = 1e6`; bin ids narrow int64 → `Int32Array` in one pass (`readInt32Slice`); `estimateBlockBytes` models the real peak, `checkBrowserDenseSize` no longer reads the file to guess | `metacooler/matrix.ts`, `h5/readTable.ts` |

@@ -214,16 +214,11 @@ export class Overview {
     groups: { row?: AxisGroup; col?: AxisGroup },
   ): void {
     if (groups.row === undefined || groups.col === undefined) return
-    // The *unit* name, not the axis label. A pooled row is labelled
-    // "NODE_7431 +15", which is what a reader needs to see and not something to
-    // hand to a range parser; `unitNames` is the contig or genome the row starts
-    // at, which is a real thing to open. `AxisGroup.start` is the slot index,
-    // which is exactly how `unitNames` is indexed.
     const names = this.unitNames
     const target = overviewTarget({
       level: this.level,
-      rowLabel: names?.[groups.row.start] ?? groups.row.label,
-      colLabel: names?.[groups.col.start] ?? groups.col.label,
+      rowLabel: unitAt(names, groups.row),
+      colLabel: unitAt(names, groups.col),
       // Indexed by slot, and a slot is snapped to a genome boundary, so a
       // pooled row still belongs to exactly one genome — which is what makes
       // the genome route survive pooling unchanged.
@@ -442,6 +437,19 @@ export class Overview {
       el('span', { text: [restriction, click, excluded].filter((part) => part !== '').join(' ') }),
     )
   }
+}
+
+/**
+ * The name a clicked slot stands for, as opposed to the name it displays.
+ *
+ * Once an axis is pooled these are two different strings. A pooled row reads
+ * `NODE_7431 +15` — which is what a reader needs to see, and is not something to
+ * hand to a range parser. `unitNames` holds the contig or genome each slot
+ * *starts* at, indexed by slot, and `AxisGroup.start` is exactly that index. On
+ * an unpooled axis the two agree, so the fallback is not a degraded path.
+ */
+export function unitAt(names: string[] | null | undefined, group: AxisGroup): string {
+  return names?.[group.start] ?? group.label
 }
 
 /** Where a clicked overview cell leads. */
