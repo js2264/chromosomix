@@ -16,7 +16,7 @@ import { UNBINNED_NAME } from './constants'
 import { ViewerError } from './errors'
 import { ViewStore, landingState, parseViewState, viewStateEquals } from './state/ViewState'
 import { recall, remember } from './state/UiMemory'
-import type { ViewState } from './types'
+import type { Transform, ViewState } from './types'
 import { ReaderClient } from './worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from './worker/protocol'
 import { Breadcrumb } from './ui/Breadcrumb'
@@ -513,6 +513,51 @@ class App {
   }
 
   /**
+   * Whether this file is shown balanced, and in `log10`, unless the state says
+   * otherwise.
+   *
+   * True for a **cooler that carries weights**, and only there. A `.cool` is a
+   * finished assembly whose map is read for structure — compartments, loops,
+   * the decay with distance — and all three are claims about *relative*
+   * contact frequency, which is what balancing produces and raw counts, with
+   * their per-bin coverage still in them, do not. The two go together: balanced
+   * values are fractions spanning orders of magnitude below 1, so `log10` is
+   * the transform that spreads them and `log1p` the one that flattens them into
+   * the bottom of the scale.
+   *
+   * A `.metacool` keeps `metacooler show`'s defaults — raw counts, `log1p` —
+   * because §7.1 parity is the point there, and because a MAG's map is usually
+   * read for *how much* two contigs touch, which is a count.
+   *
+   * With no weight column there is nothing to balance, so such a cooler keeps
+   * the CLI defaults too rather than being handed half of a pair.
+   */
+  private balancedByDefault(): boolean {
+    const info = this.file?.info
+    return info !== undefined && !info.hasGenomes && info.hasWeights
+  }
+
+  /** The balance in force: the state's choice, else the file's default. */
+  private balanceOf(state: ViewState): boolean {
+    return state.balance ?? this.balancedByDefault()
+  }
+
+  /**
+   * Record a balance choice, writing it to the hash only when it *differs* from
+   * the file's default — so a link stays clean, and "off" on a file that
+   * defaults to on survives being shared, which `balance: balance || undefined`
+   * could not express.
+   */
+  private setBalance(balance: boolean): void {
+    this.store.patch({ balance: balance === this.balancedByDefault() ? undefined : balance })
+  }
+
+  /** The colour scale in force: the state's fields over the file's defaults. */
+  private scaleOf(state: ViewState): ScaleState {
+    return scaleOf(state, this.balancedByDefault() ? { transform: 'log10' } : {})
+  }
+
+  /**
    * Filter/sort memory for one table, scoped to the open file.
    *
    * Deliberately *not* in the URL: a shared link that silently carried "only
@@ -655,13 +700,16 @@ class App {
       client: this.client,
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
-      level: state.level ?? 'bin',
-      scale: scaleOf(state),
-      balance: state.balance === true,
+      // With no control to change it back, a link carrying `level=contig` must
+      // not strand a cooler in the rolled-up view.
+      level: file.info.hasGenomes ? (state.level ?? 'bin') : 'bin',
+      scale: this.scaleOf(state),
+      balance: this.balanceOf(state),
       hasWeights: file.info.hasWeights,
+      offerLevel: file.info.hasGenomes,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
-      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
+      onBalanceChange: (balance) => this.setBalance(balance),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
         this.store.set({
@@ -684,13 +732,13 @@ class App {
       client: this.client,
       binsize: this.file?.info.binsize ?? 1,
       genome: state.genome,
-      balance: state.balance === true,
+      balance: this.balanceOf(state),
       hasWeights: this.file?.info.hasWeights === true,
-      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
+      onBalanceChange: (balance) => this.setBalance(balance),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: state.level ?? 'bin',
-      scale: scaleOf(state),
+      scale: this.scaleOf(state),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region) =>
@@ -713,13 +761,13 @@ class App {
       client: this.client,
       binsize: file.info.binsize ?? 1,
       genomeNames: file.displayNames,
-      balance: state.balance === true,
+      balance: this.balanceOf(state),
       hasWeights: file.info.hasWeights,
-      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
+      onBalanceChange: (balance) => this.setBalance(balance),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: state.level ?? 'bin',
-      scale: scaleOf(state),
+      scale: this.scaleOf(state),
       onChangeGenomes: (genome, genome2) => this.store.set({ ...state, genome, genome2 }),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
@@ -744,13 +792,13 @@ class App {
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
-      balance: state.balance === true,
+      balance: this.balanceOf(state),
       hasWeights: this.file?.info.hasWeights === true,
-      onBalanceChange: (balance) => this.store.patch({ balance: balance || undefined }),
+      onBalanceChange: (balance) => this.setBalance(balance),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
-      scale: scaleOf(state),
+      scale: this.scaleOf(state),
       // Typing a new region replaces the whole selection, so the second axis
       // goes with it: `contig_A × contig_B` then `contig_C` means contig_C, not
       // contig_C against a column the user can no longer see named anywhere.
@@ -895,9 +943,16 @@ function loading(message: string): HTMLElement {
   )
 }
 
-/** Colour-scale fields carried by a view state (§5.5). */
-function scaleOf(state: ViewState): ScaleState {
+/**
+ * Colour-scale fields carried by a view state (§5.5), over the file's defaults.
+ *
+ * Only the transform has a per-file default, and only one file has it: see
+ * {@link App.balancedByDefault}. Everything else absent means the §7.1 default,
+ * which `MatrixPanel` supplies.
+ */
+function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {
   const scale: ScaleState = {}
+  if (fallback.transform !== undefined) scale.transform = fallback.transform
   if (state.transform !== undefined) scale.transform = state.transform
   if (state.colormap !== undefined) scale.colormap = state.colormap
   if (state.vmin !== undefined) scale.vmin = state.vmin

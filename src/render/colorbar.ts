@@ -326,8 +326,13 @@ export class ColorbarView {
 
   private captionText(): string {
     const o = this.opts
-    if (!o.showTransform || this.scale.transform === 'none') return o.caption
-    return `${o.caption} (${this.scale.transform})`
+    // A balanced cell is `raw * w[i] * w[j]` — a fraction, not a count, and
+    // routinely 0.0009 where the caption said "count". Naming it here is the
+    // only place the reader is told which of the two the numbers beside the
+    // strip are.
+    const units = this.scale.balanced === true ? 'balanced' : o.caption
+    if (!o.showTransform || this.scale.transform === 'none') return units
+    return `${units} (${this.scale.transform})`
   }
 
   /**

@@ -31,6 +31,12 @@ export interface WholeViewProps {
   balance: boolean
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean
+  /**
+   * Offer the bin ↔ contig roll-up. Off for a cooler: there the unit is a
+   * chromosome, one file often holds one of them, and "contig level" on a
+   * single-genome file is a picture of a single cell.
+   */
+  offerLevel: boolean
   /** What one axis unit is called here: a chromosome, or a contig. */
   noun: string
   onLevelChange(level: 'bin' | 'contig'): void
@@ -56,7 +62,7 @@ export class WholeView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
-      levels: ['bin', 'contig'],
+      ...(props.offerLevel ? { levels: ['bin', 'contig'] as Array<'bin' | 'contig'> } : {}),
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
