@@ -1,0 +1,119 @@
+/**
+ * Registering the service worker, and telling the user when a new one is ready.
+ *
+ * Two halves of one bargain. Caching the app is what makes it work with no
+ * network — but a cached app is also an app that can go on serving last month's
+ * build forever, silently, which is worse than not caching it at all. So the
+ * page watches for a waiting worker and offers a reload rather than taking one
+ * without asking: an update that swaps the code under a half-read file is not a
+ * courtesy.
+ *
+ * Nothing here is required for the app to work. A browser with no service
+ * worker support, a page served over plain HTTP, a failed registration — all of
+ * them land on "no offline, everything else normal", which is what the guards
+ * below are for. The viewer's job is to open files, and it must not fail to
+ * start because a cache could not be filled.
+ */
+
+import { el } from './ui/dom'
+
+/**
+ * Register, and watch for a replacement.
+ *
+ * Dev is skipped: `vite dev` serves unbundled modules, so there is nothing
+ * coherent to cache, and a worker holding yesterday's chunks is the classic
+ * reason a change "does not show up". The build plugin does not emit `sw.js`
+ * there either, so this would 404 anyway.
+ */
+export function registerServiceWorker(): void {
+  if (!import.meta.env.PROD) return
+  if (!('serviceWorker' in navigator)) return
+
+  window.addEventListener('load', () => {
+    // Relative to the app's base, not to the origin: a site served from
+    // `/metacooler.js/` has its worker there too, and a worker registered at
+    // the root would claim a scope it has no business in.
+    const url = `${import.meta.env.BASE_URL}sw.js`
+    // `updateViaCache: 'none'` is what makes an update ever arrive. The browser
+    // re-fetches this script on navigation and installs a new worker when the
+    // bytes differ -- but by default that fetch may itself be answered from the
+    // HTTP cache, and a host that serves `sw.js` with any max-age (GitHub Pages
+    // does) then pins the whole app to the build that was live when the user
+    // first visited. Found by deploying a second build in a test and watching
+    // nothing happen.
+    navigator.serviceWorker.register(url, { updateViaCache: 'none' }).then(
+      (registration) => watch(registration),
+      () => {
+        /* No offline. Not worth a word on screen: nothing the user did failed. */
+      },
+    )
+  })
+
+  // The other half of the handshake. The new worker has taken over, so the page
+  // it is serving is the old one — reload once, and guard against the loop a
+  // second `controllerchange` would cause.
+  let reloading = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return
+    reloading = true
+    window.location.reload()
+  })
+}
+
+/** Offer the reload as soon as a replacement is installed and waiting. */
+function watch(registration: ServiceWorkerRegistration): void {
+  if (registration.waiting !== null) offerUpdate(registration.waiting)
+  registration.addEventListener('updatefound', () => {
+    const installing = registration.installing
+    if (installing === null) return
+    installing.addEventListener('statechange', () => {
+      // `installed` *with* a controller means this is a replacement rather than
+      // the first install — on a first visit there is nothing to offer, because
+      // what is on screen is already the new thing.
+      if (installing.state === 'installed' && navigator.serviceWorker.controller !== null) {
+        offerUpdate(installing)
+      }
+    })
+  })
+}
+
+let prompt: HTMLElement | null = null
+
+/**
+ * A small bar, bottom left, with the one button that matters.
+ *
+ * Not a modal: nothing is wrong, nothing is urgent, and a dialog over a contact
+ * map to say "there is a newer version" would be an interruption charging for a
+ * courtesy. It is dismissible, and dismissing it keeps the old build running
+ * until the next reload, which is a legitimate thing to want in the middle of
+ * reading a figure.
+ */
+function offerUpdate(worker: ServiceWorker): void {
+  if (prompt !== null) return
+  const dismiss = (): void => {
+    prompt?.remove()
+    prompt = null
+  }
+  const reload = el('button', { class: 'btn btn-small', text: 'reload', type: 'button' })
+  reload.addEventListener('click', () => {
+    // The worker steps forward; `controllerchange` above reloads the page.
+    worker.postMessage('skip-waiting')
+    dismiss()
+  })
+  const close = el('button', {
+    class: 'btn-quiet update-close',
+    text: '×',
+    type: 'button',
+    title: 'Keep this version until the next reload',
+  })
+  close.addEventListener('click', dismiss)
+
+  prompt = el(
+    'div',
+    { class: 'update-bar', attrs: { role: 'status' } },
+    el('span', { text: 'A new version of the viewer is ready.' }),
+    reload,
+    close,
+  )
+  document.body.appendChild(prompt)
+}

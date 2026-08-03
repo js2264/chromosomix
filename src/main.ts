@@ -42,6 +42,7 @@ import { Modal } from './ui/Modal'
 import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
+import { registerServiceWorker } from './pwa'
 import type { TableUiState } from './ui/VirtualTable'
 import { isChord, isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
 import { openAbout, openShortcuts } from './ui/dialogs'
@@ -1281,6 +1282,10 @@ function inferSource(uri: string): SourceSpec | null {
 
 // Before the app mounts, so a user who chose dark gets no flash of light.
 initTheme()
+
+// Offline, after the first visit. Nothing downstream depends on it: a browser
+// that refuses, or a page served over plain HTTP, simply has no cache.
+registerServiceWorker()
 
 const root = document.getElementById('app')
 if (root !== null) {

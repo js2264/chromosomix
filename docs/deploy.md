@@ -121,6 +121,37 @@ are no deep paths for Pages to 404 on and no SPA-fallback `404.html` is needed.
   bundle and make console errors legible in the field. Drop them if that ever matters — the site
   budget is 1 GB, so it does not today.
 
+## Offline, and installable
+
+The site registers a service worker (`src/sw.js`, generated at build time by the plugin in
+`vite.config.ts`; registered by `src/pwa.ts`). After one visit the app works with **no network at
+all** — reload included — and Chrome and Edge offer an "Install app" button that puts it in the dock
+with no installer and no admin rights. For a viewer whose claim is that it reads your files without
+uploading them, that claim becomes something a user can *check*: load the page, disconnect, drop a
+file on it.
+
+**What is cached is the app, never the data.** The precache is the built JS and CSS, the shell, the
+manifest and the two icons — about 5 MB, most of it the HDF5 build that makes opening a file
+possible offline at all. The demo datasets under `public/demo/` are 107 MB and are *not* cached, and
+neither is anything the viewer opens: `fetch` in the worker answers only for URLs in that list, by
+exact match, and every other request reaches the network untouched. That is not a nicety — a remote
+`.metacool` is read with HTTP range requests, and a cache is the wrong shape for a 206.
+`scripts/sw-manifest.mjs` draws that line and `test/unit/precache.test.ts` holds it.
+
+**Updates are offered, not taken.** A new build installs and *waits*; the page shows a small bar
+offering a reload, and only then does the new worker step forward. Swapping the code under a page
+that is halfway through reading a file is not a courtesy. Two details make this work in production
+and are easy to lose:
+
+- the worker is registered with `updateViaCache: 'none'`, or the browser may answer its own
+  update check from the HTTP cache — GitHub Pages serves `sw.js` with a `max-age`, which would pin
+  every visitor to the build that was live when they first arrived;
+- `activate` prunes both other caches *and* stale entries inside the current one, because two builds
+  of the same commit share a cache name and `addAll` only ever adds.
+
+To verify a change to any of this, build, `npm run preview`, then in devtools → Application →
+Service Workers: tick "Offline" and reload. The page must come back and open a local file.
+
 ## Cutting a release
 
 The site is built from `main` on every push, so a release is not what publishes the app — it is what

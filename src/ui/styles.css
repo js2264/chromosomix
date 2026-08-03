@@ -670,6 +670,37 @@ p {
   background: var(--accent-soft);
 }
 
+/* The service worker's update offer (`src/pwa.ts`): a bar in the corner, not a
+   dialog. Nothing is wrong and nothing is urgent — a modal over a contact map
+   to announce a newer build would be an interruption charging for a courtesy —
+   so it sits out of the way, above the status bar, until it is used or
+   dismissed. */
+.update-bar {
+  position: fixed;
+  left: 1rem;
+  bottom: 2.4rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  font-size: var(--step--1);
+}
+
+.update-close {
+  font-size: var(--step-1);
+  line-height: 1;
+  padding: 0 0.3rem;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+}
+
 .input,
 .select,
 .search {

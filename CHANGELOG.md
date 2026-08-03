@@ -10,6 +10,20 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Works offline, and installs.** After one visit the app runs with no network at all — reload
+  included — and browsers offer to install it as a desktop app. The app is cached; the data never
+  is, and requests for it reach the network untouched. A new build is offered as a reload rather
+  than swapped in underneath you.
+
+### Fixed
+
+- `w` opens the whole-genome view again. The repaint short-circuit could not tell "nothing changed"
+  from "show me the other picture of the same thing", and swallowed it.
+
 ## [0.2.0] - 2026-08-03
 
 The first numbered release: everything below was built under `0.1.0`, which was never cut.
