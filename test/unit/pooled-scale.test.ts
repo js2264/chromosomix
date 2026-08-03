@@ -109,19 +109,35 @@ describe('the auto range on a pooled block', () => {
 })
 
 describe('pooling', () => {
-  it('reports the extent of the drawable values', () => {
+  it('resolves the auto range once and memoises it on the pooled block', () => {
     const m = block(64)
     const scale = auto('log1p')
     const pooled = poolDisplay(m, scale)
-    expect(pooled.extent).not.toBeNull()
-    expect(pooled.extent?.vmin).toBe(0)
-    expect(pooled.extent?.vmax).toBeGreaterThan(0)
+    // Not computed until something asks to be coloured.
+    expect(pooled.autoRange).toBeUndefined()
+
+    const first = colorize(pooled, scale).scale
+    expect(pooled.autoRange).toEqual({ vmin: first.vmin, vmax: first.vmax })
+
+    // A colormap change cannot move it, and must not recompute it: the same
+    // object comes back, which is what makes the recolour cheap.
+    const cached = pooled.autoRange
+    const second = colorize(pooled, { ...scale, colormap: 'viridis' }).scale
+    expect(pooled.autoRange).toBe(cached)
+    expect(second.vmin).toBe(first.vmin)
+    expect(second.vmax).toBe(first.vmax)
   })
 
-  it('has no extent when every cell is unbalanced', () => {
+  it('leaves an all-unbalanced block transparent, with the fallback bounds', () => {
     const values = new Float32Array(16).fill(Number.NaN)
     const m: DenseMatrix = { nrows: 4, ncols: 4, values, rowExtent: [0, 4], colExtent: [0, 4] }
-    expect(poolDisplay(m, auto('log1p')).extent).toBeNull()
+    const scale = auto('log1p')
+    const pooled = poolDisplay(m, scale)
+    expect(Array.from(pooled.values).every(Number.isNaN)).toBe(true)
+    const raster = colorize(pooled, scale)
+    expect(raster.scale.vmin).toBe(0)
+    expect(raster.scale.vmax).toBe(1)
+    for (let i = 3; i < raster.data.length; i += 4) expect(raster.data[i]).toBe(0)
   })
 
   it('takes the maximum of a pooled group, so a lone contact survives', () => {

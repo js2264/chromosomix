@@ -103,11 +103,41 @@ export interface PooledDisplay {
   strideY: number
   /** `width * height` display values; `NaN` where nothing was drawable. */
   values: Float32Array
-  /** Extent of the finite values, or `null` when there are none. */
-  extent: ValueRange | null
   /** What the pooling was computed for; the cache key. */
   transform: Transform
   balanced: boolean
+  /**
+   * The auto range over {@link values}, memoised by {@link colorize} on first
+   * demand.
+   *
+   * It depends on the pooled values, the transform and whether they are
+   * balanced — the three things that are already this object's identity — and
+   * on nothing the colormap or the clip can change. Recomputing it per
+   * `colorize` call meant every colormap change re-derived a pair of numbers it
+   * already had, which on a dense 4,096² raster is the difference between a
+   * repaint and a two-second freeze.
+   */
+  autoRange?: ValueRange
+}
+
+/**
+ * Whether the maximum of a block can be taken *before* the transform.
+ *
+ * The pooled value is the largest display value in the block, and where the
+ * transform is monotone in the raw value that is the transform of the largest
+ * raw value — the same element, so the same bits. Taking it that way applies
+ * `displayValue` once per raster pixel instead of once per matrix cell, which
+ * on a whole yeast genome at 500 bp is 16.4 M calls instead of 592 M.
+ *
+ * The exception is `log10` on **raw counts**, whose `x > 0 ? log10(x) : 0` clamp
+ * is not monotone across zero: `f(0)` is `0` while `f(0.5)` is negative. Integer
+ * counts never land in `(0, 1)` so it would be safe for them, but a float count
+ * column can, and "safe for the data I happened to test" is not a property worth
+ * having — that path keeps transforming per cell. Balanced `log10` sends zero to
+ * `-Infinity` instead and *is* monotone, and so are `log1p` and `none`.
+ */
+function poolsRawMax(transform: Transform, balanced: boolean): boolean {
+  return transform !== 'log10' || balanced
 }
 
 export function poolDisplay(
@@ -125,50 +155,58 @@ export function poolDisplay(
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
   const pooled = new Float32Array(width * height)
+  const pool: PooledDisplay = { width, height, strideX, strideY, values: pooled, transform, balanced }
 
-  let lo = Number.POSITIVE_INFINITY
-  let hi = Number.NEGATIVE_INFINITY
+  // Nothing is pooled: a block small enough to draw a pixel per cell. The
+  // general loop below still pays its four bounds and its NaN-max reduction for
+  // every 1 × 1 "block", which measured 3.2x the cost per cell of the case where
+  // it actually has something to reduce. Every MAG and every region view is
+  // here, so it is worth the twelve lines.
+  if (strideX === 1 && strideY === 1) {
+    const n = nrows * ncols
+    for (let i = 0; i < n; i++) pooled[i] = displayValue(values[i], transform, balanced)
+    return pool
+  }
+
+  // The *maximum* over the pooled cells, not the mean. A contact map is sparse
+  // and its signal is the bright cell; averaging it against its empty
+  // neighbours is how a loop disappears at fit zoom. NaN is not a value to
+  // maximise over — it means "unbalanced" — so it only survives when the whole
+  // block is NaN, and then the cell stays transparent, as one NaN cell does.
+  const rawMax = poolsRawMax(transform, balanced)
   for (let ry = 0; ry < height; ry++) {
     const y0 = ry * strideY
     const y1 = Math.min(y0 + strideY, nrows)
     for (let rx = 0; rx < width; rx++) {
       const x0 = rx * strideX
       const x1 = Math.min(x0 + strideX, ncols)
-
-      // The *maximum* over the pooled cells, not the mean. A contact map is
-      // sparse and its signal is the bright cell; averaging it against its
-      // empty neighbours is how a loop disappears at fit zoom. NaN is not a
-      // value to maximise over — it means "unbalanced" — so it only survives
-      // when the whole block is NaN, and then the cell stays transparent, as
-      // one NaN cell does.
       let best = Number.NaN
-      for (let y = y0; y < y1; y++) {
-        const row = y * ncols
-        for (let x = x0; x < x1; x++) {
-          const raw = values[row + x]
-          if (Number.isNaN(raw)) continue
-          const t = displayValue(raw, transform, balanced)
-          if (Number.isNaN(best) || t > best) best = t
+      if (rawMax) {
+        for (let y = y0; y < y1; y++) {
+          const row = y * ncols
+          for (let x = x0; x < x1; x++) {
+            const raw = values[row + x]
+            if (Number.isNaN(raw)) continue
+            if (Number.isNaN(best) || raw > best) best = raw
+          }
+        }
+        if (!Number.isNaN(best)) best = displayValue(best, transform, balanced)
+      } else {
+        for (let y = y0; y < y1; y++) {
+          const row = y * ncols
+          for (let x = x0; x < x1; x++) {
+            const raw = values[row + x]
+            if (Number.isNaN(raw)) continue
+            const t = displayValue(raw, transform, balanced)
+            if (Number.isNaN(best) || t > best) best = t
+          }
         }
       }
       pooled[ry * width + rx] = best
-      if (Number.isFinite(best)) {
-        if (best < lo) lo = best
-        if (best > hi) hi = best
-      }
     }
   }
 
-  return {
-    width,
-    height,
-    strideX,
-    strideY,
-    values: pooled,
-    extent: lo <= hi ? { vmin: lo, vmax: hi } : null,
-    transform,
-    balanced,
-  }
+  return pool
 }
 
 /**
@@ -180,22 +218,42 @@ export function poolDisplay(
  * moves both: a `vmin` pinned at `0` beside an auto `vmax` is what made `log10`
  * of a balanced matrix come out blank.
  */
-export function colorize(pooled: PooledDisplay, scale: ColorScale): Raster {
+export function colorize(
+  pooled: PooledDisplay,
+  scale: ColorScale,
+  into?: Uint8ClampedArray,
+): Raster {
   const { width, height, values } = pooled
-  const auto =
-    Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)
-      ? null
-      : autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
+  let auto: ValueRange | null = null
+  if (!Number.isFinite(scale.vmin) || !Number.isFinite(scale.vmax)) {
+    // Memoised on the pooled block, because that is what it is a property of.
+    // A colormap change cannot move it, and recomputing it there was the
+    // dominant cost of the most common colour interaction there is.
+    pooled.autoRange ??= autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
+    auto = pooled.autoRange
+  }
   const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
   const vmax = Number.isFinite(scale.vmax) ? scale.vmax : (auto?.vmax ?? 1)
   const span = vmax - vmin
 
   const lut = applyColormap(scale.colormap)
-  const data = new Uint8ClampedArray(width * height * 4)
+  // Reused where the caller has a buffer of the right size — every recolour of
+  // an unchanged block, which is the common case. A fresh 4 B/px allocation per
+  // colormap click is 66 MB of garbage on a full-size raster, produced at the
+  // exact moment the memory budget is tightest.
+  const data =
+    into !== undefined && into.length === width * height * 4
+      ? into
+      : new Uint8ClampedArray(width * height * 4)
   for (let i = 0; i < values.length; i++) {
     const best = values[i]
     const o = i * 4
     if (Number.isNaN(best)) {
+      // Every byte is written on every path, including this one: the buffer may
+      // be a reused one that still holds the previous colouring.
+      data[o] = 0
+      data[o + 1] = 0
+      data[o + 2] = 0
       data[o + 3] = 0
       continue
     }
@@ -205,6 +263,9 @@ export function colorize(pooled: PooledDisplay, scale: ColorScale): Raster {
     // below every bound there is, which is that same low end.
     const k = colormapIndex(span > 0 && Number.isFinite(best) ? (best - vmin) / span : 0)
     if (k < 0) {
+      data[o] = 0
+      data[o + 1] = 0
+      data[o + 2] = 0
       data[o + 3] = 0
       continue
     }
@@ -1514,16 +1575,33 @@ export class HeatmapView {
     ) {
       this.pooled = poolDisplay(this.matrix, this.colorScale)
     }
-    const raster = colorize(this.pooled, this.colorScale)
-    const canvas = createRasterCanvas(raster.width, raster.height)
-    canvas.width = raster.width
-    canvas.height = raster.height
+    // Both buffers are handed back to the next colouring. A colormap change or
+    // a clip drag never resizes the raster, so the common case reuses a 4 B/px
+    // `Uint8ClampedArray` and a canvas of the same size instead of allocating
+    // and orphaning both — ~131 MB of churn per click on a full-size raster,
+    // against a budget that is already the tightest thing in the app.
+    const raster = colorize(this.pooled, this.colorScale, this.raster?.data)
+    const reusable =
+      this.offscreen !== null &&
+      this.offscreen.width === raster.width &&
+      this.offscreen.height === raster.height
+    const canvas = reusable
+      ? (this.offscreen as RasterCanvas)
+      : createRasterCanvas(raster.width, raster.height)
+    if (!reusable) {
+      canvas.width = raster.width
+      canvas.height = raster.height
+    }
     const ctx = (canvas as HTMLCanvasElement).getContext('2d')
     if (ctx === null) throw new Error('Could not acquire a 2d context for the raster canvas')
     // TypeScript 5.7 made typed arrays generic over their backing buffer, and
     // `ImageData` accepts only a plain `ArrayBuffer`. `rasterize` allocates
     // exactly that; the cast only re-narrows what the public `Uint8ClampedArray`
     // annotation widened to `ArrayBufferLike`.
+    //
+    // `putImageData` overwrites the destination rectangle wholesale — it does
+    // not composite — so a reused canvas needs no clear, and `colorize` writes
+    // all four bytes of every pixel including the transparent ones.
     const bytes = raster.data as Uint8ClampedArray<ArrayBuffer>
     ctx.putImageData(new ImageData(bytes, raster.width, raster.height), 0, 0)
     this.raster = raster

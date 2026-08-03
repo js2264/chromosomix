@@ -178,6 +178,81 @@ export function percentileLinear(sorted: ArrayLike<number>, q: number): number {
   return t < 0.5 ? a + diff * t : b - diff * (1 - t)
 }
 
+/**
+ * The `k`-th smallest element, in place, in expected linear time.
+ *
+ * Quickselect with a median-of-three pivot and a Hoare partition. On return the
+ * array is *partially* ordered around `k`: everything before it is no greater,
+ * everything after no smaller. That is the whole invariant {@link percentileOf}
+ * needs, and it is what a full sort spends `log n` extra passes establishing
+ * for every element nobody is going to look at.
+ *
+ * `values` is permuted. Every caller here owns a scratch copy built one line
+ * earlier, so that is free rather than rude.
+ *
+ * Assumes no `NaN`: the collectors above filter on predicates that exclude it,
+ * and a `NaN` pivot would make the partition loops run off the ends.
+ */
+export function selectNth(values: Float32Array, k: number): number {
+  let lo = 0
+  let hi = values.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    const a = values[lo]
+    const b = values[mid]
+    const c = values[hi]
+    // Median of three, by value: any of the three is a member of the range, so
+    // the partition below is guaranteed to make progress.
+    const pivot = a < b ? (b < c ? b : a < c ? c : a) : a < c ? a : b < c ? c : b
+    let i = lo - 1
+    let j = hi + 1
+    for (;;) {
+      do i++
+      while (values[i] < pivot)
+      do j--
+      while (values[j] > pivot)
+      if (i >= j) break
+      const swap = values[i]
+      values[i] = values[j]
+      values[j] = swap
+    }
+    if (k <= j) hi = j
+    else lo = j + 1
+  }
+  return values[k]
+}
+
+/**
+ * {@link percentileLinear} without the sort — the same number, from an unsorted
+ * array, in O(n).
+ *
+ * The two straddling order statistics are all the interpolation reads, and
+ * selection finds them exactly: `selectNth` places the lower one and leaves
+ * every larger element after it, so the upper one is the minimum of the tail.
+ * The lerp that follows is byte-for-byte the one above, so this is a change of
+ * *cost* and not of value — which matters, because the number it produces sets
+ * the brightness of every pixel and is compared against numpy in the goldens.
+ *
+ * @param values Scratch array, permuted in place.
+ */
+export function percentileOf(values: Float32Array, q: number): number {
+  const n = values.length
+  if (n === 0) return Number.NaN
+  if (n === 1) return values[0]
+  const pos = ((n - 1) * q) / 100
+  const lo = Math.floor(pos)
+  const hi = Math.ceil(pos)
+  const a = selectNth(values, lo)
+  if (lo === hi) return a
+  let b = values[lo + 1]
+  for (let i = lo + 2; i < n; i++) {
+    if (values[i] < b) b = values[i]
+  }
+  const t = pos - lo
+  const diff = b - a
+  return t < 0.5 ? a + diff * t : b - diff * (1 - t)
+}
+
 /** The percentile `metacooler show` uses when `--vmax` is not given. */
 export const AUTO_VMAX_PERCENTILE = 99
 
@@ -218,7 +293,7 @@ export function autoVmax(transformed: ArrayLike<number>): number {
  */
 export function autoVmaxOf(values: ArrayLike<number>, transform: Transform): number {
   const nz = collectDisplay(values, transform, false, (_raw, x) => x > 0)
-  return nz.length === 0 ? 1.0 : percentileLinear(nz, AUTO_VMAX_PERCENTILE)
+  return nz.length === 0 ? 1.0 : percentileOf(nz, AUTO_VMAX_PERCENTILE)
 }
 
 /** The low percentile of the fallback rule in {@link autoRangeOf}. */
@@ -263,7 +338,7 @@ export function autoRangeOf(
   if (!balanced) {
     const positive = collectDisplay(values, transform, false, (_raw, x) => x > 0)
     if (positive.length > 0) {
-      return { vmin: 0, vmax: percentileLinear(positive, AUTO_VMAX_PERCENTILE) }
+      return { vmin: 0, vmax: percentileOf(positive, AUTO_VMAX_PERCENTILE) }
     }
   }
   const contacts = collectDisplay(
@@ -273,8 +348,8 @@ export function autoRangeOf(
     (raw, x) => raw > 0 && Number.isFinite(x),
   )
   if (contacts.length === 0) return { vmin: 0, vmax: 1.0 }
-  const vmin = percentileLinear(contacts, AUTO_VMIN_PERCENTILE)
-  const vmax = percentileLinear(contacts, AUTO_VMAX_PERCENTILE)
+  const vmin = percentileOf(contacts, AUTO_VMIN_PERCENTILE)
+  const vmax = percentileOf(contacts, AUTO_VMAX_PERCENTILE)
   // A constant matrix has no range to speak of; matplotlib collapses one to the
   // colormap's low end, and `vmin + 1` is the span that reproduces that.
   return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
@@ -310,18 +385,28 @@ export function autoRangeOfDisplay(
   if (!balanced) {
     const positive = collectWhere(display, (x) => x > 0)
     if (positive.length > 0) {
-      return { vmin: 0, vmax: percentileLinear(positive, AUTO_VMAX_PERCENTILE) }
+      return { vmin: 0, vmax: percentileOf(positive, AUTO_VMAX_PERCENTILE) }
     }
   }
   const floor = displayValue(0, transform, balanced)
   const contacts = collectWhere(display, (x) => Number.isFinite(x) && x > floor)
   if (contacts.length === 0) return { vmin: 0, vmax: 1.0 }
-  const vmin = percentileLinear(contacts, AUTO_VMIN_PERCENTILE)
-  const vmax = percentileLinear(contacts, AUTO_VMAX_PERCENTILE)
+  // Two selections rather than two lookups into one sorted array: each is O(n)
+  // and the second runs over an array the first already partitioned, which is
+  // still cheaper than the `n log n` a sort costs to answer both.
+  const vmin = percentileOf(contacts, AUTO_VMIN_PERCENTILE)
+  const vmax = percentileOf(contacts, AUTO_VMAX_PERCENTILE)
   return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
 }
 
-/** The kept values, sorted ascending. Two passes so the array is sized once. */
+/**
+ * The kept values, unordered. Two passes so the array is sized once.
+ *
+ * Deliberately *not* sorted. A 4,096² pooled raster of a dense overview keeps
+ * ~15 M values, and sorting them to read two order statistics measured at
+ * 1.8 s — a two-second freeze per colormap change, for a pair of numbers
+ * {@link percentileOf} extracts in a linear pass.
+ */
 function collectWhere(
   values: ArrayLike<number>,
   keep: (x: number) => boolean,
@@ -335,7 +420,6 @@ function collectWhere(
     const x = values[i]
     if (keep(x)) out[k++] = x
   }
-  out.sort()
   return out
 }
 
@@ -363,8 +447,7 @@ export function valueExtentOf(
 }
 
 /**
- * The display values whose `(raw, display)` pair passes `keep`, sorted
- * ascending.
+ * The display values whose `(raw, display)` pair passes `keep`, unordered.
  *
  * Float32 because the values are Float32 either way — they come from a Float32
  * matrix — so the order and the two straddling values are identical to what a
@@ -387,7 +470,6 @@ function collectDisplay(
     const x = displayValue(values[i], transform, balanced)
     if (keep(values[i], x)) out[k++] = x
   }
-  out.sort()
   return out
 }
 
@@ -400,14 +482,16 @@ function autoVmaxImpl(transformed: ArrayLike<number>): number {
   // Float64 for the sort and the interpolation even when the input is Float32:
   // the percentile is a single number that sets the whole image's brightness,
   // so it is worth carrying at double precision once the values are extracted.
-  const nz = new Float64Array(count)
+  // Float32 rather than Float64, matching its two siblings: the input is a
+  // Float32 matrix either way, so the order and the two straddling values are
+  // identical, and the buffer is half the size against the same budget.
+  const nz = new Float32Array(count)
   let k = 0
   for (let i = 0; i < n; i++) {
     const x = transformed[i]
     if (x > 0) nz[k++] = x
   }
-  nz.sort()
-  return percentileLinear(nz, AUTO_VMAX_PERCENTILE)
+  return percentileOf(nz, AUTO_VMAX_PERCENTILE)
 }
 
 // ---------------------------------------------------------------------------
