@@ -66,6 +66,18 @@ export class StatusBar {
     this.el = el(
       'footer',
       { class: 'app-foot' },
+      // The standing disclosure, and it was missing. This module's own doc has
+      // asserted since it was written that "the privacy statement stays here
+      // permanently", and the picker's dismiss button promises in a tooltip
+      // that "the footer keeps the same statement" -- while this element
+      // rendered no such thing. So dismissing the notice made the claim
+      // disappear from the application entirely, in the shipping web build,
+      // which is the one place a privacy claim must not be a paraphrase of
+      // something that used to be there.
+      //
+      // First child, so it reads before the instruments and survives the bar
+      // being crowded from the right.
+      el('span', { class: 'status-privacy', text: 'read in place · nothing is sent' }),
       this.coordinates,
       el(
         'div',

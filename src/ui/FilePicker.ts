@@ -133,7 +133,14 @@ export class FilePicker {
             el('h3', { text: 'Public examples' }),
             el('p', {
               class: 'hint',
-              text: 'Published beside this page, so they open the same way a bucket does.',
+              // The same rewording as the privacy claim below, and the same
+              // reason. "Beside this page" is true on the website, where the
+              // demos are served from the app's own origin, and false in the
+              // desktop build, which publishes nothing and reads them over the
+              // network. What is true of both is the part that mattered anyway:
+              // they take the reader's remote path, so they exercise what a
+              // file on your own bucket exercises.
+              text: 'Read over the network, exactly as a file on your own bucket would be.',
             }),
             exampleSelect,
             exampleNote,
@@ -210,11 +217,17 @@ export class FilePicker {
       el(
         'div',
         { class: 'privacy-text' },
-        el('strong', { text: 'Nothing you drop here leaves your browser.' }),
+        // Reworded once, for both targets, rather than branched on which build
+        // this is. The standard this module's own doc sets is that the claim
+        // has to be literally true of the code -- and "leaves your browser" is
+        // false in the desktop build while "leaves this machine" is true in
+        // both. A branch here would also mean two sentences to keep honest,
+        // and the one that is read least is the one that would go stale.
+        el('strong', { text: 'Nothing you open here leaves this machine.' }),
         el('span', {
           text:
             ' There is no upload, no account and no server: the file is read in place, ' +
-            'a few kilobytes at a time, by code running on this page. Close the tab and ' +
+            'a few kilobytes at a time, by code running on your own computer. Quit and ' +
             'nothing remains.',
         }),
       ),

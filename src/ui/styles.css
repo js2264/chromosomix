@@ -325,6 +325,17 @@ p {
 
 /* --- status bar -------------------------------------------------------- */
 
+/* The standing privacy disclosure. Quiet — it is a statement of fact, not a
+   notice — but it never leaves: the picker's dismissable reminder promises in
+   its tooltip that the footer keeps the same statement, and until this existed
+   that promise was not kept. It shrinks before the coordinate readout does,
+   and is the last thing to be hidden. */
+.status-privacy {
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 /* Coordinates on the left, instruments on the right: one changes with every
    pointer move and is read continuously, the two others are glanced at. */
 .status-coords {
@@ -2205,6 +2216,15 @@ p {
      two instruments stay, because a tap opens them. */
   .status-coords {
     display: none;
+  }
+
+  /* The disclosure stays on a phone, abbreviated rather than dropped: it is the
+     one thing in this bar that is a promise rather than an instrument. */
+  .status-privacy {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 0 1 auto;
   }
 
   /* Still anchored to its item's right edge — both items sit at the right end

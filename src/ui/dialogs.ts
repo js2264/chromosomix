@@ -105,11 +105,14 @@ export function openAbout(
             'they extend. It runs entirely in this page: there is no backend, no upload and no ' +
             'preprocessing step.',
         }),
+        // Same substitution as `FilePicker.ts`, and for the same reason: the
+        // claim is reworded once to be true of both targets rather than
+        // branched, because "in this tab" is false in a window that is not one.
         el('p', {
           text:
-            'Local files are read in place, a few kilobytes at a time, by code running in this ' +
-            'tab. Remote files are read the same way over HTTP range requests, so opening a map ' +
-            'on a bucket costs a few requests rather than a download.',
+            'Local files are read in place, a few kilobytes at a time, by code running on your ' +
+            'own computer. Remote files are read the same way over HTTP range requests, so ' +
+            'opening a map on a bucket costs a few requests rather than a download.',
         }),
         el(
           'p',
