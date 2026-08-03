@@ -423,7 +423,9 @@ export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string)
   const nRows = rows[1] - rows[0]
   const nCols = cols[1] - cols[0]
   checkDenseSize(nRows, nCols, hint)
-  checkBrowserDenseSize(nRows, nCols, hint)
+  checkBrowserDenseSize(nRows, nCols, hint, {
+    ...(q.budgetBytes === undefined ? {} : { budgetBytes: q.budgetBytes }),
+  })
 
   const values = allocateDense(nRows, nCols, hint)
   if (nRows > 0 && nCols > 0) {

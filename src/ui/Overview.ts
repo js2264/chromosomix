@@ -290,20 +290,35 @@ export class Overview {
     }
 
     if (sourceKind === 'remote' && sourceBytes > REMOTE_SCAN_BYTE_LIMIT) {
+      // A warning with a way through, not a refusal.
+      //
+      // The threshold is a *bandwidth* judgement wearing a memory label: the
+      // scan streams in bounded windows, so a 1 GB remote file costs the same
+      // RAM as a 10 MB one and only the download is large. The operation is
+      // already cancellable and already reports progress, and the sentence below
+      // already states the cost honestly — which is exactly what a confirmation
+      // needs and what an unconditional refusal wastes. The user knows their
+      // connection; this page does not.
       this.gate.appendChild(
         el('p', {
           class: 'inline-error',
           text:
-            `Refusing to scan a remote file of ${fmt.bytes(sourceBytes)}: reading every pixel over ` +
-            `HTTP means downloading all of it. The limit is ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)}.`,
+            `Scanning this file over HTTP means downloading all ${fmt.bytes(sourceBytes)} of it, ` +
+            `which is past the ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)} this page starts on a click.`,
         }),
       )
       this.gate.appendChild(
         el('p', {
           class: 'hint',
           text:
-            'Two ways round it: open a local copy of the file, or publish a genome edge list next ' +
+            'Cheaper routes: open a local copy of the file, or publish a genome edge list next ' +
             'to it with `metacooler network --level genome --header` and reference it from the catalog.',
+        }),
+      )
+      this.gate.appendChild(
+        button(`download and scan anyway (${fmt.bytes(sourceBytes)})`, () => void this.scan(), {
+          class: 'btn',
+          title: 'The scan reports progress and can be cancelled at any point.',
         }),
       )
       return
