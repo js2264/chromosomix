@@ -1135,6 +1135,10 @@ class App {
       offerLevel: file.info.nContigs > 1,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
+      // The two are mutually exclusive in practice and both are passed anyway:
+      // a file either has a genome layer to name in the tooltip (§7.4) or is a
+      // cooler that can carry annotations (§8.5), never both.
+      namesGenomes: file.info.hasGenomes,
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onBalanceChange: (balance) => this.setBalance(balance),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),

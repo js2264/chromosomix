@@ -488,7 +488,7 @@ export function overviewTarget(cell: {
 /** Wrap an overview in the shape {@link MatrixPanel} draws. */
 function toMatrixResult(result: OverviewResult): MatrixResult {
   const groups = result.labels.map((label, index) => ({ label, start: index, end: index + 1 }))
-  const superGroups = runsOf(result.groups)
+  const genomes = runsOf(result.groups)
   return {
     nrows: result.n,
     ncols: result.n,
@@ -497,9 +497,11 @@ function toMatrixResult(result: OverviewResult): MatrixResult {
     colExtent: [0, result.n],
     rowGroups: groups,
     colGroups: groups,
-    ...(superGroups === undefined
+    // This is the one view whose genome runs are also what gets drawn — see
+    // `separatorsFor`. It is a picture *of* the genomes.
+    ...(genomes === undefined
       ? {}
-      : { rowSuperGroups: superGroups, colSuperGroups: superGroups }),
+      : { rowGenomes: genomes, colGenomes: genomes, genomeBoundaries: true }),
     level: 'genome',
   }
 }

@@ -15,7 +15,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { bpWithin, separatorsFor } from '@/ui/MatrixPanel'
+import { bpWithin, separationOf, separatorsFor } from '@/ui/MatrixPanel'
+import type { Cell } from '@/render/heatmap'
 import { idRuns } from '@/worker/groups'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
@@ -123,14 +124,96 @@ describe('separatorsFor', () => {
     expect(set.groupRows).toBeUndefined()
   })
 
-  it('marks genomes, and only genomes, when the reader sends them', () => {
+  it('marks genomes, and only genomes, when the reader says to draw them', () => {
     const set = separatorsFor(
-      result({ rowSuperGroups: genomes, colSuperGroups: genomes }),
+      result({ rowGenomes: genomes, colGenomes: genomes, genomeBoundaries: true }),
     )
     expect(set.rows.map((s) => s.at)).toEqual([0, 25])
     expect(set.rows.map((s) => s.label)).toEqual(['g1', 'g2'])
     expect(set.cols.map((s) => s.at)).toEqual([0, 25])
     // Also as the heavier set, drawn over the same coordinates.
     expect(set.groupRows?.map((s) => s.at)).toEqual([0, 25])
+  })
+
+  // The whole-genome view of a metacool sends genome runs for the *tooltip* and
+  // does not ask for them to be drawn. Without this distinction, turning on the
+  // genome line in the tooltip would silently coarsen the picture underneath it
+  // from 20,566 contigs to 49 genomes.
+  it('keeps the contig lines when the genomes are for naming only', () => {
+    const set = separatorsFor(result({ rowGenomes: genomes, colGenomes: genomes }))
+    expect(set.rows.map((s) => s.at)).toEqual([0, 10, 25])
+    expect(set.cols.map((s) => s.at)).toEqual([0, 10, 25])
+    expect(set.groupRows).toBeUndefined()
+    expect(set.groupCols).toBeUndefined()
+  })
+})
+
+/**
+ * The genomic distance across a cell (§5.4).
+ *
+ * A Hi-C map is read by how contact falls off with separation, so the number a
+ * pointer on an off-diagonal cell is usually asking for is how far apart its two
+ * ends are — and until this existed the tooltip made you subtract its own two
+ * coordinates to get it. What matters here is the three cases where there is no
+ * answer, because each is a refusal and not a gap: above bin level a cell has no
+ * ends to subtract, across two contigs the contact is trans and a distance along
+ * the sequence does not exist at all, and on the diagonal it is zero.
+ */
+describe('separationOf', () => {
+  const cell = (row: number, col: number, rowBin = row, colBin = col): Cell => ({
+    row,
+    col,
+    rowBin,
+    colBin,
+    value: 1,
+  })
+  /** One whole contig on both axes: a chromosome view, or a cool of one. */
+  const ONE: AxisGroup = { label: 'I', start: 0, end: 100, unitStart: 0 }
+
+  it('is the base pairs between the two ends of an off-diagonal cell', () => {
+    expect(separationOf(ONE, ONE, cell(10, 40), 'bin', BIN)).toBe(30_000)
+    // Symmetric: the upper and lower triangle are the same contact.
+    expect(separationOf(ONE, ONE, cell(40, 10), 'bin', BIN)).toBe(30_000)
+  })
+
+  it('says nothing on the diagonal, where the answer is zero', () => {
+    expect(separationOf(ONE, ONE, cell(17, 17), 'bin', BIN)).toBeNull()
+  })
+
+  it('says nothing across two contigs, where there is no distance to give', () => {
+    // Not a large separation — none. A trans contact has no position along one
+    // sequence, and reporting `|rowBin - colBin| * binsize` here would invent a
+    // number out of where the two contigs happen to sit in the file.
+    const other: AxisGroup = { label: 'II', start: 0, end: 100, unitStart: 100 }
+    expect(separationOf(ONE, other, cell(5, 5, 5, 105), 'bin', BIN)).toBeNull()
+  })
+
+  it('answers within one contig of a multi-contig axis, and not across them', () => {
+    // A genome view: several contigs on one axis, and only the cis cells have a
+    // separation.
+    const c1: AxisGroup = { label: 'c1', start: 0, end: 30, unitStart: 0 }
+    const c2: AxisGroup = { label: 'c2', start: 30, end: 100, unitStart: 30 }
+    expect(separationOf(c1, c1, cell(2, 20), 'bin', BIN)).toBe(18_000)
+    expect(separationOf(c2, c2, cell(40, 90), 'bin', BIN)).toBe(50_000)
+    expect(separationOf(c1, c2, cell(2, 90), 'bin', BIN)).toBeNull()
+  })
+
+  it('holds across a rectangular block of one contig against itself', () => {
+    // `contig × the same contig` over two different windows: the two axes have
+    // different block origins and one contig, so the absolute bins are what the
+    // arithmetic must use — `unitStart` is equal and cancels.
+    const rows: AxisGroup = { label: 'I', start: 0, end: 50, unitStart: 0 }
+    const cols: AxisGroup = { label: 'I', start: 0, end: 50, unitStart: 0 }
+    expect(separationOf(rows, cols, cell(0, 0, 100, 400), 'bin', BIN)).toBe(300_000)
+  })
+
+  it('says nothing above bin level, where a cell is a whole sequence', () => {
+    const c1: AxisGroup = { label: 'c1', start: 0, end: 1 }
+    const c2: AxisGroup = { label: 'c2', start: 1, end: 2 }
+    expect(separationOf(c1, c2, cell(0, 1), 'contig', BIN)).toBeNull()
+  })
+
+  it('says nothing without a bin size, which a variable-bin file has none of', () => {
+    expect(separationOf(ONE, ONE, cell(10, 40), 'bin', 0)).toBeNull()
   })
 })

@@ -291,10 +291,15 @@ export class MatrixPanel {
   /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
   private readonly tip: {
     matrix: HTMLElement
+    rowGenome: HTMLElement
+    genomeTimes: HTMLElement
+    colGenome: HTMLElement
+    genomes: HTMLElement
     rowName: HTMLElement
     times: HTMLElement
     colName: HTMLElement
     pos: HTMLElement
+    distance: HTMLElement
     count: HTMLElement
     /** The lane tooltip's block: a heading and however many lines it has. */
     lane: HTMLElement
@@ -331,18 +336,29 @@ export class MatrixPanel {
     // a second copy of it would drift.
     this.tip = {
       matrix: el('div', { class: 'cell-tip-block' }),
+      rowGenome: el('span', { class: 'cell-tip-name' }),
+      genomeTimes: el('span', { class: 'cell-tip-x', text: '×' }),
+      colGenome: el('span', { class: 'cell-tip-name' }),
+      genomes: el('div', { class: 'cell-tip-pair cell-tip-genomes hidden' }),
       rowName: el('span', { class: 'cell-tip-name' }),
       times: el('span', { class: 'cell-tip-x', text: '×' }),
       colName: el('span', { class: 'cell-tip-name' }),
       pos: el('div', { class: 'cell-tip-pos' }),
+      distance: el('div', { class: 'cell-tip-distance hidden' }),
       count: el('div', { class: 'cell-tip-count' }),
       lane: el('div', { class: 'cell-tip-block hidden' }),
       laneTitle: el('div', { class: 'cell-tip-title' }),
       laneLines: el('div', { class: 'cell-tip-lines' }),
     }
+    this.tip.genomes.append(this.tip.rowGenome, this.tip.genomeTimes, this.tip.colGenome)
     this.tip.matrix.append(
+      // The genome leads, where there is one: it is the coarser fact, and on a
+      // metagenome it is the one that says what you are looking at. The contig
+      // under it is the finer answer to the same question.
+      this.tip.genomes,
       el('div', { class: 'cell-tip-pair' }, this.tip.rowName, this.tip.times, this.tip.colName),
       this.tip.pos,
+      this.tip.distance,
       this.tip.count,
     )
     this.tip.lane.append(this.tip.laneTitle, this.tip.laneLines)
@@ -1311,8 +1327,13 @@ export class MatrixPanel {
     const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
     const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize, colStart)
     const count = Number.isNaN(cell.value) ? 'NaN (unbalanced)' : fmt.num(cell.value)
+    const distance = separationOf(rowGroup, colGroup, cell, data.level, this.options.binsize)
 
-    setReadout(`${rowLabel}  ×  ${colLabel}   count ${count}`)
+    setReadout(
+      `${rowLabel}  ×  ${colLabel}` +
+        (distance === null ? '' : `   ${fmt.bp(distance)} apart`) +
+        `   count ${count}`,
+    )
 
     // The names in full, unabbreviated, and each name written *once*: the axis
     // labels are elided when the blocks are narrow, so the tooltip is often the
@@ -1335,6 +1356,24 @@ export class MatrixPanel {
     const hasPos = rowPos !== null && colPos !== null
     tip.pos.classList.toggle('hidden', !hasPos)
     if (hasPos) tip.pos.textContent = `${rowPos}  ×  ${colPos}`
+
+    // The genome line, on the same "written once when it is one name" rule as
+    // the contigs above it. Absent entirely where the reader sent no genomes —
+    // a plain cooler, or any view that already is one genome.
+    const rowGenome = groupAt(data.rowGenomes, cell.row)?.label
+    const colGenome = groupAt(data.colGenomes, cell.col)?.label
+    const hasGenome = rowGenome !== undefined || colGenome !== undefined
+    tip.genomes.classList.toggle('hidden', !hasGenome)
+    if (hasGenome) {
+      const oneGenome = rowGenome === colGenome
+      tip.rowGenome.textContent = rowGenome ?? '—'
+      tip.genomeTimes.classList.toggle('hidden', oneGenome)
+      tip.colGenome.classList.toggle('hidden', oneGenome)
+      if (!oneGenome) tip.colGenome.textContent = colGenome ?? '—'
+    }
+
+    tip.distance.classList.toggle('hidden', distance === null)
+    if (distance !== null) tip.distance.textContent = `${fmt.bp(distance)} apart`
     tip.count.textContent = `count ${count}`
 
     this.tooltip.classList.remove('hidden')
@@ -1400,8 +1439,12 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
   )
 }
 
-/** Which group covers a block-local offset. */
-export function groupAt(groups: AxisGroup[], offset: number): AxisGroup | undefined {
+/** Which group covers a block-local offset. Absent list, absent answer. */
+export function groupAt(
+  groups: AxisGroup[] | undefined,
+  offset: number,
+): AxisGroup | undefined {
+  if (groups === undefined) return undefined
   let lo = 0
   let hi = groups.length - 1
   while (lo <= hi) {
@@ -1473,6 +1516,42 @@ function describeAxis(
   if (group === undefined) return '—'
   if (level !== 'bin') return group.label
   return `${group.label}:${fmt.bp(bpWithin(group, offset, blockStart, binsize))}`
+}
+
+/**
+ * How far apart the two ends of a cell are along the sequence, in base pairs.
+ *
+ * The genomic distance is what a cis contact *means* — a Hi-C map is read by
+ * how the signal falls off with separation, and until now the tooltip made you
+ * subtract two coordinates to get it. `null` where the question has no answer,
+ * which is three cases and each is a refusal rather than a gap:
+ *
+ * - **above bin level**, where a cell is a whole contig or genome and its two
+ *   ends have no positions to subtract;
+ * - **across two contigs**, where the contact is trans and a distance along the
+ *   sequence does not exist — not a large one, none;
+ * - **on the diagonal**, where it is zero and saying so is noise on the line
+ *   that matters least.
+ *
+ * Same contig is decided by `unitStart`, not by name: it is the absolute bin
+ * the contig itself begins at, so it distinguishes two blocks of one contig
+ * (a rectangular region view of `contig × the same contig`, where the labels
+ * agree and the arithmetic still has one origin) without trusting a string.
+ */
+export function separationOf(
+  rowGroup: AxisGroup | undefined,
+  colGroup: AxisGroup | undefined,
+  cell: Cell,
+  level: 'bin' | 'contig' | 'genome',
+  binsize: number,
+): number | null {
+  if (level !== 'bin' || !(binsize > 0)) return null
+  if (rowGroup === undefined || colGroup === undefined) return null
+  if (rowGroup.unitStart === undefined || rowGroup.unitStart !== colGroup.unitStart) return null
+  // Straight from the absolute bin indices: the two `unitStart` terms are equal
+  // and cancel, so this is exact and needs neither axis's block origin.
+  const bins = Math.abs(cell.rowBin - cell.colBin)
+  return bins === 0 ? null : bins * binsize
 }
 
 /**
@@ -1626,33 +1705,37 @@ function watchTheme(onChange: () => void): () => void {
 /**
  * Separator positions: the first row/column of every group after the first.
  *
- * A super-group set, when the reader supplies one, becomes the *group*
- * separators — the heavier line — so a contig × contig overview shows its
- * genome boundaries over its contig ones.
+ * The genome runs become the drawn boundaries only where the reader says so
+ * (`genomeBoundaries`), which is the whole-metagenome overview and nothing
+ * else. Elsewhere they are a fact the tooltip reports and not a line: a
+ * whole-genome view of a metacool is still read contig by contig, and moving
+ * its separators out to the genomes would coarsen a picture nobody asked to
+ * have coarsened.
  */
 export function separatorsFor(data: MatrixResult): SeparatorSet {
   const toSeparators = (groups: AxisGroup[]): Separator[] =>
     groups.map((group) => ({ at: group.start, label: group.label }))
 
-  // A whole-metagenome view is a picture of *genomes*. The reader sends the
-  // genome each selected contig belongs to as a super-group, and where it does,
-  // those are the only boundaries drawn: 20,000 contig hairlines over 4,000
-  // genome blocks is a grey wash, and it hides the block structure the view
-  // exists to show. They go in both sets so the axis is also *labelled* by
-  // genome — the fine set is what `labelBlocks` reads — while the heavier
-  // stroke, drawn at the same coordinates, is what the eye lands on.
-  const rowUnits = data.rowSuperGroups ?? data.rowGroups
-  const colUnits = data.colSuperGroups ?? data.colGroups
+  // A whole-metagenome view is a picture of *genomes*. Where the reader marks
+  // its genome runs as the boundaries, those are the only ones drawn: 20,000
+  // contig hairlines over 4,000 genome blocks is a grey wash, and it hides the
+  // block structure the view exists to show. They go in both sets so the axis
+  // is also *labelled* by genome — the fine set is what `labelBlocks` reads —
+  // while the heavier stroke, drawn at the same coordinates, is what the eye
+  // lands on.
+  const draw = data.genomeBoundaries === true
+  const rowUnits = (draw ? data.rowGenomes : undefined) ?? data.rowGroups
+  const colUnits = (draw ? data.colGenomes : undefined) ?? data.colGroups
   const set: SeparatorSet = {
     rows: toSeparators(rowUnits),
     cols: toSeparators(colUnits),
   }
-  // The *same array*, not a second copy of it. Where a super-group set exists it
-  // is both sets, and the renderer skips the fine pass when it recognises the
-  // identity — otherwise it stroked several thousand hairlines and then stroked
-  // the heavier line over exactly the same coordinates.
-  if (data.rowSuperGroups !== undefined) set.groupRows = set.rows
-  if (data.colSuperGroups !== undefined) set.groupCols = set.cols
+  // The *same array*, not a second copy of it. Where the genome runs are the
+  // boundaries they are both sets, and the renderer skips the fine pass when it
+  // recognises the identity — otherwise it stroked several thousand hairlines
+  // and then stroked the heavier line over exactly the same coordinates.
+  if (draw && data.rowGenomes !== undefined) set.groupRows = set.rows
+  if (draw && data.colGenomes !== undefined) set.groupCols = set.cols
   return set
 }
 

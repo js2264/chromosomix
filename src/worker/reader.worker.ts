@@ -17,7 +17,14 @@ import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
-import { aggregatedAxes, binContigArray, binGenomeArray, contigRuns } from './groups'
+import {
+  aggregatedAxes,
+  aggregatedGenomeRuns,
+  binContigArray,
+  binGenomeArray,
+  contigRuns,
+  genomeRuns,
+} from './groups'
 import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import {
@@ -154,7 +161,11 @@ function handleContigs(): ContigsResult {
   return { table: tableToPayload(requireSession().mc.fullContigs()) }
 }
 
-function binLevelResult(mc: MetaCooler, dense: DenseMatrix): MatrixResult {
+function binLevelResult(mc: MetaCooler, dense: DenseMatrix, genomes = false): MatrixResult {
+  // Asked for, and possible: a plain cooler has no genome layer to report, and
+  // answering with a fabricated one would put a name in the tooltip that is not
+  // in the file.
+  const withGenomes = genomes && mc.hasGenomes
   return {
     nrows: dense.nrows,
     ncols: dense.ncols,
@@ -163,6 +174,12 @@ function binLevelResult(mc: MetaCooler, dense: DenseMatrix): MatrixResult {
     colExtent: dense.colExtent,
     rowGroups: contigRuns(mc, dense.rowExtent),
     colGroups: contigRuns(mc, dense.colExtent),
+    ...(withGenomes
+      ? {
+          rowGenomes: genomeRuns(mc, dense.rowExtent),
+          colGenomes: genomeRuns(mc, dense.colExtent),
+        }
+      : {}),
     level: 'bin',
   }
 }
@@ -186,7 +203,7 @@ async function handleMatrix(
     },
     hintFor(request.rows, cols),
   )
-  return binLevelResult(mc, dense)
+  return binLevelResult(mc, dense, request.genomes === true)
 }
 
 /**
@@ -215,6 +232,10 @@ async function handleAggregate(
     request.level,
   )
   const axes = aggregatedAxes(mc, aggregated)
+  // Only a contig-level roll-up has a genome to name over it: at genome level
+  // the axis already *is* the genome, and repeating it in the tooltip would be
+  // the same word twice.
+  const withGenomes = request.genomes === true && mc.hasGenomes && request.level === 'contig'
   return {
     nrows: aggregated.nrows,
     ncols: aggregated.ncols,
@@ -223,6 +244,12 @@ async function handleAggregate(
     colExtent: cols,
     rowGroups: axes.rows,
     colGroups: axes.cols,
+    ...(withGenomes
+      ? {
+          rowGenomes: aggregatedGenomeRuns(mc, aggregated.rowIds),
+          colGenomes: aggregatedGenomeRuns(mc, aggregated.colIds),
+        }
+      : {}),
     level: request.level,
   }
 }

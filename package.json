@@ -33,7 +33,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:nofixtures": "vitest run --exclude '**/node_modules/**' --exclude 'test/budgets/**' --exclude 'test/unit/{cool,range,transpose,open,aggregate,detect,decode,matrix,bins-guard,intattr}.test.ts'",
+    "test:nofixtures": "vitest run --exclude '**/node_modules/**' --exclude 'test/budgets/**' --exclude 'test/unit/{cool,range,transpose,open,aggregate,detect,decode,matrix,bins-guard,intattr,genome-runs}.test.ts'",
     "test:watch": "vitest",
     "fixtures": "${METACOOLER_PYTHON:-python3} scripts/make_fixtures.py && ${METACOOLER_PYTHON:-python3} scripts/make_golden.py",
     "icons": "node scripts/build-icons.mjs",

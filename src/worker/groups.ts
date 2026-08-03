@@ -72,6 +72,24 @@ export function genomeRuns(mc: MetaCooler, extent: Extent): AxisGroup[] {
 }
 
 /**
+ * Genome runs over an axis that is already one contig per slot.
+ *
+ * The contig-level sibling of {@link genomeRuns}, which walks bins. Here the
+ * axis carries contig ids directly, so the run encoding is over those — and it
+ * is a *run* encoding rather than one entry per slot for the same reason
+ * everywhere else: contigs arrive grouped by genome (C4), so a genome is a
+ * stretch, and the tooltip resolves an offset by binary search over stretches.
+ *
+ * No `unitStart`: a genome's absolute bin has no meaning on an axis whose unit
+ * is a contig index, and a position inside one would be an invention.
+ */
+export function aggregatedGenomeRuns(mc: MetaCooler, contigIds: Int32Array): AxisGroup[] {
+  const genomes = new Int32Array(contigIds.length)
+  for (let i = 0; i < contigIds.length; i++) genomes[i] = mc.contigGenomeIds[contigIds[i]]
+  return idRuns(genomes, (id) => mc.genomeNames[id] ?? String(id))
+}
+
+/**
  * One run per output row of an aggregated block: after a roll-up each row *is*
  * one contig or one genome, so the runs are unit width and carry the id's name.
  */
