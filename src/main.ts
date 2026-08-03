@@ -29,6 +29,7 @@ import { GenomesTable } from './ui/GenomesTable'
 import { InfoPanel } from './ui/InfoPanel'
 import { Overview } from './ui/Overview'
 import { PairView } from './ui/PairView'
+import { findRow, recordFields, type RecordField, type RecordSpec } from './ui/RecordCard'
 import { RegionView } from './ui/RegionView'
 import { WholeView } from './ui/WholeView'
 import type { Modal } from './ui/Modal'
@@ -38,7 +39,7 @@ import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
 import { isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
 import { openAbout, openShortcuts } from './ui/dialogs'
-import { button, el } from './ui/dom'
+import { button, el, fmt } from './ui/dom'
 import { icon, iconButton } from './ui/icons'
 import { demoExamples } from './ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
@@ -630,6 +631,7 @@ class App {
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
 
     if (this.showingOverview) {
+      this.infoPanel?.setRecords([])
       this.mountOverview()
       return
     }
@@ -654,7 +656,114 @@ class App {
         this.mountWhole(state)
         break
     }
+    // After the switch, not before: a region view reads the contigs table on the
+    // way in, and there is no row to show until it has arrived.
+    this.infoPanel?.setRecords(this.recordsFor(state))
     this.status.refresh()
+  }
+
+  // -------------------------------------------------------------------------
+  // The sidebar record card
+  // -------------------------------------------------------------------------
+
+  /**
+   * The `/genomes` or `/contigs` row(s) the current view is a picture of.
+   *
+   * Only the heatmap views have one: a *table* view already shows every row of
+   * the table the card would quote, and the whole-genome view of a cooler is a
+   * picture of the file rather than of any single row.
+   *
+   * A two-axis view yields two records, labelled by axis. `contig_A × contig_B`
+   * is the phage–host block, and which of the two is on which axis is exactly
+   * what one is trying to keep straight while reading it.
+   */
+  private recordsFor(state: ViewState): RecordSpec[] {
+    const file = this.file
+    if (file === null) return []
+    const noun = file.info.hasGenomes ? 'Contig' : 'Chromosome'
+    switch (state.view) {
+      case 'genome':
+        return compact([this.genomeRecord(state.genome, 'Genome')])
+      case 'pair':
+        return compact([
+          this.genomeRecord(state.genome, 'Genome (rows)'),
+          this.genomeRecord(state.genome2, 'Genome (columns)'),
+        ])
+      case 'region':
+        return state.region2 === undefined
+          ? compact([this.contigRecord(state.region, noun)])
+          : compact([
+              this.contigRecord(state.region, `${noun} (rows)`),
+              this.contigRecord(state.region2, `${noun} (columns)`),
+            ])
+      default:
+        return []
+    }
+  }
+
+  /** One `/genomes` row, plus the density proxy the genomes table also shows. */
+  private genomeRecord(name: string | undefined, heading: string): RecordSpec | null {
+    const file = this.file
+    if (file === null || name === undefined) return null
+    const payload = file.genomes.table
+    const row = findRow(payload, name)
+    if (row < 0) return null
+    const density = file.genomes.density[row]
+    return {
+      heading,
+      name,
+      fields: recordFields(payload, row, {
+        extra:
+          density === undefined
+            ? []
+            : [
+                {
+                  key: 'nnz rows',
+                  value: fmt.int(density),
+                  title:
+                    'Non-zero pixels whose row bin falls inside this genome ' +
+                    '(bin1_offset[hi] − bin1_offset[lo]). A density proxy — NOT a contact count.',
+                },
+              ],
+      }),
+    }
+  }
+
+  /**
+   * One `/contigs` row.
+   *
+   * The view state carries a *region*, which may narrow the contig to
+   * coordinates; the row is the contig's, so `contigOf` strips the suffix — and
+   * strips it the same careful way the rest of the app does, since a contig may
+   * legally be named `NODE_1:2`.
+   *
+   * `genome_id` is replaced by the genome's name wherever it resolves: the
+   * integer is an index into `/genomes`, which is not something a reader of this
+   * card can look up.
+   */
+  private contigRecord(region: string | undefined, heading: string): RecordSpec | null {
+    const file = this.file
+    const payload = file?.contigs?.table
+    if (file === null || payload === undefined || region === undefined) return null
+    const names = payload.data['name']
+    const name = Array.isArray(names) ? contigOf(region, names) : null
+    if (name === null) return null
+    const row = findRow(payload, name)
+    if (row < 0) return null
+    const ids = payload.data['genome_id']
+    const id = ids === undefined || Array.isArray(ids) ? undefined : ids[row]
+    const genome = id === undefined ? undefined : file.genomeNames[id]
+    return {
+      heading,
+      name,
+      fields: recordFields(payload, row, {
+        // The raw index goes only when there is a name to put in its place, and
+        // on a cooler, whose synthesised single genome is noise here for the
+        // same reason the contigs table hides the column on one.
+        skip: genome !== undefined || !file.info.hasGenomes ? ['genome_id'] : [],
+        lead: file.info.hasGenomes && genome !== undefined ? [genomeField(genome)] : [],
+      }),
+    }
   }
 
   private mountGenomes(state: ViewState): void {
@@ -934,6 +1043,29 @@ class App {
  * that is working. The spinner is CSS, so it costs nothing and keeps moving
  * while the worker is busy — a frozen indicator would be worse than none.
  */
+/**
+ * The genome a contig belongs to, named as the rest of the app names it.
+ *
+ * `__unbinned__` is not a genome and §7.4 keeps it invisible everywhere but the
+ * one QC statistic in the info panel — so a contig that binning failed to place
+ * says *unassigned* here rather than quoting the reserved name back. The
+ * distinction is the point: the contig is real and its map is worth looking at;
+ * the thing it belongs to is not a bin.
+ */
+function genomeField(genome: string): RecordField {
+  if (genome !== UNBINNED_NAME) return { key: 'genome', value: genome }
+  return {
+    key: 'genome',
+    value: 'unassigned',
+    title: 'Binning placed this contig in no genome. See Binning QC above.',
+  }
+}
+
+/** Drop the records that could not be resolved to a row. */
+function compact(records: Array<RecordSpec | null>): RecordSpec[] {
+  return records.filter((record): record is RecordSpec => record !== null)
+}
+
 function loading(message: string): HTMLElement {
   return el(
     'div',

@@ -1713,12 +1713,61 @@ p {
   color: var(--text-dim);
 }
 
+/* `1 0 auto`, not `1 1 auto`: the panel may now be taller than the sidebar, and
+   it must be allowed to overflow it (the sidebar scrolls) rather than be
+   squeezed to fit. */
 .info-panel {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
   min-height: 100%;
+}
+
+/* --- record card ------------------------------------------------------- */
+
+/* The row behind the heatmap on screen. Absent on a table view, and `:empty` is
+   what keeps it from spending a gap there. */
+.record-host {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.record-host:empty {
+  display: none;
+}
+
+.record-name {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+/* The File block's key column is a fixed 9rem because its keys are ours. These
+   are the file's: `n_bins` on one table, `Overlapping_bin_contigs` on the next.
+   So the column takes the width its longest key needs, and stops taking it once
+   the values would be squeezed below legibility. */
+.kv-record {
+  grid-template-columns: minmax(0, max-content) minmax(4.5rem, 1fr);
+  column-gap: 0.6rem;
+  row-gap: 0.2rem;
+}
+
+/* A column name is one token and reads badly broken across lines; the full text
+   is on hover. A value is prose or a number and wraps — this card is read, not
+   scanned, and the sidebar scrolls. */
+.kv-record .k {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv-record .v {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 
 .info-top {

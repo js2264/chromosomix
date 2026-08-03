@@ -17,10 +17,17 @@
  * too. They moved to the status bar: both are glanced at rather than read, and
  * a sidebar block spends permanent vertical space on something a single line
  * can carry.
+ *
+ * **The record host** at the foot is the one part of this panel that changes as
+ * you navigate: the `/genomes` or `/contigs` row of whatever heatmap is on
+ * screen ({@link RecordCard}). It is last because the blocks above it describe
+ * the *file*, which is the context for everything, and a panel whose top jumps
+ * on every navigation is harder to read than one that grows at the bottom.
  */
 
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
   info: OpenResult
@@ -28,6 +35,8 @@ export interface InfoPanelProps {
 
 export class InfoPanel {
   readonly el: HTMLElement
+  /** Empty on a table view; `:empty` in the stylesheet is what hides it. */
+  private readonly recordHost = el('div', { class: 'record-host' })
 
   constructor(private readonly props: InfoPanelProps) {
     this.el = el(
@@ -36,7 +45,18 @@ export class InfoPanel {
       el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
       this.unassignedBlock(),
       this.metadataBlock(),
+      this.recordHost,
     )
+  }
+
+  /**
+   * Show the table row(s) behind the current view, or nothing at all.
+   *
+   * Called on every render, including with `[]`: a genome card left standing
+   * over the genomes table would describe a heatmap that is no longer there.
+   */
+  setRecords(records: RecordSpec[]): void {
+    this.recordHost.replaceChildren(...records.map(recordCard))
   }
 
   private fileTable(): HTMLElement {
