@@ -110,6 +110,18 @@ class App {
    * view object; this is what it was built from.
    */
   private mounted: ViewState | null = null
+  /**
+   * Whether the mounted view is the whole-file overview.
+   *
+   * The overview is a *shell mode*, not a view state: entering it changes
+   * nothing in the hash, because it is not a different place in the file but a
+   * different picture of the same one. So `mounted` alone cannot tell "the
+   * state is unchanged, repaint" from "the state is unchanged and we have just
+   * been asked for the other view of it", and the repaint short-circuit below
+   * swallowed `w` entirely — the breadcrumb flipped to Whole genome and the
+   * table stayed on screen underneath it.
+   */
+  private mountedOverview = false
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
 
@@ -741,7 +753,12 @@ class App {
     // `applyScale` rather than "do nothing": the change does not always come
     // from the panel. A pasted link or the back button moves the *hash* first,
     // and the mounted panel has to follow it.
-    if (this.mounted !== null && this.current !== null && differsOnlyInScale(this.mounted, state)) {
+    if (
+      this.mounted !== null &&
+      this.current !== null &&
+      this.mountedOverview === this.showingOverview &&
+      differsOnlyInScale(this.mounted, state)
+    ) {
       this.current.applyScale?.(this.scaleOf(state))
       this.mounted = state
       this.breadcrumb?.render(state, { overview: this.showingOverview })
@@ -752,6 +769,7 @@ class App {
     this.breadcrumb?.render(state, { overview: this.showingOverview })
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
     this.mounted = state
+    this.mountedOverview = this.showingOverview
 
     if (this.showingOverview) {
       this.infoPanel?.setRecords([])

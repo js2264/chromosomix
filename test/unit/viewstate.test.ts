@@ -179,6 +179,18 @@ describe('differsOnlyInScale', () => {
     }
   })
 
+  it('is true for a state against itself, which is why the caller needs more', () => {
+    // The trap this function sets, recorded here because it cost a regression:
+    // "nothing differs" satisfies "only the scale differs". The whole-file
+    // overview is a *shell mode* and changes no state at all, so a render path
+    // that treats this answer as "repaint, do not rebuild" swallows the request
+    // to enter it -- the breadcrumb flipped to Whole genome and the table
+    // stayed on screen underneath. `App.render` therefore compares the mode as
+    // well; this function cannot, because a mode is not part of a view state.
+    expect(differsOnlyInScale(base, base)).toBe(true)
+    expect(differsOnlyInScale(base, { ...base })).toBe(true)
+  })
+
   it('is true when a clip bound is removed, which is how "auto" is spelled', () => {
     expect(differsOnlyInScale({ ...base, vmax: 8 }, base)).toBe(true)
   })
