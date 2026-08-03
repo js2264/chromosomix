@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest'
 import {
   COLORMAP_NAMES,
   DEFAULT_COLORMAP,
+  DEFAULT_UI_COLORMAP,
   applyColormap,
   colormapIndex,
   isColormap,
@@ -50,12 +51,33 @@ function block(values: number[], nrows: number, ncols: number): DenseMatrix {
 }
 
 describe('colormaps', () => {
-  it('defaults to afmhot_r, the `metacooler show` default', () => {
+  it('keeps afmhot_r as the `metacooler show` default, and offers it', () => {
     expect(DEFAULT_COLORMAP).toBe('afmhot_r')
-    expect(COLORMAP_NAMES[0]).toBe('afmhot_r')
+    expect(COLORMAP_NAMES).toContain('afmhot_r')
     expect(COLORMAP_NAMES).toContain('cividis')
     expect(isColormap('afmhot_r')).toBe(true)
     expect(isColormap('jet')).toBe(false)
+  })
+
+  it('opens on the viewer ramp, which the picker lists first', () => {
+    // A different default from the CLI's, as the overlays are; `afmhot_r` is
+    // one item away and byte-identical, which is where parity actually lives.
+    expect(DEFAULT_UI_COLORMAP).toBe('default')
+    expect(COLORMAP_NAMES[0]).toBe('default')
+    const lut = applyColormap('default')
+    expect(lut.length).toBe(1024)
+    // The end stops land exactly; nothing in between may leave the ramp.
+    expect([...lut.slice(0, 4)]).toEqual([0xff, 0xfe, 0xf9, 255])
+    expect([...lut.slice(255 * 4, 255 * 4 + 4)]).toEqual([0x1a, 0x0a, 0x10, 255])
+    // Monotonically darkening, which is what makes it a sequential ramp rather
+    // than a set of hues. Neighbour to neighbour the tolerance is one rounding
+    // step — the table is bytes, and a channel that rounds up while another
+    // rounds down can wobble by a fraction — but no *stop* to *stop* interval
+    // may brighten at all.
+    const luminance = (i: number): number =>
+      0.2126 * lut[i * 4] + 0.7152 * lut[i * 4 + 1] + 0.0722 * lut[i * 4 + 2]
+    for (let i = 1; i < 256; i++) expect(luminance(i)).toBeLessThanOrEqual(luminance(i - 1) + 1)
+    for (let i = 21; i < 256; i += 21) expect(luminance(i)).toBeLessThan(luminance(i - 21))
   })
 
   it('reproduces matplotlib LUT entries exactly', () => {

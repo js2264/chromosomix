@@ -9,11 +9,14 @@
  *    (spec §2), so every interaction here is a canvas transform over data that
  *    has already arrived. Nothing in this file holds a reference to the worker
  *    client, which makes that structural rather than a promise.
- * 2. **The defaults match `metacooler show`** (§7.1) — `log1p`, `afmhot_r`,
- *    `vmin = 0`, `vmax` at the 99th percentile of the non-zero *transformed*
- *    values, recomputed on every view change, with a manual override. `vmax:
- *    NaN` is how {@link HeatmapView} is asked for that default, so the number
- *    the CLI computes and the number drawn here come from one implementation.
+ * 2. **The scale rule is `metacooler show`'s** (§7.1) — `log1p`, `vmin = 0`,
+ *    `vmax` at the 99th percentile of the non-zero *transformed* values,
+ *    recomputed on every view change, with a manual override. `vmax: NaN` is
+ *    how {@link HeatmapView} is asked for that default, so the number the CLI
+ *    computes and the number drawn here come from one implementation. The
+ *    *colormap* the panel opens with is the viewer's own ramp rather than the
+ *    CLI's `afmhot_r`, which the picker still offers unchanged
+ *    ({@link DEFAULT_UI_COLORMAP}).
  *
  * Interaction — drag, wheel, click, and the §7.2 keyboard pan and zoom — is
  * `HeatmapView.attach()`'s, not this panel's: the view owns the transform, so
@@ -22,7 +25,11 @@
 
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
-import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
+import {
+  COLORMAP_NAMES,
+  COLOR_VISION_SAFE_COLORMAPS,
+  DEFAULT_UI_COLORMAP,
+} from '../render/colormaps'
 import {
   HeatmapView,
   type AxisCoords,
@@ -122,7 +129,7 @@ export class MatrixPanel {
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
-    this.colormap = options.initial?.colormap ?? DEFAULT_COLORMAP
+    this.colormap = options.initial?.colormap ?? DEFAULT_UI_COLORMAP
     this.manualVmin = options.initial?.vmin
     this.manualVmax = options.initial?.vmax
     this.level = options.initial?.level ?? 'bin'
@@ -192,7 +199,7 @@ export class MatrixPanel {
 
     const controls: HTMLElement[] = [
       field('transform', transformSelect, 'Value transform, matching `metacooler show --transform`.'),
-      field('colormap', colormapSelect, 'afmhot_r is the CLI default (§7.1).'),
+      field('colormap', colormapSelect, '`afmhot_r` is what `metacooler show` draws (§7.1).'),
       // Not `field()`: that wraps its control in a `<label>`, and a label around
       // four inputs and a button focuses whichever one it feels like.
       el(

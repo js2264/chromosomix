@@ -17,18 +17,71 @@
 
 import { AFMHOT_R_RGB, AFMHOT_RGB, CIVIDIS_RGB, MAGMA_RGB, VIRIDIS_RGB } from './luts'
 
-/** Entries in every table. matplotlib's default `N` for all five colormaps. */
+/** Entries in every table. matplotlib's default `N`, and the viewer's own. */
 export const COLORMAP_SIZE = 256
 
 /** The `metacooler show` default (`ops/show.py`, `cmap: str = "afmhot_r"`). */
 export const DEFAULT_COLORMAP = 'afmhot_r'
 
 /**
- * Flat RGB triples, keyed by matplotlib name. Insertion order is the order the
- * UI offers them in, so the default comes first and the two colour-vision-safe
- * options are not buried at the bottom.
+ * What the viewer opens with, which is deliberately not the CLI's.
+ *
+ * The same split as `DEFAULT_UI_PLOT_OPTIONS` beside `DEFAULT_PLOT_OPTIONS`:
+ * `afmhot_r` is right for a figure that has to match `metacooler show` byte for
+ * byte and is still one item away in the picker, unchanged; `default` is the
+ * ramp a Hi-C map is usually read in. Nothing about parity moves — the choice
+ * is carried in the hash like any other, and asking for `afmhot_r` produces the
+ * identical image it always did.
+ */
+export const DEFAULT_UI_COLORMAP = 'default'
+
+/**
+ * The viewer's own ramp: near-white through yellow, orange and red to
+ * near-black, from thirteen stops interpolated to 256 entries.
+ *
+ * Not a matplotlib map, so unlike the tables in {@link ./luts} it is built here
+ * rather than dumped — there is nothing upstream to copy. The interpolation is
+ * `LinearSegmentedColormap.from_list`'s: the stops are spaced evenly over
+ * `[0, 1]` and each channel is linear between them, so the same list handed to
+ * matplotlib reproduces this table to within a rounding step.
+ *
+ * Its relative luminance falls monotonically across all thirteen stops (0.99 →
+ * 0.005), which is what makes it read as a sequential ramp rather than as a set
+ * of hues; it is not in {@link COLOR_VISION_SAFE_COLORMAPS} because it was not
+ * designed against a deficiency model, only measured for lightness.
+ */
+const DEFAULT_STOPS = [
+  '#FFFEF9', '#FCF9CE', '#FFF2A9', '#FDE188', '#FFCA67', '#FAAA4B', '#F78E40',
+  '#F15C34', '#ED3024', '#D42027', '#B01F29', '#7A1128', '#1A0A10',
+]
+
+/** Interpolate hex stops to a flat `size * 3` RGB table, as the tables are. */
+function rampFromStops(stops: readonly string[], size: number): number[] {
+  const points = stops.map((hex) => [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+  ])
+  const last = points.length - 1
+  const out: number[] = new Array<number>(size * 3)
+  for (let i = 0; i < size; i++) {
+    const t = (i / (size - 1)) * last
+    const lo = Math.min(Math.floor(t), last - 1)
+    const frac = t - lo
+    for (let c = 0; c < 3; c++) {
+      out[i * 3 + c] = Math.round(points[lo][c] + (points[lo + 1][c] - points[lo][c]) * frac)
+    }
+  }
+  return out
+}
+
+/**
+ * Flat RGB triples, keyed by name. Insertion order is the order the UI offers
+ * them in, so the default comes first and the colour-vision-safe options are
+ * not buried at the bottom.
  */
 const RGB_TABLES: Record<string, readonly number[]> = {
+  default: rampFromStops(DEFAULT_STOPS, COLORMAP_SIZE),
   afmhot_r: AFMHOT_R_RGB,
   afmhot: AFMHOT_RGB,
   cividis: CIVIDIS_RGB,
@@ -86,8 +139,10 @@ export function applyColormap(name: string): Uint8ClampedArray {
     rgba[i * 4] = rgb[i * 3]
     rgba[i * 4 + 1] = rgb[i * 3 + 1]
     rgba[i * 4 + 2] = rgb[i * 3 + 2]
-    // Uniform 255 in all five matplotlib tables; verified when luts.ts was
-    // generated, which is why the literals carry only RGB.
+    // Uniform 255 in every matplotlib table; verified when luts.ts was
+    // generated, which is why the literals carry only RGB. The viewer's own
+    // ramp is opaque for the same reason: transparency here would be read as
+    // "no data", which is what the NaN path already means.
     rgba[i * 4 + 3] = 255
   }
   RGBA_CACHE.set(name, rgba)
