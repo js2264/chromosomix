@@ -56,6 +56,11 @@ Two things run the other way and need *more* guarding than they have: the
 wall and which no guard in the repo models; and `MIN_DENSE_BUDGET_BYTES`, which
 grants a 256 MB device a 1 GB budget (§3).
 
+And one defect outweighs every guard in the document for day-to-day
+responsiveness: **changing the colormap, the transform or a clip bound tears
+down the whole view and re-reads the matrix from the worker** (§6.0), because
+`App.render` compares only the file URI before re-entering its mount switch.
+
 ---
 
 ## 2. The case in the brief: yeast micro-C, whole genome, 500 bp
@@ -522,6 +527,37 @@ in the UI.
 
 ## 6. Other findings, with numbers
 
+### 6.0 Every colour change tears down the view and re-reads the matrix
+
+The largest interactive defect in the app, and it is invisible from inside
+`render/`.
+
+`MatrixPanel.rescale()` recolours locally and *also* calls
+`onScaleChange` → `store.patch(scale, { replace: true })` (`main.ts:852`).
+`ViewStore.set` sees a changed state and notifies; `App.render`
+(`main.ts:592`) compares only `state.uri` against the open file and otherwise
+falls straight through to its `switch`, which constructs a **brand-new**
+`GenomeView` / `RegionView` / `PairView` / `WholeView`. Every one of those calls
+`void this.load()` in its constructor (`GenomeView.ts:133`), which issues a
+fresh `client.request({ kind: 'matrix' })`.
+
+So changing the colormap, the transform, or nudging a clip bound costs:
+
+- a **full worker round trip and matrix re-read** — over HTTP, real range
+  requests;
+- a complete DOM teardown and rebuild of the view (~1,500 elements destroyed and
+  recreated for a 500-contig MAG, with both trees briefly alive);
+- and the local recolour, which is thrown away with the panel that did it.
+
+A user nudging a clip bound ten times to find a ceiling pays 30 worker round
+trips and 10 matrix re-reads. This is also why the rasterisation work in §6.3
+and §6.4 matters less than it looks: the re-read dominates it.
+
+The fix is a diff in `App.render`: when only `transform`, `colormap`, `vmin` or
+`vmax` changed, do not re-enter the `switch` at all — the mounted `MatrixPanel`
+already holds the authoritative value, and the patch only needs to reach the
+URL. `viewStateEquals` (`ViewState.ts:164`) already exists to compare against.
+
 ### 6.1 A local file is read whole, twice, before anything is parsed
 
 `LocalFileSource.mount()` (`LocalFileSource.ts:156`):
@@ -546,13 +582,27 @@ local and remote paths:
   the failure mode is a raw allocation error with no advice — while the rare
   compressed-host fallback that ends in the same class is capped at 128 MB.
 
-`RemoteRangeSource` already contains the fix: a lazy FS node with an LRU chunk
-cache and a synchronous `read` stream op. The local path can take the same shape
-using `FileReaderSync` over `blob.slice()` — available in workers, which is
-where all I/O already lives. That makes local files arbitrarily large, instant
-to open, and collapses both sources into one lazy-node implementation with two
-byte accessors. It is the biggest scale win available and it is *simpler* than
-what is there now.
+Measured: mounting the 14.5 MB demo file takes 85 ms and the source reports
+`{requests: 1, bytes: 14497503}` — it says so itself. Linearly, 1 GB ≈ 5.9 s and
+2 GB of peak; 4 GB exceeds V8's practical `blob.arrayBuffer()` ceiling; a 20 GB
+file is out by orders of magnitude.
+
+**And nothing is retained.** `createSource` (`sources.ts:28`) has a
+`keep`/`borrowRemote`/`retained` mechanism for *remote* sources only, so every
+mcool-resolution or mmetacool-entry click on a local file re-reads and re-copies
+the whole thing. `public/demo/Ecoli.mcool` is 45.6 MB with 8 resolutions —
+~270 ms and ~91 MB of allocation per click, with a ~137 MB transient peak while
+the old MEMFS node awaits its async `unlink`. At 2 GB that click is ~12 s and
+~6 GB peak, i.e. it kills the tab. The `retained()` wrapper needs no change;
+only `createSource`'s local branch and `borrowRemote`'s key have to generalise.
+
+`RemoteRangeSource` already contains the fix for the read itself: a lazy FS node
+with an LRU chunk cache and a synchronous `read` stream op. The local path can
+take the same shape using `FileReaderSync` over `blob.slice()` — available in
+workers, which is where all I/O already lives. That makes local files
+arbitrarily large, instant to open, and collapses both sources into one
+lazy-node implementation with two byte accessors. It is the biggest scale win
+available and it is *simpler* than what is there now.
 
 ### 6.2 Rasterisation blocks the main thread
 
@@ -823,7 +873,122 @@ provides — makes this O(nContigs²) instead of O(nBins²) and takes the guard 
 of the path. **This is the cheapest large win in the list**: it turns the "too
 big" screen into a usable picture using machinery that already exists.
 
-### 6.9 Export is unguarded against canvas area caps at high DPI
+### 6.8b The measured cost of that roll-up
+
+Instrumented on the yeast @ 500 bp contig-level view (Node 22.22 / V8 12.4, one
+core, nnz = 3e7):
+
+| path | allocation | time | output |
+|---|---|---|---|
+| today: dense then `aggregateDense` | 2,366 MB | 298 ms scatter + **1,792 ms** sum | 17 × 17 = 289 cells |
+| direct sparse roll-up | `Float64Array(17²)` + a bin→contig `Int32Array` | **139 ms** | identical (max relative disagreement 0.00e0) |
+
+**2,046,919 dense cells materialised per output cell**, for 2,312 bytes of
+answer. And `aggregateDense`'s cost is `N(N+1)/2` iterations *regardless of the
+file's sparsity*: measured 1,384 ms at nnz = 1e7 and 1,792 ms at nnz = 3e7 —
+essentially flat while the useful work varies 3×. At nnz = 1e7 it reads 29.6
+zeros per non-zero.
+
+Keep `aggregateDense` for the case its docstring describes — a single MAG at
+~3,000 bins is 4.5 M iterations and ~10 ms, genuinely free — and gate on
+`nRows·nCols / nnz`: above ~1, sparse accumulation is strictly cheaper. The
+`fold` upper-triangle trick and the `agg + agg.T − diag(agg)` symmetrisation
+carry over unchanged.
+
+### 6.9 The open path and the cold start
+
+Measured against `public/demo/Mock_microbiome.metacool` and the built bundle.
+
+**The 4.78 MB h5wasm chunk is fetched only after the user picks a file.**
+`vite build` emits `hdf5_hl-*.js` as a separate async chunk — 4,784,651 B raw,
+1,029,190 gzip, **766,168 brotli** — and `getH5()`'s dynamic import
+(`bootstrap.ts:180`) is not reached until an open begins. The cold critical path
+is therefore `index.js` (38 kB br) → first paint → `worker.js` (17 kB br) →
+*user picks a file* → HEAD probe → **766 kB + wasm instantiate** → range GETs,
+strictly serialised. `void getH5()` at module scope in `reader.worker.ts` moves
+the download under the user's file-picking time; `getH5()` already memoises and
+already un-memoises on failure, so a warm-up is free and cannot poison a later
+open. This is one line and it is most of §12's at-risk "≤ 3 s time to
+interactive".
+
+**Open reads every column of `/contigs`, and that is 93 % of its bytes.**
+Instrumented: 2,911,179 B of HDF5 reads, of which `/contigs` is 2,706,159 B. The
+three columns the reader needs — `name`, `length`, `genome_id` — are 616,980 B.
+So **71.8 % of the whole open is optional metadata the landing table never
+shows**. `handleContigs` is already lazy; `fromHandle` is not. A `columns`
+argument on `readTable`, honoured by a filter in `readTableGroup`, is the whole
+change.
+
+**`open()` also reads the root attribute block three times** (`detect.ts:258`),
+each a full enumeration with a wasm round trip per fixed-length string
+attribute — ~24 `malloc`/`get_attribute_data`/`free` trips instead of 8. Read
+once in `fromHandle` and thread the dict through `detectLayout` and
+`assertAcceptable`; both already take it as a local.
+
+**And it eagerly builds two 154,468-entry name → index Maps** (`MetaCooler.ts`
+constructor): measured 7.3 MB + 7.2 MB = **14.5 MB** of worker heap for
+structures a user may never exercise, plus 3.06 MB of throwaway `Array.from`
+garbage from `Float64Array.from(this.contigs.numbers('length'))` and the
+`Int32Array.from` beside it — the `Table` already holds typed arrays. Lazy
+getters, and a direct copy instead of `Array.from`.
+
+**Every range request is a synchronous XHR with no pipelining and no
+read-ahead.** Measured request counts, all serial: open + genomes 6, one genome
+matrix 1, full pixel scan 9. At 60 ms RTT that is 360 / 60 / 540 ms of
+unavoidable serialised latency, and it cannot overlap the transfer. Worse, while
+`xhr.send` blocks, **the worker cannot service `postMessage`** — so a cancel
+issued during a fetch does not arrive until the fetch completes, which is the
+same class of defect the `yieldToEventLoop` fix already addressed for the scan
+loop.
+
+**The 1 MiB chunk over-fetches 1,186× on the metadata handshake**: 3,536 B asked
+in 12 reads → 4,194,304 B in 4 GETs. Across the whole open it is 2,911,179 asked
+/ 5,060,319 fetched = 1.74×, and 1.2 MB of the 2.15 MB of waste is in that
+handshake alone. A smaller chunk for the first N reads, or one async `fetch` of
+the first ~256 kB and last ~1 MiB to seed the cache before mounting, fixes it in
+the `open()` path that already issues a HEAD.
+
+**What the I/O audit confirms is right**: the LRU chunk cache is correct and
+provably cannot thrash (peak occupancy measured at 14 of 64 chunks, 21.9 %, on a
+full scan — whose three interleaved sequential streams are the worst case);
+`/pixels` is deflate-6 + shuffle at ~28.9 kB chunks, and a full scan inflates
+10.5 MB into 141.6 MB, so **the scan is CPU-bound, not network-bound** — the
+network is 6 % of its wall time, which is why the decode path (§2.4) is the
+lever and not the transport; and all four §12 *request* budgets are met with
+large margin (open + genomes 6 of 20, matrix 1 of 5, pan/zoom 0 of 0). The
+budget at risk is the fifth, time-to-interactive, and it has no test. A byte
+budget for open — e.g. `bytes < 40 · nContigs + 2 MB` — would catch the
+regression the current 20 MB tripwire passes straight through.
+
+### 6.9b The rest, in one table
+
+Smaller, all measured, all local fixes.
+
+| finding | where | cost | fix |
+|---|---|---|---|
+| Table string columns are structure-cloned, not transferred | `protocol.ts:74` | 154,468 rows × 10 string cols → 623 ms serialise + **518 ms main-thread block**, 38.5 MB | concatenated UTF-8 `Uint8Array` + `Uint32Array` offsets, both transferable, decoded lazily for the ~45 rows on screen |
+| `transfersFor` recurses into every string | `protocol.ts:441` | 1,544,690 visits, 53.6 ms per contigs response | bail out of the array branch when the first element is not an object |
+| Search lowercases all 154,468 names per recompute | `VirtualTable.ts:319` | ~3.9 MB of transient strings per recompute, ~31 MB/s while typing | precompute one lowercased array per searchable column at construction |
+| Every debounced keystroke re-runs the **sort**, not just the filter | `VirtualTable.ts:330` | up to 8 × 665 ms while typing an 8-char prefix; `persist()` also does `JSON.stringify` + synchronous `sessionStorage.setItem` each time | split `refilter` from `resort`; sort once per (key, direction) into an index array; debounce `persist()` separately |
+| Arrow-key navigation does an O(n) `indexOf` per keypress | `VirtualTable.ts:461` | ~77,000 comparisons average, plus a forced reflow, per key-repeat | store `activePosition` into `visible` rather than the row id |
+| The command list is rebuilt on **every keydown in the document**, with four linear scans of 154,468 names | `main.ts:320` → `182`, `366` | 620,000–930,000 string comparisons, ~1–3 ms per keystroke | hoist the `typing` early-return above the loop; compute `stepTarget(±1)` once into locals |
+| `scanPixels` allocates ~52 MB per chunk and reuses nothing | `MetaCooler.ts:590` | 36 MB of the 52 is immediate garbage (69 %); at nnz = 3e8 that is 15.6 GB allocated | allocate the three destination buffers once; add `readNumericInto(path, lo, hi, dst)` narrowing int64 → Int32 in one pass |
+| `binGenomeArray` allocates two `nBins` arrays and discards one; neither it nor `binContigArray` is cached | `groups.ts:107` | 3.38 MB per overview at 423 k bins, half garbage, re-run on every level toggle | memoise on the session; write genome ids in place over the contig ids |
+| `contigRuns` builds one object per contig per axis, then clones both | `reader.worker.ts:145` | 154,468 × 64 B = 9.9 MB per axis → 39.6 MB with the clone, plus ~8.3 MB of label strings per axis | parallel typed arrays + a de-duplicated label index, or cache the whole-file run list |
+| `validateDeep` does a binary search **per pixel** | `MetaCooler.ts:678` | 33.5 ns/pixel vs 7.3 for a walking pointer; 10.0 s at nnz = 3e8 | hoist a monotone `owner` pointer; identical semantics |
+| …and allocates a two-element array per pixel | `MetaCooler.ts:685` | 14.2 ns/pixel vs 4.6 for scalars; 3e8 allocations on a reference file. Combined with the above: 42 → 10 ns/pixel, 4.3× | `let prev1 = -1, prev2 = -1` |
+| `validateDeep` is not cancellable and reports no progress | `MetaCooler.ts:660` | minutes of uninterruptible worker time behind a static label | it is the same shape as `handleOverview`, which already does both |
+| A late cancel leaves a permanent entry in `cancelled` | `reader.worker.ts:461` | one orphaned integer per late cancel; no runtime penalty | clear the set in `handleOpen`/`close` |
+
+**Also confirmed correct**: `VirtualTable` really is virtualised — ~205 DOM
+elements for 154,468 rows, independent of row count, against 617,872
+un-virtualised (~3,000×); filters and search are properly debounced on the
+trailing edge; and the bin → contig mapping in `coords.ts` is an
+O(1)-amortised walk rather than a per-bin binary search — measured 3.4 ms
+against 15.8 ms over 423,000 bins, and it is never on a per-pixel path in the
+render pipeline.
+
+### 6.10 Export is unguarded against canvas area caps at high DPI
 
 `exportCanvas` (`MatrixPanel.ts:448`) scales by `dpi/96`, so at 600 dpi a
 5,243 CSS-px figure crosses both Chrome's 2²⁸ area cap and Firefox's 32,767 side
@@ -881,61 +1046,99 @@ give.
 
 Ranked by what it unlocks ÷ risk.
 
-**Cheap and large:**
+**One-liners with outsized effect:**
 
-1. **Streaming aggregation for whole-genome contig/genome level** (§6.8).
-   Reuses `scanPixels`; removes the guard from that path; turns the "too big"
-   screen into a usable picture.
-2. **Cache the auto-range on `PooledDisplay`** (§6.3). Removes a 0.5–2 s
-   main-thread freeze from every colormap change. One field.
+1. **Diff `App.render` so a colour change does not tear down the view**
+   (§6.0). Today every colormap, transform and clip change costs a worker round
+   trip, a matrix re-read and a full DOM rebuild.
+2. **`void getH5()` at worker module scope** (§6.9). Moves 766 kB of brotli and
+   a wasm instantiate off the post-click critical path — most of §12's at-risk
+   time-to-interactive.
 3. **Delete the synchronous `draw()` calls in the input handlers** (§6.5b).
    Removes a 2–3× repaint multiplier from every pan, zoom and hover.
-4. **Pool the raw maximum and transform once per pooled pixel** (§6.4). 36:1
+4. **Cache the auto-range on `PooledDisplay`** (§6.3). Removes a 0.5–2 s
+   main-thread freeze from every colormap change. One field.
+5. **Batch `genomeDensity`** (§4.4). Measured 72 µs per one-element read →
+   635 ms on the landing screen and ~13.7 s of comparator overhead before the
+   overview scan starts, against 17 ms batched. Make `contigDensityLookup` lazy
+   while there.
+
+**Cheap and large:**
+
+6. **Sparse roll-up for contig/genome level** (§6.8, §6.8b). Measured 2,366 MB
+   and 2,090 ms → 139 ms and a `Float64Array(17²)`, identical output. Removes
+   the dense guard from that path entirely.
+7. **Pool the raw maximum and transform once per pooled pixel** (§6.4). 36:1
    fewer transform calls, measured 2.05 s off the yeast render — with the
    `log10`-on-float-counts caveat noted there.
-5. **Stop retaining `raster.data` and reallocating the offscreen canvas**
+8. **Stop retaining `raster.data` and reallocating the offscreen canvas**
    (§6.4b). ~66 MB pinned and ~131 MB churned per recolour, on the case where
    the budget is tightest.
-6. **Batch the separators into two `Path2D`s, cull to the visible domain, and
+9. **Batch the separators into two `Path2D`s, cull to the visible domain, and
    bail out of `labelBlocks` early** (§6.6).
-7. **Fix the overview's density sort** (§4.4) — precompute keys, and read
-   `bin1_offset` once as the contig path already does. Removes ~190,000 HDF5
-   reads. Same in `handleGenomes`. Make `contigDensityLookup` lazy.
-8. **Accumulate only the upper triangle in the overview** (§4.1). Halves memory
-   and removes the cache-hostile mirror write — up to 134× per-pixel at large N.
+10. **Accumulate only the upper triangle in the overview** (§4.1). Halves memory
+    and removes the cache-hostile mirror write — up to 134× per-pixel at large N.
+11. **Read only the required `/contigs` columns at open** (§6.9). 71.8 % of the
+    open's bytes are metadata the landing view never shows.
 
 **Then the substantive ones:**
 
-9. **Chunk `readPixelSpan`, and budget against the real `P`** (§2.4). Removes
-   the largest unmodelled allocation, the 7.9× estimate error, and the 2 GiB
-   wasm ceiling, all from one change. Narrow int64 → Int32 directly and drop
-   `toNumberArray`'s no-op copy while in there.
-10. **Aggregate rather than truncate in the overview** (§4.5), with the cap
+12. **Chunk `readPixelSpan`, and budget against the real `P`** (§2.4). Removes
+    the largest unmodelled allocation, the 7.9× estimate error, and the 2 GiB
+    wasm ceiling, all from one change. Narrow int64 → Int32 directly and drop
+    `toNumberArray`'s no-op copy while in there — and do the same at
+    `scanPixels`, which carries the identical pattern. *Implementation note:
+    `values`/`rows`/`cols`/`plan` are not in `readPixelSpan`'s scope, so this
+    means either a per-chunk callback or hoisting the loop into
+    `readDenseMatrix`; two call sites in `test/unit/transpose.test.ts` consume
+    the current shape.*
+13. **Aggregate rather than truncate in the overview** (§4.5), with the cap
     derived from the budget so no real metagenome's genomes are pooled at all;
     fix the one-sided selection statistic (§4.3); wire or delete `maxUnits`
     (§4.2); fix the message (§4.6).
-11. **Recalibrate the dense guard** (§3): try-and-catch instead of pre-refuse,
+14. **Recalibrate the dense guard** (§3): try-and-catch instead of pre-refuse,
     warn-and-continue in the middle band, hard refusal only where an allocation
     actually failed. Fix `MIN_DENSE_BUDGET_BYTES` below 2 GiB, correct
     `estimateBlockBytes`'s constants, and either delete `MAX_TYPED_ARRAY_CELLS`
-    or stop it choosing a false message.
-12. **Rasterise in the worker** and hand back an `ImageBitmap` (§6.2). Retires
+    or stop it choosing a false message. `checkBrowserDenseSize` already accepts
+    `budgetBytes` and no production caller passes it — threading it through the
+    `matrix`/`aggregate` requests is what a "load anyway (~N GB)" button needs.
+15. **Rasterise in the worker** and hand back an `ImageBitmap` (§6.2). Retires
     ~197 MB of main-thread buffers and removes multi-second freezes; the code is
     already linked into the worker and the data is already there.
-13. **Stream COO → pooled raster** above a threshold, keeping the dense path
+16. **Transfer table string columns instead of cloning them** (§6.9b). 518 ms of
+    main-thread block per contigs response on a reference-scale file.
+17. **Stream COO → pooled raster** above a threshold, keeping the dense path
     below it (§5), plus a **stride-1 re-raster of the visible window** when
     `zoom · stride > 1` — bounded by the plot area in pixels, so it fits in a
     frame at any zoom, and it is worth doing for fidelity even without the
     streaming change.
-14. **Lazy local files** (§6.1). Removes the read-it-all-first cost and makes
-    opening instant.
+18. **Lazy local files, and retain them across entry switches** (§6.1). Removes
+    the read-it-all-first cost, the per-resolution re-read, and the local size
+    ceiling.
 
-**Small:** quickselect percentile and the dead `extent` pass (§6.3, §6.3b),
-stride-1 fast path in `poolDisplay` (§6.4), `new Float32Array(acc)` (§6.5),
-colourbar/clip dirty flags and the tooltip layout thrash (§6.5b, §6.5c),
-decorated sort with a shared `Intl.Collator` (§6.7), export DPI pre-flight
+**Small:** everything in the §6.9b table, plus quickselect percentile and the
+dead `extent` pass (§6.3, §6.3b), the stride-1 fast path in `poolDisplay`
+(§6.4), `new Float32Array(acc)` (§6.5), colourbar/clip dirty flags and the
+tooltip layout thrash (§6.5b, §6.5c), decorated sort with a shared
+`Intl.Collator` (§6.7), export DPI pre-flight (§6.10), a byte budget for open
 (§6.9), and the stale `SPECS.md` §9 paragraph.
 
-Items 1–11 make the brief's yeast-@-500 bp case work on ordinary hardware and
+Items 1–14 make the brief's yeast-@-500 bp case work on ordinary hardware and
 the whole-metagenome overview show every contig — and they do it mostly by
 deleting work, not by loosening a limit.
+
+---
+
+## Method
+
+Findings were produced by seven parallel subsystem audits, three scenario traces
+and eleven adversarial verification passes (21 agents, ~5.8 M tokens), then
+re-checked against the source by hand. Every quantitative claim that decides a
+recommendation was either re-derived from the code or re-measured here:
+the `poolDisplay` and percentile timings, the streaming-raster comparison, the
+V8 typed-array ceilings, and h5wasm's 2 GiB `getHeapMax`. Two claims that the
+first pass got wrong were corrected before they reached this document —
+Emscripten MEMFS stores file contents in the **JS** heap, not the wasm arena,
+and the numeric read path *is* bounded by h5wasm's own `check_malloc`, just not
+by the repo's. Line references are against `269f380` plus this commit.
