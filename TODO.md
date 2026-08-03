@@ -504,6 +504,182 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
 - **Still true after all of it:** pan, zoom, hover and the bin/contig level
   toggle perform zero I/O, measured in a real browser against the demo files.
 
+## DONE
+
+- [x] In contigs/chromosome view, there should be ticks along x and Y axes (can be within the heatmap) to show the actual genomic coordinates of the heatmap. They need to stay aligned when the heatmap is zoomed in or out, or when the heatmap is panned.
+
+- [x] The right bar is not fully contained within the screen, so I have to scroll right to see the end of settings. 
+
+![alt text](image.png)
+
+- [x] Remove the 2-handle slider, just keep vmin/vmax text boxes. Also remove the "reset view" button. 
+
+- [x] By default, chromosome view (for a (m)cool file) should be shown with "balanced" and log10 scale. Same for whole-genome view.
+
+- [x] Also, for these files, the "level" in the right bar should be HIDDEN (as it does not make sense for a single genome file).
+
+- [x] Default cmap ("default") should be: 
+  "#FFFEF9" "#FCF9CE" "#FFF2A9" "#FDE188" "#FFCA67" "#FAAA4B" "#F78E40" "#F15C34" "#ED3024" "#D42027" "#B01F29" "#7A1128" "#1A0A10"
+
+> NOTES ON THE BATCH ABOVE
+
+- **Ticks are base pairs, and only where base pairs mean something.** An axis
+  gets them when the whole of it lies inside one contig; an axis that crosses
+  several has no single coordinate system and keeps the contig names it already
+  had. That is `_bin_axis`'s rule in `ops/show.py`, and the labels are
+  `_format_bp` digit for digit — `0 bp`, `120 kb`, `1.5 Mb`. The positions are
+  the contig's, not the picture's: `NC_000913.3:2000000-3000000` is ticked
+  2 → 3 Mb, from the same `unitStart` the hover readout uses, so a tick and the
+  status line cannot disagree.
+- **They are round numbers in genomic space**, on the 1–2–5 ladder and never
+  finer than one bin, chosen from the *visible data* rather than the visible
+  domain — zoomed out the domain runs past the last bin, and spacing ticks over
+  that empty margin puts two on the picture and four on nothing. Because they
+  are recomputed from the axis scales on the frame they are drawn, a pan or a
+  zoom carries them exactly; `test/unit/axis-ticks.test.ts` asserts that through
+  the same conversion `cellAt` inverts, so a drift between the ticks and the
+  transform fails there.
+- **Drawn inside the plot**, along the bottom and left edges. The gutters belong
+  to the block names and collapse to nothing when those are off — which is this
+  app's default — so an outside tick would have to reopen a band the user
+  closed; and the bottom-left of a symmetric map is the furthest corner from the
+  diagonal, the emptiest part of the picture. Two perpendicular axes share a
+  corner wherever you put them, so the last row *label* stands down for the row
+  of column labels. Its mark stays. `ticks` is a fourth overlay toggle, on by
+  default, key `K`.
+- **The right bar was two separate overflows**, neither of them the sidebar's
+  own width. An `<input type=number>` asks for about twenty characters of room
+  and asks for it as a *minimum*; in a column flex container the stretched cross
+  size is clamped by each item's minimum, so the two clip boxes set the width of
+  every row beside them — 413 px of content inside a 240 px card, measured in
+  the browser. And the status bar's hover panel hung rightwards from an item at
+  the right end of the window, adding 156 px of scrollable width while
+  invisible, since `visibility: hidden` still occupies layout. Both are fixed at
+  the cause; nothing is clipped to hide it.
+- **The slider is gone and the boxes stayed.** A 200-pixel track over a value
+  extent is about four significant figures per pixel, and the number you
+  actually wanted was always typed into the box underneath. Losing it also
+  deletes `HeatmapView.displayExtent` and the extent bookkeeping in
+  `MatrixPanel`, which existed only to keep the track spanned. `reset view` went
+  with it: double-click and `0` both refit, and the button was a third way to
+  say so in a card that has to fit in 15 rem.
+- **A cooler opens balanced, in `log10`; a metacool does not.** One rule, in
+  `App.balancedByDefault`, and it fires only for a file with no genome layer
+  *and* a weight column. A `.cool` is a finished assembly whose map is read for
+  structure — compartments, loops, distance decay — and all three are claims
+  about relative contact frequency, which is what balancing produces and raw
+  counts, with their coverage still in them, do not; balanced values are
+  fractions spanning orders of magnitude below 1, so `log10` is the transform
+  that spreads them. A MAG's map is usually read for *how much* two contigs
+  touch, which is a count, so `.metacool` keeps §7.1's `log1p` on raw counts and
+  parity is untouched. The hash still wins over both, and a choice is written to
+  it only when it *differs* from the file's default — which `balance: balance ||
+  undefined` could not do for "off" on a file that defaults to on.
+- **`level` is gone from a cooler's view card**, where the unit is a chromosome
+  and the file often holds one: the roll-up of a single-chromosome genome is a
+  one-cell picture. A link carrying `level=contig` is ignored there rather than
+  stranding a reader in a view with no control to leave it. It costs a
+  multi-chromosome cooler its chromosome × chromosome summary — one line in
+  `mountWhole` to give back, if that turns out to be missed.
+- **The default colormap is the viewer's own ramp**, thirteen stops from
+  near-white through yellow, orange and red to near-black, interpolated to 256
+  entries the way `LinearSegmentedColormap.from_list` would. It is built in
+  `colormaps.ts` rather than dumped into `luts.ts` because there is no
+  matplotlib table to copy — and `DEFAULT_COLORMAP`, `afmhot_r`, is untouched
+  and one item away in the picker, still byte-identical to `metacooler show`.
+  The same split as `DEFAULT_UI_PLOT_OPTIONS` beside `DEFAULT_PLOT_OPTIONS`: the
+  renderer defaults to the CLI, the app defaults to what reads best on screen.
+  Its luminance falls across all thirteen stops, which is what makes it a
+  sequential ramp; it is *not* claimed colour-vision-safe, since it was measured
+  for lightness rather than designed against a deficiency model.
+- **The colourbar says `balanced` when it is.** With balancing now the default
+  for a cooler, a legend reading `count` above the number `0.0009` would be the
+  first thing most users of this app see.
+
+## DONE
+
+- [x] Add full support to smartphone touchscreen devices. 
+- [x] Add more plotting options (export as PDF or PNG, reset zoom, etc). image export should allow for specific DPI settings. Those could be together with "overlays" in a new separate card. Make sure all views (both cooler and metacooler, genomes, contigs, contig pairs, whole genome) have the same plotting options.
+- [x] Make this card prettier for cool files (balanced box is weird, overlays too, etc.). 
+
+![alt text](image-1.png)
+
+> NOTES ON THE BATCH ABOVE
+
+- **Touch is its own path, not a rewrite of the mouse into pointer events.** One
+  finger pans, two pinch about their midpoint *and* carry the picture with them
+  — handling only the scale makes a two-finger drag feel nailed down — a tap
+  opens what it lands on, and a double tap refits. `touch-action: none` on the
+  canvas is what stops the browser claiming the first drag to scroll the page,
+  and every handler calls `preventDefault`, which is also what suppresses the
+  synthetic mouse events that would otherwise run each gesture twice. A tap
+  fills the tooltip in on its way to navigating, because a phone has no hover
+  and that readout is the only place the pair of names is spelled out. Pinned in
+  `heatmap-navigation.test.ts`, and driven for real through an emulated iPhone
+  over the devtools protocol: a tap on the diagonal opened the contig under the
+  finger.
+- **One real bug came out of it**: the double-tap window was measured from
+  `lastTapAt = 0`, and `TouchEvent.timeStamp` is milliseconds since the page
+  loaded — so the first tap within a quarter-second of opening a link counted as
+  the second half of a double tap that never happened, and refitted instead of
+  navigating.
+- **Below 34rem the app is one column**: no file sidebar, no search bar, no
+  strapline, the plot as wide as the screen, and the legend turned on its side
+  underneath it rather than taking a fifth of the width standing up. That last
+  one is a canvas, so the breakpoint is stated twice — once in the stylesheet
+  and once in `MatrixPanel`, which watches the same query and tells the colour
+  bar which way up it is.
+- **The plot card is new**, and every view mounts the same one: overlays, fit to
+  view, and the export. The colour card kept what the numbers look like; this
+  one holds what the figure does. It also gives the four overlay toggles a 2 × 2
+  block instead of the ragged 1 / 1 / 2 wrap they had in a 7rem value column,
+  and the `balanced` checkbox no longer floats alone at the right-hand edge of
+  the card.
+- **Export re-renders; it does not screen-grab.** `HeatmapView.renderTo` points
+  the same drawing code at another canvas at another device-pixel ratio, so a
+  300 dpi PNG has hairlines and labels *drawn* at 300 dpi rather than an
+  enlarged screenshot — and the framing, pan and zoom included, is exactly what
+  is on screen. The legend is composed in beside it, so the file is a figure
+  rather than a picture of a matrix. The background is painted last, behind
+  everything, because the heatmap clears as it draws.
+- **The PDF is written here**, in eighty lines: one page, one lossless
+  `/FlateDecode` image through `CompressionStream`, and a cross-reference table
+  of real byte offsets. A PDF library would have been several hundred kilobytes
+  to do that arithmetic in an app whose whole claim is that it has no server. The
+  page is sized in points from the CSS size, so "300 dpi" is 300 dots per inch
+  *on paper*, not a number in the filename — `export.test.ts` reads the offsets
+  and the MediaBox back out of the bytes and checks both.
+- **Two defects the first export had**, both found by looking at the file rather
+  than at the code: the legend was placed through the heatmap's own transform,
+  which put it three times its offset away and off the canvas entirely; and the
+  background was filled *before* the plot drew, which clears as it goes, so
+  every margin came out transparent — a black rectangle in any viewer that
+  composites onto black.
+
+- [x] And in metagenome whole genome view, the dividers should be per each GENOME, not per each CONTIG!
+- [x] And in metagenome whole genome view, the default to compute should be contigs x contigs !
+
+> NOTES ON THE TWO ABOVE
+
+- **The overview is contigs, marked by genome.** Both levels cost the same
+  single pass, and the contig picture is the one that *contains* the other: its
+  blocks are the genomes, with the binning still visible inside each. A
+  genome × genome cell has already thrown that away, so it is no longer where
+  the view starts — except where a sidecar edge list is the offered route, which
+  is genome-level by construction and would leave the picker naming a level the
+  button cannot produce.
+- **Where the reader sends genomes, they are the only dividers drawn.** 20,000
+  contig hairlines over 4,000 genome blocks is a grey wash that hides exactly
+  the structure the view exists to show. They are also what labels the axis now,
+  since the fine set is what `labelBlocks` reads. Pinned in
+  `axis-position.test.ts`.
+- **And the overview was drawn at a quarter of its panel.** Its plot is built
+  behind the gate, before the element has a size, so the zoom was worked out
+  against a one-pixel plot and then pinned by `clampView` at the zoom-out limit
+  once the real size arrived. A view showing the whole block now goes on showing
+  the whole block across a resize — which also means a window resize no longer
+  drifts a fitted view — while a zoom the user chose is left alone.
+
 ## FOR FUTURE
 
 - M5

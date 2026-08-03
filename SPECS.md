@@ -338,10 +338,11 @@ URL carries `vmin` and `vmax` independently, in transformed units, and their abs
 
 **What the app *opens* with is its own choice**, as the overlay defaults are (§7.2). Parity is a
 property of the machinery — the same colormap table, the same indexing, the same percentile rule —
-not of which entry the picker starts on, so a **cooler with a weight column** opens balanced in
-`log10`, because that is what a finished assembly's map is read in. `afmhot_r` on raw counts is
-unchanged, and a `.metacool` — where the reader is asking how much two contigs touch, which is a
-count — is left on the CLI's defaults exactly.
+not of which entry the picker starts on, so the viewer opens on its own white → yellow → red → black
+ramp, and a **cooler with a weight column** opens balanced in `log10` because that is what a finished
+assembly's map is read in. `afmhot_r` on raw counts is one item away and still byte-identical, and a
+`.metacool` — where the reader is asking how much two contigs touch, which is a count — is left on
+the CLI's defaults exactly.
 
 **The percentile is taken over the pixels that are drawn.** Above §7.2's raster
 cap a block is pooled, one pixel to many cells, and a scale fitted to the cells
