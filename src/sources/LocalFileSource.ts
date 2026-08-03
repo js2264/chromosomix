@@ -1,8 +1,8 @@
 /**
  * A local file as a {@link ByteSource} — the private path (spec §11).
  *
- * Nothing here leaves the machine. A file dropped on the page is read into the
- * Emscripten MEMFS and opened from there; nothing is uploaded, which is what
+ * Nothing here leaves the machine. A file dropped on the page is mounted into
+ * the Emscripten FS and opened from there; nothing is uploaded, which is what
  * makes "no accounts, no storage, no GDPR review" a property of the code rather
  * than a promise in the UI.
  *
@@ -11,18 +11,32 @@
  *
  * | input | mount |
  * |---|---|
- * | `File` / `Blob` | bytes copied into the FS |
+ * | `File` / `Blob` in a worker | **lazy** FS node, slices read on demand |
  * | `Uint8Array` / `ArrayBuffer` | bytes copied into the FS |
  * | filesystem path (Node only) | used as-is |
  *
  * The path case costs nothing: `h5wasm/node` is built with NODERAWFS, so its
  * `FS` *is* the real filesystem and HDF5 reads the file in place. That is why
  * the 26 MB reference file can be opened in a unit test without a 26 MB copy.
+ *
+ * The `Blob` case now costs nothing either, and for the same reason: a
+ * `FileReaderSync` over `blob.slice()` behind a bounded LRU is exactly what
+ * `RemoteRangeSource` does with range requests, so a dropped file is read a
+ * slice at a time instead of entirely, twice, before the first byte is parsed.
+ * The fallback below it is for a runtime with no `FileReaderSync` — the main
+ * thread, and the Node tests, neither of which is where the app does I/O.
  */
 
 import type { ByteSource, SourceStats } from '../types'
 import { ViewerError } from '../errors'
+import type { H5FSNode, H5Module } from '../h5/bootstrap'
 import { getH5, isNodeRuntime } from '../h5/bootstrap'
+
+/** Bytes per cached slice. Matches the remote source's, for the same reasons. */
+const LOCAL_CHUNK_SIZE = 1 << 20
+
+/** Upper bound on retained slice bytes; least-recently-used are dropped. */
+const LOCAL_CACHE_BYTES = 64 << 20
 
 /** Anything {@link LocalFileSource} knows how to mount. */
 export type LocalFileInput = Blob | Uint8Array | ArrayBuffer | ArrayBufferView | string
@@ -63,6 +77,10 @@ export class LocalFileSource implements ByteSource {
   private ownsMount = false
   private requests = 0
   private bytesRead = 0
+  /** Slice cache for the lazy mount; insertion-ordered, so first key is LRU. */
+  private readonly cache = new Map<number, Uint8Array>()
+  private cachedBytes = 0
+  private syncReader: FileReaderSync | null = null
 
   /**
    * Wrap a `File`, a `Blob`, raw bytes, or a {@link LocalPathRef}.
@@ -153,6 +171,23 @@ export class LocalFileSource implements ByteSource {
       return this.mountPath
     }
 
+    // A `Blob` in a worker is read *lazily*, a slice at a time.
+    //
+    // Reading it whole put the file in memory twice — once as the ArrayBuffer
+    // and once as the MEMFS copy — before a single byte of HDF5 was parsed, so
+    // opening a 5 GB file to look at one 2 Mb region cost 5 GB of reading and up
+    // to 10 GB of heap, and a large enough file could not be opened at all. The
+    // remote path has never done that: it mounts an FS node whose `read` fetches
+    // on demand behind an LRU. `FileReaderSync` is the same shape for a local
+    // file — synchronous, worker-only, which is where all I/O already lives — so
+    // the two sources differ in their byte accessor and in nothing else, and a
+    // local file is now bounded by its *reads* rather than by its size.
+    if (this.blob !== null && typeof FileReaderSync !== 'undefined') {
+      this.mountPath = this.mountLazy(h5, this.blob)
+      this.ownsMount = true
+      return this.mountPath
+    }
+
     const bytes = this.bytes ?? new Uint8Array(await (this.blob as Blob).arrayBuffer())
     const target = this.mountTarget()
     h5.FS.writeFile(target, bytes)
@@ -163,7 +198,105 @@ export class LocalFileSource implements ByteSource {
     return target
   }
 
+  /**
+   * Create the lazy FS node, mirroring `RemoteRangeSource.mount`.
+   *
+   * `usedBytes` has to be a getter over `contents.length` or MEMFS's `getattr`
+   * reports a zero-length file and HDF5 refuses to open it; `stream_ops` is
+   * copied rather than mutated because MEMFS shares one object across every file
+   * it created.
+   */
+  private mountLazy(h5: H5Module, blob: Blob): string {
+    const leaf = this.mountTarget().replace(/^\//, '')
+    const node: H5FSNode = h5.FS.createFile('/', leaf, {}, true, false)
+    const contents = { length: this.size }
+    node.contents = contents
+    Object.defineProperty(node, 'usedBytes', { get: () => contents.length })
+    node.stream_ops = {
+      ...node.stream_ops,
+      read: (
+        _stream: unknown,
+        buffer: Uint8Array,
+        offset: number,
+        length: number,
+        position: number,
+      ): number => {
+        if (position >= this.size) return 0
+        const n = Math.min(this.size - position, length)
+        this.copyInto(blob, buffer, offset, position, n)
+        return n
+      },
+      mmap: (_stream: unknown, length: number, position: number): { ptr: number; allocated: boolean } => {
+        const ptr = h5.Module._malloc(length)
+        if (ptr === 0) throw new Error('mmap allocation failed')
+        const n = Math.max(0, Math.min(this.size - position, length))
+        if (n > 0) this.copyInto(blob, h5.Module.HEAPU8, ptr, position, n)
+        return { ptr, allocated: true }
+      },
+    }
+    return `/${leaf}`
+  }
+
+  /**
+   * Copy `length` bytes at `position` out of the blob, through a chunk cache.
+   *
+   * The same bounded LRU the remote source uses, for the same reason: HDF5's
+   * metadata walk reads a few dozen bytes at a time from a handful of places,
+   * and a `FileReaderSync` call per read would be thousands of them.
+   */
+  private copyInto(
+    blob: Blob,
+    buffer: Uint8Array,
+    offset: number,
+    position: number,
+    length: number,
+  ): void {
+    let done = 0
+    while (done < length) {
+      const at = position + done
+      const index = Math.floor(at / LOCAL_CHUNK_SIZE)
+      let chunk = this.cache.get(index)
+      if (chunk === undefined) {
+        const from = index * LOCAL_CHUNK_SIZE
+        const to = Math.min(from + LOCAL_CHUNK_SIZE, this.size)
+        chunk = new Uint8Array(this.reader().readAsArrayBuffer(blob.slice(from, to)))
+        this.store(index, chunk)
+        this.requests += 1
+        this.bytesRead += chunk.byteLength
+      } else {
+        // Reinsert at the back: `Map` keeps insertion order, so the first key
+        // is the least recently used.
+        this.cache.delete(index)
+        this.cache.set(index, chunk)
+      }
+      const start = at - index * LOCAL_CHUNK_SIZE
+      const n = Math.min(chunk.length - start, length - done)
+      if (n <= 0) throw new Error(`short read of ${this.id} at ${at}`)
+      buffer.set(chunk.subarray(start, start + n), offset + done)
+      done += n
+    }
+  }
+
+  private store(index: number, chunk: Uint8Array): void {
+    this.cache.set(index, chunk)
+    this.cachedBytes += chunk.byteLength
+    for (const key of this.cache.keys()) {
+      if (this.cachedBytes <= LOCAL_CACHE_BYTES) break
+      if (key === index) continue
+      const evicted = this.cache.get(key)
+      if (evicted) this.cachedBytes -= evicted.byteLength
+      this.cache.delete(key)
+    }
+  }
+
+  private reader(): FileReaderSync {
+    this.syncReader ??= new FileReaderSync()
+    return this.syncReader
+  }
+
   close(): void {
+    this.cache.clear()
+    this.cachedBytes = 0
     if (this.mountPath === null) return
     const path = this.mountPath
     this.mountPath = null
@@ -192,6 +325,26 @@ export class LocalFileSource implements ByteSource {
    */
   stats(): SourceStats {
     return { requests: this.requests, bytes: this.bytesRead }
+  }
+
+  /** Slices currently retained — a cache-behaviour assertion for tests. */
+  cachedChunkCount(): number {
+    return this.cache.size
+  }
+
+  /**
+   * Read `[position, position + length)` of the file.
+   *
+   * The byte accessor {@link mount}'s stream op is built on, exposed for the
+   * same reason `RemoteRangeSource.readBytes` is: the slice cache is the part
+   * with the interesting behaviour, and it should be assertable without
+   * standing up an Emscripten FS. Only meaningful for a `Blob` input.
+   */
+  readBytes(position: number, length: number): Uint8Array {
+    const n = Math.max(0, Math.min(this.size - position, length))
+    const out = new Uint8Array(n)
+    if (n > 0 && this.blob !== null) this.copyInto(this.blob, out, 0, position, n)
+    return out
   }
 
   /** Zero the counters, so a budget test can measure one operation. */
