@@ -42,8 +42,8 @@
     "version": "node scripts/changelog-check.mjs"
   },
   "dependencies": {
-    "@gmod/bbi": "^4.0.6",
-    "generic-filehandle2": "^1.0.0",
+    "@gmod/bbi": "^10.0.1",
+    "generic-filehandle2": "^2.2.1",
     "h5wasm": "^0.10.3"
   },
   "devDependencies": {

@@ -424,22 +424,104 @@ above and does not weaken it — no code path reaches `__unbinned__` through thi
 
 ---
 
-## 8. Tracks
+## 8. Tracks and annotations
 
-bigWig via `@gmod/bbi` (the JBrowse 2 parser, MIT). Local files take a `generic-filehandle2` handle;
-remote files use its `RemoteFile`, which uses the global `fetch` — so local and remote differ only in
-the handle, as with HDF5. Values are requested at the view's pixel resolution using bigWig's built-in
-zoom levels, not base resolution.
+A contact map is read against what is on the sequence: genes, peaks, coverage, called loops. This
+section is the whole of that surface. It is **restricted to cool and mcool** — see §8.5 — and it is
+additive: a file with no annotations loaded behaves exactly as it did before this section existed.
+
+### 8.1 The three cards
+
+Three cards in the left sidebar, above Binning QC, in this order. Each is absent — not disabled, not
+empty — on a file that cannot carry them.
+
+**Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
+on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
+comparison), **tracks** (bigWig, any number, resolved as lines or areas), and **bed-like files** (any
+number, resolved as genomic segments). Each is placed on the bottom edge, the right edge, or both, by
+tick box; each carries its own limits, style, colour and value scaling; and any set of tracks may
+share one autoscale group.
+
+**Map overlays.** Annotations drawn *on* the matrix. Bed-like files mark on-diagonal borders or
+elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from the card above because
+these two answer a different question — not "what is on the sequence here" but "this pixel is a
+feature" — and because one file is rarely wanted in both roles at once.
+
+**Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
+or both) and arrowheads (on- or off-diagonal), each entered as coordinates or picked by clicking the
+map. This is the card that makes a figure, and nothing in it comes from a file.
+
+### 8.2 bigWig
+
+bigWig via `@gmod/bbi` v10 (the JBrowse 2 parser, MIT). Local files take a `generic-filehandle2`
+`BlobFile`; remote files take its `RemoteFile`, which uses the global `fetch` — so local and remote
+differ only in the handle, exactly as with HDF5, and neither path uploads a byte (§11).
+
+Values are requested through `getFeaturesAsArraysMulti` at the view's pixel resolution: one call per
+track per view covers every visible contig at once, `basesPerSpan` selects the file's own zoom level,
+and the result is typed arrays rather than a million feature objects. That is what makes a
+whole-genome view of ten tracks affordable, and it is the same "averaging when zoomed out" a genome
+browser does — read out of the file rather than computed here.
 
 **Contig-naming contract.** bigWig is keyed on chromosome names, which here are **contig** names from
 `/contigs`, not genome names. On load, intersect the bigWig's chrom list with `chromnames` and report
-the overlap explicitly ("412 of 418 contigs matched"). Silent zero-overlap is the most likely support
+the overlap explicitly ("16 of 16 contigs matched"). Silent zero-overlap is the most likely support
 question and must be impossible.
 
-Tracks are meaningful at bin and contig level. At genome level they are hidden.
+### 8.3 Text formats
 
-Tracks share a single `Scale` object (genomic coordinate ↔ pixel) owned by the view state; heatmap and
-tracks never compute their own.
+Parsed in full, in the annotations worker, never on the main thread — a 9.5 MB GTF is a tenth of a
+second of parsing and that is a tenth of a second of frozen UI.
+
+| Format | Accepted as | Coordinates |
+|---|---|---|
+| GTF / GFF | the one gene model | 1-based, inclusive; converted on parse |
+| BED 3/4/5/6/9/12, narrowPeak, broadPeak | segments | 0-based, half-open |
+| BEDPE, and a headed TSV carrying `chrom1/start1/end1/chrom2/start2/end2` | pairs | 0-based, half-open |
+
+Detection is by content, not by extension: a `.tsv` of loop calls with a header row is the shape the
+demo data has, and refusing it because of its suffix would be pedantry. A file whose contigs do not
+intersect the map's is reported with the overlap count, as a bigWig is, rather than loaded to draw
+nothing.
+
+### 8.4 Geometry, and why nothing can drift
+
+One rule: **the heatmap and every annotation share the axis `Scale` objects** (§`render/scale.ts`),
+which are owned by the view and written by the heatmap's own pan and zoom. Nothing here computes a
+second coordinate mapping, so a track and the matrix column above it cannot disagree by a pixel.
+
+What a `Scale` speaks is *matrix coordinates* — fractional cell indices along one axis of the
+rendered block — and what an annotation speaks is (contig, base pair). The bridge is a **locus axis**
+built from the block's own `AxisGroup`s: a piecewise-linear map, one piece per contig run, derived
+from `unitStart`, `unitLength` and the bin size. It is the same arithmetic the hover readout already
+does, from the same two numbers, so a tick, a tooltip and a track cannot disagree either. It covers
+every view without a special case: one contig, two different contigs, or all sixteen at once.
+
+Annotations are meaningful at bin and contig level. At genome level they are hidden — a cell is a
+whole genome there and a position inside one would be an invention.
+
+**Pan and zoom stay I/O-free**, as §2 requires of everything else. A track fetches whole visible
+contigs at a reduction level chosen for the current zoom and keeps them; panning and zooming redraw
+from that cache. A refetch happens only when the visible contig set changes or the required
+resolution crosses a factor of two — not once per frame, and never during a drag.
+
+### 8.5 cool and mcool only
+
+Every card, every lane and every overlay is gated on the file having no genome layer — which is
+exactly "this is a cooler" (§9). On a `.metacool` or `.mmetacool` they are not rendered at all.
+
+The reason is not squeamishness about effort. A metacool's axis is thousands of contigs from
+thousands of *different organisms*, assembled independently; a bigWig or a GTF is keyed on contig
+names that belong to one assembly, so the overlap is either a coincidence or a mistake, and drawing a
+gene model across a MAG boundary would assert a coordinate system that does not exist. The honest
+answer is to not offer it.
+
+### 8.6 Persistence
+
+The loaded set, and every per-annotation setting, is remembered per file in `UiMemory` — the same
+session-scoped store the table filters use. Deliberately **not** in the URL hash: §5.5 shares *what is
+being looked at*, a dropped local file cannot be re-read after a reload in any browser, and a link
+that arrived carrying half an annotation set would be worse than one carrying none.
 
 ---
 
