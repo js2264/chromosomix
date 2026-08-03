@@ -96,11 +96,12 @@ function separators(count: number, n: number, prefix: string): Separator[] {
 }
 
 describe('overlay toggles', () => {
-  it('starts with dividers, labels and ticks on and the crosshair off', () => {
+  it('starts with every mark but the crosshair on', () => {
     const view = new HeatmapView(fakeCanvas(800, 800).canvas, { devicePixelRatio: 1 })
     expect(view.plotOptions).toEqual(DEFAULT_PLOT_OPTIONS)
     expect(view.plotOptions).toEqual({
       dividers: true,
+      breaks: true,
       labels: true,
       crosshair: false,
       ticks: true,
@@ -134,6 +135,7 @@ describe('overlay toggles', () => {
     view.setPlotOptions({ crosshair: true })
     expect(view.plotOptions).toEqual({
       dividers: true,
+      breaks: true,
       labels: true,
       crosshair: true,
       ticks: true,
@@ -141,6 +143,7 @@ describe('overlay toggles', () => {
     view.setPlotOptions({ dividers: false })
     expect(view.plotOptions).toEqual({
       dividers: false,
+      breaks: true,
       labels: true,
       crosshair: true,
       ticks: true,

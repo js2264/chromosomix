@@ -23,7 +23,7 @@
  * it is the only thing that can move it coherently.
  */
 
-import { MAX_CATEGORICAL_TICKS } from '../constants'
+import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
 import {
   COLORMAP_NAMES,
@@ -47,8 +47,10 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPdf,
   canvasToPng,
+  captionStamp,
   downloadBlob,
   exportBaseName,
+  fileStamp,
   scaleForDpi,
 } from './export'
 import { setReadout } from './readout'
@@ -88,6 +90,20 @@ export interface MatrixPanelOptions {
   onBalanceChange?(balance: boolean): void
   /** A cell was clicked; offsets are block-local, ids are absolute. */
   onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
+  /**
+   * What the exported figure is a picture *of*, for its caption.
+   *
+   * The panel knows the bin size, the transform and the level; it does not know
+   * which file or which genome, because it is mounted by five different views
+   * over the same data. The router does, and passes it down.
+   */
+  caption?: { file: string; genome?: string }
+  /**
+   * An axis label was clicked. `name` is the block's own name — a genome in the
+   * whole-metagenome overview, a contig everywhere else — and the view opens
+   * whatever that name is.
+   */
+  onLabelClick?(axis: 'rows' | 'cols', name: string): void
   /**
    * Keep the colour controls out of the panel so the owning view can place them
    * elsewhere — the genome and region views stack them in their sidebar, above
@@ -179,6 +195,7 @@ export class MatrixPanel {
       onChange: () => this.schedule(),
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
+      onLabelClick: (axis, block) => this.options.onLabelClick?.(axis, block.label),
     })
     this.heatmap.attach()
     this.colorbar = new ColorbarView(this.barCanvas, { caption: 'count' })
@@ -278,6 +295,7 @@ export class MatrixPanel {
             { class: 'plot-option-row' },
             optionToggle('crosshair'),
             optionToggle('dividers'),
+            optionToggle('breaks'),
             optionToggle('labels'),
             optionToggle('ticks'),
           ),
@@ -445,22 +463,37 @@ export class MatrixPanel {
    * enlarged. What is *framed* is whatever is framed on screen, pan and zoom
    * included.
    */
-  exportCanvas(dpi: number): HTMLCanvasElement {
+  exportCanvas(dpi: number, now = new Date()): HTMLCanvasElement {
     const scale = scaleForDpi(dpi)
     const plot = this.heatmap.cssSize
     const bar = this.colorbar.cssSize
     const gap = 10
     const width = plot.width + gap + bar.width
-    const height = Math.max(plot.height, bar.height)
+    const body = Math.max(plot.height, bar.height)
 
     const out = document.createElement('canvas')
-    out.width = Math.max(1, Math.round(width * scale))
-    out.height = Math.max(1, Math.round(height * scale))
     const ctx = out.getContext('2d')
     if (ctx === null) throw new Error('Could not acquire a 2d context for the export canvas.')
 
+    // Measured before the canvas is sized, because the caption decides how tall
+    // it has to be — a long provenance line on a narrow figure wraps rather
+    // than running off the edge. Setting `width`/`height` resets the context,
+    // so nothing is drawn until after.
+    // Aligned with the *drawn* frame, not the canvas: the plot is inset by
+    // however much its labels need, and a caption flush with the canvas edge
+    // hangs off the left of the picture it belongs to.
+    const left = this.heatmap.dataRect.x
+    const caption = this.figureCaption(now)
+    const lines = captionLines(ctx, caption, Math.max(120, width - left))
+    const captionHeight = captionHeightOf(lines)
+
+    out.width = Math.max(1, Math.round(width * scale))
+    out.height = Math.max(1, Math.round((body + captionHeight) * scale))
+
     // The plot draws from the canvas origin and clears as it goes, so it goes
-    // first and the background goes on underneath at the end.
+    // first and the background goes on underneath at the end. The caption is
+    // *below* the figure, which is where a caption goes and — not incidentally
+    // — the only place that needs no offset for anything else.
     this.heatmap.renderTo(ctx, scale)
 
     // The legend renders into a canvas of its own and is then placed, because
@@ -478,6 +511,24 @@ export class MatrixPanel {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.drawImage(barCanvas, Math.round((plot.width + gap) * scale), 0)
 
+    if (lines.length > 0) {
+      const palette = readCanvasPalette()
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'left'
+      let y = body + CAPTION_TOP
+      for (const line of lines) {
+        const height = line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE
+        ctx.font = line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT
+        ctx.fillStyle = line.strong ? readPageText() : palette.labelColor
+        // Baseline a little above the line's foot, so the two lines read as one
+        // block rather than as two evenly spaced rows.
+        ctx.fillText(line.text, left, y + height - 4)
+        y += height
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+    }
+
     // Opaque, and in the theme on screen. A transparent PNG of a white-on-white
     // contact map is a blank rectangle in every viewer that composites onto
     // black, and the labels are drawn in the page's own text colour. Painted
@@ -491,16 +542,80 @@ export class MatrixPanel {
     return out
   }
 
+  /**
+   * What the figure is of, with the coordinates it is *actually framed at*.
+   *
+   * A view is panned and zoomed before it is exported, and the export keeps
+   * that framing — so a figure captioned `XVI` when it shows 200–600 kb of
+   * chromosome XVI is wrong in the way that matters, and the reader has no way
+   * to tell from the picture. The suffix is written in the region grammar, so
+   * it can be pasted back into the region box to return to this exact view.
+   *
+   * Omitted only where it would add nothing: an axis with no single coordinate
+   * system (a genome, whose axis is contigs), a block with two different axes
+   * (contig × contig), and a picture that is the whole sequence from base zero.
+   */
+  private framedSubject(): string {
+    const subject = this.exportName
+    if (subject.includes(' × ')) return subject
+    const range = this.heatmap.framedRange('rows')
+    if (range === null || range.whole) return subject
+    const name = subject.split(':')[0]
+    return `${name}:${fmt.int(Math.round(range.start))}-${fmt.int(Math.round(range.end))}`
+  }
+
+  /**
+   * What the exported figure says it is: the subject, and where it came from.
+   *
+   * Everything here is a fact a reader of the figure would otherwise have to be
+   * told separately, and every one of them has been the subject of an email
+   * about a screenshot: which file, which genome, which region, what bin size,
+   * and when — a contact map of the same region at two bin sizes is two
+   * different pictures, and a map re-exported after a re-run is a third.
+   */
+  figureCaption(now: Date): { title: string; detail: string } {
+    const context = this.options.caption
+    const subject = this.framedSubject()
+    const genome = context?.genome
+    // `›` rather than `·` between the two: a contig belongs *inside* its
+    // genome, which is the relationship the breadcrumb draws the same way. Not
+    // added when the subject already opens with the genome — a genome's own
+    // view names it once, and a pair names both.
+    const title =
+      genome === undefined || genome === '' || subject.startsWith(genome)
+        ? subject
+        : `${genome} › ${subject}`
+
+    const parts: string[] = []
+    if (context?.file !== undefined && context.file !== '') parts.push(context.file)
+    if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize)} bins`)
+    if (this.level === 'contig') parts.push('contig level')
+    if (this.options.balance === true) parts.push('balanced')
+    parts.push(this.transform === 'none' ? 'linear' : this.transform)
+    parts.push(captionStamp(now))
+    return { title, detail: parts.join(' · ') }
+  }
+
   /** Save the figure. The status line under the buttons reports what happened. */
   private async save(format: 'png' | 'pdf'): Promise<void> {
-    const name = `${exportBaseName(this.exportName)}-${this.exportDpi}dpi.${format}`
+    const now = new Date()
+    // The stamp is in the name because two exports of the same view are the
+    // same filename otherwise, and the second one silently becomes
+    // `figure (1).png` in a downloads folder nobody can later put in order.
+    const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}-${this.exportDpi}dpi.${format}`
     this.exportStatus.textContent = `saving ${name}…`
     try {
-      const canvas = this.exportCanvas(this.exportDpi)
+      const canvas = this.exportCanvas(this.exportDpi, now)
+      const caption = this.figureCaption(now)
       const blob =
         format === 'png'
           ? await canvasToPng(canvas)
-          : await canvasToPdf(canvas, { dpi: this.exportDpi, title: this.exportName })
+          : await canvasToPdf(canvas, {
+              dpi: this.exportDpi,
+              title: caption.title,
+              subject: caption.detail,
+              created: now,
+            })
       downloadBlob(blob, name)
       this.exportStatus.textContent = `${name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
@@ -517,6 +632,14 @@ export class MatrixPanel {
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
     this.heatmap.setMatrix(toDense(data), separatorsFor(data))
+    // A cell is a bin, so a block's span in cells is its length in base pairs:
+    // the contigs worth naming in a 300-contig genome are the long ones, and
+    // they are named however many short ones surround them. Above bin level a
+    // cell *is* a contig or a genome, every block is one cell wide, and the
+    // rule has nothing to read — hence 0, which turns it off.
+    this.heatmap.setLabelMinSpan(
+      data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
+    )
     this.heatmap.setAxisCoords({
       rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
       cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
@@ -766,6 +889,71 @@ function readCanvasPalette(): {
     labelHaloColor: pick('--bg', '#ffffff'),
     plotBorderColor: pick('--border-strong', '#b9bec5'),
   }
+}
+
+/** Body text in the theme in force, for the exported caption's first line. */
+function readPageText(): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()
+  return value === '' ? '#16181d' : value
+}
+
+/** Caption geometry, in CSS pixels. */
+const CAPTION_TOP = 14
+const CAPTION_TITLE_LINE = 19
+const CAPTION_DETAIL_LINE = 16
+const CAPTION_TITLE_FONT = '600 15px system-ui, sans-serif'
+const CAPTION_DETAIL_FONT = '12px system-ui, sans-serif'
+
+/** One drawn caption line; `strong` is the subject, the rest is provenance. */
+interface CaptionLine {
+  text: string
+  strong: boolean
+}
+
+/** Total height of a caption block, in CSS pixels. */
+function captionHeightOf(lines: CaptionLine[]): number {
+  if (lines.length === 0) return 0
+  return (
+    CAPTION_TOP +
+    lines.reduce((sum, line) => sum + (line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE), 0)
+  )
+}
+
+/**
+ * The caption as drawn lines, wrapped to the figure's width.
+ *
+ * The detail line is a middot-separated list, so it breaks at those separators
+ * and nowhere else — a provenance line broken mid-filename reads as two files.
+ * The subject line is one name and is left to overflow rather than be cut: a
+ * truncated genome name is worse than a wide figure.
+ */
+function captionLines(
+  ctx: CanvasRenderingContext2D,
+  caption: { title: string; detail: string },
+  width: number,
+): CaptionLine[] {
+  const lines: CaptionLine[] = []
+  if (caption.title !== '') lines.push({ text: caption.title, strong: true })
+  if (caption.detail === '') return lines
+
+  ctx.font = CAPTION_DETAIL_FONT
+  const fits = (text: string): boolean => ctx.measureText(text).width <= width
+  if (fits(caption.detail)) {
+    lines.push({ text: caption.detail, strong: false })
+    return lines
+  }
+  let line = ''
+  for (const part of caption.detail.split(' · ')) {
+    const candidate = line === '' ? part : `${line} · ${part}`
+    if (line !== '' && !fits(candidate)) {
+      lines.push({ text: line, strong: false })
+      line = part
+    } else {
+      line = candidate
+    }
+  }
+  if (line !== '') lines.push({ text: line, strong: false })
+  return lines
 }
 
 /** The page colour an export is flattened onto — the theme in force. */

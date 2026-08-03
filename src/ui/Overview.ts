@@ -56,10 +56,17 @@ export interface OverviewProps {
    */
   onOpenContig(rowContig: string, colContig?: string): void
   onError(err: unknown): void
+  /** File and genome context for the exported figure's caption. */
+  caption?: { file: string; genome?: string }
 }
 
 export class Overview {
   readonly el: HTMLElement
+  /**
+   * The view's own controls, mounted by the shell in the right-hand column
+   * rather than inside this element — see `App.showContent`.
+   */
+  readonly sideEl: HTMLElement
   private readonly gate: HTMLElement
   private readonly progressBar: HTMLProgressElement
   private readonly progressText: HTMLElement
@@ -120,9 +127,21 @@ export class Overview {
     // its own terms, which made switching to it feel like leaving the app.
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.caption === undefined ? {} : { caption: props.caption }),
       detachedControls: true,
       hideTitle: true,
       onCellClick: (cell, groups) => this.openCell(cell, groups),
+      // The axes of this view are labelled by *genome* at either level — the
+      // reader's super-groups are what name a contig axis — so a label opens
+      // the genome it names. The contig fallback is the one case where it does
+      // not: an axis with no genome behind it is labelled by its contigs.
+      onLabelClick: (_axis, name) => {
+        if (this.level === 'genome' || this.axisGenomes !== undefined) {
+          this.props.onOpenGenome(name)
+        } else {
+          this.props.onOpenContig(name)
+        }
+      },
     })
     this.panelHost.appendChild(this.panel.el)
 
@@ -136,28 +155,25 @@ export class Overview {
         this.summary,
         this.note,
       ),
+      el('div', { class: 'overview-main' }, this.gate, this.progressBox, this.panelHost),
+    )
+
+    this.sideEl = el(
+      'aside',
+      { class: 'side' },
+      this.panel.controlsEl,
+      this.panel.plotEl,
       el(
-        'div',
-        { class: 'genome-body' },
-        el('div', { class: 'overview-main' }, this.gate, this.progressBox, this.panelHost),
-        el(
-          'aside',
-          { class: 'side' },
-          this.panel.controlsEl,
-          this.panel.plotEl,
-          el(
-            'section',
-            { class: 'card' },
-            el('h3', { text: 'Scan' }),
-            this.levelPicker(),
-            el('p', {
-              class: 'hint',
-              text:
-                'Every other view costs a bounded read. This one costs a pass over every ' +
-                'non-zero pixel, so it only runs when you ask for it.',
-            }),
-          ),
-        ),
+        'section',
+        { class: 'card' },
+        el('h3', { text: 'Scan' }),
+        this.levelPicker(),
+        el('p', {
+          class: 'hint',
+          text:
+            'Every other view costs a bounded read. This one costs a pass over every ' +
+            'non-zero pixel, so it only runs when you ask for it.',
+        }),
       ),
     )
 
@@ -367,7 +383,7 @@ export class Overview {
       : `${result.n} ${unit} · ${provenance}`
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
-    this.panel.setData(toMatrixResult(result), 'metagenome-overview')
+    this.panel.setData(toMatrixResult(result), 'Whole metagenome')
 
     // Three separate statements, composed rather than nested: the restriction
     // caveat used to *replace* the click instruction, so the files most likely

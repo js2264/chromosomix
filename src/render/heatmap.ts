@@ -265,6 +265,39 @@ const EMPTY_SEPARATORS: SeparatorSet = { rows: [], cols: [] }
  * are dropped and each block runs to the next separator or to the end of the
  * axis.
  */
+/**
+ * Where a block's name goes: the middle of the part of it that is on screen.
+ *
+ * The block's own midpoint only works while the whole block is in view, which
+ * it was when labels were drawn only on axes small enough to fit. Zoomed in, a
+ * genome block can be wider than the window and its midpoint is then off the
+ * canvas — the name of the thing filling the picture was the one name not
+ * written on it.
+ */
+export function visibleCentre(
+  block: { start: number; end: number },
+  domain: readonly [number, number],
+): number {
+  const start = Math.max(block.start, domain[0])
+  const end = Math.min(block.end, domain[1])
+  return end > start ? (start + end) / 2 : (block.start + block.end) / 2
+}
+
+/**
+ * The first index in `[0, length)` for which `pred` holds, or `length`.
+ * `pred` must be monotone: false, then true.
+ */
+function lowerBound(length: number, pred: (index: number) => boolean): number {
+  let lo = 0
+  let hi = length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (pred(mid)) hi = mid
+    else lo = mid + 1
+  }
+  return lo
+}
+
 export function separatorBlocks(seps: readonly Separator[], n: number): LabelBlock[] {
   const inside = seps
     .filter((s) => s.at >= 0 && s.at < n)
@@ -357,6 +390,18 @@ export interface Cell {
 export interface PlotOptions {
   /** Contig and genome boundary hairlines. */
   dividers: boolean
+  /**
+   * Boundary marks *outside* the data, along the top and left edges.
+   *
+   * The same information the dividers carry, drawn where it costs no data. On a
+   * whole-genome map the question "where does one genome end" is asked
+   * constantly and answered badly by both alternatives: hairlines across the
+   * picture cover the contacts being read, and names need a gutter and thin out
+   * to nothing once there are more of them than the axis can spell. A tick on
+   * the edge is neither — it marks every boundary at any count, and it is off
+   * the data by construction.
+   */
+  breaks: boolean
   /** Block labels in the gutters. Off also collapses the gutters they need. */
   labels: boolean
   /** Guide lines through the hovered cell. */
@@ -367,6 +412,7 @@ export interface PlotOptions {
 
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   dividers: true,
+  breaks: true,
   labels: true,
   crosshair: false,
   ticks: true,
@@ -481,8 +527,20 @@ export interface HeatmapOptions {
   /** Halo drawn behind labels that fall inside the plot area. */
   labelHaloColor?: string
   labelFont?: string
-  /** Draw labels only when an axis has at most this many blocks. */
+  /** Draw labels only when an axis has at most this many blocks *in view*. */
   maxLabels?: number
+  /**
+   * Span, in matrix cells, at or above which a block is labelled however many
+   * blocks the axis has.
+   *
+   * The count rule alone answers "would these names be a smear" with one number
+   * for the whole axis, and a real genome is not uniform: 300 contigs, six of
+   * them megabases and the rest a few kilobases each. Those six are the ones
+   * worth naming and the count rule refuses all 300. Left at `0` — off — where
+   * a block is one aggregated unit and its span in cells says nothing about its
+   * size in base pairs.
+   */
+  labelMinSpan?: number
   /** Guide lines for the hovered cell; distinct from every separator colour. */
   crosshairColor?: string
   /** The frame drawn on the plot's own edges, replacing the wrapper's border. */
@@ -517,6 +575,16 @@ export interface HeatmapOptions {
   /** Fired on a click that was not a drag, for §5.5 cross-navigation. */
   onCellClick?: (cell: Cell) => void
   /**
+   * Fired on a click in a label gutter, on the block that label names.
+   *
+   * A label is the name of a thing the app can open — a genome in the overview,
+   * a contig in a genome view — and it is the only part of the picture that
+   * says so in words. Clicking it is the obvious gesture, and until it did
+   * something it was the one piece of the plot that looked interactive and was
+   * not.
+   */
+  onLabelClick?: (axis: 'rows' | 'cols', block: LabelBlock) => void
+  /**
    * Fired as the pointer moves over the plot; `null` when it leaves.
    *
    * `at` is the pointer in canvas CSS pixels, so a tooltip can be positioned
@@ -547,7 +615,10 @@ interface Drag {
 }
 
 type ResolvedOptions = Required<
-  Omit<HeatmapOptions, 'margin' | 'onChange' | 'onCellClick' | 'onHover' | 'plotOptions'>
+  Omit<
+    HeatmapOptions,
+    'margin' | 'onChange' | 'onCellClick' | 'onLabelClick' | 'onHover' | 'plotOptions'
+  >
 > & { margin: Margin }
 
 const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
@@ -557,6 +628,12 @@ const LABEL_MIN_GAP = 11
 
 /** Breathing room between a label and the plot edge, in CSS pixels. */
 const LABEL_GAP = 8
+
+/** How far a boundary tick reaches out of the plot, in CSS pixels. */
+const BREAK_LENGTH = 5
+
+/** Minimum on-screen gap between two boundary ticks, in CSS pixels. */
+const BREAK_MIN_GAP = 3
 
 /** Gutter left on an edge that carries no labels, in CSS pixels. */
 const EDGE_PAD = 6
@@ -605,6 +682,7 @@ export class HeatmapView {
   private readonly opts: ResolvedOptions
   private readonly onChange: (() => void) | null
   private readonly onCellClick: ((cell: Cell) => void) | null
+  private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
   private matrix: DenseMatrix | null = null
@@ -619,6 +697,16 @@ export class HeatmapView {
   private pooled: PooledDisplay | null = null
   private offscreen: RasterCanvas | null = null
   private separators: SeparatorSet = EMPTY_SEPARATORS
+  /** {@link blocks}, per axis, until the separators change. */
+  private blockCache: { rows: LabelBlock[] | null; cols: LabelBlock[] | null } = {
+    rows: null,
+    cols: null,
+  }
+  /**
+   * The policy each axis was last measured for, so a view change re-measures
+   * the gutters only when the answer has actually changed.
+   */
+  private labelPolicies: { rows: string; cols: string } = { rows: 'none', cols: 'none' }
   private colorScale: ColorScale
   private dirtyRaster = false
   private plot: PlotOptions
@@ -673,6 +761,7 @@ export class HeatmapView {
       labelHaloColor: options.labelHaloColor ?? 'rgba(255, 255, 255, 0.85)',
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
+      labelMinSpan: options.labelMinSpan ?? 0,
       crosshairColor: options.crosshairColor ?? '#1f5fa9',
       plotBorderColor: options.plotBorderColor ?? '#b9bec5',
       selectionColor: options.selectionColor ?? '#1f5fa9',
@@ -687,6 +776,7 @@ export class HeatmapView {
     this.plot = { ...DEFAULT_PLOT_OPTIONS, ...(options.plotOptions ?? {}) }
     this.onChange = options.onChange ?? null
     this.onCellClick = options.onCellClick ?? null
+    this.onLabelClick = options.onLabelClick ?? null
     this.onHover = options.onHover ?? null
 
     // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
@@ -738,19 +828,16 @@ export class HeatmapView {
    * Hiding the labels also gives their gutters back, which is why this remeasures
    * rather than only repainting: the margin exists *for* the labels, and leaving
    * a 150 px band of nothing beside a plot with no names in it would be the dead
-   * space {@link measureMargin} was written to remove. The view keeps its zoom
-   * and origin, so the pixels under the pointer stay under the pointer.
+   * space {@link measureMargin} was written to remove. A zoom someone chose is
+   * kept, so the pixels under the pointer stay under the pointer; a view that
+   * was showing the whole block goes on showing the whole block, rather than
+   * losing its last few contigs to the gutter that just opened.
    */
   setPlotOptions(next: Partial<PlotOptions>): void {
     const merged = { ...this.plot, ...next }
     const labelsChanged = merged.labels !== this.plot.labels
     this.plot = merged
-    if (labelsChanged) {
-      this.measureMargin()
-      this.recomputeBaseZoom()
-      this.clampView()
-      this.syncScales()
-    }
+    if (labelsChanged) this.remeasure()
     this.changed()
   }
 
@@ -770,8 +857,9 @@ export class HeatmapView {
    */
   measureMargin(): void {
     if (!this.opts.autoMargin) return
-    const cols = this.labelBlocks('cols')
-    const rows = this.labelBlocks('rows')
+    this.labelPolicies = { rows: this.labelPolicy('rows'), cols: this.labelPolicy('cols') }
+    const cols = this.marginBlocks('cols')
+    const rows = this.marginBlocks('rows')
     this.ctx.save()
     this.ctx.font = this.opts.labelFont
     const widest = (blocks: LabelBlock[]): number => {
@@ -872,6 +960,7 @@ export class HeatmapView {
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
       : separators
+    this.blockCache = { rows: null, cols: null }
     // A mapping belongs to one block. Clearing it here means a caller that
     // never calls `setAxisCoords` draws no ticks, rather than drawing the
     // previous block's coordinates over this one's data.
@@ -895,6 +984,22 @@ export class HeatmapView {
    */
   setAxisCoords(coords: AxisCoordSet): void {
     this.axisCoords = coords
+    this.changed()
+  }
+
+  /**
+   * Set the span, in matrix cells, above which a block is labelled whatever the
+   * count. `0` turns the rule off.
+   *
+   * Per matrix, not per view: the caller knows the bin size and whether a cell
+   * is a bin at all, and an aggregated cell — one contig, one genome — has a
+   * span of exactly one whatever its size, so the rule has nothing to read.
+   */
+  setLabelMinSpan(cells: number): void {
+    const next = cells > 0 ? cells : 0
+    if (next === this.opts.labelMinSpan) return
+    this.opts.labelMinSpan = next
+    this.remeasure()
     this.changed()
   }
 
@@ -1047,7 +1152,49 @@ export class HeatmapView {
   }
 
   private changed(): void {
+    this.refreshLabelMargin()
     this.onChange?.()
+  }
+
+  /**
+   * Re-measure the gutters when a zoom or a pan has changed what the axes are
+   * willing to label.
+   *
+   * The margin is now a function of the view, because the label policy is: an
+   * axis with 20,000 blocks names none of them zoomed out and names them all
+   * once fifty are in view. It cannot oscillate. Opening a gutter *shrinks* the
+   * plot, so fewer blocks are in view, so the policy that opened it still
+   * holds; closing one widens the plot, so more are in view, and it stays
+   * closed. Both directions reinforce the decision that caused them.
+   *
+   * Guarded on the policy rather than on the measurement, so the common frame —
+   * a pan that changes nothing about what is labelled — costs two binary
+   * searches and no text measurement at all.
+   */
+  private refreshLabelMargin(): void {
+    if (!this.opts.autoMargin || this.matrix === null) return
+    const rows = this.labelPolicy('rows')
+    const cols = this.labelPolicy('cols')
+    if (rows === this.labelPolicies.rows && cols === this.labelPolicies.cols) return
+    this.remeasure()
+  }
+
+  /**
+   * Re-measure the gutters and put the view back in step with the plot area
+   * they leave.
+   *
+   * A view that was showing the whole block goes on showing the whole block —
+   * as after a resize, and for the same reason: the gutter is chrome, and
+   * losing the last two contigs of a fitted map to it is not something the
+   * reader asked for. A zoom someone chose is kept.
+   */
+  private remeasure(): void {
+    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+    this.measureMargin()
+    this.recomputeBaseZoom()
+    if (wasFitted) this.zoom = this.baseZoom
+    this.clampView()
+    this.syncScales()
   }
 
   /**
@@ -1108,6 +1255,47 @@ export class HeatmapView {
     }
   }
 
+  /**
+   * The labelled block under a point in a gutter, or `null`.
+   *
+   * The target is the whole band above (or beside) the block, not the drawn
+   * glyphs: a rotated 10 px name is a two-pixel-wide thing to ask anyone to
+   * hit, and the band is unambiguous — one block owns each column of the top
+   * gutter. Crowded labels are elided at {@link LABEL_MIN_GAP}, so a band may
+   * have no name written over it; it still belongs to its block, and clicking
+   * it opens what a wider window would have named.
+   */
+  labelAt(x: number, y: number): { axis: 'rows' | 'cols'; block: LabelBlock } | null {
+    const plot = this.plotRect
+    const inRows = x < plot.x && y >= plot.y && y < plot.y + plot.height
+    const inCols = y < plot.y && x >= plot.x && x < plot.x + plot.width
+    if (!inRows && !inCols) return null
+    const axis = inRows ? 'rows' : 'cols'
+    const scale = inRows ? this.rowScale : this.colScale
+    const unit = scale.cellAt(inRows ? y - plot.y : x - plot.x)
+    if (unit < 0) return null
+    const block = this.labelBlocks(axis).find((b) => unit >= b.start && unit < b.end)
+    return block === undefined ? null : { axis, block }
+  }
+
+  /**
+   * What a click or tap at this point would open, or `null` for nothing.
+   *
+   * One answer for the mouse and the finger, so a phone cannot end up with a
+   * different idea of what is clickable than a laptop.
+   */
+  private hitAction(x: number, y: number): (() => void) | null {
+    const cell = this.cellAt(x, y)
+    if (cell !== null) {
+      const emit = this.onCellClick
+      return emit === null ? null : () => emit(cell)
+    }
+    const emit = this.onLabelClick
+    if (emit === null) return null
+    const hit = this.labelAt(x, y)
+    return hit === null ? null : () => emit(hit.axis, hit.block)
+  }
+
   // -- drawing -------------------------------------------------------------
 
   /** Rasterise if needed, then paint. Cheap enough to call every frame. */
@@ -1154,6 +1342,7 @@ export class HeatmapView {
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     if (this.plot.dividers) this.drawSeparators()
+    if (this.plot.breaks) this.drawBreaks()
     this.drawLabels()
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) this.drawCrosshair()
@@ -1187,6 +1376,31 @@ export class HeatmapView {
   /** The canvas size the export needs, in CSS pixels. */
   get cssSize(): { width: number; height: number } {
     return { width: this.cssWidth, height: this.cssHeight }
+  }
+
+  /**
+   * The base pairs an axis actually shows, or `null` where it has no single
+   * coordinate system to show them in.
+   *
+   * Bin-aligned, because the cells are: the window reported is the one drawn,
+   * not the fractional domain the transform happens to hold. `whole` says the
+   * picture is the entire sequence from its first base — which is the only case
+   * where naming the range adds nothing, since the name already implies it.
+   */
+  framedRange(axis: 'rows' | 'cols'): { start: number; end: number; whole: boolean } | null {
+    const coords = axis === 'rows' ? this.axisCoords.rows : this.axisCoords.cols
+    if (coords === null) return null
+    const scale = axis === 'rows' ? this.rowScale : this.colScale
+    const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
+    const [d0, d1] = scale.domain
+    const lo = Math.max(0, Math.floor(d0))
+    const hi = Math.min(n, Math.ceil(d1))
+    if (!(hi > lo)) return null
+    return {
+      start: coords.bpAtOrigin + lo * coords.bpPerCell,
+      end: coords.bpAtOrigin + hi * coords.bpPerCell,
+      whole: coords.bpAtOrigin === 0 && lo === 0 && hi === n,
+    }
   }
 
   /**
@@ -1365,16 +1579,154 @@ export class HeatmapView {
   }
 
   /**
-   * Block labels for one axis, or `[]` when the axis has more blocks than
-   * `maxLabels`. The default is `MAX_CATEGORICAL_TICKS = 50`, the same
-   * threshold `_level_axis`/`_bin_axis` use in `ops/show.py`: beyond it one
-   * tick per contig degenerates into an unreadable smear.
+   * Every block of one axis, sorted and cached.
+   *
+   * Cached because {@link labelPolicy} is consulted on every view change — a
+   * pan emits one per frame — and re-sorting 20,000 separators per frame to
+   * answer a question about the zoom would be paid by the pan itself.
    */
-  labelBlocks(axis: 'rows' | 'cols'): LabelBlock[] {
-    if (!this.plot.labels) return []
+  private blocks(axis: 'rows' | 'cols'): LabelBlock[] {
+    const cached = this.blockCache[axis]
+    if (cached !== null) return cached
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     const blocks = separatorBlocks(this.separators[axis], n)
-    return blocks.length > 0 && blocks.length <= this.opts.maxLabels ? blocks : []
+    this.blockCache[axis] = blocks
+    return blocks
+  }
+
+  /**
+   * The half-open index range of {@link blocks} that the current view shows.
+   *
+   * Binary search rather than a filter: an axis of 20,000 contigs is walked on
+   * every frame of a pan otherwise, and the blocks partition the axis in order,
+   * so the visible run is contiguous.
+   */
+  private visibleRange(axis: 'rows' | 'cols'): [number, number] {
+    const blocks = this.blocks(axis)
+    if (blocks.length === 0) return [0, 0]
+    const [d0, d1] = axis === 'rows' ? this.rowScale.domain : this.colScale.domain
+    // First block whose end is past the left edge, and first block starting at
+    // or after the right edge.
+    const lo = lowerBound(blocks.length, (i) => blocks[i].end > d0)
+    const hi = lowerBound(blocks.length, (i) => blocks[i].start >= d1)
+    return [lo, Math.max(lo, hi)]
+  }
+
+  /**
+   * How this axis labels itself at the current zoom.
+   *
+   * - `all` — few enough blocks *in view* to name every one of them. The count
+   *   is of the visible blocks, not of the axis, which is what makes zooming in
+   *   on a 20,000-contig overview bring its names out: `maxLabels` asks whether
+   *   the labels would be a smear, and past the first zoom step they would not.
+   * - `large` — too many to name, but the axis measures cells of a known size,
+   *   so the blocks worth naming are the big ones. See {@link labelMinSpan}.
+   * - `none` — labels off, no blocks, or too many with nothing to choose by.
+   */
+  private labelPolicy(axis: 'rows' | 'cols'): 'all' | 'large' | 'none' {
+    if (!this.plot.labels) return 'none'
+    if (this.blocks(axis).length === 0) return 'none'
+    const [lo, hi] = this.visibleRange(axis)
+    if (hi - lo <= this.opts.maxLabels) return 'all'
+    return this.opts.labelMinSpan > 0 ? 'large' : 'none'
+  }
+
+  private isLarge = (block: LabelBlock): boolean =>
+    block.end - block.start >= this.opts.labelMinSpan
+
+  /**
+   * Boundary ticks outside the data, along the top and left edges.
+   *
+   * The blocks are whatever the axis is divided into — genomes in the
+   * whole-metagenome view, where the reader sends them as the coarse set and
+   * they are what both the dividers and the labels use; contigs in a genome;
+   * chromosomes in a cooler. Interior boundaries only: the outer two are the
+   * plot frame, already drawn.
+   *
+   * Ticks are elided below {@link BREAK_MIN_GAP} apart, for the same reason
+   * labels are — a mark that cannot be told from its neighbours is not a mark,
+   * it is a grey band — but the floor is a fraction of the labels', because a
+   * tick is a hairline and a name is a word.
+   */
+  private drawBreaks(): void {
+    const plot = this.plotRect
+    const data = this.dataRect
+    if (data.width <= 0 || data.height <= 0) return
+    const ctx = this.ctx
+    ctx.save()
+    // The gutter is the page, not the figure, so these follow the theme as the
+    // labels beside them do — unlike the separators, which are `show.py`'s.
+    ctx.strokeStyle = this.opts.labelColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.beginPath()
+
+    const colLength = Math.min(BREAK_LENGTH, data.y)
+    if (colLength > 0) {
+      let last = -Infinity
+      for (const at of this.breakPositions('cols')) {
+        const x = this.snap(plot.x + this.colScale.toPixel(at))
+        if (x < data.x || x > data.x + data.width) continue
+        if (x - last < BREAK_MIN_GAP) continue
+        last = x
+        ctx.moveTo(x, data.y - colLength)
+        ctx.lineTo(x, data.y)
+      }
+    }
+
+    const rowLength = Math.min(BREAK_LENGTH, data.x)
+    if (rowLength > 0) {
+      let last = -Infinity
+      for (const at of this.breakPositions('rows')) {
+        const y = this.snap(plot.y + this.rowScale.toPixel(at))
+        if (y < data.y || y > data.y + data.height) continue
+        if (y - last < BREAK_MIN_GAP) continue
+        last = y
+        ctx.moveTo(data.x - rowLength, y)
+        ctx.lineTo(data.x, y)
+      }
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
+   * Interior block boundaries of one axis, in matrix coordinates.
+   *
+   * From the first *visible* block rather than the first block of the axis, so
+   * the cost is the boundaries on screen and not the 20,000 behind them.
+   */
+  breakPositions(axis: 'rows' | 'cols'): number[] {
+    const blocks = this.blocks(axis)
+    if (blocks.length < 2) return []
+    const [lo, hi] = this.visibleRange(axis)
+    // `max(1, lo)`: block zero's start is the axis edge, which the plot frame
+    // already draws. Every other visible block's start is a boundary.
+    return blocks.slice(Math.max(1, lo), hi).map((block) => block.start)
+  }
+
+  /** The blocks drawn on one axis: those in view that the policy admits. */
+  labelBlocks(axis: 'rows' | 'cols'): LabelBlock[] {
+    const policy = this.labelPolicy(axis)
+    if (policy === 'none') return []
+    const [lo, hi] = this.visibleRange(axis)
+    const visible = this.blocks(axis).slice(lo, hi)
+    return policy === 'all' ? visible : visible.filter(this.isLarge)
+  }
+
+  /**
+   * The blocks the *gutter* is sized for: everything the policy admits over the
+   * whole axis, in view or not.
+   *
+   * Deliberately not {@link labelBlocks}. A gutter measured from the visible
+   * labels alone would resize as the widest name scrolled in and out of view,
+   * and the plot would shift under the pointer through every pan. Sized this
+   * way it changes only when the policy does — at a zoom threshold, once.
+   */
+  private marginBlocks(axis: 'rows' | 'cols'): LabelBlock[] {
+    const policy = this.labelPolicy(axis)
+    if (policy === 'none') return []
+    const blocks = this.blocks(axis)
+    return policy === 'all' ? blocks : blocks.filter(this.isLarge)
   }
 
   private drawLabels(): void {
@@ -1405,7 +1757,7 @@ export class HeatmapView {
     ctx.textAlign = inMargin ? 'left' : 'right'
     let last = -Infinity
     for (const block of cols) {
-      const centre = plot.x + this.colScale.toPixel((block.start + block.end) / 2)
+      const centre = plot.x + this.colScale.toPixel(visibleCentre(block, this.colScale.domain))
       if (centre < plot.x || centre > plot.x + plot.width) continue
       if (centre - last < LABEL_MIN_GAP) continue
       last = centre
@@ -1422,7 +1774,7 @@ export class HeatmapView {
     const rowX = rowsInMargin ? plot.x - 4 : plot.x + 4
     last = -Infinity
     for (const block of rows) {
-      const centre = plot.y + this.rowScale.toPixel((block.start + block.end) / 2)
+      const centre = plot.y + this.rowScale.toPixel(visibleCentre(block, this.rowScale.domain))
       if (centre < plot.y || centre > plot.y + plot.height) continue
       if (centre - last < LABEL_MIN_GAP) continue
       last = centre
@@ -1661,6 +2013,11 @@ export class HeatmapView {
       }
       const cell = this.cellAt(x, y)
       this.setHover(cell)
+      // A label opens something, so it says so under the pointer.
+      canvas.classList.toggle(
+        'linking',
+        cell === null && this.onLabelClick !== null && this.labelAt(x, y) !== null,
+      )
       this.onHover?.(cell, { x, y })
     }
     const onUp = (e: MouseEvent): void => {
@@ -1672,13 +2029,14 @@ export class HeatmapView {
       // A press that did not travel is a click, in either mode: §5.5's
       // cross-navigation must not need a steady hand.
       if (!this.dragMoved) {
-        const cell = this.cellAt(x, y)
-        if (cell === null || this.onCellClick === null) return
+        const action = this.hitAction(x, y)
+        if (action === null) return
+        // Deferred behind the double-click window: the second click of a "put
+        // it back" must not land after the first has navigated away.
         cancelPendingClick()
-        const emit = this.onCellClick
         clickTimer = setTimeout(() => {
           clickTimer = null
-          emit(cell)
+          action()
         }, DOUBLE_CLICK_MS)
         return
       }
@@ -1810,12 +2168,14 @@ export class HeatmapView {
       // in on the way to opening what was tapped.
       this.setHover(cell)
       this.onHover?.(cell, { x: touchStart[0], y: touchStart[1] })
-      if (cell === null || this.onCellClick === null) return
-      const emit = this.onCellClick
+      // A label is as tappable as a cell, and on a phone it is the easier of
+      // the two to hit: the gutter is a band, the cell is a few pixels.
+      const action = this.hitAction(touchStart[0], touchStart[1])
+      if (action === null) return
       cancelPendingClick()
       clickTimer = setTimeout(() => {
         clickTimer = null
-        emit(cell)
+        action()
       }, DOUBLE_CLICK_MS)
     }
 

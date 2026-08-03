@@ -18,11 +18,12 @@
  * a sidebar block spends permanent vertical space on something a single line
  * can carry.
  *
- * **The record host** at the foot is the one part of this panel that changes as
- * you navigate: the `/genomes` or `/contigs` row of whatever heatmap is on
- * screen ({@link RecordCard}). It is last because the blocks above it describe
- * the *file*, which is the context for everything, and a panel whose top jumps
- * on every navigation is harder to read than one that grows at the bottom.
+ * **The record host** is the one part of this panel that changes as you
+ * navigate: the `/genomes` or `/contigs` row of whatever heatmap is on screen
+ * ({@link RecordCard}). It sits directly under the File card, because those two
+ * are what the reader is actually looking at — this file, this genome — while
+ * the QC statistic and the stored metadata are consulted once and then ignored.
+ * Those two stay last, in that order, wherever the record card is.
  */
 
 import type { OpenResult } from '../worker/protocol'
@@ -43,9 +44,9 @@ export class InfoPanel {
       'aside',
       { class: 'info-panel' },
       el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
+      this.recordHost,
       this.unassignedBlock(),
       this.metadataBlock(),
-      this.recordHost,
     )
   }
 

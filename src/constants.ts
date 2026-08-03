@@ -76,6 +76,19 @@ export const UNBINNED_NAME = '__unbinned__'
 export const MAX_CATEGORICAL_TICKS = 50
 
 /**
+ * A contig at least this long is labelled however many contigs share the axis.
+ *
+ * The count rule above answers "would these names be a smear" with one number
+ * for a whole axis, and a real MAG is not uniform: a few hundred contigs, a
+ * handful of them megabases and the rest a few kilobases each. The handful are
+ * the ones a reader is looking for, and the count rule refuses all of them
+ * along with the rest. 50 kb is the usual floor for a contig anyone reads
+ * individually, and at a 1 kb bin size it is a block fifty cells wide — wide
+ * enough on screen to carry a name.
+ */
+export const LABEL_MIN_SPAN_BP = 50_000
+
+/**
  * Sentinel strings that `metacooler.schema._int_attr` treats as "absent"
  * rather than as a parse error. Compared after trimming and lowercasing.
  */

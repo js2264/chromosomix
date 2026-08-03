@@ -41,6 +41,8 @@ export interface GenomeViewProps {
    */
   onOpenContigPair(rowContig: string, colContig: string): void
   onError(err: unknown): void
+  /** File and genome context for the exported figure's caption. */
+  caption?: { file: string; genome?: string }
   /** Genomes one step away in display order, for the `‹ ›` buttons. */
   neighbours?: { prev: string | null; next: string | null }
   onStep?(delta: number): void
@@ -48,6 +50,11 @@ export interface GenomeViewProps {
 
 export class GenomeView {
   readonly el: HTMLElement
+  /**
+   * The view's own controls, mounted by the shell in the right-hand column
+   * rather than inside this element — see `App.showContent`.
+   */
+  readonly sideEl: HTMLElement
   private readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly contigList: HTMLElement
@@ -65,6 +72,7 @@ export class GenomeView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
       // The controls live in this view's sidebar, stacked above the contig list,
       // and the `<h2>` above already names the genome.
@@ -93,6 +101,9 @@ export class GenomeView {
         }
         props.onOpenRegion(groups.row.label)
       },
+      // A label names one contig and nothing else — there is no second axis in
+      // it — so it opens that contig, whichever edge it was clicked on.
+      onLabelClick: (_axis, name) => props.onOpenRegion(name),
     })
 
     // At contig level every cell already *is* a contig, labelled on both axes,
@@ -122,12 +133,15 @@ export class GenomeView {
         this.summary,
         this.note,
       ),
-      el(
-        'div',
-        { class: 'genome-body' },
-        this.panel.el,
-        el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl, this.contigBox),
-      ),
+      this.panel.el,
+    )
+
+    this.sideEl = el(
+      'aside',
+      { class: 'side' },
+      this.panel.controlsEl,
+      this.panel.plotEl,
+      this.contigBox,
     )
 
     void this.load()
@@ -158,7 +172,7 @@ export class GenomeView {
               level: 'contig',
             })
       if (this.disposed) return
-      this.panel.setData(result, `${this.props.genome} — ${this.level} level`)
+      this.panel.setData(result, this.props.genome)
       this.renderSummary(result, hi - lo)
       this.renderContigs(result)
     } catch (err) {

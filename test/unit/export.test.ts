@@ -17,7 +17,9 @@ import { describe, expect, it } from 'vitest'
 import {
   CSS_DPI,
   canvasToPdf,
+  captionStamp,
   exportBaseName,
+  fileStamp,
   pointsForCssPixels,
   scaleForDpi,
 } from '@/ui/export'
@@ -105,5 +107,53 @@ describe('canvasToPdf', () => {
     expect(text).toContain('/Filter /FlateDecode')
     const length = /\/Length (\d+) >>\s*stream/.exec(text)
     expect(Number(length?.[1])).toBeLessThan(64 * 64 * 3)
+  })
+})
+
+describe('timestamps', () => {
+  // Local time on purpose: the person reading the filename is the person who
+  // pressed the button. Constructed from parts rather than from an ISO string,
+  // which would be parsed as UTC and shift the expectation with the runner.
+  const noon = new Date(2026, 7, 3, 14, 52, 33)
+
+  it('stamps a filename sortably, to the second', () => {
+    expect(fileStamp(noon)).toBe('20260803-145233')
+  })
+
+  it('pads every field, so the sort is a string sort', () => {
+    expect(fileStamp(new Date(2026, 0, 9, 1, 2, 3))).toBe('20260109-010203')
+  })
+
+  it('writes the same instant for a human on the figure', () => {
+    expect(captionStamp(noon)).toBe('2026-08-03 14:52')
+  })
+})
+
+describe('the PDF carries the caption as metadata', () => {
+  it('writes the subject and the creation date beside the title', async () => {
+    const bytes = new Uint8Array(
+      await (
+        await canvasToPdf(fakeCanvas(40, 30), {
+          dpi: 96,
+          title: 'MAG_1 > NODE_7',
+          subject: 'Hum53.metacool - 1.0 kb bins - log1p - 2026-08-03 14:52',
+          created: new Date(2026, 7, 3, 14, 52, 33),
+        })
+      ).arrayBuffer(),
+    )
+    const text = new TextDecoder('latin1').decode(bytes)
+    expect(text).toContain('/Title (MAG_1 > NODE_7)')
+    expect(text).toContain('/Subject (Hum53.metacool - 1.0 kb bins - log1p - 2026-08-03 14:52)')
+    expect(text).toContain('/CreationDate (D:20260803145233)')
+  })
+
+  it('leaves them out rather than writing empty keys', async () => {
+    const bytes = new Uint8Array(
+      await (await canvasToPdf(fakeCanvas(40, 30), { dpi: 96 })).arrayBuffer(),
+    )
+    const text = new TextDecoder('latin1').decode(bytes)
+    expect(text).toContain('/Title (contact map)')
+    expect(text).not.toContain('/Subject')
+    expect(text).not.toContain('/CreationDate')
   })
 })

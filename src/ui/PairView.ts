@@ -37,11 +37,20 @@ export interface PairViewProps {
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
+  /** A contig named on one of the axes, opened by clicking its label. */
+  onOpenContig(contig: string): void
   onError(err: unknown): void
+  /** File and genome context for the exported figure's caption. */
+  caption?: { file: string; genome?: string }
 }
 
 export class PairView {
   readonly el: HTMLElement
+  /**
+   * The view's own controls, mounted by the shell in the right-hand column
+   * rather than inside this element — see `App.showContent`.
+   */
+  readonly sideEl: HTMLElement
   private readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private level: 'bin' | 'contig'
@@ -63,6 +72,7 @@ export class PairView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
       // The same shape as the genome and region views: the heading names the
       // selection, the controls live in the sidebar, and the panel draws only
@@ -79,6 +89,10 @@ export class PairView {
         props.onLevelChange(level)
         void this.load()
       },
+      // The axes here are the two genomes' contigs, so a label names a contig
+      // rather than either genome — the genomes are named in the heading, and
+      // in the two buttons beside the plot.
+      onLabelClick: (_axis, name) => props.onOpenContig(name),
     })
 
     this.el = el(
@@ -94,30 +108,27 @@ export class PairView {
         ),
         this.summary,
       ),
+      this.panel.el,
+    )
+
+    this.sideEl = el(
+      'aside',
+      { class: 'side' },
+      this.panel.controlsEl,
+      this.panel.plotEl,
       el(
-        'div',
-        { class: 'genome-body' },
-        this.panel.el,
+        'section',
+        { class: 'card' },
+        el('h3', { text: 'Pair' }),
         el(
-          'aside',
-          { class: 'side' },
-          this.panel.controlsEl,
-          this.panel.plotEl,
-          el(
-            'section',
-            { class: 'card' },
-            el('h3', { text: 'Pair' }),
-            el(
-              'div',
-              { class: 'pair-controls' },
-              field('rows', rowSelect),
-              field('columns', colSelect),
-              swap,
-              button('open rows genome →', () => props.onOpenGenome(props.rowGenome), {
-                class: 'btn btn-quiet',
-              }),
-            ),
-          ),
+          'div',
+          { class: 'pair-controls' },
+          field('rows', rowSelect),
+          field('columns', colSelect),
+          swap,
+          button('open rows genome →', () => props.onOpenGenome(props.rowGenome), {
+            class: 'btn btn-quiet',
+          }),
         ),
       ),
     )
@@ -153,7 +164,7 @@ export class PairView {
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
-      this.panel.setData(result, `${this.props.rowGenome}-x-${this.props.colGenome}`)
+      this.panel.setData(result, `${this.props.rowGenome} × ${this.props.colGenome}`)
       this.renderSummary(result)
     } catch (err) {
       this.props.onError(err)

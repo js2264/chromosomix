@@ -303,6 +303,26 @@ p {
   display: none;
 }
 
+/* The view's controls, as a column of the shell rather than part of the view.
+   Inside the content it began below the view's own heading and scrolled the
+   heatmap off the top of the page whenever it grew a card; here it starts under
+   the breadcrumb, like the file sidebar opposite it, and scrolls on its own. */
+.right-host {
+  width: 16rem;
+  flex: 0 0 auto;
+  border-left: 1px solid var(--border);
+  background: var(--bg-sunken);
+  overflow: auto;
+  padding: 0.75rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A table view offers no controls; the column gives its width back. */
+.right-host:empty {
+  display: none;
+}
+
 /* --- status bar -------------------------------------------------------- */
 
 /* Coordinates on the left, instruments on the right: one changes with every
@@ -967,6 +987,13 @@ p {
   cursor: grabbing;
 }
 
+/* Over an axis label, which opens what it names. The pointing hand is the one
+   thing on a page that says "this is a link" without a word of explanation, and
+   a label is the only part of a canvas that is one. */
+.heatmap-canvas.linking {
+  cursor: pointer;
+}
+
 /* No focus ring. The canvas takes focus so it can receive keys, but it is a
    picture: a blue rectangle around the data reads as part of the figure, and
    the figure already has a frame of its own. */
@@ -1090,6 +1117,12 @@ p {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.3rem;
+}
+
+/* An odd number of toggles leaves the last one alone on its row; give it the
+   width instead of a hole beside it. */
+.plot-option-row > .btn-toggle:last-child:nth-child(odd) {
+  grid-column: span 2;
 }
 
 .panel-head .plot-option-row {
@@ -1419,19 +1452,21 @@ p {
 
 /* --- genome view ------------------------------------------------------- */
 
-.genome-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 15rem;
-  gap: 1rem;
-  align-items: start;
-}
-
+/* Narrow: the file sidebar goes, and the controls column stops being a column
+   — it stacks under the plot with a bounded height, which is the same trade the
+   grid used to make one level down. */
 @media (max-width: 60rem) {
-  .genome-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .side-host {
     display: none;
+  }
+  .app-body {
+    flex-direction: column;
+  }
+  .right-host {
+    width: auto;
+    max-height: 45vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
   }
 }
 
@@ -1441,6 +1476,10 @@ p {
   flex-direction: column;
   gap: 0.7rem;
   min-width: 0;
+  /* Fills the column so the contig list below can be given the space the cards
+     above it do not use — `min-height: 0` is what lets it shrink at all. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .side h3 {
@@ -1449,12 +1488,21 @@ p {
 
 .contig-box {
   min-width: 0;
+  /* The last card takes the height the ones above it leave, and never more:
+     a genome with 300 contigs used to make this card longer than the screen and
+     push the whole column into a scroll. It scrolls inside itself instead. */
+  flex: 1 1 auto;
+  min-height: 7rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .contig-list {
   display: flex;
   flex-direction: column;
-  max-height: 26rem;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -1564,6 +1612,20 @@ p {
 .view-picker {
   max-width: 52rem;
   margin: 2rem auto;
+}
+
+/* The same picker, opened over a view instead of instead of one: no page
+   margins, its own scrollbar inside the panel, and a shallower drop target so
+   the remote box and the examples are visible without scrolling at all. */
+.modal-panel .view-picker {
+  margin: 0;
+  max-width: none;
+  padding: 0.8rem;
+  overflow: auto;
+}
+
+.modal-panel .dropzone {
+  padding: 1.6rem 1rem;
 }
 
 .privacy {

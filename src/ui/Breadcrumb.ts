@@ -73,7 +73,13 @@ export interface BreadcrumbProps {
   /** What one entry is called in this format: an entry, or a resolution. */
   entryNoun?: string
   onNavigate(state: ViewState): void
-  onOpenFilePicker(): void
+  /**
+   * The file crumb was clicked. It opens a file *over* the current view rather
+   * than navigating away to ask, so that changing your mind costs nothing —
+   * a dropped local file cannot be re-opened without another gesture (§11), so
+   * leaving the view to look at the picker used to be one-way.
+   */
+  onOpenFile(): void
   /** The whole-genome view was picked from the root menu. */
   onShowOverview?(): void
   /** An mmetacool entry was picked; the caller re-opens the file at it. */
@@ -99,7 +105,7 @@ export class Breadcrumb {
       return
     }
 
-    this.push(this.props.fileLabel, () => this.props.onOpenFilePicker(), false, 'file')
+    this.push(this.props.fileLabel, () => this.props.onOpenFile(), false, 'file')
     this.pushEntryPicker()
     this.pushRootPicker(state)
 
@@ -252,11 +258,14 @@ export class Breadcrumb {
   private push(label: string, onClick?: () => void, current = false, extra = ''): void {
     this.separator()
     const className = `crumb${current ? ' current' : ''}${extra === '' ? '' : ` crumb-${extra}`}`
+    // The file crumb is the one whose label does not describe what clicking it
+    // does, so it is the one that has to say.
+    const title = extra === 'file' ? `${label} — click to open another file` : label
     if (onClick === undefined || current) {
-      this.el.appendChild(el('span', { class: className, text: label, title: label }))
+      this.el.appendChild(el('span', { class: className, text: label, title }))
       return
     }
-    const node = el('button', { class: className, type: 'button', text: label, title: label })
+    const node = el('button', { class: className, type: 'button', text: label, title })
     node.addEventListener('click', onClick)
     this.el.appendChild(node)
   }

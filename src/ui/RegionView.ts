@@ -47,6 +47,8 @@ export interface RegionViewProps {
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   onError(err: unknown): void
+  /** File and genome context for the exported figure's caption. */
+  caption?: { file: string; genome?: string }
   /**
    * Contigs one step away in file order. Absent for a two-contig block, which
    * has two axes and so no single neighbour to step to.
@@ -57,6 +59,11 @@ export interface RegionViewProps {
 
 export class RegionView {
   readonly el: HTMLElement
+  /**
+   * The view's own controls, mounted by the shell in the right-hand column
+   * rather than inside this element — see `App.showContent`.
+   */
+  readonly sideEl: HTMLElement
   private readonly panel: MatrixPanel
   private readonly input: HTMLInputElement
   private readonly matched: HTMLElement
@@ -79,6 +86,7 @@ export class RegionView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.caption === undefined ? {} : { caption: props.caption }),
       initial: props.scale,
       // Same shape as the genome view: heading names the selection, controls
       // live in the sidebar. Only the Contigs card is missing, because inside a
@@ -93,6 +101,12 @@ export class RegionView {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
         }
+      },
+      // On a contig × contig block the two axes are different contigs, and the
+      // label is how you drop the other one: click the row name to open that
+      // contig by itself.
+      onLabelClick: (_axis, name) => {
+        if (name !== props.region) props.onChangeRegion(name)
       },
     })
 
@@ -120,8 +134,10 @@ export class RegionView {
         this.matched,
         this.problem,
       ),
-      el('div', { class: 'genome-body' }, this.panel.el, el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)),
+      this.panel.el,
     )
+
+    this.sideEl = el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)
 
     void this.load()
   }

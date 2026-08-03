@@ -32,7 +32,7 @@ import { PairView } from './ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from './ui/RecordCard'
 import { RegionView } from './ui/RegionView'
 import { WholeView } from './ui/WholeView'
-import type { Modal } from './ui/Modal'
+import { Modal } from './ui/Modal'
 import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
@@ -74,6 +74,15 @@ class App {
   private readonly content: HTMLElement
   private readonly breadcrumbHost: HTMLElement
   private readonly sideHost: HTMLElement
+  /**
+   * The right-hand column, holding whatever controls the mounted view offers.
+   *
+   * A shell column rather than part of the view, for the same two reasons the
+   * file sidebar is one: it starts under the breadcrumb instead of below the
+   * view's own heading, and it scrolls on its own instead of dragging the
+   * heatmap up the page when there is one card too many.
+   */
+  private readonly rightHost: HTMLElement
   private readonly picker: FilePicker
   private readonly sidebar: SidebarToggle
   private readonly theme: ThemeToggle
@@ -98,6 +107,7 @@ class App {
     this.breadcrumbHost = el('div', { class: 'breadcrumb-host' })
     this.content = el('main', { class: 'content' })
     this.sideHost = el('div', { class: 'side-host' })
+    this.rightHost = el('div', { class: 'right-host' })
     this.sidebar = new SidebarToggle(this.sideHost)
 
     this.status = new StatusBar({ client: this.client })
@@ -159,7 +169,7 @@ class App {
       this.breadcrumbHost,
       // `side-host` also carries `order: -1`, so it renders left; keeping it
       // second in the DOM keeps the tab order content-first.
-      el('div', { class: 'app-body' }, this.content, this.sideHost),
+      el('div', { class: 'app-body' }, this.content, this.sideHost, this.rightHost),
       this.status.el,
     )
 
@@ -261,6 +271,7 @@ class App {
     const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
       ['crosshair', 'x'],
       ['dividers', 'd'],
+      ['breaks', 'e'],
       ['labels', 'l'],
       ['ticks', 'k'],
     ]
@@ -349,6 +360,41 @@ class App {
     this.modal = openAbout(REPO_URL, () => {
       this.modal = null
     })
+  }
+
+  /**
+   * Open a file over whatever is on screen, rather than going back to the
+   * landing page for one.
+   *
+   * The file crumb used to *navigate* to the picker, which threw the current
+   * view away to ask a question — and a user who then changed their mind had no
+   * way back to the map they were reading, because the file they had dropped
+   * cannot be re-opened without another gesture (§11). As a dialog it asks the
+   * same question over the top: Escape, the close button or the backdrop leave
+   * everything exactly as it was, and choosing a file replaces it deliberately.
+   *
+   * Its own {@link FilePicker}, not the one mounted in the content area: that
+   * element is the landing view and moving it into a dialog would empty the
+   * page behind it.
+   */
+  private openFileDialog(): void {
+    if (this.modal !== null) return
+    const modal: Modal = new Modal({
+      title: 'Open a file',
+      variant: 'modal-wide',
+      body: () =>
+        new FilePicker({
+          onOpen: (uri, source) => {
+            modal.close()
+            void this.open(uri, source)
+          },
+          examples: demoExamples(),
+        }).el,
+      onClose: () => {
+        this.modal = null
+      },
+    })
+    this.modal = modal
   }
 
   // -------------------------------------------------------------------------
@@ -460,7 +506,7 @@ class App {
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
         ...(currentEntry === undefined ? {} : { currentEntry }),
         onNavigate: (state) => this.navigate(state),
-        onOpenFilePicker: () => this.toPicker(),
+        onOpenFile: () => this.openFileDialog(),
         onShowOverview: () => this.showOverview(),
         onSelectEntry: (entry) =>
           void this.open(
@@ -766,6 +812,20 @@ class App {
     }
   }
 
+  /**
+   * File and genome context for the exported figure's caption.
+   *
+   * The panel can say what it drew — bin size, transform, level — but not what
+   * it drew it *from*; that is the router's, because the uri and the genome are
+   * view state.
+   */
+  private captionFor(state: ViewState): { file: string; genome?: string } {
+    return {
+      file: fileLabel(state.uri),
+      ...(state.genome === undefined ? {} : { genome: state.genome }),
+    }
+  }
+
   private mountGenomes(state: ViewState): void {
     const file = this.file
     if (file === null) return
@@ -807,6 +867,7 @@ class App {
     if (file === null) return
     const view = new WholeView({
       client: this.client,
+      caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
       // With no control to change it back, a link carrying `level=contig` must
@@ -839,6 +900,7 @@ class App {
     }
     const view = new GenomeView({
       client: this.client,
+      caption: this.captionFor(state),
       binsize: this.file?.info.binsize ?? 1,
       genome: state.genome,
       balance: this.balanceOf(state),
@@ -868,6 +930,7 @@ class App {
     }
     const view = new PairView({
       client: this.client,
+      caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       genomeNames: file.displayNames,
       balance: this.balanceOf(state),
@@ -881,6 +944,7 @@ class App {
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
+      onOpenContig: (region) => this.store.set({ uri: state.uri, view: 'region', region }),
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
@@ -898,6 +962,7 @@ class App {
     if (this.store.state !== state) return
     const view = new RegionView({
       client: this.client,
+      caption: this.captionFor(state),
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
@@ -952,6 +1017,7 @@ class App {
       const edges = new URLSearchParams(window.location.search).get('edges')
       this.overview = new Overview({
         client: this.client,
+        caption: { file: fileLabel(file.uri) },
           binsize: file.info.binsize ?? 1,
         sourceKind: file.info.sourceKind,
         sourceBytes: file.info.sourceBytes,
@@ -976,7 +1042,10 @@ class App {
         onError: (err) => this.showError(err),
       })
     }
+    // Its own controls, but *not* as the current view: the overview is cached
+    // across navigations and `showContent` destroys what it replaces.
     this.showContent(this.overview.el)
+    this.rightHost.replaceChildren(this.overview.sideEl)
   }
 
   // -------------------------------------------------------------------------
@@ -997,10 +1066,17 @@ class App {
     else this.store.set(null)
   }
 
-  private showContent(node: HTMLElement, view?: { destroy?(): void }): void {
+  private showContent(
+    node: HTMLElement,
+    view?: { destroy?(): void; sideEl?: HTMLElement },
+  ): void {
     this.current?.destroy?.()
     this.current = view ?? null
     this.content.replaceChildren(node)
+    // Emptied rather than hidden when a view has no controls: `:empty` is what
+    // takes the column's width back for the table views.
+    if (view?.sideEl === undefined) this.rightHost.replaceChildren()
+    else this.rightHost.replaceChildren(view.sideEl)
   }
 
   private pickerWithNote(uri: string): HTMLElement {

@@ -45,10 +45,17 @@ export interface WholeViewProps {
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
   onError(err: unknown): void
+  /** File and genome context for the exported figure's caption. */
+  caption?: { file: string; genome?: string }
 }
 
 export class WholeView {
   readonly el: HTMLElement
+  /**
+   * The view's own controls, mounted by the shell in the right-hand column
+   * rather than inside this element — see `App.showContent`.
+   */
+  readonly sideEl: HTMLElement
   private readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly problem: HTMLElement
@@ -62,6 +69,7 @@ export class WholeView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.offerLevel ? { levels: ['bin', 'contig'] as Array<'bin' | 'contig'> } : {}),
       detachedControls: true,
       hideTitle: true,
@@ -83,6 +91,7 @@ export class WholeView {
         }
         props.onOpenRegion(groups.row.label)
       },
+      onLabelClick: (_axis, name) => props.onOpenRegion(name),
     })
 
     this.el = el(
@@ -95,13 +104,10 @@ export class WholeView {
         this.summary,
         this.problem,
       ),
-      el(
-        'div',
-        { class: 'genome-body' },
-        this.panel.el,
-        el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl),
-      ),
+      this.panel.el,
     )
+
+    this.sideEl = el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)
 
     void this.load()
   }
@@ -122,7 +128,7 @@ export class WholeView {
           ? await client.request<'matrix'>({ kind: 'matrix', rows, balance })
           : await client.request<'aggregate'>({ kind: 'aggregate', rows, level: 'contig', balance })
       if (this.disposed) return
-      this.panel.setData(result, 'whole-genome')
+      this.panel.setData(result, 'Whole genome')
       this.summary.textContent =
         `${fmt.int(nBins)} bins across ${fmt.int(result.rowGroups.length)} ${noun}s · ` +
         `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells rendered` +

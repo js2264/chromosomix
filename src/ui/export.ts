@@ -44,6 +44,36 @@ export function exportBaseName(title: string): string {
   return cleaned === '' ? 'contact-map' : cleaned
 }
 
+/**
+ * `20260803-145233` — the stamp a saved file carries in its name.
+ *
+ * Local time, not UTC: the person reading the filename is the person who
+ * pressed the button, and a figure saved at half past two in the afternoon
+ * should say so. Sortable, so a directory of exports is in the order they were
+ * made whatever they are called.
+ */
+export function fileStamp(now: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  )
+}
+
+/** `2026-08-03 14:52` — the same instant, for a human reading the figure. */
+export function captionStamp(now: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}`
+  )
+}
+
+/** `D:20260803145233` — PDF's own date syntax, for `/CreationDate`. */
+function pdfDate(now: Date): string {
+  return `D:${fileStamp(now).replace('-', '')}`
+}
+
 /** Hand a blob to the browser as a download, then release the object URL. */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
@@ -103,7 +133,7 @@ function toRgb(image: ImageData): Uint8Array {
  */
 export async function canvasToPdf(
   canvas: HTMLCanvasElement,
-  options: { dpi: number; title?: string },
+  options: { dpi: number; title?: string; subject?: string; created?: Date },
 ): Promise<Blob> {
   const ctx = canvas.getContext('2d')
   if (ctx === null) throw new Error('Could not read the canvas back for export.')
@@ -151,8 +181,15 @@ export async function canvasToPdf(
   startObject()
   push(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`)
   startObject()
-  const title = (options.title ?? 'contact map').replace(/[()\\]/g, '')
-  push(`6 0 obj\n<< /Title (${title}) /Producer ((meta)cooler) >>\nendobj\n`)
+  // The caption drawn on the page, repeated as document metadata: a figure
+  // dropped into a manuscript keeps its provenance even when the caption is
+  // cropped off, and `pdfinfo` is where anyone looks for it first.
+  const clean = (text: string): string => text.replace(/[()\\]/g, '')
+  const title = clean(options.title ?? 'contact map')
+  const subject = options.subject === undefined ? '' : ` /Subject (${clean(options.subject)})`
+  const created =
+    options.created === undefined ? '' : ` /CreationDate (${pdfDate(options.created)})`
+  push(`6 0 obj\n<< /Title (${title})${subject}${created} /Producer ((meta)cooler) >>\nendobj\n`)
 
   const xrefAt = length
   let xref = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`

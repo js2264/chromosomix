@@ -231,3 +231,47 @@ describe('HeatmapView position ticks', () => {
     }
   })
 })
+
+describe('the range a figure is framed at', () => {
+  function view(n: number, bpAtOrigin = 0): HeatmapView {
+    const v = new HeatmapView(fakeCanvas(600, 600), { devicePixelRatio: 1, autoMargin: true })
+    v.setMatrix(block(n), [{ at: 0, label: 'NODE_1' }])
+    v.setAxisCoords({
+      rows: { bpPerCell: BIN, bpAtOrigin },
+      cols: { bpPerCell: BIN, bpAtOrigin },
+    })
+    return v
+  }
+
+  it('is the whole sequence when the whole of it is on screen from base zero', () => {
+    const range = view(400).framedRange('rows')
+    expect(range).toEqual({ start: 0, end: 400 * BIN, whole: true })
+  })
+
+  it('is not "whole" when the block starts part-way along the sequence', () => {
+    // `contig:200000-600000`: every bin is on screen, but the picture is not
+    // the contig, and a caption saying so would be wrong.
+    const range = view(400, 200_000)?.framedRange('rows')
+    expect(range?.start).toBe(200_000)
+    expect(range?.whole).toBe(false)
+  })
+
+  it('follows a zoom, bin-aligned', () => {
+    const v = view(400)
+    const plot = v.plotRect
+    v.zoomToBox(plot.x, plot.y, plot.x + plot.width / 4, plot.y + plot.height / 4)
+    const range = v.framedRange('rows')
+    expect(range).not.toBeNull()
+    expect(range?.whole).toBe(false)
+    expect(range?.start).toBe(0)
+    expect(range?.end).toBeLessThan(400 * BIN)
+    // A bin boundary, not a fraction of one.
+    expect((range as { end: number }).end % BIN).toBe(0)
+  })
+
+  it('has nothing to report on an axis with no coordinates', () => {
+    const v = new HeatmapView(fakeCanvas(600, 600), { devicePixelRatio: 1 })
+    v.setMatrix(block(400), [])
+    expect(v.framedRange('rows')).toBeNull()
+  })
+})

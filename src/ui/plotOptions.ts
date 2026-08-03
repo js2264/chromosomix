@@ -36,6 +36,7 @@ const KEY = 'metacooler-viewer:overlays'
 export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   crosshair: true,
   dividers: false,
+  breaks: true,
   labels: false,
   ticks: true,
 }
@@ -46,6 +47,10 @@ export type PlotOptionKey = keyof PlotOptions
 export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: string }> = {
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
+  breaks: {
+    label: 'breaks',
+    hint: 'The same boundaries as ticks outside the plot, where they cost no data.',
+  },
   labels: { label: 'labels', hint: 'Block names in the gutters. Off gives the gutters back to the plot.' },
   ticks: {
     label: 'ticks',
@@ -69,6 +74,7 @@ function read(): PlotOptions {
     return {
       crosshair: pick('crosshair'),
       dividers: pick('dividers'),
+      breaks: pick('breaks'),
       labels: pick('labels'),
       ticks: pick('ticks'),
     }
