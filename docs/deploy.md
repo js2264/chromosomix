@@ -33,6 +33,14 @@ The workflow therefore resolves the base itself before building:
 | User or org site (repo named `<name>.github.io`) | `/` |
 | Custom domain (a `public/CNAME` file exists) | `/` |
 | Anything else | set the `BASE_PATH` repository variable (Settings → Secrets and variables → Actions → Variables) and it wins over all of the above |
+| Desktop build | `./`, written by `vite.desktop.config.ts` — never by `BASE_PATH` |
+
+The desktop row is the odd one out and stays that way on purpose. A packaged renderer is served from
+`app://viewer/`, where there is no site root for a `/assets/…` URL to resolve against, so its base is
+relative and is set in its own config rather than passed in. `BASE_PATH` is not read by that build at
+all: a variable left in the environment must not be able to change the shape of an installer, and a
+`VAR=value command` prefix is not parsed by the Windows runner's shell in any case. See
+[docs/desktop.md](desktop.md).
 
 To reproduce a Pages build locally, pass the same value:
 
@@ -232,6 +240,15 @@ running it.
 What "major" means here is not an API: this is an application, so the contract is the **file format
 it opens and the URL hash it publishes**. A major bump is a `.metacool` the previous version could
 open and this one cannot, or a shared `#uri=…` link that no longer resolves to the same view.
+
+**The tag is also what builds the desktop installers.** `.github/workflows/release.yml` triggers on
+`v*`, builds on macOS, Windows and Linux, and collects the artifacts into a **draft** release for a
+human to publish. So one `git push --follow-tags` starts two independent workflows: Pages publishes
+the web build, and the release workflow packages the same bundle. They share nothing — different
+commands, different outputs, different concurrency groups — which is why a failed installer leg
+cannot delay or undo a site deployment that has already happened. Packaging is deliberately *not*
+part of `preversion`: `npm version patch` would otherwise download Electron and build a `.dmg` to
+bump a number.
 
 ### How a build says what it is
 
