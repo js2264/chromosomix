@@ -1,6 +1,28 @@
 # Shipping the viewer as a desktop application — implementation plan
 
-This is a plan, not a description: nothing below is implemented yet. It exists so the work can be
+> **This plan has been carried out — all nineteen steps.** It is kept for the record and for the
+> open questions below that are still open; `docs/desktop.md` is the user-facing document and
+> [SPECS §15](../SPECS.md#15-desktop-target) is the specification. Where the two disagree with this
+> file, they are right and this one is history.
+>
+> Three things came out differently, and each is written up where it lives:
+>
+> 1. **Step 19's justification did not survive measurement.** Chromium already sends
+>    `Accept-Encoding: identity` on any request carrying a `Range` header, so the claim that the
+>    override turns whole-object downloads into bounded range reads is false — there was nothing
+>    there to fix. The override is still worth shipping, for the `HEAD` probe in
+>    `RemoteRangeSource.open()`, which carries no range and is otherwise answered compressed. See
+>    the table in `electron/main.cts`. Open question 1 is answered: the override *does* survive on
+>    the worker's synchronous XHR.
+> 2. **A sandboxed preload has no module resolver**, so the relative `require` that `tsc` correctly
+>    emits cannot load — the app starts, the menu appears, and every item silently does nothing.
+>    The preload is bundled by `scripts/build-preload.mjs`, and `preloadProblems` checks it.
+> 3. **Step 2 was already done** by `cc58442`. Note also that no npm version writes
+>    `packages[''].overrides`, so that step's verify criterion cannot be met as written.
+>
+> Open questions 1 and 5 are answered below. 2, 3 and 4 are not.
+
+This is a plan, not a description. It exists so the work can be
 picked up in a fresh session without re-deciding anything, and so the decisions that were made by
 *measurement* rather than by preference are not quietly reversed by someone who reads only the code.
 
@@ -527,12 +549,11 @@ Each of these produces no useful error message, which is why they are written do
 
 These do not block starting, but each one should be answered before the step it gates.
 
-1. **Does Chromium honour an `onBeforeSendHeaders` override of `Accept-Encoding` on the reader
-   worker's *synchronous* XHR, or only on `fetch`?** The server-side effect of `identity` was
-   verified against the live host; the override surviving the network service on the sync-XHR path
-   was not. Gates step 19 only. If it does not hold the app degrades silently to today's
-   whole-object fallback — which is exactly the kind of silent degradation that wants a budget test
-   rather than a comment.
+1. ~~**Does Chromium honour an `onBeforeSendHeaders` override of `Accept-Encoding` on the reader
+   worker's *synchronous* XHR, or only on `fetch`?**~~ **Answered: yes**, measured on a real
+   same-origin module worker doing a synchronous `XMLHttpRequest`. The server saw `identity` on
+   every path. The measurement also showed the *premise* of step 19 to be wrong — see the note at
+   the top of this file.
 2. **Is `webUtils.getPathForFile` reachable from a `sandbox: true` preload in Electron 43?** It
    decides whether the deferred path-*addressing* story (Open Recent, reload-survives-a-drop, file
    associations) is a preload change or needs the sandbox relaxed. Worth a five-minute probe before
@@ -545,7 +566,8 @@ These do not block starting, but each one should be answered before the step it 
 4. **`package.json` has no `author` email and the design sets `linux.maintainer` instead.** Confirm
    the address before the first `.deb` — it is baked into a public package and cannot be quietly
    changed later.
-5. **Two renderer improvements are gated on `IS_DESKTOP` in step 17 purely to honour the
-   byte-identical-behaviour constraint** — the document-level drag/drop guard and `document.title`.
-   Both benefit the web build. Should they land unconditionally in their own `fix(ui):` commit
-   instead? Leaving them desktop-only permanently is the wrong end state.
+5. ~~**Two renderer improvements are gated on `IS_DESKTOP` in step 17 purely to honour the
+   byte-identical-behaviour constraint**~~ — **Answered: they landed unconditionally.** A file
+   dropped outside the dropzone replaces the page with a binary blob in either target, and a window
+   or tab named after the file it holds is worth as much in a browser. Only the header subtitle
+   branches, because "in the browser" is a hook rather than a claim about behaviour.
