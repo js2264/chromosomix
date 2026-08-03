@@ -144,6 +144,19 @@ export class Overview {
           this.props.onOpenContig(name)
         }
       },
+      // A box across a whole-metagenome map is asking for a genome — there is
+      // no smaller region an axis of aggregated units can name, and a cross-
+      // genome square is still begun in one of them. Resolved through the
+      // anchor rather than the block label, because at contig level the label
+      // is a contig and the genome behind it is what this view is read by.
+      onSelectRegion: (selection) => {
+        const rows = this.axisGenomes?.[selection.anchor.row] ?? selection.rows.label
+        const cols = this.axisGenomes?.[selection.anchor.col] ?? selection.cols.label
+        // Across two genomes it is the pair — the phage-host and HGT block this
+        // view exists to find — and within one it is that genome.
+        if (rows === cols) this.props.onOpenGenome(rows)
+        else this.props.onOpenPair(rows, cols)
+      },
     })
     this.panelHost.appendChild(this.panel.el)
 
@@ -423,18 +436,9 @@ export class Overview {
         `${result.level === 'contig' ? ', never across a genome boundary' : ''}. ` +
         'Every one is included.'
       : ''
-    const click =
-      result.level === 'genome'
-        ? 'Click an off-diagonal cell to open that genome pair, or a diagonal cell to open the genome.'
-        : 'Click a cell between two genome blocks to open that genome pair, or one inside a block to ' +
-          'open the genome.'
-    const excluded =
-      result.level === 'genome'
-        ? '__unbinned__ is excluded, as everywhere.'
-        : 'Contigs of __unbinned__ are excluded, as everywhere.'
     this.note.classList.remove('hidden')
     this.note.replaceChildren(
-      el('span', { text: [restriction, click, excluded].filter((part) => part !== '').join(' ') }),
+      el('span', { text: [restriction].filter((part) => part !== '').join(' ') }),
     )
   }
 }

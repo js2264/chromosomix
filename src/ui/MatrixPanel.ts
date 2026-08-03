@@ -35,8 +35,10 @@ import {
   type AxisCoords,
   type Cell,
   type PlotOptions,
+  type SelectionBox,
   type SeparatorSet,
 } from '../render/heatmap'
+import { rasterStride } from '../render/heatmap'
 import { inverseTransform } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
@@ -64,6 +66,46 @@ import {
 } from './plotOptions'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
+
+/**
+ * What a dragged box resolves to: one block, and how much of it.
+ *
+ * *One* block, not the rectangle the box covers, because that is the view a
+ * selection is asking for. A square drawn across the corner of two chromosomes
+ * on a whole-genome map is asking to look at a chromosome — it cannot be asking
+ * for a region that spans two of them, since no such region exists — so it
+ * resolves to the one the drag began in, ending at the edge of the box or at
+ * the end of that chromosome, whichever comes first.
+ *
+ * `range` is absent above bin level, where a cell *is* a contig or a genome and
+ * there is no position inside one to name.
+ */
+export interface SelectedAxis {
+  /** The block this axis of the box falls in: a contig, or a genome. */
+  label: string
+  /** Base pairs within that block, clamped to it; absent above bin level. */
+  range?: [number, number]
+}
+
+export interface SelectedRegion {
+  rows: SelectedAxis
+  cols: SelectedAxis
+  /**
+   * `true` when the box lies *on* the diagonal: the same block on both axes,
+   * covering the same stretch of it.
+   *
+   * Not "the same block" — that was the first version of this and it is the
+   * wrong question. A box in the top-right corner of one chromosome is two
+   * different windows of the same sequence, and answering it with the row's
+   * window alone hands back a square centred on the diagonal: the one place the
+   * reader was deliberately not looking. Only when both windows coincide is
+   * there a single region to open.
+   */
+  diagonal: boolean
+  level: 'bin' | 'contig' | 'genome'
+  /** The cell the drag began on, for a view that resolves blocks its own way. */
+  anchor: Cell
+}
 
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
@@ -112,6 +154,11 @@ export interface MatrixPanelOptions {
    * whatever that name is.
    */
   onLabelClick?(axis: 'rows' | 'cols', name: string): void
+  /**
+   * A box was selected. The panel resolves it to *one* block and, at bin level,
+   * to a base-pair range inside it; the view decides what opening that means.
+   */
+  onSelectRegion?(selection: SelectedRegion): void
   /**
    * Keep the colour controls out of the panel so the owning view can place them
    * elsewhere — the genome and region views stack them in their sidebar, above
@@ -234,6 +281,11 @@ export class MatrixPanel {
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
       onLabelClick: (axis, block) => this.options.onLabelClick?.(axis, block.label),
+      // Only wired when the view wants it; without it a drag zooms, which is
+      // the renderer's own behaviour.
+      ...(options.onSelectRegion === undefined
+        ? {}
+        : { onSelect: (box: SelectionBox) => this.emitSelection(box) }),
     })
     this.heatmap.attach()
     this.colorbar = new ColorbarView(this.barCanvas, { caption: 'count' })
@@ -812,6 +864,66 @@ export class MatrixPanel {
     })
   }
 
+  /**
+   * Resolve a dragged box to one block per axis, and hand it on.
+   *
+   * Each axis is resolved through the block the *anchor* sits in on that axis —
+   * where the drag began, which is what says which sequence the box is of when
+   * it overruns a boundary — and clamped to that block. A box in the trans
+   * corner therefore comes back naming both sequences, and the view opens their
+   * intersection.
+   */
+  private emitSelection(box: SelectionBox): void {
+    const emit = this.options.onSelectRegion
+    const data = this.data
+    if (emit === undefined || data === null) return
+    const rowGroup = groupAt(data.rowGroups, box.anchor.row)
+    const colGroup = groupAt(data.colGroups, box.anchor.col)
+    if (rowGroup === undefined || colGroup === undefined) return
+
+    const level = data.level
+    const sameBlock = rowGroup.label === colGroup.label && rowGroup.start === colGroup.start
+    if (level !== 'bin') {
+      // A cell *is* the unit here, so same block is the whole of same window.
+      emit({
+        rows: { label: rowGroup.label },
+        cols: { label: colGroup.label },
+        diagonal: sameBlock,
+        level,
+        anchor: box.anchor,
+      })
+      return
+    }
+    const rows = this.axisSelection(rowGroup, box.rows, data.rowExtent[0])
+    const cols = this.axisSelection(colGroup, box.cols, data.colExtent[0])
+    if (rows === null || cols === null) return
+    emit({ rows, cols, diagonal: sameBlock && onDiagonal(box), level, anchor: box.anchor })
+  }
+
+  /**
+   * One axis of a selection: the block, and the base pairs of it the box covers.
+   *
+   * The last bin of a contig is usually a short one, so the bin arithmetic runs
+   * past the end of the sequence — `VII` at 2 kb is 546 bins, which is
+   * 1,092,000 bp against a chromosome of 1,090,940 — and the region built from
+   * that is refused as out of bounds by the very reader that would open it. The
+   * contig's own length has the last word wherever the reader has sent one.
+   */
+  private axisSelection(
+    group: AxisGroup,
+    span: [number, number],
+    blockStart: number,
+  ): SelectedAxis | null {
+    const lo = Math.max(span[0], group.start)
+    const hi = Math.min(span[1], group.end)
+    if (!(hi > lo)) return null
+    const binsize = this.options.binsize
+    const start = Math.max(0, bpWithin(group, lo, blockStart, binsize))
+    const raw = bpWithin(group, hi, blockStart, binsize)
+    const end = group.unitLength === undefined ? raw : Math.min(raw, group.unitLength)
+    return { label: group.label, range: [start, end] }
+  }
+
   private describe(cell: Cell | null, at?: { x: number; y: number }): void {
     if (cell === null || this.data === null) {
       setReadout('')
@@ -1171,6 +1283,66 @@ export function separatorsFor(data: MatrixResult): SeparatorSet {
   if (data.rowSuperGroups !== undefined) set.groupRows = set.rows
   if (data.colSuperGroups !== undefined) set.groupCols = set.cols
   return set
+}
+
+/**
+ * Whether a box straddles the diagonal, in cells.
+ *
+ * Compared in cells rather than in base pairs because that is where the
+ * question is exact, and with a bin of slack at each end because the marquee is
+ * square in *pixels*: the two axes convert those pixels through their own
+ * scales, and a plot whose gutters differ by a pixel turns a square on the
+ * diagonal into ranges that differ by one cell. A whole bin of tolerance is
+ * still far tighter than any box a hand can draw off the diagonal.
+ */
+export function onDiagonal(box: SelectionBox): boolean {
+  return Math.abs(box.rows[0] - box.cols[0]) <= 1 && Math.abs(box.rows[1] - box.cols[1]) <= 1
+}
+
+/**
+ * One axis of a selection as a region string, in the grammar the region box
+ * takes.
+ *
+ * Rounded to whole base pairs and written without separators, so it is both a
+ * legal range (§5.4) and something that can be pasted back. Above bin level
+ * there is no range to write and the block's own name is the answer.
+ */
+export function axisRegion(axis: SelectedAxis): string {
+  if (axis.range === undefined) return axis.label
+  const [start, end] = axis.range
+  return `${axis.label}:${Math.round(start)}-${Math.round(end)}`
+}
+
+/**
+ * What to say when the picture is coarser than the data.
+ *
+ * A block wider than {@link RASTER_MAX_DIM} is drawn through a pooled raster:
+ * one pixel per `stride x stride` block of cells, carrying the strongest value
+ * under it. That is the right trade — a 12,975-bin genome at one pixel per bin
+ * is 585 MB of RGBA for an image no screen can show, and the *maximum* is what
+ * keeps a sparse map's bright cell from being averaged into its empty
+ * neighbours — but until now nothing said it was happening. The summary claimed
+ * "12,975 x 12,975 cells rendered", the crosshair then reported four different
+ * coordinates and four different values inside one visible square, and there
+ * was no way to tell which of the two was lying.
+ *
+ * Two things a reader needs and cannot deduce: that the picture is pooled, and
+ * that **zooming does not sharpen it** — the pooling is per block, not per view,
+ * so the answer is to open a smaller block, not to magnify this one.
+ *
+ * `null` when every cell has its own pixel, which is every region and nearly
+ * every MAG.
+ */
+export function poolingNote(
+  nrows: number,
+  ncols: number,
+): { phrase: string } | null {
+  const strideY = rasterStride(nrows)
+  const strideX = rasterStride(ncols)
+  if (strideX === 1 && strideY === 1) return null
+  return {
+    phrase: `aggregated ${strideX} × ${strideY} bins to a pixel`
+  }
 }
 
 /** Adapt a worker result to the renderer's {@link DenseMatrix}. */

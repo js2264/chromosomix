@@ -27,6 +27,7 @@ export function idRuns(
   ids: Int32Array,
   labelOf: (id: number) => string,
   startOf?: (id: number) => number,
+  lengthOf?: (id: number) => number,
 ): AxisGroup[] {
   const runs: AxisGroup[] = []
   if (ids.length === 0) return runs
@@ -39,6 +40,7 @@ export function idRuns(
         start,
         end: i,
         ...(startOf === undefined ? {} : { unitStart: startOf(id) }),
+        ...(lengthOf === undefined ? {} : { unitLength: lengthOf(id) }),
       })
       start = i
     }
@@ -53,6 +55,7 @@ export function contigRuns(mc: MetaCooler, extent: Extent): AxisGroup[] {
     ids,
     (id) => mc.chromnames[id] ?? String(id),
     (id) => mc.coords.contigStartBin(id),
+    (id) => mc.coords.contigLengths[id],
   )
 }
 

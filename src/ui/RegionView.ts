@@ -27,7 +27,7 @@ import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel } from './MatrixPanel'
+import { MatrixPanel, axisRegion } from './MatrixPanel'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -43,7 +43,11 @@ export interface RegionViewProps {
   /** What one sequence is called here: a contig, or a chromosome. */
   noun: string
   onBalanceChange(balance: boolean): void
-  onChangeRegion(region: string): void
+  /**
+   * A new selection. The second region makes the block rectangular — the
+   * contacts *between* two contigs rather than within one (§5.3).
+   */
+  onChangeRegion(region: string, region2?: string): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   onError(err: unknown): void
@@ -108,6 +112,14 @@ export class RegionView {
       onLabelClick: (_axis, name) => {
         if (name !== props.region) props.onChangeRegion(name)
       },
+      // Narrowing by drawing: the same view over a smaller range on the
+      // diagonal, and the rectangle between the two windows anywhere else —
+      // including above the diagonal of a single contig, which is where the
+      // long-range structure of that contig lives.
+      onSelectRegion: (selection) =>
+        selection.diagonal
+          ? props.onChangeRegion(axisRegion(selection.rows))
+          : props.onChangeRegion(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
 
     // The heading *is* the region, as the genome view's heading is the genome;
@@ -121,15 +133,29 @@ export class RegionView {
       el(
         'header',
         { class: 'view-head' },
+        // `.title-bar`, the same wrapper every other view heading uses — the
+        // region box rides on the title line rather than in a row of its own,
+        // because it *is* the title: typing in it is how you change what this
+        // view is of.
         el(
           'div',
-          { class: 'region-bar' },
+          { class: 'title-bar region-bar' },
           this.title,
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
           this.input,
           button('go', () => props.onChangeRegion(this.input.value.trim())),
+          // Back, beside the box that got you here. Every navigation is a
+          // history entry (§5.5 puts the whole view state in the hash), so this
+          // is the browser's own back — the same button the keyboard and the
+          // trackpad already reach, put where a selection lands you. Selecting
+          // a box now *opens* something, and undoing that should not require
+          // knowing where you were.
+          button('← back', () => window.history.back(), {
+            class: 'btn btn-quiet',
+            title: 'Back to the previous view',
+          }),
         ),
         this.matched,
         this.problem,

@@ -10,7 +10,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { HeatmapView } from '@/render/heatmap'
+import { HeatmapView, type SelectionBox } from '@/render/heatmap'
 import type { DenseMatrix } from '@/types'
 
 /**
@@ -331,5 +331,116 @@ describe('touch', () => {
     fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(opened).toEqual([])
+  })
+})
+
+describe('a selection is a square, and it is handed over', () => {
+  /** A view with somewhere for the box to go, and its listeners. */
+  function selectable(): {
+    fire: (type: string, event: Record<string, unknown>) => void
+    boxes: SelectionBox[]
+    heatmap: HeatmapView
+  } {
+    const { canvas, fire } = harness(400)
+    const boxes: SelectionBox[] = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onSelect: (box) => boxes.push(box),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    return { fire, boxes, heatmap }
+  }
+
+  it('squares a rectangle rather than quietly reinterpreting it', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    // A wide, short drag. It used to resolve to a square zoom anyway, which is
+    // what made drawing a rectangle misleading; now the square is what is drawn
+    // *and* what is acted on.
+    dragWith(fire, [plot.x + 10, plot.y + 10], [plot.x + 210, plot.y + 50], { altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].cols[1] - boxes[0].cols[0]).toBe(boxes[0].rows[1] - boxes[0].rows[0])
+  })
+
+  it('anchors on the corner the drag began at, in any direction', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 200, plot.y + 200], [plot.x + 100, plot.y + 120], { altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].rows[1] - boxes[0].rows[0]).toBe(boxes[0].cols[1] - boxes[0].cols[0])
+    // The anchor is the press, not a corner of the normalised box: it is what
+    // says which contig the selection belongs to.
+    const anchor = heatmap.cellAt(plot.x + 200, plot.y + 200)
+    expect(boxes[0].anchor.row).toBe(anchor?.row)
+    expect(boxes[0].anchor.col).toBe(anchor?.col)
+  })
+
+  it('does not zoom when the box is handed over', () => {
+    const { fire, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    const before = heatmap.zoomLevel
+    dragWith(fire, [plot.x + 10, plot.y + 10], [plot.x + 120, plot.y + 120], { altKey: true })
+    expect(heatmap.zoomLevel).toBe(before)
+  })
+
+  it('still zooms when nobody is listening', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    const before = heatmap.zoomLevel
+    dragWith(fire, [50, 50], [250, 250], { altKey: true })
+    expect(heatmap.zoomLevel).toBeGreaterThan(before)
+  })
+
+  it('ignores a slip: a drag under the threshold selects nothing', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 30, plot.y + 30], [plot.x + 33, plot.y + 32], { altKey: true })
+    expect(boxes).toEqual([])
+  })
+
+  it('clamps to the block, so a drag off the edge names cells that exist', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 20, plot.y + 20], [plot.x + 2000, plot.y + 2000], { altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].rows[0]).toBeGreaterThanOrEqual(0)
+    expect(boxes[0].rows[1]).toBeLessThanOrEqual(100)
+    expect(boxes[0].cols[1]).toBeLessThanOrEqual(100)
+  })
+})
+
+describe('a sideways gesture belongs to the browser', () => {
+  it('zooms on a vertical wheel and stands aside for a horizontal one', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+
+    let prevented = 0
+    const wheel = (deltaX: number, deltaY: number): void =>
+      fire('wheel', {
+        clientX: 200,
+        clientY: 200,
+        deltaX,
+        deltaY,
+        preventDefault: () => {
+          prevented++
+        },
+      })
+
+    const fitted = heatmap.zoomLevel
+    wheel(0, -200)
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+    expect(prevented).toBe(1)
+
+    // Two fingers sideways is the browser's back gesture. It works everywhere
+    // else on the page, so it must not die on the one element that fills it.
+    const zoomed = heatmap.zoomLevel
+    wheel(-180, 4)
+    expect(heatmap.zoomLevel).toBe(zoomed)
+    expect(prevented).toBe(1)
   })
 })

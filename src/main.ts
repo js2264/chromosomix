@@ -579,6 +579,7 @@ class App {
           void this.open(
             `${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`,
             source,
+            this.carryAcrossEntries(`${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`),
           ),
       })
       this.infoPanel = new InfoPanel({ info })
@@ -624,6 +625,28 @@ class App {
     } finally {
       this.opening = null
     }
+  }
+
+  /**
+   * The view to reopen at another resolution — the same one, at the other one.
+   *
+   * Switching resolution in an `.mcool` is not opening a different file: it is
+   * the same data at a different bin size, and being returned to the landing
+   * table for it means finding your way back to a chromosome and a range by
+   * hand every time you change zoom level. Every field of a view state means
+   * the same thing at every resolution — names are names and coordinates are
+   * base pairs — so all of them carry.
+   *
+   * All but the *clip*. `vmax` is in counts, and counts scale with the bin: a
+   * ceiling tuned at 1 kb is a saturated black square at 16 kb, and a floor is
+   * an empty one. Dropping it hands the new block back to the §7.1 auto range,
+   * which is the number the CLI would have picked for it.
+   */
+  private carryAcrossEntries(uri: string): ViewState | undefined {
+    const state = this.store.state
+    if (state === null) return undefined
+    const { vmin: _vmin, vmax: _vmax, ...rest } = state
+    return { ...rest, uri }
   }
 
   /**
@@ -1043,7 +1066,13 @@ class App {
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
-      onOpenContig: (region) => this.store.set({ uri: state.uri, view: 'region', region }),
+      onOpenContig: (region, region2) =>
+        this.store.set({
+          uri: state.uri,
+          view: 'region',
+          region,
+          ...(region2 === undefined ? {} : { region2 }),
+        }),
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
@@ -1077,9 +1106,9 @@ class App {
       // contig_C against a column the user can no longer see named anywhere.
       // Built by omission rather than `region2: undefined`, so the state object
       // has no undefined-valued keys for a strict deep-equal to trip on.
-      onChangeRegion: (region) => {
+      onChangeRegion: (region, region2) => {
         const { region2: _dropped, ...rest } = state
-        this.store.set({ ...rest, region })
+        this.store.set({ ...rest, region, ...(region2 === undefined ? {} : { region2 }) })
       },
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),

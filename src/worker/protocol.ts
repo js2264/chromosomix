@@ -210,6 +210,17 @@ export interface AxisGroup {
    * no position inside anything.
    */
   unitStart?: number
+  /**
+   * Length of this group's contig in base pairs, where it is a contig.
+   *
+   * Only the reader knows it, and only it can answer the question a selection
+   * asks at the end of a sequence: the last bin of a contig is usually partial,
+   * so `bins * binsize` overshoots the sequence — by up to one bin — and a
+   * region built from that arithmetic is refused as out of bounds by the very
+   * parser that would open it. Sent so the UI can clamp to the truth rather
+   * than to a multiple of the bin size.
+   */
+  unitLength?: number
 }
 
 export interface MatrixResult {

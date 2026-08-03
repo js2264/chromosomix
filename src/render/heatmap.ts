@@ -420,6 +420,24 @@ export interface Rect {
   height: number
 }
 
+/**
+ * A dragged selection, in the coordinates the caller thinks in.
+ *
+ * Offsets are block-local, as {@link Cell.row} is, because that is what
+ * `groupAt` and the base-pair arithmetic take. The anchor is the cell the drag
+ * *started* on, which is what says which contig or genome the selection is of:
+ * a square laid across a boundary belongs to the block it was begun in, not to
+ * whichever one happens to hold more of its area.
+ */
+export interface SelectionBox {
+  /** Half-open row range, clamped to the block. */
+  rows: [number, number]
+  /** Half-open column range, clamped to the block. */
+  cols: [number, number]
+  /** Where the drag began. */
+  anchor: Cell
+}
+
 /** A cell identified by {@link HeatmapView.cellAt}. */
 export interface Cell {
   /** Row within the rendered block. */
@@ -636,6 +654,15 @@ export interface HeatmapOptions {
   /** Fired on a click that was not a drag, for §5.5 cross-navigation. */
   onCellClick?: (cell: Cell) => void
   /**
+   * Fired when a modifier-drag selects a box.
+   *
+   * When set, this *replaces* zoom-to-box as what a selection does: the view
+   * that owns the panel opens the region the box covers, which is the thing a
+   * box drawn over a contact map is usually asking for. Left unset, the drag
+   * zooms, which is what the renderer does on its own.
+   */
+  onSelect?: (selection: SelectionBox) => void
+  /**
    * Fired on a click in a label gutter, on the block that label names.
    *
    * A label is the name of a thing the app can open — a genome in the overview,
@@ -678,11 +705,36 @@ interface Drag {
 type ResolvedOptions = Required<
   Omit<
     HeatmapOptions,
-    'margin' | 'onChange' | 'onCellClick' | 'onLabelClick' | 'onHover' | 'plotOptions'
+    | 'margin'
+    | 'onChange'
+    | 'onCellClick'
+    | 'onLabelClick'
+    | 'onSelect'
+    | 'onHover'
+    | 'plotOptions'
   >
 > & { margin: Margin }
 
 const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
+
+/**
+ * The square a drag describes, anchored where it began.
+ *
+ * A selection *resolves* to a square — the zoom it produced was
+ * `min(width/cols, height/rows)`, and the region it now produces is one range
+ * applied to both axes — so drawing a rectangle promised something the app was
+ * never going to give. The marquee is therefore square as it is drawn, and the
+ * side is the longer of the two drags: the shorter one would silently discard
+ * ground the pointer had already covered.
+ */
+function squareFrom(x0: number, y0: number, x: number, y: number): { x: number; y: number; side: number } {
+  const side = Math.max(Math.abs(x - x0), Math.abs(y - y0))
+  return {
+    x: x >= x0 ? x0 : x0 - side,
+    y: y >= y0 ? y0 : y0 - side,
+    side,
+  }
+}
 
 /** Minimum on-screen gap between two drawn labels, in CSS pixels. */
 const LABEL_MIN_GAP = 11
@@ -744,6 +796,7 @@ export class HeatmapView {
   private readonly onChange: (() => void) | null
   private readonly onCellClick: ((cell: Cell) => void) | null
   private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
+  private readonly onSelect: ((selection: SelectionBox) => void) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
   private matrix: DenseMatrix | null = null
@@ -842,6 +895,7 @@ export class HeatmapView {
     this.onChange = options.onChange ?? null
     this.onCellClick = options.onCellClick ?? null
     this.onLabelClick = options.onLabelClick ?? null
+    this.onSelect = options.onSelect ?? null
     this.onHover = options.onHover ?? null
 
     // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
@@ -1345,6 +1399,61 @@ export class HeatmapView {
     this.changed()
   }
 
+  /**
+   * What a released selection does: hand the box to the owner, or zoom.
+   *
+   * The box is squared first, so what is acted on is what was drawn. Handing it
+   * over rather than zooming is the point — a box over a contact map is nearly
+   * always "show me this bit", and zooming answered a question about the
+   * picture when the question was about the data. A view that wants the old
+   * behaviour simply does not pass `onSelect`.
+   */
+  private finishSelection(x0: number, y0: number, x: number, y: number): void {
+    const emit = this.onSelect
+    if (emit === null) {
+      this.zoomToBox(x0, y0, x, y)
+      return
+    }
+    const matrix = this.matrix
+    if (matrix === null) return
+    const plot = this.plotRect
+    const { x: bx, y: by, side } = squareFrom(x0, y0, x, y)
+    if (side < this.opts.minSelectPixels) return
+
+    // The anchor is where the drag *began*, which is the cell that says what
+    // the selection is of. Clamped into the plot first: a drag that started on
+    // the frame is still a drag from the nearest cell.
+    const anchor = this.cellAt(
+      clamp(x0, plot.x, plot.x + plot.width - 1),
+      clamp(y0, plot.y, plot.y + plot.height - 1),
+    )
+    if (anchor === null) return
+
+    const cols = this.spanOf('cols', bx - plot.x, side, matrix.ncols)
+    const rows = this.spanOf('rows', by - plot.y, side, matrix.nrows)
+    if (cols === null || rows === null) return
+    emit({ rows, cols, anchor })
+  }
+
+  /**
+   * A pixel run along one axis as a half-open cell range, clamped to the block.
+   *
+   * `null` when the run misses the data entirely, which is what a drag that
+   * began inside the plot but outside the matrix produces when the view is
+   * zoomed out.
+   */
+  private spanOf(
+    axis: 'rows' | 'cols',
+    from: number,
+    length: number,
+    n: number,
+  ): [number, number] | null {
+    const scale = axis === 'rows' ? this.rowScale : this.colScale
+    const lo = Math.max(0, Math.floor(scale.toUnit(from)))
+    const hi = Math.min(n, Math.ceil(scale.toUnit(from + length)))
+    return hi > lo ? [lo, hi] : null
+  }
+
   // -- hit testing ---------------------------------------------------------
 
   /**
@@ -1549,10 +1658,9 @@ export class HeatmapView {
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
     const plot = this.dataRect
     const ctx = this.ctx
-    const x = Math.min(drag.x0, drag.x)
-    const y = Math.min(drag.y0, drag.y)
-    const w = Math.abs(drag.x - drag.x0)
-    const h = Math.abs(drag.y - drag.y0)
+    const { x, y, side } = squareFrom(drag.x0, drag.y0, drag.x, drag.y)
+    const w = side
+    const h = side
     ctx.save()
     ctx.beginPath()
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
@@ -2211,7 +2319,7 @@ export class HeatmapView {
         }, DOUBLE_CLICK_MS)
         return
       }
-      if (drag.mode === 'select') this.zoomToBox(drag.x0, drag.y0, x, y)
+      if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, x, y)
       this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {
@@ -2233,6 +2341,12 @@ export class HeatmapView {
       if (wasDragging) this.changed()
     }
     const onWheel = (e: WheelEvent): void => {
+      // A sideways two-finger scroll is the browser's back/forward gesture, and
+      // it works everywhere on the page except here, because this handler used
+      // to swallow every wheel event it saw. A gesture that navigates outside
+      // the plot and does nothing inside it reads as the app being broken, so
+      // the horizontal ones are left alone: no `preventDefault`, no zoom.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
       e.preventDefault()
       const [x, y] = local(e)
       // Exponential in the wheel delta so a trackpad's many small events and a

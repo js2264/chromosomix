@@ -19,7 +19,7 @@ import type { ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel } from './MatrixPanel'
+import { MatrixPanel, axisRegion, poolingNote } from './MatrixPanel'
 
 export interface WholeViewProps {
   client: ReaderClient
@@ -97,6 +97,14 @@ export class WholeView {
         props.onOpenRegion(groups.row.label)
       },
       onLabelClick: (_axis, name) => props.onOpenRegion(name),
+      // On the diagonal a box is one region; anywhere else it is the rectangle
+      // between two windows — of two chromosomes in the trans corner, or of one
+      // chromosome against itself above its own diagonal, which is a picture
+      // this view can show and a single region cannot.
+      onSelectRegion: (selection) =>
+        selection.diagonal
+          ? props.onOpenRegion(axisRegion(selection.rows))
+          : props.onOpenRegion(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
 
     this.el = el(
@@ -154,9 +162,11 @@ export class WholeView {
             })
       if (this.disposed) return
       this.panel.setData(result, 'Whole genome')
+      const pooled = this.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
       this.summary.textContent =
         `${fmt.int(nBins)} bins across ${fmt.int(result.rowGroups.length)} ${noun}s · ` +
-        `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells rendered` +
+        `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells` +
+        (pooled === null ? ' · 1 bin is 1 pixel' : ` · ${pooled.phrase}`) +
         (balance ? ' · balanced' : '')
     } catch (err) {
       // Too big is a fact about this machine, not a broken file: say it here,

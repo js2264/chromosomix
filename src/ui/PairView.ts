@@ -19,7 +19,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { button, el, field, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel } from './MatrixPanel'
+import { MatrixPanel, axisRegion } from './MatrixPanel'
 
 export interface PairViewProps {
   client: ReaderClient
@@ -37,8 +37,11 @@ export interface PairViewProps {
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
-  /** A contig named on one of the axes, opened by clicking its label. */
-  onOpenContig(contig: string): void
+  /**
+   * A contig named on one of the axes, opened by clicking its label — or the
+   * block between one contig of each genome, selected by drawing on it.
+   */
+  onOpenContig(contig: string, contig2?: string): void
   onError(err: unknown): void
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
@@ -93,6 +96,12 @@ export class PairView {
       // rather than either genome — the genomes are named in the heading, and
       // in the two buttons beside the plot.
       onLabelClick: (_axis, name) => props.onOpenContig(name),
+      // The axes are the two genomes' contigs, so a box names one contig of
+      // each — and the block between them is exactly what a pair view is for.
+      onSelectRegion: (selection) =>
+        selection.diagonal
+          ? props.onOpenContig(axisRegion(selection.rows))
+          : props.onOpenContig(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
 
     this.el = el(

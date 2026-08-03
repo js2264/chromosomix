@@ -16,9 +16,10 @@ import { buildLine } from '../version'
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
   ['drag', 'Pan'],
-  ['⌥ / Alt + drag', 'Select a region and zoom into it'],
+  ['⌥ / Alt + drag', 'Select a square and open it as a region'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
+  ['two fingers sideways', 'Back and forward, as anywhere else on the page'],
   ['click', 'Open what the cell refers to'],
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
   ['+ / −', 'Zoom about the centre'],

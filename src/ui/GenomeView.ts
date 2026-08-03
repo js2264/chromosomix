@@ -11,7 +11,7 @@ import type { ParsedRange, Transform } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
-import { MatrixPanel } from './MatrixPanel'
+import { MatrixPanel, axisRegion, poolingNote } from './MatrixPanel'
 import { stepper } from './Stepper'
 
 /** The colour-scale fields that are carried in the URL hash (§5.5). */
@@ -104,6 +104,12 @@ export class GenomeView {
       // A label names one contig and nothing else — there is no second axis in
       // it — so it opens that contig, whichever edge it was clicked on.
       onLabelClick: (_axis, name) => props.onOpenRegion(name),
+      // The same rule as a click on an off-diagonal cell (§5.5): the block
+      // between two contigs, not one of them.
+      onSelectRegion: (selection) =>
+        selection.diagonal
+          ? props.onOpenRegion(axisRegion(selection.rows))
+          : props.onOpenContigPair(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
 
     // At contig level every cell already *is* a contig, labelled on both axes,
@@ -194,11 +200,13 @@ export class GenomeView {
 
   private renderSummary(result: MatrixResult, bins: number): void {
     const contigs = result.level === 'bin' ? result.rowGroups.length : result.nrows
+    const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     this.summary.textContent =
       `${fmt.int(bins)} bins across ${fmt.int(contigs)} contigs · ` +
-      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells rendered · ` +
-      `pan and zoom are local — no further reads.`
+      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells` +
+      (pooled === null ? ' · 1 bin is 1 pixel' : ` · ${pooled.phrase}`)
   }
+
 
   private renderContigs(result: MatrixResult): void {
     this.contigList.replaceChildren()

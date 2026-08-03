@@ -19,6 +19,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is, and requests for it reach the network untouched. A new build is offered as a reload rather
   than swapped in underneath you.
 
+### Changed
+
+- **A selection opens a region instead of zooming.** Option-drag draws a square —
+  it always resolved to one, so drawing a rectangle promised something it would
+  not give — and releasing it opens what the square covers: the chromosome or
+  contig the drag began in, ending at the edge of the box or of the sequence,
+  whichever comes first. On the whole-metagenome view, where no smaller region
+  exists, it opens the genome. Zoom is still the wheel, the keys and pinch.
+- **Two fingers sideways go back and forward** over the heatmap, as they already
+  did everywhere else on the page.
+- **A selection in the trans corner opens the intersection**, not one of the two
+  sequences: the rectangle between two chromosomes, or the genome pair. On the
+  diagonal it is still one region.
+- **Switching resolution in an `.mcool` keeps the view** you were in — the same
+  genome, contig and range at the new bin size — instead of returning to the
+  landing table. The colour clip is not carried, because it is in counts and
+  counts scale with the bin.
+- **A pooled picture says so.** Above 4,096 bins on an axis the raster is pooled,
+  one pixel per block of bins carrying the strongest value under it; the summary
+  now reads "drawn 4 × 4 bins to a pixel" and explains why the crosshair reports
+  several coordinates inside one square, and why zooming does not sharpen it.
+
 ### Fixed
 
 - `w` opens the whole-genome view again. The repaint short-circuit could not tell "nothing changed"
