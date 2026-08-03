@@ -11,6 +11,7 @@
 import { Modal } from './Modal'
 import { el } from './dom'
 import { keyLabel, type Command } from './commands'
+import { buildLine } from '../version'
 
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
@@ -94,6 +95,10 @@ export function openAbout(repoUrl: string, onClose?: () => void): Modal {
           'Source, issues and the format specification: ',
           el('a', { href: repoUrl, text: repoUrl, class: 'link' }),
         ),
+        // Last, small, and selectable: it is the first thing to ask for in a
+        // bug report about a page that has no server to interrogate, and the
+        // last thing anyone reads for pleasure.
+        el('p', { class: 'about-build', text: `version ${buildLine()}` }),
       ),
   })
 }

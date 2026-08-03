@@ -15,6 +15,8 @@
  * has no server and little else.
  */
 
+import { PRODUCER } from '../version'
+
 /** CSS pixels are defined as 1/96 inch, which is what makes DPI meaningful. */
 export const CSS_DPI = 96
 
@@ -189,7 +191,7 @@ export async function canvasToPdf(
   const subject = options.subject === undefined ? '' : ` /Subject (${clean(options.subject)})`
   const created =
     options.created === undefined ? '' : ` /CreationDate (${pdfDate(options.created)})`
-  push(`6 0 obj\n<< /Title (${title})${subject}${created} /Producer ((meta)cooler) >>\nendobj\n`)
+  push(`6 0 obj\n<< /Title (${title})${subject}${created} /Producer (${PRODUCER}) >>\nendobj\n`)
 
   const xrefAt = length
   let xref = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`

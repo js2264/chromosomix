@@ -121,6 +121,35 @@ are no deep paths for Pages to 404 on and no SPA-fallback `404.html` is needed.
   bundle and make console errors legible in the field. Drop them if that ever matters — the site
   budget is 1 GB, so it does not today.
 
+## Cutting a release
+
+The site is built from `main` on every push, so a release is not what publishes the app — it is what
+gives a published build a *name*. Three things have to agree, and one command makes them:
+
+```bash
+npm version minor        # or patch, or major
+git push --follow-tags
+```
+
+`npm version` runs the typecheck and the test suite first (`preversion`), refuses to continue if
+`CHANGELOG.md` has no section for the new number (`version`, via `scripts/changelog-check.mjs`),
+then commits the bump together with the changelog and tags it. Write the changelog entry *before*
+running it.
+
+What "major" means here is not an API: this is an application, so the contract is the **file format
+it opens and the URL hash it publishes**. A major bump is a `.metacool` the previous version could
+open and this one cannot, or a shared `#uri=…` link that no longer resolves to the same view.
+
+### How a build says what it is
+
+`vite.config.ts` bakes three facts into the bundle: the version from `package.json`, the short
+commit, and that commit's date (`src/version.ts`). They appear in **About → version** and in the
+`/Producer` field of every exported PDF, which is what turns "it broke on the website" into a diff.
+
+The commit *date* rather than the build date is deliberate: rebuilding identical source must not
+produce a bundle that claims to be newer than the one beside it. A build with no git repository —
+from a source tarball, say — reports the version alone rather than failing.
+
 ## What CI does not do
 
 The deploy workflow typechecks (`npm run build` runs `tsc --noEmit` first) and builds. It does

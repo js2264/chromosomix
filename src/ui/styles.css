@@ -1355,6 +1355,17 @@ p {
   margin: 0.6rem 0;
 }
 
+/* The build stamp: monospace because it is meant to be copied into an issue,
+   quiet because nobody opens this dialog to read it. */
+.about-build {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  color: var(--text-faint);
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  user-select: text;
+}
+
 .link {
   color: var(--accent);
   font-family: var(--mono);

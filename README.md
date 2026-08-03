@@ -236,6 +236,9 @@ of this code existed.
   port of Python's `_int_attr` rather than `Number()`.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
+- `docs/deploy.md` — how the site is built and published, and how a release is cut.
+- `CHANGELOG.md` — what changed between versions. The running build names itself in
+  **About → version**: version, commit and commit date.
 
 ## Licence
 
