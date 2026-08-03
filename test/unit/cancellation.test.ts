@@ -43,11 +43,13 @@ describe('yieldToEventLoop', () => {
   it('stops a chunked loop at the next chunk once a task sets the flag', async () => {
     // The shape of `scanPixels`: work, check, yield.
     let cancelled = false
+    let chunks = 0
+    let chunksWhenCancelled = -1
     setTimeout(() => {
       cancelled = true
+      chunksWhenCancelled = chunks
     }, 0)
 
-    let chunks = 0
     for (let i = 0; i < 500; i++) {
       if (cancelled) break
       chunks += 1
@@ -55,8 +57,17 @@ describe('yieldToEventLoop', () => {
     }
 
     expect(cancelled).toBe(true)
-    // Stopped early rather than running all 500 chunks to the end.
-    expect(chunks).toBeLessThan(10)
+    // Measured from where the flag was actually set, not against a round
+    // number of chunks. How many yields a 0 ms timer takes to fire is a Node
+    // scheduling detail — timers phase against the check phase a channel
+    // message is delivered in — and under a loaded machine running the whole
+    // suite it is tens, which failed a `< 10` bound that passed on an idle one.
+    // What the loop owes is that it stops at the *next* chunk boundary after
+    // the flag becomes visible, which is this, and it holds at any timer delay.
+    expect(chunks - chunksWhenCancelled).toBeLessThanOrEqual(1)
+    // And that it stopped rather than ran out: the microtask spelling never
+    // delivers the timer at all, so it would reach 500 with `cancelled` false.
+    expect(chunks).toBeLessThan(500)
   })
 
   it('resolves even when nothing else is queued', async () => {
