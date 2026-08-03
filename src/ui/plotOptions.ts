@@ -37,6 +37,7 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   crosshair: true,
   dividers: false,
   labels: false,
+  ticks: true,
 }
 
 export type PlotOptionKey = keyof PlotOptions
@@ -46,6 +47,10 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
   labels: { label: 'labels', hint: 'Block names in the gutters. Off gives the gutters back to the plot.' },
+  ticks: {
+    label: 'ticks',
+    hint: 'Base-pair coordinates along the axes, inside a block that has a single contig.',
+  },
 }
 
 let current: PlotOptions | null = null
@@ -61,7 +66,12 @@ function read(): PlotOptions {
     const record = parsed as Record<string, unknown>
     const pick = (key: PlotOptionKey): boolean =>
       typeof record[key] === 'boolean' ? (record[key] as boolean) : DEFAULT_UI_PLOT_OPTIONS[key]
-    return { crosshair: pick('crosshair'), dividers: pick('dividers'), labels: pick('labels') }
+    return {
+      crosshair: pick('crosshair'),
+      dividers: pick('dividers'),
+      labels: pick('labels'),
+      ticks: pick('ticks'),
+    }
   } catch {
     return { ...DEFAULT_UI_PLOT_OPTIONS }
   }

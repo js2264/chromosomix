@@ -23,7 +23,13 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
 import { COLORMAP_NAMES, COLOR_VISION_SAFE_COLORMAPS, DEFAULT_COLORMAP } from '../render/colormaps'
-import { HeatmapView, type Cell, type PlotOptions, type SeparatorSet } from '../render/heatmap'
+import {
+  HeatmapView,
+  type AxisCoords,
+  type Cell,
+  type PlotOptions,
+  type SeparatorSet,
+} from '../render/heatmap'
 import { inverseTransform } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
@@ -351,6 +357,10 @@ export class MatrixPanel {
     this.data = data
     this.titleNode.textContent = title
     this.heatmap.setMatrix(toDense(data), separatorsFor(data))
+    this.heatmap.setAxisCoords({
+      rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
+      cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
+    })
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
@@ -539,6 +549,30 @@ export function bpWithin(
 ): number {
   const first = group.unitStart ?? blockStart + group.start
   return (blockStart + offset - first) * binsize
+}
+
+/**
+ * What one axis measures in base pairs, or `null` when it measures nothing a
+ * position could be expressed in.
+ *
+ * Both refusals are the ones `_bin_axis` makes in `ops/show.py`. Above bin
+ * level a cell *is* a contig or a genome, so a position inside one would be an
+ * invention. Across more than one contig there is no single coordinate system:
+ * the ticks are the contig names there, and they already are.
+ *
+ * The line itself is {@link bpWithin} at offset 0, from the same `unitStart`,
+ * so a tick and the readout under the pointer cannot disagree.
+ */
+export function axisCoordsFor(
+  groups: AxisGroup[],
+  extent: readonly [number, number],
+  level: 'bin' | 'contig' | 'genome',
+  binsize: number,
+): AxisCoords | null {
+  if (level !== 'bin' || groups.length !== 1 || !(binsize > 0)) return null
+  const group = groups[0]
+  const first = group.unitStart ?? extent[0] + group.start
+  return { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize }
 }
 
 /**

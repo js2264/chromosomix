@@ -329,6 +329,9 @@ diverges from what a reader reproduces locally.
 - `vmin = 0`; `vmax` = 99th percentile of non-zero values in the **transformed** matrix, recomputed on
   view change, with manual override
 - separators at genome or contig boundaries, thin grey
+- ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
+  does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
+  where the block does
 
 Both bounds are overridable, as one clip range: a two-handled slider over the block's own value
 extent, with either bound also typeable, and one control back to auto. The URL carries `vmin` and

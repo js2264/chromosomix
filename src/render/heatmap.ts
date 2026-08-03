@@ -348,11 +348,11 @@ export interface Cell {
 /**
  * What the plot draws over the pixels, toggled from the view card.
  *
- * All three are pure overlay: nothing here re-reads, re-rasterises or changes
+ * All four are pure overlay: nothing here re-reads, re-rasterises or changes
  * the data, so a toggle costs one repaint of an image that is already in
- * memory. `dividers` and `labels` start on because they match `metacooler
- * show`; `crosshair` starts off because a line that follows the pointer is
- * help while you are aiming and clutter while you are reading.
+ * memory. `dividers`, `labels` and `ticks` start on because they match
+ * `metacooler show`; `crosshair` starts off because a line that follows the
+ * pointer is help while you are aiming and clutter while you are reading.
  */
 export interface PlotOptions {
   /** Contig and genome boundary hairlines. */
@@ -361,12 +361,112 @@ export interface PlotOptions {
   labels: boolean
   /** Guide lines through the hovered cell. */
   crosshair: boolean
+  /** Base-pair coordinates along an axis that has a single one (§7.1). */
+  ticks: boolean
 }
 
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   dividers: true,
   labels: true,
   crosshair: false,
+  ticks: true,
+}
+
+// ---------------------------------------------------------------------------
+// Base-pair ticks
+// ---------------------------------------------------------------------------
+
+/**
+ * How one axis of the block maps to base pairs, when it has a single
+ * coordinate system to map to.
+ *
+ * A bin index is not a position: it counts from the left edge of the *picture*,
+ * and `contig:139005-199005` starts at bin 139 of its contig, not at bin 0. So
+ * the mapping is stated as a line — the position of the block's first cell, and
+ * the width of a cell — which is exactly the arithmetic the hover readout does
+ * (`MatrixPanel.bpWithin`), from the same two numbers.
+ *
+ * `null` for an axis that spans more than one contig, where the ticks are the
+ * contig names instead; `_bin_axis` in `ops/show.py` draws the same distinction
+ * and for the same reason.
+ */
+export interface AxisCoords {
+  /** Base pairs per matrix cell — the bin size. */
+  bpPerCell: number
+  /** Base-pair position of the first cell of the block. */
+  bpAtOrigin: number
+}
+
+export interface AxisCoordSet {
+  rows: AxisCoords | null
+  cols: AxisCoords | null
+}
+
+/** Position ticks per axis, as `_MAX_POSITION_TICKS` in `ops/show.py`. */
+export const MAX_POSITION_TICKS = 6
+
+/** On-screen room one tick label needs before another may be placed. */
+const TICK_MIN_GAP_PX = 78
+
+/** Length of a tick mark, drawn inward from the data edge, in CSS pixels. */
+const TICK_LENGTH = 5
+
+/**
+ * A round step covering `span` base pairs in at most `maxTicks` intervals.
+ *
+ * The 1–2–5 ladder, so a step is a number a reader recognises as a position
+ * rather than as an artefact of the window width. Never finer than one bin: a
+ * tick between two bins marks a coordinate no cell on screen has.
+ */
+export function chooseBpStep(span: number, maxTicks: number, bpPerCell = 1): number {
+  if (!(span > 0) || maxTicks < 1) return Number.NaN
+  const raw = span / maxTicks
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 5, 10].map((m) => m * magnitude).find((s) => s >= raw) ?? magnitude * 10
+  return Math.max(step, bpPerCell)
+}
+
+/**
+ * The ticks visible in `domain`, a half-open range of matrix coordinates.
+ *
+ * Positions are multiples of the step in *genomic* space, not offsets from the
+ * left edge of the view, which is what keeps a tick on the same base pair while
+ * the picture moves underneath it.
+ */
+export function bpTicks(
+  coords: AxisCoords,
+  domain: readonly [number, number],
+  maxTicks: number,
+): Array<{ bp: number; unit: number }> {
+  const lo = coords.bpAtOrigin + domain[0] * coords.bpPerCell
+  const hi = coords.bpAtOrigin + domain[1] * coords.bpPerCell
+  const step = chooseBpStep(hi - lo, maxTicks, coords.bpPerCell)
+  if (!Number.isFinite(step) || step <= 0) return []
+  const out: Array<{ bp: number; unit: number }> = []
+  const first = Math.ceil(lo / step) * step
+  for (let bp = first; bp <= hi; bp += step) {
+    out.push({ bp, unit: (bp - coords.bpAtOrigin) / coords.bpPerCell })
+    // The ladder bounds this at `maxTicks + 1`; the guard is against a
+    // pathological `bpPerCell` making `step` too small to terminate usefully.
+    if (out.length > maxTicks + 2) break
+  }
+  return out
+}
+
+/**
+ * `0 bp`, `120 kb`, `1.5 Mb` — `_format_bp` in `ops/show.py`, digit for digit,
+ * so the same position is written the same way in a figure and on screen.
+ */
+export function formatBpTick(position: number): string {
+  for (const [scale, unit] of [
+    [1e6, 'Mb'],
+    [1e3, 'kb'],
+  ] as const) {
+    if (Math.abs(position) >= scale) {
+      return `${(position / scale).toFixed(2).replace(/\.?0+$/, '')} ${unit}`
+    }
+  }
+  return `${Math.round(position)} bp`
 }
 
 export interface HeatmapOptions {
@@ -502,6 +602,8 @@ export class HeatmapView {
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
   private matrix: DenseMatrix | null = null
+  /** Base-pair mapping per axis; `null` where the axis has no single one. */
+  private axisCoords: AxisCoordSet = { rows: null, cols: null }
   private raster: Raster | null = null
   /**
    * The pooled display values behind {@link raster}, kept so that a change of
@@ -753,6 +855,10 @@ export class HeatmapView {
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
       : separators
+    // A mapping belongs to one block. Clearing it here means a caller that
+    // never calls `setAxisCoords` draws no ticks, rather than drawing the
+    // previous block's coordinates over this one's data.
+    this.axisCoords = { rows: null, cols: null }
     this.dirtyRaster = true
     this.pooled = null
     this.hoverCell = null
@@ -761,6 +867,23 @@ export class HeatmapView {
     // Before `fit`, which divides by the plot area the gutters determine.
     this.measureMargin()
     this.fit()
+  }
+
+  /**
+   * Declare what each axis measures in base pairs, for the position ticks.
+   *
+   * Set alongside the matrix and cleared by passing two `null`s. It changes no
+   * geometry: the ticks are drawn inside the data, so an axis gaining or losing
+   * its coordinates never moves the plot.
+   */
+  setAxisCoords(coords: AxisCoordSet): void {
+    this.axisCoords = coords
+    this.changed()
+  }
+
+  /** What each axis measures in base pairs, as a copy. */
+  get coordinateAxes(): AxisCoordSet {
+    return { ...this.axisCoords }
   }
 
   /**
@@ -1033,6 +1156,7 @@ export class HeatmapView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     if (this.plot.dividers) this.drawSeparators()
     this.drawLabels()
+    if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) this.drawCrosshair()
     this.drawSelection()
     this.drawPlotBorder()
@@ -1278,6 +1402,109 @@ export class HeatmapView {
       if (!rowsInMargin) ctx.strokeText(block.label, rowX, centre)
       ctx.fillText(block.label, rowX, centre)
     }
+    ctx.restore()
+  }
+
+  /**
+   * The ticks one axis would draw at the current zoom, or `[]` when the axis
+   * has no single coordinate system. Exposed for the tests, which cannot call
+   * `draw` under Node.
+   */
+  positionTicks(axis: 'rows' | 'cols'): Array<{ bp: number; unit: number }> {
+    const coords = axis === 'rows' ? this.axisCoords.rows : this.axisCoords.cols
+    if (coords === null) return []
+    const scale = axis === 'rows' ? this.rowScale : this.colScale
+    const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
+    // The *visible data*, not the visible domain: zoomed out the domain runs
+    // past the last bin, and spacing the ticks over that empty margin would put
+    // one or two of them on the picture and the rest on nothing.
+    const [d0, d1] = scale.domain
+    const lo = Math.max(d0, 0)
+    const hi = Math.min(d1, n)
+    if (!(hi > lo)) return []
+    const pixels = (hi - lo) * scale.pixelsPerUnit
+    const maxTicks = Math.min(MAX_POSITION_TICKS, Math.max(1, Math.floor(pixels / TICK_MIN_GAP_PX)))
+    return bpTicks(coords, [lo, hi], maxTicks)
+  }
+
+  /**
+   * Base-pair coordinates along the bottom and left edges of the data.
+   *
+   * *Inside* the plot rather than in a gutter, for two reasons. The gutters
+   * belong to the block names and collapse to nothing when those are off —
+   * which is the app's default — so an outside tick would have to reopen a band
+   * the user closed. And the bottom-left of a symmetric contact map is the
+   * furthest corner from the diagonal: the emptiest part of the picture, which
+   * is where ink costs least.
+   *
+   * Everything is computed from the axis scales on the frame it is drawn, so
+   * the ticks track a pan or a zoom exactly, with no state to keep in step.
+   */
+  private drawTicks(): void {
+    const data = this.dataRect
+    if (data.width <= 0 || data.height <= 0) return
+    const cols = this.positionTicks('cols')
+    const rows = this.positionTicks('rows')
+    if (cols.length === 0 && rows.length === 0) return
+
+    const ctx = this.ctx
+    const plot = this.plotRect
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(data.x, data.y, data.width, data.height)
+    ctx.clip()
+    ctx.font = this.opts.labelFont
+    ctx.strokeStyle = this.opts.labelHaloColor
+    ctx.lineWidth = 3
+    ctx.lineJoin = 'round'
+    ctx.fillStyle = this.opts.labelColor
+
+    // The mark is drawn at the position; the *label* is nudged back inside the
+    // frame when it would hang over the edge. A tick at 0 bp sits on the first
+    // column, and a centred label there is half outside the picture — clipped
+    // to "0 b" by the very frame that makes it worth drawing.
+    const bottom = data.y + data.height
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    for (const tick of cols) {
+      const x = this.snap(plot.x + this.colScale.toPixel(tick.unit))
+      const text = formatBpTick(tick.bp)
+      const half = ctx.measureText(text).width / 2 + 2
+      const at = clamp(x, data.x + half, data.x + data.width - half)
+      ctx.strokeText(text, at, bottom - TICK_LENGTH - 3)
+      ctx.fillText(text, at, bottom - TICK_LENGTH - 3)
+      this.tickMark(x, bottom, x, bottom - TICK_LENGTH)
+    }
+
+    // Two perpendicular axes share a corner whichever edges they are put on, so
+    // the last row label steps aside for the row of column labels rather than
+    // printing on top of it. Its mark stays: the position is still marked, it is
+    // the second copy of the number that goes.
+    const corner = cols.length === 0 ? bottom : bottom - 20
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    for (const tick of rows) {
+      const y = this.snap(plot.y + this.rowScale.toPixel(tick.unit))
+      this.tickMark(data.x, y, data.x + TICK_LENGTH, y)
+      const at = clamp(y, data.y + 8, data.y + data.height - 8)
+      if (at > corner) continue
+      const text = formatBpTick(tick.bp)
+      ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
+      ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
+    }
+    ctx.restore()
+  }
+
+  /** One tick mark, in the label colour rather than the halo's. */
+  private tickMark(x0: number, y0: number, x1: number, y1: number): void {
+    const ctx = this.ctx
+    ctx.save()
+    ctx.strokeStyle = this.opts.labelColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.beginPath()
+    ctx.moveTo(x0, y0)
+    ctx.lineTo(x1, y1)
+    ctx.stroke()
     ctx.restore()
   }
 

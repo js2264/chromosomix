@@ -96,10 +96,15 @@ function separators(count: number, n: number, prefix: string): Separator[] {
 }
 
 describe('overlay toggles', () => {
-  it('starts with dividers and labels on and the crosshair off', () => {
+  it('starts with dividers, labels and ticks on and the crosshair off', () => {
     const view = new HeatmapView(fakeCanvas(800, 800).canvas, { devicePixelRatio: 1 })
     expect(view.plotOptions).toEqual(DEFAULT_PLOT_OPTIONS)
-    expect(view.plotOptions).toEqual({ dividers: true, labels: true, crosshair: false })
+    expect(view.plotOptions).toEqual({
+      dividers: true,
+      labels: true,
+      crosshair: false,
+      ticks: true,
+    })
   })
 
   it('hands the gutters back when the labels are hidden, and returns them', () => {
@@ -127,9 +132,19 @@ describe('overlay toggles', () => {
   it('leaves the other overlays alone when one is toggled', () => {
     const view = new HeatmapView(fakeCanvas(400, 400).canvas, { devicePixelRatio: 1 })
     view.setPlotOptions({ crosshair: true })
-    expect(view.plotOptions).toEqual({ dividers: true, labels: true, crosshair: true })
+    expect(view.plotOptions).toEqual({
+      dividers: true,
+      labels: true,
+      crosshair: true,
+      ticks: true,
+    })
     view.setPlotOptions({ dividers: false })
-    expect(view.plotOptions).toEqual({ dividers: false, labels: true, crosshair: true })
+    expect(view.plotOptions).toEqual({
+      dividers: false,
+      labels: true,
+      crosshair: true,
+      ticks: true,
+    })
   })
 
   it('cannot be mutated through the getter', () => {

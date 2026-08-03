@@ -261,6 +261,7 @@ class App {
       ['crosshair', 'x'],
       ['dividers', 'd'],
       ['labels', 'l'],
+      ['ticks', 'k'],
     ]
     for (const [key, binding] of overlayKeys) {
       list.push({
