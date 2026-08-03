@@ -680,6 +680,35 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   the whole block across a resize — which also means a window resize no longer
   drifts a fitted view — while a zoom the user chose is left alone.
 
+- [x] In a genome or contig heatmap view, a new card under Metadata in the left
+  bar showing that row of the genomes/contigs table. The bar scrolls if the card
+  is long; the page itself never does.
+
+> NOTES ON THE ABOVE
+
+- **The card is a quotation of the table, not a second schema.** `RecordCard`
+  hard-codes no column names: the four (or two) the format guarantees lead, and
+  everything the binner joined in follows in file order, so `Present Markers`
+  and `GC-content` appear without this code knowing those words. An empty
+  fixed-length string reads as an em dash, exactly as in the tables — otherwise
+  the card asserts a blank taxonomy that the file never claimed.
+- **`genome_id` is replaced by the genome's name**, since the integer is an
+  index into `/genomes` that nobody reading a sidebar can look up, and it leads
+  the contig card rather than trailing it: a MetaTOR contigs table is nineteen
+  columns wide and would otherwise push the one piece of context off the bottom.
+  A contig whose genome is `__unbinned__` says *unassigned*, because §7.4 keeps
+  the reserved name out of the UI and the Binning QC block above is the one
+  exception.
+- **Two axes yield two cards**, labelled rows and columns — which of the pair is
+  on which axis is precisely what one is trying to keep straight while reading
+  an off-diagonal block.
+- **The page still does not scroll.** It never did: `.side-host` has been
+  `overflow: auto` inside a `min-height: 0` flex row all along, so the only
+  change needed was `.info-panel { flex: 1 0 auto }` — with `1 1 auto` a panel
+  taller than the sidebar was a candidate for being squeezed rather than
+  overflowed. Measured in a headless browser: 1,588 px of sidebar content in a
+  780 px box, `document.scrollHeight === innerHeight`.
+
 ## FOR FUTURE
 
 - M5
