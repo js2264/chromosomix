@@ -90,8 +90,24 @@ function png(size) {
   ])
 }
 
+import { mkdirSync } from 'node:fs'
+
 for (const size of [192, 512]) {
   const path = new URL(`../public/icon-${size}.png`, import.meta.url)
   writeFileSync(path, png(size))
   console.log(`wrote public/icon-${size}.png`)
 }
+
+// The desktop icon, from the same fifty lines that draw the other two — which
+// is the whole argument this file already makes, extended one target further: a
+// dock icon that disagreed with the tab icon would be two designs maintained by
+// hand, and nobody would notice they had drifted.
+//
+// 1024 because electron-builder derives every platform size from one square
+// PNG, and it refuses anything under 256. `build/` is electron-builder's
+// `buildResources` directory, which is why it is *not* in `.gitignore` — but
+// this file is generated, so `dist:desktop` draws it and only the recipe is
+// committed.
+mkdirSync(new URL('../build/', import.meta.url), { recursive: true })
+writeFileSync(new URL('../build/icon.png', import.meta.url), png(1024))
+console.log('wrote build/icon.png')
