@@ -11,6 +11,11 @@ same engine family a Chrome tab runs, single-threaded, which is what the
 rasteriser is. Runtime facts about h5wasm were probed against the installed
 `h5wasm@0.10.3`, not assumed.
 
+> **Status.** Sections 1–7 describe the code as it stood at `269f380`, and are
+> kept as the record of what was measured. Most of what they describe has since
+> been changed — **§9 is the ledger of what landed and what did not**, and is the
+> section to read first if you want the current state rather than the audit.
+
 ---
 
 ## 1. Verdict
@@ -1127,6 +1132,86 @@ tooltip layout thrash (§6.5b, §6.5c), decorated sort with a shared
 Items 1–14 make the brief's yeast-@-500 bp case work on ordinary hardware and
 the whole-metagenome overview show every contig — and they do it mostly by
 deleting work, not by loosening a limit.
+
+---
+
+## 9. What was implemented
+
+Seven commits on top of the audit, in the order of §8. Sections 1–7 above are
+the state at `269f380` and are deliberately not rewritten; this is the delta.
+
+### 9.1 Landed
+
+| §8 | change | where |
+|---|---|---|
+| 1 | `render()` diffs the view state and calls `applyScale()` on the mounted panel instead of tearing it down; `differsOnlyInScale` lives in `ViewState` so it is testable without importing `main.ts` | `main.ts`, `state/ViewState.ts`, `ui/MatrixPanel.ts` |
+| 2 | `void getH5()` at worker module scope — the wasm instantiate overlaps the file pick | `worker/reader.worker.ts` |
+| 3 | one `changed()` redraw entry, rAF-coalesced; synchronous `draw()` gone from every input handler | `render/heatmap.ts` |
+| 4 | `PooledDisplay.autoRange` memo; the dead per-pixel `extent` pass deleted | `render/heatmap.ts` |
+| 5 | `binOffsets()` / `genomeDensities()` batch the density proxy into two reads; `chromsizes` and `contigIds` are lazy | `metacooler/MetaCooler.ts` |
+| 6 | `sparseAggregator` rolls contig/genome level up from the stored pixels — no `DenseMatrix` at all. 2,366 MB and 2,090 ms → 139 ms and a `Float64Array(17²)` | `metacooler/aggregate.ts`, `MetaCooler.aggregateSparse` |
+| 7 | `poolsRawMax()` pools raw counts and transforms once per *pooled* pixel, with a stride-1 fast path | `render/heatmap.ts` |
+| 8 | `colorize(pooled, scale, into?)` writes into a reused buffer; `rasterizeNow` reuses its canvas; `raster.data` is not retained | `render/heatmap.ts` |
+| 9 | separators batched into two `Path2D`s, culled to the visible domain, deduped; `labelBlocks` bails early; `separatorsFor` reuses array identity | `render/heatmap.ts` |
+| 10 | `TriangleAccumulator` — upper triangle only, `idx = lo·n − lo(lo−1)/2 + (hi−lo)`; one `Float64Array` instead of two `n²` | `worker/overview.ts` |
+| 11 | `READER_CONTIG_COLUMNS` / `READER_GENOME_COLUMNS` — the open reads what the landing view shows | `metacooler/MetaCooler.ts` |
+| 12 | `forEachPixelSpan` chunks the read at `PIXEL_CHUNK = 1e6`; bin ids narrow int64 → `Int32Array` in one pass (`readInt32Slice`); `estimateBlockBytes` models the real peak, `checkBrowserDenseSize` no longer reads the file to guess | `metacooler/matrix.ts`, `h5/readTable.ts` |
+| 13 | the overview **aggregates instead of truncating**: `overviewUnitCap(budget)`, `poolUnits` with largest-remainder `apportion`, genome-snapped slots, `OVERVIEW_HARD_CAP = 16_384`. `maxUnits` is wired. The old "2,048 densest by nnz" selection — and its one-sided statistic — is gone | `worker/overview.ts`, `worker/reader.worker.ts` |
+| 14 | guards recalibrated: `allocateDense` try-and-catch rather than pre-refuse, `denseBudgetFor(gib)` extracted and pure, a user-facing override for the band where the budget cannot see the machine | `metacooler/matrix.ts` |
+| 18 | local files mount lazily — `LOCAL_CHUNK_SIZE = 1 MiB`, `LOCAL_CACHE_BYTES = 64 MiB`, `FileReaderSync` in the worker — and are retained across entry switches | `sources/LocalFileSource.ts` |
+| small | quickselect `selectNth` / `percentileOf`; every `.sort()` off the auto-range path (6.6× measured) | `render/scale.ts` |
+| small | `transfersFor` bails out of a string array; `cancelled` cleared on open/close | `worker/protocol.ts`, `worker/reader.worker.ts` |
+| small | `VirtualTable`: decorate-sort-undecorate with a shared `Intl.Collator`, `sortCache` keyed on (key, direction), precomputed lowercase haystacks, `activePosition`, cached header height, debounced-and-flushed `persist`, `destroy()` | `ui/VirtualTable.ts` |
+| small | `isChord` early-return above the command list; `stepTargets()` memo | `main.ts`, `ui/commands.ts` |
+| small | `validateDeep`: walking `owner` pointer, scalar `prev1`/`prev2`, cancellable with progress (42 → 10 ns/pixel) | `metacooler/MetaCooler.ts` |
+| small | tooltip positioned by CSS transform over fixed nodes, no layout read per event; colourbar and clip repaint only when their inputs change | `ui/MatrixPanel.ts` |
+| small | `largestDpiThatFits` pre-flight on export; `binGenomeArray` writes in place and both bin→unit arrays are memoised per file | `ui/MatrixPanel.ts`, `worker/groups.ts` |
+
+Test count went from 235 to 329 passing. New suites: `render-cost`,
+`render-equivalence`, `pixel-window`, `local-lazy`, `overview-pooling`,
+`sparse-aggregate`.
+
+### 9.2 Not landed, and why
+
+- **§8.15 — rasterise in the worker, hand back an `ImageBitmap`.** Still the
+  right change and still worth ~197 MB of main-thread buffers, but it moves the
+  colour scale, the pooling and the auto-range across the worker boundary, which
+  changes the protocol and the interaction model (a colour change becomes a
+  round trip again unless the pooled array is kept on both sides). Left as a
+  proposal rather than done badly under the same commit series that just removed
+  the round trip.
+- **§8.17 — stream COO → pooled raster, plus a stride-1 re-raster of the visible
+  window.** The chunked read (§8.12) is the prerequisite and is now in place, so
+  this is a smaller change than it was. It still needs a second render path with
+  its own guard semantics, and the dense path below the threshold has to keep
+  working identically — a change to make deliberately, with its own equivalence
+  suite, not as a tail item.
+- **§8.16 — transfer table string columns.** The cheap half landed
+  (`transfersFor` no longer walks 1.5 M strings). The packed-UTF-8 + offsets
+  representation did not: it changes `TablePayload`, `tableFromPayload` and every
+  `ColumnDef.value` that indexes a `string[]`, for a saving that only appears on
+  files with ~10⁵ contigs.
+- **`scanPixels` destination reuse** (§6.9b). The two 8-byte intermediates are
+  gone via `readInt32Slice`, which was the bulk of it. The remaining allocation
+  is the buffer h5wasm's `ds.slice` mints per call — there is no read-into entry
+  point on the h5wasm dataset API to reuse a destination through.
+- **`contigRuns` parallel typed arrays** (§6.9b). Only fires on the dense bin
+  path, where the block itself now dominates; deferred behind §8.17, which
+  changes that path anyway.
+
+### 9.3 The brief's two questions, answered in code
+
+- **Yeast micro-C, whole genome, 500 bp** (24,322 bins, 591.6 M cells, 2,366 MB
+  dense). Contig and genome level no longer materialise a block at all (§8.6), so
+  they are unconditional. Bin level is chunked (§8.12) rather than reading the
+  whole pixel table into wasm, and the guard now tries the allocation instead of
+  refusing on a Firefox/Safari `undefined` (§8.14), with an override in the band
+  where the budget is a guess.
+- **The 2,048 cap.** Removed. Nothing is dropped for being outside a top-N: every
+  displayed unit lands in a slot, and above the cap slots are *pooled* rather
+  than truncated (§8.13), with the cap derived from the budget and a hard ceiling
+  of 16,384 — 64× the area the old cap allowed, and the ceiling exists because a
+  16,384² `Float64Array` is 2 GB, not because of readability.
 
 ---
 
