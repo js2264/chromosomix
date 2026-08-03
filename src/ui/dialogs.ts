@@ -70,7 +70,28 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
   })
 }
 
-export function openAbout(repoUrl: string, onClose?: () => void): Modal {
+/**
+ * What the desktop build knows about itself, when it is the one running.
+ *
+ * A plain interface and an optional argument, never an import from `electron/`:
+ * this module is in the bundle the **web** build ships, and a Node import here
+ * would end up in it. The caller passes what it has, which on the website is
+ * nothing.
+ */
+export interface AboutPlatform {
+  electron: string
+  chrome: string
+  node: string
+  platform: string
+  arch: string
+  signed: boolean
+}
+
+export function openAbout(
+  repoUrl: string,
+  platform?: AboutPlatform | null,
+  onClose?: () => void,
+): Modal {
   return new Modal({
     title: '(meta)cooler',
     ...(onClose === undefined ? {} : { onClose }),
@@ -100,6 +121,33 @@ export function openAbout(repoUrl: string, onClose?: () => void): Modal {
         // bug report about a page that has no server to interrogate, and the
         // last thing anyone reads for pleasure.
         el('p', { class: 'about-build', text: `version ${buildLine()}` }),
+        // The runtime, read from `process.versions` at preload time rather than
+        // written down anywhere: Electron's Chromium and Node move within a
+        // major, and a number pinned in the repository would be wrong within a
+        // week and believed anyway, because it is under the word "version".
+        ...(platform === undefined || platform === null
+          ? []
+          : [
+              el('p', {
+                class: 'about-build',
+                text:
+                  `Electron ${platform.electron} · Chromium ${platform.chrome} · ` +
+                  `Node ${platform.node} · ${platform.platform} ${platform.arch}`,
+              }),
+            ]),
+        // The answer to the warning the user clicked through to get here. They
+        // were told the developer could not be verified; this is where they
+        // find out that this was expected and what it does and does not mean.
+        ...(platform !== undefined && platform !== null && !platform.signed
+          ? [
+              el('p', {
+                class: 'about-build',
+                text:
+                  'This build is not code-signed. A signature says who published a build, ' +
+                  'not whether it works — which is why macOS and Windows each warned you once.',
+              }),
+            ]
+          : []),
       ),
   })
 }

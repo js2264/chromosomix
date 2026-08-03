@@ -18,6 +18,7 @@ import {
   entryChunkProblems,
   indexHtmlProblems,
   isDataFile,
+  preloadProblems,
   rendererFileProblems,
 } from '../../scripts/desktop-shape.mjs'
 
@@ -135,6 +136,40 @@ describe('isDataFile', () => {
     // same set as a negated glob, and `check-package.mjs` reads this one.
     expect(DATA_EXTENSIONS).toContain('.metacool')
     expect(DATA_EXTENSIONS).toContain('.tsv')
+  })
+})
+
+describe('preloadProblems', () => {
+  const BUNDLED =
+    'var CHANNEL_COMMAND="metacooler:command";var electron=require("electron");' +
+    'electron.contextBridge.exposeInMainWorld("metacoolerDesktop",{platform:{},onCommand(h){}});'
+
+  it('passes a bundled preload that requires only electron', () => {
+    expect(preloadProblems(BUNDLED)).toEqual([])
+  })
+
+  it('catches the relative require tsc emits, which no runtime error explains', () => {
+    // The actual regression: `tsc` emits correct CommonJS that a sandboxed
+    // preload cannot load. The app starts, the window opens, the page renders,
+    // the menu appears, and every item does nothing.
+    const source = 'const contract_cjs_1 = require("./contract.cjs");' + BUNDLED
+    expect(preloadProblems(source)).toEqual([expect.stringContaining('./contract.cjs')])
+  })
+
+  it('catches a parent-relative require too', () => {
+    expect(preloadProblems(`require("../shared/x.cjs");${BUNDLED}`)).toEqual([
+      expect.stringContaining('../shared/x.cjs'),
+    ])
+  })
+
+  it('leaves bare built-in requires alone', () => {
+    expect(preloadProblems(`require("node:events");${BUNDLED}`)).toEqual([])
+  })
+
+  it('notices a preload that exposes nothing at all', () => {
+    expect(preloadProblems('var x = 1')).toEqual([
+      expect.stringContaining('exposeInMainWorld'),
+    ])
   })
 })
 

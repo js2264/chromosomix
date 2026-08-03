@@ -17,8 +17,9 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { BrowserWindow, app, protocol, session, shell } from 'electron'
+import { BrowserWindow, Menu, app, protocol, session, shell } from 'electron'
 
+import { buildMenu } from './menu.cjs'
 import { APP_INDEX, APP_ORIGIN, APP_SCHEME, CSP, contentType, resolveInside } from './protocol.cjs'
 
 /**
@@ -150,6 +151,11 @@ function createWindow(): void {
     backgroundColor: '#ffffff',
     title: '(meta)cooler',
     webPreferences: {
+      // Two members wide, and CommonJS because a sandboxed preload cannot be
+      // ESM. A window whose preload fails to load still works: `src/desktop.ts`
+      // asks whether the bridge is there rather than assuming it, so the app
+      // degrades to browser behaviour instead of throwing.
+      preload: join(__dirname, 'preload.cjs'),
       // Isolates the page's JavaScript from any privileged code in the same
       // frame. Off, a preload's objects are reachable and mutable by the page,
       // which turns every one of them into an escape route.
@@ -247,6 +253,11 @@ if (!app.requestSingleInstanceLock()) {
     current.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     current.setPermissionCheckHandler(() => false)
     current.setDevicePermissionHandler(() => false)
+
+    // Application-wide, and before the first window: on macOS the menu bar
+    // belongs to the app rather than to a window, so building it per-window
+    // would leave the app with no menu whenever no window has focus.
+    Menu.setApplicationMenu(buildMenu())
 
     createWindow()
 

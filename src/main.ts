@@ -50,6 +50,7 @@ import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import { registerServiceWorker } from './pwa'
+import { IS_DESKTOP, desktop } from './desktop'
 import type { TableUiState } from './ui/VirtualTable'
 import { isChord, isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
 import { openAbout, openShortcuts } from './ui/dialogs'
@@ -61,6 +62,9 @@ import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from './ui/plotO
 
 /** Where "source" points, from the about dialog and the header. */
 const REPO_URL = 'https://github.com/js2264/metacooler.js'
+
+/** The document title with nothing open; the file name is prefixed to it. */
+const APP_TITLE = '(meta)cooler'
 
 interface OpenFile {
   /**
@@ -200,7 +204,14 @@ class App {
             home,
             el('span', {
               class: 'brand-sub',
-              text: '(multi-genome) cool files, in the browser',
+              // The one string that genuinely differs between the targets.
+              // "in the browser" is the web app's hook -- it is the surprising
+              // half of what it does -- and it is simply false in a window that
+              // is not one. Everything else about privacy is reworded to be
+              // true of both rather than branched; see `FilePicker.ts`.
+              text: IS_DESKTOP
+                ? '(multi-genome) cool files, on your machine'
+                : '(multi-genome) cool files, in the browser',
             }),
           ),
         ),
@@ -224,6 +235,31 @@ class App {
     )
 
     window.addEventListener('keydown', (event) => this.onKeyDown(event))
+
+    // A menu click and a keystroke are the same thing arriving by a different
+    // road, so they end at the same place: the command registry. The menu holds
+    // no behaviour of its own, which is what keeps the shortcuts dialog honest
+    // about everything the app responds to.
+    desktop()?.onCommand((id) => {
+      const command = this.commands().find((entry) => entry.id === id)
+      if (command === undefined || command.enabled === false) return
+      command.run()
+    })
+
+    // A file dropped anywhere *except* the dropzone otherwise navigates the
+    // window to a binary blob — and in a desktop window there is no address bar
+    // and no back button to return from it. The main process refuses that
+    // navigation outright (`will-navigate`), which is the un-bypassable half;
+    // this is the graceful one, and it is the only one the browser has.
+    //
+    // Unconditional, not gated on the target: the same miss on the website
+    // replaces the app with a download prompt or a page of binary, which is no
+    // better for being recoverable.
+    document.addEventListener('dragover', (event) => event.preventDefault())
+    document.addEventListener('drop', (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest('.dropzone') !== null) return
+      event.preventDefault()
+    })
 
     this.store.subscribe((state) => void this.render(state))
     this.store.connectHash()
@@ -417,7 +453,9 @@ class App {
 
   private openAboutDialog(): void {
     if (this.modal !== null) return
-    this.modal = openAbout(REPO_URL, () => {
+    // `desktop()?.platform` rather than a flag: on the website there is no
+    // bridge and the dialog says exactly what it says today.
+    this.modal = openAbout(REPO_URL, desktop()?.platform ?? null, () => {
       this.modal = null
     })
   }
@@ -854,6 +892,11 @@ class App {
   // -------------------------------------------------------------------------
 
   private async render(state: ViewState | null): Promise<void> {
+    // What is open, in the window title -- which BrowserWindow mirrors for free
+    // on the desktop, and which names the tab in a browser. Two maps open side
+    // by side are otherwise two identical entries in a window switcher.
+    document.title = state === null ? APP_TITLE : `${fileLabel(state.uri)} — ${APP_TITLE}`
+
     if (state === null) {
       this.file = null
       this.mounted = null

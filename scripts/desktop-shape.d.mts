@@ -19,3 +19,6 @@ export declare function entryChunkProblems(source: string): string[]
 
 /** Problems with the set of renderer file names, relative and `/`-separated. */
 export declare function rendererFileProblems(names: Iterable<string>): string[]
+
+/** Problems with the bundled preload's source; empty when it is self-contained. */
+export declare function preloadProblems(source: string): string[]

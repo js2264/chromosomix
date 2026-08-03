@@ -106,6 +106,36 @@ export function entryChunkProblems(source) {
 }
 
 /**
+ * What is wrong with the bundled preload, if anything.
+ *
+ * A **sandboxed** preload has no module resolver: its `require` reaches
+ * `electron` and a few Node built-ins, and a relative `require('./contract.cjs')`
+ * fails. `tsc` emits exactly that and cannot know better, which is why
+ * `build-preload.mjs` bundles the file — and why this checks that the bundling
+ * actually happened.
+ *
+ * It has to be checked rather than trusted because the failure is invisible.
+ * The app starts, the window opens, the page renders, the menu appears and
+ * every item does nothing at all. One line on a console nobody has open is the
+ * only evidence.
+ *
+ * Built-ins are allowed by name. Anything relative is not.
+ */
+export function preloadProblems(source) {
+  const problems = []
+  for (const match of source.matchAll(/require\(\s*["'](\.[^"']*)["']\s*\)/g)) {
+    problems.push(
+      `preload requires ${match[1]} relatively — a sandboxed preload has no module ` +
+        'resolver, so it will fail to load and every menu item will silently do nothing',
+    )
+  }
+  if (!source.includes('exposeInMainWorld')) {
+    problems.push('preload does not call contextBridge.exposeInMainWorld — the bridge is not exposed')
+  }
+  return problems
+}
+
+/**
  * What is wrong with the *set* of files in the renderer directory.
  *
  * Takes names relative to the renderer root, with `/` separators, so the caller

@@ -23,11 +23,13 @@ import { fileURLToPath } from 'node:url'
 import {
   entryChunkProblems,
   indexHtmlProblems,
+  preloadProblems,
   rendererFileProblems,
 } from './desktop-shape.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const RENDERER = join(ROOT, 'dist-electron', 'renderer')
+const PRELOAD = join(ROOT, 'dist-electron', 'main', 'preload.cjs')
 
 /** Every file under `dir`, as paths relative to it with `/` separators. */
 function walk(dir) {
@@ -68,6 +70,15 @@ for (const name of files.filter((file) => file.endsWith('.js'))) {
   for (const problem of entryChunkProblems(readFileSync(join(RENDERER, name), 'utf8'))) {
     problems.push(`${name}: ${problem}`)
   }
+}
+
+// The preload lives in the main-process output rather than the renderer's, but
+// it is checked here because this is the step that runs after everything is
+// built, and because what it gets wrong is invisible at runtime.
+try {
+  problems.push(...preloadProblems(readFileSync(PRELOAD, 'utf8')))
+} catch {
+  problems.push('dist-electron/main/preload.cjs is missing — did scripts/build-preload.mjs run?')
 }
 
 if (problems.length > 0) {
