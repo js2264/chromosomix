@@ -22,10 +22,14 @@ import type { SourceSpec } from './protocol'
  */
 export async function createSource(spec: SourceSpec): Promise<ByteSource> {
   if (spec.kind === 'local') {
-    // A dropped file replaces whatever was retained; nothing else would ever
-    // free a 64 MiB chunk cache for a bucket the user has finished with.
+    // Retained across opens of the *same* file, exactly as a remote one is.
+    // Stepping through an mcool's resolutions or an mmetacool's entries reopens
+    // the same object at a different group, and without this each click threw
+    // away the mount and its slice cache and rebuilt both.
+    const reused = borrowLocal(spec.file)
+    if (reused !== null) return reused
     releaseSources()
-    return new LocalFileSource(spec.file)
+    return keepLocal(spec.file, new LocalFileSource(spec.file))
   }
   const reused = borrowRemote(spec.url)
   if (reused !== null) return reused
@@ -72,6 +76,27 @@ export async function createSource(spec: SourceSpec): Promise<ByteSource> {
  */
 let remote: { url: string; source: ByteSource } | null = null
 
+/**
+ * The dropped file this worker currently has mounted, if any.
+ *
+ * Keyed on the `File`/`Blob` object itself: the drop target hands the same
+ * object across an entry switch, and object identity is the only honest test —
+ * two files can share a name and a size, and a user who re-drops a file they
+ * have edited must get the new bytes.
+ */
+let local: { file: unknown; source: ByteSource } | null = null
+
+function keepLocal(file: unknown, source: ByteSource): ByteSource {
+  local = { file, source }
+  return retained(source)
+}
+
+function borrowLocal(file: unknown): ByteSource | null {
+  if (local === null) return null
+  if (local.file !== file) return null
+  return retained(local.source)
+}
+
 /** Retain `source` as the worker's one remote file, and lend it out. */
 function keep(url: string, source: ByteSource): ByteSource {
   remote = { url, source }
@@ -100,7 +125,12 @@ function retained(source: ByteSource): ByteSource {
 
 /** The mounted remote file for `url`, if this worker still holds it. */
 function borrowRemote(url: string): ByteSource | null {
-  if (remote === null) return null
+  if (remote === null) {
+    // A remote open after a local one: the dropped file is finished with, and
+    // nothing else would free its slice cache.
+    releaseSources()
+    return null
+  }
   if (remote.url !== url) {
     releaseSources()
     return null
@@ -115,6 +145,8 @@ function borrowRemote(url: string): ByteSource | null {
 export function releaseSources(): void {
   remote?.source.close()
   remote = null
+  local?.source.close()
+  local = null
 }
 
 /**
