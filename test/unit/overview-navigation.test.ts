@@ -12,7 +12,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { overviewTarget } from '@/ui/Overview'
+import { overviewTarget, unitAt } from '@/ui/Overview'
+import type { AxisGroup } from '@/worker/protocol'
 
 describe('overviewTarget at contig level', () => {
   it('opens the genome pair for two contigs of different genomes', () => {
@@ -74,6 +75,55 @@ describe('overviewTarget at contig level', () => {
         rowGenome: 'MAG_1',
       }),
     ).toEqual({ kind: 'contig', rowContig: 'NODE_1', colContig: 'NODE_2' })
+  })
+})
+
+describe('unitAt, which is what a pooled axis is clicked through', () => {
+  const group = (label: string, start: number): AxisGroup => ({ label, start, end: start + 1 })
+
+  it('resolves a pooled slot to the unit it starts at, not to its label', () => {
+    // What the reader sends once an axis is pooled: the label is a summary, and
+    // the name behind it is a real contig. Opening the label would hand
+    // "NODE_7431 +15" to a range parser.
+    const names = ['NODE_1', 'NODE_18', 'NODE_7431']
+    expect(unitAt(names, group('NODE_7431 +15', 2))).toBe('NODE_7431')
+  })
+
+  it('agrees with the label when nothing is pooled', () => {
+    const names = ['NODE_1', 'NODE_2', 'NODE_3']
+    for (let i = 0; i < names.length; i++) expect(unitAt(names, group(names[i], i))).toBe(names[i])
+  })
+
+  it('falls back to the label when the reader sent no unit names', () => {
+    expect(unitAt(null, group('MAG_1', 0))).toBe('MAG_1')
+    expect(unitAt(undefined, group('MAG_1', 0))).toBe('MAG_1')
+    // Short array — a slot past the end is the label's, not `undefined`.
+    expect(unitAt(['MAG_1'], group('MAG_2', 1))).toBe('MAG_2')
+  })
+
+  it('feeds overviewTarget the unit, so a pooled diagonal opens one genome', () => {
+    const names = ['NODE_1', 'NODE_7431']
+    const row = group('NODE_7431 +15', 1)
+    expect(
+      overviewTarget({
+        level: 'contig',
+        rowLabel: unitAt(names, row),
+        colLabel: unitAt(names, row),
+        rowGenome: 'MAG_1',
+        colGenome: 'MAG_1',
+      }),
+    ).toEqual({ kind: 'genome', genome: 'MAG_1' })
+  })
+
+  it('still names the contigs from a pooled axis when no genome backs them', () => {
+    const names = ['NODE_1', 'NODE_7431']
+    expect(
+      overviewTarget({
+        level: 'contig',
+        rowLabel: unitAt(names, group('NODE_1 +3', 0)),
+        colLabel: unitAt(names, group('NODE_7431 +15', 1)),
+      }),
+    ).toEqual({ kind: 'contig', rowContig: 'NODE_1', colContig: 'NODE_7431' })
   })
 })
 
