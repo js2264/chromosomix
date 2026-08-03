@@ -92,21 +92,45 @@ export function aggregatedAxes(
   }
 }
 
-/** `bin → contig index` for the whole file, for the contig-level overview. */
 /**
- * `bin → genome index` for the whole file, for the full-scan overview only.
+ * `bin → unit index` for the whole file, for the full-scan overview only.
  *
  * One `Int32Array` of `nBins` entries — 1.7 MB on the 423 k-bin reference file,
  * against a scan that touches every pixel anyway. Ids are the file's own; §7.4's
  * "nothing is renumbered" holds here as everywhere.
+ *
+ * Both are memoised per open file: toggling contig ↔ genome level, or re-running
+ * the scan after a cancel, rebuilt a 1.7 MB array and an O(nBins) walk each time
+ * for an answer that cannot change while the file is open. `WeakMap` because the
+ * lifetime that matters is the reader's, and it is the reader that gets dropped.
  */
+const BIN_UNITS = new WeakMap<MetaCooler, { contig?: Int32Array; genome?: Int32Array }>()
+
+function memo(mc: MetaCooler): { contig?: Int32Array; genome?: Int32Array } {
+  let slot = BIN_UNITS.get(mc)
+  if (slot === undefined) {
+    slot = {}
+    BIN_UNITS.set(mc, slot)
+  }
+  return slot
+}
+
 export function binContigArray(mc: MetaCooler): Int32Array {
-  return mc.coords.contigsOfBins(0, mc.nBins)
+  const slot = memo(mc)
+  slot.contig ??= mc.coords.contigsOfBins(0, mc.nBins)
+  return slot.contig
 }
 
 export function binGenomeArray(mc: MetaCooler): Int32Array {
-  const contigs = mc.coords.contigsOfBins(0, mc.nBins)
-  const out = new Int32Array(contigs.length)
-  for (let i = 0; i < contigs.length; i++) out[i] = mc.contigGenomeIds[contigs[i]]
-  return out
+  const slot = memo(mc)
+  if (slot.genome === undefined) {
+    // Written in place over the contig ids rather than into a second array:
+    // `contigsOfBins` mints a fresh buffer for this call, the mapping is
+    // position-wise, and the intermediate was 1.7 MB of immediate garbage.
+    const out = mc.coords.contigsOfBins(0, mc.nBins)
+    const genomeOf = mc.contigGenomeIds
+    for (let i = 0; i < out.length; i++) out[i] = genomeOf[out[i]]
+    slot.genome = out
+  }
+  return slot.genome
 }

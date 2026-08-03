@@ -28,7 +28,15 @@ describe('yieldToEventLoop', () => {
     for (let i = 0; i < 1000; i++) await Promise.resolve()
     expect(delivered).toBe(false)
 
-    await yieldToEventLoop()
+    // Bounded rather than exactly one turn. In a worker — the environment that
+    // matters — a channel message and a 0 ms timer share one task queue and are
+    // delivered in insertion order, so one turn always suffices. Node runs
+    // channel messages in the check phase and timers in the timers phase, so
+    // which comes first depends on where in the loop the yield lands, and
+    // asserting one turn made this test fail about once in three runs. The
+    // regression is intact: the microtask spelling above never delivers, however
+    // many turns it is given.
+    for (let i = 0; i < 5 && !delivered; i++) await yieldToEventLoop()
     expect(delivered).toBe(true)
   })
 
