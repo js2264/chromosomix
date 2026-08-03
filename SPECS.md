@@ -363,6 +363,12 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported.
 
+**The figure saves as PNG or PDF at a chosen DPI.** It is re-rendered at that resolution through the
+same drawing code rather than screen-grabbed, so the labels and hairlines are drawn rather than
+enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one page holding
+one lossless image, written by the app; its page size in points is derived from the CSS size, so the
+DPI is a fact about the paper rather than a name.
+
 ### 7.3 Genome × genome overview — gated, not default
 
 Available, but never automatic, because it costs a full pixel scan (§4):

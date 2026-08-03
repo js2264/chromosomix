@@ -126,7 +126,7 @@ export class GenomeView {
         'div',
         { class: 'genome-body' },
         this.panel.el,
-        el('aside', { class: 'side' }, this.panel.controlsEl, this.contigBox),
+        el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl, this.contigBox),
       ),
     )
 

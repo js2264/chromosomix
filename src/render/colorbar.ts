@@ -194,7 +194,8 @@ function detectDpr(): number {
  */
 export class ColorbarView {
   private readonly canvas: HTMLCanvasElement
-  private readonly ctx: CanvasRenderingContext2D
+  /** Not `readonly`: {@link renderTo} borrows it for one draw, as the heatmap does. */
+  private ctx: CanvasRenderingContext2D
   private readonly opts: ResolvedColorbarOptions
   private scale: ColorScale
   private cssWidth = 0
@@ -233,6 +234,25 @@ export class ColorbarView {
   /** The ticks {@link draw} will render. Exposed for a DOM-based legend. */
   ticks(): ColorbarTick[] {
     return colorbarTicks(this.scale, this.opts.maxTicks)
+  }
+
+  /** Draw into another context at `scale` device pixels per CSS pixel. */
+  renderTo(ctx: CanvasRenderingContext2D, scale: number): void {
+    const previousCtx = this.ctx
+    const previousDpr = this.dpr
+    this.ctx = ctx
+    this.dpr = scale
+    try {
+      this.draw()
+    } finally {
+      this.ctx = previousCtx
+      this.dpr = previousDpr
+    }
+  }
+
+  /** The canvas size, in CSS pixels — what an export has to allocate. */
+  get cssSize(): { width: number; height: number } {
+    return { width: this.cssWidth, height: this.cssHeight }
   }
 
   /** Re-read the canvas's CSS size and resize its backing store. */

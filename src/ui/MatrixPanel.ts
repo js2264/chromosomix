@@ -41,7 +41,16 @@ import { inverseTransform } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
-import { el, field, fmt } from './dom'
+import { button, el, field, fmt } from './dom'
+import {
+  CSS_DPI,
+  EXPORT_DPI_CHOICES,
+  canvasToPdf,
+  canvasToPng,
+  downloadBlob,
+  exportBaseName,
+  scaleForDpi,
+} from './export'
 import { setReadout } from './readout'
 import {
   PLOT_OPTION_LABELS,
@@ -104,6 +113,15 @@ export class MatrixPanel {
    * places it. Wired either way — the panel keeps the listeners.
    */
   readonly controlsEl: HTMLElement
+  /**
+   * The plot card: overlays, the fit control and the export.
+   *
+   * Separate from the colour card because the two answer different questions —
+   * one is *what the numbers look like*, the other *what the figure does* — and
+   * because every view mounts this one identically, which is the whole of "the
+   * same plotting options everywhere".
+   */
+  readonly plotEl: HTMLElement
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
@@ -113,11 +131,14 @@ export class MatrixPanel {
   private readonly titleNode: HTMLElement
   private readonly clip: ClipRange
   private readonly overlay: HTMLElement
-  private readonly plotOptionsEl: HTMLElement
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
   private readonly unsubscribePlotOptions: () => void
   private readonly themeWatchers: () => void
   private readonly observer: ResizeObserver | null
+  private readonly exportStatus: HTMLElement
+  private exportDpi = 300
+  /** What the figure is called, for the download name. */
+  private exportName = 'contact-map'
 
   private data: MatrixResult | null = null
   private transform: Transform
@@ -228,16 +249,58 @@ export class MatrixPanel {
       return node
     }
 
-    this.plotOptionsEl = el(
+    const dpiSelect = el('select', { class: 'select' })
+    for (const dpi of EXPORT_DPI_CHOICES) {
+      dpiSelect.appendChild(
+        el('option', { value: String(dpi), text: dpi === CSS_DPI ? `${dpi} (screen)` : `${dpi}` }),
+      )
+    }
+    dpiSelect.value = String(this.exportDpi)
+    dpiSelect.addEventListener('change', () => {
+      this.exportDpi = Number(dpiSelect.value)
+    })
+    this.exportStatus = el('span', { class: 'clip-note export-note' })
+
+    this.plotEl = el(
       'div',
-      { class: 'plot-options' },
-      el('span', { class: 'field-label', text: 'overlays' }),
+      { class: 'controls-card' },
+      el('h3', { class: 'controls-title', text: 'Plot' }),
       el(
         'div',
-        { class: 'plot-option-row' },
-        optionToggle('crosshair'),
-        optionToggle('dividers'),
-        optionToggle('labels'),
+        { class: 'panel-controls' },
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'overlays' }),
+          el(
+            'div',
+            { class: 'plot-option-row' },
+            optionToggle('crosshair'),
+            optionToggle('dividers'),
+            optionToggle('labels'),
+            optionToggle('ticks'),
+          ),
+        ),
+        button('fit to view', () => this.fit(), {
+          class: 'btn btn-wide',
+          title: 'Undo every pan and zoom (key: 0, or a double click on the plot)',
+        }),
+        field('export at', dpiSelect, 'Dots per inch of the saved image. 96 is what is on screen.'),
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'save as' }),
+          el(
+            'div',
+            { class: 'plot-option-row' },
+            button('PNG', () => void this.save('png'), { class: 'btn', title: 'Save the figure as a PNG' }),
+            button('PDF', () => void this.save('pdf'), {
+              class: 'btn',
+              title: 'Save the figure as a one-page PDF, at the same resolution',
+            }),
+          ),
+        ),
+        this.exportStatus,
       ),
     )
     this.paintPlotOptions(getPlotOptions())
@@ -282,7 +345,6 @@ export class MatrixPanel {
       { class: 'controls-card' },
       el('h3', { class: 'controls-title', text: 'View' }),
       el('div', { class: 'panel-controls' }, ...controls),
-      this.plotOptionsEl,
     )
 
     const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay, this.tooltip)
@@ -307,7 +369,7 @@ export class MatrixPanel {
               'header',
               { class: 'panel-head' },
               ...(options.hideTitle === true ? [] : [this.titleNode]),
-              ...(options.detachedControls === true ? [] : [this.controlsEl]),
+              ...(options.detachedControls === true ? [] : [this.controlsEl, this.plotEl]),
             ),
           ]),
       body,
@@ -356,9 +418,92 @@ export class MatrixPanel {
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
   }
 
+  /** Refit the block to the canvas, undoing every pan and zoom. */
+  fit(): void {
+    this.heatmap.fit()
+    this.schedule()
+  }
+
+  /**
+   * The figure as one canvas: the plot with its legend beside it, on an opaque
+   * page background, at `dpi` dots per inch.
+   *
+   * Composed from the two live views rather than copied off the screen — each
+   * redraws itself into this canvas at the export scale, so the labels, the
+   * hairlines and the tick marks are drawn at that resolution instead of being
+   * enlarged. What is *framed* is whatever is framed on screen, pan and zoom
+   * included.
+   */
+  exportCanvas(dpi: number): HTMLCanvasElement {
+    const scale = scaleForDpi(dpi)
+    const plot = this.heatmap.cssSize
+    const bar = this.colorbar.cssSize
+    const gap = 10
+    const width = plot.width + gap + bar.width
+    const height = Math.max(plot.height, bar.height)
+
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * scale))
+    out.height = Math.max(1, Math.round(height * scale))
+    const ctx = out.getContext('2d')
+    if (ctx === null) throw new Error('Could not acquire a 2d context for the export canvas.')
+
+    // The plot draws from the canvas origin and clears as it goes, so it goes
+    // first and the background goes on underneath at the end.
+    this.heatmap.renderTo(ctx, scale)
+
+    // The legend renders into a canvas of its own and is then placed, because
+    // `renderTo` also draws from the origin — there is nowhere to pass an
+    // offset, and giving it one would be a second coordinate system for the
+    // benefit of this one caller.
+    const barCanvas = document.createElement('canvas')
+    barCanvas.width = Math.max(1, Math.round(bar.width * scale))
+    barCanvas.height = Math.max(1, Math.round(bar.height * scale))
+    const barCtx = barCanvas.getContext('2d')
+    if (barCtx !== null) this.colorbar.renderTo(barCtx, scale)
+    // In device pixels: `renderTo` leaves the heatmap's own scale on the
+    // context, and drawing the legend through that would put it at 3× its
+    // offset, which is off the canvas entirely.
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.drawImage(barCanvas, Math.round((plot.width + gap) * scale), 0)
+
+    // Opaque, and in the theme on screen. A transparent PNG of a white-on-white
+    // contact map is a blank rectangle in every viewer that composites onto
+    // black, and the labels are drawn in the page's own text colour. Painted
+    // *behind* what is already there — `#ffffff` first, so an unreadable
+    // custom property leaves a white page rather than a black one.
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
+  }
+
+  /** Save the figure. The status line under the buttons reports what happened. */
+  private async save(format: 'png' | 'pdf'): Promise<void> {
+    const name = `${exportBaseName(this.exportName)}-${this.exportDpi}dpi.${format}`
+    this.exportStatus.textContent = `saving ${name}…`
+    try {
+      const canvas = this.exportCanvas(this.exportDpi)
+      const blob =
+        format === 'png'
+          ? await canvasToPng(canvas)
+          : await canvasToPdf(canvas, { dpi: this.exportDpi, title: this.exportName })
+      downloadBlob(blob, name)
+      this.exportStatus.textContent = `${name} · ${fmt.bytes(blob.size)}`
+    } catch (err) {
+      // Nothing here is worth an error screen: the view is intact and the user
+      // can try a smaller size. Say what failed and stay put.
+      this.exportStatus.textContent =
+        err instanceof Error ? `export failed: ${err.message}` : 'export failed'
+    }
+  }
+
   /** Load a block. `HeatmapView` refits and recomputes the auto range (§7.1). */
   setData(data: MatrixResult, title: string): void {
     this.data = data
+    this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
     this.heatmap.setMatrix(toDense(data), separatorsFor(data))
     this.heatmap.setAxisCoords({
@@ -610,6 +755,12 @@ function readCanvasPalette(): {
     labelHaloColor: pick('--bg', '#ffffff'),
     plotBorderColor: pick('--border-strong', '#b9bec5'),
   }
+}
+
+/** The page colour an export is flattened onto — the theme in force. */
+function readPageBackground(): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+  return value === '' ? '#ffffff' : value
 }
 
 /**

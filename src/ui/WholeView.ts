@@ -99,7 +99,7 @@ export class WholeView {
         'div',
         { class: 'genome-body' },
         this.panel.el,
-        el('aside', { class: 'side' }, this.panel.controlsEl),
+        el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl),
       ),
     )
 
@@ -122,7 +122,7 @@ export class WholeView {
           ? await client.request<'matrix'>({ kind: 'matrix', rows, balance })
           : await client.request<'aggregate'>({ kind: 'aggregate', rows, level: 'contig', balance })
       if (this.disposed) return
-      this.panel.setData(result, '')
+      this.panel.setData(result, 'whole-genome')
       this.summary.textContent =
         `${fmt.int(nBins)} bins across ${fmt.int(result.rowGroups.length)} ${noun}s · ` +
         `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells rendered` +

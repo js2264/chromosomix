@@ -120,7 +120,7 @@ export class RegionView {
         this.matched,
         this.problem,
       ),
-      el('div', { class: 'genome-body' }, this.panel.el, el('aside', { class: 'side' }, this.panel.controlsEl)),
+      el('div', { class: 'genome-body' }, this.panel.el, el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)),
     )
 
     void this.load()

@@ -102,6 +102,7 @@ export class PairView {
           'aside',
           { class: 'side' },
           this.panel.controlsEl,
+          this.panel.plotEl,
           el(
             'section',
             { class: 'card' },
@@ -152,7 +153,7 @@ export class PairView {
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
-      this.panel.setData(result, '')
+      this.panel.setData(result, `${this.props.rowGenome}-x-${this.props.colGenome}`)
       this.renderSummary(result)
     } catch (err) {
       this.props.onError(err)

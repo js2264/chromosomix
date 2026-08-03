@@ -595,7 +595,13 @@ function detectDpr(): number {
  */
 export class HeatmapView {
   private readonly canvas: HTMLCanvasElement
-  private readonly ctx: CanvasRenderingContext2D
+  /**
+   * Where the picture goes. Not `readonly`: {@link renderTo} points it at
+   * another canvas for the length of one draw, which is what lets an export be
+   * the same drawing code at a different resolution rather than a second
+   * implementation that can drift from this one.
+   */
+  private ctx: CanvasRenderingContext2D
   private readonly opts: ResolvedOptions
   private readonly onChange: (() => void) | null
   private readonly onCellClick: ((cell: Cell) => void) | null
@@ -1142,6 +1148,34 @@ export class HeatmapView {
     if (this.plot.crosshair) this.drawCrosshair()
     this.drawSelection()
     this.drawPlotBorder()
+  }
+
+  /**
+   * Draw the current view into another context at `scale` device pixels per CSS
+   * pixel — the export path.
+   *
+   * The layout does not move: the same margins, the same zoom, the same pan,
+   * the same visible range. Only the density changes, so a 300 dpi PNG has
+   * sharper labels and hairlines rather than a wider picture. The raster itself
+   * is at matrix resolution and independent of this, so nothing is
+   * re-rasterised either.
+   */
+  renderTo(ctx: CanvasRenderingContext2D, scale: number): void {
+    const previousCtx = this.ctx
+    const previousDpr = this.dpr
+    this.ctx = ctx
+    this.dpr = scale
+    try {
+      this.draw()
+    } finally {
+      this.ctx = previousCtx
+      this.dpr = previousDpr
+    }
+  }
+
+  /** The canvas size the export needs, in CSS pixels. */
+  get cssSize(): { width: number; height: number } {
+    return { width: this.cssWidth, height: this.cssHeight }
   }
 
   /**

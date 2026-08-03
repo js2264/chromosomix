@@ -1024,8 +1024,37 @@ p {
   gap: 0.4rem;
 }
 
+/* A row whose control is a group rather than one box — the overlay buttons, the
+   save buttons — puts its label on its own line and gives the group the full
+   width. Four toggles squeezed into a 7rem value column wrapped one per line
+   and left the word "overlays" floating against a three-line stack. */
+.controls-card .field-block {
+  display: block;
+}
+
+.controls-card .field-block > .field-label {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
 .controls-card .select,
 .controls-card .input-num {
+  width: 100%;
+}
+
+/* A checkbox is the one control that must not stretch: `width: 100%` on it
+   draws a 7rem square in some browsers and a lonely 13px box pinned to the far
+   right in the rest. It sits at the head of its column, level with its label. */
+.controls-card .field > .checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  justify-self: start;
+}
+
+/* Full-width actions ("fit to view"), so a card reads as a column of rows
+   rather than a column with one shrink-wrapped button in it. */
+.btn-wide {
   width: 100%;
 }
 
@@ -1050,25 +1079,23 @@ p {
   grid-template-columns: none;
 }
 
-/* Overlay toggles take the same two-column shape as a field, so the card reads
-   as one list whether a row holds a select or three buttons. */
-.plot-options {
-  display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-}
-
+/* Toggles and actions in even columns: four overlays land as a 2 × 2 block
+   instead of wrapping 1 / 1 / 2 down the side of the card. */
 .plot-option-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
-.panel-head > .controls-card .plot-options {
+.panel-head .plot-option-row {
   display: flex;
-  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+/* The last line of the plot card: what was saved, or why it was not. */
+.export-note {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .btn-toggle {
