@@ -127,10 +127,19 @@ export class AnnotationLanes {
     this.layouts.clear()
   }
 
-  /** Forget one entry's samples; called when it is removed or reloaded. */
-  forget(id: string): void {
+  /**
+   * Drop cached samples for entries that are no longer in the store.
+   *
+   * Done here rather than through a removal event, because the cache is a
+   * *derived* thing and the store is the truth: reconciling against it once per
+   * frame cannot go stale, whereas an event that is not sent leaks a track's
+   * worth of typed arrays for as long as the file is open.
+   */
+  private prune(): void {
+    if (this.cache.size === 0) return
+    const live = new Set(this.options.store.entries.map((entry) => entry.id))
     for (const key of [...this.cache.keys()]) {
-      if (key.startsWith(`${id}:`)) this.cache.delete(key)
+      if (!live.has(key.slice(0, key.lastIndexOf(':')))) this.cache.delete(key)
     }
   }
 
@@ -233,6 +242,7 @@ export class AnnotationLanes {
     right: Lane[]
     groups: Map<string, { min: number; max: number }>
   } {
+    this.prune()
     const bottom = this.buildEdge('bottom', geometry)
     const right = this.buildEdge('right', geometry)
 

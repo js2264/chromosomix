@@ -12,6 +12,10 @@
 
 import './ui/styles.css'
 
+import { AnnotationLoader } from './annotations/loader'
+import { ManualStore } from './annotations/manual'
+import { AnnotationStore } from './annotations/store'
+import { AnnotationClient } from './annotations/worker/client'
 import { UNBINNED_NAME } from './constants'
 import { ViewerError } from './errors'
 import {
@@ -25,7 +29,10 @@ import { recall, remember } from './state/UiMemory'
 import type { Transform, ViewState } from './types'
 import { ReaderClient } from './worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from './worker/protocol'
+import { AnnotationCard } from './ui/AnnotationCard'
 import { Breadcrumb } from './ui/Breadcrumb'
+import { ManualCard, type MapPicker } from './ui/ManualCard'
+import type { AnnotationContext, MatrixPanel } from './ui/MatrixPanel'
 import { openCommandPalette } from './ui/CommandPalette'
 import { ContigsTable } from './ui/ContigsTable'
 import { ErrorView } from './ui/ErrorView'
@@ -103,7 +110,22 @@ class App {
   private overview: Overview | null = null
   private showingOverview = false
   private opening: string | null = null
-  private current: { destroy?(): void; applyScale?(scale: ScaleState): void } | null = null
+  private current: {
+    destroy?(): void
+    applyScale?(scale: ScaleState): void
+    /** Present on the heatmap views; the manual card places marks through it. */
+    panel?: MatrixPanel
+  } | null = null
+  /**
+   * Everything annotations need, for the file that is open (spec §8).
+   *
+   * Held by the shell rather than by a view, because a view is rebuilt on every
+   * navigation and ten loaded tracks must not be: leaving a region for the
+   * contigs table and coming back has to return to the same picture. `null` on
+   * a `.metacool`, which is the whole of §8.5's gate.
+   */
+  private annotations: FileAnnotations | null = null
+  private manualCard: ManualCard | null = null
   /**
    * The state the mounted view was built for.
    *
@@ -583,6 +605,9 @@ class App {
           ),
       })
       this.infoPanel = new InfoPanel({ info })
+      // Before the sidebar is mounted, so the cards are there on the first paint
+      // rather than appearing a frame later.
+      await this.setUpAnnotations(uri, info)
       this.sideHost.replaceChildren(this.infoPanel.el)
       this.sidebar.setAvailable(true)
       this.status.reset()
@@ -625,6 +650,86 @@ class App {
     } finally {
       this.opening = null
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Annotations (spec §8)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build the annotation stores and cards for a newly opened file, or tear the
+   * previous file's down.
+   *
+   * The gate is one line and it is §8.5's: a file with a genome layer gets
+   * nothing — no cards, no worker, no listeners. The reason is not effort. A
+   * metacool's axis is contigs from thousands of independently assembled
+   * organisms, so a GTF or a bigWig keyed on contig names either coincides or
+   * misleads, and drawing a gene model across a MAG boundary would assert a
+   * coordinate system that does not exist.
+   */
+  private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
+    this.annotations?.client.destroy()
+    this.annotations = null
+    this.manualCard = null
+    if (info.hasGenomes) {
+      this.infoPanel?.setAnnotationCards([])
+      return
+    }
+
+    // The contigs table is what every annotation is matched against — by name,
+    // for the §8.2 overlap report, and by length, so an aggregated axis knows
+    // how long one cell is. It is read once per file and cached, so this is the
+    // only place that pays for it.
+    const contigs = await this.contigs().catch(() => null)
+    const names = contigNames(contigs)
+    const lengths = contigLengths(contigs)
+
+    const store = new AnnotationStore(uri)
+    const manual = new ManualStore(uri)
+    const client = new AnnotationClient()
+    const loader = new AnnotationLoader(store, client, names)
+    this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
+
+    const picker: MapPicker = {
+      available: () => this.current?.panel !== undefined,
+      pick: (count) =>
+        new Promise((resolve) => {
+          const panel = this.current?.panel
+          if (panel === undefined) {
+            resolve(null)
+            return
+          }
+          panel.armPicking(
+            count,
+            (points) => resolve(points),
+            () => resolve(null),
+          )
+        }),
+    }
+    this.manualCard = new ManualCard({ store: manual, picker })
+
+    this.infoPanel?.setAnnotationCards([
+      new AnnotationCard({ card: 'linear', store, loader }).el,
+      new AnnotationCard({ card: 'overlay', store, loader }).el,
+      this.manualCard.el,
+    ])
+
+    // What a previous visit to this file left in session storage (§8.6). After
+    // the cards are mounted, so the restored rows land in a list that exists.
+    loader.restore(AnnotationStore.stored(uri))
+  }
+
+  /** The context a heatmap view hands to its panel, or `undefined`. */
+  private annotationContext(): AnnotationContext | undefined {
+    const held = this.annotations
+    return held === null
+      ? undefined
+      : {
+          store: held.store,
+          manual: held.manual,
+          client: held.client,
+          contigLength: held.contigLength,
+        }
   }
 
   /**
@@ -730,6 +835,12 @@ class App {
       this.file = null
       this.mounted = null
       this.breadcrumb = null
+      // The annotation worker belongs to the open file, and there is no longer
+      // one. Its cache is megabytes of parsed features; leaving it running would
+      // hold them until the tab closed.
+      this.annotations?.client.destroy()
+      this.annotations = null
+      this.manualCard = null
       this.sideHost.replaceChildren()
       this.sidebar.setAvailable(false)
       this.showContent(this.picker.el)
@@ -1000,6 +1111,7 @@ class App {
       // sequence, where every level is a single cell.
       offerLevel: file.info.nContigs > 1,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+      ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onBalanceChange: (balance) => this.setBalance(balance),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
@@ -1094,6 +1206,7 @@ class App {
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
+      ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       balance: this.balanceOf(state),
       hasWeights: this.file?.info.hasWeights === true,
       onBalanceChange: (balance) => this.setBalance(balance),
@@ -1196,10 +1309,14 @@ class App {
 
   private showContent(
     node: HTMLElement,
-    view?: { destroy?(): void; sideEl?: HTMLElement },
+    view?: { destroy?(): void; sideEl?: HTMLElement; panel?: MatrixPanel },
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
+    // "Click the map" is only offered while there is a map. A table view has
+    // none, and a button that arms a gesture nothing can complete is worse than
+    // one that is plainly unavailable.
+    this.manualCard?.refresh()
     this.content.replaceChildren(node)
     // Emptied rather than hidden when a view has no controls: `:empty` is what
     // takes the column's width back for the table views.
@@ -1324,4 +1441,40 @@ if (root !== null) {
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
   }
   new App(root)
+}
+
+/**
+ * The annotation machinery for one open file.
+ *
+ * Bundled because the four pieces have exactly one lifetime between them: the
+ * file. Opening another replaces all four, and closing one destroys all four.
+ */
+interface FileAnnotations {
+  store: AnnotationStore
+  manual: ManualStore
+  client: AnnotationClient
+  loader: AnnotationLoader
+  contigLength(name: string): number | undefined
+}
+
+/** Contig names from the contigs table, or `[]` if it could not be read. */
+function contigNames(contigs: ContigsResult | null): string[] {
+  const column = contigs?.table.data['name']
+  return Array.isArray(column) ? (column as string[]) : []
+}
+
+/**
+ * Contig lengths by name.
+ *
+ * A `Map` rather than a pair of parallel arrays because every consumer looks up
+ * by name — an annotation file knows what it calls a contig and nothing about
+ * the row it sits on.
+ */
+function contigLengths(contigs: ContigsResult | null): Map<string, number> {
+  const out = new Map<string, number>()
+  const names = contigNames(contigs)
+  const lengths = contigs?.table.data['length']
+  if (names.length === 0 || lengths === undefined || Array.isArray(lengths)) return out
+  for (let i = 0; i < names.length; i++) out.set(names[i], Number(lengths[i]))
+  return out
 }

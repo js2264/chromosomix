@@ -1069,6 +1069,13 @@ p {
   cursor: grabbing;
 }
 
+/* While a manual annotation is waiting for its coordinates, a click places a
+   mark rather than opening what it lands on. The cursor is the only warning the
+   plot itself can give that the same gesture now means something else. */
+.heatmap-canvas.picking {
+  cursor: crosshair;
+}
+
 /* Over an axis label, which opens what it names. The pointing hand is the one
    thing on a page that says "this is a link" without a word of explanation, and
    a label is the only part of a canvas that is one. */
@@ -2194,4 +2201,322 @@ p {
   .table {
     height: calc(100vh - 12rem);
   }
+}
+
+/* --- annotations (spec §8) --------------------------------------------- */
+
+/* The three cards sit between the record card and Binning QC. `:empty`
+   collapses the host on a `.metacool`, where there are no cards at all — §8.5's
+   "not rendered", rather than a disabled card nobody can enable. */
+.annotation-host {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.annotation-host:not(:empty) {
+  margin-top: 0.6rem;
+}
+
+.annotation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.annotation-card > .hint {
+  margin: 0;
+}
+
+/* One row per drop area, because their labels are what says which file goes
+   where and a grid of two would truncate them. */
+.drop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ann-drop {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.ann-drop:hover,
+.ann-drop:focus-visible {
+  border-color: var(--accent, #1f5fa9);
+  background: var(--bg-sunken);
+}
+
+/* The drag is over this zone rather than over one of its neighbours: the whole
+   card is a drop target from the pointer's point of view, so the highlight has
+   to say which of the three would take the file. */
+.ann-drop.over {
+  border-style: solid;
+  border-color: var(--accent, #1f5fa9);
+  background: color-mix(in srgb, var(--accent, #1f5fa9) 12%, var(--bg));
+}
+
+.ann-drop-label {
+  font-weight: 600;
+  font-size: var(--step--1);
+}
+
+.ann-drop-hint {
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.ann-url > summary {
+  cursor: pointer;
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+}
+
+.ann-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.ann-url-row > .input {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.ann-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ann-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.4rem;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ann-row.ann-error {
+  border-color: color-mix(in srgb, #c0392b 45%, var(--border));
+}
+
+.ann-row.ann-loading,
+.ann-row.ann-detached {
+  opacity: 0.85;
+}
+
+.ann-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* The colour is the annotation's identity on the plot, so it is the first thing
+   in its row — the row is found by matching it to the lane, not by reading. */
+.ann-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  border: 1px solid var(--border-strong);
+  flex: 0 0 auto;
+}
+
+.ann-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ann-name:hover {
+  text-decoration: underline;
+}
+
+.ann-edges {
+  display: flex;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.ann-edge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.ann-edge .checkbox {
+  margin: 0;
+}
+
+.ann-eye {
+  padding: 0 0.25rem;
+  line-height: 1.1;
+  flex: 0 0 auto;
+}
+
+.ann-note {
+  margin: 0;
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+/* An overlap warning is the §8.2 requirement made visible: a file whose contigs
+   do not match the map looks exactly like a broken feature, so it must never be
+   quiet about it. */
+.ann-warn {
+  margin: 0;
+  font-size: var(--step--2, 0.72rem);
+  line-height: 1.3;
+  color: #b06000;
+  background: color-mix(in srgb, #e69f00 14%, transparent);
+  border-radius: 3px;
+  padding: 0.2rem 0.3rem;
+}
+
+.ann-detached {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.ann-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.3rem;
+}
+
+.ann-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ann-field > .field-label {
+  flex: 0 0 3.6rem;
+}
+
+.ann-field > .select,
+.ann-field > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ann-colour {
+  width: 1.8rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ann-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ann-limits {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ann-limits > .input-num {
+  flex: 1 1 3rem;
+  min-width: 0;
+}
+
+.ann-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+/* --- manual annotations ------------------------------------------------ */
+
+.manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.manual-form-title {
+  font-size: var(--step--2, 0.72rem);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.manual-row {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.manual-row > .input,
+.manual-row > .select,
+.manual-row > .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A coordinate that did not parse. Marked rather than replaced with an error
+   line, because the box still holds what was typed and the fix is usually one
+   character. */
+.input.is-bad {
+  border-color: #c0392b;
+}
+
+/* Armed, and waiting for a click on the plot. */
+.btn.is-armed {
+  border-color: var(--accent, #1f5fa9);
+  background: color-mix(in srgb, var(--accent, #1f5fa9) 16%, var(--bg));
+}
+
+.manual-where {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-label {
+  width: 100%;
+  font-size: var(--step--2, 0.72rem);
 }

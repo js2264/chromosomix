@@ -153,6 +153,10 @@ export function drawSegments(
   layout: FeatureLayout,
   paint: FeaturePaint,
 ): void {
+  if (layout.dense) {
+    drawDensity(ctx, frame, layout, paint)
+    return
+  }
   const rowHeight = frame.thickness / layout.rows
   const boxHeight = Math.max(3, rowHeight - 2)
   ctx.save()
@@ -193,6 +197,10 @@ export function drawGenes(
   layout: FeatureLayout,
   paint: FeaturePaint,
 ): void {
+  if (layout.dense) {
+    drawDensity(ctx, frame, layout, paint)
+    return
+  }
   const rowHeight = frame.thickness / layout.rows
   const exonHeight = Math.max(3, Math.min(9, rowHeight * 0.5))
   const cdsHeight = Math.max(exonHeight + 2, Math.min(13, rowHeight * 0.78))
@@ -272,6 +280,62 @@ export function drawGenes(
     drawStrandMarks(ctx, frame, set, layout, paint, rowHeight)
     if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
+  ctx.restore()
+}
+
+/**
+ * The zoomed-out picture: how many features cover each pixel.
+ *
+ * Boxes are the wrong answer once there are more features than pixels — every
+ * pixel is covered, so the lane is a solid bar and says only "there are genes
+ * here", which for a gene-dense genome is not news. A count profile says
+ * *how many*, which is the question that still has an answer at this zoom, and
+ * it costs one pass over placements that have already been computed.
+ *
+ * Scaled to the busiest pixel in view rather than to a fixed ceiling: the lane
+ * is a picture of relative density across what is on screen, and it rescales as
+ * the view moves for the same reason a track's autoscale does.
+ */
+function drawDensity(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  layout: FeatureLayout,
+  paint: FeaturePaint,
+): void {
+  const from = Math.floor(Math.min(frame.alongFrom, frame.alongTo))
+  const slots = Math.max(1, Math.ceil(Math.abs(frame.alongTo - frame.alongFrom)) + 1)
+  const counts = new Float32Array(slots)
+  let peak = 0
+  for (const placement of layout.placements) {
+    const first = Math.max(0, Math.floor(placement.along0 - from))
+    const last = Math.min(slots - 1, Math.ceil(placement.along1 - from) - 1)
+    for (let slot = first; slot <= last; slot++) {
+      counts[slot]++
+      if (counts[slot] > peak) peak = counts[slot]
+    }
+  }
+  if (peak <= 0) return
+
+  const base = valueAcross(frame, 0)
+  ctx.save()
+  ctx.globalAlpha = paint.opacity
+  ctx.fillStyle = paint.colour
+  ctx.beginPath()
+  for (let slot = 0; slot < slots; slot++) {
+    if (counts[slot] === 0) continue
+    // A floor of one twelfth, so a pixel with a single feature under a busy
+    // neighbour is still visible rather than rounded away to nothing.
+    const height = Math.max(counts[slot] / peak, 1 / 12)
+    const [x, y, width, boxHeight] = laneRect(
+      frame,
+      from + slot,
+      from + slot + 1,
+      base,
+      valueAcross(frame, height),
+    )
+    ctx.rect(x, y, width, boxHeight)
+  }
+  ctx.fill()
   ctx.restore()
 }
 

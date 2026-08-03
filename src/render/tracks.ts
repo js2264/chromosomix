@@ -19,6 +19,7 @@
 
 import { valueAcross, laneRect, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
+import { percentileOf } from './scale'
 import type { Limits, TrackSampleSet, ValueScaling } from '../annotations/types'
 
 /**
@@ -39,9 +40,37 @@ export interface PixelProfile {
   high: Float32Array
   /** `true` when `low`/`high` are a genuine envelope rather than copies of the mean. */
   envelope: boolean
-  /** Extent over the drawn pixels only — what "autoscale to what is in view" means. */
+  /**
+   * What "autoscale to what is in view" resolves to.
+   *
+   * Neither the means' range nor the envelope's, but a considered compromise
+   * between them, because both extremes are wrong in a way that is easy to see
+   * on a whole-genome view of a real ATAC track:
+   *
+   * - **The envelope's maximum** is whatever single base was highest inside a
+   *   13 kb pixel. Scaling to it flattens every track in the file onto its own
+   *   baseline — the first version did this, and the picture was unreadable.
+   * - **The means' maximum** puts the line at full height and leaves the
+   *   envelope clipped over the entire lane, so a peaky track paints as one
+   *   solid block — the second version did this, which was no better.
+   *
+   * So the ceiling is the {@link ENVELOPE_PERCENTILE}th percentile of the
+   * per-pixel maxima, raised if necessary to fit the largest mean. The drawn
+   * line therefore always fits, the envelope fits except for its extreme tail,
+   * and a handful of outlier bases cannot decide the scale of the whole track.
+   */
   extent: { min: number; max: number } | null
 }
+
+/**
+ * Where the autoscale's ceiling sits in the per-pixel maxima.
+ *
+ * High enough that the envelope is genuinely informative rather than clipped
+ * flat, low enough that one saturated base in a 12 Mb genome does not set the
+ * scale. Same spirit as §7.1's 99th-percentile `vmax` for the matrix, and a
+ * little more forgiving because a track's outliers are single bases.
+ */
+export const ENVELOPE_PERCENTILE = 98
 
 /**
  * Reduce samples to one value per pixel.
@@ -110,15 +139,19 @@ export function profileOf(
 
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
+  let drawn = 0
   for (let slot = 0; slot < slots; slot++) {
     if (weight[slot] <= 0) continue
     const value = sum[slot] / weight[slot]
     mean[slot] = value
     if (Number.isNaN(low[slot])) low[slot] = value
     if (Number.isNaN(high[slot])) high[slot] = value
+    if (value < min) min = value
+    if (value > max) max = value
     if (low[slot] < min) min = low[slot]
-    if (high[slot] > max) max = high[slot]
+    drawn++
   }
+  if (drawn === 0) return empty
 
   return {
     from,
@@ -126,8 +159,25 @@ export function profileOf(
     low,
     high,
     envelope,
-    extent: min <= max ? { min, max } : null,
+    extent: { min, max: Math.max(max, ceilingOf(high, drawn)) },
   }
+}
+
+/**
+ * The {@link ENVELOPE_PERCENTILE}th percentile of the per-pixel maxima.
+ *
+ * Quickselect over a scratch copy, as the matrix's own `vmax` rule does: two
+ * order statistics out of a few hundred values is not worth a sort, and this
+ * runs once per lane per view change.
+ */
+function ceilingOf(high: Float32Array, drawn: number): number {
+  const kept = new Float32Array(drawn)
+  let at = 0
+  for (let slot = 0; slot < high.length && at < drawn; slot++) {
+    if (Number.isFinite(high[slot])) kept[at++] = high[slot]
+  }
+  if (at === 0) return Number.NEGATIVE_INFINITY
+  return percentileOf(kept.subarray(0, at) as Float32Array, ENVELOPE_PERCENTILE)
 }
 
 // ---------------------------------------------------------------------------

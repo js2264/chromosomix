@@ -23,11 +23,19 @@
  * it is the only thing that can move it coherently.
  */
 
+import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
-import { locusAxisFrom } from '../render/locus'
+import { locusAxisFrom, type LocusAxis } from '../render/locus'
+import {
+  drawArrowheads,
+  drawDiagonalFeatures,
+  drawManualLines,
+  drawPairs,
+  type OverlayFrame,
+} from '../render/overlays'
 import { AnnotationLanes, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
 import {
   COLORMAP_NAMES,
@@ -193,6 +201,7 @@ export interface MatrixPanelOptions {
 /** What the panel needs to draw annotations against this file. */
 export interface AnnotationContext {
   store: AnnotationStore
+  manual: ManualStore
   client: AnnotationClient
   /**
    * A contig's length in base pairs, from the contigs table.
@@ -263,6 +272,22 @@ export class MatrixPanel {
   private readonly grid: HTMLElement
   /** The cell under the pointer, so the lanes can continue the crosshair. */
   private hoverCell: Cell | null = null
+  /**
+   * The two axes as annotations see them, rebuilt with every block.
+   *
+   * Held here rather than only inside {@link lanes}, because the overlays and
+   * the click-to-place picker need them too — and three copies of the same
+   * mapping is exactly what §8.4 exists to prevent.
+   */
+  private locusAxes: { rows: LocusAxis | null; cols: LocusAxis | null } = { rows: null, cols: null }
+  /** A point-picking gesture in progress; see {@link armPicking}. */
+  private picking: {
+    /** How many points it is collecting: a line takes one, an arrowhead two. */
+    wants: number
+    got: Array<{ rows: ManualPoint; cols: ManualPoint }>
+    done(points: Array<{ rows: ManualPoint; cols: ManualPoint }>): void
+    cancel(): void
+  } | null = null
   /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
   private readonly tip: {
     matrix: HTMLElement
@@ -545,6 +570,27 @@ export class MatrixPanel {
       this.watchLane('bottom', this.lanes.bottomEl)
       this.watchLane('right', this.lanes.rightEl)
     }
+    if (options.annotations !== undefined) {
+      this.heatmap.setOverlayPainter((ctx, frame) => this.paintOverlays(ctx, frame))
+      // Escape abandons a half-finished pick. On the window rather than the
+      // canvas: the gesture is armed from a button in the sidebar, so the focus
+      // is very often not on the plot at the moment the reader changes their
+      // mind.
+      const onEscape = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape' && this.picking !== null) {
+          event.preventDefault()
+          this.setBusy(false)
+          this.cancelPicking()
+        }
+      }
+      window.addEventListener('keydown', onEscape)
+      this.laneListeners.push(() => window.removeEventListener('keydown', onEscape))
+      // The cards write to the stores and the panel reads from them; neither
+      // needs a reference to the other, which is what lets the cards live in the
+      // shell's sidebar while the plot lives inside a view the shell replaces.
+      this.laneListeners.push(options.annotations.store.subscribe(() => this.schedule()))
+      this.laneListeners.push(options.annotations.manual.subscribe(() => this.schedule()))
+    }
 
     // The colourbar sits immediately right of the plot and is deliberately
     // short: it is a legend, and a legend as tall as the figure reads as a
@@ -635,18 +681,6 @@ export class MatrixPanel {
     this.lanes?.destroy()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
-  }
-
-  /**
-   * Redraw because the annotation set or one of its settings changed.
-   *
-   * A colour, a limit or a tick box is a repaint of lanes whose data has not
-   * moved; adding or removing one changes the geometry, which the next frame
-   * picks up from the store. Either way this is one frame, not a reload.
-   */
-  refreshAnnotations(removed?: string): void {
-    if (removed !== undefined) this.lanes?.forget(removed)
-    this.schedule()
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -853,6 +887,100 @@ export class MatrixPanel {
   }
 
   /**
+   * Everything drawn on the data: the overlay card's files, then the hand-drawn
+   * marks over them.
+   *
+   * Files first and marks second, because a mark is what the reader put there
+   * and it must not end up underneath a circle from a loop table.
+   */
+  private paintOverlays(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
+    const context = this.options.annotations
+    if (context === undefined) return
+    const palette = readCanvasPalette()
+
+    for (const entry of context.store.overlays()) {
+      if (entry.payload?.kind === 'features') {
+        drawDiagonalFeatures(ctx, frame, this.locusAxes, entry.payload.data, {
+          colour: entry.style.colour,
+          opacity: entry.style.opacity,
+          shape: entry.style.shape,
+        })
+      } else if (entry.payload?.kind === 'pairs') {
+        drawPairs(ctx, frame, this.locusAxes, entry.payload.data, {
+          colour: entry.style.colour,
+          opacity: entry.style.opacity,
+          radius: entry.style.radius,
+        })
+      }
+    }
+
+    drawManualLines(ctx, frame, this.locusAxes, context.manual.lines, MARK_FONT, palette.labelHaloColor)
+    drawArrowheads(
+      ctx,
+      frame,
+      this.locusAxes,
+      context.manual.arrowheads,
+      MARK_FONT,
+      palette.labelHaloColor,
+    )
+  }
+
+  /**
+   * Collect `wants` points by clicking the map, then hand them back.
+   *
+   * While armed, a click *places* rather than navigates — which is the only
+   * sensible reading of a click during a "pick a point" gesture, and the reason
+   * this is a mode rather than a modifier. Escape, or arming something else,
+   * abandons it; the returned function does the same, for a card that is being
+   * torn down.
+   *
+   * Each point is reported on **both** axes, because a click is one cell and a
+   * cell has a row coordinate and a column coordinate. A vertical line wants the
+   * column, a horizontal one the row, and an arrowhead wants both — so the panel
+   * hands over both and lets the card take what it means.
+   */
+  armPicking(
+    wants: number,
+    done: (points: Array<{ rows: ManualPoint; cols: ManualPoint }>) => void,
+    cancel: () => void = () => {},
+  ): () => void {
+    this.picking?.cancel()
+    this.picking = { wants, got: [], done, cancel }
+    this.canvas.classList.add('picking')
+    return () => this.cancelPicking()
+  }
+
+  /** Abandon a picking gesture. Safe to call when none is in progress. */
+  cancelPicking(): void {
+    const picking = this.picking
+    this.picking = null
+    this.canvas.classList.remove('picking')
+    picking?.cancel()
+  }
+
+  /** `true` while a click would place a mark rather than navigate. */
+  get isPicking(): boolean {
+    return this.picking !== null
+  }
+
+  /**
+   * Turn a clicked cell into a point on each axis.
+   *
+   * The cell's *centre*, not its corner: a click lands somewhere inside a cell,
+   * and reporting its left edge would put every hand-placed mark half a bin
+   * earlier than where the reader aimed.
+   */
+  private locusOf(cell: Cell): { rows: ManualPoint; cols: ManualPoint } | null {
+    const rows = this.locusAxes.rows?.unitToLocus(cell.row + 0.5) ?? null
+    const cols = this.locusAxes.cols?.unitToLocus(cell.col + 0.5) ?? null
+    if (rows === null || cols === null) return null
+    return {
+      rows: { contig: rows.contig, bp: Math.round(rows.bp) },
+      cols: { contig: cols.contig, bp: Math.round(cols.bp) },
+    }
+  }
+
+  /**
    * The lanes' view of the frame about to be drawn.
    *
    * Every number comes from the heatmap rather than from this panel: the scales
@@ -942,12 +1070,13 @@ export class MatrixPanel {
     // patched, so a stale mapping can never be drawn over fresh data — the same
     // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
     const context = this.options.annotations
-    if (this.lanes !== null && context !== undefined) {
+    if (context !== undefined) {
       const shared = { level: data.level, binsize: this.options.binsize, contigLength: context.contigLength }
-      this.lanes.setAxes({
+      this.locusAxes = {
         rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
         cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-      })
+      }
+      this.lanes?.setAxes(this.locusAxes)
     }
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
@@ -1061,10 +1190,35 @@ export class MatrixPanel {
     if (bottom === this.laneBudget) return
     this.laneBudget = bottom
     this.grid.style.setProperty('--lane-bottom', `${bottom}px`)
+    // Re-measure *now*, in the same frame, rather than waiting for the resize
+    // observer. The observer watches the grid, and the grid's width is the wider
+    // of the plot and the lane below it — so a plot that has just shrunk under a
+    // lane still as wide as the plot used to be leaves the grid's box unchanged,
+    // the observer silent, and the two canvases permanently out of step. This is
+    // the one forced layout in the draw path, and it happens only when a lane is
+    // added, removed or resized.
+    this.heatmap.resize()
   }
 
   private emitClick(cell: Cell): void {
     if (this.data === null) return
+    // A picking gesture owns the click outright. Navigating *and* placing would
+    // put the mark on a view the reader can no longer see.
+    const picking = this.picking
+    if (picking !== null) {
+      const point = this.locusOf(cell)
+      if (point === null) return
+      picking.got.push(point)
+      if (picking.got.length < picking.wants) {
+        this.setBusy(true, `click ${picking.wants - picking.got.length} more…`)
+        return
+      }
+      this.picking = null
+      this.canvas.classList.remove('picking')
+      this.setBusy(false)
+      picking.done(picking.got)
+      return
+    }
     this.options.onCellClick?.(cell, {
       row: groupAt(this.data.rowGroups, cell.row),
       col: groupAt(this.data.colGroups, cell.col),
@@ -1572,3 +1726,12 @@ export function toDense(data: MatrixResult): DenseMatrix {
     colExtent: data.colExtent,
   }
 }
+
+/**
+ * The type size hand-drawn marks and overlay labels are written at.
+ *
+ * A shade larger than the lanes' 9 px: these are the reader's own annotations on
+ * a figure, and they are meant to be read from the page rather than glanced at
+ * on screen.
+ */
+const MARK_FONT = '10px system-ui, sans-serif'

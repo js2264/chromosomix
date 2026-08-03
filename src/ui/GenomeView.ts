@@ -55,7 +55,14 @@ export class GenomeView {
    * rather than inside this element — see `App.showContent`.
    */
   readonly sideEl: HTMLElement
-  private readonly panel: MatrixPanel
+  /**
+   * The heatmap panel, exposed so the shell can reach it.
+   *
+   * The manual-annotation card lives in the sidebar and the plot lives in
+   * whichever view is mounted, so "click the map to place a mark" has to cross
+   * that gap. The shell forwards to this; the view itself stays unaware.
+   */
+  readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly contigList: HTMLElement
   private readonly contigBox: HTMLElement

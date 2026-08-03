@@ -126,9 +126,44 @@ describe('per-pixel reduction', () => {
     expect(profile.envelope).toBe(true)
     expect(profile.low[0]).toBe(1)
     expect(profile.high[0]).toBe(9)
-    // The extent an autoscale reads is the envelope's, not the mean's: a lane
-    // clipped to the means would cut the tops off every peak it drew.
-    expect(profile.extent).toEqual({ min: 1, max: 9 })
+  })
+
+  // A whole-genome pixel covers 13 kb, and its maximum is whatever single base
+  // was highest in it. Scaling to that flattens every track onto its baseline;
+  // scaling to the means alone leaves the envelope clipped over the whole lane.
+  // The ceiling is the 98th percentile of the maxima, raised to fit the means.
+  it('autoscales past a handful of outlier bases, not past the whole envelope', () => {
+    const intervals: Array<[number, number, number]> = []
+    const band: Array<[number, number]> = []
+    for (let i = 0; i < 100; i++) {
+      intervals.push([i * 1000, (i + 1) * 1000, 5])
+      // Two pixels in a hundred hold a base that is two hundred times the rest.
+      band.push([0, i === 40 || i === 80 ? 1000 : 12])
+    }
+    const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples(intervals, band))
+    expect(profile.extent?.max).toBeGreaterThanOrEqual(12)
+    expect(profile.extent?.max).toBeLessThan(200)
+    expect(profile.extent?.min).toBe(0)
+  })
+
+  // Whatever the envelope does, the *line* must fit: a lane whose drawn values
+  // ran off the top would be worse than one whose band is clipped.
+  it('never puts the ceiling below the largest mean', () => {
+    const profile = profileOf(
+      frameOf([0, 100], 100),
+      yeastAxis(),
+      samples(
+        [
+          [0, 1000, 900],
+          [1000, 100_000, 1],
+        ],
+        [
+          [900, 900],
+          [1, 1],
+        ],
+      ),
+    )
+    expect(profile.extent?.max).toBe(900)
   })
 
   it('ignores samples for a contig the axis does not show', () => {
