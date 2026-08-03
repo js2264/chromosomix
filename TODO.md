@@ -737,6 +737,100 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   to be one or the other, so the files most likely to be capped — the big real
   ones — were the ones never told what a click does.
 
+- [x] With `labels` on and more than 50 genomes/contigs on an axis, labels never
+  appeared at all. They should appear as soon as fewer than 50 are in the view.
+- [x] A genome may hold more than 50 contigs. There, every contig longer than
+  50 kb should be labelled, however many contigs there are.
+- [x] Clicking an axis label should open what it names.
+
+> NOTES ON THE ABOVE
+
+- **The count is now of the blocks *in view*.** `MAX_CATEGORICAL_TICKS` asks
+  "would these names be a smear", which is a question about the picture, not
+  about the file — and counting the whole axis answered it once, at fit, for
+  every zoom level after it. A 20,000-contig overview now names its genomes as
+  soon as fifty of them are on screen.
+- **A long block is labelled whatever the count.** The count rule is one number
+  for a whole axis and a real MAG is not uniform: 65 contigs, seven of them
+  hundreds of kilobases and the rest a few. Those seven are what a reader is
+  looking for and the count rule refused all 65. The threshold is 50 kb
+  (`LABEL_MIN_SPAN_BP`), passed to the renderer in *cells* — the panel knows the
+  bin size — and it is off above bin level, where a cell is a whole contig and
+  every block is one cell wide whatever its size.
+- **The gutter is measured from the whole labelled set, not the visible part of
+  it.** Otherwise the widest name scrolling into view resizes the margin and the
+  plot shifts under the pointer through every pan. It changes only when the
+  policy does, and it cannot oscillate: opening a gutter shrinks the plot, so
+  *fewer* blocks are in view, so the policy that opened it still holds. A view
+  that was fitted is re-fitted to the plot the new gutter leaves.
+- **A name is drawn at the centre of the part of its block that is on screen.**
+  The block's own midpoint is off the canvas as soon as one block is wider than
+  the window, which is the normal case once you have zoomed in — so the name of
+  the thing filling the picture was the one name not written on it.
+- **Clicking a label opens what it names**: a genome in the whole-metagenome
+  view, whose axes are labelled by genome at either level; a contig in a genome,
+  pair or region view. The target is the whole band of the gutter above (or
+  beside) the block, not the drawn glyphs — a rotated 10 px name is a
+  two-pixel-wide thing to ask anyone to hit — and the pointer turns into a hand
+  over it. Taps get the same treatment through one shared hit test, so a phone
+  cannot end up with a different idea of what is clickable.
+
+- [x] New plot aesthetic: outside ticks on the whole-genome and genome views
+  (metacool and cool), marking the separations between genomes/chromosomes.
+- [x] Bug: chromosome XVI of the yeast mcool at 2 kb showed XVI *plus one bin of
+  Mito*, and XIV one bin of XV — noticed because the within-chromosome distance
+  ticks, which need a single chromosome, disappeared on exactly those two.
+- [x] Clicking the file name in the top bar opens a dialog to load another file,
+  rather than navigating back to the landing page. Esc or close returns to the
+  previous state.
+- [x] Exports carry a caption — file, genome, region actually framed, bin size,
+  scale, timestamp — and the saved file is named with a timestamp.
+- [x] The right-hand controls are a column of the shell: stacked from under the
+  breadcrumb like the file sidebar, scrolling on their own, with the contigs
+  card fitted to the space left rather than running off the screen.
+- [x] In the file sidebar, the genome/contig/chromosome card sits under FILE;
+  Binning QC and Metadata are always last.
+
+> NOTES ON THE ABOVE
+
+- **`chrom_offset` decides where a chromosome ends, not the division.**
+  `cooler.Cooler.extent` computes a fixed-bin region as
+  `chrom_offset[cid] + ceil(end / binsize)`, which assumes the bin table is
+  `binnify(chromsizes, binsize)`. This file's is not: a trailing part-bin is
+  absorbed into the one before it, so chromosome I has 230 bins at 1 kb where
+  the division says 231, and five chromosomes are short at 2 kb — I, VI, XII,
+  XIV and XVI, the ones whose 1 kb count was odd. The extra bin the arithmetic
+  returned was the *first bin of the next chromosome*, which is why the picture
+  gained a row and a column of another chromosome's contacts and why the
+  base-pair ticks vanished: two axis groups is no longer a single coordinate
+  system. The clamp is the one place this port deliberately answers something
+  cooler's arithmetic does not, and `coarse-extent.test.ts` pins it against the
+  demo file itself.
+- **Boundary ticks are the third way to say the same thing**, and the only one
+  that costs no data: hairlines cover the contacts being read, names need a
+  gutter and thin out past the count an axis can spell, a tick on the edge does
+  neither. Its own toggle (`breaks`, on by default, `e`), because every other
+  mark has one.
+- **The file crumb opens a dialog over the view.** It used to navigate to the
+  picker, which threw the current view away to ask a question — and a dropped
+  local file cannot be re-opened without another gesture (§11), so changing your
+  mind was one-way. Escape, the close button and the backdrop leave everything
+  as it was.
+- **An exported figure now says what it is**: the subject and the range it is
+  *actually framed at* (a view is panned and zoomed before it is saved, and the
+  export keeps that framing, so a picture of 200–600 kb captioned `XVI` is wrong
+  in the way that matters), then file, bin size, scale and the time, aligned
+  with the plot's own left edge. The range is written in the region grammar, so
+  it pastes back into the region box. The PDF repeats all of it as `/Title`,
+  `/Subject` and `/CreationDate`, for a figure whose caption gets cropped in a
+  manuscript. The filename carries the same instant, because two exports of one
+  view were otherwise the same name and the second became `figure (1).png`.
+- **Toggling labels no longer crops a fitted view.** Found while reading an
+  export caption that said `XVI:200,000-589,000` for a whole block: opening the
+  gutters kept the zoom, so the last 3% of the block fell outside the narrower
+  plot. A fitted view is now re-fitted to the plot the gutter leaves; a zoom
+  someone chose is still kept.
+
 ## FOR FUTURE
 
 - M5
