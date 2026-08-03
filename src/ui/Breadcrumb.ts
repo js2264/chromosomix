@@ -86,6 +86,28 @@ export interface BreadcrumbProps {
   onSelectEntry?(entry: string): void
 }
 
+/**
+ * Which table a view was reached through — the crumb that leads back to it.
+ *
+ * A table view names itself. Below that the trail used to fall back to the
+ * file's *default* root, so opening a contig from the Contigs table produced
+ * "Genomes > NODE_18007", a path that does not exist and that leads back to a
+ * table the reader was never in.
+ *
+ * The signal is already in the state and needs no remembering: a contig opened
+ * from within a genome carries that genome (`region` beside `genome`), and one
+ * opened from the contigs table does not. Reading it off the state rather than
+ * off a mode means a shared link rebuilds the same trail as the session that
+ * produced it.
+ */
+export function rootTable(state: ViewState, fallback: 'genomes' | 'contigs'): 'genomes' | 'contigs' {
+  if (state.view === 'genomes' || state.view === 'contigs') return state.view
+  if (state.view === 'region') return state.genome === undefined ? 'contigs' : 'genomes'
+  // A genome or a pair is by definition below the genomes table; `whole` and the
+  // overview are neither, and keep the file's own default.
+  return state.genome === undefined ? fallback : 'genomes'
+}
+
 export class Breadcrumb {
   readonly el: HTMLElement
 
@@ -163,8 +185,7 @@ export class Breadcrumb {
    */
   private pushRootPicker(state: ViewState): void {
     const { rootChoices, rootKind } = this.props
-    const table: 'genomes' | 'contigs' =
-      state.view === 'genomes' || state.view === 'contigs' ? state.view : rootKind
+    const table: 'genomes' | 'contigs' = rootTable(state, rootKind)
     // `whole` is a view state where `overview` is a shell mode, but both are
     // landing views of the whole file and both belong in this crumb: leaving it
     // out left the cooler's whole-genome view labelled "Chromosomes", so the
