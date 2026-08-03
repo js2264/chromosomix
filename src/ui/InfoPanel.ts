@@ -38,6 +38,16 @@ export class InfoPanel {
   readonly el: HTMLElement
   /** Empty on a table view; `:empty` in the stylesheet is what hides it. */
   private readonly recordHost = el('div', { class: 'record-host' })
+  /**
+   * The three annotation cards (spec §8.1), or nothing at all.
+   *
+   * Above Binning QC, which is where the reader asked for them — and note that
+   * on the files these cards appear for there *is* no Binning QC block, since a
+   * cooler was never binned. So in practice they sit directly under the record
+   * card, which is the right place for them: this file, this region, what is on
+   * it.
+   */
+  private readonly annotationHost = el('div', { class: 'annotation-host' })
 
   constructor(private readonly props: InfoPanelProps) {
     this.el = el(
@@ -45,9 +55,21 @@ export class InfoPanel {
       { class: 'info-panel' },
       el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
       this.recordHost,
+      this.annotationHost,
       this.unassignedBlock(),
       this.metadataBlock(),
     )
+  }
+
+  /**
+   * Mount the annotation cards, or clear them.
+   *
+   * Called once per opened file. A `.metacool` passes nothing and the host stays
+   * empty, which `:empty` collapses — §8.5's "not rendered at all", rather than
+   * a disabled card that raises the question of how to enable it.
+   */
+  setAnnotationCards(cards: HTMLElement[]): void {
+    this.annotationHost.replaceChildren(...cards)
   }
 
   /**

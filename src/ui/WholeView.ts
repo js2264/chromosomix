@@ -19,7 +19,7 @@ import type { ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel, axisRegion, poolingNote } from './MatrixPanel'
+import { MatrixPanel, axisRegion, poolingNote, type AnnotationContext } from './MatrixPanel'
 
 export interface WholeViewProps {
   client: ReaderClient
@@ -54,6 +54,14 @@ export interface WholeViewProps {
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
   onError(err: unknown): void
+  /**
+   * Annotations to draw beside and on the map (spec §8).
+   *
+   * Supplied only for a cooler; a `.metacool` never carries one (§8.5), which is
+   * why the genome and pair views — reachable only on files that *have* genomes
+   * — do not take this at all.
+   */
+  annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
 }
@@ -65,7 +73,14 @@ export class WholeView {
    * rather than inside this element — see `App.showContent`.
    */
   readonly sideEl: HTMLElement
-  private readonly panel: MatrixPanel
+  /**
+   * The heatmap panel, exposed so the shell can reach it.
+   *
+   * The manual-annotation card lives in the sidebar and the plot lives in
+   * whichever view is mounted, so "click the map to place a mark" has to cross
+   * that gap. The shell forwards to this; the view itself stays unaware.
+   */
+  readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly problem: HTMLElement
   private level: 'bin' | 'contig'
@@ -79,6 +94,7 @@ export class WholeView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
+      ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(props.offerLevel
         ? {
             levels: ['bin', 'contig'] as Array<'bin' | 'contig'>,

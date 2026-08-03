@@ -108,10 +108,16 @@ its path is `http(s)://`.
 
 ## The track resources
 
-`public/demo/` also carries ten files that are **not maps and are not in the picker**. Nothing reads
-them yet: they are published ahead of M6 (bigWig tracks, SPECS §12) and of loop and annotation
-overlays, so that when those land there is a real signal to draw beside a real map rather than a
-fixture. Every one of them is aligned to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it.
+`public/demo/` also carries ten files that are **not maps and are not in the picker**. They are what
+the annotation cards (SPECS §8) draw: a real signal beside a real map rather than a fixture. Every
+one of them is aligned to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it.
+
+Opening that map offers all ten as one click, from the Linear annotations card. The pairing lives in
+`ui/examples.ts` beside the picker's own catalogue, and is keyed on the map's **file name** rather
+than its URL, so it survives the base path differing between dev and Pages. It is offered only when
+the map itself came from a URL: a *local* file that happens to be called
+`Yeast_microC_G2M_1kb.cool` is somebody else's data under a familiar name, and drawing ten yeast
+tracks on it would be a serious mistake rather than a convenience.
 
 | file | data |
 | --- | --- |
@@ -128,9 +134,9 @@ map is a synthetic strain: it has no `Mito`, its chromosome XIII is `XIII-syn40`
 than R64's, and its `III` is 1,095 bp shorter. Every file above was regenerated or lifted to agree
 with it, and as published:
 
-- all five bigWigs declare the map's **16 contig names with byte-identical lengths** — no `Mito`, and
-  `XIII-syn40` at 964,431. So the intersection SPECS §12 asks for is 16 of 16, and the
-  "412 of 418 contigs matched" report has nothing to complain about.
+- all six bigWigs declare the map's **16 contig names with byte-identical lengths** — no `Mito`, and
+  `XIII-syn40` at 964,431. So the intersection SPECS §8.2 asks for is 16 of 16, and the overlap
+  report the card shows has nothing to complain about.
 - the GTF, both `.narrowPeak`s and the loops table name the same 16 and hold **no coordinate past the
   end of its contig**. The GTF earned that: an earlier copy carried `YCR108C` at 315,997–316,188 on
   `III`, entirely beyond the map's 315,525, because it was R64 annotation relabelled rather than

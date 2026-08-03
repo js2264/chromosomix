@@ -27,7 +27,7 @@ import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel, axisRegion } from './MatrixPanel'
+import { MatrixPanel, axisRegion, type AnnotationContext } from './MatrixPanel'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -51,6 +51,14 @@ export interface RegionViewProps {
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
   onError(err: unknown): void
+  /**
+   * Annotations to draw beside and on the map (spec §8).
+   *
+   * Supplied only for a cooler; a `.metacool` never carries one (§8.5), which is
+   * why the genome and pair views — reachable only on files that *have* genomes
+   * — do not take this at all.
+   */
+  annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
   /**
@@ -68,7 +76,14 @@ export class RegionView {
    * rather than inside this element — see `App.showContent`.
    */
   readonly sideEl: HTMLElement
-  private readonly panel: MatrixPanel
+  /**
+   * The heatmap panel, exposed so the shell can reach it.
+   *
+   * The manual-annotation card lives in the sidebar and the plot lives in
+   * whichever view is mounted, so "click the map to place a mark" has to cross
+   * that gap. The shell forwards to this; the view itself stays unaware.
+   */
+  readonly panel: MatrixPanel
   private readonly input: HTMLInputElement
   private readonly matched: HTMLElement
   private readonly title: HTMLElement
@@ -91,6 +106,7 @@ export class RegionView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
+      ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       initial: props.scale,
       // Same shape as the genome view: heading names the selection, controls
       // live in the sidebar. Only the Contigs card is missing, because inside a

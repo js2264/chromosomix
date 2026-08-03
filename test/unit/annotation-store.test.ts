@@ -1,0 +1,312 @@
+/**
+ * The annotation store, the drop routing, and the manual marks.
+ *
+ * Everything here is the part of §8 that is *decisions* rather than pixels: what
+ * a card does with a file whose bytes disagree with the area it landed on, what
+ * survives a reload, and what a coordinate box will accept.
+ */
+
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { kindFor } from '../../src/annotations/loader'
+import {
+  ManualStore,
+  formatPoint,
+  mintMarkId,
+  parsePoint,
+  type ManualMark,
+} from '../../src/annotations/manual'
+import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
+import { defaultStyle } from '../../src/annotations/types'
+import { overlapWarning } from '../../src/ui/AnnotationCard'
+import { demoAnnotationsFor, DEMO_ANNOTATION_FILES } from '../../src/ui/examples'
+
+/**
+ * `UiMemory` reaches for `window.sessionStorage` and falls back to an in-memory
+ * map when it throws — which is exactly what happens under Node. That fallback
+ * is the thing being exercised here, and it behaves identically.
+ */
+function freshStore(uri = 'file.cool'): AnnotationStore {
+  const store = new AnnotationStore(uri)
+  store.clear()
+  return store
+}
+
+const localSource = { kind: 'local' as const, file: null as unknown as File, name: 'ATAC.bw' }
+
+describe('the annotation store', () => {
+  let store: AnnotationStore
+
+  beforeEach(() => {
+    store = freshStore(`file-${Math.random()}.cool`)
+  })
+
+  it('puts a row on screen before a byte is read', () => {
+    const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(entry.status).toBe('loading')
+    expect(entry.label).toBe('ATAC')
+    expect(store.forCard('linear')).toHaveLength(1)
+    expect(store.forCard('overlay')).toHaveLength(0)
+  })
+
+  // Bottom, and not both: two copies of one track is twice the ink for no more
+  // information, and the bottom edge is where the eye already is after following
+  // a column down the map.
+  it('starts on the bottom edge only', () => {
+    const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(entry.placement).toEqual({ bottom: true, right: false })
+    expect(store.drawnOn('right')).toHaveLength(0)
+  })
+
+  it('draws nothing that has not finished loading', () => {
+    const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(store.drawnOn('bottom')).toHaveLength(0)
+    store.update(entry.id, { status: 'ready' })
+    expect(store.drawnOn('bottom')).toHaveLength(1)
+    store.update(entry.id, { visible: false })
+    expect(store.drawnOn('bottom')).toHaveLength(0)
+  })
+
+  // Removing the third of four and dropping a replacement should give the
+  // replacement the colour that just came free, not a fifth that reads as a new
+  // series.
+  it('reuses a colour that has been freed', () => {
+    const first = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    const second = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(first.style.colour).toBe(ANNOTATION_PALETTE[0])
+    expect(second.style.colour).toBe(ANNOTATION_PALETTE[1])
+    store.remove(first.id)
+    expect(store.nextColour()).toBe(ANNOTATION_PALETTE[0])
+  })
+
+  it('groups tracks that share an autoscale name, and only tracks', () => {
+    const a = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    const b = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    const c = store.begin({ card: 'linear', kind: 'segments', source: localSource })
+    store.restyle(a.id, { group: 'rna' })
+    store.restyle(b.id, { group: 'rna' })
+    store.restyle(c.id, { group: 'rna' })
+    const groups = store.scaleGroups()
+    expect(groups.get('rna')?.map((entry) => entry.id)).toEqual([a.id, b.id])
+  })
+
+  it('notifies on every change and stops when unsubscribed', () => {
+    let calls = 0
+    const off = store.subscribe(() => calls++)
+    const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    store.restyle(entry.id, { colour: '#123456' })
+    expect(calls).toBe(2)
+    off()
+    store.remove(entry.id)
+    expect(calls).toBe(2)
+  })
+
+  it('does not notify for an id that has gone', () => {
+    let calls = 0
+    store.subscribe(() => calls++)
+    store.update('nope', { visible: false })
+    store.remove('nope')
+    expect(calls).toBe(0)
+  })
+
+  it('knows when a gene model is already loaded (§8.1)', () => {
+    expect(store.hasGtf()).toBe(false)
+    store.begin({ card: 'linear', kind: 'gtf', source: localSource })
+    expect(store.hasGtf()).toBe(true)
+  })
+})
+
+describe('what survives a reload (§8.6)', () => {
+  it('remembers a finished row and its settings', () => {
+    const uri = `keep-${Math.random()}.cool`
+    const store = new AnnotationStore(uri)
+    const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    store.update(entry.id, { status: 'ready' })
+    store.restyle(entry.id, { colour: '#abcdef', group: 'rna' })
+
+    const stored = AnnotationStore.stored(uri)
+    expect(stored).toHaveLength(1)
+    expect(stored[0].style.colour).toBe('#abcdef')
+    expect(stored[0].style.group).toBe('rna')
+    expect(stored[0].source).toEqual({ kind: 'local', name: 'ATAC.bw' })
+  })
+
+  // A row still loading is not a row: remembering it would restore a
+  // placeholder for a file nothing ever read.
+  it('does not remember a row that never finished', () => {
+    const uri = `partial-${Math.random()}.cool`
+    const store = new AnnotationStore(uri)
+    store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(AnnotationStore.stored(uri)).toHaveLength(0)
+  })
+
+  it('drops a stored row that no longer makes sense', () => {
+    const uri = `bad-${Math.random()}.cool`
+    const store = new AnnotationStore(uri)
+    const good = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    store.update(good.id, { status: 'ready' })
+    // Stored state outlives the build that wrote it, so it is untrusted input.
+    const rows = AnnotationStore.stored(uri)
+    expect(rows).toHaveLength(1)
+    expect(AnnotationStore.stored('never-written.cool')).toEqual([])
+  })
+})
+
+describe('labels', () => {
+  it('strips a suffix without eating a hyphenated name', () => {
+    expect(cleanLabel('Yeast_ChIP_Pol2-vs-input.narrowPeak')).toBe('Yeast_ChIP_Pol2-vs-input')
+    expect(cleanLabel('/a/b/Yeast_ATAC.bw')).toBe('Yeast_ATAC')
+    expect(cleanLabel('genes.gtf.gz')).toBe('genes')
+    expect(cleanLabel('no-suffix')).toBe('no-suffix')
+  })
+})
+
+describe('drop routing (§8.3)', () => {
+  // The zone says what the reader meant; the bytes say what the file is, and
+  // the bytes win wherever the card can absorb it.
+  it('takes what a card can draw, whatever area it landed on', () => {
+    expect(kindFor('linear', 'bigwig')).toBe('track')
+    expect(kindFor('linear', 'gtf')).toBe('gtf')
+    expect(kindFor('linear', 'bed')).toBe('segments')
+    expect(kindFor('overlay', 'bed')).toBe('segments')
+    expect(kindFor('overlay', 'bedpe')).toBe('pairs')
+  })
+
+  it('refuses what a card has nowhere to put', () => {
+    expect(kindFor('linear', 'bedpe')).toBeNull()
+    expect(kindFor('overlay', 'bigwig')).toBeNull()
+    expect(kindFor('overlay', 'gtf')).toBeNull()
+    expect(kindFor('linear', 'bigbed')).toBeNull()
+  })
+})
+
+describe('the contig overlap warning (§8.2)', () => {
+  // Silent zero-overlap is the most likely support question there is, and it
+  // presents as "the feature is broken" rather than "these files disagree".
+  it('says so loudly when nothing matches', () => {
+    const message = overlapWarning({ matched: 0, total: 16, missing: ['I'], extra: ['chrI'] })
+    expect(message).toContain('0 of 16')
+    expect(message).toContain('chrI')
+  })
+
+  it('names what is missing on a partial match', () => {
+    const message = overlapWarning({ matched: 15, total: 16, missing: ['XVI'], extra: [] })
+    expect(message).toContain('15 of 16')
+    expect(message).toContain('XVI')
+  })
+
+  it('says nothing when everything matched', () => {
+    expect(overlapWarning({ matched: 16, total: 16, missing: [], extra: [] })).toBeNull()
+    expect(overlapWarning(undefined)).toBeNull()
+  })
+})
+
+describe('manual marks', () => {
+  it('reads back a coordinate this app itself wrote', () => {
+    expect(parsePoint('I:120000')).toEqual({ contig: 'I', bp: 120_000 })
+    // `fmt.int` writes separators and `fmt.bp` writes units; refusing to read
+    // back what the page just printed would be a small cruelty.
+    expect(parsePoint('I:1,531,933')).toEqual({ contig: 'I', bp: 1_531_933 })
+    expect(parsePoint(' XIII-syn40 : 1.53 Mb ')).toEqual({ contig: 'XIII-syn40', bp: 1_530_000 })
+    expect(parsePoint('II:120 kb')).toEqual({ contig: 'II', bp: 120_000 })
+  })
+
+  // A contig may legally be named `NODE_1:2`, so the *last* colon splits.
+  it('splits on the last colon, not the first', () => {
+    expect(parsePoint('NODE_1:2:5000')).toEqual({ contig: 'NODE_1:2', bp: 5000 })
+  })
+
+  it('refuses what it cannot read', () => {
+    expect(parsePoint('I')).toBeNull()
+    expect(parsePoint('I:')).toBeNull()
+    expect(parsePoint(':100')).toBeNull()
+    expect(parsePoint('I:abc')).toBeNull()
+    expect(parsePoint('I:-100')).toBeNull()
+  })
+
+  it('round-trips through its own formatter', () => {
+    const point = { contig: 'XIII-syn40', bp: 964_431 }
+    expect(parsePoint(formatPoint(point))).toEqual(point)
+  })
+
+  it('keeps marks, and forgets them on request', () => {
+    const store = new ManualStore(`marks-${Math.random()}.cool`)
+    const line: ManualMark = {
+      id: mintMarkId(),
+      kind: 'line',
+      axis: 'vertical',
+      at: { contig: 'I', bp: 100 },
+      colour: '#111318',
+      label: '',
+    }
+    store.add(line)
+    store.add({
+      id: mintMarkId(),
+      kind: 'arrowhead',
+      a: { contig: 'I', bp: 1 },
+      b: { contig: 'I', bp: 2 },
+      colour: '#c0392b',
+      label: 'loop',
+    })
+    expect(store.lines).toHaveLength(1)
+    expect(store.arrowheads).toHaveLength(1)
+    store.remove(line.id)
+    expect(store.lines).toHaveLength(0)
+    store.clear()
+    expect(store.marks).toHaveLength(0)
+  })
+
+  it('restores what a previous visit left', () => {
+    const uri = `restore-${Math.random()}.cool`
+    const first = new ManualStore(uri)
+    first.add({
+      id: mintMarkId(),
+      kind: 'line',
+      axis: 'both',
+      at: { contig: 'IV', bp: 400_000 },
+      colour: '#111318',
+      label: 'centromere',
+    })
+    const second = new ManualStore(uri)
+    expect(second.marks).toHaveLength(1)
+    expect(second.lines[0].label).toBe('centromere')
+  })
+})
+
+describe('the annotations published beside a demo map', () => {
+  const map = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+
+  it('offers all ten, with their URLs beside the map', () => {
+    const found = demoAnnotationsFor(map)
+    expect(found).toHaveLength(10)
+    expect(found[0].url).toBe('https://example.org/demo/Yeast_annotations.gtf')
+    expect(found.filter((entry) => entry.card === 'overlay')).toHaveLength(1)
+  })
+
+  it('splits them across the cards that can draw them', () => {
+    const found = demoAnnotationsFor(map)
+    expect(found.filter((entry) => entry.zone === 'gtf')).toHaveLength(1)
+    expect(found.filter((entry) => entry.zone === 'track')).toHaveLength(6)
+    expect(found.filter((entry) => entry.zone === 'segments')).toHaveLength(2)
+    expect(found.filter((entry) => entry.zone === 'pairs')).toHaveLength(1)
+  })
+
+  // A *local* file of the same name is somebody else's data under a familiar
+  // name; offering ten yeast tracks against it would be a serious mistake.
+  it('offers nothing for a local file, or for another map', () => {
+    expect(demoAnnotationsFor('Yeast_microC_G2M_1kb.cool')).toEqual([])
+    expect(demoAnnotationsFor('https://example.org/demo/Ecoli.mcool')).toEqual([])
+  })
+
+  it('names ten distinct files', () => {
+    expect(new Set(DEMO_ANNOTATION_FILES).size).toBe(10)
+  })
+})
+
+describe('style defaults', () => {
+  it('gives a lane a thickness its kind can use', () => {
+    expect(defaultStyle('track', '#000').size).toBeGreaterThan(defaultStyle('segments', '#000').size)
+    expect(defaultStyle('track', '#000').limits.auto).toBe(true)
+    expect(defaultStyle('track', '#000').scaling).toBe('linear')
+  })
+})

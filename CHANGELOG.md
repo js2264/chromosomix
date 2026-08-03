@@ -14,6 +14,61 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Tracks and annotations, on cool and mcool files.** Three cards in the left
+  sidebar, and everything they draw. See [SPECS §8](SPECS.md#8-tracks-and-annotations).
+
+  **Linear annotations** takes one GTF or GFF gene model, any number of bigWig
+  tracks, and any number of BED-like segment files (BED 3–12, narrowPeak,
+  broadPeak). Each is drawn beside the map on the bottom edge, the right edge or
+  both, with its own colour, height, style (line, area or bars), value scaling
+  (linear or log2), and limits — auto, which rescales to what is on screen, or a
+  pair of numbers. Tracks that share an autoscale **group** resolve to one range
+  over everything they show, which is the only way two of them can be compared
+  by eye.
+
+  **Map overlays** takes BED-like files as marks on the diagonal — a box for an
+  extent, a mark across the diagonal for a point call, which is the only shape
+  that survives being zoomed out — and BEDPE-like files as circles off it. A
+  headed table with `chrom1/start1/end1/chrom2/start2/end2` counts as BEDPE,
+  because that is what loop callers actually emit.
+
+  **Manual annotations** takes vertical, horizontal and crossed lines, and
+  arrowheads on or off the diagonal. Both are entered as coordinates or placed
+  by clicking the plot, and both are stored in base pairs, so they survive a
+  zoom, a pan and a change of resolution in an `.mcool`.
+
+  Nothing drawn on the map fills the pixel it is about: loops are open circles,
+  domains are outlines, and the arrowhead sits *outside* the cell it points at,
+  on the far side from the diagonal — mirrored below it, so a mark placed while
+  reading the upper triangle never points into the map from the lower one.
+
+  Everything stays locked to the matrix because it is drawn through the matrix's
+  own coordinate scales; nothing here computes a second mapping. Panning and
+  zooming perform **no I/O**, as they already did for the map: a track fetches a
+  window half again as wide as the view at a resolution rounded to a power of
+  two, and everything inside that redraws from memory. Zooming out averages
+  through bigWig's own zoom levels, and a feature lane with more features than
+  pixels switches to a density profile rather than painting a solid bar. Hovering
+  a lane names the feature or reads out the value; the crosshair continues from
+  the map into every lane; exported PNGs and PDFs carry the lanes, redrawn at
+  the export resolution.
+
+  Contig names are checked on load and the overlap is always reported, in both
+  directions — a GTF using `chrI` against a map using `I` is the most likely
+  support question there is, and it presents as a broken feature rather than as
+  two files disagreeing.
+
+  Restricted to cool and mcool. On a `.metacool` the cards are **absent**, not
+  disabled: a metagenome's axis is contigs from thousands of independently
+  assembled organisms, so a file keyed on contig names either coincides with it
+  or misleads.
+
+- **One click loads the ten tracks published beside the yeast micro-C map.**
+  Gene models, MNase, ATAC, Pol II ChIP-over-input, stranded RNA-seq, shotgun
+  coverage, two peak sets and the loop calls — all on that map's own assembly.
+  Offered only when the map itself came from a URL, never for a local file that
+  happens to share the name.
+
 - **The tooltip says how far apart a contact is.** Hover an off-diagonal cell
   within one chromosome or contig and it now reports the genomic distance
   between its two ends, which is the number a Hi-C map is actually read by. It
@@ -31,13 +86,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   179 M contacts, balanced. It is the first single-resolution cooler in the
   picker, so it is also the choice that lands somewhere with no resolution
   ladder to pick from.
-- **Ten track resources published beside it**, for the bigWig and overlay work
-  that has not landed yet: MNase, ATAC, Pol II ChIP-over-input and stranded
-  RNA-seq coverage, shotgun coverage, ATAC and Pol II peak calls, gene models,
-  and the loop calls made on that map. They are not in the picker and nothing
-  reads them yet. All ten are on the map's own assembly rather than on R64 —
-  same 16 contig names, same lengths, no coordinate off the end of a chromosome
-  — which is the property to check before republishing any of them. See
+- **Ten track resources published beside it**: MNase, ATAC, Pol II
+  ChIP-over-input and stranded RNA-seq coverage, shotgun coverage, ATAC and Pol
+  II peak calls, gene models, and the loop calls made on that map. They are not
+  in the picker; the annotation cards above are what reads them. All ten are on
+  the map's own assembly rather than on R64 — same 16 contig names, same
+  lengths, no coordinate off the end of a chromosome — which is the property to
+  check before republishing any of them. See
   [docs/deploy.md](docs/deploy.md#the-track-resources).
 
 - **Works offline, and installs.** After one visit the app runs with no network at all — reload

@@ -101,6 +101,7 @@ src/
   render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar
   state/         ViewState and its URL-hash serialisation
   ui/            file picker, genomes/contigs tables, genome/pair/region views, errors
+  annotations/   the tracks and annotations layer: parsers, store, and their own worker
   main.ts        the app shell
 scripts/
   make_fixtures.py  make_golden.py  gen_luts.py
@@ -113,10 +114,12 @@ SPECS.md         the specification — section numbers are cited throughout the 
 IMPLEMENTATION.md  the build plan, and nine corrections where the docs were wrong
 ```
 
-Two layering rules are enforced rather than encouraged, because breaking either is silent:
+Three layering rules are enforced rather than encouraged, because breaking any of them is silent:
 
 - **`h5wasm` is imported only under `src/h5/`.** That is what makes the local and remote paths
   identical everywhere downstream.
+- **`@gmod/bbi` is imported only by the annotations worker.** Same rule, same reason: no file parser
+  belongs in the main-thread bundle, and the demo GTF alone is ~310 ms of parsing.
 - **`/bins` is never read.** With fixed bins the entire coordinate model is arithmetic over
   `indexes/chrom_offset` and `contigs/length`, so one of the four large tables in the file is never
   touched — not on open, not per view, not over the network. `test/unit/real-file.test.ts` records
@@ -137,7 +140,7 @@ not the plan.
 | M3 | Render and first visible app | **done** — canvas heatmap with matplotlib's own LUTs, `metacooler show` defaults, genomes table, genome/pair/region views, breadcrumb, URL-hash state |
 | M4 | Interaction | **mostly** — pan, zoom, level toggle and cross-navigation are all local and I/O-free; the mmetacool *zoom ladder* is classified but not yet wired to a zoom control (see below) |
 | M5 | Remote sources | **done** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals), `docs/hosting.md`, and the §12 request-budget regression tests in `test/budgets/` |
-| M6 | bigWig tracks | **not started** — no `src/tracks/`, and the `.bw` fixtures are not built |
+| M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12 and BEDPE in a worker of their own; `src/render/` draws them as lanes on either edge of the map and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 
@@ -158,7 +161,9 @@ Other gaps worth naming rather than discovering:
   file.
 
 Tests currently live in `test/unit/`: `reader-core`, `render`, `viewstate`, `real-file`,
-`mmetacool`.
+`mmetacool`, and — for §8 — `annotation-parse`, `annotation-store`, `locus-axis` and `track-lanes`.
+The annotation parsers are run against the *published demo files* rather than against three lines
+written to pass: a real Ensembl GTF, two real MACS narrowPeaks and a real loop table.
 
 ---
 
@@ -188,6 +193,12 @@ exactly as written, and exclusion happens at selection and display time only. Th
 is one read-only QC statistic in the file info panel — *"unassigned: 67,058 contigs / 23.8% of
 bins"* — because that fraction is a direct diagnostic of binning quality that a metagenomics reader
 will look for. It is a number, not a view: it opens nothing and selects nothing.
+
+**Annotations are for cool and mcool only.** Gene models, tracks, peak sets, loop calls and
+hand-drawn marks are offered on a cooler and are *absent* — not disabled — on a `.metacool`. A
+metagenome's axis is contigs from thousands of independently assembled organisms, so a file keyed on
+contig names either coincides with it or misleads, and a gene model drawn across a MAG boundary would
+assert a coordinate system that does not exist. See SPECS §8.5.
 
 **cool and mcool are region-level only, and this is not a HiGlass replacement.** A eukaryotic cooler
 reintroduces exactly the streaming problem the design avoids, so those files are supported as

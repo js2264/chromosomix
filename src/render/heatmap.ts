@@ -489,6 +489,14 @@ export interface PlotOptions {
   ticks: boolean
 }
 
+/**
+ * The guide-line colour, shared with whatever else continues the crosshair.
+ *
+ * Exported because the annotation lanes draw the same line through the same
+ * column: two constants would be two colours the day one of them was tuned.
+ */
+export const CROSSHAIR_COLOR = '#1f5fa9'
+
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   dividers: true,
   breaks: true,
@@ -593,6 +601,23 @@ export function formatBpTick(position: number): string {
   }
   return `${Math.round(position)} bp`
 }
+
+/**
+ * What {@link HeatmapView.setOverlayPainter} is handed on every frame.
+ *
+ * Exactly the transform state, and nothing about the data: an overlay is placed
+ * by the same two `Scale`s the matrix is drawn through, which is what makes it
+ * incapable of drifting from the pixels it marks.
+ */
+export interface OverlayContext {
+  plot: Rect
+  data: Rect
+  rowScale: Scale
+  colScale: Scale
+  dpr: number
+}
+
+export type OverlayPainter = (ctx: CanvasRenderingContext2D, frame: OverlayContext) => void
 
 export interface HeatmapOptions {
   margin?: Partial<Margin>
@@ -830,6 +855,8 @@ export class HeatmapView {
   private plot: PlotOptions
   /** The cell under the pointer, for the crosshair. `null` when outside. */
   private hoverCell: Cell | null = null
+  /** What the owner draws on the data; see {@link setOverlayPainter}. */
+  private overlayPainter: OverlayPainter | null = null
 
   private cssWidth = 0
   private cssHeight = 0
@@ -880,7 +907,7 @@ export class HeatmapView {
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
       labelMinSpan: options.labelMinSpan ?? 0,
-      crosshairColor: options.crosshairColor ?? '#1f5fa9',
+      crosshairColor: options.crosshairColor ?? CROSSHAIR_COLOR,
       plotBorderColor: options.plotBorderColor ?? '#b9bec5',
       selectionColor: options.selectionColor ?? '#1f5fa9',
       selectionFill: options.selectionFill ?? 'rgba(31, 95, 169, 0.16)',
@@ -1569,10 +1596,48 @@ export class HeatmapView {
     if (this.plot.dividers) this.drawSeparators()
     if (this.plot.breaks) this.drawBreaks()
     this.drawLabels()
+    this.drawOverlay()
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) this.drawCrosshair()
     this.drawSelection()
     this.drawPlotBorder()
+  }
+
+  /**
+   * Whatever the owner draws on the data — loops, domains, hand-drawn marks.
+   *
+   * A callback rather than a list of shapes, because the renderer has no
+   * business knowing what a loop is: what it owns is the transform, and the one
+   * thing it can offer that nobody else can is the guarantee that the shapes are
+   * drawn in it. Clipped to the *data* rather than to the plot, so a circle at
+   * the last bin cannot spill onto the frame.
+   *
+   * Painted after the dividers and labels and before the ticks and crosshair:
+   * over the picture, under the instruments.
+   */
+  private drawOverlay(): void {
+    const paint = this.overlayPainter
+    const data = this.dataRect
+    if (paint === null || data.width <= 0 || data.height <= 0) return
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(data.x, data.y, data.width, data.height)
+    ctx.clip()
+    paint(ctx, {
+      plot: this.plotRect,
+      data,
+      rowScale: this.rowScale,
+      colScale: this.colScale,
+      dpr: this.dpr,
+    })
+    ctx.restore()
+  }
+
+  /** Install (or clear) the overlay painter. */
+  setOverlayPainter(paint: OverlayPainter | null): void {
+    this.overlayPainter = paint
+    this.changed()
   }
 
   /**
