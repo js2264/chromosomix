@@ -1,0 +1,167 @@
+name: Desktop release
+
+# Builds the desktop installers on a version tag and collects them into a
+# **draft** release.
+#
+# `deploy.yml` is not touched by any of this, and that is the concrete form of
+# the guarantee the desktop target was built under: the web app is published by
+# a different workflow, from a different command (`npm run build`), and nothing
+# here can reach it. The two even run at the same time — `npm version` creates a
+# commit and a tag, and one `git push --follow-tags` starts both.
+#
+# Which is why the concurrency group below is **not** `pages`. Sharing that group
+# would make one push serialise the installer build against the site deployment,
+# or cancel it outright, and the failure would look like GitHub being slow.
+#
+# The release is a draft on purpose. By the time a tag lands, Pages has already
+# published the web build — so the web release is done and a bad installer costs
+# nothing until a human looks at the artifacts and presses publish.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.id }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      # One red leg should not hide the state of the other two: the interesting
+      # question after a failure is whether it is platform-specific.
+      fail-fast: false
+      matrix:
+        include:
+          # `macos-13` no longer exists as a runner label and `macos-14` is
+          # deprecated. A job naming a removed label does not fail — it queues
+          # indefinitely, so the release simply hangs.
+          #
+          # One macOS leg builds both architectures. There are no native modules
+          # to compile (h5wasm is a single file with the wasm inlined), so the
+          # x64 slice is a copy of the same JavaScript beside a different
+          # Electron binary.
+          - id: mac
+            os: macos-15
+            args: --mac
+          - id: win
+            os: windows-latest
+            args: --win
+          - id: linux
+            os: ubuntu-latest
+            args: --linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # Electron's binary is fetched lazily on first use and is ~100 MB per
+      # platform. Cached here and nowhere else: the Pages and test jobs never
+      # touch it, so this must not become a repository-wide cache step.
+      - name: Cache the Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - run: npm ci
+
+      # Typechecks both projects, builds the renderer, compiles the main
+      # process and asserts the shape of what came out.
+      - name: Build the renderer and the main process
+        run: npm run build:desktop
+
+      - name: Package
+        run: npx electron-builder ${{ matrix.args }} --config electron-builder.config.cjs --publish never
+        env:
+          # A runner keychain must never silently supply a real Developer ID.
+          # These releases are unsigned, `docs/desktop.md` says so, and a build
+          # that quietly became signed would make that document wrong.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # `mac.identity: '-'` is ad-hoc signing, and the difference between that
+      # and no signature at all is the difference between an app that runs on
+      # Apple Silicon and one that does not. Nothing else in the pipeline can
+      # tell them apart: both build, both upload, both install.
+      - name: Assert the macOS build is at least ad-hoc signed
+        if: matrix.id == 'mac'
+        run: |
+          set -euo pipefail
+          app=$(find release -maxdepth 2 -name '*.app' -print -quit)
+          test -n "$app" || { echo "no .app in release/"; exit 1; }
+          # `|| true` so that the grep below is what fails the job: codesign
+          # exits non-zero on an unsigned binary, and under `pipefail` that
+          # would kill the step before it could say why.
+          codesign -dv --verbose=4 "$app" 2>&1 | tee /tmp/codesign.txt || true
+          if grep -q 'code object is not signed at all' /tmp/codesign.txt; then
+            echo "::error title=Unsigned binary::mac.identity produced no signature — check it is '-' and not null."
+            exit 1
+          fi
+
+      - name: Verify the packed archive
+        run: node scripts/check-package.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # v4 refuses duplicate artifact names within one run, so the matrix id
+          # is part of the name rather than a suffix someone might drop.
+          name: metacooler-viewer-${{ matrix.id }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  collect:
+    name: draft release
+    needs: build
+    runs-on: ubuntu-latest
+    # The only job in this workflow that can write anything, and it writes one
+    # thing. Never `pages:` or `id-token:` — those belong to deploy.yml and
+    # nothing here has any business publishing a website.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: What was collected
+        run: ls -la artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: artifacts/*
+          body: |
+            Desktop builds of the (meta)cooler viewer.
+
+            **These installers are unsigned.** macOS and Windows will each warn
+            once before running one; `docs/desktop.md` gives both warnings
+            verbatim and the exact click that gets past them. A signature says
+            who published a build, not whether it works.
+
+            The web app at https://js2264.github.io/metacooler.js/ is the same
+            viewer and needs no installation.

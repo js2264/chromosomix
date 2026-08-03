@@ -50,6 +50,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The desktop *bundle*, not the installers: this compiles the renderer and
+      # the main process and asserts the shape of what came out. No Electron
+      # binary is downloaded and nothing is packaged, so PR time is unchanged —
+      # `release.yml` is where the ~100 MB per platform gets fetched.
+      #
+      # Here rather than only on a tag because everything it catches is a source
+      # change: a root-absolute asset URL, a worker URL built from the root, a
+      # main process that no longer compiles. Finding those on the tag means
+      # finding them at the moment a release is least able to absorb it.
+      - name: Build the desktop bundle
+        run: npm run build:desktop
+
   goldens:
     name: golden oracles (needs metacooler)
     runs-on: ubuntu-latest

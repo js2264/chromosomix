@@ -1,3 +1,10 @@
+# LF in the working tree on every platform. Added before the first Windows
+# runner ever checks this repository out: without it, git would hand that runner
+# CRLF, and the first thing to notice would be a shell script in a workflow
+# failing with `$'\r': command not found` — a message that names neither the
+# file nor the line ending.
+* text=auto eol=lf
+
 # Golden oracles are generated, deterministic JSON; a diff in them means a real
 # format change, so keep them readable in review rather than collapsed.
 test/golden/*.json -diff=off
