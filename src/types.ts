@@ -110,6 +110,16 @@ export interface MatrixQuery {
   cols?: Extent
   /** Apply `/bins` weights if a balancing column is present (spec §6.4). */
   balance?: boolean
+  /**
+   * Override the tab's memory budget for this one read.
+   *
+   * The budget is a guess from `navigator.deviceMemory`, which is Chromium-only
+   * and capped at 8 — so it says the same thing about a 128 GB workstation as
+   * about an 8 GB laptop, and says nothing at all on Firefox or Safari. When it
+   * refuses a block, the user is in a position to know better than it does, and
+   * this is how they say so. Absent means "use the guess".
+   */
+  budgetBytes?: number
 }
 
 /**

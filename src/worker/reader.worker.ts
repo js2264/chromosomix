@@ -173,7 +173,12 @@ async function handleMatrix(
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
   const dense = await mc.matrix(
-    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    {
+      rows: request.rows,
+      cols,
+      ...(request.balance === true ? { balance: true } : {}),
+      ...(request.budgetBytes === undefined ? {} : { budgetBytes: request.budgetBytes }),
+    },
     hintFor(request.rows, cols),
   )
   return binLevelResult(mc, dense)

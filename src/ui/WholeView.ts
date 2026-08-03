@@ -17,7 +17,7 @@
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
-import { el, fmt } from './dom'
+import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel } from './MatrixPanel'
 
@@ -134,16 +134,24 @@ export class WholeView {
     this.panel.destroy()
   }
 
-  private async load(): Promise<void> {
+  private async load(budgetBytes?: number): Promise<void> {
     const { client, nBins, balance, noun } = this.props
     const rows: [number, number] = [0, nBins]
+    const budget = budgetBytes === undefined ? {} : { budgetBytes }
     this.panel.setBusy(true)
+    this.problem.replaceChildren()
     this.problem.classList.add('hidden')
     try {
       const result: MatrixResult =
         this.level === 'bin'
-          ? await client.request<'matrix'>({ kind: 'matrix', rows, balance })
-          : await client.request<'aggregate'>({ kind: 'aggregate', rows, level: 'contig', balance })
+          ? await client.request<'matrix'>({ kind: 'matrix', rows, balance, ...budget })
+          : await client.request<'aggregate'>({
+              kind: 'aggregate',
+              rows,
+              level: 'contig',
+              balance,
+              ...budget,
+            })
       if (this.disposed) return
       this.panel.setData(result, 'Whole genome')
       this.summary.textContent =
@@ -156,15 +164,39 @@ export class WholeView {
       // than on an error screen that offers a way back to the file picker.
       if (err instanceof ViewerError && err.code === 'dense-too-large') {
         this.panel.setBusy(false)
+        // Only the *browser* refusal is overridable. The CLI-parity limit and a
+        // real allocation failure are not opinions about this machine.
+        const estimate = err.detail['bytes']
+        const needed =
+          err.detail['where'] === 'browser' && typeof estimate === 'number' ? estimate : null
         // "Switch to level" is a real escape hatch now. It used to be a false
         // one: the roll-up loaded the same bin-level block before summing it, so
         // it was refused by the same guard for the same reason. It accumulates
         // from the stored pixels instead, and its cost is the *output* size —
         // one cell per sequence pair, which always fits.
-        this.problem.textContent =
-          `${err.message} The ${noun}-level view of the same selection is one cell per ` +
-          `${noun} and always fits; a coarser resolution of this file, if it has one, or a ` +
-          `single ${noun} from the table, will too.`
+        this.problem.replaceChildren(
+          el('span', {
+            text:
+              `${err.message} The ${noun}-level view of the same selection is one cell per ` +
+              `${noun} and always fits; a coarser resolution of this file, if it has one, or a ` +
+              `single ${noun} from the table, will too.`,
+          }),
+          // The budget is a guess from a property Chromium caps at 8 and the
+          // other two engines do not implement at all, so it says the same thing
+          // about a workstation as about a laptop and nothing about a Mac. When
+          // it refuses a block the user is often the one who knows better, and
+          // this is how they say so.
+          ...(needed === null
+            ? []
+            : [
+                button(`load anyway (${fmt.bytes(needed)})`, () => void this.load(needed), {
+                  class: 'btn',
+                  title:
+                    'Ignore the estimated memory budget for this read. The tab may become ' +
+                    'unresponsive while the block loads, and may run out of memory.',
+                }),
+              ]),
+        )
         this.problem.classList.remove('hidden')
         this.summary.textContent = ''
         return

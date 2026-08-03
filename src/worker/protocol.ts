@@ -318,7 +318,7 @@ export type WorkerRequest =
   // `balance` multiplies each cell by its two bin weights, which is cooler's
   // own definition of a balanced matrix (§6.4). Off by default, matching
   // `metacooler show`, and offered only when the file carries the column.
-  | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent; balance?: boolean }
+  | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent; balance?: boolean; budgetBytes?: number }
   | {
       id: number
       kind: 'aggregate'
@@ -326,6 +326,7 @@ export type WorkerRequest =
       cols?: Extent
       level: 'contig' | 'genome'
       balance?: boolean
+      budgetBytes?: number
     }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
