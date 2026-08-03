@@ -696,6 +696,10 @@ export class HeatmapView {
    */
   private pooled: PooledDisplay | null = null
   private offscreen: RasterCanvas | null = null
+  /** Handle of a frame this view scheduled for itself; see {@link changed}. */
+  private selfFrame = 0
+  /** Cached canvas origin; see {@link clientRect}. `null` means "re-measure". */
+  private rectCache: { left: number; top: number } | null = null
   private separators: SeparatorSet = EMPTY_SEPARATORS
   /** {@link blocks}, per axis, until the separators change. */
   private blockCache: { rows: LabelBlock[] | null; cols: LabelBlock[] | null } = {
@@ -916,6 +920,7 @@ export class HeatmapView {
    * raster is at *matrix* resolution and is independent of the viewport.
    */
   resize(cssWidth?: number, cssHeight?: number): void {
+    this.rectCache = null
     const w = cssWidth ?? this.canvas.clientWidth
     const h = cssHeight ?? this.canvas.clientHeight
     this.cssWidth = w > 0 ? w : this.canvas.width || 1
@@ -1151,9 +1156,59 @@ export class HeatmapView {
     this.rowScale.setDomain([this.originY, this.originY + plot.height / this.zoom])
   }
 
+  /**
+   * The **single** redraw entry point. Everything that moves the view calls
+   * this; nothing calls {@link draw} directly except the export path, which
+   * needs a synchronous render into a foreign context.
+   *
+   * The input handlers used to call `draw()` themselves *and* go through a
+   * mutator that ends here, so every pointer event painted twice: once
+   * synchronously, at whatever rate the device reports moves, and once from the
+   * frame the same call had scheduled. A 120 Hz trackpad drove 180 full repaints
+   * a second where 60 would do, and the owner's coalescing guard — the thing
+   * that exists to prevent exactly that — was bypassed by the half that did not
+   * go through it.
+   *
+   * With an owner, coalescing is the owner's (`MatrixPanel.schedule`). Without
+   * one this schedules its own frame. Where there are no frames at all — Node,
+   * and therefore the unit tests — it does nothing, which is exactly what every
+   * non-handler mutator here has always done: a caller that wants a picture in
+   * that environment asks for one with {@link draw} or {@link rasterize}.
+   */
+  /**
+   * The canvas's position in client coordinates, cached.
+   *
+   * `getBoundingClientRect` was called once per pointer move and once per touch
+   * point — a geometry read on the app's highest-frequency path, which the
+   * tooltip's DOM writes in the same handler chain turn into a forced document
+   * reflow. The rect changes when the canvas resizes or the page scrolls, and
+   * both of those already have a home: {@link resize} clears it, and the scroll
+   * listener {@link attach} installs does the same.
+   */
+  private clientRect(): { left: number; top: number } {
+    let rect = this.rectCache
+    if (rect === null) {
+      const box = this.canvas.getBoundingClientRect()
+      rect = { left: box.left, top: box.top }
+      this.rectCache = rect
+    }
+    return rect
+  }
+
   private changed(): void {
+    // Before either redraw path: the margin is a function of the view, so it
+    // has to be up to date whoever ends up painting.
     this.refreshLabelMargin()
-    this.onChange?.()
+    if (this.onChange !== null) {
+      this.onChange()
+      return
+    }
+    if (typeof requestAnimationFrame !== 'function') return
+    if (this.selfFrame !== 0) return
+    this.selfFrame = requestAnimationFrame(() => {
+      this.selfFrame = 0
+      this.draw()
+    })
   }
 
   /**
@@ -1487,13 +1542,43 @@ export class HeatmapView {
     const vertical = axis === 'cols'
     const scale = vertical ? this.colScale : this.rowScale
     const base = vertical ? plot.x : plot.y
+
+    // Three things this loop used to do wrong, all of which only bite at scale
+    // — and "at scale" is a whole-metagenome view, which is the one place the
+    // dividers matter most.
+    //
+    // 1. **One path per line.** A `beginPath`/`stroke` pair per separator is a
+    //    separate submission to the rasteriser: 2 × (N − 1) of them per frame,
+    //    4,094 on a 2,048-unit overview, at whatever rate the pointer moves.
+    //    They all share a colour and a width, so they are one path.
+    // 2. **No culling.** Every separator was transformed and stroked whether or
+    //    not it landed inside the clip. Zoomed to 100 of 24,300 bins, 99.6% of
+    //    the work produced no pixels — and zooming *in* made the ratio worse,
+    //    because the visible fraction shrinks while the loop length does not.
+    // 3. **No de-duplication.** At fit zoom on a 20,000-contig axis, dozens of
+    //    boundaries land on the same device pixel; drawing them all is how a
+    //    set of hairlines becomes a grey wash.
+    //
+    // `at` is ascending by construction (`separatorsFor` maps over ordered
+    // groups), so the visible window is a contiguous slice and the scan can
+    // stop at its far edge.
+    const [lo, hi] = scale.domain
+    const near = vertical ? data.x : data.y
+    const far = near + (vertical ? data.width : data.height)
+    let previous = Number.NaN
+    let drawn = 0
+    ctx.beginPath()
     for (const sep of seps) {
       // `at === 0` is the block edge, not an internal boundary.
       if (sep.at <= 0 || sep.at >= n) continue
+      if (sep.at < lo) continue
+      if (sep.at > hi) break
       // Snap to the device-pixel grid: a hairline on a fractional coordinate is
       // antialiased into a two-pixel smudge that reads as a real feature.
       const p = this.snap(base + scale.toPixel(sep.at))
-      ctx.beginPath()
+      if (p === previous || p < near || p > far) continue
+      previous = p
+      drawn++
       if (vertical) {
         ctx.moveTo(p, data.y)
         ctx.lineTo(p, data.y + data.height)
@@ -1501,8 +1586,8 @@ export class HeatmapView {
         ctx.moveTo(data.x, p)
         ctx.lineTo(data.x + data.width, p)
       }
-      ctx.stroke()
     }
+    if (drawn > 0) ctx.stroke()
   }
 
   /** Put a hairline on the device-pixel grid, so it stays one pixel wide. */
@@ -1564,10 +1649,18 @@ export class HeatmapView {
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
     ctx.clip()
 
+    // A whole-metagenome view puts the genome runs in *both* sets, so the axis
+    // is labelled by genome while the heavier stroke lands on the same
+    // coordinates. Where the two are literally the same array there is nothing
+    // for the fine pass to add, and skipping it halves the stroking.
     ctx.strokeStyle = this.opts.separatorColor
     ctx.lineWidth = Math.max(this.opts.separatorWidth, 1 / this.dpr)
-    this.strokeBoundary(this.separators.cols, 'cols', ncols)
-    this.strokeBoundary(this.separators.rows, 'rows', nrows)
+    if (this.separators.groupCols !== this.separators.cols) {
+      this.strokeBoundary(this.separators.cols, 'cols', ncols)
+    }
+    if (this.separators.groupRows !== this.separators.rows) {
+      this.strokeBoundary(this.separators.rows, 'rows', nrows)
+    }
 
     // The coarser set on top, heavier: genomes over contigs in a whole-genome
     // view, and selection-block edges everywhere else.
@@ -1944,7 +2037,7 @@ export class HeatmapView {
     if (canvas.tabIndex < 0) canvas.tabIndex = 0
 
     const local = (e: MouseEvent): [number, number] => {
-      const r = canvas.getBoundingClientRect()
+      const r = this.clientRect()
       return [e.clientX - r.left, e.clientY - r.top]
     }
 
@@ -2008,7 +2101,7 @@ export class HeatmapView {
           drag.x = x
           drag.y = y
         }
-        this.draw()
+        this.changed()
         return
       }
       const cell = this.cellAt(x, y)
@@ -2041,7 +2134,7 @@ export class HeatmapView {
         return
       }
       if (drag.mode === 'select') this.zoomToBox(drag.x0, drag.y0, x, y)
-      this.draw()
+      this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {
       e.preventDefault()
@@ -2049,7 +2142,7 @@ export class HeatmapView {
       // back", not "go there and put it back".
       cancelPendingClick()
       this.fit()
-      this.draw()
+      this.changed()
     }
     const onLeave = (): void => {
       // Abandon the drag rather than finish it blind: a selection whose second
@@ -2059,7 +2152,7 @@ export class HeatmapView {
       showCursor({ selecting: false, grabbing: false })
       this.setHover(null)
       this.onHover?.(null)
-      if (wasDragging) this.draw()
+      if (wasDragging) this.changed()
     }
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault()
@@ -2067,10 +2160,10 @@ export class HeatmapView {
       // Exponential in the wheel delta so a trackpad's many small events and a
       // mouse wheel's few large ones compose to the same total zoom.
       this.zoomAt(x, y, Math.exp(-e.deltaY * 0.002))
-      this.draw()
+      this.changed()
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (this.handleKeyDown(e)) this.draw()
+      if (this.handleKeyDown(e)) this.changed()
     }
 
     /**
@@ -2084,7 +2177,7 @@ export class HeatmapView {
      * otherwise run every gesture twice.
      */
     const touchPoints = (e: TouchEvent): Array<[number, number]> => {
-      const r = canvas.getBoundingClientRect()
+      const r = this.clientRect()
       return Array.from(e.touches, (t) => [t.clientX - r.left, t.clientY - r.top])
     }
     const centre = (points: Array<[number, number]>): [number, number] => [
@@ -2128,7 +2221,7 @@ export class HeatmapView {
         this.lastX = cx
         this.lastY = cy
         touchMoved = true
-        this.draw()
+        this.changed()
         return
       }
       const [x, y] = points[0]
@@ -2136,7 +2229,7 @@ export class HeatmapView {
       this.panBy(x - this.lastX, y - this.lastY)
       this.lastX = x
       this.lastY = y
-      this.draw()
+      this.changed()
     }
     const onTouchEnd = (e: TouchEvent): void => {
       if (e.touches.length > 0) {
@@ -2159,7 +2252,7 @@ export class HeatmapView {
         lastTapAt = 0
         cancelPendingClick()
         this.fit()
-        this.draw()
+        this.changed()
         return
       }
       lastTapAt = now
@@ -2192,7 +2285,18 @@ export class HeatmapView {
     canvas.addEventListener('touchmove', onTouchMove, { passive: false })
     canvas.addEventListener('touchend', onTouchEnd, { passive: false })
     canvas.addEventListener('touchcancel', onTouchEnd, { passive: false })
+    // The cached canvas origin (see `clientRect`) moves when the page scrolls.
+    // Captured on the window so an ancestor's scroll is seen too, and passive
+    // because this only invalidates a number.
+    const onScroll = (): void => {
+      this.rectCache = null
+    }
+    const scrollHost: { addEventListener?: typeof window.addEventListener } | undefined =
+      typeof window === 'undefined' ? undefined : window
+    scrollHost?.addEventListener?.('scroll', onScroll, { capture: true, passive: true })
+
     this.detachFns = [
+      () => window?.removeEventListener?.('scroll', onScroll, { capture: true }),
       () => canvas.removeEventListener('mousedown', onDown),
       () => canvas.removeEventListener('mousemove', onMove),
       () => canvas.removeEventListener('mouseup', onUp),
@@ -2229,5 +2333,9 @@ export class HeatmapView {
   detach(): void {
     for (const fn of this.detachFns) fn()
     this.detachFns = []
+    if (this.selfFrame !== 0) {
+      cancelAnimationFrame(this.selfFrame)
+      this.selfFrame = 0
+    }
   }
 }

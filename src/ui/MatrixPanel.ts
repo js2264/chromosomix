@@ -146,6 +146,8 @@ export class MatrixPanel {
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly clip: ClipRange
+  private readonly transformSelect: HTMLSelectElement
+  private readonly colormapSelect: HTMLSelectElement
   private readonly overlay: HTMLElement
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
   private readonly unsubscribePlotOptions: () => void
@@ -164,6 +166,21 @@ export class MatrixPanel {
   private manualVmax: number | undefined
   private level: 'bin' | 'contig'
   private frame = 0
+  /** The scale the colourbar was last drawn for; `null` until it has been. */
+  private painted: ColorScale | null = null
+  /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
+  private readonly tip: {
+    rowName: HTMLElement
+    times: HTMLElement
+    colName: HTMLElement
+    pos: HTMLElement
+    count: HTMLElement
+  }
+  /** Cached geometry for {@link positionTooltip}; never read during a pointer move. */
+  private tipSize = { width: 0, height: 0 }
+  private hostSize = { width: 0, height: 0 }
+  private tipAt: { x: number; y: number } | null = null
+  private tipFrame = 0
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -178,7 +195,20 @@ export class MatrixPanel {
     // Both exist on purpose: the tooltip answers "what is under my cursor"
     // without a glance away from the matrix, and the readout keeps the last
     // answer visible after the pointer has moved on.
-    this.tooltip = el('div', { class: 'cell-tip hidden' })
+    this.tip = {
+      rowName: el('span', { class: 'cell-tip-name' }),
+      times: el('span', { class: 'cell-tip-x', text: '×' }),
+      colName: el('span', { class: 'cell-tip-name' }),
+      pos: el('div', { class: 'cell-tip-pos' }),
+      count: el('div', { class: 'cell-tip-count' }),
+    }
+    this.tooltip = el(
+      'div',
+      { class: 'cell-tip hidden' },
+      el('div', { class: 'cell-tip-pair' }, this.tip.rowName, this.tip.times, this.tip.colName),
+      this.tip.pos,
+      this.tip.count,
+    )
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
@@ -201,6 +231,7 @@ export class MatrixPanel {
     this.colorbar = new ColorbarView(this.barCanvas, { caption: 'count' })
 
     const transformSelect = el('select', { class: 'select' })
+    this.transformSelect = transformSelect
     for (const name of TRANSFORMS) transformSelect.appendChild(el('option', { value: name, text: name }))
     transformSelect.value = this.transform
     transformSelect.addEventListener('change', () => {
@@ -214,6 +245,7 @@ export class MatrixPanel {
     })
 
     const colormapSelect = el('select', { class: 'select' })
+    this.colormapSelect = colormapSelect
     for (const name of COLORMAP_NAMES) {
       const safe = COLOR_VISION_SAFE_COLORMAPS.includes(name)
       colormapSelect.appendChild(el('option', { value: name, text: safe ? `${name} ✓` : name }))
@@ -415,7 +447,12 @@ export class MatrixPanel {
     this.observer =
       typeof ResizeObserver === 'undefined'
         ? null
-        : new ResizeObserver(() => {
+        : new ResizeObserver((entries) => {
+            // The tooltip's host is `wrap`, which is what is observed — so the
+            // one place that already learns this box's size is also the only
+            // place that needs to.
+            const box = entries[0]?.contentRect
+            if (box !== undefined) this.hostSize = { width: box.width, height: box.height }
             this.heatmap.resize()
             this.colorbar.resize()
             this.schedule()
@@ -423,6 +460,7 @@ export class MatrixPanel {
     this.observer?.observe(wrap)
     // The canvas has no size until it is in the document; size it once laid out.
     requestAnimationFrame(() => {
+      this.hostSize = { width: wrap.clientWidth, height: wrap.clientHeight }
       this.heatmap.resize()
       this.colorbar.resize()
       this.schedule()
@@ -445,6 +483,7 @@ export class MatrixPanel {
     this.observer?.disconnect()
     this.heatmap.detach()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
+    if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -669,6 +708,35 @@ export class MatrixPanel {
     }
   }
 
+  /**
+   * Adopt a colour scale that came from *outside* this panel — a shared link, a
+   * back button, a command — without echoing it back out.
+   *
+   * The echo is the point of the separation. {@link rescale} is what a control
+   * in this card calls, and it announces the change so the URL follows;
+   * `applyScale` is what the owning view calls when the URL moved first, and
+   * announcing it again would be a loop. Programmatic assignment to a `<select>`
+   * fires no `change` event, so the two listeners above stay quiet.
+   *
+   * This is what lets `App.render` treat a colour-only state change as a repaint
+   * rather than as a reason to rebuild the view and re-read the matrix.
+   */
+  applyScale(scale: {
+    transform?: Transform
+    colormap?: string
+    vmin?: number
+    vmax?: number
+  }): void {
+    this.transform = scale.transform ?? this.transform
+    this.colormap = scale.colormap ?? this.colormap
+    this.manualVmin = scale.vmin
+    this.manualVmax = scale.vmax
+    this.transformSelect.value = this.transform
+    this.colormapSelect.value = this.colormap
+    this.heatmap.setScale(this.scale())
+    this.schedule()
+  }
+
   private rescale(): void {
     this.heatmap.setScale(this.scale())
     this.options.onScaleChange?.({
@@ -690,9 +758,16 @@ export class MatrixPanel {
       // `effectiveScale` is the scale the raster actually used, so this is where
       // the auto rule's numbers become visible — in the colourbar and, equally,
       // in the clip boxes, which is what a reader nudges rather than invents.
+      //
+      // Guarded, because a pan changes neither. The legend is 256 `fillRect`s
+      // and a tick layout; unguarded it redrew all of it every frame of every
+      // drag, to produce the same picture it already had.
       const effective = this.heatmap.effectiveScale
-      this.colorbar.setScale(effective)
-      this.colorbar.draw()
+      if (!sameColorScale(effective, this.painted)) {
+        this.painted = { ...effective }
+        this.colorbar.setScale(effective)
+        this.colorbar.draw()
+      }
       if (Number.isFinite(effective.vmin) && Number.isFinite(effective.vmax)) {
         this.clip.setValues(
           { vmin: effective.vmin, vmax: effective.vmax },
@@ -735,22 +810,23 @@ export class MatrixPanel {
     // the old layout printed `NODE_8524_len_441121` four times, and the number
     // the pointer is actually asking about was the last thing on the card.
     const sameBlock = rowGroup !== undefined && colGroup !== undefined && rowGroup.label === colGroup.label
-    const heading = sameBlock
-      ? [el('span', { class: 'cell-tip-name', text: rowGroup.label })]
-      : [
-          el('span', { class: 'cell-tip-name', text: rowGroup?.label ?? '—' }),
-          el('span', { class: 'cell-tip-x', text: '×' }),
-          el('span', { class: 'cell-tip-name', text: colGroup?.label ?? '—' }),
-        ]
     const rowPos = positionIn(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
     const colPos = positionIn(colGroup, cell.col, data.level, this.options.binsize, colStart)
-    this.tooltip.replaceChildren(
-      el('div', { class: 'cell-tip-pair' }, ...heading),
-      ...(rowPos === null || colPos === null
-        ? []
-        : [el('div', { class: 'cell-tip-pos', text: `${rowPos}  ×  ${colPos}` })]),
-      el('div', { class: 'cell-tip-count', text: `count ${count}` }),
-    )
+
+    // Written in place rather than rebuilt. `replaceChildren` with five fresh
+    // elements ran on every pointer move — 4-6 allocations and as many
+    // detachments per event, on the highest-frequency path in the app — to
+    // produce a card whose *shape* almost never changes. Only the text does.
+    const tip = this.tip
+    tip.rowName.textContent = sameBlock ? rowGroup.label : (rowGroup?.label ?? '—')
+    tip.times.classList.toggle('hidden', sameBlock)
+    tip.colName.classList.toggle('hidden', sameBlock)
+    if (!sameBlock) tip.colName.textContent = colGroup?.label ?? '—'
+    const hasPos = rowPos !== null && colPos !== null
+    tip.pos.classList.toggle('hidden', !hasPos)
+    if (hasPos) tip.pos.textContent = `${rowPos}  ×  ${colPos}`
+    tip.count.textContent = `count ${count}`
+
     this.tooltip.classList.remove('hidden')
     if (at !== undefined) this.placeTooltip(at.x, at.y)
   }
@@ -761,18 +837,57 @@ export class MatrixPanel {
    * Offset from the pointer so it never sits under it, and flipped to the other
    * side near an edge — a tooltip clipped by the panel border is worse than no
    * tooltip, because it looks like the value is missing.
+   *
+   * Both measurements it needs are *cached*, and that is the whole point. The
+   * old version read `offsetWidth`/`offsetHeight` immediately after writing the
+   * card's contents, which forces the browser to lay out the document
+   * synchronously — twice per pointer move, at whatever rate the device reports
+   * them. The host's size now comes from the `ResizeObserver` that already
+   * watches it, and the tooltip's own size is re-measured at most once per
+   * frame, inside a `requestAnimationFrame` where layout is already clean.
    */
   private placeTooltip(x: number, y: number): void {
-    const host = this.tooltip.parentElement
-    if (host === null) return
-    const pad = 14
-    const tipWidth = this.tooltip.offsetWidth
-    const tipHeight = this.tooltip.offsetHeight
-    const left = x + pad + tipWidth > host.clientWidth ? x - pad - tipWidth : x + pad
-    const top = y + pad + tipHeight > host.clientHeight ? y - pad - tipHeight : y + pad
-    this.tooltip.style.left = `${Math.max(0, left)}px`
-    this.tooltip.style.top = `${Math.max(0, top)}px`
+    this.tipAt = { x, y }
+    this.positionTooltip()
+    if (this.tipFrame !== 0) return
+    this.tipFrame = requestAnimationFrame(() => {
+      this.tipFrame = 0
+      const width = this.tooltip.offsetWidth
+      const height = this.tooltip.offsetHeight
+      if (width === this.tipSize.width && height === this.tipSize.height) return
+      this.tipSize = { width, height }
+      this.positionTooltip()
+    })
   }
+
+  /** Write the transform from the cached geometry. No reads, no layout. */
+  private positionTooltip(): void {
+    const at = this.tipAt
+    if (at === null) return
+    const pad = 14
+    const { width, height } = this.tipSize
+    const host = this.hostSize
+    const left = at.x + pad + width > host.width ? at.x - pad - width : at.x + pad
+    const top = at.y + pad + height > host.height ? at.y - pad - height : at.y + pad
+    this.tooltip.style.transform = `translate(${Math.max(0, left)}px, ${Math.max(0, top)}px)`
+  }
+}
+
+/**
+ * Whether two resolved scales would paint the same legend.
+ *
+ * Every field the colourbar reads, and nothing else — a change of matrix with
+ * an identical scale draws an identical bar.
+ */
+function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
+  return (
+    b !== null &&
+    a.vmin === b.vmin &&
+    a.vmax === b.vmax &&
+    a.transform === b.transform &&
+    a.colormap === b.colormap &&
+    a.balanced === b.balanced
+  )
 }
 
 /** Which group covers a block-local offset. */
@@ -1022,8 +1137,12 @@ export function separatorsFor(data: MatrixResult): SeparatorSet {
     rows: toSeparators(rowUnits),
     cols: toSeparators(colUnits),
   }
-  if (data.rowSuperGroups !== undefined) set.groupRows = toSeparators(data.rowSuperGroups)
-  if (data.colSuperGroups !== undefined) set.groupCols = toSeparators(data.colSuperGroups)
+  // The *same array*, not a second copy of it. Where a super-group set exists it
+  // is both sets, and the renderer skips the fine pass when it recognises the
+  // identity — otherwise it stroked several thousand hairlines and then stroked
+  // the heavier line over exactly the same coordinates.
+  if (data.rowSuperGroups !== undefined) set.groupRows = set.rows
+  if (data.colSuperGroups !== undefined) set.groupCols = set.cols
   return set
 }
 
