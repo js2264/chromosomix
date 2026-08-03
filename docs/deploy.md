@@ -241,14 +241,32 @@ What "major" means here is not an API: this is an application, so the contract i
 it opens and the URL hash it publishes**. A major bump is a `.metacool` the previous version could
 open and this one cannot, or a shared `#uri=…` link that no longer resolves to the same view.
 
-**The tag is also what builds the desktop installers.** `.github/workflows/release.yml` triggers on
-`v*`, builds on macOS, Windows and Linux, and collects the artifacts into a **draft** release for a
-human to publish. So one `git push --follow-tags` starts two independent workflows: Pages publishes
-the web build, and the release workflow packages the same bundle. They share nothing — different
-commands, different outputs, different concurrency groups — which is why a failed installer leg
-cannot delay or undo a site deployment that has already happened. Packaging is deliberately *not*
-part of `preversion`: `npm version patch` would otherwise download Electron and build a `.dmg` to
-bump a number.
+### The desktop installers
+
+Pushing the tag publishes the *web* build and nothing else. The installers are built by
+**creating a GitHub release**, which is a separate, deliberate act:
+
+```bash
+npm version minor && git push --follow-tags     # site goes live
+gh release create v0.3.0 --draft --title v0.3.0 --notes-file <(…)
+```
+
+`.github/workflows/release.yml` triggers on `release: [created]`, builds on macOS, Windows and
+Linux, and attaches the `.dmg`, `.zip`, `.exe`, `.AppImage` and `.deb` to that release. Creating it
+as a **draft** is the recommended shape: the three legs attach their artifacts, you look at them,
+and then you press publish. Publishing an existing draft does not re-fire the workflow — nothing
+has changed to rebuild — so re-running a leg against an existing tag is `workflow_dispatch` with
+the tag as input.
+
+The trigger is the release rather than the tag because a tag on its own does not mean "ship
+binaries": `npm version` makes one on every patch bump, and building three installers to renumber
+a changelog is a waste of twenty minutes per release. It also keeps the two workflows genuinely
+independent — different events, different commands, different outputs, different concurrency
+groups — so a failed installer leg cannot delay or undo a site deployment that has already
+happened.
+
+Packaging is deliberately *not* part of `preversion`, for the same reason: `npm version patch`
+would otherwise download Electron and build a `.dmg` to bump a number.
 
 ### How a build says what it is
 

@@ -74,7 +74,7 @@
     "electron": "Pinned exactly, not caret-ranged. This is the browser the desktop user runs, so a floating range would silently change the rendering engine under a `npm ci`. Bumping it is a CHANGELOG `Changed` entry for the same reason. Track the latest three majors, which is the window Electron itself supports.",
     "engines": "The floor is Electron 43's now, not Vite's. The `^20.19.0` half had to go: it satisfies Vite and vitest, but cannot run the desktop toolchain, so leaving it in would have advertised a Node version on which half the scripts fail.",
     "build:desktop": "A second invocation of the bundler, never a change to the first. `build` is the command line .github/workflows/deploy.yml runs and it must keep working byte-for-byte; this one reads the same source through vite.desktop.config.ts, compiles the main process, and then asserts the shape of what came out, because every way that shape goes wrong is silent.",
-    "dist:desktop": "Builds the installers. Deliberately *not* part of `preversion`: `npm version patch` would otherwise download a 100 MB Electron binary and pack a .dmg to bump a number. On a tag, .github/workflows/release.yml is what runs this, once per platform."
+    "dist:desktop": "Builds the installers. Deliberately *not* part of `preversion`: `npm version patch` would otherwise download a 100 MB Electron binary and pack a .dmg to bump a number. In CI this is what .github/workflows/release.yml runs, once per platform, when a GitHub release is *created* — a tag alone does not mean 'ship binaries'."
   },
   "overrides": {
     "rollup": "npm:@rollup/wasm-node@^4.62.0"

@@ -13,7 +13,9 @@ for people who would rather have an icon than a bookmark.
 ## What to download
 
 Artifacts are attached to each [release](https://github.com/js2264/metacooler.js/releases), named
-`metacooler-viewer-<version>-<os>-<arch>.<ext>`.
+`metacooler-viewer-<version>-<os>-<arch>.<ext>`. They are built by CI from the release's own tag
+when the release is created, so what you download is what that tag builds — not something uploaded
+by hand from somebody's laptop.
 
 | Platform | File | Notes |
 |---|---|---|
