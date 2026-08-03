@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A fifth example: a yeast micro-C map at one resolution.**
+  `Yeast_microC_G2M_1kb.cool` — 16 chromosomes of synthetic yeast, 1 kb bins,
+  179 M contacts, balanced. It is the first single-resolution cooler in the
+  picker, so it is also the choice that lands somewhere with no resolution
+  ladder to pick from.
+- **Ten track resources published beside it**, for the bigWig and overlay work
+  that has not landed yet: MNase, ATAC, Pol II ChIP-over-input and stranded
+  RNA-seq coverage, shotgun coverage, ATAC and Pol II peak calls, gene models,
+  and the loop calls made on that map. They are not in the picker and nothing
+  reads them yet. All ten are on the map's own assembly rather than on R64 —
+  same 16 contig names, same lengths, no coordinate off the end of a chromosome
+  — which is the property to check before republishing any of them. See
+  [docs/deploy.md](docs/deploy.md#the-track-resources).
+
 - **Works offline, and installs.** After one visit the app runs with no network at all — reload
   included — and browsers offer to install it as a desktop app. The app is cached; the data never
   is, and requests for it reach the network untouched. A new build is offered as a reload rather

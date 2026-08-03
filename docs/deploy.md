@@ -4,7 +4,7 @@ The app is a static bundle — no backend, no server-side rendering, no API (SPE
 is a file copy. `.github/workflows/deploy.yml` builds on every push to `main` and publishes `dist/`
 through the official Pages actions.
 
-**What is published is the app plus three demo files** (see below). Real datasets are served from a
+**What is published is the app, five demo datasets and ten track resources** (see below). Real datasets are served from a
 bucket configured per [hosting.md](hosting.md); nothing under `data/` is committed or uploaded, and
 a dropped local file still never leaves the browser.
 
@@ -48,7 +48,7 @@ missing file.
 
 ## The demo files
 
-`public/demo/` holds four published datasets, so the deployed site opens something real without
+`public/demo/` holds five published datasets, so the deployed site opens something real without
 anyone first standing up a bucket:
 
 | file | data | provenance |
@@ -57,6 +57,15 @@ anyone first standing up a bucket:
 | `Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
 | `Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
 | `Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
+| `Yeast_microC_G2M_1kb.cool` (19 MB) | 16 chromosomes of synthetic yeast (`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts, balanced | mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`) |
+
+`Yeast_microC_G2M_1kb.cool` is the **single-resolution** cooler in the set: every other map here is
+either a metacool or an `.mcool` ladder, so it is what exercises the path where there is no
+resolution to choose and no `resolutions/` group to land in. It is one level lifted out of a
+seven-level `.mcool` (100 bp – 10 kb) whose finest levels are far too large to publish; 1 kb is the
+grid the loop calls below were made on. **The `_1kb` in the name is load-bearing** — read it back
+from `bin-size` before renaming it, since an earlier copy of this file was called `_2kb` and was
+not.
 
 Vite copies `public/` into `dist/` verbatim, so they land at:
 
@@ -84,16 +93,63 @@ explore rather than glance at should be published per hosting.md and reached by 
 
 Two things to keep in mind:
 
-- The two `.mcool`s carry no genome layer, and that is deliberate: they are what exercises the
-  plain-cooler path on the deployed site — the resolution ladder landing on its finest level, and
-  a contig-only view with the genomes table absent rather than empty.
-- This is ~112 MB in git history and in every Pages artifact. It is a fixed cost, not a per-release
-  one — keep it that way. New or larger datasets belong on a bucket and in the catalog, not here.
+- The three plain coolers carry no genome layer, and that is deliberate: they are what exercises the
+  plain-cooler path on the deployed site — the resolution ladder landing on its finest level, the
+  single-resolution file with no ladder at all, and a contig-only view with the genomes table absent
+  rather than empty.
+- This is ~250 MB in git history and in every Pages artifact, counting the track resources below.
+  It is a fixed cost, not a per-release one — keep it that way. New or larger datasets belong on a
+  bucket and in the catalog, not here.
 
 They are offered in the example dropdown on the picker (`ui/examples.ts`), with URLs built from
 `BASE_URL` and made absolute against the page: the base differs between dev and Pages, and a
 *relative* URI in a shared link would not re-open, because `inferSource` follows a link only when
 its path is `http(s)://`.
+
+## The track resources
+
+`public/demo/` also carries ten files that are **not maps and are not in the picker**. Nothing reads
+them yet: they are published ahead of M6 (bigWig tracks, SPECS §12) and of loop and annotation
+overlays, so that when those land there is a real signal to draw beside a real map rather than a
+fixture. Every one of them is aligned to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it.
+
+| file | data |
+| --- | --- |
+| `Yeast_Shotgun.bw` (18 MB) | shotgun DNA-seq coverage — the flat-ish control track |
+| `Yeast_MNase.bw` (23 MB) | MNase-seq coverage; nucleosome positioning |
+| `Yeast_ATAC.bw` (15 MB), `Yeast_ATAC.narrowPeak` (500 KB) | ATAC-seq accessibility, and 5,105 called peaks |
+| `Yeast_ChIP_Pol2-vs-input.bw` (13 MB), `Yeast_ChIP_Pol2-vs-input.narrowPeak` (56 KB) | Pol II ChIP-seq as a **ratio over input**, and 527 called peaks |
+| `Yeast_RNA_fwd.bw` (20 MB), `Yeast_RNA_rev.bw` (20 MB) | stranded RNA-seq coverage, forward and reverse as separate files |
+| `Yeast_annotations.gtf` (9.5 MB) | R64-1-1 gene models: 7,071 genes and transcripts, 7,419 exons, 6,853 CDS |
+| `Yeast_microC_loops.tsv` (115 KB) | 1,506 cis loop calls (chrompeaks-style: two anchors, bin indices, kernel, score, p/q) |
+
+**They are on the map's assembly, not on the reference, and that is the property to preserve.** The
+map is a synthetic strain: it has no `Mito`, its chromosome XIII is `XIII-syn40` and 40,000 bp longer
+than R64's, and its `III` is 1,095 bp shorter. Every file above was regenerated or lifted to agree
+with it, and as published:
+
+- all five bigWigs declare the map's **16 contig names with byte-identical lengths** — no `Mito`, and
+  `XIII-syn40` at 964,431. So the intersection SPECS §12 asks for is 16 of 16, and the
+  "412 of 418 contigs matched" report has nothing to complain about.
+- the GTF, both `.narrowPeak`s and the loops table name the same 16 and hold **no coordinate past the
+  end of its contig**. The GTF earned that: an earlier copy carried `YCR108C` at 315,997–316,188 on
+  `III`, entirely beyond the map's 315,525, because it was R64 annotation relabelled rather than
+  lifted. That gene is gone.
+- the last 40,629 bp of `XIII-syn40` carry no gene models, which is expected — that is the synthetic
+  insert, and R64 has nothing to say about it.
+
+An earlier version of these tracks was on plain R64 (17 sequences including `Mito`, `XIII` at
+924,431), which made the overlap 15 of 16 with two lengths disagreeing. **If a future track is
+regenerated from the reference, that is the state it will regress to** — check the contig names and
+lengths against the cool before publishing it, because nothing in the build does.
+
+Two reading notes for whoever writes the track renderer: `Yeast_ChIP_Pol2-vs-input.bw` is a ratio, so
+its neutral value is **1, not 0**, and a renderer that baselines at zero will draw it as uniformly
+positive; and `Yeast_microC_loops.tsv` is cis-only, so there is nothing to draw off the diagonal.
+
+These are data by every rule in `scripts/sw-manifest.mjs`, so they are not precached and not in
+`DEMO_FILES` — `test/unit/demo-examples.test.ts` opens what the picker offers, and offering a bigWig
+in a picker that returns a `MetaCooler` would be a broken choice, not a track.
 
 ## Why Pages works at all for this app
 
@@ -132,7 +188,7 @@ file on it.
 
 **What is cached is the app, never the data.** The precache is the built JS and CSS, the shell, the
 manifest and the two icons — about 5 MB, most of it the HDF5 build that makes opening a file
-possible offline at all. The demo datasets under `public/demo/` are 107 MB and are *not* cached, and
+possible offline at all. The demo datasets and track resources under `public/demo/` are 250 MB and are *not* cached, and
 neither is anything the viewer opens: `fetch` in the worker answers only for URLs in that list, by
 exact match, and every other request reaches the network untouched. That is not a nicety — a remote
 `.metacool` is read with HTTP range requests, and a cache is the wrong shape for a 206.

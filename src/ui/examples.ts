@@ -56,6 +56,14 @@ const DEMO: Array<{ file: string; label: string; note: string }> = [
       'resolutions from 500 bp to 100 kb (46 MB). ' +
       '(DOI: 10.1038/s41594-023-01178-2)'
   },
+  {
+    file: 'Yeast_microC_G2M_1kb.cool',
+    label: 'Yeast micro-C, G2/M — single 1 kb map (cool)',
+    note:
+      'A mitotic micro-C map of synthetic yeast: 16 chromosomes ' +
+      '(XIII carries a 40 kb insertion, hence XIII-syn40), 12,118 bins of ' +
+      '1 kb, 13.7 M pixels, 179 M contacts, balanced (19 MB).',
+  },
 ]
 
 /**
@@ -72,7 +80,9 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => entry.file)
 /**
  * Absolute URLs for the published demo files, in the order they should be
  * offered — the metacool first, because it is the file type this viewer exists
- * for, and the plain `.mcool`s last, as the fallback path they exercise.
+ * for, then the plain coolers, as the fallback path they exercise: the `.mcool`s
+ * for the resolution ladder, the single `.cool` last for the case where there is
+ * no ladder to land on.
  */
 export function demoExamples(): Example[] {
   const base = import.meta.env.BASE_URL

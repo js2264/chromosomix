@@ -8,9 +8,9 @@
  *
  * - **too little** — a chunk missing from the precache is an app that half
  *   loads on a train, with an error nobody can reproduce on a desk;
- * - **too much** — the demo datasets are 107 MB, and a precache that swept them
- *   in would turn every first visit into a download of every file the site
- *   ships, silently, in the background.
+ * - **too much** — the demo datasets and track resources are 250 MB, and a
+ *   precache that swept them in would turn every first visit into a download of
+ *   every file the site ships, silently, in the background.
  *
  * Both are invisible until they are in front of a user, which is exactly the
  * kind of thing to assert about a pure function instead.
@@ -54,6 +54,14 @@ describe('isShellAsset', () => {
       'demo/Ecoli.mcool',
       'demo/Mock_microbial_community.metacool',
       'demo/Yeast_mpneumoniae_G2M.mcool',
+      'demo/Yeast_microC_G2M_1kb.cool',
+      // The M6 track resources. The text ones are what to watch: a rule
+      // written around "binary is data" would take a `.gtf`, a `.tsv` and a
+      // `.narrowPeak` straight into the precache.
+      'demo/Yeast_MNase.bw',
+      'demo/Yeast_annotations.gtf',
+      'demo/Yeast_microC_loops.tsv',
+      'demo/Yeast_ATAC.narrowPeak',
       'icon-512.png',
     ]) {
       expect(isShellAsset(name), name).toBe(false)
