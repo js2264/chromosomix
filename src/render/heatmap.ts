@@ -1634,7 +1634,13 @@ export class HeatmapView {
       this.lastX = x
       this.lastY = y
       showCursor({ grabbing: this.drag.mode === 'pan' })
-      canvas.focus()
+      // `preventScroll`, because focusing an element the scroll container has
+      // only partly in view *scrolls it into view* — and the press that just
+      // took the focus is measured again on release, against a canvas that has
+      // since moved under the still-stationary pointer. Two pixels of scroll is
+      // six contigs at a fitted 2,048-contig overview: the click opened the
+      // wrong pair, a little below the cell the tooltip had just named.
+      canvas.focus({ preventScroll: true })
     }
     const onMove = (e: MouseEvent): void => {
       const [x, y] = local(e)
