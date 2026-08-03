@@ -34,7 +34,7 @@ import { inverseTransform } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
-import { button, el, field, fmt } from './dom'
+import { el, field, fmt } from './dom'
 import { setReadout } from './readout'
 import {
   PLOT_OPTION_LABELS,
@@ -119,8 +119,6 @@ export class MatrixPanel {
   private manualVmax: number | undefined
   private level: 'bin' | 'contig'
   private frame = 0
-  /** What the clip slider's current span was measured from. */
-  private extentSource: { data: MatrixResult; transform: Transform } | null = null
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -208,7 +206,6 @@ export class MatrixPanel {
         el('span', { class: 'field-label', text: 'clip' }),
         this.clip.el,
       ),
-      button('reset view', () => this.heatmap.fit(), { title: 'Fit the block to the canvas (key: 0)' }),
     ]
 
     /**
@@ -397,37 +394,13 @@ export class MatrixPanel {
     this.schedule()
   }
 
-  /**
-   * Re-span the clip slider over the loaded block, which is what makes both
-   * handles reach every value on screen.
-   *
-   * The extent comes from the rasteriser, which measured it while pooling, so
-   * this is a field read rather than the second full pass over the block it
-   * used to be. It therefore has to run *after* a draw, and it still updates
-   * only when the block or the transform changed — the units are the
-   * transform's, and dragging a handle must not re-span the track under the
-   * hand doing the dragging.
-   */
-  private syncClipExtent(): void {
-    const data = this.data
-    if (data === null) return
-    if (this.extentSource?.data === data && this.extentSource.transform === this.transform) return
-    const extent = this.heatmap.displayExtent
-    if (extent === null) return
-    this.extentSource = { data, transform: this.transform }
-    this.clip.setExtent(extent)
-  }
-
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
   private schedule(): void {
     if (this.frame !== 0) return
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
       this.heatmap.draw()
-      // After the draw, because both of these read numbers the rasteriser
-      // resolved: the extent it measured while pooling, and the bounds it
-      // actually used.
-      this.syncClipExtent()
+      // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where
       // the auto rule's numbers become visible — in the colourbar and, equally,
       // in the clip boxes, which is what a reader nudges rather than invents.

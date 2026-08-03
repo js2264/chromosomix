@@ -902,24 +902,6 @@ export class HeatmapView {
     return this.raster?.scale ?? this.colorScale
   }
 
-  /**
-   * Extent of the values actually drawn, in transformed units — what the clip
-   * slider spans.
-   *
-   * Read off the pooled raster rather than recomputed from the matrix. It is
-   * the same number when nothing was pooled, it is the *right* number when
-   * something was (the slider should reach the pixels on screen, not values no
-   * pixel shows), and it costs nothing: the pooling pass already tracked it.
-   * The pass it replaces was a second full walk of the block — two seconds on a
-   * whole yeast genome, on the main thread, for a control most users never
-   * touch.
-   *
-   * `null` before the first draw, and when nothing is drawable at all.
-   */
-  get displayExtent(): ValueRange | null {
-    return this.pooled?.extent ?? null
-  }
-
   /** The block currently displayed. */
   get currentMatrix(): DenseMatrix | null {
     return this.matrix

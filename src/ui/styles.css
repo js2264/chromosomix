@@ -1104,94 +1104,22 @@ p {
   gap: 0.3rem;
 }
 
-/* Two range inputs stacked on one track. Each is transparent and inert except
-   for its thumb, which is the only part that takes the pointer — that is what
-   lets the upper handle be grabbed where the lower input covers it. */
-.clip-slider {
-  position: relative;
-  height: 1.1rem;
-}
-
-.clip-track {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 4px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: var(--border-strong);
-}
-
-.clip-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.clip-handle {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  background: none;
-  pointer-events: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.clip-handle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius);
-}
-
-.clip-handle::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  background: var(--bg-raised);
-  pointer-events: auto;
-  cursor: ew-resize;
-}
-
-.clip-handle::-moz-range-thumb {
-  width: 0.85rem;
-  height: 0.85rem;
-  box-sizing: border-box;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  background: var(--bg-raised);
-  pointer-events: auto;
-  cursor: ew-resize;
-}
-
-.clip-handle::-moz-range-track {
-  background: none;
-}
-
+/* A grid, not a flex row: two equal columns and a button, each one bounded by
+   its track rather than by what an `<input type=number>` would like to be. */
 .clip-boxes {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.3rem;
 }
 
 .controls-card .clip-box {
-  flex: 1 1 0;
-  width: auto;
+  width: 100%;
   min-width: 0;
   font-family: var(--mono);
 }
 
 .clip-auto {
-  flex: 0 0 auto;
   padding: 0.2rem 0.45rem;
 }
 

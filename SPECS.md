@@ -333,9 +333,8 @@ diverges from what a reader reproduces locally.
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
   where the block does
 
-Both bounds are overridable, as one clip range: a two-handled slider over the block's own value
-extent, with either bound also typeable, and one control back to auto. The URL carries `vmin` and
-`vmax` independently, in transformed units, and their absence means auto.
+Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
+URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
 
 **The percentile is taken over the pixels that are drawn.** Above §7.2's raster
 cap a block is pooled, one pixel to many cells, and a scale fitted to the cells
