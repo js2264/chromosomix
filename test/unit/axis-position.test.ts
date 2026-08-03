@@ -15,9 +15,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { bpWithin } from '@/ui/MatrixPanel'
+import { bpWithin, separatorsFor } from '@/ui/MatrixPanel'
 import { idRuns } from '@/worker/groups'
-import type { AxisGroup } from '@/worker/protocol'
+import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
 const BIN = 1000
 
@@ -82,5 +82,55 @@ describe('idRuns', () => {
 
   it('returns nothing for an empty axis', () => {
     expect(idRuns(new Int32Array(0), String)).toEqual([])
+  })
+})
+
+/**
+ * What the dividers mark.
+ *
+ * Everywhere but the whole-metagenome view an axis is contigs, and its blocks
+ * are what gets a line. That view is the exception: its axis is contigs but its
+ * *subject* is genomes, and the reader says so by sending a coarser set of
+ * groups alongside. Where it does, the fine set is not drawn at all — 20,000
+ * hairlines over 4,000 genome blocks is a wash that hides the structure.
+ */
+describe('separatorsFor', () => {
+  const groups: AxisGroup[] = [
+    { label: 'c1', start: 0, end: 10 },
+    { label: 'c2', start: 10, end: 25 },
+    { label: 'c3', start: 25, end: 40 },
+  ]
+  const genomes: AxisGroup[] = [
+    { label: 'g1', start: 0, end: 25 },
+    { label: 'g2', start: 25, end: 40 },
+  ]
+  const result = (extra: Partial<MatrixResult> = {}): MatrixResult =>
+    ({
+      nrows: 40,
+      ncols: 40,
+      values: new Float32Array(0),
+      rowExtent: [0, 40],
+      colExtent: [0, 40],
+      rowGroups: groups,
+      colGroups: groups,
+      level: 'contig',
+      ...extra,
+    }) as MatrixResult
+
+  it('marks every block when the axis has only one set', () => {
+    const set = separatorsFor(result())
+    expect(set.rows.map((s) => s.at)).toEqual([0, 10, 25])
+    expect(set.groupRows).toBeUndefined()
+  })
+
+  it('marks genomes, and only genomes, when the reader sends them', () => {
+    const set = separatorsFor(
+      result({ rowSuperGroups: genomes, colSuperGroups: genomes }),
+    )
+    expect(set.rows.map((s) => s.at)).toEqual([0, 25])
+    expect(set.rows.map((s) => s.label)).toEqual(['g1', 'g2'])
+    expect(set.cols.map((s) => s.at)).toEqual([0, 25])
+    // Also as the heavier set, drawn over the same coordinates.
+    expect(set.groupRows?.map((s) => s.at)).toEqual([0, 25])
   })
 })

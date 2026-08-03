@@ -75,9 +75,23 @@ export class Overview {
    * overview the user had just called off.
    */
   private generation = 0
-  private level: 'genome' | 'contig' = 'genome'
+  /**
+   * Contigs, not genomes.
+   *
+   * Both cost the same single pass, and the contig picture is the one that
+   * *contains* the other: its blocks are the genomes — the reader sends them as
+   * a super-group and they are what the dividers mark — with the binning still
+   * visible inside each one. A genome × genome cell has already thrown that
+   * away, so starting there hides the question most people open this view to
+   * ask, which is whether a bin holds together.
+   */
+  private level: 'genome' | 'contig' = 'contig'
 
   constructor(private readonly props: OverviewProps) {
+    // Except where the offered route is a sidecar edge list, which is
+    // genome-level by construction: the picker must not say "contig × contig"
+    // over a button that can only produce the other one.
+    if (props.edgeListUrl !== undefined) this.level = 'genome'
     this.gate = el('div', { class: 'gate' })
     this.progressBar = el('progress', { class: 'progress' })
     this.progressBar.max = 1
@@ -122,6 +136,7 @@ export class Overview {
           'aside',
           { class: 'side' },
           this.panel.controlsEl,
+          this.panel.plotEl,
           el(
             'section',
             { class: 'card' },
@@ -313,7 +328,7 @@ export class Overview {
       : `${result.n} ${unit} · ${provenance}`
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
-    this.panel.setData(toMatrixResult(result), '')
+    this.panel.setData(toMatrixResult(result), 'metagenome-overview')
 
     this.note.classList.remove('hidden')
     this.note.replaceChildren(

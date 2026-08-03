@@ -835,10 +835,21 @@ export class HeatmapView {
     this.dpr = this.opts.devicePixelRatio > 0 ? this.opts.devicePixelRatio : detectDpr()
     this.canvas.width = Math.max(1, Math.round(this.cssWidth * this.dpr))
     this.canvas.height = Math.max(1, Math.round(this.cssHeight * this.dpr))
+    // A view that was showing the whole block goes on showing the whole block.
+    // Anything else is measured against the *old* plot area, and re-fitting it
+    // would throw away a zoom the user chose; `clampView` keeps that honest.
+    //
+    // This is also what rescues a panel built before it had a size — the
+    // whole-metagenome overview is constructed behind its gate and revealed
+    // after the scan, and its zoom, worked out against a one-pixel plot, was
+    // then pinned by `clampView` at a quarter of the fit: a 2,048-contig map
+    // drawn in the middle of a panel four times its size.
+    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
     // The cap is a fraction of the canvas, so a resize can change the gutters
     // even though the labels have not changed.
     this.measureMargin()
     this.recomputeBaseZoom()
+    if (wasFitted) this.zoom = this.baseZoom
     this.clampView()
     this.syncScales()
     this.changed()

@@ -820,9 +820,19 @@ function watchTheme(onChange: () => void): () => void {
 export function separatorsFor(data: MatrixResult): SeparatorSet {
   const toSeparators = (groups: AxisGroup[]): Separator[] =>
     groups.map((group) => ({ at: group.start, label: group.label }))
+
+  // A whole-metagenome view is a picture of *genomes*. The reader sends the
+  // genome each selected contig belongs to as a super-group, and where it does,
+  // those are the only boundaries drawn: 20,000 contig hairlines over 4,000
+  // genome blocks is a grey wash, and it hides the block structure the view
+  // exists to show. They go in both sets so the axis is also *labelled* by
+  // genome — the fine set is what `labelBlocks` reads — while the heavier
+  // stroke, drawn at the same coordinates, is what the eye lands on.
+  const rowUnits = data.rowSuperGroups ?? data.rowGroups
+  const colUnits = data.colSuperGroups ?? data.colGroups
   const set: SeparatorSet = {
-    rows: toSeparators(data.rowGroups),
-    cols: toSeparators(data.colGroups),
+    rows: toSeparators(rowUnits),
+    cols: toSeparators(colUnits),
   }
   if (data.rowSuperGroups !== undefined) set.groupRows = toSeparators(data.rowSuperGroups)
   if (data.colSuperGroups !== undefined) set.groupCols = toSeparators(data.colSuperGroups)
