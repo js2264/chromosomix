@@ -126,7 +126,12 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
 
 function handleGenomes(): GenomesResult {
   const { mc } = requireSession()
-  const genomes = mc.genomes
+  // The *full* table, with every metadata column the creator joined in — that
+  // is what this view exists to show. The open path reads only the four the
+  // reader itself needs, so the taxonomy and the quality metrics arrive here,
+  // when they are about to be displayed, rather than before the file is even
+  // known to be openable.
+  const genomes = mc.fullGenomes()
   // A plain cooler has no genome layer, and answers with an empty table rather
   // than a fabricated row. The app never asks — it lands on the contigs table —
   // but a hand-edited URL can, and an empty table is the honest answer.
@@ -146,7 +151,7 @@ function handleGenomes(): GenomesResult {
 }
 
 function handleContigs(): ContigsResult {
-  return { table: tableToPayload(requireSession().mc.contigs) }
+  return { table: tableToPayload(requireSession().mc.fullContigs()) }
 }
 
 function binLevelResult(mc: MetaCooler, dense: DenseMatrix): MatrixResult {

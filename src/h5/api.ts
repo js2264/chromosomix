@@ -75,6 +75,17 @@ export interface Hdf5Handle {
   readNumeric(path: string, lo?: number, hi?: number): Float64Array
 
   /**
+   * Read a half-open slice of an integer column as `Int32Array`, with no
+   * `Float64Array` in between.
+   *
+   * For the two pixel index columns, which are int64 on disk and array indices
+   * in use. Going through {@link readNumeric} meant a bin id occupied 8 bytes as
+   * a BigInt, 8 more as a double and 4 as its final self, all at once, for every
+   * pixel of the read.
+   */
+  readInt32(path: string, lo?: number, hi?: number): Int32Array
+
+  /**
    * Read a half-open slice of a string dataset, UTF-8 decoded with trailing NUL
    * padding stripped. Handles fixed-length `S<n>` (sized by encoded *byte*
    * length, so never assume ASCII) as well as the vlen `O`/`U` kinds a file
@@ -83,10 +94,17 @@ export interface Hdf5Handle {
   readStrings(path: string, lo?: number, hi?: number): string[]
 
   /**
-   * Read every column under a table group into a {@link Table}. The column set
-   * is discovered from the group, never hard-coded.
+   * Read a table group into a {@link Table}. The column set is discovered from
+   * the group, never hard-coded.
+   *
+   * `columns` narrows the *decode* to the named subset — the reader's own four
+   * or five, as against the twenty a creator may have joined in. It does not
+   * narrow the integrity checks, and it does not invent: a name that is not in
+   * the file is absent from the result, exactly as it would be without the
+   * filter, so a required-column check still catches a file that lacks one.
+   * Omit it for the whole table, which is what the table *views* ask for.
    */
-  readTable(path: string, lo?: number, hi?: number): Table
+  readTable(path: string, lo?: number, hi?: number, columns?: readonly string[]): Table
 
   /** Release the handle and its byte source. Idempotent. */
   close(): void

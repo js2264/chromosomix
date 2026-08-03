@@ -21,32 +21,36 @@ export const DENSE_MATRIX_BIN_LIMIT = 50_000
  * `navigator.deviceMemory` reports RAM in GiB, rounded down to a power of two
  * and **capped at 8** by every browser that implements it, so a 64 GB
  * workstation and an 8 GB laptop both say 8. It is a floor, not a measurement,
- * which is why the share is modest: a third of what the browser admits to,
- * never less than 1 GB. The floor matters for the machines that report 2 GiB
- * or less, where a third would refuse blocks those machines can in fact draw.
+ * which is why the share is modest: a third of what the browser admits to.
  */
 export const DEVICE_MEMORY_SHARE = 1 / 3
 
-/** Assumed RAM in GiB when the browser does not say. */
+/**
+ * Assumed RAM in GiB when the browser does not say.
+ *
+ * Which is most of the web: `navigator.deviceMemory` is Chromium-only, so
+ * Firefox and Safari land here on every machine they run on, from a phone to a
+ * workstation. That is why nothing downstream *refuses* on this number alone —
+ * the estimate it feeds is a warning threshold, and the allocation itself is
+ * the measurement (`metacooler/matrix.ts`).
+ */
 export const DEVICE_MEMORY_FALLBACK_GIB = 4
 
-/** Never budget less than this, whatever the device claims. */
+/**
+ * Never budget less than this — but only where the device's own claim is
+ * plausible enough to be a floor rather than a ceiling.
+ *
+ * The floor exists for the 2 GiB bucket, where a third is 716 MB and refuses
+ * blocks such a machine can in fact draw. Applied unconditionally it inverted
+ * below that: a device reporting 0.25 GiB was granted 1 GB, four times its
+ * entire RAM, turning a clean refusal into a killed tab. See
+ * `deviceDenseBudgetBytes`, which applies it only at or above
+ * {@link MIN_DENSE_BUDGET_GIB}.
+ */
 export const MIN_DENSE_BUDGET_BYTES = 1e9
 
-/**
- * The most cells one dense block may have, whatever the machine has.
- *
- * The values live in a `Float32Array`, and V8 will not allocate one past about
- * 2^31 elements however much memory is free. This is the wall no budget can
- * argue with; everything below it is a question of how much RAM to spend, which
- * `metacooler/matrix.ts` answers by estimating rather than by a fixed limit.
- *
- * The canvas caps that used to sit here are gone: the raster is pooled to
- * `RASTER_MAX_DIM` per axis, so no selection can ask for a canvas bigger than
- * 4096 px on a side and neither Chrome's area cap nor Firefox's side cap is
- * reachable any more.
- */
-export const MAX_TYPED_ARRAY_CELLS = 2 ** 31
+/** The smallest reported memory for which {@link MIN_DENSE_BUDGET_BYTES} applies. */
+export const MIN_DENSE_BUDGET_GIB = 2
 
 /** `storage-mode` values the reader understands. */
 export const STORAGE_MODES = ['symmetric-upper', 'square'] as const

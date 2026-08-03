@@ -15,7 +15,7 @@ import type { ByteSource, Table } from '../types'
 import { MetaCoolerFormatError, ViewerError, truncateNames } from '../errors'
 import type { H5Module, H5wasmDataset, H5wasmFile, Metadata } from './bootstrap'
 import { getH5 } from './bootstrap'
-import { classify, readNumericSlice, readStringSlice, readTableGroup } from './readTable'
+import { classify, readInt32Slice, readNumericSlice, readStringSlice, readTableGroup } from './readTable'
 import { orderEntries } from '../metacooler/detect'
 
 const UTF8 = new TextDecoder('utf-8')
@@ -190,16 +190,30 @@ class Hdf5File implements Hdf5Handle {
   }
 
   readNumeric(path: string, lo?: number, hi?: number): Float64Array {
+    const [ds, start, stop] = this.numericRange(path, lo, hi)
+    return readNumericSlice(ds, start, stop)
+  }
+
+  readInt32(path: string, lo?: number, hi?: number): Int32Array {
+    const [ds, start, stop] = this.numericRange(path, lo, hi)
+    return readInt32Slice(ds, start, stop)
+  }
+
+  /** The shared preamble of the two numeric reads: classify, then clamp. */
+  private numericRange(
+    path: string,
+    lo?: number,
+    hi?: number,
+  ): [H5wasmDataset, number, number] {
     const ds = this.dataset(path)
-    const md = ds.metadata
-    if (classify(this.h5, md) !== 'number') {
+    if (classify(this.h5, ds.metadata) !== 'number') {
       throw new MetaCoolerFormatError(
         `${this.describe(path)} is ${String(ds.dtype)}, not a numeric dataset`,
         { uri: this.uri, path: this.resolve(path), dtype: String(ds.dtype) },
       )
     }
     const [start, stop] = this.range(ds, lo, hi)
-    return readNumericSlice(ds, start, stop)
+    return [ds, start, stop]
   }
 
   readStrings(path: string, lo?: number, hi?: number): string[] {
@@ -215,7 +229,7 @@ class Hdf5File implements Hdf5Handle {
     return readStringSlice(this.h5, this.file, ds, start, stop)
   }
 
-  readTable(path: string, lo?: number, hi?: number): Table {
+  readTable(path: string, lo?: number, hi?: number, columns?: readonly string[]): Table {
     const entity = this.entity(path)
     if (entity === null || !(entity instanceof this.h5.Group)) {
       throw new MetaCoolerFormatError(`${this.describe(path)} is not a table group`, {
@@ -224,7 +238,7 @@ class Hdf5File implements Hdf5Handle {
       })
     }
     const label = this.resolve(path).slice(this.group === '/' ? 1 : this.group.length + 1)
-    return readTableGroup(this.h5, this.file, entity, label, lo, hi)
+    return readTableGroup(this.h5, this.file, entity, label, lo, hi, columns)
   }
 
   close(): void {

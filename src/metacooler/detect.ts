@@ -127,8 +127,8 @@ export function listEntryNames(h: Hdf5Handle): string[] {
  *
  * @throws ViewerError `not-a-cooler` when nothing matches.
  */
-export function detectLayout(h: Hdf5Handle): Layout {
-  const attrs = h.attrs()
+export function detectLayout(h: Hdf5Handle, rootAttrs?: Record<string, AttrValue>): Layout {
+  const attrs = rootAttrs ?? h.attrs()
   const format = strAttr(attrs, 'format')
 
   if (format === MMETACOOLER_FORMAT && h.has('entries')) {
@@ -248,14 +248,18 @@ export function refuseMcoolRoot(h: Hdf5Handle, entries: string[]): never {
  *   `bad-ordering`, `variable-bins`, or a `MetaCoolerFormatError` for an
  *   unreadable `bin-size` or `storage-mode`.
  */
-export function assertAcceptable(h: Hdf5Handle, layout: Layout): void {
+export function assertAcceptable(
+  h: Hdf5Handle,
+  layout: Layout,
+  rootAttrs?: Record<string, AttrValue>,
+): void {
   if (layout.kind === 'mmetacool') refuseMMetacoolRoot(h)
   // Before the bin-geometry gate, not after: an mcool root carries only
   // `format` and `format-version`, so the fixed-bin check would refuse it as a
   // variable-bin file and tell the user to run `metacooler binnify` on a file
   // that is already binned four ways. What it needs is a resolution.
   if (layout.kind === 'mcool') refuseMcoolRoot(h, layout.entries ?? [])
-  const attrs = h.attrs()
+  const attrs = rootAttrs ?? h.attrs()
 
   if (layout.kind === 'metacool') {
     // Absent is tolerated, matching `schema.validate`, which only compares the

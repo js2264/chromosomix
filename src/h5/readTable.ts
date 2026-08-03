@@ -159,9 +159,51 @@ export function readNumericSlice(ds: H5wasmDataset, lo: number, hi: number): Flo
   const n = hi - lo
   if (n <= 0) return new Float64Array(0)
   const raw = ds.slice([[lo, hi]])
+  // Already the target type, and already a buffer h5wasm minted for this call
+  // and will not touch again — so it is ours to hand on. Copying it into an
+  // identical array was 8 B per element of pure duplication, and both copies
+  // were live while it happened: on a float-count file that is the single
+  // largest avoidable allocation in the read path.
+  if (raw instanceof Float64Array) return raw
   if (raw instanceof BigInt64Array || raw instanceof BigUint64Array) return toNumberArray(raw)
   if (ArrayBuffer.isView(raw) && !(raw instanceof DataView)) {
     return toNumberArray(raw as unknown as ArrayLike<number>)
+  }
+  throw new MetaCoolerFormatError(
+    `/${ds.path.replace(/^\//, '')} did not read back as a numeric array`,
+    { path: ds.path },
+  )
+}
+
+/**
+ * Read a half-open row range of an integer column straight into `Int32Array`.
+ *
+ * For `pixels/bin1_id` and `pixels/bin2_id` — int64 on disk, and consumed as
+ * array indices. {@link readNumericSlice} would widen them to `Float64Array`
+ * and the caller would then narrow that to `Int32Array`, so a bin id passed
+ * through three buffers of 8, 8 and 4 bytes to arrive somewhere 4 bytes wide.
+ * This is the same single pass over the BigInt64 data, writing the final width
+ * directly: 8 B per pixel of live memory that no longer exists, per column.
+ *
+ * Bin ids are bounded by the file's bin count, which every guard here keeps far
+ * below 2^31, so the narrowing is exact.
+ */
+export function readInt32Slice(ds: H5wasmDataset, lo: number, hi: number): Int32Array {
+  const n = hi - lo
+  if (n <= 0) return new Int32Array(0)
+  const raw = ds.slice([[lo, hi]])
+  if (raw instanceof Int32Array) return raw
+  if (raw instanceof BigInt64Array || raw instanceof BigUint64Array) {
+    const out = new Int32Array(n)
+    for (let i = 0; i < n; i++) out[i] = Number(raw[i])
+    return out
+  }
+  if (ArrayBuffer.isView(raw) && !(raw instanceof DataView)) {
+    const out = new Int32Array(n)
+    // `set` on an integer target applies ToInt32, which is exact for the
+    // integral values an index column holds.
+    out.set(raw as unknown as ArrayLike<number>)
+    return out
   }
   throw new MetaCoolerFormatError(
     `/${ds.path.replace(/^\//, '')} did not read back as a numeric array`,
@@ -231,6 +273,7 @@ export function readTableGroup(
   label: string,
   lo?: number,
   hi?: number,
+  columns?: readonly string[],
 ): Table {
   const datasets: { name: string; ds: H5wasmDataset; md: Metadata; length: number }[] = []
   for (const name of group.keys()) {
@@ -261,23 +304,30 @@ export function readTableGroup(
   const start = clamp(lo ?? 0, 0, total)
   const stop = clamp(hi ?? total, start, total)
 
-  const columns: string[] = []
+  // The *lengths* above are metadata and cost no read, so the equal-length
+  // check runs over the whole group whatever is asked for. Only the decode
+  // below is narrowed — a column the caller did not ask for is simply absent
+  // from the result, which is exactly how a column that is not in the file
+  // reads, so a required-column check still fires for a file that lacks one.
+  const wanted = columns === undefined ? null : new Set(columns)
+  const names: string[] = []
   const data: Record<string, Column> = {}
   for (const { name, ds, md } of datasets) {
+    if (wanted !== null && !wanted.has(name)) continue
     switch (classify(h5, md)) {
       case 'string':
-        columns.push(name)
+        names.push(name)
         data[name] = readStringSlice(h5, file, ds, start, stop)
         break
       case 'number':
-        columns.push(name)
+        names.push(name)
         data[name] = readNumericSlice(ds, start, stop)
         break
       case 'other':
         break
     }
   }
-  return makeTable(stop - start, columns, data)
+  return makeTable(stop - start, names, data)
 }
 
 function clamp(value: number, lo: number, hi: number): number {
