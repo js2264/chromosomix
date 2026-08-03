@@ -374,10 +374,14 @@ p {
   color: var(--danger);
 }
 
+/* Anchored to its item's *right* edge, because every item that has one sits at
+   the right end of the bar: a 20rem panel hanging rightwards from there ran off
+   the window and gave the whole document a horizontal scrollbar — while
+   invisible, since `visibility: hidden` still takes up scrollable space. */
 .status-pop {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  right: 0;
   z-index: 30;
   margin-bottom: 0.35rem;
   min-width: 20rem;
@@ -999,6 +1003,18 @@ p {
   flex-direction: column;
   align-items: stretch;
   gap: 0.4rem;
+}
+
+/* Every row is as wide as the card and no wider.
+   In a *column* flex container the stretched cross size is clamped by each
+   item's minimum width, and `auto` there is the item's min-content width — so
+   one row with a wide intrinsic child (two number inputs, which ask for about
+   twenty characters each) widened every row beside it, pushed the whole card's
+   contents past its own border and put a horizontal scrollbar under the app.
+   The card is 15rem by construction; its rows say so. */
+.controls-card .panel-controls > *,
+.side .pair-controls > * {
+  min-width: 0;
 }
 
 .controls-card .field {
