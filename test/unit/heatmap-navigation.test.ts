@@ -246,3 +246,90 @@ describe('chrome stops at the data', () => {
     expect(heatmap.dataRect.height).toBeLessThan(plot.height)
   })
 })
+
+/**
+ * Touch, which is a separate path from the mouse rather than a rewrite of it:
+ * pinch has no mouse equivalent, and the modifier that turns a mouse drag into a
+ * zoom selection does not exist on a phone. What has to hold is that the same
+ * three things happen — pan, zoom, open a cell — through gestures a hand makes.
+ */
+function touches(...points: Array<[number, number]>): Record<string, unknown> {
+  const list = points.map(([clientX, clientY]) => ({ clientX, clientY }))
+  return { touches: list, preventDefault: () => {}, timeStamp: 0 }
+}
+
+describe('touch', () => {
+  function attached(): {
+    heatmap: HeatmapView
+    fire: (type: string, event: Record<string, unknown>) => void
+    opened: Array<{ row: number; col: number }>
+  } {
+    const { canvas, fire } = harness(400)
+    const opened: Array<{ row: number; col: number }> = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onCellClick: (cell) => opened.push({ row: cell.row, col: cell.col }),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    return { heatmap, fire, opened }
+  }
+
+  it('pans with one finger', () => {
+    const { heatmap, fire } = attached()
+    heatmap.zoomToBox(80, 80, 160, 160)
+    const before = heatmap.cellAt(heatmap.plotRect.x + 5, heatmap.plotRect.y + 5)
+    fire('touchstart', touches([200, 200]))
+    fire('touchmove', touches([260, 200]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
+    const after = heatmap.cellAt(heatmap.plotRect.x + 5, heatmap.plotRect.y + 5)
+    // Dragging right brings earlier columns into view; the rows do not move.
+    expect(after?.col).toBeLessThan(before?.col ?? 0)
+    expect(after?.row).toBe(before?.row)
+  })
+
+  it('zooms on a pinch, about the middle of the two fingers', () => {
+    const { heatmap, fire } = attached()
+    const before = heatmap.zoomLevel
+    fire('touchstart', touches([180, 200], [220, 200]))
+    fire('touchmove', touches([120, 200], [280, 200]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
+    // Fingers four times as far apart, so four times the zoom — up to the clamp.
+    expect(heatmap.zoomLevel).toBeGreaterThan(before * 3)
+  })
+
+  it('opens the tapped cell, and only after the double-tap window', async () => {
+    const { heatmap, fire, opened } = attached()
+    const cell = heatmap.cellAt(200, 200)
+    fire('touchstart', touches([200, 200]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
+    expect(opened).toEqual([])
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(opened).toEqual([{ row: cell?.row ?? -1, col: cell?.col ?? -1 }])
+  })
+
+  it('refits on a double tap, and the first tap does not navigate', async () => {
+    const { heatmap, fire, opened } = attached()
+    const fitted = heatmap.zoomLevel
+    heatmap.zoomToBox(80, 80, 160, 160)
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+
+    fire('touchstart', touches([200, 200]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
+    fire('touchstart', touches([202, 201]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 10 })
+
+    expect(heatmap.zoomLevel).toBeCloseTo(fitted, 6)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(opened).toEqual([])
+  })
+
+  it('does not treat a drag as a tap', async () => {
+    const { fire, opened } = attached()
+    fire('touchstart', touches([200, 200]))
+    fire('touchmove', touches([260, 240]))
+    fire('touchend', { touches: [], preventDefault: () => {}, timeStamp: 0 })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(opened).toEqual([])
+  })
+})

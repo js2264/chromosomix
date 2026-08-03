@@ -1698,6 +1698,110 @@ export class HeatmapView {
       if (this.handleKeyDown(e)) this.draw()
     }
 
+    /**
+     * Touch: one finger pans, two pinch, a tap opens, a double tap refits.
+     *
+     * A separate path from the mouse rather than a rewrite of it into pointer
+     * events. Pinch has no mouse equivalent to fold into, the modifier that
+     * turns a mouse drag into a zoom selection does not exist on a phone, and
+     * `preventDefault` here is what stops the browser from panning the *page*
+     * under the finger and from firing the synthetic mouse events that would
+     * otherwise run every gesture twice.
+     */
+    const touchPoints = (e: TouchEvent): Array<[number, number]> => {
+      const r = canvas.getBoundingClientRect()
+      return Array.from(e.touches, (t) => [t.clientX - r.left, t.clientY - r.top])
+    }
+    const centre = (points: Array<[number, number]>): [number, number] => [
+      points.reduce((sum, p) => sum + p[0], 0) / points.length,
+      points.reduce((sum, p) => sum + p[1], 0) / points.length,
+    ]
+    const spread = (points: Array<[number, number]>): number =>
+      Math.hypot(points[0][0] - points[1][0], points[0][1] - points[1][1])
+
+    let pinchDistance = 0
+    let touchMoved = false
+    let touchStart: [number, number] = [0, 0]
+    // Not `0`: `timeStamp` is milliseconds since the page loaded, so a first tap
+    // inside the first quarter-second of the document's life would arrive
+    // "within the double-tap window" of a tap that never happened.
+    let lastTapAt = Number.NEGATIVE_INFINITY
+
+    const onTouchStart = (e: TouchEvent): void => {
+      const points = touchPoints(e)
+      if (points.length === 0) return
+      e.preventDefault()
+      touchMoved = false
+      touchStart = points[0]
+      this.lastX = points[0][0]
+      this.lastY = points[0][1]
+      pinchDistance = points.length >= 2 ? spread(points) : 0
+    }
+    const onTouchMove = (e: TouchEvent): void => {
+      const points = touchPoints(e)
+      if (points.length === 0) return
+      e.preventDefault()
+      if (points.length >= 2) {
+        // Pinch about the midpoint of the two fingers, and pan by however far
+        // that midpoint travelled: the two are one gesture, and handling only
+        // the scale makes a two-finger drag feel nailed down.
+        const [cx, cy] = centre(points)
+        const distance = spread(points)
+        if (pinchDistance > 0 && distance > 0) this.zoomAt(cx, cy, distance / pinchDistance)
+        this.panBy(cx - this.lastX, cy - this.lastY)
+        pinchDistance = distance
+        this.lastX = cx
+        this.lastY = cy
+        touchMoved = true
+        this.draw()
+        return
+      }
+      const [x, y] = points[0]
+      if (Math.abs(x - touchStart[0]) + Math.abs(y - touchStart[1]) > 6) touchMoved = true
+      this.panBy(x - this.lastX, y - this.lastY)
+      this.lastX = x
+      this.lastY = y
+      this.draw()
+    }
+    const onTouchEnd = (e: TouchEvent): void => {
+      if (e.touches.length > 0) {
+        // A finger lifted mid-pinch: re-anchor on what is left rather than
+        // treating the survivor's position as a jump.
+        const points = touchPoints(e)
+        const [cx, cy] = centre(points)
+        this.lastX = cx
+        this.lastY = cy
+        pinchDistance = points.length >= 2 ? spread(points) : 0
+        return
+      }
+      e.preventDefault()
+      pinchDistance = 0
+      if (touchMoved) return
+      const now = e.timeStamp
+      if (now - lastTapAt < DOUBLE_CLICK_MS) {
+        // A second tap in the double-tap window is "put it back", and it must
+        // beat the first tap's pending navigation.
+        lastTapAt = 0
+        cancelPendingClick()
+        this.fit()
+        this.draw()
+        return
+      }
+      lastTapAt = now
+      const cell = this.cellAt(touchStart[0], touchStart[1])
+      // The tooltip is the readout a phone has no hover for, so a tap fills it
+      // in on the way to opening what was tapped.
+      this.setHover(cell)
+      this.onHover?.(cell, { x: touchStart[0], y: touchStart[1] })
+      if (cell === null || this.onCellClick === null) return
+      const emit = this.onCellClick
+      cancelPendingClick()
+      clickTimer = setTimeout(() => {
+        clickTimer = null
+        emit(cell)
+      }, DOUBLE_CLICK_MS)
+    }
+
     canvas.addEventListener('mousedown', onDown)
     canvas.addEventListener('mousemove', onMove)
     canvas.addEventListener('mouseup', onUp)
@@ -1705,6 +1809,12 @@ export class HeatmapView {
     canvas.addEventListener('mouseleave', onLeave)
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('keydown', onKey)
+    // Not passive: every one of these calls `preventDefault`, and a passive
+    // listener that does so is ignored with a console warning.
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false })
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false })
     this.detachFns = [
       () => canvas.removeEventListener('mousedown', onDown),
       () => canvas.removeEventListener('mousemove', onMove),
@@ -1714,6 +1824,10 @@ export class HeatmapView {
       () => canvas.removeEventListener('mouseleave', onLeave),
       () => canvas.removeEventListener('wheel', onWheel),
       () => canvas.removeEventListener('keydown', onKey),
+      () => canvas.removeEventListener('touchstart', onTouchStart),
+      () => canvas.removeEventListener('touchmove', onTouchMove),
+      () => canvas.removeEventListener('touchend', onTouchEnd),
+      () => canvas.removeEventListener('touchcancel', onTouchEnd),
     ]
   }
 

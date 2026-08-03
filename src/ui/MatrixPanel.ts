@@ -134,6 +134,7 @@ export class MatrixPanel {
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
   private readonly unsubscribePlotOptions: () => void
   private readonly themeWatchers: () => void
+  private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
   private readonly exportStatus: HTMLElement
   private exportDpi = 300
@@ -384,6 +385,15 @@ export class MatrixPanel {
       this.schedule()
     })
 
+    // The legend turns on its side when the plot is as wide as the screen and
+    // the only room left is underneath it. Same breakpoint as the stylesheet's,
+    // stated once here because the canvas cannot read a media query.
+    this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
+      this.colorbar.setOrientation(narrow ? 'horizontal' : 'vertical')
+      this.colorbar.resize()
+      this.schedule()
+    })
+
     this.observer =
       typeof ResizeObserver === 'undefined'
         ? null
@@ -413,6 +423,7 @@ export class MatrixPanel {
     setReadout('')
     this.unsubscribePlotOptions()
     this.themeWatchers()
+    this.narrowWatcher()
     this.observer?.disconnect()
     this.heatmap.detach()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
@@ -761,6 +772,22 @@ function readCanvasPalette(): {
 function readPageBackground(): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
   return value === '' ? '#ffffff' : value
+}
+
+/** The width below which the plot takes the whole column; `styles.css` agrees. */
+const NARROW_QUERY = '(max-width: 34rem)'
+
+/**
+ * Watch a media query, calling back with its state now and on every change.
+ * Returns the teardown.
+ */
+function watchMedia(query: string, onChange: (matches: boolean) => void): () => void {
+  const media = window.matchMedia?.(query)
+  if (media === undefined) return () => {}
+  const listener = (): void => onChange(media.matches)
+  media.addEventListener?.('change', listener)
+  onChange(media.matches)
+  return () => media.removeEventListener?.('change', listener)
 }
 
 /**

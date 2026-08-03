@@ -363,6 +363,10 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported.
 
+**Touch is a first-class input**, not a fallback: one finger pans, two pinch, a tap opens what it
+lands on and a double tap refits. Below 34rem the app is one column — the plot as wide as the screen,
+the legend on its side beneath it.
+
 **The figure saves as PNG or PDF at a chosen DPI.** It is re-rendered at that resolution through the
 same drawing code rather than screen-grabbed, so the labels and hairlines are drawn rather than
 enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one page holding

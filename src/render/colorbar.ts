@@ -236,6 +236,18 @@ export class ColorbarView {
     return colorbarTicks(this.scale, this.opts.maxTicks)
   }
 
+  /**
+   * Turn the bar on its side.
+   *
+   * A legend beside a square plot is vertical; on a phone the plot is as wide
+   * as the screen and the only room left is under it, where a vertical bar
+   * would be a 5.5rem column of nothing. Same drawing code either way — this
+   * picks which of the two branches in {@link draw} runs.
+   */
+  setOrientation(orientation: 'vertical' | 'horizontal'): void {
+    this.opts.orientation = orientation
+  }
+
   /** Draw into another context at `scale` device pixels per CSS pixel. */
   renderTo(ctx: CanvasRenderingContext2D, scale: number): void {
     const previousCtx = this.ctx
@@ -335,7 +347,12 @@ export class ColorbarView {
       ctx.moveTo(snapped, y + h)
       ctx.lineTo(snapped, y + h + o.tickLength)
       ctx.stroke()
-      ctx.fillText(tick.label, snapped, y + h + o.tickLength + 2)
+      // The mark stays on its value; the label steps back inside the canvas
+      // when it would hang off the end. The two extremes are `vmin` and `vmax`
+      // — the numbers a reader most wants — and half of "≤ 0.00085" is not one.
+      const half = ctx.measureText(tick.label).width / 2
+      const at = Math.min(Math.max(snapped, x + half), x + w - half)
+      ctx.fillText(tick.label, at, y + h + o.tickLength + 2)
     }
     if (captionHeight > 0) {
       ctx.textAlign = 'left'

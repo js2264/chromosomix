@@ -938,6 +938,11 @@ p {
   display: block;
   width: 100%;
   height: 100%;
+  /* Every touch on the plot is a gesture of its own — one finger pans, two
+     pinch — so the browser must not claim any of them for scrolling the page or
+     for its own double-tap zoom. Without this the first drag scrolls the
+     document out from under the finger and the handler never sees the rest. */
+  touch-action: none;
   /* A drawn arrowhead, not the OS pointer: thinner, sharper, and with its tip
      on the cell it is pointing at, which is what you need over a matrix where a
      cell can be one pixel. Black on white so it survives every colormap; the
@@ -1850,4 +1855,103 @@ p {
 
 .overview-host {
   min-width: 0;
+}
+
+/* --- phones ------------------------------------------------------------- */
+
+/* One column, bigger targets, and nothing that needs a pointer.
+   The 60rem rules above already fold the file sidebar away and drop the search
+   bar; below 34rem the header itself has to give way, and the plot has to stop
+   being sized from the *viewport height* — on a phone that is a portrait
+   rectangle, and a square plot measured from it is wider than the screen. */
+@media (max-width: 34rem) {
+  .app-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.5rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  /* The strapline is the first thing to go: it explains the app to someone who
+     has already opened it, and it costs the whole width of a phone. */
+  .brand-sub {
+    display: none;
+  }
+
+  .content {
+    padding: 0.6rem;
+  }
+
+  .heatmap-wrap {
+    width: 100%;
+  }
+
+  /* The legend under the plot rather than beside it, where 5.5rem of it would
+     be a quarter of the screen. `MatrixPanel` watches the same breakpoint and
+     turns the bar itself on its side; this is only where it sits. */
+  .panel-body {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .colorbar-slot {
+    width: 100%;
+    max-width: 20rem;
+  }
+
+  .colorbar-canvas {
+    width: 100%;
+    height: 3.2rem;
+  }
+
+  /* The region box and its button share a line instead of taking one each. */
+  .input-region {
+    width: auto;
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  /* Two instruments, one line: the bar is 1.5 rem tall and must stay that way. */
+  .app-foot {
+    gap: 0.6rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+  }
+
+  .status-item {
+    white-space: nowrap;
+  }
+
+  /* A finger is about 9 mm across: the buttons a gesture cannot replace are
+     sized for one. */
+  .btn,
+  .select,
+  .input {
+    min-height: 2.2rem;
+  }
+
+  .btn-icon {
+    padding: 0.5rem;
+  }
+
+  .contig-item {
+    padding: 0.45rem 0.3rem;
+  }
+
+  /* The coordinate readout is a hover product and there is no hover here; the
+     two instruments stay, because a tap opens them. */
+  .status-coords {
+    display: none;
+  }
+
+  /* Still anchored to its item's right edge — both items sit at the right end
+     of the bar, so that is the edge that keeps the panel on screen. Only the
+     20rem floor has to go, since 20rem is most of a phone. */
+  .status-pop {
+    min-width: 0;
+    max-width: 88vw;
+  }
+
+  .table {
+    height: calc(100vh - 12rem);
+  }
 }
