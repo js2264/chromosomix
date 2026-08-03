@@ -96,9 +96,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   [docs/deploy.md](docs/deploy.md#the-track-resources).
 
 - **Works offline, and installs.** After one visit the app runs with no network at all — reload
-  included — and browsers offer to install it as a desktop app. The app is cached; the data never
-  is, and requests for it reach the network untouched. A new build is offered as a reload rather
-  than swapped in underneath you.
+  included — and browsers offer to install it as a standalone window. The app is cached; the data
+  never is, and requests for it reach the network untouched. A new build is offered as a reload
+  rather than swapped in underneath you.
+
+- **A desktop application, for machines that cannot reach the website.** The same
+  bundle packaged with Electron: a `.dmg` and a `.zip` for macOS (Apple Silicon and
+  Intel), an NSIS installer for Windows, an AppImage and a `.deb` for Linux. It is a
+  delivery channel and not a second feature set — it opens exactly the files the web
+  build opens, in exactly the same way, with the same reader and the same privacy
+  claim, and it never writes anything back. There is no auto-update: a new version is
+  a new download. The first releases are **unsigned**, so macOS and Windows will each
+  warn once before running it; [docs/desktop.md](docs/desktop.md) gives both warnings
+  verbatim with the exact click that gets past them. The web app is unchanged — same
+  URL, same build, nothing to install.
 
 ### Changed
 

@@ -1,7 +1,9 @@
 # metacooler web viewer — specification
 
-A browser-based viewer for `.metacool` files. No backend, no installation, no preprocessing, no
-additions to the metacooler API.
+A viewer for `.metacool` files, in a browser and as an optional desktop application. No backend, no
+preprocessing, no additions to the metacooler API. Nothing has to be installed to use it: the web
+app is complete on its own, and the desktop build is the same bundle packaged for machines that
+cannot reach it — it adds a distribution channel, never a requirement.
 
 ---
 
@@ -11,11 +13,11 @@ These are hard, and everything below follows from them.
 
 | # | Constraint | Consequence |
 |---|---|---|
-| C1 | No server-side component of any kind | No tile server, no metacooler on a host, no accounts, no uploads |
+| C1 | No server-side component of any kind | No tile server, no metacooler on a host, no accounts, no uploads, no update service |
 | C2 | No new metacooler API | The app consumes files exactly as current metacooler writes them |
 | C3 | No required preprocessing | A file straight from `metacooler create` must open and work |
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
-| C5 | Static hosting only | Public files are objects on a bucket; private files never leave the browser |
+| C5 | Static hosting only | Public files are objects on a bucket; private files never leave the machine. The desktop build changes only where the *app* comes from, never where the data comes from |
 
 C3 and C1 together mean the app can never *require* a companion file. C4 means a whole class of
 code — run gathering, fallback query planners, `genome_extent` failure paths — is deleted rather
@@ -647,7 +649,9 @@ chromatin files. Held in reserve — adopting it would not change any file forma
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
 computation of any kind; required companion files; required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
-not a category); write access of any kind.
+not a category); write access of any kind, in either target; an auto-update service; and a desktop
+build that can open anything the web build cannot — the package is a delivery mechanism, not a
+second feature set.
 
 ---
 
@@ -677,3 +681,46 @@ Not blocking, but worth revisiting once something is on screen:
    have. Whether the error message alone is sufficient is a question for first users, not for now.
 2. **The genome × genome overview (§7.3).** Gated rather than removed. If it turns out nobody waits
    for the scan, dropping it entirely would simplify the state model further.
+
+---
+
+## 15. Desktop target
+
+The same bundle, packaged with Electron for machines that cannot reach the website. It is a second
+invocation of the same bundler over the same source, never a change to the first: the web build is
+what §1 constrains, and nothing here is allowed to alter it.
+
+**The origin is frozen at `app://viewer`.** Everything the browser keys on an origin is keyed on
+that string — `localStorage` (theme, per-file table state), the hash router's `history` entries, the
+`Origin` header sent to remote hosts. Change it in a later release and every user's remembered
+preferences disappear on upgrade with no error and no way to get them back.
+
+**The renderer is served by a privileged standard scheme, never `file://`.** `app` is registered
+before `whenReady` with `standard`, `secure`, `supportFetchAPI` and `stream`. `standard: true` is
+what gives the page a real, non-opaque origin: without it `history.pushState` throws `SecurityError`
+and the router dies on the first navigation into a genome. `file://` fails earlier and more quietly
+— the module worker never constructs, so the app hangs on "Opening…" with nothing on the console.
+
+**`allowServiceWorkers` is deliberately absent.** The desktop build has no offline story to tell,
+because it is already on disk; §11's caching bargain buys nothing and costs a stale-build failure
+mode. Three independent guards keep it out: the plugin is not in the desktop config so `sw.js` is
+never emitted, `registerServiceWorker()` returns early off the web target, and Chromium refuses the
+registration on an `app://` origin outright.
+
+**`contextIsolation` and `sandbox` are on; `nodeIntegration` and `nodeIntegrationInWorker` are
+off.** Not only for the usual reasons. `isNodeRuntime()` in the reader worker decides which h5wasm
+filesystem path to take purely by whether `process` exists, so leaking Node into the worker sends
+every open down the wrong path and it fails with a generic `not-hdf5` error, hundreds of frames from
+the cause — and `mountTarget()` starts writing tens of megabytes into `TMPDIR` on the way.
+
+**The CSP is delivered as a response header**, not a `<meta>` tag: a meta CSP does not reach a module
+worker at all, and cannot express `frame-ancestors`. It keeps `'wasm-unsafe-eval'` — verified in both
+directions; without it h5wasm fails to instantiate in both document and worker — and needs no
+`'unsafe-inline'` for styles, because `el()` assigns through the CSSOM and the tree contains no
+`innerHTML`, no `<style>` creation and no `style=` attribute.
+
+**No path→bytes route.** Local files are read exactly as in the browser: a `File` from the drop, a
+`Blob`, `FileReaderSync` in the worker. Routing the bytes through an IPC protocol handler was
+measured at ~15× slower per read with a fixed ~3 ms floor per call, which is precisely what HDF5's
+many-small-reads metadata walk punishes. If a local path is ever wanted, it is wanted as a *string*
+for addressing, and the bytes stay on the Blob.
