@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 
-import { DEMO_FILES } from '../../src/ui/examples'
+import { DEMO_ANNOTATION_FILES, DEMO_FILES, demoAnnotationsFor } from '../../src/ui/examples'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
@@ -52,4 +52,30 @@ describe('the picker examples', () => {
       mc.close()
     })
   }
+})
+
+/**
+ * The annotations offered beside a demo map are there too.
+ *
+ * The same failure mode one layer up: the card offers "load the ten tracks
+ * published with this map", the files get renamed, and the button produces ten
+ * rows that all fail to load. Only the presence is checked here — the *parsing*
+ * of every one of them is `annotation-parse.test.ts`'s job, and the
+ * contig-for-contig agreement with the map is checked there too.
+ */
+describe('the annotations published beside a demo map', () => {
+  for (const file of DEMO_ANNOTATION_FILES) {
+    it(`ships ${file}`, () => {
+      expect(
+        existsSync(`${DIR}${file}`),
+        `${file} is offered beside a demo map but is not in public/demo/`,
+      ).toBe(true)
+    })
+  }
+
+  it('offers them only for a map that is itself published', () => {
+    for (const link of demoAnnotationsFor('https://example.org/demo/Yeast_microC_G2M_1kb.cool')) {
+      expect(DEMO_FILES).not.toContain(link.file)
+    }
+  })
 })

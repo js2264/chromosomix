@@ -70,6 +70,14 @@ export interface AnnotationCardProps {
   card: CardKind
   store: AnnotationStore
   loader: AnnotationLoader
+  /**
+   * A one-click offer, when the open map has annotations published beside it.
+   *
+   * Only the Linear card is given one, even though the set it loads spans both:
+   * the offer is about *this map*, not about this card, and two buttons that do
+   * the same thing would raise the question of how they differ.
+   */
+  demo?: { label: string; hint: string; run(): void }
 }
 
 export class AnnotationCard {
@@ -94,6 +102,14 @@ export class AnnotationCard {
             'locked to what the map shows.'
           : 'Drawn on the map itself. Nothing here fills the pixel it marks.',
       }),
+      ...(props.demo === undefined
+        ? []
+        : [
+            button(props.demo.label, props.demo.run, {
+              class: 'btn btn-wide ann-demo',
+              title: props.demo.hint,
+            }),
+          ]),
       el('div', { class: 'drop-row' }, ...zones.map((spec) => this.dropzone(spec))),
       this.urlRow(zones),
       this.list,

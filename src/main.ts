@@ -55,7 +55,7 @@ import { isChord, isTypingTarget, keyLabel, matchesKeys, type Command } from './
 import { openAbout, openShortcuts } from './ui/dialogs'
 import { button, el, fmt } from './ui/dom'
 import { icon, iconButton } from './ui/icons'
-import { demoExamples } from './ui/examples'
+import { demoAnnotationsFor, demoExamples } from './ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
 import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from './ui/plotOptions'
 
@@ -708,8 +708,31 @@ class App {
     }
     this.manualCard = new ManualCard({ store: manual, picker })
 
+    // The demo map ships ten annotation files on its own assembly. Offering
+    // them as one click is the difference between a viewer that demonstrably
+    // works and one a reader has to assemble a test case for.
+    const published = demoAnnotationsFor(uri)
     this.infoPanel?.setAnnotationCards([
-      new AnnotationCard({ card: 'linear', store, loader }).el,
+      new AnnotationCard({
+        card: 'linear',
+        store,
+        loader,
+        ...(published.length === 0
+          ? {}
+          : {
+              demo: {
+                label: `load the ${published.length} tracks published with this map`,
+                hint:
+                  'Gene models, coverage, peak calls and loop calls, all on this map’s own ' +
+                  'assembly. They open the same way any remote file does.',
+                run: () => {
+                  for (const entry of published) {
+                    loader.addUrl(entry.card, entry.zone, entry.url, entry.label)
+                  }
+                },
+              },
+            }),
+      }).el,
       new AnnotationCard({ card: 'overlay', store, loader }).el,
       this.manualCard.el,
     ])

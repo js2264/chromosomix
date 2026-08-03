@@ -67,6 +67,70 @@ const DEMO: Array<{ file: string; label: string; note: string }> = [
 ]
 
 /**
+ * The annotation files published beside a demo map, and where each belongs.
+ *
+ * Keyed by the map's file name rather than by its URL, because the URL depends
+ * on where the app is served from and the pairing does not. All ten are on the
+ * map's own assembly — same sixteen contig names, same lengths, `XIII-syn40`
+ * included — which is exactly what makes them worth offering as one click: a
+ * reader gets a complete, correct picture without hunting for ten URLs, and the
+ * §8.2 overlap report has something to report success about.
+ */
+interface DemoAnnotation {
+  file: string
+  card: 'linear' | 'overlay'
+  zone: 'gtf' | 'track' | 'segments' | 'pairs'
+  label: string
+}
+
+const DEMO_ANNOTATIONS: Record<string, DemoAnnotation[]> = {
+  'Yeast_microC_G2M_1kb.cool': [
+    { file: 'Yeast_annotations.gtf', card: 'linear', zone: 'gtf', label: 'genes' },
+    { file: 'Yeast_MNase.bw', card: 'linear', zone: 'track', label: 'MNase' },
+    { file: 'Yeast_ATAC.bw', card: 'linear', zone: 'track', label: 'ATAC' },
+    { file: 'Yeast_ChIP_Pol2-vs-input.bw', card: 'linear', zone: 'track', label: 'Pol II / input' },
+    { file: 'Yeast_RNA_fwd.bw', card: 'linear', zone: 'track', label: 'RNA +' },
+    { file: 'Yeast_RNA_rev.bw', card: 'linear', zone: 'track', label: 'RNA −' },
+    { file: 'Yeast_Shotgun.bw', card: 'linear', zone: 'track', label: 'shotgun' },
+    { file: 'Yeast_ATAC.narrowPeak', card: 'linear', zone: 'segments', label: 'ATAC peaks' },
+    {
+      file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak',
+      card: 'linear',
+      zone: 'segments',
+      label: 'Pol II peaks',
+    },
+    { file: 'Yeast_microC_loops.tsv', card: 'overlay', zone: 'pairs', label: 'loops' },
+  ],
+}
+
+/** One loadable annotation, with the URL resolved for wherever this is served. */
+export interface DemoAnnotationLink extends DemoAnnotation {
+  url: string
+}
+
+/**
+ * The annotations published beside the map at `uri`, or `[]`.
+ *
+ * Matched on the file name at the end of the URI, so it works for the published
+ * site, for `vite dev`, and for a copy of `public/demo/` served from anywhere
+ * else — and not for a *local* file of the same name, which would be someone
+ * else's data under a familiar name.
+ */
+export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
+  if (!/^https?:\/\//i.test(uri)) return []
+  const name = uri.split('?')[0].split('#')[0].split('/').pop() ?? ''
+  const entries = DEMO_ANNOTATIONS[name]
+  if (entries === undefined) return []
+  const base = uri.slice(0, uri.length - name.length)
+  return entries.map((entry) => ({ ...entry, url: `${base}${entry.file}` }))
+}
+
+/** Every published annotation file, for the test that checks they are on disk. */
+export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOTATIONS)
+  .flat()
+  .map((entry) => entry.file)
+
+/**
  * The bare file names this module offers, for the test that opens every one of
  * them out of `public/demo/`.
  *

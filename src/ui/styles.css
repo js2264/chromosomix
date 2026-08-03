@@ -2520,3 +2520,10 @@ p {
   width: 100%;
   font-size: var(--step--2, 0.72rem);
 }
+
+/* The one-click offer, when the open map has annotations published beside it.
+   Above the drop areas because it is the shortest path to a working picture,
+   and quiet enough that it does not read as the only way in. */
+.ann-demo {
+  font-size: var(--step--1);
+}
