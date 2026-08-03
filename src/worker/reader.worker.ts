@@ -18,6 +18,8 @@ import { MetaCooler } from '../metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import { aggregatedAxes, binContigArray, binGenomeArray, contigRuns } from './groups'
+import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
+import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import {
   serialiseError,
   tableToPayload,
@@ -56,14 +58,6 @@ void getH5().catch(() => undefined)
 
 /** Pixels per chunk during the full scan; the order of magnitude Python uses. */
 const SCAN_CHUNK = 1_000_000
-
-/**
- * Cap on the genome × genome overview. A dense `G × G` accumulator is `8·G²`
- * bytes: 2048 genomes is 34 MB, 4395 (the reference file) would be 154 MB for a
- * picture with 19 million cells that no screen can show. Above the cap the
- * densest genomes are kept and the UI says so.
- */
-const OVERVIEW_MAX_UNITS = 2048
 
 interface Session {
   mc: MetaCooler
@@ -143,10 +137,11 @@ function handleGenomes(): GenomesResult {
     }
   }
   const display = Int32Array.from(mc.displayGenomes())
-  const density = new Float64Array(genomes.length)
-  // Two lookups per genome into an index already in memory (§4). Doing it once
-  // here rather than lazily per sort keeps the column free at every later click.
-  for (const index of display) density[index] = mc.genomeDensity(index)
+  // One read of the index, then two array lookups per genome (§4). This used to
+  // be two *HDF5 reads* per genome — 8,788 of them on the reference file, each a
+  // dataset open, a metadata fetch, a malloc and a hyperslab read, all before
+  // the landing table could paint.
+  const density = mc.genomeDensities()
   return { table: tableToPayload(genomes), display, density }
 }
 
@@ -187,29 +182,35 @@ async function handleMatrix(
 /**
  * Contig- or genome-level roll-up of a bounded block.
  *
- * The block is loaded at bin level and summed locally (spec §5.2): the level
- * toggle inside a genome is free because the data is already there. The sum
+ * Accumulated **from the stored pixels**, not from a dense block. The sum
  * accumulates in `Float64Array` — the format widens counts to int64 precisely
  * because summation overflows int32 — and is narrowed to `Float32` only at the
  * boundary, for display.
+ *
+ * This used to load the block at bin level first, on the grounds from §5.2 that
+ * the level toggle inside a genome is free because the data is already there.
+ * That is true of a MAG and false of everything larger: a whole yeast genome at
+ * 500 bp is 2.4 GB and two seconds to produce a 17 × 17 answer, and the dense
+ * guard refused it outright — including as the escape hatch offered by its own
+ * refusal message. The sparse path costs the pixels the selection actually
+ * holds and produces output identical to the last bit.
  */
 async function handleAggregate(
   request: Extract<WorkerRequest, { kind: 'aggregate' }>,
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const dense = await mc.matrix(
+  const aggregated = await mc.aggregateSparse(
     { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
-    hintFor(request.rows, cols),
+    request.level,
   )
-  const aggregated = mc.aggregate(dense, request.level)
   const axes = aggregatedAxes(mc, aggregated)
   return {
     nrows: aggregated.nrows,
     ncols: aggregated.ncols,
     values: Float32Array.from(aggregated.values),
-    rowExtent: dense.rowExtent,
-    colExtent: dense.colExtent,
+    rowExtent: request.rows,
+    colExtent: cols,
     rowGroups: axes.rows,
     colGroups: axes.cols,
     level: request.level,
@@ -217,12 +218,16 @@ async function handleAggregate(
 }
 
 /**
- * The genome × genome overview by full pixel scan.
+ * The genome × genome (or contig × contig) overview, by full pixel scan.
  *
  * The one expensive operation in the app (§4) and the reason it is gated rather
  * than automatic (§7.3). `__unbinned__` is excluded, which is required (§7.4)
  * and incidentally makes the picture readable, since it otherwise dominates its
  * own row and column.
+ *
+ * Where there are more units than the machine will draw, they are **pooled**,
+ * not dropped: see `worker/overview.ts`. Nothing is excluded except
+ * `__unbinned__`, and no unit is chosen over another.
  */
 async function handleOverview(
   request: Extract<WorkerRequest, { kind: 'overview' }>,
@@ -230,7 +235,6 @@ async function handleOverview(
   const { mc } = requireSession()
   const id = request.id
   const level = request.level ?? 'genome'
-  const cap = request.maxUnits ?? OVERVIEW_MAX_UNITS
 
   if (level === 'genome' && !mc.hasGenomes) {
     throw new ViewerError(
@@ -244,44 +248,50 @@ async function handleOverview(
   // The unit of both axes: a genome, or a contig. `__unbinned__` is excluded at
   // either level — at contig level that means excluding *its* contigs, which is
   // the same rule (§7.4) applied one level down, not a different one.
-  const displayed =
-    level === 'genome' ? mc.displayGenomes() : displayableContigs(mc)
-  const density =
-    level === 'genome'
-      ? (unit: number) => mc.genomeDensity(unit)
-      : contigDensityLookup(mc)
+  const displayed = level === 'genome' ? mc.displayGenomes() : displayableContigs(mc)
+  const cap = Math.max(1, Math.trunc(request.maxUnits ?? overviewUnitCap(deviceDenseBudgetBytes())))
 
-  let selected = displayed
-  const restricted = displayed.length > cap
-  if (restricted) {
-    selected = [...displayed]
-      .sort((a, b) => density(b) - density(a))
-      .slice(0, cap)
-      .sort((a, b) => a - b)
-  }
+  // At contig level the coarser structure is the genome, and slots are snapped
+  // to it so a pooled row never straddles two genomes — which is the whole
+  // point of the contig picture, since the genome blocks are what it shows.
+  const groupOf =
+    level === 'contig' && mc.hasGenomes
+      ? (position: number) => mc.contigGenomeIds[displayed[position]]
+      : undefined
+  const pooling = poolUnits(displayed.length, cap, groupOf)
+  const n = pooling.slots
 
-  const n = selected.length
   const unitCount = level === 'genome' ? mc.nGenomes : mc.nContigs
   const slot = new Int32Array(unitCount).fill(-1)
-  selected.forEach((unit, index) => {
-    slot[unit] = index
-  })
+  for (let i = 0; i < displayed.length; i++) slot[displayed[i]] = pooling.slotOf[i]
+
   const binUnit = level === 'genome' ? binGenomeArray(mc) : binContigArray(mc)
-  const acc = new Float64Array(n * n)
   const mirror = mc.storageMode === 'symmetric-upper'
+  const triangle = mirror ? new TriangleAccumulator(n) : null
+  const square = mirror ? null : new Float64Array(n * n)
 
   await mc.scanPixels({
     chunkSize: SCAN_CHUNK,
     onChunk: (chunk) => {
       if (cancelled.has(id)) return false
-      for (let k = 0; k < chunk.length; k++) {
-        const a = slot[binUnit[chunk.bin1[k]]]
-        if (a < 0) continue
-        const b = slot[binUnit[chunk.bin2[k]]]
-        if (b < 0) continue
-        const value = chunk.count[k]
-        acc[a * n + b] += value
-        if (mirror && a !== b) acc[b * n + a] += value
+      if (triangle !== null) {
+        for (let k = 0; k < chunk.length; k++) {
+          const a = slot[binUnit[chunk.bin1[k]]]
+          if (a < 0) continue
+          const b = slot[binUnit[chunk.bin2[k]]]
+          if (b < 0) continue
+          triangle.add(a, b, chunk.count[k])
+        }
+      } else {
+        // `square` storage holds both triangles independently, so each stored
+        // pixel is placed once and nothing is mirrored.
+        for (let k = 0; k < chunk.length; k++) {
+          const a = slot[binUnit[chunk.bin1[k]]]
+          if (a < 0) continue
+          const b = slot[binUnit[chunk.bin2[k]]]
+          if (b < 0) continue
+          square![a * n + b] += chunk.count[k]
+        }
       }
       return true
     },
@@ -291,17 +301,56 @@ async function handleOverview(
   if (cancelled.has(id)) throw abortError()
 
   const names = level === 'genome' ? mc.genomeNames : mc.chromnames
+  const axis = axisLabels(displayed, pooling, (unit) => names[unit])
   return {
     level,
-    labels: selected.map((unit) => names[unit]),
-    ...(level === 'contig'
-      ? { groups: selected.map((unit) => mc.genomeNames[mc.contigGenomeIds[unit]]) }
+    labels: axis.labels,
+    unitNames: axis.unitNames,
+    ...(level === 'contig' && mc.hasGenomes
+      ? {
+          // The *genome* of each slot, for the heavier dividers. Slots are
+          // snapped to genome boundaries, so this is exact rather than the
+          // genome of whichever contig happened to come first.
+          groups: axisLabels(displayed, pooling, (unit) => mc.genomeNames[mc.contigGenomeIds[unit]])
+            .unitNames,
+        }
       : {}),
-    values: Float32Array.from(acc),
+    values: triangle !== null ? triangle.toSquare() : Float32Array.from(square!),
     n,
     source: 'scan',
-    restricted,
+    pooled: pooling.pooled,
+    unitsPerSlot: pooling.pooled ? displayed.length / n : 1,
     totalUnits: displayed.length,
+  }
+}
+
+/**
+ * One label per slot: the name of its first unit, plus a count when the slot
+ * holds more than one.
+ *
+ * The first rather than a synthesised range, because a slot's units are
+ * consecutive and share a genome — so "NODE_7431_len_134871 +15" names where the
+ * row starts and says how wide it is, which is what a reader hovering it needs.
+ */
+function axisLabels(
+  displayed: readonly number[],
+  pooling: UnitPooling,
+  nameOf: (unit: number) => string,
+): { labels: string[]; unitNames: string[] } {
+  const first: number[] = new Array<number>(pooling.slots)
+  const size = new Int32Array(pooling.slots)
+  for (let i = 0; i < displayed.length; i++) {
+    const s = pooling.slotOf[i]
+    if (size[s] === 0) first[s] = displayed[i]
+    size[s] += 1
+  }
+  const unitNames = Array.from(
+    { length: pooling.slots },
+    (_, s) => nameOf(first[s]) ?? String(first[s]),
+  )
+  return {
+    labels: unitNames.map((name, s) => (size[s] > 1 ? `${name} +${size[s] - 1}` : name)),
+    unitNames,
   }
 }
 
@@ -321,23 +370,6 @@ function displayableContigs(mc: MetaCooler): number[] {
     if (!mc.hasGenomes || mc.contigGenomeIds[i] !== unbinned) out.push(i)
   }
   return out
-}
-
-/**
- * Per-contig non-zero pixel counts, from **one** read of `bin1_offset`.
- *
- * `MetaCooler.genomeDensity` does two tiny reads per call, which is right for a
- * few thousand genomes and wrong for 154 k contigs. The caller is about to scan
- * every pixel anyway, so one 3 MB read to pick the axis set is cheap by
- * comparison. Not a contact count, exactly as in §4.
- */
-function contigDensityLookup(mc: MetaCooler): (contig: number) => number {
-  const offsets = mc.handle.readNumeric('indexes/bin1_offset')
-  return (contig: number) => {
-    const [lo, hi] = mc.contigExtent(contig)
-    if (hi <= lo) return 0
-    return offsets[hi] - offsets[lo]
-  }
 }
 
 /**
@@ -403,10 +435,12 @@ async function handleOverviewSidecar(
   return {
     level: 'genome',
     labels,
+    unitNames: labels,
     values,
     n,
     source: 'edge-list',
-    restricted: false,
+    pooled: false,
+    unitsPerSlot: 1,
     totalUnits: displayed.size,
   }
 }

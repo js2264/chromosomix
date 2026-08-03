@@ -69,6 +69,13 @@ export interface MatrixPanelOptions {
   binsize: number
   /** Offered aggregation levels; omit for views with no level toggle. */
   levels?: Array<'bin' | 'contig'>
+  /**
+   * What to *call* each level, where the file's vocabulary differs from the
+   * internal name. A cooler's sequences are chromosomes, and a control offering
+   * "contig" on one is the app speaking about a file in words the file does not
+   * use.
+   */
+  levelLabels?: Partial<Record<'bin' | 'contig', string>>
   initial?: {
     transform?: Transform
     colormap?: string
@@ -382,7 +389,11 @@ export class MatrixPanel {
 
     if (options.levels && options.levels.length > 1) {
       const levelSelect = el('select', { class: 'select' })
-      for (const name of options.levels) levelSelect.appendChild(el('option', { value: name, text: name }))
+      for (const name of options.levels) {
+        levelSelect.appendChild(
+          el('option', { value: name, text: options.levelLabels?.[name] ?? name }),
+        )
+      }
       levelSelect.value = this.level
       levelSelect.addEventListener('change', () => {
         this.level = levelSelect.value as 'bin' | 'contig'

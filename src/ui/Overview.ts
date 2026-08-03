@@ -101,6 +101,8 @@ export class Overview {
    * `groups`, kept because it is what a click resolves through.
    */
   private axisGenomes: string[] | undefined
+  /** Slot index → the unit that slot starts at; see {@link openCell}. */
+  private unitNames: string[] | null = null
 
   constructor(private readonly props: OverviewProps) {
     // Except where the offered route is a sidecar edge list, which is
@@ -212,10 +214,19 @@ export class Overview {
     groups: { row?: AxisGroup; col?: AxisGroup },
   ): void {
     if (groups.row === undefined || groups.col === undefined) return
+    // The *unit* name, not the axis label. A pooled row is labelled
+    // "NODE_7431 +15", which is what a reader needs to see and not something to
+    // hand to a range parser; `unitNames` is the contig or genome the row starts
+    // at, which is a real thing to open. `AxisGroup.start` is the slot index,
+    // which is exactly how `unitNames` is indexed.
+    const names = this.unitNames
     const target = overviewTarget({
       level: this.level,
-      rowLabel: groups.row.label,
-      colLabel: groups.col.label,
+      rowLabel: names?.[groups.row.start] ?? groups.row.label,
+      colLabel: names?.[groups.col.start] ?? groups.col.label,
+      // Indexed by slot, and a slot is snapped to a genome boundary, so a
+      // pooled row still belongs to exactly one genome — which is what makes
+      // the genome route survive pooling unchanged.
       ...(this.axisGenomes === undefined
         ? {}
         : { rowGenome: this.axisGenomes[cell.row], colGenome: this.axisGenomes[cell.col] }),
@@ -378,20 +389,29 @@ export class Overview {
     this.axisGenomes = result.groups
     const unit = result.level === 'genome' ? 'genomes' : 'contigs'
     const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
-    this.summary.textContent = result.restricted
-      ? `${result.n} densest ${unit} of ${result.totalUnits} · ${provenance}`
-      : `${result.n} ${unit} · ${provenance}`
+    const per = Math.round(result.unitsPerSlot)
+    this.summary.textContent = result.pooled
+      ? `${fmt.int(result.totalUnits)} ${unit} in ${fmt.int(result.n)} rows · ${provenance}`
+      : `${fmt.int(result.n)} ${unit} · ${provenance}`
+    this.unitNames = result.unitNames
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
     this.panel.setData(toMatrixResult(result), 'Whole metagenome')
 
-    // Three separate statements, composed rather than nested: the restriction
-    // caveat used to *replace* the click instruction, so the files most likely
-    // to be capped — the big real ones — were the ones never told what a click
-    // does.
-    const restriction = result.restricted
-      ? `A ${result.totalUnits} × ${result.totalUnits} picture is neither renderable nor readable, so the ` +
-        `${result.n} ${unit} with the most non-zero pixels are shown.`
+    // Three separate statements, composed rather than nested: the caveat used
+    // to *replace* the click instruction, so the files most likely to carry one
+    // — the big real ones — were the ones never told what a click does.
+    //
+    // The caveat itself no longer says a picture this size is "neither
+    // renderable nor readable". Only the second half was ever true — the
+    // renderer pools any raster to 4096 px per axis and draws it — and the first
+    // half was the clause that justified throwing away 98% of the contigs.
+    // Nothing is thrown away now, so it says what the rows *are* instead.
+    const restriction = result.pooled
+      ? `${fmt.int(result.totalUnits)} ${unit} are more than are readable at once, so each row sums ` +
+        `about ${per} consecutive ${per === 1 ? unit.replace(/s$/, '') : unit}` +
+        `${result.level === 'contig' ? ', never across a genome boundary' : ''}. ` +
+        'Every one is included.'
       : ''
     const click =
       result.level === 'genome'
