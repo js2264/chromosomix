@@ -30,6 +30,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:desktop": "npm run typecheck && vite build --config vite.desktop.config.ts && node scripts/check-desktop-build.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

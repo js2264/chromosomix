@@ -1,6 +1,12 @@
 node_modules/
 dist/
 .vite/
+# The desktop build's two outputs, and the archive it packs. `build/` is
+# deliberately absent: that is electron-builder's `buildResources` input, and
+# ignoring it would drop the icon and the entitlements out of the repository.
+dist-electron/
+release/
+*.asar
 *.log
 .DS_Store
 
