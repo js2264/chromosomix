@@ -709,6 +709,34 @@ mcool is nearly free. parseUri already handles file.mcool::resolutions/10000, an
   overflowed. Measured in a headless browser: 1,588 px of sidebar content in a
   780 px box, `document.scrollHeight === innerHeight`.
 
+- [x] In the whole-metagenome view, a click on a contig × contig cell between two
+  genomes should open the genome pair, and one inside a genome should open that
+  genome — not the contig or the contig pair.
+
+> NOTES ON THE ABOVE
+
+- **The overview is read by genome at either level**, so it now answers a click
+  by genome at either level. The contig under the pointer decides nothing beyond
+  which genome it belongs to: stepping from a 20,000-contig picture straight
+  into one 200 kb contig against another skips the level in between and lands on
+  a block too small to have been the reason for the click. The genome view it
+  goes to instead has the contig pair one further click away, on a picture where
+  it is legible. The contig route survives only where the genome cannot be named
+  — the reader's per-axis `groups` is what resolves it, and there is no answer
+  to "open the genome" without it.
+- **One real bug came out of verifying it in a browser**: the click was landing
+  a few cells below the cell the tooltip had just named. `canvas.focus()` on
+  mousedown scrolls a partly-visible canvas into view, and the press is measured
+  again on release — against a canvas that has moved under a pointer that has
+  not. Two pixels of scroll is six contigs at a fitted 2,048-contig overview, so
+  clicks near a genome boundary opened the neighbouring block's pair.
+  `focus({ preventScroll: true })`. Measured before and after: `.content`
+  scrolled by 2 px on every press and now by none, and hover and click resolve
+  the same cell.
+- **The restriction caveat no longer replaces the click instruction.** It used
+  to be one or the other, so the files most likely to be capped — the big real
+  ones — were the ones never told what a click does.
+
 ## FOR FUTURE
 
 - M5
