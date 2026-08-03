@@ -249,14 +249,33 @@ export interface OverviewResult {
    * that is what the pointer is over.
    */
   groups?: string[]
+  /**
+   * The plain name of the unit each slot *starts* at.
+   *
+   * Distinct from {@link labels}, which carries the "+15" that tells a reader a
+   * row is pooled. This one is what a click resolves to — a real contig or
+   * genome the app can open — so the display string and the navigation target
+   * never have to be recovered from one another by parsing.
+   */
+  unitNames: string[]
   /** Row-major `n × n`. */
   values: Float32Array
   n: number
   /** Whether the numbers came from a full pixel scan or a sidecar edge list. */
   source: 'scan' | 'edge-list'
-  /** `true` when the axis set was capped for memory; see `totalUnits`. */
-  restricted: boolean
-  /** Displayable units at this level, before any cap. */
+  /**
+   * `true` when consecutive units share an axis slot.
+   *
+   * Note what this is *not*: units are never dropped. Every displayable unit
+   * contributes to exactly one slot, so a pooled overview is a coarser picture
+   * of the whole file rather than a sharp picture of part of it. The field it
+   * replaces, `restricted`, meant the opposite — that the axis had been cut to
+   * the densest few and the rest discarded.
+   */
+  pooled: boolean
+  /** Mean units per slot; `1` when nothing is pooled. */
+  unitsPerSlot: number
+  /** Displayable units at this level — the number actually represented. */
   totalUnits: number
 }
 

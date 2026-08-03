@@ -25,8 +25,9 @@
  *   (`agg + agg.T - diag(agg)`), and {@link aggregateDense} reproduces that.
  */
 
-import type { DenseMatrix } from '../types'
+import type { DenseMatrix, Extent } from '../types'
 import type { Coords } from './coords'
+import type { PlacementMode } from './matrix'
 
 /** Aggregation level, matching `ops/aggregate.py`. */
 export type AggregationLevel = 'contig' | 'genome'
@@ -183,6 +184,107 @@ export function genomeGrouping(
  * on-diagonal and pair views disjoint — so it is summed directly, and the
  * overlap would be double-counted if a caller ever built one.
  */
+/**
+ * The same roll-up, from the **stored pixels** rather than from a dense block.
+ *
+ * `aggregateMatrix` needs the block materialised first, and that is the wrong
+ * way round for a selection whose output is small and whose input is not: a
+ * whole yeast genome at 500 bp is 2,366 MB of `Float32Array` and 295 million
+ * loop iterations to produce a 17 × 17 answer — 2,046,919 dense cells per output
+ * cell — and its cost does not move with the file's sparsity, because it walks
+ * cells rather than pixels. Measured on that shape: 2,090 ms against 139 ms for
+ * this, with identical output.
+ *
+ * It also means the roll-up no longer passes through the dense guard. A
+ * contig-level whole-genome view was being refused for the size of a block it
+ * only ever wanted to collapse — the one escape hatch the refusal offered, and
+ * it did not work.
+ *
+ * The accumulation is `_aggregate_sparse`'s: map each stored pixel once into its
+ * pair of groups, then symmetrise on the diagonal. That is exactly what
+ * {@link aggregateDense}'s `fold` reproduces from the mirrored dense block, so
+ * the two agree cell for cell.
+ *
+ * @param place Called once per stored pixel with its two bin ids and value;
+ *   the caller drives the read, so this module still performs no I/O.
+ */
+export function sparseAggregator(
+  rows: Extent,
+  cols: Extent,
+  coords: Coords,
+  contigGenomeIds: Int32Array,
+  level: AggregationLevel,
+  plan: PlacementMode,
+  upperTriangular = true,
+): {
+  place(bin1: number, bin2: number, value: number): void
+  finish(): AggregatedMatrix
+} {
+  const build = (extent: Extent): AxisGrouping =>
+    level === 'contig'
+      ? contigGrouping(coords, extent[0], extent[1])
+      : genomeGrouping(coords, contigGenomeIds, extent[0], extent[1])
+  const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
+  const rowGroups = build(rows)
+  const colGroups = onDiagonal ? rowGroups : build(cols)
+  const fold = onDiagonal && upperTriangular
+
+  const nrows = rowGroups.ids.length
+  const ncols = colGroups.ids.length
+  const values = new Float64Array(nrows * ncols)
+  const [r0, r1] = rows
+  const [c0, c1] = cols
+  const placeDirect = plan !== 'transpose'
+  // Not simply `plan !== 'direct'`. The flipped placement is what builds the
+  // *mirrored dense block*, and on an on-diagonal selection the fold below is
+  // what mirrors instead — `aggregateDense` reads only `c >= r` there for
+  // exactly this reason. Placing both and folding as well counts every pixel
+  // twice, which lands on the diagonal of the result, where a contig-level
+  // heatmap has its largest values and an inflated one reads as normal.
+  //
+  // A *partially* overlapping selection is `symmetric` but not folded, and there
+  // both placements are correct, because the dense path sums every cell.
+  const placeFlipped = plan !== 'direct' && !fold
+  const skipDiagonal = plan === 'symmetric'
+
+  const add = (row: number, col: number, value: number): void => {
+    const a = rowGroups.slot[row]
+    const b = colGroups.slot[col]
+    // Upper-triangular in *group* space too, mirroring `to_upper_triangle`, so
+    // the fold below has one triangle to mirror rather than two half-filled ones.
+    values[fold && a > b ? b * ncols + a : a * ncols + b] += value
+  }
+
+  return {
+    place(bin1: number, bin2: number, value: number): void {
+      // A NaN is a bin the balancer dropped, not a value; it contributes
+      // nothing rather than turning its whole contig NaN.
+      if (Number.isNaN(value)) return
+      if (placeDirect && bin1 >= r0 && bin1 < r1 && bin2 >= c0 && bin2 < c1) {
+        add(bin1 - r0, bin2 - c0, value)
+      }
+      if (
+        placeFlipped &&
+        !(skipDiagonal && bin1 === bin2) &&
+        bin2 >= r0 &&
+        bin2 < r1 &&
+        bin1 >= c0 &&
+        bin1 < c1
+      ) {
+        add(bin2 - r0, bin1 - c0, value)
+      }
+    },
+    finish(): AggregatedMatrix {
+      if (fold) {
+        for (let a = 0; a < nrows; a++) {
+          for (let b = a + 1; b < ncols; b++) values[b * ncols + a] = values[a * ncols + b]
+        }
+      }
+      return { nrows, ncols, values, rowIds: rowGroups.ids, colIds: colGroups.ids, level }
+    },
+  }
+}
+
 export function aggregateMatrix(
   m: DenseMatrix,
   coords: Coords,

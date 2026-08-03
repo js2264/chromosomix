@@ -906,13 +906,16 @@ class App {
       caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
-      // With no control to change it back, a link carrying `level=contig` must
-      // not strand a cooler in the rolled-up view.
-      level: file.info.hasGenomes ? (state.level ?? 'bin') : 'bin',
+      level: state.level ?? 'bin',
       scale: this.scaleOf(state),
       balance: this.balanceOf(state),
       hasWeights: file.info.hasWeights,
-      offerLevel: file.info.hasGenomes,
+      // Offered for a cooler too, now that the roll-up accumulates from the
+      // stored pixels: a chromosome-level whole-genome view of yeast is 17 x 17
+      // cells and always fits, which makes it the honest answer when the
+      // bin-level block does not. It is only meaningless on a file with one
+      // sequence, where every level is a single cell.
+      offerLevel: file.info.nContigs > 1,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onBalanceChange: (balance) => this.setBalance(balance),

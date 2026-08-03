@@ -33,10 +33,22 @@ import type {
   PixelChunk,
   Table,
 } from '../types'
-import { aggregateMatrix, type AggregatedMatrix, type AggregationLevel } from './aggregate'
+import {
+  aggregateMatrix,
+  sparseAggregator,
+  type AggregatedMatrix,
+  type AggregationLevel,
+} from './aggregate'
 import { Coords, searchOffset } from './coords'
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
-import { DEFAULT_WEIGHT_COLUMN, DENSE_HINTS, readDenseMatrix, resolveCountKind } from './matrix'
+import {
+  DEFAULT_WEIGHT_COLUMN,
+  DENSE_HINTS,
+  forEachPixelSpan,
+  planRead,
+  readDenseMatrix,
+  resolveCountKind,
+} from './matrix'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -192,6 +204,8 @@ export class MetaCooler {
   /** Built on the first lookup by name; see {@link contigIds}. */
   private contigIdCache: Map<string, number> | null = null
   private chromsizeCache: Map<string, number> | null = null
+  /** `indexes/bin1_offset`, read whole on first use; see {@link binOffsets}. */
+  private binOffsetCache: Float64Array | null = null
   private readonly contigLengths: Float64Array
 
   /**
@@ -572,9 +586,45 @@ export class MetaCooler {
   genomeDensity(genome: string | number): number {
     const [lo, hi] = this.genomeExtent(genome)
     if (hi <= lo) return 0
-    const start = this.handle.readNumeric('indexes/bin1_offset', lo, lo + 1)[0]
-    const end = this.handle.readNumeric('indexes/bin1_offset', hi, hi + 1)[0]
-    return end - start
+    const offsets = this.binOffsets()
+    return offsets[hi] - offsets[lo]
+  }
+
+  /**
+   * `indexes/bin1_offset` in full, read once and kept.
+   *
+   * Two one-element HDF5 reads look cheaper than one whole-array read, and are
+   * not: each is a `file.get`, a metadata fetch, a `malloc`, a hyperslab read
+   * and a `free` — measured at 72 µs against an in-memory mount, the best case
+   * there is. The landing view asks for one per genome, so the reference file
+   * spent 8,788 of them (635 ms) before the table painted, and the overview's
+   * top-N sort asked ~190,000 (13.7 s) before its scan even started. The whole
+   * array is one read of 3.4 MB on that file, and every query after it is two
+   * array lookups.
+   *
+   * Held for the session: it is the index the density column, the size guards
+   * and every bounded read consult, so it is re-asked for constantly.
+   */
+  binOffsets(): Float64Array {
+    this.binOffsetCache ??= this.handle.readNumeric('indexes/bin1_offset')
+    return this.binOffsetCache
+  }
+
+  /**
+   * The same proxy for every displayed genome, in one pass.
+   *
+   * Indexed by *genome id*, not by position in the result — nothing is
+   * renumbered here any more than anywhere else (§7.4).
+   */
+  genomeDensities(): Float64Array {
+    const out = new Float64Array(this.nGenomes)
+    if (this.genomes === null) return out
+    const offsets = this.binOffsets()
+    for (const genome of this.displayGenomes()) {
+      const [lo, hi] = this.genomeExtent(genome)
+      if (hi > lo) out[genome] = offsets[hi] - offsets[lo]
+    }
+    return out
   }
 
   // -------------------------------------------------------------------------
@@ -620,6 +670,71 @@ export class MetaCooler {
    * would double every within-group off-diagonal pixel. The result then
    * matches `metacooler aggregate` and `show --level contig` exactly.
    */
+  /**
+   * Roll a block up to contig or genome level **without materialising it**.
+   *
+   * The dense route is right for what its docstring describes — a MAG already on
+   * screen, whose contig view is then free — and wrong for a selection whose
+   * output is small and whose input is not. A whole yeast genome at 500 bp is
+   * 2,366 MB of `Float32Array` and 295 million iterations to produce a 17 × 17
+   * answer; this reads the same pixels in bounded windows and accumulates into
+   * `Float64Array(17²)`. Measured: 2,090 ms and 2.4 GB against 139 ms and a few
+   * kilobytes, with output identical to the last bit.
+   *
+   * That is also what takes the roll-up out from behind the dense guard. The
+   * refusal for an over-large block used to offer "or switch to contig level" as
+   * the escape hatch, and switching hit the same guard for the same reason,
+   * because the roll-up read the same block first.
+   */
+  async aggregateSparse(q: MatrixQuery, level: AggregationLevel): Promise<AggregatedMatrix> {
+    const rows = clampExtent(q.rows, this.nBins)
+    const cols = clampExtent(q.cols ?? q.rows, this.nBins)
+    const plan = planRead(rows, cols, this.storageMode)
+    const aggregator = sparseAggregator(
+      rows,
+      cols,
+      this.coords,
+      this.contigGenomeIds,
+      level,
+      plan.mode,
+      this.storageMode === 'symmetric-upper',
+    )
+    // Weights are read once per axis for the bins on screen, exactly as the
+    // dense path does — the one bounded read of `/bins` in the reader (§6.4).
+    const weights = q.balance === true ? this.weightSlices(rows, cols) : null
+    forEachPixelSpan(this.handle, plan.span[0], plan.span[1], (chunk) => {
+      for (let i = 0; i < chunk.length; i++) {
+        const b1 = chunk.bin1[i]
+        const b2 = chunk.bin2[i]
+        const value =
+          weights === null
+            ? chunk.count[i]
+            : chunk.count[i] * weightAt(weights, rows, cols, b1) * weightAt(weights, rows, cols, b2)
+        aggregator.place(b1, b2, value)
+      }
+    })
+    return aggregator.finish()
+  }
+
+  /** The two bounded weight slices a balanced roll-up multiplies by. */
+  private weightSlices(rows: Extent, cols: Extent): { rows: Float64Array; cols: Float64Array } {
+    const path = `bins/${DEFAULT_WEIGHT_COLUMN}`
+    if (!this.handle.has(path)) {
+      throw new ViewerError(
+        'unsupported',
+        `This file has no /${path} column, so there are no weights to balance with. ` +
+          'Run `cooler balance` on it, or view the raw counts.',
+        { column: DEFAULT_WEIGHT_COLUMN },
+      )
+    }
+    const rowWeights = this.handle.readNumeric(path, rows[0], rows[1])
+    const colWeights =
+      cols[0] === rows[0] && cols[1] === rows[1]
+        ? rowWeights
+        : this.handle.readNumeric(path, cols[0], cols[1])
+    return { rows: rowWeights, cols: colWeights }
+  }
+
   aggregate(m: DenseMatrix, level: AggregationLevel): AggregatedMatrix {
     return aggregateMatrix(
       m,
@@ -695,7 +810,7 @@ export class MetaCooler {
 
     const nBins = this.nBins
     const square = this.storageMode === 'square'
-    const bin1Offset = this.handle.readNumeric('indexes/bin1_offset')
+    const bin1Offset = this.binOffsets()
     const total = this.nnz
     if (bin1Offset.length !== nBins + 1) {
       problems.push(`bin1_offset length (${bin1Offset.length}) != ${nBins + 1}`)
@@ -876,4 +991,30 @@ function toInt32(table: Table, column: string): Int32Array {
     return out
   }
   return Int32Array.from(table.numbers(column))
+}
+
+/** A bin range clamped onto the file, matching `readDenseMatrix`'s validation. */
+function clampExtent(extent: Extent, nBins: number): Extent {
+  const lo = Math.min(Math.max(Math.trunc(extent[0]), 0), nBins)
+  const hi = Math.min(Math.max(Math.trunc(extent[1]), lo), nBins)
+  return [lo, hi]
+}
+
+/**
+ * The weight of an absolute bin, from whichever axis slice covers it.
+ *
+ * A pixel contributes through both of its bins, and the two can fall on
+ * different axes of a rectangular block. Outside both slices the weight is `1`,
+ * which cannot happen for a pixel the aggregator will place — every placement is
+ * range-checked first — and is the identity if it ever did.
+ */
+function weightAt(
+  weights: { rows: Float64Array; cols: Float64Array },
+  rows: Extent,
+  cols: Extent,
+  bin: number,
+): number {
+  if (bin >= rows[0] && bin < rows[1]) return weights.rows[bin - rows[0]]
+  if (bin >= cols[0] && bin < cols[1]) return weights.cols[bin - cols[0]]
+  return 1
 }

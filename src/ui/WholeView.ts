@@ -70,7 +70,12 @@ export class WholeView {
     this.panel = new MatrixPanel({
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
-      ...(props.offerLevel ? { levels: ['bin', 'contig'] as Array<'bin' | 'contig'> } : {}),
+      ...(props.offerLevel
+        ? {
+            levels: ['bin', 'contig'] as Array<'bin' | 'contig'>,
+            levelLabels: { contig: props.noun },
+          }
+        : {}),
       detachedControls: true,
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
@@ -151,13 +156,15 @@ export class WholeView {
       // than on an error screen that offers a way back to the file picker.
       if (err instanceof ViewerError && err.code === 'dense-too-large') {
         this.panel.setBusy(false)
-        // Not "switch to contig level": that rolls up a block which has to be
-        // read first, so it is refused by the same guard for the same reason.
-        // What actually helps is fewer bins — a coarser resolution of an mcool,
-        // or one sequence at a time.
+        // "Switch to level" is a real escape hatch now. It used to be a false
+        // one: the roll-up loaded the same bin-level block before summing it, so
+        // it was refused by the same guard for the same reason. It accumulates
+        // from the stored pixels instead, and its cost is the *output* size —
+        // one cell per sequence pair, which always fits.
         this.problem.textContent =
-          `${err.message} A coarser resolution of this file, if it has one, or a single ` +
-          `${noun} from the table, will fit.`
+          `${err.message} The ${noun}-level view of the same selection is one cell per ` +
+          `${noun} and always fits; a coarser resolution of this file, if it has one, or a ` +
+          `single ${noun} from the table, will too.`
         this.problem.classList.remove('hidden')
         this.summary.textContent = ''
         return
