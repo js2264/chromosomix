@@ -352,7 +352,9 @@ describe.skipIf(!hasMmetacool)('Hum53.mmetacool — a collection, opened by entr
  */
 function instrument(handle: Hdf5Handle): string[] {
   const paths: string[] = []
-  const wrap = <K extends 'readNumeric' | 'readStrings' | 'readTable'>(key: K): void => {
+  const wrap = <K extends 'readNumeric' | 'readInt32' | 'readStrings' | 'readTable'>(
+    key: K,
+  ): void => {
     const original = handle[key].bind(handle) as (...args: never[]) => unknown
     Object.defineProperty(handle, key, {
       configurable: true,
@@ -363,6 +365,10 @@ function instrument(handle: Hdf5Handle): string[] {
     })
   }
   wrap('readNumeric')
+  // The bin id columns go through `readInt32`, which narrows int64 straight to
+  // the width they are used at. Leaving it unwrapped would make a four-read
+  // block look like a two-read one and hide a scan that arrived through it.
+  wrap('readInt32')
   wrap('readStrings')
   wrap('readTable')
   return paths

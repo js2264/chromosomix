@@ -134,7 +134,14 @@ describe('bounded reads', () => {
     const mc = await openCase(fixture)
     const touched: string[] = []
     const handle = mc.handle as unknown as Record<string, (path: string) => unknown>
-    for (const method of ['readNumeric', 'readStrings', 'readTable', 'dtype', 'datasetLength']) {
+    for (const method of [
+      'readNumeric',
+      'readInt32',
+      'readStrings',
+      'readTable',
+      'dtype',
+      'datasetLength',
+    ]) {
       const original = handle[method].bind(mc.handle)
       handle[method] = (path: string, ...rest: unknown[]) => {
         if (/(^|\/)bins(\/|$)/.test(path)) touched.push(`${method}(${path})`)
@@ -156,13 +163,18 @@ describe('bounded reads', () => {
     const fixture = cases.find((c) => c.label === 'basic.metacool')!
     const mc = await openCase(fixture)
     const paths: string[] = []
-    const handle = mc.handle as unknown as {
-      readNumeric: (path: string, lo?: number, hi?: number) => unknown
-    }
-    const original = handle.readNumeric.bind(mc.handle)
-    handle.readNumeric = (path: string, lo?: number, hi?: number) => {
-      paths.push(path)
-      return original(path, lo, hi)
+    const handle = mc.handle as unknown as Record<
+      string,
+      (path: string, lo?: number, hi?: number) => unknown
+    >
+    // Both readers, not just `readNumeric`: the bin id columns are int64 on
+    // disk and array indices in use, so they come back through `readInt32`.
+    for (const method of ['readNumeric', 'readInt32']) {
+      const original = handle[method].bind(mc.handle)
+      handle[method] = (path: string, lo?: number, hi?: number) => {
+        paths.push(path)
+        return original(path, lo, hi)
+      }
     }
     try {
       await mc.genomeMatrix('MAG_04')

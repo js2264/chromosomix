@@ -81,13 +81,22 @@ describe('every accepted map reproduces its golden', () => {
 
     it('/genomes, with every column the creator wrote', async () => {
       await withMap(map, (mc) => {
-        expectTable(requireGenomes(mc), golden.genomes)
+        // `fullGenomes()`, not `genomes`: the open decodes only the four
+        // columns the reader itself uses, and the table view reads the full
+        // width when it opens. §5.1's rule is that no column the creator wrote
+        // is *dropped* — that is a claim about what the file can still show,
+        // and this accessor is where it is answered.
+        expectTable(requireGenomes({ genomes: mc.fullGenomes() }), golden.genomes)
+        // The narrowing is the other half of the same rule: what open reads is
+        // a subset, never an invention.
+        expectSubsetOf(mc.genomes?.columns ?? [], golden.genomes.columns)
       })
     })
 
     it('/contigs', async () => {
       await withMap(map, (mc) => {
-        expectTable(mc.contigs, golden.contigs)
+        expectTable(mc.fullContigs(), golden.contigs)
+        expectSubsetOf(mc.contigs.columns, golden.contigs.columns)
       })
     })
 
@@ -222,4 +231,10 @@ function expectTable(
     }
   }
   expect(mismatches).toEqual([])
+}
+
+/** Every column the open decoded is one the file actually has. */
+function expectSubsetOf(columns: readonly string[], available: readonly string[]): void {
+  expect(columns.length).toBeGreaterThan(0)
+  expect(columns.filter((c) => !available.includes(c))).toEqual([])
 }
