@@ -216,10 +216,12 @@ describe.skipIf(!existsSync(REFERENCE))('Hum53.metacool (26 MB, 4395 genomes)', 
    * the spec is optimistic about, and on a slow connection that is the
    * difference between the ≤ 3 s time-to-interactive target and missing it.
    *
-   * Recorded here so the number is visible and a regression is loud; the fix,
-   * if one is wanted, is to read `/contigs`' three required columns eagerly and
-   * the optional ones on demand, which is a change to `MetaCooler.open`, not to
-   * any file format.
+   * That fix has since landed: `MetaCooler.fromHandle` reads only the columns
+   * the reader itself uses, and the table views read the full width when they
+   * open. So the bound below is a *per-row* one rather than a round number —
+   * loose enough not to be brittle, tight enough that reading the optional
+   * metadata eagerly again would fail it, which the old 20 MB ceiling would
+   * have let straight through.
    */
   it('records what opening the reference file actually costs', async () => {
     const { mc, source } = await open(REFERENCE)
@@ -236,6 +238,15 @@ describe.skipIf(!existsSync(REFERENCE))('Hum53.metacool (26 MB, 4395 genomes)', 
       // The pixel table is 4.57 M pixels; not scanning it is what keeps the
       // open bounded at all, and it is the one thing that must never regress.
       expect(bytes).toBeLessThan(20 * 1024 * 1024)
+      // And a bound that scales with the file rather than with a guess: the
+      // reader needs a name, a length and a genome id per contig, plus the two
+      // offset arrays. Anything materially past that is a column being decoded
+      // that nothing is about to show.
+      const perRow = bytes / mc.nContigs
+      expect(
+        perRow,
+        `open + genomes table read ${perRow.toFixed(1)} bytes per contig`,
+      ).toBeLessThan(64)
     } finally {
       mc.close()
     }

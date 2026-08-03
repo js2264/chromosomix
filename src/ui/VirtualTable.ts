@@ -74,6 +74,15 @@ type Predicate = (row: number) => boolean
 
 const OVERSCAN = 6
 
+/**
+ * One collator for every string comparison in every table.
+ *
+ * `String.prototype.localeCompare` constructs a collator per call. Hoisting it
+ * is the single largest win in the sort, and `numeric: true` also gives
+ * `NODE_2` before `NODE_10`, which is what a reader of contig names expects.
+ */
+const COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
 export class VirtualTable {
   readonly el: HTMLElement
 
@@ -84,6 +93,21 @@ export class VirtualTable {
 
   private source: number[]
   private visible: number[] = []
+  /** Memoised sort order; see {@link sorted}. */
+  private sortCache: { key: string; dir: 1 | -1; source: number[]; order: number[] } | null = null
+  /**
+   * Position of {@link active} within {@link visible}.
+   *
+   * Kept rather than searched for: `visible.indexOf(active)` is 154,468
+   * comparisons per keypress on the reference file, at the key-repeat rate.
+   */
+  private activePosition = -1
+  private persistTimer: ReturnType<typeof setTimeout> | undefined
+  private readonly onResize: () => void
+  /** Cached sticky-header height; a geometry read per keypress otherwise. */
+  private headHeightCache = -1
+  /** Lowercased search haystacks, per column key; see {@link lowercased}. */
+  private readonly searchCache = new Map<string, Map<number, string>>()
   private sortKey: string | null = null
   private sortDir: 1 | -1 = 1
   private search = ''
@@ -176,6 +200,12 @@ export class VirtualTable {
       this.grid,
     )
     this.viewport.addEventListener('scroll', () => this.paint())
+    // The header can re-wrap at a different width, which is the one thing that
+    // changes its height without going through `recompute`.
+    this.onResize = () => {
+      this.headHeightCache = -1
+    }
+    window.addEventListener?.('resize', this.onResize)
     this.viewport.addEventListener('keydown', (event) => this.onKeyDown(event))
 
     this.el = el('div', { class: 'table' }, this.toolbar, this.viewport)
@@ -184,6 +214,23 @@ export class VirtualTable {
     // The viewport has no height until it is in the document; repaint once the
     // browser has laid it out so the first screen is not blank.
     requestAnimationFrame(() => this.paint())
+  }
+
+  /**
+   * Release the resize listener and write out any pending filter state.
+   *
+   * The flush is the point: {@link persistLater} coalesces a burst of typing
+   * into one `sessionStorage` write, and a user who types a filter and
+   * immediately clicks a row would otherwise leave before it landed and come
+   * back to an unfiltered table.
+   */
+  destroy(): void {
+    window.removeEventListener?.('resize', this.onResize)
+    if (this.persistTimer !== undefined) {
+      clearTimeout(this.persistTimer)
+      this.persistTimer = undefined
+      this.persist()
+    }
   }
 
   /** Extra controls placed in the toolbar by the owning view. */
@@ -195,6 +242,8 @@ export class VirtualTable {
   setRows(rows: number[]): void {
     this.source = rows
     this.selected.clear()
+    this.searchCache.clear()
+    this.sortCache = null
     this.recompute()
   }
 
@@ -290,6 +339,15 @@ export class VirtualTable {
     }
   }
 
+  /** Queue a {@link persist}, coalescing a burst of typing into one write. */
+  private persistLater(): void {
+    if (this.persistTimer !== undefined) clearTimeout(this.persistTimer)
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined
+      this.persist()
+    }, 500)
+  }
+
   /** Hand the user-typed state to the caller's store, if there is one. */
   private persist(): void {
     this.options.persistence?.save({
@@ -313,48 +371,114 @@ export class VirtualTable {
       const keys = this.options.searchKeys ?? this.options.columns.filter((c) => c.kind === 'string').map((c) => c.key)
       const columns = this.options.columns.filter((column) => keys.includes(column.key))
       const needle = this.search
-      list.push((row) =>
-        columns.some((column) => {
-          const value = column.value(row)
-          return value !== undefined && String(value).toLowerCase().includes(needle)
-        }),
-      )
+      // Lowercased once per column, not once per row per keystroke: 154,468
+      // fresh strings per recompute, at up to eight recomputes a second while
+      // typing, is ~31 MB/s of garbage for a comparison that never changes.
+      const haystacks = columns.map((column) => this.lowercased(column))
+      list.push((row) => haystacks.some((byRow) => byRow.get(row)?.includes(needle) === true))
     }
     return list
   }
 
+  /**
+   * The source rows in sort order, computed once per (column, direction).
+   *
+   * Two things were wrong with sorting inside `recompute`. It ran on **every
+   * debounced keystroke** — typing an eight-character prefix with a name sort
+   * active re-sorted eight times — and it sorted through the comparator, which
+   * called `column.value(row)` twice per comparison and `localeCompare` once.
+   * For 154,468 contigs that is ~2.7 M comparisons: 5.3 M closure calls and
+   * 2.7 M collations, on the main thread, per keystroke.
+   *
+   * Decorate-sort-undecorate fixes the first half: the keys are extracted once,
+   * `n` calls instead of `2n log n`. A single shared `Intl.Collator` fixes the
+   * second — `String.prototype.localeCompare` builds a collator per call, which
+   * is where most of the time went. And caching the result by sort key fixes the
+   * third, so filtering is a stable pass over an order that already exists.
+   */
+  private sorted(): number[] {
+    const key = this.sortKey
+    if (key === null) return this.source
+    if (this.sortCache !== null && this.sortCache.key === key && this.sortCache.dir === this.sortDir) {
+      if (this.sortCache.source === this.source) return this.sortCache.order
+    }
+    const column = this.options.columns.find((c) => c.key === key)
+    if (column === undefined) return this.source
+
+    const dir = this.sortDir
+    const numeric = column.kind === 'number'
+    const n = this.source.length
+    // One pass for the values, so `value()` is called once per row.
+    const values: Array<string | number | undefined> = new Array<string | number | undefined>(n)
+    const missing = new Uint8Array(n)
+    for (let i = 0; i < n; i++) {
+      const v = column.value(this.source[i])
+      values[i] = v
+      // Missing sorts last regardless of direction: a blank taxonomy is not
+      // "smaller" than a filled one, it is absent.
+      missing[i] = v === undefined || (numeric && Number.isNaN(v as number)) ? 1 : 0
+    }
+    const order = Array.from({ length: n }, (_, i) => i)
+    order.sort((a, b) => {
+      if (missing[a] !== 0 || missing[b] !== 0) {
+        return missing[a] !== 0 && missing[b] !== 0 ? 0 : missing[a] !== 0 ? 1 : -1
+      }
+      if (numeric) return ((values[a] as number) - (values[b] as number)) * dir
+      return COLLATOR.compare(String(values[a]), String(values[b])) * dir
+    })
+    const rows = order.map((i) => this.source[i])
+    this.sortCache = { key, dir, source: this.source, order: rows }
+    return rows
+  }
+
+  /** A column's values, lowercased, built once per column and kept. */
+  private lowercased(column: ColumnDef): Map<number, string> {
+    let cached = this.searchCache.get(column.key)
+    if (cached === undefined) {
+      cached = new Map<number, string>()
+      for (const row of this.source) {
+        const value = column.value(row)
+        if (value !== undefined) cached.set(row, String(value).toLowerCase())
+      }
+      this.searchCache.set(column.key, cached)
+    }
+    return cached
+  }
+
   private recompute(): void {
     const tests = this.predicates()
-    this.visible = tests.length === 0 ? [...this.source] : this.source.filter((row) => tests.every((t) => t(row)))
-
-    if (this.sortKey !== null) {
-      const column = this.options.columns.find((c) => c.key === this.sortKey)
-      if (column !== undefined) {
-        const dir = this.sortDir
-        const numeric = column.kind === 'number'
-        this.visible.sort((a, b) => {
-          const va = column.value(a)
-          const vb = column.value(b)
-          // Missing sorts last regardless of direction: a blank taxonomy is not
-          // "smaller" than a filled one, it is absent.
-          const ma = va === undefined || (numeric && Number.isNaN(va as number))
-          const mb = vb === undefined || (numeric && Number.isNaN(vb as number))
-          if (ma || mb) return ma && mb ? 0 : ma ? 1 : -1
-          if (numeric) return ((va as number) - (vb as number)) * dir
-          return String(va).localeCompare(String(vb)) * dir
-        })
-      }
-    }
+    // Filtering a sorted array preserves its order, so the sort happens once
+    // per column click rather than once per keystroke.
+    this.headHeightCache = -1
+    const ordered = this.sorted()
+    this.visible = tests.length === 0 ? [...ordered] : ordered.filter((row) => tests.every((t) => t(row)))
 
     const total = this.source.length
     const shown = this.visible.length
     this.status.textContent = shown === total ? `${total.toLocaleString()} rows` : `${shown.toLocaleString()} of ${total.toLocaleString()} rows`
-    this.persist()
+    // Debounced separately and more slowly than the filter it follows:
+    // `JSON.stringify` plus a synchronous `sessionStorage.setItem` is not
+    // something to do eight times a second while someone types, and nothing
+    // reads it until the view is left.
+    this.persistLater()
     // The body reserves the full height of the virtual row set; only the rows
     // in view exist as elements.
     this.body.style.height = `${this.visible.length * this.options.rowHeight}px`
     this.viewport.scrollTop = 0
+    // The active row's *position* is meaningless in a different visible set.
+    this.activePosition = this.active < 0 ? -1 : this.visible.indexOf(this.active)
     this.paint()
+  }
+
+  /**
+   * Height of the sticky header, cached.
+   *
+   * Constant while the user scrolls and keys around, and re-read only when the
+   * filter row could have changed shape — so a keypress does not force a layout.
+   */
+  private headHeight(): number {
+    if (this.headHeightCache < 0) this.headHeightCache = this.head.offsetHeight
+    return this.headHeightCache
   }
 
   private paint(): void {
@@ -362,7 +486,7 @@ export class VirtualTable {
     const height = this.viewport.clientHeight || 400
     // The sticky header scrolls with the content, so it occupies the first
     // `head.offsetHeight` pixels of `scrollTop`; row 0 begins after it.
-    const scrolled = Math.max(0, this.viewport.scrollTop - this.head.offsetHeight)
+    const scrolled = Math.max(0, this.viewport.scrollTop - this.headHeight())
     const first = Math.max(0, Math.floor(scrolled / rowHeight) - OVERSCAN)
     const count = Math.min(this.visible.length - first, Math.ceil(height / rowHeight) + 2 * OVERSCAN)
 
@@ -458,7 +582,10 @@ export class VirtualTable {
 
   private onKeyDown(event: KeyboardEvent): void {
     if (this.visible.length === 0) return
-    const position = this.visible.indexOf(this.active)
+    // `activePosition` rather than `visible.indexOf(this.active)`: the linear
+    // scan was 154,468 comparisons per keypress at reference scale, repeated at
+    // the key-repeat rate.
+    const position = this.activePosition
     let next = position
     switch (event.key) {
       case 'ArrowDown':
@@ -493,11 +620,12 @@ export class VirtualTable {
     }
     event.preventDefault()
     next = Math.min(Math.max(next, 0), this.visible.length - 1)
+    this.activePosition = next
     this.active = this.visible[next]
     // Row coordinates are relative to the body, which starts below the sticky
     // header; scroll positions are relative to the scroller. Hence the offset,
     // and hence keeping the row clear of the header rather than under it.
-    const headHeight = this.head.offsetHeight
+    const headHeight = this.headHeight()
     const top = next * this.options.rowHeight + headHeight
     const bottom = top + this.options.rowHeight
     if (top - headHeight < this.viewport.scrollTop) this.viewport.scrollTop = top - headHeight

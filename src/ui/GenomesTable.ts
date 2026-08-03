@@ -88,6 +88,11 @@ export class GenomesTable {
   }
 
   /** Drop the current two-genome selection. */
+  /** Release the table's listeners and flush its pending filter state. */
+  destroy(): void {
+    this.table.destroy()
+  }
+
   clearSelection(): void {
     this.table.clearSelection()
   }

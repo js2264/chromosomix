@@ -93,6 +93,11 @@ function abortError(): Error {
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
   session?.mc.close()
   session = null
+  // A cancel that arrives after its target finished leaves its id behind, since
+  // the `finally` that would have removed it has already run. Harmless
+  // individually and unbounded over a session, so it is cleared with the file
+  // the ids belonged to.
+  cancelled.clear()
 
   const source = await createSource(request.source)
   const mc = await MetaCooler.open(request.uri, source)
@@ -450,8 +455,20 @@ async function handleOverviewSidecar(
   }
 }
 
-async function handleValidateDeep(): Promise<DeepValidation> {
-  return requireSession().mc.validateDeep()
+async function handleValidateDeep(
+  request: Extract<WorkerRequest, { kind: 'validateDeep' }>,
+): Promise<DeepValidation> {
+  const id = request.id
+  // The same shape as the overview: the same pass over every pixel, so the same
+  // right to a progress bar and a cancel. It had neither, and on a
+  // reference-scale file it is minutes of uninterruptible worker behind a static
+  // label.
+  const result = await requireSession().mc.validateDeep({
+    cancelled: () => cancelled.has(id),
+    onProgress: (done, total) => post({ type: 'progress', id, done, total }),
+  })
+  if (cancelled.has(id)) throw abortError()
+  return result
 }
 
 function handleStats(): StatsResult {
@@ -487,7 +504,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
     case 'overviewSidecar':
       return handleOverviewSidecar(request)
     case 'validateDeep':
-      return handleValidateDeep()
+      return handleValidateDeep(request)
     case 'stats':
       return handleStats()
     case 'cancel':
@@ -496,6 +513,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
     case 'close':
       session?.mc.close()
       session = null
+      cancelled.clear()
       // The handle's `close` returns the *borrowed* source; this is what
       // actually releases the mount and its chunk cache (`worker/sources.ts`).
       releaseSources()

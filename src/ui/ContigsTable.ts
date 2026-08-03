@@ -98,4 +98,9 @@ export class ContigsTable {
       this.table.el,
     )
   }
+
+  /** Release the table's listeners and flush its pending filter state. */
+  destroy(): void {
+    this.table.destroy()
+  }
 }

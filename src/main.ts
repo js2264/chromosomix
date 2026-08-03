@@ -43,7 +43,7 @@ import { SidebarToggle } from './ui/SidebarToggle'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import type { TableUiState } from './ui/VirtualTable'
-import { isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
+import { isChord, isTypingTarget, keyLabel, matchesKeys, type Command } from './ui/commands'
 import { openAbout, openShortcuts } from './ui/dialogs'
 import { button, el, fmt } from './ui/dom'
 import { icon, iconButton } from './ui/icons'
@@ -110,6 +110,8 @@ class App {
    * view object; this is what it was built from.
    */
   private mounted: ViewState | null = null
+  /** Memoised {@link stepTargets}, keyed on the state object's identity. */
+  private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
 
   constructor(root: HTMLElement) {
     this.picker = new FilePicker({
@@ -344,9 +346,19 @@ class App {
   private onKeyDown(event: KeyboardEvent): void {
     if (this.modal !== null) return
     const typing = isTypingTarget(event.target)
+    // Above the loop, not inside it.
+    //
+    // `commands()` rebuilds fifteen command objects and their closures, and two
+    // of them call `stepTarget` twice each — which in a region view is a linear
+    // scan of every contig name, four times over. That ran on **every keydown in
+    // the document**, so typing into a filter box cost ~900,000 string
+    // comparisons per character to discover that the only `mod+` binding does
+    // not match a bare letter.
+    if (typing && !isChord(event)) return
     for (const command of this.commands()) {
       if (command.keys === undefined || command.enabled === false) continue
       if (typing && !command.keys.startsWith('mod+')) continue
+
       if (!matchesKeys(event, command.keys)) continue
       event.preventDefault()
       command.run()
@@ -423,6 +435,35 @@ class App {
    * "next", so it does not step at all rather than picking one silently.
    */
   private stepTarget(delta: number): string | null {
+    const both = this.stepTargets()
+    return delta < 0 ? both.previous : both.next
+  }
+
+  /**
+   * Both directions at once, memoised on the state they were computed for.
+   *
+   * `commands()` asks for each direction *twice* — once for the hint and once
+   * for `enabled` — and in a region view each answer is a linear scan of every
+   * contig name. That is four scans of 154,468 strings per call, for a pair of
+   * answers that cannot change while the view state does not; and `commands()`
+   * itself used to run on every keydown in the document.
+   */
+  private stepTargets(): { previous: string | null; next: string | null } {
+    const state = this.store.state
+    if (state === null) return { previous: null, next: null }
+    const cached = this.stepCache
+    if (cached !== null && cached.state === state) return cached
+    const pair = {
+      state,
+      previous: this.computeStepTarget(-1),
+      next: this.computeStepTarget(1),
+    }
+    this.stepCache = pair
+    return pair
+  }
+
+  /** The uncached neighbour lookup; {@link stepTargets} is the way in. */
+  private computeStepTarget(delta: number): string | null {
     const state = this.store.state
     const file = this.file
     if (state === null || file === null) return null
@@ -872,7 +913,7 @@ class App {
       onOpenPair: (a, b) =>
         this.store.set({ uri: state.uri, view: 'pair', genome: a, genome2: b }),
     })
-    this.showContent(view.el)
+    this.showContent(view.el, view)
   }
 
   private async mountContigs(state: ViewState): Promise<void> {
@@ -895,7 +936,7 @@ class App {
       onOpenContig: (contig) =>
         this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
     })
-    this.showContent(view.el)
+    this.showContent(view.el, view)
   }
 
   private mountWhole(state: ViewState): void {

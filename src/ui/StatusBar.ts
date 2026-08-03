@@ -11,8 +11,8 @@
  */
 
 import { icon } from './icons'
-import type { ReaderClient } from '../worker/client'
-import type { StatsResult } from '../worker/protocol'
+import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
+import type { DeepValidation, StatsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
 import { subscribeReadout } from './readout'
 
@@ -31,6 +31,8 @@ export class StatusBar {
   private readonly coordinates: HTMLElement
   private readonly unsubscribeReadout: () => void
   private hasFile = false
+  /** The running deep validation, if any; clicking again stops it. */
+  private validation: Cancellable<DeepValidation> | null = null
 
   constructor(private readonly props: StatusBarProps) {
     this.readsSummary = el('span', { class: 'status-value', text: '—' })
@@ -124,10 +126,28 @@ export class StatusBar {
 
   private async runValidation(): Promise<void> {
     if (!this.hasFile) return
+    // A cancellable, reporting run. It is the same pass over every pixel the
+    // overview makes, and on a reference-scale file it is minutes long; it used
+    // to be a static "scanning…" with no way out.
+    if (this.validation !== null) {
+      this.validation.cancel()
+      this.validation = null
+      this.validationLabel.textContent = 'cancelled'
+      return
+    }
     this.validationLabel.textContent = 'scanning…'
     this.validationItem.classList.remove('ok', 'bad')
+    const task = this.props.client.cancellable<'validateDeep'>(
+      { kind: 'validateDeep' },
+      (done, total) => {
+        this.validationLabel.textContent =
+          total === 0 ? 'scanning…' : `${Math.round((done / total) * 100)}% · click to stop`
+      },
+    )
+    this.validation = task
     try {
-      const result = await this.props.client.request<'validateDeep'>({ kind: 'validateDeep' })
+      const result = await task.promise
+      this.validation = null
       if (result.ok) this.validationLabel.replaceChildren(icon('check', { size: 14 }))
       else this.validationLabel.textContent = `${result.problems.length} problem(s)`
       this.validationItem.classList.toggle('ok', result.ok)
@@ -138,6 +158,11 @@ export class StatusBar {
       )
       this.refresh()
     } catch (err) {
+      this.validation = null
+      if (isCancellation(err)) {
+        this.validationLabel.textContent = 'cancelled'
+        return
+      }
       this.validationLabel.textContent = 'failed'
       this.validationItem.classList.add('bad')
       this.validationDetail.replaceChildren(

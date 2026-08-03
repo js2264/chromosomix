@@ -479,12 +479,17 @@ in the same view. Concretely:
 - the vocabulary follows the file: a cooler's sequences are **chromosomes**, and the genomes table is
   shown greyed out with the reason rather than hidden, so "does this viewer have one" is answered
   rather than raised
-- whole-genome and whole-chromosome selections are size-guarded and refused above the dense limit.
-  Two guards, in order: `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a stricter
-  browser cap (`BROWSER_DENSE_CELL_LIMIT`, 1e8 cells ≈ 10,000 bins per axis) because a tab is a
-  smaller room than a workstation — 50,000 × 50,000 passes the CLI limit and is ~40 GB of live bytes
-  with a raster nine times a canvas's area cap. Human chr1 at 5 kb (49,792 bins) is exactly the case
-  the second guard exists for
+- whole-genome and whole-chromosome selections are size-guarded. Two guards, in order:
+  `DENSE_MATRIX_BIN_LIMIT` with the CLI's own wording, and then a browser-side *estimate against a
+  budget* — the dense values at 4 B per cell, the raster at 16 B per pooled pixel (a constant
+  ceiling, since it is pooled at `RASTER_MAX_DIM`), and one bounded read window. There is no
+  per-`nnz` term, because the pixel read is windowed rather than whole. The budget comes from
+  `navigator.deviceMemory`, which is Chromium-only and capped at 8 — so it is a *warning* threshold
+  rather than a wall: a browser-side refusal offers "load anyway" with the number, and the
+  allocation itself is what actually decides, translating a `RangeError` into the same typed
+  refusal. Human chr1 at 5 kb (49,792 bins, 2.5e9 cells, ~10 GB) is the case the second guard exists
+  for; a whole yeast genome at 500 bp (24,322 bins, ~2.7 GB) is the case it must *not* refuse on a
+  machine that can hold it
 - `.mcool` resolution levels are each fixed-bin, so §3.3's arithmetic applies unchanged; the levels
   drive the zoom control exactly as mmetacool entries do. An `.mcool` addressed at its **root** is
   refused with `mcool-root`, naming its resolutions — the mirror of `mmetacool-root` — and the app

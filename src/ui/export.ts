@@ -201,3 +201,36 @@ export async function canvasToPdf(
 
   return new Blob(chunks as BlobPart[], { type: 'application/pdf' })
 }
+
+/**
+ * The largest canvas a browser will actually give you.
+ *
+ * Chrome caps the *area* at 2^28 px; Firefox caps each *side* at 32,767; iOS
+ * Safari caps the area at 2^24 on memory-constrained devices. Past any of them
+ * `getContext` hands back a blank canvas rather than throwing, so an export goes
+ * silently white — which is why this is a pre-flight and not a `catch`.
+ */
+export const CANVAS_MAX_AREA = 268_435_456
+export const CANVAS_MAX_SIDE = 32_767
+
+/**
+ * The largest offered DPI whose canvas fits, or `null` when even the smallest
+ * does.
+ *
+ * Offered as advice rather than as a clamp: the user picked a DPI and is owed a
+ * reason and a number, not a quietly different file.
+ */
+export function largestDpiThatFits(
+  cssWidth: number,
+  cssHeight: number,
+  choices: readonly number[] = EXPORT_DPI_CHOICES,
+): number | null {
+  const fits = (dpi: number): boolean => {
+    const scale = scaleForDpi(dpi)
+    const w = Math.max(1, Math.round(cssWidth * scale))
+    const h = Math.max(1, Math.round(cssHeight * scale))
+    return w * h <= CANVAS_MAX_AREA && w <= CANVAS_MAX_SIDE && h <= CANVAS_MAX_SIDE
+  }
+  const ok = [...choices].sort((a, b) => b - a).find(fits)
+  return ok ?? null
+}
