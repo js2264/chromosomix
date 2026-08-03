@@ -75,3 +75,15 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
+
+/**
+ * Whether a keystroke carries a command modifier — ⌘ or Ctrl.
+ *
+ * The one thing that can still be a command while the user is typing into an
+ * input. Asked *before* the command list is built, so a bare letter typed into
+ * a filter box costs one boolean rather than fifteen command objects and four
+ * linear scans of the contig names.
+ */
+export function isChord(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey
+}

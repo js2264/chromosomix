@@ -458,6 +458,10 @@ export function transfersFor(payload: unknown): Transferable[] {
       return
     }
     if (Array.isArray(value)) {
+      // A table's string column is 154,468 entries, and a string cannot hold a
+      // buffer — so recursing into one was 1.5 M `typeof` checks per contigs
+      // response looking for something that cannot be there.
+      if (value.length === 0 || typeof value[0] !== 'object') return
       for (const item of value) visit(item)
       return
     }

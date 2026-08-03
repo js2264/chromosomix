@@ -51,6 +51,7 @@ import {
   downloadBlob,
   exportBaseName,
   fileStamp,
+  largestDpiThatFits,
   scaleForDpi,
 } from './export'
 import { setReadout } from './readout'
@@ -537,8 +538,23 @@ export class MatrixPanel {
     const lines = captionLines(ctx, caption, Math.max(120, width - left))
     const captionHeight = captionHeightOf(lines)
 
+    // Pre-flight, because the failure mode is silent: past a browser's canvas
+    // cap, setting `width`/`height` leaves a blank canvas rather than throwing,
+    // so the export lands as a white rectangle with no explanation. Asked here
+    // rather than at the top of the method because the caption is part of the
+    // height, and a figure that fits without it can fail with it.
+    const height = body + captionHeight
+    const fits = largestDpiThatFits(width, height)
+    if (fits !== null && fits < dpi) {
+      throw new Error(
+        `${dpi} dpi would need a ${Math.round(width * scale)}×${Math.round(height * scale)} px ` +
+          `canvas, which is past what a browser will draw. ${fits} dpi is the largest that fits ` +
+          'this figure.',
+      )
+    }
+
     out.width = Math.max(1, Math.round(width * scale))
-    out.height = Math.max(1, Math.round((body + captionHeight) * scale))
+    out.height = Math.max(1, Math.round(height * scale))
 
     // The plot draws from the canvas origin and clears as it goes, so it goes
     // first and the background goes on underneath at the end. The caption is
