@@ -39,6 +39,15 @@ export interface WholeViewProps {
   offerLevel: boolean
   /** What one axis unit is called here: a chromosome, or a contig. */
   noun: string
+  /**
+   * Ask the reader which genome each contig belongs to, for the tooltip.
+   *
+   * This is the one view where the answer is not already known from the view
+   * itself: a genome view is one genome and a region view is one contig of one,
+   * but here the axes run over the whole file and a contig's genome is exactly
+   * the thing that is not on screen. False for a plain cooler, which has none.
+   */
+  namesGenomes: boolean
   onLevelChange(level: 'bin' | 'contig'): void
   onBalanceChange(balance: boolean): void
   onScaleChange(scale: ScaleState): void
@@ -143,22 +152,24 @@ export class WholeView {
   }
 
   private async load(budgetBytes?: number): Promise<void> {
-    const { client, nBins, balance, noun } = this.props
+    const { client, nBins, balance, noun, namesGenomes } = this.props
     const rows: [number, number] = [0, nBins]
     const budget = budgetBytes === undefined ? {} : { budgetBytes }
+    const genomes = namesGenomes ? { genomes: true } : {}
     this.panel.setBusy(true)
     this.problem.replaceChildren()
     this.problem.classList.add('hidden')
     try {
       const result: MatrixResult =
         this.level === 'bin'
-          ? await client.request<'matrix'>({ kind: 'matrix', rows, balance, ...budget })
+          ? await client.request<'matrix'>({ kind: 'matrix', rows, balance, ...budget, ...genomes })
           : await client.request<'aggregate'>({
               kind: 'aggregate',
               rows,
               level: 'contig',
               balance,
               ...budget,
+              ...genomes,
             })
       if (this.disposed) return
       this.panel.setData(result, 'Whole genome')

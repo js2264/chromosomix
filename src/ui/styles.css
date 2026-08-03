@@ -1471,7 +1471,24 @@ p {
   font-weight: 400;
 }
 
+/* The genome leads the card, so it is the line that carries the weight and the
+   contig under it steps back — the opposite of the emphasis inside one genome,
+   where the contig is the subject. */
+.cell-tip-genomes {
+  color: var(--text);
+}
+
+/* `:not(.hidden)` is load-bearing: `display: none` removes the box, not the
+   element, so a bare adjacent-sibling selector still matches and would dim the
+   contig line in every view that has no genome line above it — which is most
+   of them. */
+.cell-tip-genomes:not(.hidden) + .cell-tip-pair {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
 .cell-tip-pos,
+.cell-tip-distance,
 .cell-tip-count {
   font-family: var(--mono);
   color: var(--text-dim);

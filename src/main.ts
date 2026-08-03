@@ -1000,6 +1000,7 @@ class App {
       // sequence, where every level is a single cell.
       offerLevel: file.info.nContigs > 1,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+      namesGenomes: file.info.hasGenomes,
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onBalanceChange: (balance) => this.setBalance(balance),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),

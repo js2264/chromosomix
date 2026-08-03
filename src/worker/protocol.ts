@@ -234,15 +234,31 @@ export interface MatrixResult {
   rowGroups: AxisGroup[]
   colGroups: AxisGroup[]
   /**
-   * Coarser boundaries drawn over the ones above — genomes over contigs.
+   * The genome each stretch of the axis belongs to — the coarser structure over
+   * {@link rowGroups}, in the same offset space.
    *
-   * Two levels of structure exist in a contig × contig picture and only one of
-   * them is worth a line: the tooltip wants the contig, the eye wants the
-   * genome. Kept separate rather than replacing `rowGroups`, because both
-   * answers are needed at once.
+   * Two levels of structure exist in a contig × contig picture and both are
+   * wanted at once, which is why this does not replace `rowGroups`: the pointer
+   * is over a contig, and that contig is in a genome, and a reader looking at a
+   * whole metagenome needs to be told which.
+   *
+   * Present only where the axis *is* contigs of a file that has genomes. Absent
+   * for a plain cooler, and absent when the axis is already genomes.
    */
-  rowSuperGroups?: AxisGroup[]
-  colSuperGroups?: AxisGroup[]
+  rowGenomes?: AxisGroup[]
+  colGenomes?: AxisGroup[]
+  /**
+   * Whether the genome runs above are the boundaries to *draw*.
+   *
+   * Naming and drawing are separate decisions, and the whole-metagenome
+   * overview is the only view that wants both. There, 20,000 contig hairlines
+   * over 4,000 genome blocks is a grey wash that hides the block structure the
+   * view exists to show, so the genome runs become the separators and the axis
+   * labels. Everywhere else the genome is a fact for the tooltip and the
+   * contigs keep the lines — a whole-genome view of a metacool is still read
+   * contig by contig.
+   */
+  genomeBoundaries?: boolean
   level: 'bin' | 'contig' | 'genome'
 }
 
@@ -329,7 +345,20 @@ export type WorkerRequest =
   // `balance` multiplies each cell by its two bin weights, which is cooler's
   // own definition of a balanced matrix (§6.4). Off by default, matching
   // `metacooler show`, and offered only when the file carries the column.
-  | { id: number; kind: 'matrix'; rows: Extent; cols?: Extent; balance?: boolean; budgetBytes?: number }
+  // `genomes` asks for the genome each stretch of the axes belongs to, for the
+  // tooltip. Off by default: it costs a walk over the block's bins and a run
+  // encoding, and every view but the whole-genome one already knows the answer
+  // from the view it is — a genome view is one genome, a region view is one
+  // contig of one.
+  | {
+      id: number
+      kind: 'matrix'
+      rows: Extent
+      cols?: Extent
+      balance?: boolean
+      budgetBytes?: number
+      genomes?: boolean
+    }
   | {
       id: number
       kind: 'aggregate'
@@ -338,6 +367,7 @@ export type WorkerRequest =
       level: 'contig' | 'genome'
       balance?: boolean
       budgetBytes?: number
+      genomes?: boolean
     }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }

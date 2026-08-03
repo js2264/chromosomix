@@ -14,6 +14,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The tooltip says how far apart a contact is.** Hover an off-diagonal cell
+  within one chromosome or contig and it now reports the genomic distance
+  between its two ends, which is the number a Hi-C map is actually read by. It
+  is deliberately absent where there is no answer rather than shown as a large
+  one: a trans cell has no distance along a sequence, and on the diagonal it is
+  zero.
+- **The tooltip names the genome, in the whole-genome view of a metacool.**
+  It led with the contig, which on a metagenome is the finer half of the answer
+  and rarely the one you want first. The genome now leads and the contig sits
+  under it; a cell between two genomes names both. The picture underneath is
+  unchanged — the separators are still the contigs.
+
 - **A fifth example: a yeast micro-C map at one resolution.**
   `Yeast_microC_G2M_1kb.cool` — 16 chromosomes of synthetic yeast, 1 kb bins,
   179 M contacts, balanced. It is the first single-resolution cooler in the
