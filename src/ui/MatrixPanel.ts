@@ -23,14 +23,19 @@
  * it is the only thing that can move it coherently.
  */
 
+import type { AnnotationStore } from '../annotations/store'
+import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
+import { locusAxisFrom } from '../render/locus'
+import { AnnotationLanes, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
 import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
   DEFAULT_UI_COLORMAP,
 } from '../render/colormaps'
 import {
+  CROSSHAIR_COLOR,
   HeatmapView,
   type AxisCoords,
   type Cell,
@@ -174,6 +179,29 @@ export interface MatrixPanelOptions {
    * name is in the heading; the line said nothing either did not.
    */
   hideTitle?: boolean
+  /**
+   * Draw annotations beside and on the matrix (spec §8).
+   *
+   * Absent on every view of a `.metacool`, which is not a decision this panel
+   * makes: the shell only supplies it for a file with no genome layer (§8.5).
+   * With it absent the panel is byte for byte the panel it was before
+   * annotations existed — no lanes, no listeners, no worker.
+   */
+  annotations?: AnnotationContext
+}
+
+/** What the panel needs to draw annotations against this file. */
+export interface AnnotationContext {
+  store: AnnotationStore
+  client: AnnotationClient
+  /**
+   * A contig's length in base pairs, from the contigs table.
+   *
+   * Passed as a lookup rather than a table because an *aggregated* axis carries
+   * one cell per contig and no length of its own, and because the panel has no
+   * business knowing the reader's table shapes.
+   */
+  contigLength(name: string): number | undefined
 }
 
 export class MatrixPanel {
@@ -223,19 +251,40 @@ export class MatrixPanel {
   private frame = 0
   /** The scale the colourbar was last drawn for; `null` until it has been. */
   private painted: ColorScale | null = null
+  /**
+   * The annotation lanes, or `null` on a file that cannot carry them (§8.5).
+   *
+   * Every use of it is optional-chained rather than guarded by a flag, so the
+   * "no annotations" path is the absence of an object rather than a branch that
+   * has to be kept correct in six places.
+   */
+  private readonly lanes: AnnotationLanes | null
+  /** The grid holding the map and its lanes; the tooltip's positioning parent. */
+  private readonly grid: HTMLElement
+  /** The cell under the pointer, so the lanes can continue the crosshair. */
+  private hoverCell: Cell | null = null
   /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
   private readonly tip: {
+    matrix: HTMLElement
     rowName: HTMLElement
     times: HTMLElement
     colName: HTMLElement
     pos: HTMLElement
     count: HTMLElement
+    /** The lane tooltip's block: a heading and however many lines it has. */
+    lane: HTMLElement
+    laneTitle: HTMLElement
+    laneLines: HTMLElement
   }
   /** Cached geometry for {@link positionTooltip}; never read during a pointer move. */
   private tipSize = { width: 0, height: 0 }
   private hostSize = { width: 0, height: 0 }
   private tipAt: { x: number; y: number } | null = null
   private tipFrame = 0
+  /** Teardowns for the lane canvases' own pointer listeners. */
+  private readonly laneListeners: Array<() => void> = []
+  /** The bottom stack's thickness the stylesheet was last told about. */
+  private laneBudget = -1
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -250,20 +299,29 @@ export class MatrixPanel {
     // Both exist on purpose: the tooltip answers "what is under my cursor"
     // without a glance away from the matrix, and the readout keeps the last
     // answer visible after the pointer has moved on.
+    // Two shapes in one card: the matrix's row × column × count, and a lane's
+    // heading with however many lines the feature under the pointer has. One
+    // element rather than two, because there is one pointer and it can only be
+    // over one of them — and because the placement logic is fiddly enough that
+    // a second copy of it would drift.
     this.tip = {
+      matrix: el('div', { class: 'cell-tip-block' }),
       rowName: el('span', { class: 'cell-tip-name' }),
       times: el('span', { class: 'cell-tip-x', text: '×' }),
       colName: el('span', { class: 'cell-tip-name' }),
       pos: el('div', { class: 'cell-tip-pos' }),
       count: el('div', { class: 'cell-tip-count' }),
+      lane: el('div', { class: 'cell-tip-block hidden' }),
+      laneTitle: el('div', { class: 'cell-tip-title' }),
+      laneLines: el('div', { class: 'cell-tip-lines' }),
     }
-    this.tooltip = el(
-      'div',
-      { class: 'cell-tip hidden' },
+    this.tip.matrix.append(
       el('div', { class: 'cell-tip-pair' }, this.tip.rowName, this.tip.times, this.tip.colName),
       this.tip.pos,
       this.tip.count,
     )
+    this.tip.lane.append(this.tip.laneTitle, this.tip.laneLines)
+    this.tooltip = el('div', { class: 'cell-tip hidden' }, this.tip.matrix, this.tip.lane)
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
@@ -462,7 +520,31 @@ export class MatrixPanel {
       el('div', { class: 'panel-controls' }, ...controls),
     )
 
-    const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay, this.tooltip)
+    const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay)
+
+    this.lanes =
+      options.annotations === undefined
+        ? null
+        : new AnnotationLanes({
+            store: options.annotations.store,
+            client: options.annotations.client,
+            onChange: () => this.schedule(),
+          })
+
+    // The map and its lanes are one grid, so a lane canvas is the same width as
+    // the map's canvas by construction rather than by arrangement — and the
+    // tooltip, parented here, can float over either.
+    this.grid = el(
+      'div',
+      { class: 'panel-grid' },
+      wrap,
+      ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
+      this.tooltip,
+    )
+    if (this.lanes !== null) {
+      this.watchLane('bottom', this.lanes.bottomEl)
+      this.watchLane('right', this.lanes.rightEl)
+    }
 
     // The colourbar sits immediately right of the plot and is deliberately
     // short: it is a legend, and a legend as tall as the figure reads as a
@@ -470,7 +552,7 @@ export class MatrixPanel {
     const body = el(
       'div',
       { class: 'panel-body' },
-      wrap,
+      this.grid,
       el('div', { class: 'colorbar-slot' }, this.barCanvas),
     )
 
@@ -511,20 +593,19 @@ export class MatrixPanel {
     this.observer =
       typeof ResizeObserver === 'undefined'
         ? null
-        : new ResizeObserver((entries) => {
-            // The tooltip's host is `wrap`, which is what is observed — so the
-            // one place that already learns this box's size is also the only
-            // place that needs to.
-            const box = entries[0]?.contentRect
-            if (box !== undefined) this.hostSize = { width: box.width, height: box.height }
+        : new ResizeObserver(() => {
+            // The *grid* is what is observed, not the plot: it is the tooltip's
+            // positioning parent, and it is the box that changes when a lane
+            // appears — which the plot's own size does not.
+            this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
             this.heatmap.resize()
             this.colorbar.resize()
             this.schedule()
           })
-    this.observer?.observe(wrap)
+    this.observer?.observe(this.grid)
     // The canvas has no size until it is in the document; size it once laid out.
     requestAnimationFrame(() => {
-      this.hostSize = { width: wrap.clientWidth, height: wrap.clientHeight }
+      this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
       this.heatmap.resize()
       this.colorbar.resize()
       this.schedule()
@@ -546,8 +627,26 @@ export class MatrixPanel {
     this.narrowWatcher()
     this.observer?.disconnect()
     this.heatmap.detach()
+    for (const off of this.laneListeners) off()
+    this.laneListeners.length = 0
+    // The lanes' sample cache goes with the panel, not with the file: the store
+    // outlives this view, and a cache keyed on a view's own geometry would be
+    // answering the next view's questions with the last one's data.
+    this.lanes?.destroy()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
+  }
+
+  /**
+   * Redraw because the annotation set or one of its settings changed.
+   *
+   * A colour, a limit or a tick box is a repaint of lanes whose data has not
+   * moved; adding or removing one changes the geometry, which the next frame
+   * picks up from the store. Either way this is one frame, not a reload.
+   */
+  refreshAnnotations(removed?: string): void {
+    if (removed !== undefined) this.lanes?.forget(removed)
+    this.schedule()
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -571,8 +670,13 @@ export class MatrixPanel {
     const plot = this.heatmap.cssSize
     const bar = this.colorbar.cssSize
     const gap = 10
-    const width = plot.width + gap + bar.width
-    const body = Math.max(plot.height, bar.height)
+    // The lanes are part of the figure, so they are part of its box. A track
+    // exported without them is a picture of a claim with its evidence cropped
+    // off.
+    const rightLanes = this.lanes?.thicknessOf('right') ?? 0
+    const bottomLanes = this.lanes?.thicknessOf('bottom') ?? 0
+    const width = plot.width + rightLanes + gap + bar.width
+    const body = Math.max(plot.height + bottomLanes, bar.height)
 
     const out = document.createElement('canvas')
     const ctx = out.getContext('2d')
@@ -613,6 +717,10 @@ export class MatrixPanel {
     // *below* the figure, which is where a caption goes and — not incidentally
     // — the only place that needs no offset for anything else.
     this.heatmap.renderTo(ctx, scale)
+    // Placed exactly as the grid places them — below the plot, and beside it —
+    // and *redrawn* at the export scale rather than blown up from the screen
+    // canvases, so a 300 dpi figure has 300 dpi track names.
+    this.lanes?.renderInto(ctx, this.laneGeometry(), scale)
 
     // The legend renders into a canvas of its own and is then placed, because
     // `renderTo` also draws from the origin — there is nowhere to pass an
@@ -627,7 +735,7 @@ export class MatrixPanel {
     // context, and drawing the legend through that would put it at 3× its
     // offset, which is off the canvas entirely.
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.drawImage(barCanvas, Math.round((plot.width + gap) * scale), 0)
+    ctx.drawImage(barCanvas, Math.round((plot.width + rightLanes + gap) * scale), 0)
 
     if (lines.length > 0) {
       const palette = readCanvasPalette()
@@ -744,6 +852,74 @@ export class MatrixPanel {
     }
   }
 
+  /**
+   * The lanes' view of the frame about to be drawn.
+   *
+   * Every number comes from the heatmap rather than from this panel: the scales
+   * are the objects the heatmap's pan and zoom write, and the two rects are the
+   * ones it draws in. That is the whole of §8.4's "nothing computes a second
+   * mapping", stated as one function.
+   */
+  private laneGeometry(): LaneGeometry {
+    const palette = readCanvasPalette()
+    return {
+      plot: this.heatmap.plotRect,
+      data: this.heatmap.dataRect,
+      colScale: this.heatmap.scaleX,
+      rowScale: this.heatmap.scaleY,
+      cssWidth: this.heatmap.cssSize.width,
+      cssHeight: this.heatmap.cssSize.height,
+      hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
+      crosshair: getPlotOptions().crosshair,
+      palette: {
+        guide: palette.labelColor,
+        halo: palette.labelHaloColor,
+        crosshair: CROSSHAIR_COLOR,
+      },
+    }
+  }
+
+  /**
+   * Follow the pointer over one lane stack.
+   *
+   * The lanes get their own listeners rather than sharing the heatmap's, because
+   * they are separate canvases and a pointer over one is not over the other.
+   * What they share is the tooltip, which is why the coordinates are converted
+   * to the grid's — the tooltip is parented there and knows nothing about which
+   * canvas asked for it.
+   */
+  private watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+    const onMove = (event: MouseEvent): void => {
+      const lanes = this.lanes
+      if (lanes === null) return
+      const box = canvas.getBoundingClientRect()
+      const x = event.clientX - box.left
+      const y = event.clientY - box.top
+      const probe = lanes.probe(edge, x, y, this.laneGeometry())
+      if (probe === null) {
+        this.tooltip.classList.add('hidden')
+        return
+      }
+      this.tip.matrix.classList.add('hidden')
+      this.tip.lane.classList.remove('hidden')
+      this.tip.laneTitle.textContent = probe.title
+      this.tip.laneLines.replaceChildren(
+        ...probe.lines.map((line) => el('div', { class: 'cell-tip-line', text: line })),
+      )
+      this.tooltip.classList.remove('hidden')
+      this.placeTooltip(canvas.offsetLeft + x, canvas.offsetTop + y)
+    }
+    const onLeave = (): void => {
+      this.tooltip.classList.add('hidden')
+    }
+    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('mouseleave', onLeave)
+    this.laneListeners.push(() => {
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('mouseleave', onLeave)
+    })
+  }
+
   /** Load a block. `HeatmapView` refits and recomputes the auto range (§7.1). */
   setData(data: MatrixResult, title: string): void {
     this.data = data
@@ -762,6 +938,17 @@ export class MatrixPanel {
       rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
       cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
     })
+    // The annotations' view of the same two axes. Rebuilt per block rather than
+    // patched, so a stale mapping can never be drawn over fresh data — the same
+    // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
+    const context = this.options.annotations
+    if (this.lanes !== null && context !== undefined) {
+      const shared = { level: data.level, binsize: this.options.binsize, contigLength: context.contigLength }
+      this.lanes.setAxes({
+        rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+        cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
+      })
+    }
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
@@ -832,7 +1019,12 @@ export class MatrixPanel {
     if (this.frame !== 0) return
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
+      this.syncLaneMetrics()
       this.heatmap.draw()
+      // After the matrix and inside the same frame: the lanes read the scales
+      // the heatmap has just written, so drawing them anywhere else would show
+      // the previous frame's pan for one frame on every drag.
+      this.lanes?.draw(this.laneGeometry())
       // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where
       // the auto rule's numbers become visible — in the colourbar and, equally,
@@ -854,6 +1046,21 @@ export class MatrixPanel {
         )
       }
     })
+  }
+
+  /**
+   * Tell the stylesheet how much vertical budget the bottom lanes take.
+   *
+   * The plot's size is `100vh` minus its furniture, and a stack of tracks under
+   * it is furniture: without this, six tracks push the map off the bottom of the
+   * window. Written only when it changes, because assigning a custom property
+   * invalidates layout and this runs on every frame of a drag.
+   */
+  private syncLaneMetrics(): void {
+    const bottom = this.lanes?.thicknessOf('bottom') ?? 0
+    if (bottom === this.laneBudget) return
+    this.laneBudget = bottom
+    this.grid.style.setProperty('--lane-bottom', `${bottom}px`)
   }
 
   private emitClick(cell: Cell): void {
@@ -925,11 +1132,21 @@ export class MatrixPanel {
   }
 
   private describe(cell: Cell | null, at?: { x: number; y: number }): void {
+    // Recorded whatever happens: the lanes continue the crosshair through the
+    // hovered column, and they can only do that if they are told it has moved.
+    const moved =
+      (this.hoverCell === null) !== (cell === null) ||
+      (cell !== null && this.hoverCell !== null && (cell.row !== this.hoverCell.row || cell.col !== this.hoverCell.col))
+    this.hoverCell = cell
+    if (moved && this.lanes !== null && getPlotOptions().crosshair) this.schedule()
+
     if (cell === null || this.data === null) {
       setReadout('')
       this.tooltip.classList.add('hidden')
       return
     }
+    this.tip.matrix.classList.remove('hidden')
+    this.tip.lane.classList.add('hidden')
     const data = this.data
     const rowGroup = groupAt(data.rowGroups, cell.row)
     const colGroup = groupAt(data.colGroups, cell.col)

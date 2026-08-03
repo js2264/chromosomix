@@ -489,6 +489,14 @@ export interface PlotOptions {
   ticks: boolean
 }
 
+/**
+ * The guide-line colour, shared with whatever else continues the crosshair.
+ *
+ * Exported because the annotation lanes draw the same line through the same
+ * column: two constants would be two colours the day one of them was tuned.
+ */
+export const CROSSHAIR_COLOR = '#1f5fa9'
+
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   dividers: true,
   breaks: true,
@@ -880,7 +888,7 @@ export class HeatmapView {
       labelFont: options.labelFont ?? '10px system-ui, sans-serif',
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
       labelMinSpan: options.labelMinSpan ?? 0,
-      crosshairColor: options.crosshairColor ?? '#1f5fa9',
+      crosshairColor: options.crosshairColor ?? CROSSHAIR_COLOR,
       plotBorderColor: options.plotBorderColor ?? '#b9bec5',
       selectionColor: options.selectionColor ?? '#1f5fa9',
       selectionFill: options.selectionFill ?? 'rgba(31, 95, 169, 0.16)',

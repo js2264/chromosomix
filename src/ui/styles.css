@@ -968,6 +968,53 @@ p {
   gap: 0.6rem;
 }
 
+/* The map and its lanes, as one grid.
+
+   Two columns and two rows: the plot top-left, the right-hand lane stack beside
+   it, the bottom stack underneath. Everything is explicitly sized by
+   `AnnotationLanes` — the lane canvases have to match the plot canvas *exactly*
+   on their shared axis, and "exactly" is not something `stretch` promises to
+   the pixel.
+
+   `position: relative` because this is the tooltip's positioning parent: the
+   card has to be able to float over a lane as well as over the map, and this is
+   the one box that contains both. */
+.panel-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: start;
+  justify-items: start;
+  min-width: 0;
+}
+
+.panel-grid > .heatmap-wrap {
+  grid-area: 1 / 1;
+}
+
+.lane-canvas {
+  display: block;
+  /* A lane is a picture of the same window the map shows; the browser must not
+     claim a drag over it for scrolling any more than it may over the map. */
+  touch-action: none;
+}
+
+.lane-right {
+  grid-area: 1 / 2;
+  margin-left: 4px;
+}
+
+.lane-bottom {
+  grid-area: 2 / 1;
+  margin-top: 4px;
+}
+
+/* An edge with no annotations takes no space and receives no events. */
+.lane-canvas.hidden {
+  display: none;
+}
+
 /* No chrome of its own: no border, no radius, no fill, no padding. The frame
    the eye needs is the one drawn on the plot's own edges by the canvas, which
    is the only thing that sits *on* the data — a wrapper border is however far
@@ -980,7 +1027,11 @@ p {
   position: relative;
   overflow: hidden;
   aspect-ratio: 1 / 1;
-  width: clamp(20rem, calc(100vh - 14rem), 60rem);
+  /* The lanes stacked under the map come out of the same vertical budget, or a
+     tall stack of tracks pushes the plot off the bottom of the window. The
+     property is written by the panel and defaults to nothing, so a view with no
+     annotations is sized exactly as it was before they existed. */
+  width: clamp(20rem, calc(100vh - 14rem - var(--lane-bottom, 0px)), 60rem);
   max-width: 100%;
   flex: 0 1 auto;
 }
@@ -1479,6 +1530,25 @@ p {
 }
 
 .cell-tip-count {
+  color: var(--text);
+}
+
+/* The lane half of the card: a heading and however many lines the feature under
+   the pointer has. Only one half is ever shown — there is one pointer, and it
+   is over the matrix or over a lane. */
+.cell-tip-title {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cell-tip-line {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-tip-line:first-child {
   color: var(--text);
 }
 
