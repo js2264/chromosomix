@@ -220,10 +220,32 @@ export function parseMetacoolerRange(mc: RangeTarget, rangeStr: string): ParsedR
 }
 
 /**
- * The bin extent of a `contig` / `contig:start-end` region, exactly as
- * `cooler.Cooler.extent` computes it for a fixed-bin file:
+ * The bin extent of a `contig` / `contig:start-end` region, as
+ * `cooler.Cooler.extent` computes it for a fixed-bin file —
  * `chrom_offset[cid] + floor(start / binsize)` to
- * `chrom_offset[cid] + ceil(end / binsize)`.
+ * `chrom_offset[cid] + ceil(end / binsize)` — **clamped to the contig's own
+ * bins**.
+ *
+ * The clamp is not cosmetic, and it is the one place this port deliberately
+ * answers something cooler's arithmetic does not.
+ *
+ * A coarsened `.mcool` level does not carry `binnify(chromsizes, binsize)`'s
+ * bin table. `cooler zoomify` merges the fine bins in groups of the factor, and
+ * where a chromosome's fine bin count is not a multiple of it, the remainder is
+ * absorbed into the last coarse bin rather than given one of its own — yeast
+ * chromosome I at 2 kb ends in a single `228,000–230,218` bin, so the level has
+ * 115 bins for it where `ceil(230218 / 2000)` says 116. The extra one is the
+ * *first bin of chromosome II*, and the arithmetic hands it back for every
+ * chromosome whose fine bin count was odd: I, VI, XII, XIV and XVI in this
+ * assembly.
+ *
+ * What that costs is not one stray column. A block that spans two chromosomes
+ * has two axis groups, so the view stops being a single-coordinate one: the
+ * base-pair ticks along the edge disappear, the label switches to two names,
+ * and the picture quietly gains a row and a column of another chromosome's
+ * contacts. `chrom_offset` is the authority on which bins belong to a
+ * chromosome — it is what the pixels are indexed by — so it, not the division,
+ * decides where the block ends.
  */
 export function regionToExtent(
   chromOffset: ArrayLike<number>,
@@ -233,5 +255,8 @@ export function regionToExtent(
   binsize: number,
 ): Extent {
   const base = chromOffset[contigId]
-  return [base + Math.floor(start / binsize), base + Math.ceil(end / binsize)]
+  const limit = chromOffset[contigId + 1] ?? base
+  const lo = Math.min(base + Math.floor(start / binsize), limit)
+  const hi = Math.min(base + Math.ceil(end / binsize), limit)
+  return [lo, Math.max(lo, hi)]
 }
