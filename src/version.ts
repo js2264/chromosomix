@@ -24,6 +24,7 @@
 declare const __APP_VERSION__: string
 declare const __APP_COMMIT__: string
 declare const __APP_COMMIT_DATE__: string
+declare const __APP_TARGET__: string
 
 /** The `package.json` version this bundle was built from. */
 export const VERSION: string = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0-dev'
@@ -36,18 +37,43 @@ export const COMMIT_DATE: string =
   typeof __APP_COMMIT_DATE__ === 'string' ? __APP_COMMIT_DATE__ : ''
 
 /**
- * `(meta)cooler 0.2.0` — the name and version, for anywhere a figure or a file
- * has to say what produced it.
+ * Which of the two builds this is.
+ *
+ * The one place the flag lives. Every other module asks this rather than
+ * reading the token itself, because a guard is only as good as the number of
+ * copies of it — and the token is substituted by a `define`, so a second copy
+ * that is spelt slightly differently silently reads `undefined` and takes the
+ * web path in the desktop build.
+ *
+ * Anything other than the exact string `desktop` is the web target, including
+ * the case the guards above exist for: `vitest` applies no `define` block, so
+ * the name is never substituted and `typeof` on an undeclared identifier is the
+ * only legal way to ask about it.
  */
-export const PRODUCER = `(meta)cooler ${VERSION}`
+export const TARGET: 'web' | 'desktop' =
+  typeof __APP_TARGET__ === 'string' && __APP_TARGET__ === 'desktop' ? 'desktop' : 'web'
 
 /**
- * The full build line: `0.2.0 · a1b2c3d · 2026-08-03`.
+ * `(meta)cooler 0.2.0`, or `(meta)cooler 0.2.0 desktop` — the name and version,
+ * for anywhere a figure or a file has to say what produced it.
+ *
+ * The target is part of the answer because this string ends up in every
+ * exported PDF's `/Producer` field, and "which build made this figure" is the
+ * first question asked when one came out wrong.
+ */
+export const PRODUCER = `(meta)cooler ${VERSION}${TARGET === 'desktop' ? ' desktop' : ''}`
+
+/**
+ * The full build line: `0.2.0 · a1b2c3d · 2026-08-03`, with `· desktop` when
+ * that is what is running.
  *
  * Composed rather than templated, so a build with no git behind it reads
  * `0.2.0` and not `0.2.0 ·  · ` — the parts that are unknown are absent, not
- * empty.
+ * empty. The target joins on the same terms: the web build is the default and
+ * says nothing, which keeps the line on the website exactly what it was.
  */
 export function buildLine(): string {
-  return [VERSION, COMMIT, COMMIT_DATE].filter((part) => part !== '').join(' · ')
+  return [VERSION, COMMIT, COMMIT_DATE, TARGET === 'desktop' ? 'desktop' : '']
+    .filter((part) => part !== '')
+    .join(' · ')
 }

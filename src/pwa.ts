@@ -16,6 +16,7 @@
  */
 
 import { el } from './ui/dom'
+import { TARGET } from './version'
 
 /**
  * Register, and watch for a replacement.
@@ -27,6 +28,17 @@ import { el } from './ui/dom'
  */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD) return
+  // A packaged desktop build *is* a production build, so the check above is not
+  // the guard people assume it is -- and caching an app that is already on disk
+  // buys nothing while costing the one failure mode this whole module exists to
+  // avoid: a worker serving a build the installer replaced months ago.
+  //
+  // One of three, all independent, because this one is the only one a future
+  // refactor can delete by accident. The desktop config does not include the
+  // plugin, so `sw.js` is never emitted for it to fetch; and the `app` scheme is
+  // registered without `allowServiceWorkers`, which Chromium refuses outright --
+  // "The URL protocol of the current origin ('app://viewer') is not supported".
+  if (TARGET !== 'web') return
   if (!('serviceWorker' in navigator)) return
 
   window.addEventListener('load', () => {

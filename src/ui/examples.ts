@@ -13,6 +13,22 @@
  * `main.ts` re-opens a link only when its path is `http(s)://`.
  */
 
+declare const __DEMO_BASE__: string
+
+/**
+ * Where the demos are, when they are not beside the app.
+ *
+ * Empty on the web, where `BASE_URL` resolved against the page is right by
+ * construction — the files are in `public/demo/` and ship with the bundle. Set
+ * to an absolute origin in the desktop build, which serves its renderer from
+ * `app://viewer` and publishes no demos of its own; those URLs then go through
+ * the *remote* reader, which needs a `HEAD` and bounded range `GET`s that a
+ * static handler over a packaged directory does not answer.
+ *
+ * `typeof` because `vitest` applies no `define` block (see `version.ts`).
+ */
+const DEMO_BASE: string = typeof __DEMO_BASE__ === 'string' ? __DEMO_BASE__ : ''
+
 export interface Example {
   label: string
   url: string
@@ -149,7 +165,11 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => entry.file)
  * no ladder to land on.
  */
 export function demoExamples(): Example[] {
-  const base = import.meta.env.BASE_URL
+  // An absolute base wins over the second argument to `new URL`, so the line
+  // below is unchanged in either case and nothing downstream can tell which one
+  // it got: `inferSource` still sees `http(s)://`, and a view state naming a
+  // demo re-opens in the desktop build exactly as it does on the website.
+  const base = DEMO_BASE !== '' ? DEMO_BASE : import.meta.env.BASE_URL
   return DEMO.map((entry) => ({
     label: entry.label,
     url: new URL(`${base}demo/${entry.file}`, window.location.href).href,

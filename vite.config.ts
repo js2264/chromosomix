@@ -89,10 +89,19 @@ export default defineConfig({
   // What the bundle says about itself (`src/version.ts`). The commit *date*
   // rather than the build date: rebuilding identical source must not produce a
   // bundle that claims to be newer than the one beside it.
+  // The last two are the web target's *own* values, not placeholders for
+  // someone else's: `vite.desktop.config.ts` spreads this object and overrides
+  // them. Written here rather than only there so that both guards that read
+  // them fold away — esbuild replaces the token, sees a constant comparison,
+  // and drops the branch — and the deployed bundle carries no trace of a second
+  // target. A `define` missing from one config is a token that survives into
+  // the output as an undefined identifier, which is why neither is optional.
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
     __APP_COMMIT__: JSON.stringify(COMMIT),
     __APP_COMMIT_DATE__: JSON.stringify(git(['log', '-1', '--format=%cs'])),
+    __APP_TARGET__: JSON.stringify('web'),
+    __DEMO_BASE__: JSON.stringify(''),
   },
   plugins: [serviceWorker(process.env.BASE_PATH ?? '/')],
   resolve: {
