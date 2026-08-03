@@ -22,6 +22,9 @@ import {
   checkBrowserDenseSize,
   checkDenseSize,
   DENSE_HINTS,
+  denseBudgetFor,
+  estimateBlockBytes,
+  PIXEL_CHUNK_BYTES,
   readDenseMatrix,
   type MatrixSource,
 } from '@/metacooler/matrix'
@@ -129,17 +132,17 @@ describe('readDenseMatrix', () => {
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 13_000] }, DENSE_HINTS.range),
     ).toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
-    // 200000 × 12000 = 2.4e9 cells: under Python's limit, and past what a
-    // single Float32Array can be — so the browser guard answers, and with the
-    // one refusal no budget can argue with.
+    // 200000 × 12000 = 2.4e9 cells: under Python's limit and far past any tab's
+    // budget, so the browser guard is what answers.
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range),
-    ).toThrowError(/single typed array/)
-    // 20000 × 12000 = 2.4e8 cells: inside the array limit and outside a laptop's
-    // budget, so this is the estimate talking.
-    expect(() =>
-      readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 12_000] }, DENSE_HINTS.range),
     ).toThrowError(/browser tab/)
+    // 20000 × 12000 = 2.4e8 cells: 960 MB of values and a raster that has
+    // stopped growing, so it is *inside* a 4 GiB machine's budget and the read
+    // is attempted. It was refused when the estimate still charged a per-nnz
+    // term for a read that is now windowed.
+    expect(() => readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 12_000] }, DENSE_HINTS.range))
+      .toThrowError(/must refuse before touching the file/)
   })
 
   it('rejects a malformed bin range before the size check', () => {
@@ -177,30 +180,35 @@ describe('the browser guard, which is stricter than the CLI', () => {
 
   it('allows a whole yeast genome at 1 kb, which is the point of the estimate', () => {
     // 12.1 Mb at 1 kb is 12,100 bins: 1.46e8 cells, which every round fixed
-    // limit refuses and which actually costs about 1.2 GB pessimistically and
-    // far less once the file's sparsity is known.
-    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT, { budgetBytes: 2e9 })).not.toThrow()
-    // And with a real nnz — a few million non-zero pixels — it fits a laptop.
+    // limit refuses and which costs 585 MB of values plus a bounded raster.
+    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT, { budgetBytes: 1e9 })).not.toThrow()
+  })
+
+  it('allows a whole yeast genome at 500 bp on a machine that reports 8 GiB', () => {
+    // 24,322 bins, 5.9e8 cells: 2.37 GB of values, ~263 MB of raster and one
+    // 36 MB read window. The estimate used to add a per-nnz term for a read that
+    // is now windowed, and refused this on every engine.
     expect(() =>
-      checkBrowserDenseSize(12_100, 12_100, HINT, {
-        budgetBytes: 1e9,
-        nonZero: () => 8_000_000,
-      }),
+      checkBrowserDenseSize(24_322, 24_322, HINT, { budgetBytes: (8 * 1024 ** 3) / 3 }),
     ).not.toThrow()
   })
 
-  it('asks the file how sparse it is only when the pessimistic estimate fails', () => {
-    let asked = 0
-    const nonZero = (): number => {
-      asked++
-      return 1_000
-    }
-    // Comfortably inside the budget: decided without touching the file.
-    checkBrowserDenseSize(1_000, 1_000, HINT, { budgetBytes: 1e9, nonZero })
-    expect(asked).toBe(0)
-    // Over it pessimistically, rescued by the real sparsity.
-    checkBrowserDenseSize(12_000, 12_000, HINT, { budgetBytes: 1e9, nonZero })
-    expect(asked).toBe(1)
+  it('never touches the file: the estimate is a closed form in the block shape', () => {
+    // The proxy handle throws on any access, and this call has no handle at all
+    // — which is the point. The old guard reached for `nnz` to decide.
+    expect(estimateBlockBytes(1_000, 1_000)).toBe(
+      1_000 * 1_000 * 4 + 1_000 * 1_000 * 16 + PIXEL_CHUNK_BYTES,
+    )
+  })
+
+  it('charges the raster as a ceiling, not as something that grows', () => {
+    // Past the pooling cap the raster term stops moving; only the cells do.
+    const a = estimateBlockBytes(20_000, 20_000)
+    const b = estimateBlockBytes(40_000, 40_000)
+    const rasterA = a - 20_000 * 20_000 * 4 - PIXEL_CHUNK_BYTES
+    const rasterB = b - 40_000 * 40_000 * 4 - PIXEL_CHUNK_BYTES
+    expect(rasterB).toBeLessThanOrEqual(rasterA * 1.01)
+    expect(rasterB).toBeLessThan(300e6)
   })
 
   it('says what it refused and what the limit is', () => {
@@ -215,6 +223,18 @@ describe('the browser guard, which is stricter than the CLI', () => {
     expect(message).toMatch(/needs about [\d.]+ GB/)
     expect(message).toMatch(/budgeting [\d.]+ GB/)
     expect(message).toContain(HINT)
+  })
+
+  it('does not grant a tiny device more than it has', () => {
+    // deviceMemory is bucketed: 0.25 is a real value a small device reports. A
+    // floor applied unconditionally handed it 1 GB — four times the machine.
+    expect(denseBudgetFor(0.25)).toBeLessThan(0.25 * 1024 ** 3)
+    expect(denseBudgetFor(0.5)).toBeLessThan(0.5 * 1024 ** 3)
+    expect(denseBudgetFor(1)).toBeLessThan(1024 ** 3)
+    // At and above 2 GiB the floor is the correction it was written to be.
+    expect(denseBudgetFor(2)).toBe(1e9)
+    expect(denseBudgetFor(4)).toBeCloseTo((4 * 1024 ** 3) / 3, 0)
+    expect(denseBudgetFor(8)).toBeCloseTo((8 * 1024 ** 3) / 3, 0)
   })
 
   it('carries the same code, so the UI keeps one refusal screen', () => {

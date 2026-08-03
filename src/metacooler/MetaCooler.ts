@@ -4,10 +4,16 @@
  * Same names, same semantics, same errors, no new concepts. Where this file
  * and `metacooler/api.py` disagree, this file is wrong.
  *
- * What `open` reads, and nothing more (§3.2): the root attributes, `/genomes`
- * and `/contigs` in full, and the two small offset arrays. Never `/pixels/*`,
- * never `indexes/bin1_offset` (one entry per bin — sliced on demand), and
- * never `/bins` at all (§3.3).
+ * What `open` reads, and nothing more (§3.2): the root attributes **once**, the
+ * `/genomes` and `/contigs` columns the *reader* uses, and the two small offset
+ * arrays. Never `/pixels/*`, never `indexes/bin1_offset` (one entry per bin —
+ * sliced on demand), and never `/bins` at all (§3.3).
+ *
+ * "The columns the reader uses" is a narrowing of §3.2's "all columns", and it
+ * is a large one: on the reference file the optional `/contigs` metadata is 72%
+ * of the whole open's HDF5 bytes, for a table view the user may never open.
+ * {@link MetaCooler.fullContigs} and {@link MetaCooler.fullGenomes} read the
+ * rest when that view actually opens, which is the only place it is shown.
  */
 
 import { yieldToEventLoop } from '../async'
@@ -38,6 +44,19 @@ import { parseUri } from '../uri'
 const REQUIRED_GENOME_COLUMNS = ['name', 'length', 'n_contigs', 'n_bins'] as const
 /** What any cooler's chrom/contig table must carry. */
 const REQUIRED_COOLER_COLUMNS = ['name', 'length'] as const
+
+/**
+ * The `/contigs` columns the *reader* uses, as against the ones a creator may
+ * have joined in for the table view.
+ *
+ * `genome_id` is here for the metacool path and simply absent from a cooler's
+ * `/chroms`, which is the same shape of absence the required-column check
+ * already handles.
+ */
+const READER_CONTIG_COLUMNS = ['name', 'length', 'genome_id'] as const
+
+/** The `/genomes` columns the reader uses; the rest are the table view's. */
+const READER_GENOME_COLUMNS = ['name', 'length', 'n_contigs', 'n_bins'] as const
 
 /**
  * Everything `MetaCooler` needs, already read.
@@ -133,8 +152,23 @@ export class MetaCooler {
 
   /** Contig names, in file order — cooler's `chromnames`. */
   readonly chromnames: string[]
-  /** Contig name → length in bp — cooler's `chromsizes`. */
-  readonly chromsizes: Map<string, number>
+  /**
+   * Contig name → length in bp — cooler's `chromsizes`. Built on first use.
+   *
+   * Lazy because it is only ever consulted by name, and only by a *region*
+   * selection: on a 154 k-contig file it is 7.3 MB of map built during the open,
+   * before the landing table has painted, for a lookup many sessions never make.
+   */
+  get chromsizes(): Map<string, number> {
+    this.chromsizeCache ??= new Map(this.chromnames.map((name, i) => [name, this.contigLengths[i]]))
+    return this.chromsizeCache
+  }
+
+  /** Contig name → index. Lazy for the same reason as {@link chromsizes}. */
+  private get contigIds(): Map<string, number> {
+    this.contigIdCache ??= new Map(this.chromnames.map((name, i) => [name, i]))
+    return this.contigIdCache
+  }
   /** Genome names, in file order, `__unbinned__` included; `[]` for a cooler. */
   readonly genomeNames: string[]
   /**
@@ -150,9 +184,15 @@ export class MetaCooler {
   readonly handle: Hdf5Handle
   private readonly chromOffset: Float64Array
   private readonly genomeOffset: Float64Array
-  private readonly contigIds: Map<string, number>
   private readonly genomeIds: Map<string, number>
   private closed = false
+  /** Memoised full-width tables; see {@link fullContigs}. */
+  private fullContigTable: Table | null = null
+  private fullGenomeTable: Table | null = null
+  /** Built on the first lookup by name; see {@link contigIds}. */
+  private contigIdCache: Map<string, number> | null = null
+  private chromsizeCache: Map<string, number> | null = null
+  private readonly contigLengths: Float64Array
 
   /**
    * Open a map from a byte source.
@@ -183,8 +223,12 @@ export class MetaCooler {
    *   MetaCoolerFormatError for a metacool missing `indexes/genome_offset`.
    */
   static fromHandle(handle: Hdf5Handle): MetaCooler {
-    const layout = detectLayout(handle)
-    assertAcceptable(handle, layout)
+    // Read **once**. Three enumerations of the root attribute block cost three
+    // wasm round trips per fixed-length string attribute, for a set of values
+    // that cannot change between them.
+    const attrs = handle.attrs()
+    const layout = detectLayout(handle, attrs)
+    assertAcceptable(handle, layout, attrs)
 
     // A plain cooler — including one resolution of an mcool — is opened as
     // itself: its `/chroms` is the contig table, and there is no genome layer
@@ -195,8 +239,8 @@ export class MetaCooler {
         uri: handle.uri,
         handle,
         layout,
-        attrs: handle.attrs(),
-        contigs: handle.readTable('chroms'),
+        attrs,
+        contigs: handle.readTable('chroms', undefined, undefined, READER_CONTIG_COLUMNS),
         chromOffset: handle.readNumeric('indexes/chrom_offset'),
       })
     }
@@ -208,12 +252,35 @@ export class MetaCooler {
       uri: handle.uri,
       handle,
       layout,
-      attrs: handle.attrs(),
-      genomes: handle.readTable('genomes'),
-      contigs: handle.readTable('contigs'),
+      attrs,
+      genomes: handle.readTable('genomes', undefined, undefined, READER_GENOME_COLUMNS),
+      contigs: handle.readTable('contigs', undefined, undefined, READER_CONTIG_COLUMNS),
       chromOffset: handle.readNumeric('indexes/chrom_offset'),
       genomeOffset: handle.readNumeric('indexes/genome_offset'),
     })
+  }
+
+  /**
+   * `/contigs` (or `/chroms`) with **every** column the creator wrote — the
+   * table the contigs *view* shows, read when that view opens.
+   *
+   * Opening a file does not need them. On the reference file the optional
+   * metadata columns are 72% of the whole open's HDF5 bytes, decoded before the
+   * landing table has painted, for a view the user may never reach. Memoised,
+   * because the view is reached by navigation and comes back.
+   */
+  fullContigs(): Table {
+    this.fullContigTable ??= this.handle.readTable(
+      this.layout.kind === 'metacool' ? 'contigs' : 'chroms',
+    )
+    return this.fullContigTable
+  }
+
+  /** `/genomes` with every column the creator wrote; `null` for a cooler. */
+  fullGenomes(): Table | null {
+    if (this.genomes === null) return null
+    this.fullGenomeTable ??= this.handle.readTable('genomes')
+    return this.fullGenomeTable
   }
 
   constructor(init: MetaCoolerInit) {
@@ -245,17 +312,16 @@ export class MetaCooler {
 
     this.chromnames = this.contigs.strings('name')
     this.genomeNames = this.genomes === null ? [] : this.genomes.strings('name')
-    const contigLengths = Float64Array.from(this.contigs.numbers('length'))
+    // `numbers()` materialises a plain JS array first — 1.5 MB of throwaway per
+    // call at 154 k contigs, twice. The column is already a `Float64Array` off
+    // the decoder, so the typed-array constructor converts it in one pass with
+    // nothing in between.
+    const contigLengths = toFloat64(this.contigs, 'length')
     this.contigGenomeIds =
-      this.genomes === null ? new Int32Array(0) : Int32Array.from(this.contigs.numbers('genome_id'))
+      this.genomes === null ? new Int32Array(0) : toInt32(this.contigs, 'genome_id')
     this.coords = new Coords(this.binsize, this.chromOffset, contigLengths)
 
-    this.chromsizes = new Map()
-    this.contigIds = new Map()
-    for (let i = 0; i < this.chromnames.length; i++) {
-      this.chromsizes.set(this.chromnames[i], contigLengths[i])
-      this.contigIds.set(this.chromnames[i], i)
-    }
+    this.contigLengths = contigLengths
     this.genomeIds = new Map()
     for (let i = 0; i < this.genomeNames.length; i++) this.genomeIds.set(this.genomeNames[i], i)
 
@@ -587,15 +653,13 @@ export class MetaCooler {
     const total = this.nnz
     for (let lo = 0; lo < total; lo += chunkSize) {
       const hi = Math.min(lo + chunkSize, total)
-      const bin1 = this.handle.readNumeric('pixels/bin1_id', lo, hi)
-      const bin2 = this.handle.readNumeric('pixels/bin2_id', lo, hi)
+      // `readInt32` rather than `readNumeric` then `Int32Array.from`: the bin
+      // ids are int64 on disk and array indices in use, and the double in
+      // between was 8 B per pixel per column that existed only to be narrowed.
+      const bin1 = this.handle.readInt32('pixels/bin1_id', lo, hi)
+      const bin2 = this.handle.readInt32('pixels/bin2_id', lo, hi)
       const count = this.handle.readNumeric('pixels/count', lo, hi)
-      const chunk: PixelChunk = {
-        bin1: Int32Array.from(bin1),
-        bin2: Int32Array.from(bin2),
-        count,
-        length: count.length,
-      }
+      const chunk: PixelChunk = { bin1, bin2, count, length: count.length }
       const keepGoing = options.onChunk(chunk)
       options.onProgress?.(hi, total)
       if (keepGoing === false) return
@@ -787,4 +851,29 @@ export class MetaCooler {
     this.closed = true
     this.handle.close()
   }
+}
+
+/**
+ * A numeric column as a `Float64Array`, without the intermediate JS array.
+ *
+ * `Table.numbers` returns `number[]`, which is the right shape for the handful
+ * of small columns the UI formats — and the wrong one for a 154,000-row index
+ * the reader is about to convert anyway. Every numeric column arrives from the
+ * decoder as a `Float64Array`, so the common case is a straight hand-back.
+ */
+function toFloat64(table: Table, column: string): Float64Array {
+  const raw = table.data[column]
+  if (raw instanceof Float64Array) return raw
+  return Float64Array.from(table.numbers(column))
+}
+
+/** The same, narrowing to `Int32Array` — for id columns, which are indices. */
+function toInt32(table: Table, column: string): Int32Array {
+  const raw = table.data[column]
+  if (ArrayBuffer.isView(raw) && !(raw instanceof DataView) && !(raw instanceof BigInt64Array)) {
+    const out = new Int32Array(raw.length)
+    out.set(raw as unknown as ArrayLike<number>)
+    return out
+  }
+  return Int32Array.from(table.numbers(column))
 }

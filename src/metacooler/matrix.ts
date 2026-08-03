@@ -17,8 +17,8 @@ import {
   DENSE_MATRIX_BIN_LIMIT,
   DEVICE_MEMORY_FALLBACK_GIB,
   DEVICE_MEMORY_SHARE,
-  MAX_TYPED_ARRAY_CELLS,
   MIN_DENSE_BUDGET_BYTES,
+  MIN_DENSE_BUDGET_GIB,
   type StorageMode,
 } from '../constants'
 import { rasterStride } from '../render/heatmap'
@@ -77,38 +77,35 @@ export function checkDenseSize(nRows: number, nCols: number, hint: string): void
 /**
  * What one displayed block costs, in bytes, before it is read.
  *
- * Not a limit — an estimate, from the three allocations that actually scale:
+ * Not a limit — an estimate, and now an honest one. There are exactly two
+ * things that scale with the selection and one that does not:
  *
  * - the dense values, `4 B` per cell, held for as long as the view is open;
- * - the auto-`vmax` percentile buffer, `4 B` per *non-zero* value and transient.
- *   A contact map is sparse, and the file knows its own `nnz`, so this is
- *   `min(cells, nnz)` rather than `cells`;
- * - the raster and its canvas, `8 B` per raster pixel — and the raster is
- *   pooled at {@link RASTER_MAX_DIM}, so this is a constant ceiling (about
- *   134 MB) rather than something that grows with the selection.
+ * - the raster: pooled values, RGBA, canvas backing store and the transient
+ *   auto-range buffer, `16 B` per raster pixel — and the raster is pooled at
+ *   {@link RASTER_MAX_DIM}, so this is a constant ceiling rather than something
+ *   that grows;
+ * - the pixel read, one bounded window at a time
+ *   ({@link forEachPixelSpan}), which is why there is no `nnz` term any more.
  *
- * The transformed copy that used to sit alongside the values is gone; the
- * transform is applied during rasterisation.
+ * The `nnz` term this used to carry was wrong in two directions at once. It
+ * charged `16 B` per stored pixel where the unwindowed read held `32`, and it
+ * measured that against `min(cells, nnz)` when what the read actually pulled in
+ * was every pixel of the *row band* — a population bounded by the file's `nnz`
+ * and unrelated to the block's cell count, so a small block on the diagonal of
+ * a large file could cost several times what it was charged. Reading in windows
+ * makes the term a constant, which is both cheaper and true.
  */
-export function estimateBlockBytes(
-  nRows: number,
-  nCols: number,
-  options: { nonZero?: number } = {},
-): number {
+export function estimateBlockBytes(nRows: number, nCols: number): number {
   const cells = nRows * nCols
   const rasterPixels =
     Math.ceil(nRows / rasterStride(nRows)) * Math.ceil(nCols / rasterStride(nCols))
-  const certain = cells * 4 + rasterPixels * 8
-
-  // Without `nnz` the sparse terms are bounded only by the cell count, and the
-  // percentile buffer is the one worth assuming: 4 B per cell, which in
-  // practice also covers the transient COO span. With `nnz` both are known
-  // exactly — the percentile buffer at 4 B and the span read (two Int32
-  // columns and a Float64, alive while it is scattered into the dense block)
-  // at 16 B per stored pixel — and the estimate stops guessing.
-  if (options.nonZero === undefined) return certain + cells * 4
-  const nonZero = Math.min(cells, options.nonZero)
-  return certain + nonZero * 4 + nonZero * 16
+  // 16 B per raster pixel, not 8: the pooled `Float32Array`, the RGBA bytes and
+  // the canvas backing store are all live at once (4 each), and the auto-range
+  // buffer is a fourth, transient, over the *pooled* values rather than over
+  // the matrix. All four are bounded by `RASTER_MAX_DIM`, so this whole term is
+  // a ceiling of about 268 MB however large the selection is.
+  return cells * 4 + rasterPixels * 16 + PIXEL_CHUNK_BYTES
 }
 
 /**
@@ -120,8 +117,24 @@ export function estimateBlockBytes(
  */
 export function deviceDenseBudgetBytes(): number {
   const reported = (globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory
-  const gib = typeof reported === 'number' && reported > 0 ? reported : DEVICE_MEMORY_FALLBACK_GIB
-  return Math.max(MIN_DENSE_BUDGET_BYTES, gib * 1024 ** 3 * DEVICE_MEMORY_SHARE)
+  return denseBudgetFor(
+    typeof reported === 'number' && reported > 0 ? reported : DEVICE_MEMORY_FALLBACK_GIB,
+  )
+}
+
+/**
+ * The budget for a machine claiming `gib` gibibytes — the whole policy, with
+ * no globals in it so it can be stated as a table in a test.
+ *
+ * The floor is a correction for a *pessimistic* hint, so it applies only where
+ * the hint is large enough to be one. Below {@link MIN_DENSE_BUDGET_GIB} the
+ * device is telling us it is small, and raising its budget to a flat 1 GB —
+ * four times the whole machine, at the bottom of the reported scale — is not
+ * generosity but a killed tab.
+ */
+export function denseBudgetFor(gib: number): number {
+  const share = gib * 1024 ** 3 * DEVICE_MEMORY_SHARE
+  return gib >= MIN_DENSE_BUDGET_GIB ? Math.max(MIN_DENSE_BUDGET_BYTES, share) : share
 }
 
 /**
@@ -136,8 +149,11 @@ export function deviceDenseBudgetBytes(): number {
  * are exactly the case a cooler in this viewer is for, so the guard has to
  * measure rather than guess.
  *
- * The one hard wall left is the values array itself: a `Float32Array` cannot
- * exceed the runtime's typed-array maximum, and no budget makes that legal.
+ * There is no `nnz` consultation any more, and no file read: the estimate is a
+ * closed form in the block's own shape ({@link estimateBlockBytes}), because
+ * windowing the pixel read took the one term that depended on the file out of
+ * it. The guard is therefore both cheaper — it never touches the handle — and
+ * accurate, which the version that budgeted against `min(cells, nnz)` was not.
  *
  * @throws ViewerError `dense-too-large`.
  */
@@ -145,42 +161,19 @@ export function checkBrowserDenseSize(
   nRows: number,
   nCols: number,
   hint: string,
-  options: { nonZero?: () => number; budgetBytes?: number } = {},
+  options: { budgetBytes?: number } = {},
 ): void {
   const cells = nRows * nCols
   const budget = options.budgetBytes ?? deviceDenseBudgetBytes()
+  const bytes = estimateBlockBytes(nRows, nCols)
+  if (bytes <= budget) return
 
-  // Worst case first — every cell non-zero — because that costs no read. The
-  // file's own `nnz` is consulted only to *rescue* a block the pessimistic
-  // estimate would refuse, never to condemn one, so a selection that obviously
-  // fits is decided without touching the file at all.
-  let bytes = estimateBlockBytes(nRows, nCols)
-  if (bytes > budget && options.nonZero !== undefined) {
-    try {
-      bytes = estimateBlockBytes(nRows, nCols, { nonZero: options.nonZero() })
-    } catch {
-      // A guard that fails because its own optimisation failed is worse than a
-      // guard that is merely pessimistic. If the file will not say how sparse
-      // it is, the worst case stands and the block is refused.
-    }
-  }
-  if (bytes <= budget && cells <= MAX_TYPED_ARRAY_CELLS) return
-
-  const message =
-    cells > MAX_TYPED_ARRAY_CELLS
-      ? `Refusing to load a ${nRows}×${nCols} block: ${fmtCells(cells)} cells is more than a ` +
-        `single typed array can hold, whatever the machine has.`
-      : `Refusing to load a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells ` +
-        `needs about ${fmtBytes(bytes)}, and this tab is budgeting ${fmtBytes(budget)}.`
-
-  throw new ViewerError('dense-too-large', `${message} ${hint}`, {
-    nRows,
-    nCols,
-    cells,
-    bytes,
-    budget,
-    where: 'browser',
-  })
+  throw new ViewerError(
+    'dense-too-large',
+    `Refusing to load a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells ` +
+      `needs about ${fmtBytes(bytes)}, and this tab is budgeting ${fmtBytes(budget)}. ${hint}`,
+    { nRows, nCols, cells, bytes, budget, where: 'browser' },
+  )
 }
 
 /** `1.6e9` → `1.6 GB`; small enough numbers get MB. */
@@ -238,28 +231,102 @@ export function resolveCountKind(dtype: string): 'i' | 'u' | 'f' {
  * pixels come back.
  */
 export function readPixelSpan(h: Hdf5Handle, lo: number, hi: number): PixelChunk {
-  const empty: PixelChunk = {
-    bin1: new Int32Array(0),
-    bin2: new Int32Array(0),
-    count: new Float64Array(0),
-    length: 0,
+  const parts: PixelChunk[] = []
+  let total = 0
+  forEachPixelSpan(h, lo, hi, (chunk) => {
+    parts.push({
+      bin1: chunk.bin1.slice(),
+      bin2: chunk.bin2.slice(),
+      count: chunk.count.slice(),
+      length: chunk.length,
+    })
+    total += chunk.length
+  })
+  if (parts.length === 1) return parts[0]
+  const bin1 = new Int32Array(total)
+  const bin2 = new Int32Array(total)
+  const count = new Float64Array(total)
+  let at = 0
+  for (const part of parts) {
+    bin1.set(part.bin1, at)
+    bin2.set(part.bin2, at)
+    count.set(part.count, at)
+    at += part.length
   }
-  if (hi <= lo) return empty
+  return { bin1, bin2, count, length: total }
+}
 
+/**
+ * Stored pixels whose row bin falls in `[lo, hi)`, without reading the file.
+ *
+ * Two entries of an index that is one number per bin — the cheapest read there
+ * is, and the same one `genomeDensity` makes. It is what a size guard should be
+ * asking: a block's cost is set by the pixels its *row band* holds, which is
+ * bounded by the file's `nnz` and not by the block's own cell count.
+ */
+export function spanPixelCount(h: Hdf5Handle, lo: number, hi: number): number {
+  if (hi <= lo) return 0
+  const start = h.readNumeric('indexes/bin1_offset', lo, lo + 1)[0]
+  const end = h.readNumeric('indexes/bin1_offset', hi, hi + 1)[0]
+  return Math.max(0, end - start)
+}
+
+/**
+ * Pixels per window in {@link forEachPixelSpan}; the order of magnitude the
+ * scan path already uses.
+ */
+export const PIXEL_CHUNK = 1_000_000
+
+/**
+ * Peak bytes one window of {@link forEachPixelSpan} holds.
+ *
+ * Two `Int32Array`s and a `Float64Array` at the window size, plus the transient
+ * buffers h5wasm mints on the way (an int64 column arrives as `BigInt64Array`
+ * and is narrowed in one pass). Charged as a constant by
+ * {@link estimateBlockBytes}, which is the whole point of reading in windows.
+ */
+export const PIXEL_CHUNK_BYTES = PIXEL_CHUNK * 36
+
+/**
+ * Read the pixels whose **row** bin falls in `[lo, hi)`, in bounded windows.
+ *
+ * One `bin1_offset` slice gives the pixel range; the three pixel columns are
+ * then read a window at a time and handed to `onChunk` before the next window
+ * is fetched.
+ *
+ * **The windowing is not an optimisation, it is the correctness fix.** The span
+ * of a whole-genome block is the whole file, and reading it in one shot put
+ * `32 B` per stored pixel on the JS heap simultaneously — 3.2 GB at 100 M
+ * pixels — while the estimator that had waved the block through charged 16.
+ * It also staged each column whole inside h5wasm's linear memory, which is hard
+ * capped at 2 GiB whatever the machine has, so a span past ~2.7e8 pixels failed
+ * outright with an error carrying no code and no advice. A window is 36 MB and
+ * neither problem exists at any file size.
+ *
+ * The buffers handed to `onChunk` are **not** retained between calls; a callback
+ * that needs them past its own return must copy.
+ */
+export function forEachPixelSpan(
+  h: Hdf5Handle,
+  lo: number,
+  hi: number,
+  onChunk: (chunk: PixelChunk) => void,
+  chunkSize: number = PIXEL_CHUNK,
+): void {
+  if (hi <= lo) return
   // hi + 1 is safe: bin1_offset has one entry per bin plus a terminator.
   const offsets = h.readNumeric('indexes/bin1_offset', lo, hi + 1)
   const p0 = offsets[0]
   const p1 = offsets[offsets.length - 1]
-  if (p1 <= p0) return empty
+  if (p1 <= p0) return
 
-  const bin1 = h.readNumeric('pixels/bin1_id', p0, p1)
-  const bin2 = h.readNumeric('pixels/bin2_id', p0, p1)
-  const count = h.readNumeric('pixels/count', p0, p1)
-  return {
-    bin1: Int32Array.from(bin1),
-    bin2: Int32Array.from(bin2),
-    count,
-    length: count.length,
+  const width = Math.max(1, Math.trunc(chunkSize))
+  for (let at = p0; at < p1; at += width) {
+    const end = Math.min(at + width, p1)
+    const bin1 = h.readInt32('pixels/bin1_id', at, end)
+    const bin2 = h.readInt32('pixels/bin2_id', at, end)
+    const count = h.readNumeric('pixels/count', at, end)
+    onChunk({ bin1, bin2, count, length: count.length })
   }
 }
 
@@ -356,21 +423,45 @@ export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string)
   const nRows = rows[1] - rows[0]
   const nCols = cols[1] - cols[0]
   checkDenseSize(nRows, nCols, hint)
-  // `nnz` is the dataset's *shape*, so this costs no pixel read — and it is the
-  // difference between assuming every cell is non-zero and knowing how sparse
-  // this file actually is.
-  checkBrowserDenseSize(nRows, nCols, hint, {
-    nonZero: () => src.handle.datasetLength('pixels/bin1_id'),
-  })
+  checkBrowserDenseSize(nRows, nCols, hint)
 
-  const values = new Float32Array(nRows * nCols)
+  const values = allocateDense(nRows, nCols, hint)
   if (nRows > 0 && nCols > 0) {
     const plan = planRead(rows, cols, src.storageMode)
-    const chunk = readPixelSpan(src.handle, plan.span[0], plan.span[1])
-    scatterDense(chunk, rows, cols, plan, values)
+    // Scattered window by window: `scatterDense` is additive and per-pixel, so
+    // it needs no knowledge that the span arrived in pieces, and the peak COO
+    // footprint is one window rather than the whole row band.
+    forEachPixelSpan(src.handle, plan.span[0], plan.span[1], (chunk) => {
+      scatterDense(chunk, rows, cols, plan, values)
+    })
     if (q.balance === true) applyWeights(src.handle, rows, cols, values)
   }
   return { nrows: nRows, ncols: nCols, values, rowExtent: rows, colExtent: cols }
+}
+
+/**
+ * The dense block, or a refusal carrying the same code as the estimate's.
+ *
+ * The estimate is a prediction; this is the machine answering. A typed array
+ * the runtime cannot serve throws a catchable `RangeError`, which is a
+ * *measurement* of what is available in the only unit that matters and is free
+ * to take — where guessing from `navigator.deviceMemory`, a value two of the
+ * three major engines do not implement, is neither. Translating it here is what
+ * lets the estimate above be generous without the failure being a raw stack
+ * trace on an error screen.
+ */
+function allocateDense(nRows: number, nCols: number, hint: string): Float32Array {
+  try {
+    return new Float32Array(nRows * nCols)
+  } catch (cause) {
+    const cells = nRows * nCols
+    throw new ViewerError(
+      'dense-too-large',
+      `This machine could not allocate the ${nRows}×${nCols} block: ${fmtCells(cells)} cells ` +
+        `is ${fmtBytes(cells * 4)} in one array, and the request was refused. ${hint}`,
+      { nRows, nCols, cells, bytes: cells * 4, where: 'allocation', cause: String(cause) },
+    )
+  }
 }
 
 /**
