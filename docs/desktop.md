@@ -76,10 +76,26 @@ bytes`, `GET` and `HEAD` allowed, the `Range` request header allowed, `Content-L
 `Content-Range` exposed — are the same requirements, and a host that fails one of them fails it in
 both targets.
 
-### What the desktop build does *not* fix
+### The one thing it does fix: hosts that compress
 
-It would be easy to read "desktop app" as "no more CORS problems". It is not, and the list is worth
-being precise about, because the alternative is not believing the error messages:
+A host that serves `.metacool` files with `Content-Encoding: gzip` cannot be read by the web app at
+all. The viewer refuses such a file on purpose — byte ranges would address the compressed stream
+rather than the file — and the web app has no way out, because `Accept-Encoding` is a *forbidden
+header name*: no page may set it, with `fetch` or with `XMLHttpRequest`. **GitHub Pages is such a
+host.**
+
+The desktop build asks for `Accept-Encoding: identity` from outside the page, where that restriction
+does not apply, so the same file on the same host opens here and is refused on the website.
+
+This is a host-compatibility difference and not a second feature set: the file formats, the views
+and the operations are identical in both targets. It is worth stating precisely, though, because it
+is the one case where "it works in the app but not in the browser" is the expected answer rather
+than a bug.
+
+### What it does *not* fix
+
+It would be easy to read "desktop app" as "no more remote-file problems". It is not, and the list is
+worth being precise about, because the alternative is not believing the error messages:
 
 - **A host that does not serve ranges** still cannot be read. No client-side setting can make a
   server produce partial content.
@@ -87,6 +103,8 @@ being precise about, because the alternative is not believing the error messages
   method; the reader needs two.
 - **DNS and TLS failures** are unchanged.
 - **A CORS policy that names hostnames** is, as above, *more* likely to bite here, not less.
+- **Ranged reads were never slowed by compression in either target.** Chromium already asks for
+  `identity` on any request carrying a `Range` header, so there was nothing there to fix.
 
 ---
 

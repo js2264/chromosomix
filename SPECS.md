@@ -650,8 +650,13 @@ Stated so they are decisions rather than omissions: tile server; user accounts; 
 computation of any kind; required companion files; required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
 not a category); write access of any kind, in either target; an auto-update service; and a desktop
-build that can open anything the web build cannot — the package is a delivery mechanism, not a
-second feature set.
+build with a feature set of its own — the package is a delivery mechanism, and the formats, views
+and operations are the same in both targets.
+
+There is exactly **one** observable difference between them, and it is a host-compatibility
+difference rather than a feature: the desktop build can ask a host not to compress, which a page is
+forbidden from doing, so a file served with `Content-Encoding: gzip` opens there and is refused on
+the website. See §15.
 
 ---
 
@@ -718,6 +723,17 @@ worker at all, and cannot express `frame-ancestors`. It keeps `'wasm-unsafe-eval
 directions; without it h5wasm fails to instantiate in both document and worker — and needs no
 `'unsafe-inline'` for styles, because `el()` assigns through the CSSOM and the tree contains no
 `innerHTML`, no `<style>` creation and no `style=` attribute.
+
+**One request header is rewritten, and it is the target's only capability.** `Accept-Encoding` is a
+forbidden header name in Fetch, so no page may set it; the main process may. Every http(s) request
+goes out asking for `identity`. Measured: this changes nothing for ranged reads — Chromium already
+sends `identity` whenever a `Range` header is present, because it cannot inflate a partial response
+— and everything for the `HEAD` that `RemoteRangeSource.open()` probes with, which carries no range
+and is otherwise answered compressed. The refusal that follows a compressed probe (§10,
+`remote-compressed`) is correct and stays; the desktop build simply stops provoking it. No response
+header is ever injected, and in particular no `Access-Control-Allow-Origin`: it could not make a
+server produce partial content, and the `?edges=` sidecar fetch takes a user-supplied URL, which a
+blanket injection would turn into a read-anything primitive.
 
 **No path→bytes route.** Local files are read exactly as in the browser: a `File` from the drop, a
 `Blob`, `FileReaderSync` in the worker. Routing the bytes through an IPC protocol handler was

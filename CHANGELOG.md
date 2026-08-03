@@ -111,6 +111,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   verbatim with the exact click that gets past them. The web app is unchanged — same
   URL, same build, nothing to install.
 
+  It has a native menu, and one capability the web app cannot have: it asks
+  remote hosts not to compress. `Accept-Encoding` is a forbidden header name in
+  a page, so a `.metacool` served with `Content-Encoding: gzip` — which is what
+  GitHub Pages does — is refused by the website with no way around it. The
+  desktop build sets the header from outside the page, so the same file on the
+  same host opens.
+
+- **The footer states the privacy claim, which it had been promising to.** The
+  dismissable notice on the picker says the footer keeps the same statement, and
+  `StatusBar` asserted it in its own documentation, but nothing rendered it — so
+  dismissing the notice removed the claim from the app. The statement is also
+  reworded, in both targets, from "leaves your browser" to "leaves this machine":
+  the first is false in a window that is not a browser, and the second is true in
+  both.
+
 ### Changed
 
 - **A selection opens a region instead of zooming.** Option-drag draws a square —

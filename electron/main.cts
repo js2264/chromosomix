@@ -139,6 +139,66 @@ async function handleAppRequest(request: Request): Promise<Response> {
   })
 }
 
+/**
+ * Ask remote hosts not to compress, which is the one thing this build can do
+ * that a browser cannot.
+ *
+ * `Accept-Encoding` is a **forbidden header name** in Fetch, so no page can set
+ * it — not with `fetch`, not with `XMLHttpRequest`. `RemoteRangeSource` says so
+ * at its own line 128 and calls the caller's only recourse "stop using ranges".
+ * The main process has no forbidden-header list, and that asymmetry is the
+ * entire capability.
+ *
+ * **What it actually buys, measured rather than assumed.** Against a host that
+ * gzips `application/octet-stream`, with the override off and on:
+ *
+ * | request                  | off                              | on         |
+ * |--------------------------|----------------------------------|------------|
+ * | `HEAD` — the open probe  | `gzip, deflate, br, zstd` → gzip | `identity` |
+ * | `GET`, no range          | `gzip, …` → gzip                 | `identity` |
+ * | `GET`, **with** `Range`  | **already `identity`**           | `identity` |
+ *
+ * The last row is the one that matters, and it is not what one would guess:
+ * **Chromium already sends `identity` whenever a request carries a `Range`
+ * header**, because it cannot inflate a partial response. So ranged reads were
+ * never the problem in a browser engine, and an override sold on fixing them
+ * would be a no-op documented as a feature.
+ *
+ * The `HEAD` is the problem. `RemoteRangeSource.open()` probes with one, it
+ * carries no `Range`, so it is answered compressed — and the reader then refuses
+ * the whole file with `remote-compressed` rather than trusting a
+ * `content-length` that describes the gzip stream. That refusal is correct and
+ * stays. This simply means the desktop build stops provoking it: the same file,
+ * on the same host, opens here and is refused on the website. GitHub Pages is
+ * exactly such a host, which is the case `RemoteRangeSource` documents as having
+ * no client-side fix at all.
+ *
+ * Only http(s), and only the request headers: this states a preference on an
+ * outgoing request and can change nothing else. In particular it is **not** an
+ * `onHeadersReceived` hook injecting `Access-Control-Allow-Origin` — that is
+ * rejected outright. Response headers cannot make a server produce partial
+ * content, so it would fix none of the failures people expect it to; and the
+ * worker's `?edges=` sidecar fetch takes an arbitrary user-supplied URL and
+ * renders the result, which a blanket ACAO injection turns into a read-anything
+ * primitive.
+ *
+ * If a network stack ever re-applies its own value, nothing breaks: the app
+ * falls back to exactly today's behaviour with today's error text. Verified to
+ * survive the reader's real path — a synchronous `XMLHttpRequest` inside a
+ * same-origin module worker — and not only `fetch` from the document.
+ */
+function askForUncompressedTransfers(current: Electron.Session): void {
+  current.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (!details.url.startsWith('http://') && !details.url.startsWith('https://')) {
+      callback({ requestHeaders: details.requestHeaders })
+      return
+    }
+    callback({
+      requestHeaders: { ...details.requestHeaders, 'Accept-Encoding': 'identity' },
+    })
+  })
+}
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1440,
@@ -253,6 +313,8 @@ if (!app.requestSingleInstanceLock()) {
     current.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     current.setPermissionCheckHandler(() => false)
     current.setDevicePermissionHandler(() => false)
+
+    askForUncompressedTransfers(current)
 
     // Application-wide, and before the first window: on macOS the menu bar
     // belongs to the app rather than to a window, so building it per-window
