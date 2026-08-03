@@ -14,7 +14,13 @@ import './ui/styles.css'
 
 import { UNBINNED_NAME } from './constants'
 import { ViewerError } from './errors'
-import { ViewStore, landingState, parseViewState, viewStateEquals } from './state/ViewState'
+import {
+  ViewStore,
+  differsOnlyInScale,
+  landingState,
+  parseViewState,
+  viewStateEquals,
+} from './state/ViewState'
 import { recall, remember } from './state/UiMemory'
 import type { Transform, ViewState } from './types'
 import { ReaderClient } from './worker/client'
@@ -96,7 +102,14 @@ class App {
   private overview: Overview | null = null
   private showingOverview = false
   private opening: string | null = null
-  private current: { destroy?(): void } | null = null
+  private current: { destroy?(): void; applyScale?(scale: ScaleState): void } | null = null
+  /**
+   * The state the mounted view was built for.
+   *
+   * Kept so `render` can tell a navigation from a repaint. `this.current` is the
+   * view object; this is what it was built from.
+   */
+  private mounted: ViewState | null = null
 
   constructor(root: HTMLElement) {
     this.picker = new FilePicker({
@@ -638,6 +651,7 @@ class App {
   private async render(state: ViewState | null): Promise<void> {
     if (state === null) {
       this.file = null
+      this.mounted = null
       this.breadcrumb = null
       this.sideHost.replaceChildren()
       this.sidebar.setAvailable(false)
@@ -673,8 +687,30 @@ class App {
       return
     }
 
+    // A colour change is a repaint, not a navigation.
+    //
+    // Every control in the colour card patches the view state so the URL stays
+    // shareable, and the store notifies for it like any other change. Without
+    // this branch that notification fell straight through to the `switch`
+    // below, which builds a *new* view whose constructor re-reads the matrix
+    // from the worker — so nudging a clip bound ten times cost thirty worker
+    // round trips, ten matrix re-reads and ten full DOM rebuilds, for a picture
+    // whose data never changed.
+    //
+    // `applyScale` rather than "do nothing": the change does not always come
+    // from the panel. A pasted link or the back button moves the *hash* first,
+    // and the mounted panel has to follow it.
+    if (this.mounted !== null && this.current !== null && differsOnlyInScale(this.mounted, state)) {
+      this.current.applyScale?.(this.scaleOf(state))
+      this.mounted = state
+      this.breadcrumb?.render(state, { overview: this.showingOverview })
+      this.status.refresh()
+      return
+    }
+
     this.breadcrumb?.render(state, { overview: this.showingOverview })
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
+    this.mounted = state
 
     if (this.showingOverview) {
       this.infoPanel?.setRecords([])

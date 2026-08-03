@@ -1396,6 +1396,12 @@ p {
 
 .cell-tip {
   position: absolute;
+  /* Placed with a transform rather than with `left`/`top`: the tooltip follows
+     the pointer, and a transform is composited without invalidating layout, so
+     the size measurement the placement needs never forces a reflow. */
+  left: 0;
+  top: 0;
+  will-change: transform;
   z-index: 10;
   pointer-events: none;
   max-width: 28rem;

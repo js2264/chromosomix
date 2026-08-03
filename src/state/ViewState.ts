@@ -164,6 +164,34 @@ export function viewStateEquals(a: ViewState | null, b: ViewState | null): boole
   return serialiseViewState(a) === serialiseViewState(b)
 }
 
+/**
+ * The keys that change how a block is *coloured*, never which block it is.
+ *
+ * Exported so the render path and this module cannot drift: adding a colour
+ * control means adding its key here, and forgetting to means the app rebuilds
+ * the view for it — slow, but never wrong, which is the right way round.
+ */
+export const SCALE_KEYS = ['transform', 'colormap', 'vmin', 'vmax'] as const
+
+/**
+ * `true` when two states select the same data and differ only in how it is
+ * painted, so the mounted view can repaint instead of being rebuilt.
+ *
+ * Stated as "every non-scale key is equal" rather than "some scale key
+ * differs", because the safe answer for a key this function has never heard of
+ * is `false`. A field added to {@link ViewState} that selects *data* would
+ * otherwise be silently ignored by the render path, and the view would go on
+ * showing the previous block — a far worse failure than an unnecessary reload.
+ */
+export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
+  const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)])
+  for (const key of keys) {
+    if ((SCALE_KEYS as readonly string[]).includes(key)) continue
+    if (a[key as keyof ViewState] !== b[key as keyof ViewState]) return false
+  }
+  return true
+}
+
 /** A view state naming a file but nothing inside it — the landing view (§5.1). */
 export function landingState(uri: string, view: ViewKind = 'genomes'): ViewState {
   return { uri, view }

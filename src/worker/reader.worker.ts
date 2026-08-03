@@ -12,6 +12,7 @@
 
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
+import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { parseMetacoolerRange } from '../metacooler/range'
@@ -39,6 +40,19 @@ import { createSource, releaseSources } from './sources'
  * One cast, at the top, rather than a cast per `postMessage`.
  */
 const ctx = self as unknown as DedicatedWorkerGlobalScope
+
+// Start fetching and instantiating h5wasm *now*, while the user is still
+// choosing a file.
+//
+// The runtime is a separate async chunk — 4.8 MB raw, ~766 kB brotli, with the
+// wasm binary inlined — and `getH5()` is otherwise not reached until an open
+// begins, so its download, parse and instantiate sat squarely between the click
+// and the first byte of the file. Nothing waits on this promise: `getH5()`
+// memoises its result and un-memoises a failure (`h5/bootstrap.ts`), so the
+// open path calls it exactly as before and either finds it ready or awaits the
+// same in-flight promise. A rejection here is deliberately swallowed — the open
+// path will re-run it and report it in context.
+void getH5().catch(() => undefined)
 
 /** Pixels per chunk during the full scan; the order of magnitude Python uses. */
 const SCAN_CHUNK = 1_000_000

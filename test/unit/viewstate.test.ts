@@ -8,7 +8,14 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { parseViewState, serialiseViewState, ViewStore, viewStateEquals } from '../../src/state/ViewState'
+import {
+  differsOnlyInScale,
+  parseViewState,
+  SCALE_KEYS,
+  serialiseViewState,
+  ViewStore,
+  viewStateEquals,
+} from '../../src/state/ViewState'
 import type { ViewState } from '../../src/types'
 
 const CASES: ViewState[] = [
@@ -155,5 +162,53 @@ describe('the clip in the hash', () => {
     const store = new ViewStore({ uri: 'a', view: 'whole', vmin: -4, vmax: -2 })
     store.patch({ vmin: undefined, vmax: undefined })
     expect(store.state).toStrictEqual({ uri: 'a', view: 'whole' })
+  })
+})
+
+describe('differsOnlyInScale', () => {
+  const base: ViewState = { uri: 'f.metacool', view: 'genome', genome: 'MAG_1' }
+
+  it('is true for a change of colour alone, in any of the four keys', () => {
+    for (const patch of [
+      { transform: 'log10' as const },
+      { colormap: 'viridis' },
+      { vmin: 0.5 },
+      { vmax: 8 },
+    ]) {
+      expect(differsOnlyInScale(base, { ...base, ...patch })).toBe(true)
+    }
+  })
+
+  it('is true when a clip bound is removed, which is how "auto" is spelled', () => {
+    expect(differsOnlyInScale({ ...base, vmax: 8 }, base)).toBe(true)
+  })
+
+  it('is false for anything that selects different data', () => {
+    for (const patch of [
+      { genome: 'MAG_2' },
+      { view: 'region' as const },
+      { uri: 'other.metacool' },
+      { level: 'contig' as const },
+      { balance: true },
+      { region: 'NODE_1' },
+      { genome2: 'MAG_3' },
+    ]) {
+      expect(differsOnlyInScale(base, { ...base, ...patch })).toBe(false)
+    }
+  })
+
+  it('is false when a data key is removed rather than changed', () => {
+    expect(differsOnlyInScale(base, { uri: base.uri, view: 'genome' })).toBe(false)
+  })
+
+  it('covers every optional key the serialiser knows about', () => {
+    // The guarantee this whole optimisation rests on: a key that is neither a
+    // scale key nor compared would let the app show the wrong block.
+    const known = new Set<string>([...SCALE_KEYS])
+    for (const key of ['genome', 'genome2', 'region', 'region2', 'level', 'balance']) {
+      if (known.has(key)) continue
+      const patched = { ...base, [key]: 'x' } as unknown as ViewState
+      expect(differsOnlyInScale(base, patched)).toBe(false)
+    }
   })
 })

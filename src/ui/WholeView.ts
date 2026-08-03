@@ -112,6 +112,18 @@ export class WholeView {
     void this.load()
   }
 
+  /**
+   * Adopt a colour scale the URL moved to (a shared link, the back button).
+   *
+   * Delegated to the panel, which repaints without echoing the change back out.
+   * Its existence is what lets `App.render` treat a colour-only state change as
+   * a repaint rather than as a reason to rebuild this view and re-read its
+   * matrix.
+   */
+  applyScale(scale: ScaleState): void {
+    this.panel.applyScale(scale)
+  }
+
   destroy(): void {
     this.disposed = true
     this.panel.destroy()

@@ -75,7 +75,18 @@ export class ClipRange {
    * In auto the boxes keep showing them — they are the numbers a reader would
    * otherwise have to guess before nudging one.
    */
+  /**
+   * Show the bounds the renderer actually resolved.
+   *
+   * Called once per animation frame while the panel is being dragged, and the
+   * numbers move only when the *scale* does — so the early return is what keeps
+   * a pan from formatting two floats, building a caption and writing four DOM
+   * properties sixty times a second for output that is byte-identical.
+   */
   setValues(value: ValueRange, auto: boolean): void {
+    if (auto === this.auto && value.vmin === this.value.vmin && value.vmax === this.value.vmax) {
+      return
+    }
     this.value = value
     this.auto = auto
     this.paint()
