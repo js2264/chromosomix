@@ -48,9 +48,12 @@ export interface OverviewProps {
   /** Sidecar edge list advertised by a catalog, if any. */
   edgeListUrl?: string
   onOpenPair(rowGenome: string, colGenome: string): void
-  /** A diagonal cell: one genome with itself, which is the genome view. */
+  /** A cell within one genome, which is the genome view. */
   onOpenGenome(genome: string): void
-  /** A contig-level cell: one contig, or the block between two. */
+  /**
+   * The contig-level fallback, for a cell whose genome cannot be named — see
+   * {@link Overview.openCell}. Not the ordinary route out of this view.
+   */
   onOpenContig(rowContig: string, colContig?: string): void
   onError(err: unknown): void
 }
@@ -86,6 +89,11 @@ export class Overview {
    * ask, which is whether a bin holds together.
    */
   private level: 'genome' | 'contig' = 'contig'
+  /**
+   * The genome each axis entry belongs to, at contig level — the reader's
+   * `groups`, kept because it is what a click resolves through.
+   */
+  private axisGenomes: string[] | undefined
 
   constructor(private readonly props: OverviewProps) {
     // Except where the offered route is a sidecar edge list, which is
@@ -114,7 +122,7 @@ export class Overview {
       binsize: props.binsize,
       detachedControls: true,
       hideTitle: true,
-      onCellClick: (_cell, groups) => this.openCell(groups),
+      onCellClick: (cell, groups) => this.openCell(cell, groups),
     })
     this.panelHost.appendChild(this.panel.el)
 
@@ -163,20 +171,50 @@ export class Overview {
     this.panel.destroy()
   }
 
-  /** §5.5 cross-navigation from an aggregated cell. */
-  private openCell(groups: { row?: AxisGroup; col?: AxisGroup }): void {
+  /**
+   * §5.5 cross-navigation from an aggregated cell — **always to a genome**.
+   *
+   * This view is read by genome at either level: the blocks are the genomes and
+   * the dividers mark them, so a cell is answered as "these two bins touch",
+   * and the thing to open next is the pair. Off the diagonal that is the
+   * genome × genome view — the phage–host lead this view exists for. Within one
+   * genome the pair would be that genome with itself, which is just the genome
+   * view, and its contigs are the axes there.
+   *
+   * At contig level that means the *contig* under the pointer decides nothing
+   * beyond which genome it belongs to. Stepping from a 20,000-contig picture
+   * straight into one 200 kb contig against another skips the level in between
+   * and lands on a block too small to have been the reason for the click; the
+   * genome view it goes to instead has the contig pair one further click away,
+   * on a picture where it is legible.
+   *
+   * The contig route survives only where the genome cannot be named — a file
+   * whose contigs carry no genome, where "open the genome" has no answer.
+   */
+  private openCell(
+    cell: { row: number; col: number },
+    groups: { row?: AxisGroup; col?: AxisGroup },
+  ): void {
     if (groups.row === undefined || groups.col === undefined) return
-    const row = groups.row.label
-    const col = groups.col.label
-    // Off the diagonal a cell is the *pair* — the phage-host lead this view
-    // exists for. On the diagonal the pair would be a genome with itself, which
-    // is just the genome, so open that instead of a degenerate pair view.
-    if (this.level === 'contig') {
-      this.props.onOpenContig(row, row === col ? undefined : col)
-      return
+    const target = overviewTarget({
+      level: this.level,
+      rowLabel: groups.row.label,
+      colLabel: groups.col.label,
+      ...(this.axisGenomes === undefined
+        ? {}
+        : { rowGenome: this.axisGenomes[cell.row], colGenome: this.axisGenomes[cell.col] }),
+    })
+    switch (target.kind) {
+      case 'genome':
+        this.props.onOpenGenome(target.genome)
+        break
+      case 'pair':
+        this.props.onOpenPair(target.rowGenome, target.colGenome)
+        break
+      case 'contig':
+        this.props.onOpenContig(target.rowContig, target.colContig)
+        break
     }
-    if (row === col) this.props.onOpenGenome(row)
-    else this.props.onOpenPair(row, col)
   }
 
   /**
@@ -321,6 +359,7 @@ export class Overview {
   }
 
   private show(result: OverviewResult): void {
+    this.axisGenomes = result.groups
     const unit = result.level === 'genome' ? 'genomes' : 'contigs'
     const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
     this.summary.textContent = result.restricted
@@ -330,20 +369,57 @@ export class Overview {
     this.gate.classList.add('hidden')
     this.panel.setData(toMatrixResult(result), 'metagenome-overview')
 
+    // Three separate statements, composed rather than nested: the restriction
+    // caveat used to *replace* the click instruction, so the files most likely
+    // to be capped — the big real ones — were the ones never told what a click
+    // does.
+    const restriction = result.restricted
+      ? `A ${result.totalUnits} × ${result.totalUnits} picture is neither renderable nor readable, so the ` +
+        `${result.n} ${unit} with the most non-zero pixels are shown.`
+      : ''
+    const click =
+      result.level === 'genome'
+        ? 'Click an off-diagonal cell to open that genome pair, or a diagonal cell to open the genome.'
+        : 'Click a cell between two genome blocks to open that genome pair, or one inside a block to ' +
+          'open the genome.'
+    const excluded =
+      result.level === 'genome'
+        ? '__unbinned__ is excluded, as everywhere.'
+        : 'Contigs of __unbinned__ are excluded, as everywhere.'
     this.note.classList.remove('hidden')
     this.note.replaceChildren(
-      el('span', {
-        text: result.restricted
-          ? `A ${result.totalUnits} × ${result.totalUnits} picture is neither renderable nor readable, so the ` +
-            `${result.n} ${unit} with the most non-zero pixels are shown. __unbinned__ is excluded, as everywhere.`
-          : result.level === 'genome'
-            ? 'Click an off-diagonal cell to open that genome pair, or a diagonal cell to open the genome. ' +
-              '__unbinned__ is excluded, as everywhere.'
-            : 'Click a cell to open that contig, or the block between two contigs. ' +
-              'Contigs of __unbinned__ are excluded, as everywhere.',
-      }),
+      el('span', { text: [restriction, click, excluded].filter((part) => part !== '').join(' ') }),
     )
   }
+}
+
+/** Where a clicked overview cell leads. */
+export type OverviewTarget =
+  | { kind: 'genome'; genome: string }
+  | { kind: 'pair'; rowGenome: string; colGenome: string }
+  | { kind: 'contig'; rowContig: string; colContig?: string }
+
+/**
+ * Resolve a clicked cell to a view, at either level. See
+ * {@link Overview.openCell} for why the answer is a genome even when the axes
+ * are contigs; kept out of the class so it can be tested without a document.
+ */
+export function overviewTarget(cell: {
+  level: 'genome' | 'contig'
+  rowLabel: string
+  colLabel: string
+  /** The genome of each axis entry, at contig level. */
+  rowGenome?: string
+  colGenome?: string
+}): OverviewTarget {
+  const [row, col] =
+    cell.level === 'contig' ? [cell.rowGenome, cell.colGenome] : [cell.rowLabel, cell.colLabel]
+  if (row === undefined || col === undefined) {
+    return cell.rowLabel === cell.colLabel
+      ? { kind: 'contig', rowContig: cell.rowLabel }
+      : { kind: 'contig', rowContig: cell.rowLabel, colContig: cell.colLabel }
+  }
+  return row === col ? { kind: 'genome', genome: row } : { kind: 'pair', rowGenome: row, colGenome: col }
 }
 
 /** Wrap an overview in the shape {@link MatrixPanel} draws. */
