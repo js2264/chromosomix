@@ -13,8 +13,10 @@
  * whether it came off a disk or a bucket.
  */
 
+import { IS_DESKTOP } from '../desktop'
 import { iconButton } from './icons'
 import { button, el } from './dom'
+import { appMark } from './mark'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
 import { ViewerError } from '../errors'
@@ -154,6 +156,23 @@ export class FilePicker {
     this.el = el(
       'section',
       { class: 'view view-picker' },
+      // The mark and the name, over the drop area: this is the first screen,
+      // and until now the first thing on it was an instruction. A file picker
+      // that does not say what program it belongs to is a dialog, not a page.
+      el(
+        'div',
+        { class: 'picker-brand' },
+        // Mark and name on one line, as a masthead rather than a stack: read
+        // together they are the app's name, and a logo on its own line above a
+        // word is two things where there is one.
+        el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: '(meta)cooler' })),
+        el('p', {
+          class: 'picker-tagline',
+          text: IS_DESKTOP
+            ? '(multi-genome) cool files, on your machine'
+            : '(multi-genome) cool files, in the browser',
+        }),
+      ),
       this.drop,
       fileInput,
       el(

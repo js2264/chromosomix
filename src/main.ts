@@ -68,6 +68,7 @@ import { button, el, fmt } from './ui/dom'
 import { icon, iconButton } from './ui/icons'
 import { demoAnnotationsFor, demoExamples } from './ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from './ui/labels'
+import { appMark } from './ui/mark'
 import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from './ui/plotOptions'
 
 /** Where "source" points, from the about dialog and the header. */
@@ -245,6 +246,11 @@ class App {
           el(
             'div',
             { class: 'brand' },
+            // Before the name: the same mark as the tab's favicon and the dock
+            // icon, so the window and the taskbar entry agree about what this
+            // app is. Sized against the name rather than the row — 26 px beside
+            // a 16 px name is the proportion a favicon has to a tab title.
+            appMark(26),
             home,
             el('span', {
               class: 'brand-sub',

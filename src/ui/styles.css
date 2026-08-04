@@ -239,9 +239,15 @@ p {
   }
 }
 
+/* Centred, not baseline-aligned. Baselines are the right rule for a name and a
+   tagline sharing a line and the wrong one the moment a picture joins them: an
+   image's baseline is its bottom edge, so the mark sat off-centre against the
+   words — and `align-self` cannot rescue one item from a line whose height the
+   other two set. All three share a centre instead, which is what the eye reads
+   as "in a row". */
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6rem;
 }
 
@@ -2058,6 +2064,76 @@ p {
 .view-picker {
   max-width: 52rem;
   margin: 2rem auto;
+}
+
+/* The masthead over the drop area: mark and name on one line, tagline under.
+   Sized so the pair spans most of the drop zone below it — this is the first
+   screen, and the app's name on it should be the size of a name on a cover.
+
+   One `font-size` drives all of it. The mark is `1em` and the name is the em,
+   so the ratio between them is fixed and the pair scales as one thing; the
+   `clamp` is against the viewport rather than the container, because a phone
+   sets the width here and a `52rem` page is what the maximum is tuned for. */
+.picker-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  /* Air above the mark as well as below it: the masthead is the top of the
+     page, and a logo hard against the breadcrumb reads as attached to it. */
+  margin: 20px 0 1.8rem;
+  text-align: center;
+}
+
+.picker-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32em;
+  font-size: clamp(2.2rem, 12vw, 6.1rem);
+  line-height: 1;
+}
+
+.picker-masthead > h1 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+/* Nudged down by a tenth of an em, which is not a taste but a measurement.
+   Centring the two *boxes* leaves the mark visibly high: a line box carries the
+   font's ascent and descent, so the ink of a word sits below the middle of it,
+   while a square's ink is its box. Measured on the rendered pixels — the mark's
+   ink centre was 10.5 px above the word's at a 97.6 px font — and written in
+   `em` so it holds at every size the `clamp` produces. `transform`, so the
+   layout the masthead is centred by does not move. */
+.picker-masthead > .app-mark {
+  width: 1em;
+  height: 1em;
+  border-radius: 0.22em;
+  transform: translateY(0.108em);
+}
+
+.picker-tagline {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--step-1);
+}
+
+/* Opened *over* a view the brand block goes: the page it would introduce is
+   already behind it, and the picker is a dialog there rather than a landing. */
+.modal-panel .picker-brand {
+  display: none;
+}
+
+/* Never a target, in either place it is drawn: the header's mark sits beside a
+   button that is already the way home, and the landing page's is a masthead
+   over a drop zone that takes the whole width. */
+.app-mark {
+  flex: 0 0 auto;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* The same picker, opened over a view instead of instead of one: no page
