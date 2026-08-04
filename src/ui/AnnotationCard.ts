@@ -145,8 +145,18 @@ export class AnnotationCard {
   private pending = false
   /** The row being dragged, while one is; see {@link grip}. */
   private dragging: string | null = null
-  /** A row whose grip should get the focus back after the next rebuild. */
-  private refocus: string | null = null
+  /** A control that should get the focus back after the next rebuild. */
+  private refocus: { attribute: 'data-grip' | 'data-tick'; id: string } | null = null
+  /**
+   * The rows that are ticked, for the actions that apply to several at once.
+   *
+   * Putting six tracks in one group, or giving them one height, is six trips
+   * through six rows otherwise — and the six are almost always chosen together
+   * because they are the same experiment. Held here rather than in the store: a
+   * selection is a gesture in progress, not a property of a track, and it should
+   * not survive a reload the way a colour does.
+   */
+  private readonly ticked = new Set<string>()
 
   constructor(private readonly props: AnnotationCardProps) {
     const linear = props.card === 'linear'
@@ -286,20 +296,26 @@ export class AnnotationCard {
   /**
    * `true` while a control in the list is being edited.
    *
-   * Only the value-bearing ones count. A colour picker is the case that forces
-   * this: it fires `input` on every drag, each of which is a store change, and
-   * replacing the `<input>` underneath an open picker closes it. A half-typed
-   * name is the same problem more quietly — the caret and the untyped rest of
-   * the word go with the node.
+   * Only the controls carrying a value the reader has not finished giving. A
+   * colour picker is the case that forces this: it fires `input` on every drag,
+   * each of which is a store change, and replacing the `<input>` underneath an
+   * open picker closes it. A half-typed name is the same problem more quietly —
+   * the caret and the untyped rest of the word go with the node.
+   *
+   * A checkbox is the case that forces the *exception*. It commits on the click
+   * that focuses it, so there is never a half-given value to protect — and
+   * treating it like the rest deferred the rebuild that the tick was asking for,
+   * which is exactly the batch bar it exists to open. The focus is put back on
+   * the same box afterwards, so a second tick does not need a second aim.
    */
   private holdsFocus(): boolean {
     const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !this.list.contains(active)) return false
+    if (active instanceof HTMLInputElement && active.type === 'checkbox') return false
     return (
-      active instanceof HTMLElement &&
-      this.list.contains(active) &&
-      (active instanceof HTMLInputElement ||
-        active instanceof HTMLSelectElement ||
-        active instanceof HTMLTextAreaElement)
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLSelectElement ||
+      active instanceof HTMLTextAreaElement
     )
   }
 
@@ -311,8 +327,15 @@ export class AnnotationCard {
     this.pending = false
 
     const entries = this.props.store.forCard(this.props.card)
+    // Rows that have gone take their tick with them, or a batch would act on
+    // ids the store has never heard of.
+    for (const id of [...this.ticked]) {
+      if (!entries.some((entry) => entry.id === id)) this.ticked.delete(id)
+    }
+    const batch = this.batchBar(entries)
     this.list.replaceChildren(
       ...entries.map((entry, index) => this.row(entry, index, entries.length)),
+      ...(batch === null ? [] : [batch]),
     )
 
     // A keyboard reorder rebuilt the list out from under the grip that asked for
@@ -321,7 +344,9 @@ export class AnnotationCard {
     const wanted = this.refocus
     this.refocus = null
     if (wanted !== null) {
-      this.list.querySelector<HTMLElement>(`[data-grip="${cssEscape(wanted)}"]`)?.focus()
+      this.list
+        .querySelector<HTMLElement>(`[${wanted.attribute}="${cssEscape(wanted.id)}"]`)
+        ?.focus()
     }
   }
 
@@ -356,6 +381,7 @@ export class AnnotationCard {
         // order, and a handle that does nothing is a control to be tried, then
         // doubted.
         ...(total > 1 ? [this.grip(entry, index, total)] : []),
+        ...(total > 1 ? [this.tick(entry)] : []),
         this.swatch(entry),
         this.name(entry),
         // Which edge of the map — a choice a 1D browser does not have, since
@@ -423,6 +449,93 @@ export class AnnotationCard {
    * one small target that does nothing else. Arrow keys do the same job, because
    * a reorder that needs a pointer is a reorder some readers cannot perform.
    */
+  /**
+   * The tick box that puts a row into the batch.
+   *
+   * Beside the name rather than in a mode of its own: a selection you have to
+   * turn on is a selection nobody finds, and the box costs eleven pixels in a
+   * row that already has five controls in it.
+   */
+  private tick(entry: AnnotationEntry): HTMLElement {
+    const input = el('input', {
+      class: 'checkbox ann-tick',
+      type: 'checkbox',
+      title: `Include ${entry.label} in the batch below`,
+      attrs: { 'data-tick': entry.id },
+    })
+    input.checked = this.ticked.has(entry.id)
+    input.addEventListener('change', () => {
+      if (input.checked) this.ticked.add(entry.id)
+      else this.ticked.delete(entry.id)
+      this.refocus = { attribute: 'data-tick', id: entry.id }
+      this.render()
+    })
+    return input
+  }
+
+  /**
+   * What can be done to the ticked rows, and only while some are.
+   *
+   * Four things, and they are the four that are meaningless one at a time:
+   * a shared autoscale group (which is a claim *about the set*), one height,
+   * one colour, and removing them together. Everything else a track has is a
+   * per-track decision and stays in the row.
+   */
+  private batchBar(entries: AnnotationEntry[]): HTMLElement | null {
+    const chosen = entries.filter((entry) => this.ticked.has(entry.id))
+    if (chosen.length < 2) return null
+    const group = el('select', { class: 'select' })
+    group.appendChild(el('option', { value: '', text: 'no group' }))
+    for (const name of this.props.store.scaleGroups().keys()) {
+      group.appendChild(el('option', { value: name, text: name }))
+    }
+    group.appendChild(el('option', { value: ' new', text: 'new group…' }))
+    group.value = ''
+    group.title = 'Resolve these tracks to one pair of limits'
+    group.addEventListener('change', () => {
+      let name = group.value
+      if (name === ' new') {
+        name = window.prompt('Name for the new autoscale group')?.trim() ?? ''
+        if (name === '') {
+          group.value = ''
+          return
+        }
+      }
+      for (const entry of chosen) this.props.store.restyle(entry.id, { group: name })
+    })
+
+    const colour = el('input', { class: 'ann-swatch', type: 'color', value: chosen[0].style.colour })
+    colour.title = 'One colour for all of them'
+    colour.addEventListener('input', () => {
+      for (const entry of chosen) this.props.store.restyle(entry.id, { colour: colour.value })
+    })
+
+    return el(
+      'div',
+      { class: 'ann-batch' },
+      el('span', { class: 'ann-batch-count', text: `${chosen.length} selected` }),
+      group,
+      colour,
+      button('same height', () => {
+        const tallest = Math.max(...chosen.map((entry) => entry.style.size))
+        for (const entry of chosen) this.props.store.restyle(entry.id, { size: tallest })
+      }, { class: 'btn btn-quiet', title: 'Give them all the height of the tallest' }),
+      button('hide', () => {
+        for (const entry of chosen) this.props.store.update(entry.id, { visible: false })
+      }, { class: 'btn btn-quiet', title: 'Hide them all, keeping their settings' }),
+      button('remove', () => {
+        for (const entry of chosen) {
+          this.ticked.delete(entry.id)
+          this.props.store.remove(entry.id)
+        }
+      }, { class: 'btn btn-quiet ann-batch-remove', title: 'Remove them all' }),
+      button('clear', () => {
+        this.ticked.clear()
+        this.render()
+      }, { class: 'btn btn-quiet' }),
+    )
+  }
+
   private grip(entry: AnnotationEntry, index: number, total: number): HTMLElement {
     const node = el(
       'span',
@@ -464,7 +577,7 @@ export class AnnotationCard {
       event.preventDefault()
       const to = index + step
       if (to < 0 || to >= total) return
-      this.refocus = entry.id
+      this.refocus = { attribute: 'data-grip', id: entry.id }
       this.props.store.move(entry.id, to)
     })
     return node

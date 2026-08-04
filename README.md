@@ -108,7 +108,7 @@ src/
                  diagonal blend for two files, the 1D browser's ruler and arcs
   state/         ViewState and its URL-hash serialisation
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
-                 the 1D browser, errors
+                 the 1D browser, its vector-PDF page, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
   app/           App (the window, the tabs, the address bar) and Session (one file)
   main.ts        three lines of bootstrap

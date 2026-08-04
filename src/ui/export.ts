@@ -115,7 +115,9 @@ export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
  * missing the bytes go in uncompressed — a legal PDF that is simply large,
  * which beats refusing to export at all.
  */
-async function deflate(bytes: Uint8Array): Promise<{ data: Uint8Array; filter: string | null }> {
+export async function deflateBytes(
+  bytes: Uint8Array,
+): Promise<{ data: Uint8Array; filter: string | null }> {
   const Compression = (globalThis as { CompressionStream?: typeof CompressionStream })
     .CompressionStream
   if (Compression === undefined) return { data: bytes, filter: null }
@@ -150,7 +152,7 @@ export async function canvasToPdf(
   const ctx = canvas.getContext('2d')
   if (ctx === null) throw new Error('Could not read the canvas back for export.')
   const { width, height } = canvas
-  const { data, filter } = await deflate(toRgb(ctx.getImageData(0, 0, width, height)))
+  const { data, filter } = await deflateBytes(toRgb(ctx.getImageData(0, 0, width, height)))
 
   const scale = scaleForDpi(options.dpi)
   const pageWidth = pointsForCssPixels(width / scale)

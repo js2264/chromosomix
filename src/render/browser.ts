@@ -27,6 +27,8 @@ export interface RulerPalette {
   text: string
   faint: string
   line: string
+  /** The sequence boundaries carried down through the tracks. */
+  divider: string
   band: string
   halo: string
 }
@@ -241,10 +243,13 @@ export function drawBoundaries(
   // A boundary every few pixels is a grey wash rather than a set of divisions —
   // the same judgement the heatmap's separators make above their own density
   // limit. Better to draw none than to fill the picture with them.
-  if (marks.length === 0 || marks.length > frame.width / 6) return
+  if (marks.length === 0 || marks.length > frame.width / 3) return
   ctx.save()
-  ctx.strokeStyle = frame.palette.line
-  ctx.globalAlpha = 0.5
+  // Solid, and in the strong border colour. These are the one thing a
+  // whole-genome profile cannot be read without: a continuous line across
+  // sixteen chromosomes is one chromosome to the eye, and a telomere then looks
+  // like a peak.
+  ctx.strokeStyle = frame.palette.divider
   ctx.lineWidth = 1 / frame.dpr
   ctx.beginPath()
   for (const at of marks) {

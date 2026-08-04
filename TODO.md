@@ -49,6 +49,20 @@
 
 - [x] A 1D genome browser with no contact map: a chrom.sizes, a bigWig, a bigBed or a feature file declares the assembly, and the axis becomes the whole genome end to end at one unit per base pair. Same tracks, same cards, same renderers — §8.4's one coordinate model is what made it possible. Locus box, feature search, click-to-zoom on a gene, ruler and readout, arcs for a BEDPE, inline range and group editing, stacked and overlay group presets, ⌘-scroll for a track's ceiling, export. Drop a `.cool` on it to become its map; close a map to fall back to one.
 
+- [x] Tracks reorder by their grip, their arrow keys or by dragging the lane itself; a button fits them all into the space there is, in the proportions they are already in.
+- [x] A drag on the genomic axis zooms, with no modifier — the tracks below it keep the drag-to-pan they had.
+- [x] Chromosome boundaries drawn between sequences, and the ruler's bands keyed to the assembly rather than to what is on screen, so a pan does not repaint them.
+- [x] The pointer is the black-filled arrowhead over the tracks too.
+- [x] A slider for a track's ceiling, beside the two boxes that type it.
+- [x] Track names larger; their settings smaller, quieter and under the name, revealed by pointing at the lane.
+- [x] A file dropped anywhere in the middle of the window is imported.
+- [x] Gene names in a band under the features rather than over them.
+- [x] Tick boxes on each row, and a batch bar that groups, colours, resizes, hides or removes several tracks at once.
+- [x] A colour swatch beside each track name that *is* the colour input.
+- [x] One toggle in Aesthetics that hides every word on the tracks — names, ranges, feature names — leaving the ink.
+- [x] The 1D browser's PDF is vector: paths and text through the same renderers, Helvetica for type, deflated. The heatmap's stays a raster, because a contact map is one.
+- [x] Tabs with tilted sides, the active one raised and lit along its top edge.
+
 ## FOR NOW
 
 

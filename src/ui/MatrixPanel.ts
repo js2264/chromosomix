@@ -579,6 +579,7 @@ export class MatrixPanel {
           el(
             'div',
             { class: 'plot-option-row' },
+            optionToggle('text'),
             optionToggle('crosshair'),
             optionToggle('dividers'),
             optionToggle('breaks'),
