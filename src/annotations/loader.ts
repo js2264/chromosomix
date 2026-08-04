@@ -194,26 +194,32 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
   if (card === 'linear') {
     if (format === 'bigwig') return 'track'
     if (format === 'gtf') return 'gtf'
-    if (format === 'bed') return 'segments'
+    // A bigBed is read whole and parsed as the BED it holds, so from here it is
+    // one: boxes on a lane, and a BED12 with exons draws them.
+    if (format === 'bed' || format === 'bigbed') return 'segments'
     return null
   }
-  if (format === 'bed') return 'segments'
+  if (format === 'bed' || format === 'bigbed') return 'segments'
   if (format === 'bedpe') return 'pairs'
   return null
 }
 
 /** Why a card cannot take this file, and which card can. */
 function refusal(card: AnnotationCard, format: DetectedFormat): string {
+  if (format === 'sizes') {
+    return (
+      'This is a chrom.sizes: two columns naming an assembly. It declares a genome rather than ' +
+      'annotating one, so it opens a browser rather than joining this map.'
+    )
+  }
+  if (format === 'hdf5') {
+    return 'This is a contact map, not an annotation. Open it as a file, or drop it to compare.'
+  }
   if (card === 'linear') {
-    return format === 'bedpe'
-      ? 'This is a paired file. Pairs are drawn on the map, not beside it — drop it on Map overlays.'
-      : 'A bigBed is not read as a track. Export its intervals as BED and drop that.'
+    return 'This is a paired file. Pairs are drawn on the map, not beside it — drop it on Map overlays.'
   }
   if (format === 'bigwig') {
     return 'A bigWig is a value track, which is drawn beside the map — drop it on Linear annotations.'
   }
-  if (format === 'gtf') {
-    return 'A gene model is a linear annotation, which is drawn beside the map — drop it on Linear annotations.'
-  }
-  return 'A bigBed is not read here. Export its intervals as BED and drop that.'
+  return 'A gene model is a linear annotation, which is drawn beside the map — drop it on Linear annotations.'
 }

@@ -41,8 +41,11 @@ import { recall, remember } from '../state/UiMemory'
 import type { Transform, ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
+import type { WireSource } from '../annotations/worker/protocol'
+import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
+import { BrowserView, type GroupMode } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
@@ -60,7 +63,7 @@ import { RegionView } from '../ui/RegionView'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import type { Command } from '../ui/commands'
-import { el, fmt } from '../ui/dom'
+import { button, el, fmt } from '../ui/dom'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
 
@@ -112,6 +115,86 @@ export interface OpenFile {
   entries: string[]
   /** The entry this URI names, when it addresses one. */
   currentEntry: string | undefined
+}
+
+/**
+ * How to reach a file's bytes, in the shape the annotations worker takes.
+ *
+ * The reader's `SourceSpec` and the annotations worker's `WireSource` are the
+ * same two cases under two names — a `File` handed over by reference, or a URL —
+ * and the one place they meet is a file whose *kind* is not yet known.
+ */
+function toWire(source: SourceSpec): WireSource {
+  return source.kind === 'local'
+    ? { kind: 'local', file: source.file, name: source.file.name }
+    : { kind: 'remote', url: source.url, name: source.url.split('/').pop() ?? source.url }
+}
+
+/**
+ * The General column of a browser session: what genome this is, and where its
+ * lengths came from.
+ *
+ * Shorter than a map's File card because there is less to say and every line of
+ * it matters: a reader who opened a browser from a peak set needs to know the
+ * sequence ends are a lower bound, and a reader who opened one from a bigWig
+ * needs to know they are not.
+ */
+function genomeCard(assembly: Assembly, onOpenFile: () => void): HTMLElement {
+  const exact = lengthsAreExact(assembly)
+  const rows: Array<[string, string]> = [
+    ['uri', assembly.uri],
+    ['sequences', fmt.int(assembly.contigs.length)],
+    ['total', `${fmt.bp(assembly.total)}${exact ? '' : ' (at least)'}`],
+    ['lengths', ORIGINS[assembly.origin]],
+  ]
+  return el(
+    'aside',
+    { class: 'info-panel' },
+    el(
+      'div',
+      { class: 'card' },
+      el('h3', { text: 'Genome' }),
+      el(
+        'div',
+        { class: 'kv' },
+        ...rows.flatMap(([key, value]) => [
+          el('div', { class: 'k', text: key }),
+          el('div', { class: 'v', text: value, title: value }),
+        ]),
+      ),
+      ...(exact
+        ? []
+        : [
+            el('p', {
+              class: 'hint',
+              text:
+                'This file carries no sequence lengths, so each one ends at its last feature ' +
+                'rounded up. Drop a chrom.sizes or a bigWig to replace them with the real ones.',
+            }),
+          ]),
+    ),
+    el(
+      'div',
+      { class: 'card' },
+      el('h3', { text: 'Contact map' }),
+      el('p', {
+        class: 'hint',
+        text:
+          'Drop a .cool or .mcool anywhere on the tracks to switch this session to its map. The ' +
+          'tracks come with it.',
+      }),
+      button('open a file…', onOpenFile, { class: 'btn btn-wide' }),
+    ),
+  )
+}
+
+/** How each kind of source is described in the Genome card. */
+const ORIGINS: Record<Assembly['origin'], string> = {
+  sizes: 'declared by a chrom.sizes',
+  bigwig: 'from the bigWig header',
+  bigbed: 'from the bigBed header',
+  features: 'inferred from the features',
+  cooler: 'from the cooler’s /chroms',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */
@@ -191,6 +274,8 @@ export class Session {
     applyScale?(scale: ScaleState): void
     /** Present on the heatmap views; the manual card places marks through it. */
     panel?: MatrixPanel
+    /** Present on the genome browser, which owns a canvas of its own. */
+    remeasure?(): void
   } | null = null
   /**
    * Everything annotations need, for the file that is open (spec §8).
@@ -225,6 +310,17 @@ export class Session {
   private compareCard: CompareCard | null = null
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
+  /**
+   * The genome this session is browsing, when there is no contact map.
+   *
+   * A session is in one of two shapes and this is the discriminant: with a
+   * {@link file} it is a map browser with tracks beside the map, with an
+   * assembly it is a 1D genome browser with the same tracks and no map. Both at
+   * once never happens — opening a map from a browser replaces the assembly with
+   * the map's own chromosomes, and closing a map falls back to exactly that.
+   */
+  private assembly: Assembly | null = null
+  private browser: BrowserView | null = null
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
@@ -263,6 +359,11 @@ export class Session {
 
   get hasFile(): boolean {
     return this.file !== null
+  }
+
+  /** `true` while this session is a 1D genome browser rather than a map. */
+  get isBrowsing(): boolean {
+    return this.assembly !== null
   }
 
   /** `true` while this session names a file it has not opened. */
@@ -340,12 +441,13 @@ export class Session {
       void this.render(this.store.state)
       return
     }
-    this.current?.panel?.remeasure()
+    this.relayout()
   }
 
   /** Re-measure whatever is mounted; a column moved or the window resized. */
   relayout(): void {
     this.current?.panel?.remeasure()
+    this.current?.remeasure?.()
   }
 
   destroy(): void {
@@ -358,6 +460,7 @@ export class Session {
     this.annotations = null
     this.compare?.client.terminate()
     this.compare = null
+    this.assembly = null
     this.reader?.terminate()
     this.reader = null
   }
@@ -376,6 +479,46 @@ export class Session {
     const state = this.store.state
     const file = this.file
     const isMetacool = this.isMetacool
+    // A browser session answers a different set: there is no genomes table and
+    // no whole-metagenome scan, and the two things it *does* have — a locus and
+    // a zoom — have no counterpart on a map. Listing a map's actions beside a
+    // browser (greyed out, every one of them) would be a palette that mostly
+    // says no.
+    if (this.assembly !== null) {
+      return [
+        {
+          id: 'browser-whole',
+          group: 'Go',
+          title: 'The whole genome',
+          hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
+          keys: 'w',
+          run: () => this.store.patch({ locus: undefined }),
+        },
+        {
+          id: 'browser-locus',
+          group: 'Go',
+          title: 'Go to a locus',
+          hint: 'chrI:1,000-20,000, a sequence name, or a gene from the search box.',
+          keys: 'l',
+          run: () => this.browser?.focusLocus(),
+        },
+        {
+          id: 'browser-search',
+          group: 'Go',
+          title: 'Find a gene or feature',
+          hint: 'Searches the names in every loaded gene model and peak set.',
+          keys: '/',
+          run: () => this.browser?.focusSearch(),
+        },
+        {
+          id: 'browser-map',
+          group: 'File',
+          title: 'Open a contact map on this genome',
+          hint: 'Or drop a .cool anywhere on the tracks; the tracks come with it.',
+          run: () => this.host.openFileDialog(this),
+        },
+      ]
+    }
     return [
       {
         id: 'go-genomes',
@@ -521,6 +664,28 @@ export class Session {
   }
 
   /**
+   * Which of the two things a file is, decided by its name.
+   *
+   * A guess, and it only has to be right about the *common* cases, because the
+   * one it is wrong about costs a wasted open and is then corrected by the bytes
+   * — {@link openUnknown} asks the annotations worker what the file actually is
+   * and re-routes. Guessing first is what keeps a `.cool` from paying for a
+   * second worker and a second read on every open.
+   */
+  private routeOf(uri: string): 'map' | 'genome' | 'unknown' {
+    const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
+    if (/\.(m?cool|m?metacool|h5|hdf5)$/i.test(name)) return 'map'
+    if (
+      /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
+        name,
+      )
+    ) {
+      return 'genome'
+    }
+    return 'unknown'
+  }
+
+  /**
    * Open a file and mount the view the caller asked for.
    *
    * `carry` is the view state a *redirect* is forwarding. Opening an `.mcool`
@@ -532,6 +697,14 @@ export class Session {
    */
   async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
     if (this.opening === uri) return
+    // A file that is not a contact map starts a genome browser instead. Decided
+    // by name first, and by the bytes when the name does not say — see
+    // {@link routeOf}.
+    const route = this.routeOf(uri)
+    if (route === 'genome') {
+      await this.openGenome(uri, source, carry?.locus)
+      return
+    }
     this.opening = uri
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
     this.host.sessionChanged(this)
@@ -592,7 +765,14 @@ export class Session {
             this.carryAcrossEntries(`${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`),
           ),
       })
-      this.infoPanel = new InfoPanel({ info, onCloseFile: (which) => this.closeCompare(which) })
+      this.infoPanel = new InfoPanel({
+        info,
+        onCloseFile: (which) => this.closeCompare(which),
+        // With one file open there is nothing to close it *for* — except the
+        // genome underneath it, which a cooler carries and which the tracks
+        // beside the map are already drawn against.
+        onCloseMap: () => this.closeMap(),
+      })
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
@@ -636,11 +816,277 @@ export class Session {
         await this.open(entryUri, source, forward)
         return
       }
+      // The name said nothing and the reader could not open it. Ask what it
+      // actually is before reporting a failure: a bigWig with no suffix, or a
+      // `chrom.sizes` called `yeast.txt`, is a perfectly good genome to browse
+      // and only looks like a broken cooler from here.
+      if (route === 'unknown' && (await this.openUnknown(uri, source, carry))) {
+        this.opening = null
+        return
+      }
       this.showError(err, uri, source)
     } finally {
       this.opening = null
       this.host.sessionChanged(this)
     }
+  }
+
+  /**
+   * Second-guess a file the reader refused, by its bytes.
+   *
+   * Returns `true` when it turned out to be a genome and a browser was opened
+   * for it. The annotations worker is the only thing that looks at bytes before
+   * anything has committed to what they are, which is exactly the question here.
+   */
+  private async openUnknown(
+    uri: string,
+    source: SourceSpec,
+    carry?: ViewState,
+  ): Promise<boolean> {
+    try {
+      const client = new AnnotationClient()
+      const result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
+      client.destroy()
+      if (result.format === null || result.format === 'hdf5' || result.contigs.length === 0) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    if (this.destroyed) return false
+    await this.openGenome(uri, source, carry?.locus)
+    return true
+  }
+
+  // -------------------------------------------------------------------------
+  // The 1D genome browser
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start a browser on the genome a file declares, and load that file as its
+   * first track.
+   *
+   * The file is asked what genome it is on before anything else happens, because
+   * that answer is what makes the browser possible at all: a bigWig's header
+   * carries every sequence and its length, a `chrom.sizes` is nothing but that
+   * list, and a feature file at least says how far along each sequence it
+   * reaches. Only then is it loaded as a track — through the ordinary loader, so
+   * a bigWig dropped here and a bigWig dropped beside a map are the same row
+   * with the same settings and the same session memory.
+   */
+  private async openGenome(uri: string, source: SourceSpec, locus?: string): Promise<void> {
+    if (this.opening === uri) return
+    this.opening = uri
+    this.showContent(loading(`Reading ${fileLabel(uri)}`))
+    this.host.sessionChanged(this)
+    const client = new AnnotationClient()
+    try {
+      const result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
+      if (this.destroyed) {
+        client.destroy()
+        return
+      }
+      if (result.format === 'hdf5') {
+        // Named a genome, turned out to be a contact map. Hand it to the reader
+        // rather than refusing: what the user did was drop a file, and this is
+        // the same file either way.
+        client.destroy()
+        this.opening = null
+        await this.open(uri, source)
+        return
+      }
+      if (result.contigs.length === 0) {
+        throw new Error(
+          'This file names no sequences, so there is no genome to browse. A chrom.sizes, a ' +
+            'bigWig or a bigBed declares one outright; a BED or a GTF declares one by mentioning ' +
+            'coordinates on it.',
+        )
+      }
+      client.destroy()
+      const assembly = assemblyOf({
+        uri,
+        name: fileLabel(uri),
+        contigs: result.contigs,
+        origin: result.origin,
+      })
+      this.tearDown()
+      this.assembly = assembly
+      this.setUpBrowserAnnotations(assembly)
+      // The file that named the genome is also its first track — unless it was a
+      // `chrom.sizes`, which declares an assembly and draws nothing.
+      if (result.format !== 'sizes' && this.annotations !== null) {
+        const card = result.format === 'bedpe' ? 'overlay' : 'linear'
+        const zone =
+          result.format === 'gtf'
+            ? 'gtf'
+            : result.format === 'bigwig'
+            ? 'track'
+            : result.format === 'bedpe'
+            ? 'pairs'
+            : 'segments'
+        if (source.kind === 'local') this.annotations.loader.addFiles(card, zone, [source.file])
+        else this.annotations.loader.addUrl(card, zone, source.url)
+      }
+      const target: ViewState = {
+        uri,
+        view: 'browser',
+        ...(locus === undefined ? {} : { locus }),
+      }
+      const willNotify = !viewStateEquals(target, this.store.state)
+      this.store.set(target, { replace: true })
+      if (!willNotify) void this.render(target)
+    } catch (err) {
+      client.destroy()
+      if (!this.destroyed) this.showError(err, uri, source)
+    } finally {
+      this.opening = null
+      this.host.sessionChanged(this)
+    }
+  }
+
+  /**
+   * The annotation machinery for a browser session.
+   *
+   * The same four pieces a map gets, against the assembly rather than against a
+   * contigs table — which is the only difference, and it is one lookup: the
+   * §8.2 overlap report and the per-contig lengths both come from the assembly's
+   * own list. A track therefore behaves identically in both, and a session that
+   * later opens a map keeps nothing from here, because the map has its own.
+   */
+  private setUpBrowserAnnotations(assembly: Assembly): void {
+    const scope = this.memoryKey(assembly.uri)
+    const store = new AnnotationStore(scope)
+    const manual = new ManualStore(scope)
+    const client = new AnnotationClient()
+    const names = assembly.contigs.map((contig) => contig.name)
+    const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
+    const loader = new AnnotationLoader(store, client, names)
+    this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
+
+    this.setAnnotations([
+      new AnnotationCard({ card: 'linear', store, loader, context: 'browser' }).el,
+      new AnnotationCard({ card: 'overlay', store, loader, context: 'browser' }).el,
+    ])
+    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this))])
+    loader.restore(AnnotationStore.stored(scope))
+  }
+
+  private mountBrowser(state: ViewState): void {
+    const assembly = this.assembly
+    const held = this.annotations
+    if (assembly === null || held === null) return
+    const key = this.memoryKey(assembly.uri)
+    const view = new BrowserView({
+      assembly,
+      store: held.store,
+      client: held.client,
+      ...(state.locus === undefined ? {} : { locus: state.locus }),
+      onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
+      memory: {
+        groups: recall<Record<string, GroupMode>>(key, 'browser:groups') ?? {},
+        save: (groups) => remember(key, 'browser:groups', groups),
+      },
+      onDropFile: (file) => this.dropped(file),
+    })
+    this.browser = view
+    this.showContent(view.el, {
+      destroy: () => {
+        this.browser = null
+        view.destroy()
+      },
+      sideEl: view.sideEl,
+      remeasure: () => view.remeasure(),
+    })
+  }
+
+  /**
+   * A file dropped on the browser.
+   *
+   * A track joins the stack; anything else is opened as a file, which is what
+   * turns a dropped `.cool` into a heatmap in the tab you were already in. The
+   * decision is by name, exactly as {@link routeOf} makes it everywhere else —
+   * and a file whose name says nothing is offered to the loader, which reads its
+   * bytes and refuses it by name if it is not an annotation.
+   */
+  private dropped(file: File): void {
+    if (this.routeOf(file.name) === 'map') {
+      void this.open(file.name, { kind: 'local', file })
+      return
+    }
+    const held = this.annotations
+    if (held === null) return
+    const card = /\.bedpe$/i.test(file.name) ? 'overlay' : 'linear'
+    const zone = /\.(bw|bigwig)$/i.test(file.name)
+      ? 'track'
+      : /\.(gtf|gff3?)(\.gz)?$/i.test(file.name)
+      ? 'gtf'
+      : /\.bedpe$/i.test(file.name)
+      ? 'pairs'
+      : 'segments'
+    held.loader.addFiles(card, zone, [file])
+  }
+
+  /**
+   * Close the contact map and keep browsing its genome.
+   *
+   * A cooler carries a chromosome list, which is an assembly; there is no reason
+   * for closing the map to also throw away the tracks that were drawn beside it.
+   * So it does not — the same store, the same rows, the same colours, now along
+   * a genome instead of along an axis of bins.
+   */
+  private closeMap(): void {
+    const file = this.file
+    if (file === null) return
+    const contigs = contigPairs(file.contigs)
+    if (contigs.length === 0) {
+      this.toPicker()
+      return
+    }
+    const assembly = assemblyOf({
+      uri: file.uri,
+      name: fileLabel(file.uri),
+      contigs: contigs.map(([name, length]) => ({ name, length })),
+      origin: 'cooler',
+    })
+    // The annotations survive: they are keyed on this session and this URI, and
+    // both are exactly what they were. Only the *map* is being closed.
+    const held = this.annotations
+    this.compare?.client.terminate()
+    this.compare = null
+    this.compareCard = null
+    this.wholeFile?.view.destroy()
+    this.wholeFile = null
+    this.file = null
+    this.breadcrumb = null
+    this.breadcrumbHost.replaceChildren()
+    this.reader?.terminate()
+    this.reader = null
+    this.assembly = assembly
+    if (held === null) this.setUpBrowserAnnotations(assembly)
+    else {
+      this.setAnnotations([
+        new AnnotationCard({ card: 'linear', store: held.store, loader: held.loader, context: 'browser' }).el,
+        new AnnotationCard({ card: 'overlay', store: held.store, loader: held.loader, context: 'browser' }).el,
+      ])
+      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this))])
+    }
+    this.mounted = null
+    this.store.set({ uri: file.uri, view: 'browser' })
+  }
+
+  /** Everything a session holds for one file, released before it holds another. */
+  private tearDown(): void {
+    this.annotations?.client.destroy()
+    this.annotations = null
+    this.manualCard = null
+    this.dropCompare()
+    this.compareCard = null
+    this.wholeFile?.view.destroy()
+    this.wholeFile = null
+    this.file = null
+    this.assembly = null
+    this.breadcrumb = null
+    this.breadcrumbHost.replaceChildren()
   }
 
   // -------------------------------------------------------------------------
@@ -1060,6 +1506,7 @@ export class Session {
 
     if (state === null) {
       this.file = null
+      this.assembly = null
       this.mounted = null
       this.breadcrumb = null
       this.breadcrumbHost.replaceChildren()
@@ -1080,6 +1527,28 @@ export class Session {
       // to the picker does not leave three dropzones wired to nothing.
       this.setAnnotations([])
       this.showContent(this.picker.el)
+      return
+    }
+
+    // The browser branch comes first, because it is the one shape of session
+    // that has no `file` at all — falling through to the check below would
+    // re-open the assembly's source file on every navigation inside it.
+    if (state.view === 'browser') {
+      if (this.assembly?.uri === state.uri) {
+        this.breadcrumbHost.replaceChildren()
+        this.mounted = state
+        if (this.browser === null) this.mountBrowser(state)
+        else this.browser.applyLocus(state.locus)
+        this.host.activity(this)
+        return
+      }
+      if (this.opening !== null) return
+      const source = inferSource(state.uri)
+      if (source === null) {
+        this.showContent(this.pickerWithNote(state.uri))
+        return
+      }
+      await this.openGenome(state.uri, source, state.locus)
       return
     }
 
@@ -1722,6 +2191,8 @@ export class Session {
       applyScale?(scale: ScaleState): void
       sideEl?: HTMLElement
       panel?: MatrixPanel
+      /** For a view that owns a canvas but not a {@link MatrixPanel}. */
+      remeasure?(): void
     },
   ): void {
     this.current?.destroy?.()

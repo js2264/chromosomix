@@ -16,9 +16,18 @@
  */
 
 import type { AnnotationPayload, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type { AssemblyOrigin, Contig } from '../../genome/assembly'
 
-/** What a file turned out to be, decided by its bytes (§8.3). */
-export type DetectedFormat = 'bigwig' | 'bigbed' | 'gtf' | 'bed' | 'bedpe'
+/**
+ * What a file turned out to be, decided by its bytes (§8.3).
+ *
+ * `sizes` and `hdf5` were added for the genome browser, which starts from a file
+ * rather than from a map: one of them declares an assembly outright and the
+ * other is a contact matrix that belongs to the reader worker instead. Both are
+ * decided here because this is already the only place that looks at bytes before
+ * anything has committed to what they are.
+ */
+export type DetectedFormat = 'bigwig' | 'bigbed' | 'gtf' | 'bed' | 'bedpe' | 'sizes' | 'hdf5'
 
 /** How to reach the bytes, in the shape that survives `postMessage`. */
 export type WireSource = { kind: 'local'; file: File; name: string } | { kind: 'remote'; url: string; name: string }
@@ -36,9 +45,26 @@ export interface LoadResult {
   fileExtent?: { min: number; max: number }
 }
 
+/**
+ * What a file says about the genome it is on.
+ *
+ * `contigs` is empty when the file names none — an HDF5 file, which is the
+ * reader's business, or text this worker could not identify. The caller decides
+ * what to do with that; refusing here would mean this request could not be used
+ * to *route* a dropped file, which is most of what it is for.
+ */
+export interface AssemblyResult {
+  format: DetectedFormat | null
+  contigs: Contig[]
+  origin: AssemblyOrigin
+  /** `true` when the lengths are the file's own rather than a lower bound. */
+  exact: boolean
+}
+
 export interface AnnotationResultMap {
   load: LoadResult
   sample: TrackSampleSet
+  assembly: AssemblyResult
   drop: null
 }
 
@@ -46,6 +72,10 @@ export type AnnotationRequestKind = keyof AnnotationResultMap
 
 export type AnnotationRequest =
   | { id: number; kind: 'load'; entry: string; source: WireSource; mapContigs: string[] }
+  // What genome is this file on, and is it even one of ours? The one request
+  // that may be made about a file nothing has decided to open yet — it is what
+  // routes a drop between the reader worker and the genome browser.
+  | { id: number; kind: 'assembly'; source: WireSource }
   | {
       id: number
       kind: 'sample'
@@ -75,6 +105,24 @@ export type AnnotationResponse =
  */
 export const BIGWIG_MAGIC = 0x888ffc26
 export const BIGBED_MAGIC = 0x8789f2eb
+
+/**
+ * HDF5's own signature: `\x89HDF\r\n\x1a\n`.
+ *
+ * Read here, in the worker that reads every file's first bytes, so that a
+ * cooler dropped on the genome browser is recognised as one *without* the
+ * browser having to import h5wasm — which the layering rule (§6.1, and this
+ * repo's three enforced rules) forbids outside `src/h5/`. Recognising is not
+ * reading: what happens next is that the file is handed to the reader worker,
+ * which is the only thing that opens it.
+ */
+const HDF5_SIGNATURE = [0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a]
+
+/** `true` when the first eight bytes are HDF5's signature. */
+export function isHdf5(head: Uint8Array): boolean {
+  if (head.length < HDF5_SIGNATURE.length) return false
+  return HDF5_SIGNATURE.every((byte, index) => head[index] === byte)
+}
 
 /** What the first bytes of a file say it is, or `null` for "not a BBI file". */
 export function bbiMagic(head: Uint8Array): 'bigwig' | 'bigbed' | null {

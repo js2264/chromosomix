@@ -483,7 +483,11 @@ export class App implements SessionHost {
    */
   private commands(): Command[] {
     const session = this.current
-    const file = session?.hasFile === true
+    // A browser session has a genome rather than a file, and it fills all three
+    // columns exactly as a map does — so everything gated on "is anything open"
+    // has to count it, or half the View menu goes dead the moment a bigWig is
+    // dropped instead of a cooler.
+    const file = session?.hasFile === true || session?.isBrowsing === true
     const isMetacool = session?.isMetacool === true
     const overlays = getPlotOptions()
     const list: Command[] = [
