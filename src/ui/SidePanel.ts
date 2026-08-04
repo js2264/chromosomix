@@ -242,6 +242,10 @@ export class SidePanel {
     let dragging = false
 
     node.addEventListener('pointerdown', (event) => {
+      // The primary button only, for the reason the map's own press check
+      // exists: a right-press would arm a drag that the browser's menu then
+      // sits on top of, and the column would follow the pointer afterwards.
+      if (event.button !== 0) return
       dragging = true
       startX = event.clientX
       startWidth = this.width

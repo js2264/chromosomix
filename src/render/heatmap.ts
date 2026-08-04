@@ -2324,6 +2324,14 @@ export class HeatmapView {
     }
 
     const onDown = (e: MouseEvent): void => {
+      // The primary button only. `mousedown` fires for every button, and a press
+      // that is not answered by a matching `mouseup` guard becomes a *click* on
+      // release: right-clicking the map navigated to whatever the cell under it
+      // referred to, which on a whole-genome view is a different picture
+      // entirely, and the menu the press was for opened over the view it had
+      // just left. There is nothing to do here for the other buttons — the
+      // context menu is a `contextmenu` listener of its own.
+      if (e.button !== 0) return
       const [x, y] = local(e)
       this.dragMoved = false
       this.drag = { mode: wantsSelect(e) ? 'select' : 'pan', x0: x, y0: y, x, y }

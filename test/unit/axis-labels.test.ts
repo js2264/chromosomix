@@ -106,7 +106,13 @@ function fakeCanvas(cssWidth: number, cssHeight: number): {
     focus: () => {},
     style: {},
   } as unknown as HTMLCanvasElement
-  return { canvas, fire: (type, event) => listeners.get(type)?.(event) }
+  // `button: 0` unless a test says otherwise: a real primary press carries it,
+  // and the handlers under test now read it — a synthetic event without one is
+  // a press from a button that does not exist.
+  return {
+    canvas,
+    fire: (type, event) => listeners.get(type)?.({ button: 0, ...event }),
+  }
 }
 
 function block(n: number): DenseMatrix {
