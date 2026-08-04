@@ -145,6 +145,16 @@ export class BrowserView {
   private exportDpi = 300
   private exportFormat: ExportFormat = 'pdf'
   private clickTimer: number | null = null
+  private reportTimer: number | null = null
+  /**
+   * The last locus this view *sent*, so the one that comes back is ignored.
+   *
+   * The shell writes the locus into the view state and the state comes back as
+   * a render, which would otherwise re-apply a window this view is already at —
+   * and `formatLocus` rounds to whole base pairs, so re-applying it mid-drag
+   * snaps the view by a fraction of a pixel on every frame.
+   */
+  private reported: string | undefined
 
   constructor(private readonly props: BrowserViewProps) {
     this.axis = assemblyAxis(props.assembly)
@@ -250,6 +260,8 @@ export class BrowserView {
   destroy(): void {
     this.disposed = true
     if (this.frameHandle !== 0) cancelAnimationFrame(this.frameHandle)
+    if (this.clickTimer !== null) clearTimeout(this.clickTimer)
+    if (this.reportTimer !== null) clearTimeout(this.reportTimer)
     for (const off of this.unsubscribes) off()
     this.observer?.disconnect()
     this.cache.destroy()
@@ -282,6 +294,8 @@ export class BrowserView {
    * to be what the box would accept, or a shared view opens somewhere else.
    */
   applyLocus(locus: string | undefined): void {
+    if (locus === this.reported) return
+    this.reported = locus
     if (locus === undefined || locus === '') {
       this.scale.reset()
       this.afterMove(false)
@@ -335,9 +349,39 @@ export class BrowserView {
     this.afterMove(true)
   }
 
+  /** A step of a continuous gesture: repaint now, report once it settles. */
+  private nudged(): void {
+    this.afterMove(false)
+    this.reportSoon()
+  }
+
   private panBy(pixels: number): void {
     this.scale.panByPixels(pixels)
-    this.afterMove(true)
+    this.afterMove(false)
+    this.reportSoon()
+  }
+
+  /**
+   * Write the locus to the address bar, but not sixty times a second.
+   *
+   * A pan reports on every frame and a trackpad wheel fires dozens of events per
+   * gesture; `history.replaceState` at that rate is throttled outright by Safari
+   * (100 calls in 30 seconds) and is wasted work everywhere else. The last
+   * position of a gesture is the only one worth a history entry, so that is the
+   * one written.
+   */
+  private reportSoon(): void {
+    if (this.reportTimer !== null) clearTimeout(this.reportTimer)
+    this.reportTimer = window.setTimeout(() => {
+      this.reportTimer = null
+      this.report()
+    }, REPORT_DELAY)
+  }
+
+  /** Hand the current window to the shell, remembering what was handed over. */
+  private report(): void {
+    this.reported = this.reportedLocus()
+    this.props.onLocusChange(this.reported)
   }
 
   /**
@@ -376,7 +420,11 @@ export class BrowserView {
     // `X:1-745,751` there would name whichever sequence the midpoint fell in
     // and read as though the view were on it.
     this.locusInput.value = locus ?? '*'
-    if (report) this.props.onLocusChange(locus)
+    if (report) {
+      if (this.reportTimer !== null) clearTimeout(this.reportTimer)
+      this.reportTimer = null
+      this.report()
+    }
     this.schedule()
   }
 
@@ -1075,14 +1123,15 @@ export class BrowserView {
       }
       // Reordering: the lane follows the pointer through the stack, one slot at
       // a time, so the list is always in the order it looks like it is in.
-      const target = this.lanes.findIndex((lane) => y < lane.frame.acrossFrom + lane.frame.thickness)
-      if (target >= 0) {
-        const from = this.props.store
-          .forCard('linear')
-          .findIndex((row) => row.id === drag.entry.id)
-        const to = this.props.store
-          .forCard('linear')
-          .findIndex((row) => row.id === this.lanes[target].entry.id)
+      //
+      // Within the dragged row's *own card*, because `move` indexes that list —
+      // and both cards now put lanes in this stack, so `forCard('linear')` would
+      // silently do nothing for a row from the other one.
+      const over = this.lanes.find((lane) => y < lane.frame.acrossFrom + lane.frame.thickness)
+      if (over !== undefined && over.entry.card === drag.entry.card) {
+        const list = this.props.store.forCard(drag.entry.card)
+        const from = list.findIndex((row) => row.id === drag.entry.id)
+        const to = list.findIndex((row) => row.id === over.entry.id)
         if (from >= 0 && to >= 0 && from !== to) this.props.store.move(drag.entry.id, to)
       }
     }
@@ -1106,9 +1155,8 @@ export class BrowserView {
           return
         }
       }
-      if (drag.mode === 'pan' || drag.mode === 'resize' || drag.mode === 'reorder') {
-        this.props.onLocusChange(this.reportedLocus())
-      }
+      // The end of a gesture is the position worth a history entry.
+      if (drag.mode === 'pan') this.afterMove(true)
       this.schedule()
     }
 
@@ -1143,7 +1191,7 @@ export class BrowserView {
       // wheel's few large ones compose to the same total zoom — the same rule
       // the heatmap uses, so the two feel like one application.
       this.scale.zoomAt(x, Math.exp(-event.deltaY * 0.002))
-      this.afterMove(true)
+      this.nudged()
     }
 
     const onDouble = (event: MouseEvent): void => {
@@ -1265,7 +1313,8 @@ export class BrowserView {
           return
       }
       event.preventDefault()
-      this.afterMove(true)
+      // Held arrow keys repeat; one history entry for the whole hold.
+      this.nudged()
     }
     this.canvas.addEventListener('keydown', onKey)
     this.unsubscribes.push(() => this.canvas.removeEventListener('keydown', onKey))
@@ -1436,3 +1485,6 @@ export class BrowserView {
 
 /** Room under the figure for the one-line caption the export adds. */
 const CAPTION_HEIGHT = 18
+
+/** How long a continuous gesture must rest before the locus reaches the URL. */
+const REPORT_DELAY = 220

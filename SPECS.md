@@ -231,6 +231,78 @@ search matched.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+### 5.6 Sessions
+
+Several files may be open at once, as tabs. A **session** is one file, its views, its tracks, its
+annotations and its settings, and it is a real one: its own reader worker, its own annotation worker,
+its own stores, its own DOM. Switching tabs re-parents that DOM rather than rebuilding it, so a map
+comes back with its pixels, its zoom and its scroll intact and without a byte re-read.
+
+The address bar names **the active tab and nothing else**. A hash is one view state and there is one
+of those on screen; writing several would make every link a description of somebody else's workspace
+and make the back button walk a history interleaving three files. The rest of the strip lives in
+`sessionStorage` beside the annotations (§8.6), and a restored tab is *named*, not opened — its label
+and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
+named a local file comes back to the picker with §11's explanation.
+
+Three things are per *window* rather than per session, because they are preferences about this window
+rather than facts about a file: the theme, and the fold and width of each column.
+
+Two tabs on one file share nothing. The per-session memory is keyed on the session id as well as the
+URI, so a second view of the same map starts with no tracks, no filters and no marks.
+
+### 5.7 Two files in one square
+
+A second cooler may be opened into the **lower-left triangle** of the same map. A contact matrix is
+symmetric, so half of every square on screen is a mirror carrying no information; giving that half to
+another file makes the picture asymmetric, which is what the eye reads a difference from.
+
+The split is the **matrix diagonal**, not the viewport's: a cell belongs to the second file when its
+row bin exceeds its column bin, wherever the view is. Panning off the diagonal is therefore not a
+special case — a trans block above the line shows the first file alone and its transpose shows the
+second — and zoom, selection and every other gesture are untouched, because the merge happens once
+per read and hands the renderer an ordinary block.
+
+Three refusals, each because the merged picture would otherwise be a lie rather than a limitation:
+
+- **a genome layer** — §8.5's argument applied to a whole matrix rather than to a track;
+- **a different bin size** — one grid cannot be two resolutions;
+- **a chromosome list differing in count, order, name or length** — every coordinate in the picture
+  is an index into one such list.
+
+Either file can be closed. Closing the second returns to one map; closing the first promotes the
+second, so the map that remains is an ordinary one. `uri2` is part of the view state, so a comparison
+is a link — for two remote files, which is the same limit `uri` has always had (§11).
+
+One colour scale by default, because the same colour meaning the same count is the stronger claim.
+A **match-depth** option scales the second file so its 99th percentile meets the first's — the same
+order statistic §7.1 picks `vmax` with — for the case that motivates it, two libraries of different
+depth. Two colourbars then read the same colours in each file's own counts.
+
+### 5.8 The 1D genome browser
+
+A session may hold a **genome** instead of a file: a list of sequences and their lengths, with tracks
+drawn along it and no contact map at all. It is entered by opening a `chrom.sizes`, a bigWig, a
+bigBed or a feature file, and it is not a second application — the tracks, their cards, their session
+memory and their renderers are the ones §8 already specifies. What differs is the coordinate model
+underneath, and only that: the axis is the whole assembly laid end to end at one unit per base pair,
+rather than an axis of matrix bins. §8.4's rule is unchanged and is what makes this possible at all.
+
+Lengths come from whatever named them, in descending order of trust: a `chrom.sizes` declares them, a
+BBI header carries them, and a feature file yields only the furthest coordinate it mentions — which
+is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described.
+
+The two shapes of session convert into each other. Dropping a `.cool` on the tracks makes the tab its
+map, tracks and all; closing the map from the File card falls back to a browser on the cooler's own
+`/chroms`, with the same tracks still loaded. Neither is a new session: the tab, its id and its
+memory are the same throughout.
+
+The gestures are the map's, deliberately (§7.2): a drag pans, Option-drag selects a range to zoom
+into, the wheel zooms about the pointer, a double click fits, a lane's border resizes it and its body
+reorders the stack. One gesture is the browser's own — ⌘-scroll over a lane moves *that* track's
+ceiling — because it is the adjustment a genome browser is asked for constantly and a map has no
+analogue for it.
+
 ---
 
 ## 6. Reader layer
@@ -507,10 +579,14 @@ contigs at a reduction level chosen for the current zoom and keeps them; panning
 from that cache. A refetch happens only when the visible contig set changes or the required
 resolution crosses a factor of two — not once per frame, and never during a drag.
 
-### 8.5 cool and mcool only
+### 8.5 cool and mcool only — and genomes with no map
 
 Every card, every lane and every overlay is gated on the file having no genome layer — which is
 exactly "this is a cooler" (§9). On a `.metacool` or `.mmetacool` they are not rendered at all.
+
+The gate is about the *genome layer*, not about there being a matrix. A session browsing an assembly
+with no map (§5.8) offers the same cards for the same reason the cooler does: one assembly, one
+namespace of sequence names, and an overlap report that means something.
 
 The reason is not squeamishness about effort. A metacool's axis is thousands of contigs from
 thousands of *different organisms*, assembled independently; a bigWig or a GTF is keyed on contig
@@ -524,6 +600,18 @@ The loaded set, and every per-annotation setting, is remembered per file in `UiM
 session-scoped store the table filters use. Deliberately **not** in the URL hash: §5.5 shares *what is
 being looked at*, a dropped local file cannot be re-read after a reload in any browser, and a link
 that arrived carrying half an annotation set would be worse than one carrying none.
+
+The key is the **session** and the URI, not the URI alone (§5.6). Two tabs on one file are two
+workspaces and must not adopt each other's tracks.
+
+### 8.7 bigBed
+
+Read whole, and parsed as the BED it holds. Not a windowed source like a bigWig: a `FeatureSet` lives
+on the main thread precisely so that a pan redraws with no round trip (§8.4), and a windowed one
+would give that up for a format whose usual contents — gene models, peak calls — are a BED's size
+anyway. Feeding bbi's rows back through the BED parser rather than decoding them separately is what
+makes a bigBed12 draw its exons exactly as the text file does: one parser, one set of rules, one
+place where BED's quirks live. A file past a million intervals is cut off, and says so.
 
 ---
 

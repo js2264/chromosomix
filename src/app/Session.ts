@@ -721,6 +721,10 @@ export class Session {
       // `/entries/rep1` in an mmetacool, `/resolutions/1000` in an mcool.
       const match = /^\/(?:entries|resolutions)\/(.+)$/.exec(group)
       const currentEntry = match === null ? undefined : match[1]
+      // A map and a genome are the two shapes of a session and never both: a
+      // `.cool` dropped on the browser is a map from here on, and leaving the
+      // assembly set would keep the browser's command list and its panels.
+      this.assembly = null
       this.file = {
         uri,
         info,
@@ -788,8 +792,15 @@ export class Session {
       // rather than bouncing the recipient to the landing table.
       const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
       const wanted = carry ?? this.store.state
+      // `view=browser` is the one view a map session cannot hold: it names the
+      // *other* shape of session, and carrying it here would leave the store
+      // saying "browser" over an open matrix — which the router then answers by
+      // trying to open the genome again. Closing the map is what produces that
+      // state, and it does so deliberately (see `closeMap`).
       const target =
-        wanted !== null && wanted.uri === uri ? wanted : landingState(uri, rootView)
+        wanted !== null && wanted.uri === uri && wanted.view !== 'browser'
+          ? wanted
+          : landingState(uri, rootView)
       const willNotify = !viewStateEquals(target, this.store.state)
       this.store.set(target, { replace: true })
       // `set` is a no-op when the state is already exactly `target`, so render
@@ -874,7 +885,18 @@ export class Session {
    * a bigWig dropped here and a bigWig dropped beside a map are the same row
    * with the same settings and the same session memory.
    */
-  private async openGenome(uri: string, source: SourceSpec, locus?: string): Promise<void> {
+  private async openGenome(
+    uri: string,
+    source: SourceSpec,
+    locus?: string,
+    /**
+     * The caller asked for a browser *by name* — a `view=browser` link, or a
+     * fallback from closing a map. A contact map then means "browse the genome
+     * under it", which is what closing one already does; without this a shared
+     * `view=browser` link to a cooler silently opened the map instead.
+     */
+    insist = false,
+  ): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
     this.showContent(loading(`Reading ${fileLabel(uri)}`))
@@ -889,10 +911,16 @@ export class Session {
       if (result.format === 'hdf5') {
         // Named a genome, turned out to be a contact map. Hand it to the reader
         // rather than refusing: what the user did was drop a file, and this is
-        // the same file either way.
+        // the same file either way — unless a browser was asked for by name, in
+        // which case the map is opened for its `/chroms` and immediately closed,
+        // which is exactly the fallback the File card's close button performs.
         client.destroy()
         this.opening = null
         await this.open(uri, source)
+        if (insist && !this.destroyed && this.file !== null) {
+          await this.contigs().catch(() => null)
+          if (!this.destroyed) this.closeMap()
+        }
         return
       }
       if (result.contigs.length === 0) {
@@ -1071,7 +1099,13 @@ export class Session {
       this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this))])
     }
     this.mounted = null
-    this.store.set({ uri: file.uri, view: 'browser' })
+    const target: ViewState = { uri: file.uri, view: 'browser' }
+    // `set` is a no-op when the state is already exactly this — which it is when
+    // a `view=browser` link to a cooler got here by opening the map for its
+    // `/chroms` — so render explicitly in that case, and only in that case.
+    const willNotify = !viewStateEquals(target, this.store.state)
+    this.store.set(target)
+    if (!willNotify) void this.render(target)
   }
 
   /** Everything a session holds for one file, released before it holds another. */
@@ -1159,7 +1193,7 @@ export class Session {
             : { kind: 'remote', url: splitUri(source.url).path },
         ),
       onClose: () => this.closeCompare(2),
-      onSwap: () => this.swapCompare(),
+      onSwap: () => void this.swapCompare(),
     })
 
     // The demo map ships ten annotation files on its own assembly. Offering
@@ -1247,6 +1281,7 @@ export class Session {
       if (refusal !== null) {
         client.terminate()
         this.compareCard?.set({ kind: 'error', label: fileLabel(uri), message: refusal })
+        this.forget(uri)
         return
       }
       this.compare?.client.terminate()
@@ -1279,9 +1314,29 @@ export class Session {
         label: fileLabel(uri),
         message: err instanceof Error ? err.message : String(err),
       })
+      this.forget(uri)
     } finally {
       this.compareOpening = null
     }
+  }
+
+  /**
+   * Take a refused second file out of the view state.
+   *
+   * The state is what {@link render} reconciles against, so a `uri2` that will
+   * never open is a *standing* instruction to try opening it — a fresh worker
+   * and a fresh header read on every navigation, for a file that was already
+   * refused. The card keeps the reason; the hash stops claiming a comparison
+   * that is not on screen.
+   */
+  private forget(uri: string): void {
+    const held = this.store.state?.uri2
+    if (held === undefined || this.compare !== null) return
+    // The *file*, not the URI: a link naming an `.mcool` at its root is refused
+    // under the entry URI it was redirected to, and comparing the two strings
+    // would leave the original in the hash to be retried for ever.
+    if (held !== uri && splitUri(held).path !== splitUri(uri).path) return
+    this.store.patch({ uri2: undefined }, { replace: true })
   }
 
   /**
@@ -1314,9 +1369,32 @@ export class Session {
     void this.open(held.uri, held.source, carry)
   }
 
-  /** Swap which file is above the diagonal — the same comparison, read the other way. */
-  private swapCompare(): void {
-    this.closeCompare(1)
+  /**
+   * Swap which file is above the diagonal — the same comparison, read the other
+   * way.
+   *
+   * Reopening rather than relabelling, because "which file is first" is not a
+   * label: the first file is the one whose contigs table the axes come from,
+   * whose tracks are drawn, and whose breadcrumb is on screen. Both sources are
+   * held here, so a *local* second file survives the swap — which a round trip
+   * through `uri2` and `inferSource` could not manage (§11).
+   */
+  private async swapCompare(): Promise<void> {
+    const held = this.compare
+    const file = this.file
+    if (held === null || file === null) return
+    const state = this.store.state
+    const carry =
+      state === null
+        ? undefined
+        : (({ vmin: _vmin, vmax: _vmax, uri2: _uri2, ...rest }) => ({ ...rest, uri: held.uri }))(
+            state,
+          )
+    const previous = { uri: file.uri, source: file.source }
+    this.dropCompare()
+    await this.open(held.uri, held.source, carry)
+    if (this.destroyed) return
+    await this.openCompare(previous.uri, previous.source)
   }
 
   /**
@@ -1548,7 +1626,7 @@ export class Session {
         this.showContent(this.pickerWithNote(state.uri))
         return
       }
-      await this.openGenome(state.uri, source, state.locus)
+      await this.openGenome(state.uri, source, state.locus, true)
       return
     }
 

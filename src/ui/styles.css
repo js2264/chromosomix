@@ -561,12 +561,17 @@ p {
 /* Revealed by pointing at the lane they belong to. A row of inputs standing
    permanently over the busiest part of a coverage track hides the data it is
    there to adjust, and five tracks is five of them. */
-.browser-lane-controls.is-active {
+.browser-lane-controls.is-active,
+/* …and stay revealed once the pointer is on one of them. Reaching for a control
+   takes the pointer off the canvas, which is what revealed it — without this the
+   row disappears in the moment between deciding to click it and clicking it. */
+.browser-lane-controls:hover {
   opacity: 1;
 }
 
 /* Readable over whatever ink is under them. */
-.browser-lane-controls.is-active > * {
+.browser-lane-controls.is-active > *,
+.browser-lane-controls:hover > * {
   box-shadow: 0 0 0 3px var(--bg);
   background: var(--bg);
 }
