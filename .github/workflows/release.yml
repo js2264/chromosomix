@@ -1,19 +1,31 @@
 name: Desktop release
 
 # Builds the macOS `.app`/`.dmg`, the Windows `.exe` and the Linux
-# `AppImage`/`.deb`, and attaches them to the GitHub release that triggered it.
+# `AppImage`/`.deb`, and attaches them to a **draft** release for the tag that
+# triggered it, for a human to look at and then publish.
 #
-# **The trigger is the release, not the tag.** Creating a release — in the web
-# UI, or with `gh release create` — is the one action that means "publish these
-# binaries"; a tag on its own does not. Tags get pushed for all sorts of
-# reasons, and `npm version` makes one on every patch bump, which would build
-# three installers to renumber a changelog.
+# **The trigger is the tag, and it has to be.** This ran on `release: [created]`
+# for one release, on the stated belief that "`created` fires for a draft
+# release too". It does not, and GitHub says so in as many words:
 #
-# `created` fires for a draft release too, which is the recommended way to use
-# this: create the release as a draft, let the three legs attach their
-# artifacts, look at them, then press publish. Publishing an existing draft does
-# **not** re-fire this — nothing has changed to rebuild — so use the
-# `workflow_dispatch` below if a leg needs re-running against an existing tag.
+#   > Workflows are not triggered for the `created`, `edited`, or `deleted`
+#   > activity types for draft releases.
+#
+# So the recommended flow — save a draft, let three legs attach their artifacts,
+# press publish — could not fire at all, and produced a draft with nothing on
+# it. The only release activity that reaches a draft is `published`, which is
+# after the moment the binaries were wanted.
+#
+# The old header argued against a tag trigger: tags get pushed for all sorts of
+# reasons, and `npm version` makes one on every patch bump. In this repository
+# it does not: `preversion` runs the typecheck and the suite, and
+# `scripts/changelog-check.mjs` refuses a version CHANGELOG.md does not mention.
+# A `v*` tag here has already been through both, so it *is* a release. If a tag
+# ever should not build installers, exclude it by name in `tags:` below.
+#
+# A re-run for an existing tag is `workflow_dispatch`. It is careful in a way
+# the automatic path need not be: the release it attaches to may already be
+# published, so it changes neither that state nor the body. See `collect`.
 #
 # `deploy.yml` is not touched by any of this, and that is the concrete form of
 # the guarantee the desktop target was built under: the web app is published by
@@ -26,8 +38,8 @@ name: Desktop release
 # being slow.
 
 on:
-  release:
-    types: [created]
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -42,7 +54,10 @@ concurrency:
   # Keyed on the tag rather than on `github.ref`, which is not the same string
   # for the two triggers — a manual re-run must queue behind the automatic one
   # for the same release rather than race it for the same asset names.
-  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  #
+  # `inputs.tag` first, because on a `workflow_dispatch` run `github.ref_name`
+  # is the default branch and not the tag being built.
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -76,13 +91,13 @@ jobs:
             args: --linux
 
     steps:
-      # Explicitly the release's tag. A `release` event's default ref is already
-      # that tag, but a `workflow_dispatch` run's is the default branch — so
-      # without this a manual re-run would quietly build `main` and attach the
-      # result to an older release as if it were that version.
+      # Explicitly the tag. A tag push's default ref is already that tag, but a
+      # `workflow_dispatch` run's is the default branch — so without this a
+      # manual re-run would quietly build `main` and attach the result to an
+      # older release as if it were that version.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -165,7 +180,14 @@ jobs:
     # website.
     permissions:
       contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      # For CHANGELOG.md, which is where the release body comes from.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -174,27 +196,58 @@ jobs:
       - name: What was collected
         run: ls -la artifacts
 
+      # The section this version already has in CHANGELOG.md — the release is
+      # cut from a tag now, so nobody has hand-written a body first, and a draft
+      # whose only text is the unsigned-installer note below would be a
+      # regression on what a human used to paste in. `changelog-check.mjs`
+      # guarantees the section exists: `npm version` refuses a release without
+      # one.
+      - name: The changelog section for this tag, as the release body
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          awk -v v="${TAG#v}" '
+            $0 == "## [" v "]" || index($0, "## [" v "] ") == 1 { found = 1; next }
+            /^## \[/ { found = 0 }
+            found
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
+          cat >> notes.md <<'NOTE'
+
+          ---
+
+          **These installers are unsigned.** macOS and Windows will each warn
+          once before running one; [docs/desktop.md](docs/desktop.md) gives
+          both warnings verbatim and the exact click that gets past them. A
+          signature says who published a build, not whether it works.
+
+          The web app at https://js2264.github.io/metacooler.js/ is the same
+          viewer and needs no installation.
+          NOTE
+
       - uses: softprops/action-gh-release@v2
         with:
-          # The release already exists — it is what started this run. Named
-          # explicitly so the manual re-run path attaches to the same place, and
-          # so nothing here can create a second release by accident.
-          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+          # Named explicitly so the manual re-run path attaches to the same
+          # place, and so nothing here can create a second release by accident.
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: artifacts/*
-          # Attach to the release as the human left it. `draft` and `prerelease`
-          # are deliberately not set: passing either would *change* the state of
-          # a release someone has already published, which is not this
-          # workflow's decision to make.
           fail_on_unmatched_files: true
-          append_body: true
-          body: |
-
-            ---
-
-            **These installers are unsigned.** macOS and Windows will each warn
-            once before running one; [docs/desktop.md](docs/desktop.md) gives
-            both warnings verbatim and the exact click that gets past them. A
-            signature says who published a build, not whether it works.
-
-            The web app at https://js2264.github.io/metacooler.js/ is the same
-            viewer and needs no installation.
+          # `'true'` on a tag push, `''` on a manual re-run — and the empty
+          # string is the whole point of writing it this way. The action reads
+          # `env.INPUT_DRAFT ? env.INPUT_DRAFT === 'true' : undefined`, so an
+          # empty value is *omitted* from the API call and GitHub leaves the
+          # release's state alone, while `'false'` would publish it.
+          #
+          # Omitting it outright is what the previous version did, on the
+          # reasoning that "passing either would change the state of a release
+          # someone has already published". That had it backwards, and published
+          # v0.4.0: this action's own documentation says "when reusing an
+          # existing draft release, set this to `true` to keep it draft; omit it
+          # to publish after upload."
+          draft: ${{ github.event_name == 'push' || '' }}
+          # Same shape, same reason: the automatic path owns the body and sets
+          # it, and a re-run against a release whose text a human may have
+          # edited leaves it untouched. `body_path` rather than `append_body`,
+          # so running twice for one tag is idempotent instead of stacking a
+          # second copy of the changelog onto the first.
+          body_path: ${{ github.event_name == 'push' && 'notes.md' || '' }}
