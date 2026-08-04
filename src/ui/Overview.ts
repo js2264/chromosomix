@@ -31,6 +31,7 @@ import type { AxisGroup, MatrixResult, OverviewResult } from '../worker/protocol
 import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
+import type { ScaleState } from './GenomeView'
 import { MatrixPanel } from './MatrixPanel'
 
 /**
@@ -47,6 +48,17 @@ export interface OverviewProps {
   sourceBytes: number
   /** Sidecar edge list advertised by a catalog, if any. */
   edgeListUrl?: string
+  /** Which axes to scan for, from the view state. */
+  level: 'genome' | 'contig'
+  /** The colour scale from the view state; the panel starts there. */
+  scale: ScaleState
+  /**
+   * The level and the colour scale go back into the URL, exactly as they do
+   * from every other heatmap view — which is the whole of what "the overview is
+   * a view state" buys the reader.
+   */
+  onLevelChange(level: 'genome' | 'contig'): void
+  onScaleChange(scale: ScaleState): void
   onOpenPair(rowGenome: string, colGenome: string): void
   /** A cell within one genome, which is the genome view. */
   onOpenGenome(genome: string): void
@@ -67,6 +79,14 @@ export class Overview {
    * rather than inside this element — see `App.showContent`.
    */
   readonly sideEl: HTMLElement
+  /**
+   * The heatmap panel, exposed for the same reason {@link GenomeView} exposes
+   * its own: the shell has to be able to reach it. Folding or dragging a side
+   * panel changes how much room the plot has, and nothing inside the view can
+   * observe that — so a view the shell cannot reach is a plot that stays the
+   * size it was while the others follow the column.
+   */
+  readonly panel: MatrixPanel
   private readonly gate: HTMLElement
   private readonly progressBar: HTMLProgressElement
   private readonly progressText: HTMLElement
@@ -74,7 +94,7 @@ export class Overview {
   private readonly panelHost: HTMLElement
   private readonly summary: HTMLElement
   private readonly note: HTMLElement
-  private readonly panel: MatrixPanel
+  private readonly levelSelect = el('select', { class: 'select' })
   private running: Cancellable<OverviewResult> | null = null
   /**
    * Which scan the panel is currently willing to paint.
@@ -86,16 +106,17 @@ export class Overview {
    */
   private generation = 0
   /**
-   * Contigs, not genomes.
+   * The axes to scan for, which the view state owns and the shell builds this
+   * view for: switching it is a new state, and a new state is a new view.
    *
-   * Both cost the same single pass, and the contig picture is the one that
-   * *contains* the other: its blocks are the genomes — the reader sends them as
-   * a super-group and they are what the dividers mark — with the binning still
+   * It defaults to contigs rather than genomes — see `overviewLevel` — because
+   * both cost the same single pass and the contig picture is the one that
+   * *contains* the other: its blocks are the genomes, with the binning still
    * visible inside each one. A genome × genome cell has already thrown that
    * away, so starting there hides the question most people open this view to
    * ask, which is whether a bin holds together.
    */
-  private level: 'genome' | 'contig' = 'contig'
+  private level: 'genome' | 'contig'
   /**
    * The genome each axis entry belongs to, at contig level — the reader's
    * `groups`, kept because it is what a click resolves through.
@@ -105,10 +126,10 @@ export class Overview {
   private unitNames: string[] | null = null
 
   constructor(private readonly props: OverviewProps) {
-    // Except where the offered route is a sidecar edge list, which is
-    // genome-level by construction: the picker must not say "contig × contig"
-    // over a button that can only produce the other one.
-    if (props.edgeListUrl !== undefined) this.level = 'genome'
+    // The state gets the last word except where the offered route is a sidecar
+    // edge list, which is genome-level by construction: the picker must not say
+    // "contig × contig" over a button that can only produce the other one.
+    this.level = props.edgeListUrl === undefined ? props.level : 'genome'
     this.gate = el('div', { class: 'gate' })
     this.progressBar = el('progress', { class: 'progress' })
     this.progressBar.max = 1
@@ -132,6 +153,8 @@ export class Overview {
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       detachedControls: true,
       hideTitle: true,
+      initial: props.scale,
+      onScaleChange: (scale) => props.onScaleChange(scale),
       onCellClick: (cell, groups) => this.openCell(cell, groups),
       // The axes of this view are labelled by *genome* at either level — the
       // reader's super-groups are what name a contig axis — so a label opens
@@ -197,6 +220,14 @@ export class Overview {
     this.renderGate()
   }
 
+  /**
+   * Adopt a colour scale the URL moved to (a shared link, the back button),
+   * exactly as the genome and region views do.
+   */
+  applyScale(scale: ScaleState): void {
+    this.panel.applyScale(scale)
+  }
+
   destroy(): void {
     this.cancel()
     this.panel.destroy()
@@ -255,23 +286,22 @@ export class Overview {
   /**
    * Genome or contig axes, chosen before the scan.
    *
-   * Switching level after a result discards it: the two levels are different
-   * accumulations of the same pass, and there is no way to derive one from the
-   * other without re-reading the pixels.
+   * The picker reports and does not decide: the level is in the URL like every
+   * other view's, so the change goes out to the shell and comes back as a view
+   * built for it. That is what makes the choice survive a shared link and a
+   * back button, and it is the same round trip the transform and colormap take.
+   *
+   * Which also throws the result on screen away, as it must: the two levels are
+   * different accumulations of the same pass, and there is no way to derive one
+   * from the other without re-reading the pixels.
    */
   private levelPicker(): HTMLElement {
-    const select = el('select', { class: 'select' })
+    const select = this.levelSelect
     select.appendChild(el('option', { value: 'genome', text: 'genome × genome' }))
     select.appendChild(el('option', { value: 'contig', text: 'contig × contig' }))
     select.value = this.level
     select.addEventListener('change', () => {
-      this.level = select.value as 'genome' | 'contig'
-      // The result on screen was accumulated for the other level and cannot be
-      // converted into this one without re-reading the pixels, so it goes.
-      this.panelHost.classList.add('hidden')
-      this.note.classList.add('hidden')
-      this.gate.classList.remove('hidden')
-      this.renderGate()
+      this.props.onLevelChange(select.value as 'genome' | 'contig')
     })
     return el(
       'div',

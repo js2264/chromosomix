@@ -43,8 +43,15 @@ export interface VirtualTableOptions {
   onOpen(row: number): void
   /** Called whenever the checked set changes. */
   onSelect?(rows: number[]): void
-  /** Enables the leading checkbox column when set. */
-  maxSelection?: number
+  /**
+   * Show the leading checkbox column, and let any number of rows be ticked.
+   *
+   * It used to be `maxSelection: 2`, because the only thing a selection could
+   * do was open the pair view and a third tick had to drop the oldest. A
+   * selection is now a picture of however many rows are in it, so the cap has
+   * no meaning and its silent eviction would be a bug.
+   */
+  selectable?: boolean
   /** Columns the free-text box searches; defaults to every string column. */
   searchKeys?: string[]
   searchPlaceholder?: string
@@ -257,14 +264,29 @@ export class VirtualTable {
     this.paint()
   }
 
+  /**
+   * Tick everything the reader can currently see — the filtered, searched set,
+   * not the whole file.
+   *
+   * That is what makes "select all" worth having: filter to completeness above
+   * 90, then take all of them. Selecting rows a filter is hiding would be
+   * answering a question nobody asked, and there would be no way to see what
+   * had been chosen.
+   */
+  selectAll(): void {
+    for (const row of this.visible) this.selected.add(row)
+    this.options.onSelect?.([...this.selected])
+    this.paint()
+  }
+
   private gridTemplate(): string {
     const tracks = this.options.columns.map((column) => column.width ?? 'minmax(6rem, 1fr)')
-    if (this.options.maxSelection !== undefined) tracks.unshift('2rem')
+    if (this.options.selectable === true) tracks.unshift('2rem')
     return tracks.join(' ')
   }
 
   private buildHeader(): void {
-    if (this.options.maxSelection !== undefined) {
+    if (this.options.selectable === true) {
       this.header.appendChild(el('div', { class: 'th th-check', text: '' }))
       this.filterRow.appendChild(el('div', { class: 'tf' }))
     }
@@ -330,7 +352,7 @@ export class VirtualTable {
   /** Reflect `sortKey`/`sortDir` in the header, including a restored sort. */
   private paintSortArrows(): void {
     for (const [index, cell] of [...this.header.querySelectorAll('.th')].entries()) {
-      const offset = this.options.maxSelection !== undefined ? 1 : 0
+      const offset = this.options.selectable === true ? 1 : 0
       const column = this.options.columns[index - offset]
       const arrow = cell.querySelector('.sort-arrow')
       if (arrow === null || column === undefined) continue
@@ -524,7 +546,7 @@ export class VirtualTable {
       style: { gridTemplateColumns: template, height: `${this.options.rowHeight}px` },
       attrs: { role: 'row' },
     })
-    if (this.options.maxSelection !== undefined) {
+    if (this.options.selectable === true) {
       const check = el('input', { class: 'tcheck', type: 'checkbox' })
       check.addEventListener('click', (event) => {
         event.stopPropagation()
@@ -549,7 +571,7 @@ export class VirtualTable {
     node.style.transform = `translateY(${top}px)`
     node.classList.toggle('selected', this.selected.has(row))
     node.classList.toggle('active', this.active === row)
-    const offset = this.options.maxSelection !== undefined ? 1 : 0
+    const offset = this.options.selectable === true ? 1 : 0
     if (offset === 1) {
       const check = node.children[0]?.firstChild
       if (check instanceof HTMLInputElement) check.checked = this.selected.has(row)
@@ -566,16 +588,7 @@ export class VirtualTable {
 
   private toggleSelection(row: number): void {
     if (this.selected.has(row)) this.selected.delete(row)
-    else {
-      const max = this.options.maxSelection ?? 0
-      if (this.selected.size >= max) {
-        // Drop the oldest so a third click re-targets rather than silently
-        // doing nothing — two-genome selection is how the pair view is reached.
-        const first = this.selected.values().next().value
-        if (first !== undefined) this.selected.delete(first)
-      }
-      this.selected.add(row)
-    }
+    else this.selected.add(row)
     this.options.onSelect?.([...this.selected])
     this.paint()
   }
@@ -610,7 +623,7 @@ export class VirtualTable {
         if (this.active >= 0) this.options.onOpen(this.active)
         return
       case ' ':
-        if (this.active >= 0 && this.options.maxSelection !== undefined) {
+        if (this.active >= 0 && this.options.selectable === true) {
           event.preventDefault()
           this.toggleSelection(this.active)
         }

@@ -35,16 +35,19 @@ import type {
 } from '../types'
 import {
   aggregateMatrix,
+  pixelAccumulator,
   sparseAggregator,
   type AggregatedMatrix,
   type AggregationLevel,
 } from './aggregate'
 import { Coords } from './coords'
+import { poolBins, selectionPooling } from './pooling'
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
   DENSE_HINTS,
-  forEachPixelSpan,
+  forEachPixelSpanAsync,
+  type SpanScanOptions,
   planRead,
   readDenseMatrix,
   resolveCountKind,
@@ -686,7 +689,11 @@ export class MetaCooler {
    * the escape hatch, and switching hit the same guard for the same reason,
    * because the roll-up read the same block first.
    */
-  async aggregateSparse(q: MatrixQuery, level: AggregationLevel): Promise<AggregatedMatrix> {
+  async aggregateSparse(
+    q: MatrixQuery,
+    level: AggregationLevel,
+    options: SpanScanOptions = {},
+  ): Promise<AggregatedMatrix> {
     const rows = clampExtent(q.rows, this.nBins)
     const cols = clampExtent(q.cols ?? q.rows, this.nBins)
     const plan = planRead(rows, cols, this.storageMode)
@@ -702,18 +709,153 @@ export class MetaCooler {
     // Weights are read once per axis for the bins on screen, exactly as the
     // dense path does — the one bounded read of `/bins` in the reader (§6.4).
     const weights = q.balance === true ? this.weightSlices(rows, cols) : null
-    forEachPixelSpan(this.handle, plan.span[0], plan.span[1], (chunk) => {
-      for (let i = 0; i < chunk.length; i++) {
-        const b1 = chunk.bin1[i]
-        const b2 = chunk.bin2[i]
-        const value =
-          weights === null
-            ? chunk.count[i]
-            : chunk.count[i] * weightAt(weights, rows, cols, b1) * weightAt(weights, rows, cols, b2)
-        aggregator.place(b1, b2, value)
-      }
-    })
+    // Watched for the same reason as the pooled read above: a roll-up of the
+    // whole file walks every pixel of it, and the level toggle is one click away
+    // from the view that does.
+    await forEachPixelSpanAsync(
+      this.handle,
+      plan.span[0],
+      plan.span[1],
+      (chunk) => {
+        for (let i = 0; i < chunk.length; i++) {
+          const b1 = chunk.bin1[i]
+          const b2 = chunk.bin2[i]
+          const value =
+            weights === null
+              ? chunk.count[i]
+              : chunk.count[i] *
+                weightAt(weights, rows, cols, b1) *
+                weightAt(weights, rows, cols, b2)
+          aggregator.place(b1, b2, value)
+        }
+      },
+      options,
+    )
     return aggregator.finish()
+  }
+
+  /**
+   * A block read at a **coarser bin size** than the file stores: every `stride`
+   * consecutive bins of a contig summed into one cell.
+   *
+   * The same pass as {@link aggregateSparse} over the same pixels, into a
+   * different set of slots — see `metacooler/pooling.ts` for why the slots are
+   * bins rather than contigs, and why that makes the result an ordinary block
+   * one bin size up rather than a new kind of object. `stride` of 1 is the
+   * identity and is not pooling; the caller reads such a block the direct way.
+   *
+   * The output is bounded by construction: `cap` cells per axis, whatever the
+   * file's bin count. That is what lets a whole-genome view of a large cooler
+   * exist at all — the dense block it would otherwise ask for is refused by the
+   * browser's 2 GiB ceiling on one array, and was refused *after* the user had
+   * been asked to wait for it.
+   */
+  async pooledMatrix(
+    q: MatrixQuery,
+    stride: number,
+    options: SpanScanOptions = {},
+  ): Promise<Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; snapped: boolean }> {
+    const rows = clampExtent(q.rows, this.nBins)
+    const cols = clampExtent(q.cols ?? q.rows, this.nBins)
+    const plan = planRead(rows, cols, this.storageMode)
+    const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
+    const rowPool = poolBins(this.coords, rows[0], rows[1], stride)
+    const colPool = onDiagonal ? rowPool : poolBins(this.coords, cols[0], cols[1], stride)
+    const acc = pixelAccumulator(
+      rows,
+      cols,
+      rowPool,
+      colPool,
+      plan.mode,
+      this.storageMode === 'symmetric-upper',
+    )
+    // Weights are read once per axis for the bins on screen, exactly as the
+    // dense and roll-up paths do — the one bounded read of `/bins` (§6.4).
+    const weights = q.balance === true ? this.weightSlices(rows, cols) : null
+    // Watched rather than raced through: this is the read the whole-genome view
+    // makes, its span is the whole file, and a person waiting on it is owed a
+    // bar and a way out (`forEachPixelSpanAsync`).
+    await forEachPixelSpanAsync(
+      this.handle,
+      plan.span[0],
+      plan.span[1],
+      (chunk) => {
+        for (let i = 0; i < chunk.length; i++) {
+          const b1 = chunk.bin1[i]
+          const b2 = chunk.bin2[i]
+          const value =
+            weights === null
+              ? chunk.count[i]
+              : chunk.count[i] *
+                weightAt(weights, rows, cols, b1) *
+                weightAt(weights, rows, cols, b2)
+          acc.place(b1, b2, value)
+        }
+      },
+      options,
+    )
+    return {
+      ...acc.finish(),
+      binsPerCell: rowPool.stride,
+      snapped: rowPool.snapped && colPool.snapped,
+    }
+  }
+
+  /**
+   * One map of **several chosen sequences**, and nothing else.
+   *
+   * The picture a reader asks for by ticking four MAGs out of two thousand:
+   * their own maps on the diagonal, everything between them off it, in the
+   * order they were given. It is not a range — the four are scattered through
+   * the file — so it is built the way the overview is, by walking pixels and
+   * dropping the ones whose bins are not on either axis
+   * (`selectionPooling`).
+   *
+   * Which makes it the whole file's worth of reading whatever is selected, and
+   * that is why it is watched: the same bar and the same cancel as the
+   * whole-genome read, through the same options.
+   *
+   * @param units Selected sequences as `(id, bin extent)`, in display order.
+   */
+  async selectionMatrix(
+    units: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
+    stride: number,
+    options: SpanScanOptions & { balance?: boolean } = {},
+  ): Promise<Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; ids: Int32Array }> {
+    const pooling = selectionPooling(this.nBins, units, stride)
+    // On the diagonal by construction: one axis, used twice. `planRead` decides
+    // what that means for the store rather than this function assuming it — a
+    // `square` file holds both triangles and each stored pixel is its own cell,
+    // an upper-triangular one holds half and the result is mirrored at the end.
+    const whole: Extent = [0, this.nBins]
+    const acc = pixelAccumulator(
+      whole,
+      whole,
+      pooling,
+      pooling,
+      planRead(whole, whole, this.storageMode).mode,
+      this.storageMode === 'symmetric-upper',
+    )
+    const weights = options.balance === true ? this.weightSlices(whole, whole) : null
+    await forEachPixelSpanAsync(
+      this.handle,
+      0,
+      this.nBins,
+      (chunk) => {
+        for (let i = 0; i < chunk.length; i++) {
+          const b1 = chunk.bin1[i]
+          const b2 = chunk.bin2[i]
+          const value =
+            weights === null
+              ? chunk.count[i]
+              : chunk.count[i] * weights.rows[b1] * weights.cols[b2]
+          acc.place(b1, b2, value)
+        }
+      },
+      options,
+    )
+    const out = acc.finish()
+    return { ...out, binsPerCell: pooling.stride, ids: pooling.ids }
   }
 
   /** The two bounded weight slices a balanced roll-up multiplies by. */

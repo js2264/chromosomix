@@ -226,7 +226,47 @@ export function sparseAggregator(
       : genomeGrouping(coords, contigGenomeIds, extent[0], extent[1])
   const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
   const rowGroups = build(rows)
-  const colGroups = onDiagonal ? rowGroups : build(cols)
+  const acc = pixelAccumulator(
+    rows,
+    cols,
+    rowGroups,
+    onDiagonal ? rowGroups : build(cols),
+    plan,
+    upperTriangular,
+  )
+  return {
+    place: acc.place,
+    finish: () => ({ ...acc.finish(), level }),
+  }
+}
+
+/**
+ * The accumulation itself, over groupings the caller chose.
+ *
+ * Split out from {@link sparseAggregator} because the *arithmetic* — map each
+ * stored pixel into a pair of output slots, fold the diagonal once — has nothing
+ * to do with what the slots are. Contigs and genomes are two answers (above);
+ * runs of `stride` consecutive bins are a third, which is how a block is read at
+ * a coarser bin size than the file stores (`metacooler/pooling.ts`).
+ *
+ * On-diagonal is decided from the extents rather than passed, for the same
+ * reason it is there: identical extents mean the block carries both triangles of
+ * an upper-triangular store, and summing it without folding double-counts every
+ * off-diagonal pixel into the diagonal of the result — where a coarsened map has
+ * its largest values, so the error reads as "the diagonal is strong".
+ */
+export function pixelAccumulator(
+  rows: Extent,
+  cols: Extent,
+  rowGroups: AxisGrouping,
+  colGroups: AxisGrouping,
+  plan: PlacementMode,
+  upperTriangular = true,
+): {
+  place(bin1: number, bin2: number, value: number): void
+  finish(): Omit<AggregatedMatrix, 'level'>
+} {
+  const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
   const fold = onDiagonal && upperTriangular
 
   const nrows = rowGroups.ids.length
@@ -250,6 +290,11 @@ export function sparseAggregator(
   const add = (row: number, col: number, value: number): void => {
     const a = rowGroups.slot[row]
     const b = colGroups.slot[col]
+    // A negative slot is a bin the grouping left out — the case a *selection*
+    // makes, where most of the file is not on either axis (`selectionPooling`).
+    // Dropped here rather than filtered by the caller, so that every grouping
+    // this accumulator accepts is one it can be handed pixels for.
+    if (a < 0 || b < 0) return
     // Upper-triangular in *group* space too, mirroring `to_upper_triangle`, so
     // the fold below has one triangle to mirror rather than two half-filled ones.
     values[fold && a > b ? b * ncols + a : a * ncols + b] += value
@@ -274,13 +319,13 @@ export function sparseAggregator(
         add(bin2 - r0, bin1 - c0, value)
       }
     },
-    finish(): AggregatedMatrix {
+    finish(): Omit<AggregatedMatrix, 'level'> {
       if (fold) {
         for (let a = 0; a < nrows; a++) {
           for (let b = a + 1; b < ncols; b++) values[b * ncols + a] = values[a * ncols + b]
         }
       }
-      return { nrows, ncols, values, rowIds: rowGroups.ids, colIds: colGroups.ids, level }
+      return { nrows, ncols, values, rowIds: rowGroups.ids, colIds: colGroups.ids }
     },
   }
 }

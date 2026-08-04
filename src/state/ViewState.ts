@@ -20,8 +20,17 @@
 
 import type { Transform, ViewKind, ViewState } from '../types'
 
-const VIEW_KINDS: ViewKind[] = ['genomes', 'contigs', 'genome', 'pair', 'region', 'whole']
-const LEVELS = ['bin', 'contig'] as const
+const VIEW_KINDS: ViewKind[] = [
+  'genomes',
+  'contigs',
+  'genome',
+  'pair',
+  'region',
+  'whole',
+  'overview',
+  'selection',
+]
+const LEVELS = ['bin', 'contig', 'genome'] as const
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
 
 /** Serialisation order — stable so two equal states produce equal strings. */
@@ -30,8 +39,10 @@ const KEY_ORDER = [
   'view',
   'genome',
   'genome2',
+  'genomes',
   'region',
   'region2',
+  'regions',
   'level',
   'transform',
   'colormap',
@@ -44,8 +55,10 @@ const KEY_ORDER = [
 const OPTIONAL_KEYS = [
   'genome',
   'genome2',
+  'genomes',
   'region',
   'region2',
+  'regions',
   'level',
   'transform',
   'colormap',
@@ -118,6 +131,10 @@ export function parseViewState(hash: string): ViewState | null {
   if (region !== undefined) state.region = region
   const region2 = raw.get('region2')
   if (region2 !== undefined) state.region2 = region2
+  const genomes = raw.get('genomes')
+  if (genomes !== undefined) state.genomes = genomes
+  const regions = raw.get('regions')
+  if (regions !== undefined) state.regions = regions
   const colormap = raw.get('colormap')
   if (colormap !== undefined) state.colormap = colormap
 
@@ -190,6 +207,56 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
     if (a[key as keyof ViewState] !== b[key as keyof ViewState]) return false
   }
   return true
+}
+
+/**
+ * `level` as a bin-axis view reads it: bins unless the state says contigs.
+ *
+ * The hash is untrusted and one key serves two vocabularies, so `level=genome`
+ * — legal, and meaningful in the overview — reaches these views too. It lands on
+ * `bin` rather than being rejected: a link that named a level this view has no
+ * axis for still names a genome, a pair or a region, and showing it at the
+ * default level is the answer closest to what was asked for.
+ */
+export function matrixLevel(state: ViewState): 'bin' | 'contig' {
+  return state.level === 'contig' ? 'contig' : 'bin'
+}
+
+/**
+ * `level` as the overview reads it: contigs unless the state says genomes.
+ *
+ * Contig × contig is the default for the reason {@link ViewState.level}'s other
+ * accessor exists at all — the two levels are different accumulations of one
+ * pass, and the contig picture is the one that contains the other.
+ */
+export function overviewLevel(state: ViewState): 'genome' | 'contig' {
+  return state.level === 'genome' ? 'genome' : 'contig'
+}
+
+/** What a `selection` view is of: several genomes, or several contigs. */
+export interface UnitSelection {
+  kind: 'genome' | 'contig'
+  names: string[]
+}
+
+/**
+ * The selection a state carries, or `null` where it names none.
+ *
+ * Genomes win over contigs when a hand-edited hash carries both, because the
+ * genomes table is the coarser choice and a link that says two things should
+ * resolve to one rather than to an error. Empty names are dropped, so a
+ * trailing comma is not a sequence called `''`.
+ */
+export function selectionOf(state: ViewState): UnitSelection | null {
+  const genomes = splitNames(state.genomes)
+  if (genomes.length > 0) return { kind: 'genome', names: genomes }
+  const regions = splitNames(state.regions)
+  return regions.length > 0 ? { kind: 'contig', names: regions } : null
+}
+
+function splitNames(value: string | undefined): string[] {
+  if (value === undefined || value === '') return []
+  return value.split(',').map((name) => name.trim()).filter((name) => name !== '')
 }
 
 /** A view state naming a file but nothing inside it — the landing view (§5.1). */

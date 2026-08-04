@@ -2363,7 +2363,10 @@ p {
   min-width: 0;
 }
 
-.overview-host {
+/* Both whole-file views stand their map in one of these, so that the map can be
+   held back behind the gate without the view changing shape around it. */
+.overview-host,
+.whole-host {
   min-width: 0;
 }
 

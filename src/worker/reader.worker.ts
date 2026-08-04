@@ -15,6 +15,7 @@ import { ViewerError } from '../errors'
 import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
+import { POOLED_CELL_LIMIT } from '../metacooler/pooling'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -24,6 +25,7 @@ import {
   binGenomeArray,
   contigRuns,
   genomeRuns,
+  idRuns,
 } from './groups'
 import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
@@ -31,6 +33,7 @@ import {
   serialiseError,
   tableToPayload,
   transfersFor,
+  type AxisGroup,
   type ContigsResult,
   type DeepValidation,
   type GenomesResult,
@@ -87,6 +90,21 @@ function post(response: WorkerResponse, transfers: Transferable[] = []): void {
 }
 
 /** Raised when the user cancels a scan; the client maps it to a quiet no-op. */
+/**
+ * The bar and the way out, for the reads that walk a whole file.
+ *
+ * The same two hooks the overview scan has had all along, handed to the pooled
+ * read and to the roll-up — the three are one operation seen three ways, and a
+ * progress bar on one of them and not the others was a difference in the
+ * plumbing rather than in the wait.
+ */
+function scanHooks(id: number): { cancelled: () => boolean; onProgress: (done: number, total: number) => void } {
+  return {
+    cancelled: () => cancelled.has(id),
+    onProgress: (done, total) => post({ type: 'progress', id, done, total }),
+  }
+}
+
 function abortError(): Error {
   const err = new Error('cancelled')
   err.name = 'AbortError'
@@ -194,6 +212,8 @@ async function handleMatrix(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
+  const stride = Math.max(1, Math.trunc(request.binsPerCell ?? 1))
+  if (stride > 1) return pooledResult(mc, request, cols, stride)
   const dense = await mc.matrix(
     {
       rows: request.rows,
@@ -204,6 +224,61 @@ async function handleMatrix(
     hintFor(request.rows, cols),
   )
   return binLevelResult(mc, dense, request.genomes === true)
+}
+
+/**
+ * The same block at a coarser bin size, accumulated from the stored pixels.
+ *
+ * Still `level: 'bin'`, because that is what it is: the cells are bins of a
+ * grid `binsPerCell` times coarser, each one inside a single contig, and the
+ * axis runs are the contigs over them exactly as they are over the file's own
+ * bins. What the UI does with that is multiply its bin size by `binsPerCell`.
+ *
+ * No `unitStart`: a contig starts a fresh cell here by construction, so a
+ * group's own `start` is where it begins and the block-relative arithmetic is
+ * already right. `unitLength` is sent, because the last cell of a contig is
+ * partial and a selection that runs to the end of the sequence must clamp to the
+ * sequence rather than to a multiple of the coarse bin.
+ */
+async function pooledResult(
+  mc: MetaCooler,
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+  cols: Extent,
+  stride: number,
+): Promise<MatrixResult> {
+  const id = request.id
+  const pooled = await mc.pooledMatrix(
+    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    stride,
+    scanHooks(id),
+  )
+  if (cancelled.has(id)) throw abortError()
+  const runs = (ids: Int32Array): AxisGroup[] =>
+    idRuns(
+      ids,
+      (id) => mc.chromnames[id] ?? String(id),
+      undefined,
+      (id) => mc.coords.contigLengths[id],
+    )
+  const withGenomes = request.genomes === true && mc.hasGenomes
+  return {
+    nrows: pooled.nrows,
+    ncols: pooled.ncols,
+    values: Float32Array.from(pooled.values),
+    rowExtent: request.rows,
+    colExtent: cols,
+    rowGroups: runs(pooled.rowIds),
+    colGroups: runs(pooled.colIds),
+    ...(withGenomes
+      ? {
+          rowGenomes: aggregatedGenomeRuns(mc, pooled.rowIds),
+          colGenomes: aggregatedGenomeRuns(mc, pooled.colIds),
+        }
+      : {}),
+    level: 'bin',
+    binsPerCell: pooled.binsPerCell,
+    poolSnapped: pooled.snapped,
+  }
 }
 
 /**
@@ -230,7 +305,9 @@ async function handleAggregate(
   const aggregated = await mc.aggregateSparse(
     { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
     request.level,
+    scanHooks(request.id),
   )
+  if (cancelled.has(request.id)) throw abortError()
   const axes = aggregatedAxes(mc, aggregated)
   // Only a contig-level roll-up has a genome to name over it: at genome level
   // the axis already *is* the genome, and repeating it in the tooltip would be
@@ -252,6 +329,119 @@ async function handleAggregate(
       : {}),
     level: request.level,
   }
+}
+
+/**
+ * One map of several chosen sequences (§5.5's plural).
+ *
+ * The axis is the selection, in the order the file lays it out rather than the
+ * order it was ticked in: a matrix whose rows jump about is a picture of the
+ * clicking, and the diagonal of a Hi-C map is only readable when the sequences
+ * are where the file put them.
+ *
+ * A genome resolves to its contigs, which is what makes ticking four MAGs and
+ * ticking their contigs the same picture. Names that match nothing are dropped
+ * rather than refused — a link outlives the file it was made from, and the
+ * sequences that *are* there still make a map.
+ */
+async function handleSelection(
+  request: Extract<WorkerRequest, { kind: 'selection' }>,
+): Promise<MatrixResult> {
+  const { mc } = requireSession()
+  const id = request.id
+  const units = selectedContigs(mc, request.unit, request.names)
+  if (units.length === 0) {
+    // `unknown-label` is the code the reader already uses for a name this file
+    // does not have; a selection of them is the same failure, several times.
+    throw new ViewerError(
+      'unknown-label',
+      `None of the ${request.unit === 'genome' ? 'genomes' : 'sequences'} named are in this ` +
+        'file, so there is nothing to draw. They may belong to another map.',
+      { unit: request.unit, names: request.names },
+    )
+  }
+  const stride = Math.max(1, Math.trunc(request.binsPerCell ?? 1))
+  // The caller chooses the stride, because the caller labels the axis in the
+  // matching units — but it chooses it from a bin count it worked out itself,
+  // and a wrong one here is a matrix the size of its own square. Refused rather
+  // than clamped: clamping would draw a picture at a resolution the axis
+  // labels contradict, which is worse than not drawing one.
+  const cells = units.reduce(
+    (sum, unit) => sum + Math.ceil((unit.extent[1] - unit.extent[0]) / stride),
+    0,
+  )
+  if (cells > POOLED_CELL_LIMIT) {
+    throw new ViewerError(
+      'dense-too-large',
+      `This selection is ${cells} cells per axis at ${stride} bins each, past the ` +
+        `${POOLED_CELL_LIMIT} one picture holds. Select fewer sequences.`,
+      { cells, stride, limit: POOLED_CELL_LIMIT },
+    )
+  }
+  const selected = await mc.selectionMatrix(units, stride, {
+    ...scanHooks(id),
+    ...(request.balance === true ? { balance: true } : {}),
+  })
+  if (cancelled.has(id)) throw abortError()
+
+  const runs = idRuns(
+    selected.ids,
+    (contig) => mc.chromnames[contig] ?? String(contig),
+    undefined,
+    (contig) => mc.coords.contigLengths[contig],
+  )
+  const withGenomes = mc.hasGenomes
+  return {
+    nrows: selected.nrows,
+    ncols: selected.ncols,
+    values: Float32Array.from(selected.values),
+    // The axis is not a bin range, so the extent is the axis itself: cell 0 is
+    // where it starts. `unitStart` is absent for the same reason, and the
+    // coordinate arithmetic falls back to the group's own start, which is right.
+    rowExtent: [0, selected.nrows],
+    colExtent: [0, selected.ncols],
+    rowGroups: runs,
+    colGroups: runs,
+    ...(withGenomes
+      ? {
+          rowGenomes: aggregatedGenomeRuns(mc, selected.ids),
+          colGenomes: aggregatedGenomeRuns(mc, selected.ids),
+        }
+      : {}),
+    level: 'bin',
+    binsPerCell: selected.binsPerCell,
+    poolSnapped: true,
+  }
+}
+
+/**
+ * The contigs a selection names, in file order, with their bin extents.
+ *
+ * File order — by where the bins are — rather than the order given: see
+ * {@link handleSelection}. Duplicates collapse, so a genome ticked alongside one
+ * of its own contigs draws that contig once.
+ */
+function selectedContigs(
+  mc: MetaCooler,
+  unit: 'genome' | 'contig',
+  names: readonly string[],
+): Array<{ id: number; extent: Extent }> {
+  const ids = new Set<number>()
+  for (const name of names) {
+    if (unit === 'contig') {
+      const id = mc.chromnames.indexOf(name)
+      if (id >= 0) ids.add(id)
+      continue
+    }
+    const genome = mc.genomeNames.indexOf(name)
+    if (genome < 0) continue
+    for (let contig = 0; contig < mc.nContigs; contig++) {
+      if (mc.contigGenomeIds[contig] === genome) ids.add(contig)
+    }
+  }
+  return [...ids]
+    .map((id) => ({ id, extent: mc.contigExtent(id) }))
+    .sort((a, b) => a.extent[0] - b.extent[0])
 }
 
 /**
@@ -509,7 +699,9 @@ function handleStats(): StatsResult {
 
 /** `true` for requests whose byte cost is worth reporting separately (§12). */
 function isViewRequest(kind: WorkerRequest['kind']): boolean {
-  return kind === 'matrix' || kind === 'aggregate' || kind === 'overview'
+  return (
+    kind === 'matrix' || kind === 'aggregate' || kind === 'overview' || kind === 'selection'
+  )
 }
 
 async function dispatch(request: WorkerRequest): Promise<unknown> {
@@ -526,6 +718,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleMatrix(request)
     case 'aggregate':
       return handleAggregate(request)
+    case 'selection':
+      return handleSelection(request)
     case 'overview':
       return handleOverview(request)
     case 'overviewSidecar':

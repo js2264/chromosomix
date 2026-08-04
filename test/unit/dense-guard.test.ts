@@ -132,11 +132,12 @@ describe('readDenseMatrix', () => {
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 13_000] }, DENSE_HINTS.range),
     ).toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
-    // 200000 × 12000 = 2.4e9 cells: under Python's limit and far past any tab's
-    // budget, so the browser guard is what answers.
+    // 200000 × 12000 = 2.4e9 cells: under Python's limit and past what one
+    // typed array can hold, so the browser guard is what answers — with the
+    // ceiling, which is the truer of its two refusals for a block this size.
     expect(() =>
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range),
-    ).toThrowError(/browser tab/)
+    ).toThrowError(/single array/)
     // 20000 × 12000 = 2.4e8 cells: 960 MB of values and a raster that has
     // stopped growing, so it is *inside* a 4 GiB machine's budget and the read
     // is attempted. It was refused when the estimate still charged a per-nnz
@@ -184,13 +185,55 @@ describe('the browser guard, which is stricter than the CLI', () => {
     expect(() => checkBrowserDenseSize(12_100, 12_100, HINT, { budgetBytes: 1e9 })).not.toThrow()
   })
 
-  it('allows a whole yeast genome at 500 bp on a machine that reports 8 GiB', () => {
-    // 24,322 bins, 5.9e8 cells: 2.37 GB of values, ~263 MB of raster and one
+  it('allows the largest block one array can hold, on a machine that reports 8 GiB', () => {
+    // 23,000 bins, 5.3e8 cells: 2.1 GB of values, ~263 MB of raster and one
     // 36 MB read window. The estimate used to add a per-nnz term for a read that
     // is now windowed, and refused this on every engine.
     expect(() =>
-      checkBrowserDenseSize(24_322, 24_322, HINT, { budgetBytes: (8 * 1024 ** 3) / 3 }),
+      checkBrowserDenseSize(23_000, 23_000, HINT, { budgetBytes: (8 * 1024 ** 3) / 2 }),
     ).not.toThrow()
+  })
+
+  it('refuses a whole yeast genome at 500 bp — one array, not one machine', () => {
+    // 24,322 bins is 2.4 GB of values, and no amount of RAM buys that in a
+    // single `Float32Array`. Measured in Chrome on a 16 GB Mac:
+    // 2,140,000,000 bytes is served, `2 ** 31 - 4` is refused, and four separate
+    // 1 GB arrays live side by side — so the wall is the array, not the tab.
+    //
+    // This test asserted the opposite until the allocation was tried on a real
+    // file: the guard it was checking is an estimate against a memory budget,
+    // and passing it never meant the array could be made. The view now says so
+    // before offering to compute, rather than after.
+    expect(() =>
+      checkBrowserDenseSize(24_322, 24_322, HINT, { budgetBytes: Number.POSITIVE_INFINITY }),
+    ).toThrowError(/single array/)
+  })
+
+  it('states the ceiling as a limit of the tab, and says what does fit', () => {
+    let message = ''
+    try {
+      checkBrowserDenseSize(24_322, 24_322, HINT, { budgetBytes: Number.POSITIVE_INFINITY })
+    } catch (error) {
+      message = (error as ViewerError).message
+    }
+    expect(message).toContain('2.1 GB in a single array')
+    expect(message).toContain('not of this machine')
+    // floor(sqrt(2 ** 31 / 4)) — the largest square block that can be allocated.
+    expect(message).toContain('23170×23170')
+    expect(message).toContain(HINT)
+  })
+
+  it('is not overridable, because no confirmation can change the answer', () => {
+    // The gate and the "load anyway" button both work by setting the budget
+    // aside. Neither may reach past this, and `where` is what tells the UI not
+    // to offer a button that cannot work.
+    try {
+      checkBrowserDenseSize(30_000, 30_000, HINT, { budgetBytes: Number.POSITIVE_INFINITY })
+      expect.unreachable()
+    } catch (error) {
+      expect((error as ViewerError).code).toBe('dense-too-large')
+      expect((error as ViewerError).detail['where']).toBe('array-limit')
+    }
   })
 
   it('never touches the file: the estimate is a closed form in the block shape', () => {
@@ -214,7 +257,10 @@ describe('the browser guard, which is stricter than the CLI', () => {
   it('says what it refused and what the limit is', () => {
     let message = ''
     try {
-      checkBrowserDenseSize(20_000, 20_000, HINT)
+      // 1.6 GB of values: inside the single-array ceiling, so it is the budget
+      // that answers — and the budget has to be named, because on the default
+      // one this block now loads.
+      checkBrowserDenseSize(20_000, 20_000, HINT, { budgetBytes: 1e9 })
     } catch (error) {
       message = (error as ViewerError).message
     }
@@ -225,25 +271,66 @@ describe('the browser guard, which is stricter than the CLI', () => {
     expect(message).toContain(HINT)
   })
 
+  it('lets a modest desktop block through, which is what the share is for', () => {
+    // 20,000 bins on the default budget: half of the 8 GiB fallback is 4.3 GB
+    // against an estimate of 1.9. The old third of 4 GiB was 1.4 GB and refused
+    // this, on the two engines that report no memory at all — which is most of
+    // them.
+    expect(() => checkBrowserDenseSize(20_000, 20_000, HINT)).not.toThrow()
+  })
+
   it('does not grant a tiny device more than it has', () => {
     // deviceMemory is bucketed: 0.25 is a real value a small device reports. A
     // floor applied unconditionally handed it 1 GB — four times the machine.
     expect(denseBudgetFor(0.25)).toBeLessThan(0.25 * 1024 ** 3)
     expect(denseBudgetFor(0.5)).toBeLessThan(0.5 * 1024 ** 3)
     expect(denseBudgetFor(1)).toBeLessThan(1024 ** 3)
-    // At and above 2 GiB the floor is the correction it was written to be.
-    expect(denseBudgetFor(2)).toBe(1e9)
-    expect(denseBudgetFor(4)).toBeCloseTo((4 * 1024 ** 3) / 3, 0)
-    expect(denseBudgetFor(8)).toBeCloseTo((8 * 1024 ** 3) / 3, 0)
+    // Half of what the device claims, from the bucket where the floor stops
+    // binding upwards. A machine reporting 16 — which Chrome now does — gets
+    // 8.6 GB, and is stopped by the single-array ceiling long before that.
+    expect(denseBudgetFor(2)).toBeCloseTo(1024 ** 3, 0)
+    expect(denseBudgetFor(4)).toBeCloseTo((4 * 1024 ** 3) / 2, 0)
+    expect(denseBudgetFor(8)).toBeCloseTo((8 * 1024 ** 3) / 2, 0)
+    expect(denseBudgetFor(16)).toBeCloseTo((16 * 1024 ** 3) / 2, 0)
+    // Never below what any machine can serve, whatever the share becomes.
+    expect(denseBudgetFor(2)).toBeGreaterThanOrEqual(1e9)
   })
 
   it('carries the same code, so the UI keeps one refusal screen', () => {
     try {
-      checkBrowserDenseSize(50_000, 50_000, HINT)
+      checkBrowserDenseSize(20_000, 20_000, HINT, { budgetBytes: 1e9 })
       expect.unreachable()
     } catch (error) {
       expect((error as ViewerError).code).toBe('dense-too-large')
       expect((error as ViewerError).detail['where']).toBe('browser')
     }
+  })
+})
+
+/**
+ * Which reads the ceiling still governs, now that the largest one has stopped
+ * asking for a dense block at all.
+ *
+ * The whole-genome view reads pooled — the block is summed to the size the
+ * renderer draws, so no bin count makes it too large (`pooling.test.ts`). What
+ * remains dense is a region, a genome and a pair, and those are the blocks these
+ * numbers are about.
+ */
+describe('what a dense read can still be asked for', () => {
+  it('holds a whole yeast genome at 1 kb, which no view now asks for', () => {
+    // 12,100 bins, 585 MB of values: allowed, and the whole-genome view no
+    // longer requests it — it asks for the same map in 3 kb cells instead.
+    expect(() => checkBrowserDenseSize(12_100, 12_100, HINT)).not.toThrow()
+  })
+
+  it('holds the largest region a chromosome view can select', () => {
+    // A human chromosome at 25 kb is 9,960 bins and one bounded read.
+    expect(() => checkBrowserDenseSize(9_960, 9_960, HINT)).not.toThrow()
+  })
+
+  it('still refuses one past the single-array ceiling, wherever it is asked from', () => {
+    expect(() =>
+      checkBrowserDenseSize(24_228, 24_228, HINT, { budgetBytes: Number.POSITIVE_INFINITY }),
+    ).toThrowError(/single array/)
   })
 })

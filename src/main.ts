@@ -6,8 +6,9 @@
  * two tables read once at open — and swaps the view underneath them.
  *
  * Routing is a switch over `ViewState.view`; there is no route table and no
- * router library, because the whole navigable surface is five view kinds and one
- * URL hash (spec §5.5).
+ * router library, because the whole navigable surface is seven view kinds and
+ * one URL hash (spec §5.5). Seven, and no modes beside them: a picture of this
+ * file that the hash cannot name is one nobody can link to or come back to.
  */
 
 import './ui/styles.css'
@@ -22,8 +23,12 @@ import {
   ViewStore,
   differsOnlyInScale,
   landingState,
+  matrixLevel,
+  overviewLevel,
   parseViewState,
+  selectionOf,
   viewStateEquals,
+  type UnitSelection,
 } from './state/ViewState'
 import { recall, remember } from './state/UiMemory'
 import type { Transform, ViewState } from './types'
@@ -70,6 +75,21 @@ const REPO_URL = 'https://github.com/js2264/metacooler.js'
 
 /** The document title with nothing open; the file name is prefixed to it. */
 const APP_TITLE = '(meta)cooler'
+
+/**
+ * What the shell needs from a view of the whole file at once.
+ *
+ * {@link Overview} and {@link WholeView} satisfy this without being told to:
+ * they answer the same question about two kinds of file, and the shell treats
+ * them identically — see {@link App.wholeFile}.
+ */
+interface WholeFileView {
+  readonly el: HTMLElement
+  readonly sideEl: HTMLElement
+  readonly panel: MatrixPanel
+  applyScale(scale: ScaleState): void
+  destroy(): void
+}
 
 interface OpenFile {
   /**
@@ -119,8 +139,28 @@ class App {
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
   private infoPanel: InfoPanel | null = null
-  private overview: Overview | null = null
-  private showingOverview = false
+  /**
+   * The whole-file view, kept across navigations, and the read it holds.
+   *
+   * The two views of the whole file at once — the metagenome's scan and the
+   * cooler's single block — are the only ones the shell holds rather than
+   * rebuilds, for the one reason that justifies it: they are the expensive
+   * reads. Leaving one for a genome and coming back has to return to the
+   * picture and not to the gate, which is the promise `tableMemory` makes for a
+   * filtered table at a thousandth of the price.
+   *
+   * One slot, because a file is either a metacool or a cooler and the root menu
+   * offers each of them one of these — so this can never be the way two whole
+   * matrices are held at once. The key is *what was read* (uri, level,
+   * balance): anything that changes it is a different picture, so the view is
+   * rebuilt and the old one destroyed rather than left holding a matrix nobody
+   * is looking at.
+   *
+   * Everything else about them is ordinary. They are view states
+   * (`view=overview`, `view=whole`), the shell mounts them through
+   * {@link showContent}, and they re-measure when a panel is dragged.
+   */
+  private wholeFile: { key: string; view: WholeFileView } | null = null
   private opening: string | null = null
   private current: {
     destroy?(): void
@@ -145,18 +185,6 @@ class App {
    * view object; this is what it was built from.
    */
   private mounted: ViewState | null = null
-  /**
-   * Whether the mounted view is the whole-file overview.
-   *
-   * The overview is a *shell mode*, not a view state: entering it changes
-   * nothing in the hash, because it is not a different place in the file but a
-   * different picture of the same one. So `mounted` alone cannot tell "the
-   * state is unchanged, repaint" from "the state is unchanged and we have just
-   * been asked for the other view of it", and the repaint short-circuit below
-   * swallowed `w` entirely — the breadcrumb flipped to Whole genome and the
-   * table stayed on screen underneath it.
-   */
-  private mountedOverview = false
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
 
@@ -325,7 +353,7 @@ class App {
         keys: 'g',
         enabled: file !== null && isMetacool,
         run: () => {
-          if (state !== null) this.navigate({ uri: state.uri, view: 'genomes' })
+          if (state !== null) this.store.set({ uri: state.uri, view: 'genomes' })
         },
       },
       {
@@ -335,7 +363,7 @@ class App {
         keys: 'c',
         enabled: file !== null,
         run: () => {
-          if (state !== null) this.navigate({ uri: state.uri, view: 'contigs' })
+          if (state !== null) this.store.set({ uri: state.uri, view: 'contigs' })
         },
       },
       {
@@ -349,12 +377,13 @@ class App {
         title: isMetacool ? 'Whole metagenome' : 'Whole genome',
         hint: isMetacool
           ? 'Costs a full pixel scan; it never starts on its own.'
-          : 'One bounded read; refused if it would not fit this machine.',
+          : 'One bounded read. It asks first when the block is large, and is refused if it would not fit this machine.',
         keys: 'w',
         enabled: file !== null,
         run: () => {
-          if (isMetacool) this.showOverview()
-          else if (state !== null) this.navigate({ uri: state.uri, view: 'whole' })
+          if (state !== null) {
+            this.store.set({ uri: state.uri, view: isMetacool ? 'overview' : 'whole' })
+          }
         },
       },
       {
@@ -676,9 +705,8 @@ class App {
         entries,
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
         ...(currentEntry === undefined ? {} : { currentEntry }),
-        onNavigate: (state) => this.navigate(state),
+        onNavigate: (state) => this.store.set(state),
         onOpenFile: () => this.openFileDialog(),
-        onShowOverview: () => this.showOverview(),
         onSelectEntry: (entry) =>
           void this.open(
             `${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`,
@@ -693,8 +721,10 @@ class App {
       this.generalPanel.setContent([this.infoPanel.el])
       this.generalPanel.setAvailable(true)
       this.status.reset()
-      this.overview = null
-      this.showingOverview = false
+      // Destroyed, not merely dropped: a scan of the *previous* file may still
+      // be running, and the reference going away is not what stops it.
+      this.wholeFile?.view.destroy()
+      this.wholeFile = null
 
       // A link may already have named a view inside this file (§5.5); honour it
       // rather than bouncing the recipient to the landing table.
@@ -951,6 +981,11 @@ class App {
       this.annotations?.client.destroy()
       this.annotations = null
       this.manualCard = null
+      // For the same reason, and it is the one view the shell holds: a cached
+      // whole-file matrix is a picture of a file nobody can now navigate to,
+      // and the scan that produced it may still be running.
+      this.wholeFile?.view.destroy()
+      this.wholeFile = null
       this.generalPanel.setContent([])
       this.generalPanel.setAvailable(false)
       // The cards described a file that is no longer open, and they hold the
@@ -992,6 +1027,15 @@ class App {
       return
     }
 
+    // The same rewrite for the other view a cooler cannot answer. `overview`
+    // scans for a genome × genome matrix, and a file with no genome layer has
+    // none — but it does have the other half of the same menu entry, the whole
+    // map in one bounded read, which is what "Whole genome" means there.
+    if (state.view === 'overview' && this.file !== null && !this.file.info.hasGenomes) {
+      this.store.set({ uri: state.uri, view: 'whole' }, { replace: true })
+      return
+    }
+
     // A colour change is a repaint, not a navigation.
     //
     // Every control in the colour card patches the view state so the URL stays
@@ -1008,26 +1052,18 @@ class App {
     if (
       this.mounted !== null &&
       this.current !== null &&
-      this.mountedOverview === this.showingOverview &&
       differsOnlyInScale(this.mounted, state)
     ) {
       this.current.applyScale?.(this.scaleOf(state))
       this.mounted = state
-      this.breadcrumb?.render(state, { overview: this.showingOverview })
+      this.breadcrumb?.render(state)
       this.status.refresh()
       return
     }
 
-    this.breadcrumb?.render(state, { overview: this.showingOverview })
+    this.breadcrumb?.render(state)
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
     this.mounted = state
-    this.mountedOverview = this.showingOverview
-
-    if (this.showingOverview) {
-      this.infoPanel?.setRecords([])
-      this.mountOverview()
-      return
-    }
 
     switch (state.view) {
       case 'genomes':
@@ -1047,6 +1083,12 @@ class App {
         break
       case 'whole':
         this.mountWhole(state)
+        break
+      case 'overview':
+        this.mountOverview(state)
+        break
+      case 'selection':
+        await this.mountSelection(state)
         break
     }
     // After the switch, not before: a region view reads the contigs table on the
@@ -1180,10 +1222,20 @@ class App {
       data: file.genomes,
       persistence: this.tableMemory(state.uri, 'genomes'),
       onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
-      onOpenPair: (a, b) =>
-        this.store.set({ uri: state.uri, view: 'pair', genome: a, genome2: b }),
+      onOpenSelection: (names) =>
+        this.store.set({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
+      onOpenWhole: () => this.store.set({ uri: state.uri, view: this.wholeFileView() }),
     })
     this.showContent(view.el, view)
+  }
+
+  /**
+   * Which of the two whole-file views this file has: the metagenome's scan, or
+   * the cooler's single map. Both are called "Whole genome" wherever they are
+   * offered, because they answer the same question by the means the file allows.
+   */
+  private wholeFileView(): 'overview' | 'whole' {
+    return this.file?.info.layout.kind === 'metacool' ? 'overview' : 'whole'
   }
 
   private async mountContigs(state: ViewState): Promise<void> {
@@ -1198,13 +1250,21 @@ class App {
       hideColumns: cooler ? ['genome_id'] : [],
       title: cooler ? 'Chromosomes' : 'Contigs',
       hint: cooler
-        ? 'One genome, its chromosomes. Pick one to browse it, or open the whole genome at once ' +
-          'from the menu beside the crumb — that one is offered whenever the estimate says this ' +
-          'machine can hold it.'
+        ? 'One genome, its chromosomes. Pick one to see its map, or select a subset to compare them.'
         : undefined,
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
+      // Neither while this table is one genome's contigs: "the whole file" is
+      // not the question someone reading a MAG's contigs is asking, and the map
+      // of *those* contigs is the genome view one crumb up.
+      ...(state.genome === undefined
+        ? {
+            onOpenWhole: () => this.store.set({ uri: state.uri, view: this.wholeFileView() }),
+            onOpenSelection: (names: string[]) =>
+              this.store.set({ uri: state.uri, view: 'selection', regions: names.join(',') }),
+          }
+        : {}),
     })
     this.showContent(view.el, view)
   }
@@ -1212,29 +1272,102 @@ class App {
   private mountWhole(state: ViewState): void {
     const file = this.file
     if (file === null) return
+    const level = matrixLevel(state)
+    const balance = this.balanceOf(state)
+    this.mountWholeFile(
+      state,
+      `whole|${state.uri}|${level}|${String(balance)}`,
+      () =>
+        new WholeView({
+          client: this.client,
+          caption: this.captionFor(state),
+          binsize: file.info.binsize ?? 1,
+          nBins: file.info.nBins,
+          // The file's own count of stored pixels, which is what the read walks.
+          // A cooler that does not declare it is not gated rather than gated on
+          // a guess; the same number is in the File card, from the same place.
+          nnz: numberOr(file.info.info['nnz']),
+          level,
+          scale: this.scaleOf(state),
+          balance,
+          hasWeights: file.info.hasWeights,
+          // Offered for a cooler too, now that the roll-up accumulates from the
+          // stored pixels: a chromosome-level whole-genome view of yeast is
+          // 17 x 17 cells and always fits, which makes it the honest answer when
+          // the bin-level block does not. It is only meaningless on a file with
+          // one sequence, where every level is a single cell.
+          offerLevel: file.info.nContigs > 1,
+          noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+          ...(this.annotationContext() === undefined
+            ? {}
+            : { annotations: this.annotationContext() }),
+          // The two are mutually exclusive in practice and both are passed
+          // anyway: a file either has a genome layer to name in the tooltip
+          // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
+          namesGenomes: file.info.hasGenomes,
+          onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
+          onBalanceChange: (next) => this.setBalance(next),
+          onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
+          onOpenRegion: (region, region2) =>
+            this.store.set({
+              uri: state.uri,
+              view: 'region',
+              region,
+              ...(region2 === undefined ? {} : { region2 }),
+            }),
+          onError: (err) => this.showError(err),
+        }),
+    )
+  }
+
+  /**
+   * The map of several chosen sequences (§5.5's plural).
+   *
+   * The same view as the whole-file one, told to draw less: see
+   * {@link WholeView}. It is *not* held in {@link wholeFile}, because that slot
+   * is keyed on one read and a reader ticking their way through a table would
+   * evict it on every change — the whole-file map they were building on is
+   * exactly what should survive.
+   */
+  private async mountSelection(state: ViewState): Promise<void> {
+    const file = this.file
+    if (file === null) return
+    const selection = selectionOf(state)
+    if (selection === null) {
+      this.store.set({ uri: state.uri, view: this.wholeFileView() }, { replace: true })
+      return
+    }
+    // A contig selection is measured against the contigs table, and a pasted
+    // link arrives before anyone has opened one. Read it first: the alternative
+    // is a selection whose size is unknown, which is a resolution chosen for a
+    // picture nobody has measured. Cached after the first region view, so this
+    // costs a read once per file.
+    if (selection.kind === 'contig' && this.file?.contigs == null) {
+      await this.contigs().catch(() => null)
+      if (this.store.state !== state) return
+    }
+    const bins = this.binsOfSelection(selection)
     const view = new WholeView({
       client: this.client,
       caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
-      level: state.level ?? 'bin',
+      nnz: numberOr(file.info.info['nnz']),
+      level: 'bin',
       scale: this.scaleOf(state),
       balance: this.balanceOf(state),
       hasWeights: file.info.hasWeights,
-      // Offered for a cooler too, now that the roll-up accumulates from the
-      // stored pixels: a chromosome-level whole-genome view of yeast is 17 x 17
-      // cells and always fits, which makes it the honest answer when the
-      // bin-level block does not. It is only meaningless on a file with one
-      // sequence, where every level is a single cell.
-      offerLevel: file.info.nContigs > 1,
+      // No level toggle: the roll-up reads a bin range, and a selection is not
+      // one. The sequences are already the axis at bin level here.
+      offerLevel: false,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
-      ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
-      // The two are mutually exclusive in practice and both are passed anyway:
-      // a file either has a genome layer to name in the tooltip (§7.4) or is a
-      // cooler that can carry annotations (§8.5), never both.
+      ...(this.annotationContext() === undefined
+        ? {}
+        : { annotations: this.annotationContext() }),
       namesGenomes: file.info.hasGenomes,
-      onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
-      onBalanceChange: (balance) => this.setBalance(balance),
+      selection: { ...selection, bins },
+      onLevelChange: () => {},
+      onBalanceChange: (next) => this.setBalance(next),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
         this.store.set({
@@ -1246,6 +1379,39 @@ class App {
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
+  }
+
+  /**
+   * How many bins a selection covers — what its pooling stride is measured
+   * against, so four MAGs are drawn at four MAGs' resolution and not the
+   * file's.
+   *
+   * From the tables already in memory: `/genomes` carries `n_bins`, and a
+   * contig's bins are its length over the bin size. Names that match nothing
+   * count nothing, which is also how the worker reads them.
+   */
+  private binsOfSelection(selection: UnitSelection): number {
+    const file = this.file
+    if (file === null) return 0
+    if (selection.kind === 'genome') {
+      const names = file.genomes.table.data['name']
+      const counts = file.genomes.table.data['n_bins']
+      if (!Array.isArray(names) || counts === undefined || Array.isArray(counts)) return 0
+      let bins = 0
+      for (const name of selection.names) {
+        const row = (names as string[]).indexOf(name)
+        if (row >= 0) bins += Number(counts[row])
+      }
+      return bins
+    }
+    const binsize = file.info.binsize ?? 1
+    const lengths = contigLengths(file.contigs)
+    let bins = 0
+    for (const name of selection.names) {
+      const length = lengths.get(name)
+      if (length !== undefined) bins += Math.ceil(length / binsize)
+    }
+    return bins
   }
 
   private mountGenome(state: ViewState): void {
@@ -1263,7 +1429,7 @@ class App {
       onBalanceChange: (balance) => this.setBalance(balance),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
-      level: state.level ?? 'bin',
+      level: matrixLevel(state),
       scale: this.scaleOf(state),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
@@ -1293,7 +1459,7 @@ class App {
       onBalanceChange: (balance) => this.setBalance(balance),
       rowGenome: state.genome,
       colGenome: state.genome2,
-      level: state.level ?? 'bin',
+      level: matrixLevel(state),
       scale: this.scaleOf(state),
       onChangeGenomes: (genome, genome2) => this.store.set({ ...state, genome, genome2 }),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
@@ -1351,64 +1517,71 @@ class App {
     this.showContent(view.el, view)
   }
 
-  private showOverview(): void {
-    if (this.showingOverview) return
-    this.showingOverview = true
-    void this.render(this.store.state)
+  /** The whole-metagenome scan (§7.3), mounted like any other view. */
+  private mountOverview(state: ViewState): void {
+    const file = this.file
+    if (file === null) return
+    const level = overviewLevel(state)
+    this.mountWholeFile(
+      state,
+      `overview|${state.uri}|${level}`,
+      () =>
+        new Overview({
+          client: this.client,
+          caption: this.captionFor(state),
+          binsize: file.info.binsize ?? 1,
+          sourceKind: file.info.sourceKind,
+          sourceBytes: file.info.sourceBytes,
+          // A query parameter rather than view state: it describes where the
+          // file is published, not which picture of it is on screen.
+          edgeListUrl: new URLSearchParams(window.location.search).get('edges') ?? undefined,
+          level,
+          scale: this.scaleOf(state),
+          onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
+          onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
+          onOpenPair: (a, b) =>
+            this.store.set({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
+          onOpenGenome: (genome) => this.store.set({ uri: file.uri, view: 'genome', genome }),
+          onOpenContig: (region, region2) =>
+            this.store.set({
+              uri: file.uri,
+              view: 'region',
+              region,
+              ...(region2 === undefined ? {} : { region2 }),
+            }),
+          onError: (err) => this.showError(err),
+        }),
+    )
   }
 
   /**
-   * Go to a view state, leaving the whole-genome view if it is up.
+   * Mount the view of the whole file, building it only if this is not the one
+   * already in hand — see {@link wholeFile} for what "the one" means.
    *
-   * `store.set` is a no-op when the state is unchanged — picking "Genomes" from
-   * the root menu while already *at* `view=genomes` with the overview over it is
-   * exactly that case — so the render is forced rather than awaited.
+   * What goes to {@link showContent} is a *handle* rather than the view: it
+   * carries what the shell needs from anything mounted, the controls column and
+   * the panel to re-measure, and deliberately no `destroy`. That is the whole
+   * of the caching — navigating away releases the DOM and keeps the matrix —
+   * and it is why the destroy at the top of this function is written out: it is
+   * the only one that ever runs for these two views.
+   *
+   * The scale is applied on every mount because the URL is the truth and it may
+   * have moved while this view was not on screen: change the transform in a
+   * genome view and come back, and the map is drawn the way the hash says.
    */
-  private navigate(state: ViewState): void {
-    const same = viewStateEquals(state, this.store.state)
-    const leaving = this.showingOverview
-    this.showingOverview = false
-    this.store.set(state)
-    if (same && leaving) void this.render(state)
-  }
-
-  private mountOverview(): void {
-    const file = this.file
-    if (file === null) return
-    if (this.overview === null) {
-      const edges = new URLSearchParams(window.location.search).get('edges')
-      this.overview = new Overview({
-        client: this.client,
-        caption: { file: fileLabel(file.uri) },
-          binsize: file.info.binsize ?? 1,
-        sourceKind: file.info.sourceKind,
-        sourceBytes: file.info.sourceBytes,
-        edgeListUrl: edges ?? undefined,
-        onOpenPair: (a, b) => {
-          this.showingOverview = false
-          this.store.set({ uri: file.uri, view: 'pair', genome: a, genome2: b })
-        },
-        onOpenGenome: (genome) => {
-          this.showingOverview = false
-          this.store.set({ uri: file.uri, view: 'genome', genome })
-        },
-        onOpenContig: (region, region2) => {
-          this.showingOverview = false
-          this.store.set({
-            uri: file.uri,
-            view: 'region',
-            region,
-            ...(region2 === undefined ? {} : { region2 }),
-          })
-        },
-        onError: (err) => this.showError(err),
-      })
+  private mountWholeFile(state: ViewState, key: string, build: () => WholeFileView): void {
+    if (this.wholeFile !== null && this.wholeFile.key !== key) {
+      this.wholeFile.view.destroy()
+      this.wholeFile = null
     }
-    // Its own controls, but *not* as the current view: the overview is cached
-    // across navigations and `showContent` destroys what it replaces.
-    this.showContent(this.overview.el)
-    this.aestheticsPanel.setContent([this.overview.sideEl])
-    this.aestheticsPanel.setAvailable(true)
+    this.wholeFile ??= { key, view: build() }
+    const { view } = this.wholeFile
+    view.applyScale(this.scaleOf(state))
+    this.showContent(view.el, {
+      sideEl: view.sideEl,
+      panel: view.panel,
+      applyScale: (scale) => view.applyScale(scale),
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -1431,7 +1604,12 @@ class App {
 
   private showContent(
     node: HTMLElement,
-    view?: { destroy?(): void; sideEl?: HTMLElement; panel?: MatrixPanel },
+    view?: {
+      destroy?(): void
+      applyScale?(scale: ScaleState): void
+      sideEl?: HTMLElement
+      panel?: MatrixPanel
+    },
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
@@ -1509,6 +1687,20 @@ function genomeField(genome: string): RecordField {
 /** Drop the records that could not be resolved to a row. */
 function compact(records: Array<RecordSpec | null>): RecordSpec[] {
   return records.filter((record): record is RecordSpec => record !== null)
+}
+
+/**
+ * A number out of a file attribute, or `null`.
+ *
+ * `info` is whatever the file's root attributes said, so an entry may be absent,
+ * `null`, a string, or a `BigInt` an int64 attribute arrived as. Anything that
+ * is not a finite number is "the file did not say", which is a different answer
+ * from zero and has to stay one.
+ */
+function numberOr(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function loading(message: string): HTMLElement {

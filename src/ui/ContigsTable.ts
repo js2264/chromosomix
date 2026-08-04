@@ -6,12 +6,15 @@
  * be landing on nothing. For a `.metacool` it is the third breadcrumb segment —
  * the contigs of one genome, on the way to a region.
  *
- * Whole-genome browsing of a eukaryotic cooler is explicitly out of scope (§9),
- * so this view leads to a region and never to a "whole file" heatmap.
+ * §9 used to rule whole-genome browsing of a eukaryotic cooler out entirely, so
+ * this view led to a region and to nothing else. It is not out of scope any
+ * more — the whole map is read at the resolution it is drawn at, so no file is
+ * too large for it — and the way there is a button in the toolbar rather than
+ * only a chevron in the breadcrumb.
  */
 
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
-import { el, fmt } from './dom'
+import { button, el, fmt } from './dom'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 const CORE_ORDER = ['name', 'length']
@@ -27,6 +30,16 @@ export interface ContigsTableOptions {
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenContig(name: string): void
+  /** Show every ticked sequence as one map — see the genomes table's twin. */
+  onOpenSelection?(names: string[]): void
+  /**
+   * Open the whole file at once — see {@link GenomesTableOptions.onOpenWhole}.
+   *
+   * Absent where there is nothing to open: this table is also the third crumb
+   * of a metacool, the contigs *of one genome*, and "the whole file" is not
+   * what someone reading a MAG's contigs is asking for.
+   */
+  onOpenWhole?(): void
 }
 
 export class ContigsTable {
@@ -65,15 +78,55 @@ export class ContigsTable {
       }
     })
 
+    const chooser = options.onOpenSelection
+    const show = button('show selected →', () => {
+      const rows = this.table.selection
+      if (chooser !== undefined && rows.length > 0) chooser(rows.map((row) => names[row]))
+    })
+    show.disabled = true
+    const all = button('select all', () => this.table.selectAll(), {
+      class: 'btn btn-quiet',
+      title: 'Tick everything the current filters leave visible',
+    })
+    const none = button('clear', () => this.table.clearSelection(), {
+      class: 'btn btn-quiet',
+      title: 'Untick everything',
+    })
+    none.disabled = true
+
     this.table = new VirtualTable({
       columns,
       rows: options.rows ?? Array.from({ length: payload.length }, (_, index) => index),
+      // Ticking is offered wherever showing several is: on a metacool's
+      // per-genome contigs list the map of "these contigs" is the genome view
+      // one crumb up, so there is nothing for a selection to add.
+      ...(chooser === undefined ? {} : { selectable: true }),
+      onSelect: (rows) => {
+        show.disabled = rows.length === 0
+        none.disabled = rows.length === 0
+        show.textContent =
+          rows.length > 0 ? `show ${fmt.int(rows.length)} selected →` : 'show selected →'
+      },
       searchKeys: ['name'],
       searchPlaceholder: 'search contig names…',
       emptyMessage: 'No contigs match these filters.',
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenContig(names[row]),
     })
+    if (chooser !== undefined) {
+      this.table.addToolbarItem(all)
+      this.table.addToolbarItem(none)
+      this.table.addToolbarItem(show)
+    }
+    const whole = options.onOpenWhole
+    if (whole !== undefined) {
+      this.table.addToolbarItem(
+        button('whole genome →', () => whole(), {
+          class: 'btn',
+          title: 'Every sequence at once, as one map',
+        }),
+      )
+    }
 
     this.el = el(
       'section',

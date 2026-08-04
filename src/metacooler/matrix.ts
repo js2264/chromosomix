@@ -17,10 +17,12 @@ import {
   DENSE_MATRIX_BIN_LIMIT,
   DEVICE_MEMORY_FALLBACK_GIB,
   DEVICE_MEMORY_SHARE,
+  MAX_DENSE_ARRAY_BYTES,
   MIN_DENSE_BUDGET_BYTES,
   MIN_DENSE_BUDGET_GIB,
   type StorageMode,
 } from '../constants'
+import { yieldToEventLoop } from '../async'
 import { rasterStride } from '../render/heatmap'
 import { ViewerError } from '../errors'
 import type { Hdf5Handle } from '../h5/api'
@@ -164,6 +166,24 @@ export function checkBrowserDenseSize(
   options: { budgetBytes?: number } = {},
 ): void {
   const cells = nRows * nCols
+  // First, and not subject to the budget: a block whose values do not fit in
+  // one typed array cannot be read however much memory the machine has or the
+  // user offers. `budgetBytes: Infinity` is a statement about the *estimate*,
+  // which is a guess about this machine; this is not a guess and not about this
+  // machine. See MAX_DENSE_ARRAY_BYTES.
+  if (cells * 4 >= MAX_DENSE_ARRAY_BYTES) {
+    const side = Math.floor(Math.sqrt(MAX_DENSE_ARRAY_BYTES / 4))
+    throw new ViewerError(
+      'dense-too-large',
+      `Refusing to load a ${nRows}×${nCols} block: its ${fmtCells(cells)} values are ` +
+        `${fmtBytes(cells * 4)} and a browser serves at most ${fmtBytes(MAX_DENSE_ARRAY_BYTES)} ` +
+        'in a single array — a limit of the tab, not of this machine, so more memory and more ' +
+        `patience will not lift it. The largest square block is about ${side}×${side} bins.` +
+        (hint === '' ? '' : ` ${hint}`),
+      { nRows, nCols, cells, bytes: cells * 4, limit: MAX_DENSE_ARRAY_BYTES, where: 'array-limit' },
+    )
+  }
+
   const budget = options.budgetBytes ?? deviceDenseBudgetBytes()
   const bytes = estimateBlockBytes(nRows, nCols)
   if (bytes <= budget) return
@@ -313,21 +333,73 @@ export function forEachPixelSpan(
   onChunk: (chunk: PixelChunk) => void,
   chunkSize: number = PIXEL_CHUNK,
 ): void {
-  if (hi <= lo) return
+  const range = pixelSpanRange(h, lo, hi)
+  if (range === null) return
+  const width = Math.max(1, Math.trunc(chunkSize))
+  for (let at = range[0]; at < range[1]; at += width) {
+    onChunk(readPixelWindow(h, at, Math.min(at + width, range[1])))
+  }
+}
+
+/** What a span asks for: the pixel range, or `null` when it holds none. */
+function pixelSpanRange(h: Hdf5Handle, lo: number, hi: number): [number, number] | null {
+  if (hi <= lo) return null
   // hi + 1 is safe: bin1_offset has one entry per bin plus a terminator.
   const offsets = h.readNumeric('indexes/bin1_offset', lo, hi + 1)
   const p0 = offsets[0]
   const p1 = offsets[offsets.length - 1]
-  if (p1 <= p0) return
+  return p1 <= p0 ? null : [p0, p1]
+}
 
-  const width = Math.max(1, Math.trunc(chunkSize))
+function readPixelWindow(h: Hdf5Handle, at: number, end: number): PixelChunk {
+  const bin1 = h.readInt32('pixels/bin1_id', at, end)
+  const bin2 = h.readInt32('pixels/bin2_id', at, end)
+  const count = h.readNumeric('pixels/count', at, end)
+  return { bin1, bin2, count, length: count.length }
+}
+
+/** How a caller watches, and interrupts, a walk over a span of pixels. */
+export interface SpanScanOptions {
+  chunkSize?: number
+  /** Polled between windows; `true` abandons the walk where it stands. */
+  cancelled?: () => boolean
+  /** Pixels read so far, and how many there are in this span. */
+  onProgress?: (done: number, total: number) => void
+}
+
+/**
+ * The same walk, watched — and therefore interruptible.
+ *
+ * Identical to {@link forEachPixelSpan} in what it reads and in what order; the
+ * difference is the `await` between windows. That is not politeness, it is the
+ * whole of what makes a cancel work: the cancel arrives as a message, and a
+ * synchronous loop never lets the message queue run however many microtasks it
+ * awaits (`../async`). A read that can take twenty seconds has to be one a
+ * person can call off, and cannot report how far along it is unless it stops
+ * between windows to say so.
+ *
+ * @returns `false` when it stopped early because the caller said so.
+ */
+export async function forEachPixelSpanAsync(
+  h: Hdf5Handle,
+  lo: number,
+  hi: number,
+  onChunk: (chunk: PixelChunk) => void,
+  options: SpanScanOptions = {},
+): Promise<boolean> {
+  const range = pixelSpanRange(h, lo, hi)
+  if (range === null) return true
+  const [p0, p1] = range
+  const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
+  const total = p1 - p0
   for (let at = p0; at < p1; at += width) {
+    if (options.cancelled?.() === true) return false
     const end = Math.min(at + width, p1)
-    const bin1 = h.readInt32('pixels/bin1_id', at, end)
-    const bin2 = h.readInt32('pixels/bin2_id', at, end)
-    const count = h.readNumeric('pixels/count', at, end)
-    onChunk({ bin1, bin2, count, length: count.length })
+    onChunk(readPixelWindow(h, at, end))
+    options.onProgress?.(end - p0, total)
+    await yieldToEventLoop()
   }
+  return true
 }
 
 /**

@@ -52,6 +52,19 @@ describe('rootTable', () => {
     // the file lands on, which is `contigs` there and `genomes` on a metacool.
     expect(rootTable(state({ view: 'whole' }), 'contigs')).toBe('contigs')
     expect(rootTable(state({ view: 'whole' }), 'genomes')).toBe('genomes')
+    // And the metagenome's scan is the same kind of thing: a picture of the
+    // file rather than of a row in either table.
+    expect(rootTable(state({ view: 'overview' }), 'genomes')).toBe('genomes')
+  })
+
+  it('sends a selection back to the table it was ticked in', () => {
+    expect(rootTable(state({ view: 'selection', genomes: 'MAG_1,MAG_2' }), 'contigs')).toBe(
+      'genomes',
+    )
+    expect(rootTable(state({ view: 'selection', regions: 'I,II' }), 'genomes')).toBe('contigs')
+    // Nothing ticked is not a selection; it falls through to the file default,
+    // and the shell redirects it to the whole-file view anyway.
+    expect(rootTable(state({ view: 'selection' }), 'genomes')).toBe('genomes')
   })
 
   it('keeps a cooler on its chromosomes, since it has no genome to carry', () => {

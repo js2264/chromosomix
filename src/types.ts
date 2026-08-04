@@ -194,7 +194,24 @@ export interface Separator {
 // View state (spec §5.5)
 // ---------------------------------------------------------------------------
 
-export type ViewKind = 'genomes' | 'contigs' | 'genome' | 'pair' | 'region' | 'whole'
+/**
+ * `overview` is the whole-metagenome scan (§7.3), and it is a view state like
+ * any other. It used to be a mode the shell held beside the state, which made it
+ * the one landing view of a file that had no link, no back button and no place
+ * in the history — three things its two neighbours in the root menu, the genomes
+ * and contigs tables, have always had. Being a state costs it nothing: the scan
+ * is still gated behind a click, so a shared `view=overview` link opens the gate
+ * rather than a full pass over someone else's file.
+ */
+export type ViewKind =
+  | 'genomes'
+  | 'contigs'
+  | 'genome'
+  | 'pair'
+  | 'region'
+  | 'whole'
+  | 'overview'
+  | 'selection'
 
 export interface ViewState {
   /** The full URI, `file` or `file::group`. */
@@ -215,8 +232,31 @@ export interface ViewState {
    * either contig's own square map. Absent means the region is on-diagonal.
    */
   region2?: string
-  /** Aggregation level inside a genome view. */
-  level?: 'bin' | 'contig'
+  /**
+   * The genomes a `selection` view is of, comma-joined, in the order ticked.
+   *
+   * The plural of {@link genome}, and it makes the pair view a special case
+   * rather than a separate thing: `genomes=a,b` is the same picture `pair`
+   * shows, plus each one's own map on the diagonal. Comma because that is what
+   * the CLI's `--genomes` takes and what a reader would type; genome and contig
+   * names are ASCII and do not contain one.
+   */
+  genomes?: string
+  /** The contigs a `selection` view is of — the plural of {@link region}. */
+  regions?: string
+  /**
+   * What one row of the matrix is.
+   *
+   * `bin` and `contig` are the aggregation levels of a genome, pair, region or
+   * whole view; `genome` is the overview's coarser axis, which those views have
+   * no meaning for. One key rather than two because it is one question — what
+   * are the axes made of — and because a state with `level` *and* `axis` in it
+   * would have two ways to say the same thing on the views that share a word.
+   * Each view reads it through its own accessor (`matrixLevel`,
+   * `overviewLevel`), which is where a value that view has no use for is
+   * translated to the one it lands on.
+   */
+  level?: 'bin' | 'contig' | 'genome'
   /**
    * Multiply counts by their bin weights — cooler's balanced matrix (§6.4).
    *

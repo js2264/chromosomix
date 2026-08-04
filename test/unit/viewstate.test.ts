@@ -10,8 +10,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   differsOnlyInScale,
+  matrixLevel,
+  overviewLevel,
   parseViewState,
   SCALE_KEYS,
+  selectionOf,
   serialiseViewState,
   ViewStore,
   viewStateEquals,
@@ -48,6 +51,14 @@ const CASES: ViewState[] = [
     region2: 'NODE_3115_len_927651',
   },
   { uri: 'weird&name=with?chars.metacool', view: 'genomes', vmax: 1e-7 },
+  // The whole-metagenome scan. It is a view state like the two tables beside it
+  // in the root menu, which is what gives it a link, a history entry and a back
+  // button; it was a mode the shell held, and had none of the three.
+  { uri: 'Hum53.metacool', view: 'overview', level: 'genome' },
+  // Several genomes as one map — the plural of `view=genome`, and what makes
+  // the pair view a special case of something rather than a thing of its own.
+  { uri: 'Hum53.metacool', view: 'selection', genomes: 'MAG_1,MAG_2,MAG_7' },
+  { uri: 'yeast.cool', view: 'selection', regions: 'I,II,XVI' },
 ]
 
 describe('serialiseViewState / parseViewState', () => {
@@ -162,6 +173,76 @@ describe('the clip in the hash', () => {
     const store = new ViewStore({ uri: 'a', view: 'whole', vmin: -4, vmax: -2 })
     store.patch({ vmin: undefined, vmax: undefined })
     expect(store.state).toStrictEqual({ uri: 'a', view: 'whole' })
+  })
+})
+
+describe('the selection a state carries', () => {
+  const state = (partial: Partial<ViewState>): ViewState =>
+    ({ uri: 'a.metacool', view: 'selection', ...partial }) as ViewState
+
+  it('reads genomes and contigs out of their own keys', () => {
+    expect(selectionOf(state({ genomes: 'a,b' }))).toEqual({ kind: 'genome', names: ['a', 'b'] })
+    expect(selectionOf(state({ regions: 'I,II' }))).toEqual({ kind: 'contig', names: ['I', 'II'] })
+  })
+
+  it('is null where a state names none, which is what sends a view home', () => {
+    expect(selectionOf(state({}))).toBeNull()
+    expect(selectionOf(state({ genomes: '' }))).toBeNull()
+    // A trailing comma is a typo, not a sequence called `''`.
+    expect(selectionOf(state({ genomes: 'a,' }))).toEqual({ kind: 'genome', names: ['a'] })
+  })
+
+  it('resolves a hash that names both, rather than refusing it', () => {
+    // Genomes win: the coarser choice, and a link that says two things should
+    // land somewhere rather than nowhere.
+    expect(selectionOf(state({ genomes: 'a', regions: 'I' }))).toEqual({
+      kind: 'genome',
+      names: ['a'],
+    })
+  })
+
+  it('survives a name with spaces around it, which a pasted list has', () => {
+    expect(selectionOf(state({ genomes: 'a, b ,c' }))).toEqual({
+      kind: 'genome',
+      names: ['a', 'b', 'c'],
+    })
+  })
+})
+
+describe('the level, which two vocabularies share one key for', () => {
+  const state = (level?: 'bin' | 'contig' | 'genome'): ViewState => ({
+    uri: 'a.metacool',
+    view: 'overview',
+    ...(level === undefined ? {} : { level }),
+  })
+
+  it('gives a bin-axis view bins unless the state says contigs', () => {
+    expect(matrixLevel(state())).toBe('bin')
+    expect(matrixLevel(state('bin'))).toBe('bin')
+    expect(matrixLevel(state('contig'))).toBe('contig')
+  })
+
+  it('gives the overview contigs unless the state says genomes', () => {
+    expect(overviewLevel(state())).toBe('contig')
+    expect(overviewLevel(state('contig'))).toBe('contig')
+    expect(overviewLevel(state('genome'))).toBe('genome')
+  })
+
+  // The hash is untrusted and the key is shared, so each view meets a value it
+  // has no axis for. It lands on that view's default rather than being refused:
+  // the rest of the link still names a place, and showing it is closer to what
+  // was asked for than an error or the genomes table.
+  it('lands each view on its own default for the other one`s value', () => {
+    expect(matrixLevel(state('genome'))).toBe('bin')
+    expect(overviewLevel(state('bin'))).toBe('contig')
+  })
+
+  it('round-trips level=genome, which only the overview reads', () => {
+    expect(parseViewState('#uri=a&view=overview&level=genome')).toStrictEqual({
+      uri: 'a',
+      view: 'overview',
+      level: 'genome',
+    })
   })
 })
 

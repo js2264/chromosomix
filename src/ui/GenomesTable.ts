@@ -30,7 +30,23 @@ export interface GenomesTableOptions {
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenGenome(name: string): void
-  onOpenPair(rowGenome: string, colGenome: string): void
+  /**
+   * Show every ticked genome as one map — their own on the diagonal, everything
+   * between them off it.
+   *
+   * The plural of {@link onOpenGenome}, and it subsumes what "compare two"
+   * used to do: a pair is a selection of two, plus the two diagonals that make
+   * the off-diagonal block readable.
+   */
+  onOpenSelection(names: string[]): void
+  /**
+   * Open the whole file at once.
+   *
+   * The same place the root crumb's menu leads, offered here as well because
+   * the crumb is a chevron in the corner and this is the screen someone is on
+   * when they wonder whether the whole thing can be seen at once.
+   */
+  onOpenWhole(): void
 }
 
 export class GenomesTable {
@@ -43,31 +59,53 @@ export class GenomesTable {
     this.names = data.table.data['name'] as string[]
 
     const columns = buildColumns(data)
-    const compare = button('compare selected →', () => {
-      const [a, b] = this.table.selection
-      if (a === undefined || b === undefined) return
-      options.onOpenPair(this.names[a], this.names[b])
+    const show = button('show selected →', () => {
+      const rows = this.table.selection
+      if (rows.length > 0) options.onOpenSelection(rows.map((row) => this.names[row]))
     })
-    compare.disabled = true
+    show.disabled = true
+    const all = button('select all', () => this.table.selectAll(), {
+      class: 'btn btn-quiet',
+      title: 'Tick every genome the current filters leave visible',
+    })
+    const none = button('clear', () => this.table.clearSelection(), {
+      class: 'btn btn-quiet',
+      title: 'Untick everything',
+    })
+    none.disabled = true
 
     this.table = new VirtualTable({
       columns,
       rows: Array.from(data.display),
-      maxSelection: 2,
+      selectable: true,
       searchKeys: ['name'],
       searchPlaceholder: 'search genome names…',
       emptyMessage: 'No genomes match these filters.',
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenGenome(this.names[row]),
       onSelect: (rows) => {
-        compare.disabled = rows.length !== 2
-        compare.textContent =
+        show.disabled = rows.length === 0
+        none.disabled = rows.length === 0
+        // Two are named, because two is the comparison this table was built for
+        // and reading "MAG_7 × MAG_12 →" is worth more than a count. Past that
+        // the names would be longer than the button.
+        show.textContent =
           rows.length === 2
-            ? `compare ${this.names[rows[0]]} × ${this.names[rows[1]]} →`
-            : 'compare selected →'
+            ? `show ${this.names[rows[0]]} × ${this.names[rows[1]]} →`
+            : rows.length > 0
+              ? `show ${fmt.int(rows.length)} selected →`
+              : 'show selected →'
       },
     })
-    this.table.addToolbarItem(compare)
+    this.table.addToolbarItem(all)
+    this.table.addToolbarItem(none)
+    this.table.addToolbarItem(show)
+    this.table.addToolbarItem(
+      button('whole genome →', () => options.onOpenWhole(), {
+        class: 'btn',
+        title: 'Every genome at once, as one map',
+      }),
+    )
 
     this.el = el(
       'section',
@@ -79,8 +117,9 @@ export class GenomesTable {
         el('p', {
           class: 'hint',
           text:
-            'Click a genome to open its matrix. Tick two genomes (or ctrl-click) and ' +
-            'compare them to open the inter-genome block — the phage–host, plasmid–host and HGT view.',
+            'Click a genome to open its matrix. Tick any number and show them as one map — ' +
+            'each genome on the diagonal and every block between them off it, which is the ' +
+            'phage–host, plasmid–host and HGT view.',
         }),
       ),
       this.table.el,

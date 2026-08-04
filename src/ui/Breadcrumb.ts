@@ -19,17 +19,18 @@
  */
 
 import { icon } from './icons'
+import { selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { el } from './dom'
 
 /**
- * The three things the root crumb can be.
+ * The four things the root crumb can be.
  *
- * `overview` is not a {@link ViewState} view — it is a mode the shell holds, and
- * it costs a full pixel scan — but it *is* a landing view of the whole file, the
- * same kind of thing as the two tables. It belongs in the picker beside them
- * rather than as a button in the corner of the window, which is where it was and
- * where nothing else about this file lives.
+ * All four are {@link ViewState} views, which is what lets this picker be one
+ * thing: every entry navigates, and the crumb reads the answer back off the
+ * state. `overview` was the exception — a mode the shell held beside the state —
+ * and every place that knew it was routed around the trail rather than through
+ * it.
  */
 export type RootChoice = 'genomes' | 'contigs' | 'overview' | 'whole'
 
@@ -80,8 +81,6 @@ export interface BreadcrumbProps {
    * leaving the view to look at the picker used to be one-way.
    */
   onOpenFile(): void
-  /** The whole-genome view was picked from the root menu. */
-  onShowOverview?(): void
   /** An mmetacool entry was picked; the caller re-opens the file at it. */
   onSelectEntry?(entry: string): void
 }
@@ -103,8 +102,14 @@ export interface BreadcrumbProps {
 export function rootTable(state: ViewState, fallback: 'genomes' | 'contigs'): 'genomes' | 'contigs' {
   if (state.view === 'genomes' || state.view === 'contigs') return state.view
   if (state.view === 'region') return state.genome === undefined ? 'contigs' : 'genomes'
-  // A genome or a pair is by definition below the genomes table; `whole` and the
-  // overview are neither, and keep the file's own default.
+  // A selection leads back to the table it was ticked in, which is the one that
+  // can un-tick it. A `selection` naming nothing is not one, and falls through
+  // to the file's default like the other whole-file views — the shell redirects
+  // it to one of them anyway.
+  const kind = state.view === 'selection' ? selectionOf(state)?.kind : undefined
+  if (kind !== undefined) return kind === 'genome' ? 'genomes' : 'contigs'
+  // A genome or a pair is by definition below the genomes table; `whole` and
+  // `overview` are neither, and keep the file's own default.
   return state.genome === undefined ? fallback : 'genomes'
 }
 
@@ -115,12 +120,8 @@ export class Breadcrumb {
     this.el = el('nav', { class: 'breadcrumb', attrs: { 'aria-label': 'breadcrumb' } })
   }
 
-  /** Whether the shell is showing the whole-genome view over this state. */
-  private overviewActive = false
-
   /** Re-render for a state. Safe to call on every state change. */
-  render(state: ViewState | null, options: { overview?: boolean } = {}): void {
-    this.overviewActive = options.overview === true
+  render(state: ViewState | null): void {
     this.el.replaceChildren()
     if (state === null) {
       this.el.appendChild(el('span', { class: 'crumb current', text: 'open a file' }))
@@ -130,6 +131,23 @@ export class Breadcrumb {
     this.push(this.props.fileLabel, () => this.props.onOpenFile(), false, 'file')
     this.pushEntryPicker()
     this.pushRootPicker(state)
+
+    // A selection hangs off the table it was made in: several genomes are below
+    // the genomes table, several contigs below the contigs one. Named while
+    // there are few enough to read, counted after that — the same rule the
+    // view's own heading follows, so the crumb and the heading agree.
+    const selection = selectionOf(state)
+    if (state.view === 'selection' && selection !== null) {
+      const noun = selection.kind === 'genome' ? 'genomes' : (this.props.contigNoun ?? 'contigs')
+      this.push(
+        selection.names.length <= 3
+          ? selection.names.join(' × ')
+          : `${selection.names.length} ${noun.toLowerCase()}`,
+        undefined,
+        true,
+      )
+      return
+    }
 
     if (state.view === 'pair' && state.genome !== undefined && state.genome2 !== undefined) {
       this.push(state.genome, () =>
@@ -186,16 +204,12 @@ export class Breadcrumb {
   private pushRootPicker(state: ViewState): void {
     const { rootChoices, rootKind } = this.props
     const table: 'genomes' | 'contigs' = rootTable(state, rootKind)
-    // `whole` is a view state where `overview` is a shell mode, but both are
-    // landing views of the whole file and both belong in this crumb: leaving it
-    // out left the cooler's whole-genome view labelled "Chromosomes", so the
-    // only sign anything had happened was the heatmap itself.
-    const active: RootChoice = this.overviewActive
-      ? 'overview'
-      : state.view === 'whole'
-        ? 'whole'
-        : table
-    const atRoot = this.overviewActive || state.view === table || state.view === 'whole'
+    // The whole-file views belong in this crumb as much as the tables do:
+    // leaving them out left them labelled "Chromosomes", so the only sign
+    // anything had happened was the heatmap itself.
+    const whole = state.view === 'whole' || state.view === 'overview' ? state.view : null
+    const active: RootChoice = whole ?? table
+    const atRoot = whole !== null || state.view === table
 
     this.separator()
 
@@ -208,7 +222,9 @@ export class Breadcrumb {
       text: labelOf(active),
       title: `Back to ${labelOf(active)}`,
     })
-    label.addEventListener('click', () => this.chooseRoot(active, state))
+    label.addEventListener('click', () =>
+      this.props.onNavigate({ uri: state.uri, view: active }),
+    )
 
     if (rootChoices.length < 2) {
       this.el.appendChild(label)
@@ -237,7 +253,7 @@ export class Breadcrumb {
       } else {
         item.addEventListener('click', () => {
           menu.classList.add('hidden')
-          this.chooseRoot(kind, state)
+          this.props.onNavigate({ uri: state.uri, view: kind })
         })
       }
       menu.appendChild(item)
@@ -257,12 +273,6 @@ export class Breadcrumb {
       }
     })
     this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))
-  }
-
-  /** Route a root choice: two of them are view states, one is a shell mode. */
-  private chooseRoot(kind: RootChoice, state: ViewState): void {
-    if (kind === 'overview') this.props.onShowOverview?.()
-    else this.props.onNavigate({ uri: state.uri, view: kind })
   }
 
   /** The active root, as a label — the shell uses it for the greyed entries. */

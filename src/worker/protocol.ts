@@ -260,6 +260,24 @@ export interface MatrixResult {
    */
   genomeBoundaries?: boolean
   level: 'bin' | 'contig' | 'genome'
+  /**
+   * Bins summed into one cell, where the block was read at a coarser bin size
+   * than the file stores (`metacooler/pooling.ts`). Absent, or 1, for the
+   * ordinary read.
+   *
+   * The axes are then *bins of that coarser grid*: a cell is `binsPerCell` bins
+   * of one contig, a run of cells is that contig, and every coordinate the UI
+   * computes is right if it multiplies the file's bin size by this. Reported
+   * rather than assumed, so the picture and the summary above it cannot claim
+   * two different resolutions.
+   */
+  binsPerCell?: number
+  /**
+   * `false` when a pooled cell may straddle two contigs, which happens only on
+   * an axis with more contigs than cells. The coordinates are then approximate
+   * near the boundaries and the view says so.
+   */
+  poolSnapped?: boolean
 }
 
 export interface OverviewResult {
@@ -323,6 +341,7 @@ export interface ResultMap {
   range: ParsedRange
   matrix: MatrixResult
   aggregate: MatrixResult
+  selection: MatrixResult
   overview: OverviewResult
   overviewSidecar: OverviewResult
   validateDeep: DeepValidation
@@ -350,6 +369,12 @@ export type WorkerRequest =
   // encoding, and every view but the whole-genome one already knows the answer
   // from the view it is — a genome view is one genome, a region view is one
   // contig of one.
+  // `binsPerCell` reads the block at a coarser bin size: every N consecutive
+  // bins of a contig summed into one cell, accumulated from the stored pixels
+  // rather than from a block that would have to exist first
+  // (`metacooler/pooling.ts`). 1 or absent is the ordinary dense read. The
+  // caller chooses it because the caller is what has to label the axes in the
+  // matching units, and one number cannot be derived twice and agree.
   | {
       id: number
       kind: 'matrix'
@@ -358,6 +383,7 @@ export type WorkerRequest =
       balance?: boolean
       budgetBytes?: number
       genomes?: boolean
+      binsPerCell?: number
     }
   | {
       id: number
@@ -368,6 +394,19 @@ export type WorkerRequest =
       balance?: boolean
       budgetBytes?: number
       genomes?: boolean
+    }
+  // One map of several chosen sequences: their own maps on the diagonal and
+  // everything between them off it. Named rather than given as bin extents,
+  // because the names are what the URL carries and what the axis is labelled
+  // with — resolving them in the worker keeps one answer to "which bins is
+  // `MAG_7`", the reader's.
+  | {
+      id: number
+      kind: 'selection'
+      unit: 'genome' | 'contig'
+      names: string[]
+      balance?: boolean
+      binsPerCell?: number
     }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
