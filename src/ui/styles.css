@@ -525,6 +525,12 @@ p {
   width: 100%;
   cursor: grab;
   outline: none;
+  /* The same declaration `.heatmap-canvas` and `.lane-canvas` carry, and for
+     the same reason: without it the UA claims the first touch drag for page
+     scrolling and cancels the pointer, so a finger on a track scrolls the page
+     instead of panning the view — and the cancelled press then arrives as a
+     click. */
+  touch-action: none;
 }
 
 .browser-canvas:active {

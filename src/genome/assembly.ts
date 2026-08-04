@@ -214,13 +214,16 @@ export function parseLocus(
   }
 
   if (/^\d+$/.test(span)) {
-    const at = Math.max(0, Number(span) - 1)
+    // Clamped *before* the window is built, not after. A position past the end
+    // of the sequence — one mistyped digit is enough — would otherwise produce
+    // `start > end`, which `Scale.setDomain` refuses with a `RangeError`: from
+    // the locus box that is an uncaught throw, and from a link it is a throw
+    // inside the view's constructor and a blank page.
+    const at = Math.min(Math.max(0, Number(span) - 1), Math.max(0, contig.length - 1))
     const half = Math.max(500, Math.round(contig.length / 200))
-    return {
-      contig: contig.name,
-      start: Math.max(0, at - half),
-      end: Math.min(contig.length, at + half),
-    }
+    const start = Math.max(0, at - half)
+    const end = Math.min(contig.length, Math.max(at + half, start + 1))
+    return { contig: contig.name, start, end }
   }
   return null
 }

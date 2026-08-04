@@ -54,6 +54,7 @@ import {
   scaleForDpi,
   type ExportFormat,
 } from './export'
+import { isMac } from './commands'
 import { iconButton } from './icons'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
@@ -137,7 +138,7 @@ export class BrowserView {
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
-    | { mode: 'reorder'; entry: AnnotationEntry; y: number }
+    | { mode: 'reorder'; entry: AnnotationEntry; over: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
     | null = null
   /** What {@link paintOverlayControls} last built, so a pan does not rebuild it. */
@@ -771,17 +772,21 @@ export class BrowserView {
     // Rebuilt only when something they *describe* has changed — never on a pan
     // frame. These are inputs: replacing the element under a caret loses the
     // half-typed number in it, and a pan redraws sixty times a second.
+    // Deliberately *not* including the limits. They are what the two boxes edit,
+    // so a commit would always fail the guard and rebuild the row — removing the
+    // very input the change event came from, taking the focus with it and, since
+    // the pointer is on a control rather than on the lane, hiding the row.
+    // The numbers are written back below instead, into the boxes that are
+    // already there and are not being typed into.
     const signature = this.lanes
       .map((lane) => {
         const target = lane.profiles[0]?.entry ?? lane.entry
-        const limits = target.style.limits
         return [
           target.id,
           target.kind,
           lane.frame.acrossFrom,
           lane.frame.thickness,
           target.style.group,
-          limits.auto ? 'auto' : `${limits.min}:${limits.max}`,
         ].join('/')
       })
       .join('|')
@@ -807,14 +812,37 @@ export class BrowserView {
     // until a hand is on its way to one of them — and stay revealed while one
     // has the focus, or tabbing into a range box would hide it.
     const rows = this.overlays.children
+    const groups = this.groupRanges()
     for (let i = 0; i < rows.length; i++) {
       const lane = this.lanes[i]
+      const row = rows[i]
       const over =
         this.hover !== null &&
         lane !== undefined &&
         this.hover.y >= lane.frame.acrossFrom &&
         this.hover.y <= lane.frame.acrossFrom + lane.frame.thickness
-      rows[i].classList.toggle('is-active', over || rows[i].contains(document.activeElement))
+      row.classList.toggle('is-active', over || row.contains(document.activeElement))
+      if (lane === undefined) continue
+      // What the boxes say, from what the lane is actually drawn with — so an
+      // auto-scaled track's numbers follow the view, and the `auto` button
+      // reflects the store. Never into a box that has the caret: the reader is
+      // mid-number, and half of one is not a value to overwrite them with.
+      const first = lane.profiles[0]
+      const target = first?.entry ?? lane.entry
+      if (target.kind !== 'track') continue
+      const extent =
+        target.style.group === ''
+          ? (first?.profile.extent ?? null)
+          : (groups.get(target.style.group) ?? first?.profile.extent ?? null)
+      const limits = resolveLimits(target.style.limits, extent)
+      const boxes = row.querySelectorAll<HTMLInputElement>('.input-tiny')
+      if (boxes[0] !== undefined && boxes[0] !== document.activeElement) {
+        boxes[0].value = formatLimit(limits.min)
+      }
+      if (boxes[1] !== undefined && boxes[1] !== document.activeElement) {
+        boxes[1].value = formatLimit(limits.max)
+      }
+      row.querySelector('.btn-tiny')?.classList.toggle('is-on', target.style.limits.auto)
     }
   }
 
@@ -837,7 +865,7 @@ export class BrowserView {
       class: 'input input-tiny',
       type: 'text',
       value: formatLimit(limits.max),
-      title: 'Top of this track’s value axis. ⌘-scroll over the lane moves it too.',
+      title: `Top of this track’s value axis. ${CEILING_LABEL} over the lane moves it too.`,
     })
     const commit = (): void => {
       const low = Number(min.value)
@@ -851,8 +879,12 @@ export class BrowserView {
         if (event.key === 'Enter') commit()
       })
     }
+    // Read from the store at click time, not from the entry this row was built
+    // with: the row now outlives changes to the limits, so a captured `auto`
+    // would go stale the first time anything else moved them.
     const auto = button('auto', () => {
-      this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: !limits.auto } })
+      const current = this.props.store.byId(entry.id)?.style.limits ?? limits
+      this.props.store.restyle(entry.id, { limits: { ...current, auto: !current.auto } })
     }, {
       class: `btn btn-tiny${limits.auto ? ' is-on' : ''}`,
       title: 'Scale to whatever is in view, and follow it as the view moves',
@@ -1052,6 +1084,11 @@ export class BrowserView {
   // Gestures
   // -------------------------------------------------------------------------
 
+  /** The lane an entry is the host of, so a group moves as one. */
+  private laneOf(entry: AnnotationEntry): Lane | undefined {
+    return this.lanes.find((lane) => lane.entry.id === entry.id)
+  }
+
   private laneAt(y: number): { lane: Lane; onBorder: boolean } | null {
     for (const lane of this.lanes) {
       const offset = y - lane.frame.acrossFrom
@@ -1097,7 +1134,11 @@ export class BrowserView {
         if (drag.onBorder && drag.lane !== null) {
           this.drag = { mode: 'resize', entry: drag.lane.entry, y0: drag.y0, size: drag.lane.entry.style.size }
         } else if (Math.abs(dy) > Math.abs(dx) && drag.lane !== null) {
-          this.drag = { mode: 'reorder', entry: drag.lane.entry, y }
+          this.drag = {
+            mode: 'reorder',
+            entry: drag.lane.entry,
+            over: this.lanes.indexOf(drag.lane),
+          }
         } else if (event.altKey) {
           this.drag = { mode: 'select', x0: drag.x0, x }
         } else {
@@ -1124,16 +1165,26 @@ export class BrowserView {
       // Reordering: the lane follows the pointer through the stack, one slot at
       // a time, so the list is always in the order it looks like it is in.
       //
-      // Within the dragged row's *own card*, because `move` indexes that list —
-      // and both cards now put lanes in this stack, so `forCard('linear')` would
-      // silently do nothing for a row from the other one.
-      const over = this.lanes.find((lane) => y < lane.frame.acrossFrom + lane.frame.thickness)
-      if (over !== undefined && over.entry.card === drag.entry.card) {
-        const list = this.props.store.forCard(drag.entry.card)
-        const from = list.findIndex((row) => row.id === drag.entry.id)
-        const to = list.findIndex((row) => row.id === over.entry.id)
-        if (from >= 0 && to >= 0 && from !== to) this.props.store.move(drag.entry.id, to)
-      }
+      // Acted on once per lane *crossed*, not once per pointer move. Without
+      // that an overlay group thrashes: moving its host past its own members
+      // only re-elects a host, the two orders draw identically, and the move
+      // fires again on every event — each one a `sessionStorage` write and a
+      // rebuild of the Groups card.
+      const index = this.lanes.findIndex(
+        (lane) => y < lane.frame.acrossFrom + lane.frame.thickness,
+      )
+      if (index < 0 || index === drag.over) return
+      drag.over = index
+      const over = this.lanes[index]
+      if (over.entry.card !== drag.entry.card || over.entry.id === drag.entry.id) return
+      const list = this.props.store.forCard(drag.entry.card)
+      const to = list.findIndex((row) => row.id === over.entry.id)
+      if (to < 0) return
+      // The whole lane moves, which for a group drawn in overlay mode is every
+      // member of it: they share one slot on screen and splitting them would
+      // put half a group somewhere else.
+      const members = [drag.entry, ...(this.laneOf(drag.entry)?.overlaid ?? [])]
+      members.forEach((member, offset) => this.props.store.move(member.id, to + offset))
     }
 
     const onUp = (event: PointerEvent): void => {
@@ -1172,7 +1223,14 @@ export class BrowserView {
       // ⌘-scroll over a lane is this view's own gesture: it raises or lowers
       // *that track's* ceiling, which in a genome browser is the adjustment a
       // reader makes constantly and which no map has an analogue for.
-      if (event.metaKey || event.ctrlKey) {
+      //
+      // ⌘ on a Mac and Alt elsewhere, and **never** Ctrl. A trackpad pinch is
+      // delivered as a `wheel` event with `ctrlKey` set, on every platform, so
+      // taking Ctrl here would swallow every pinch and silently run away with a
+      // track's ceiling instead of zooming — and on Windows and Linux it would
+      // shadow the browser's own zoom as well. Left alone, a pinch falls through
+      // to the zoom below, which is what a pinch should do.
+      if (CEILING_MODIFIER(event)) {
         const hit = this.laneAt(y)
         if (hit === null) return
         event.preventDefault()
@@ -1215,8 +1273,16 @@ export class BrowserView {
 
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
+    // A cancel means the gesture was taken *away*, not that it finished:
+    // treating it as a release fires the pending click — a navigation nobody
+    // asked for — or commits a half-drawn zoom selection.
+    const onCancel = (): void => {
+      this.drag = null
+      canvas.classList.remove('grabbing')
+      this.schedule()
+    }
     canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('pointerleave', onLeave)
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('dblclick', onDouble)
@@ -1225,7 +1291,7 @@ export class BrowserView {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('dblclick', onDouble)
@@ -1478,8 +1544,17 @@ export class BrowserView {
     this.searchList.classList.remove('hidden')
   }
 
+  /**
+   * Put the hit list away, and *empty* it.
+   *
+   * Hiding alone left the buttons live, and Enter reaches the first of them
+   * through a `querySelector` that does not care whether the list is on screen:
+   * Escape then looked like a cancel and behaved like a deferred jump to a hit
+   * nobody could see.
+   */
   private closeSearch(): void {
     this.searchList.classList.add('hidden')
+    this.searchList.replaceChildren()
   }
 }
 
@@ -1488,3 +1563,10 @@ const CAPTION_HEIGHT = 18
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220
+
+/** Which modifier means "move this track's ceiling" — see the wheel handler. */
+const CEILING_MODIFIER = (event: WheelEvent): boolean =>
+  isMac() ? event.metaKey && !event.ctrlKey : event.altKey
+
+/** What to call it in a tooltip, on this platform. */
+const CEILING_LABEL = isMac() ? '⌘-scroll' : 'Alt-scroll'
