@@ -1,0 +1,93 @@
+/**
+ * Saving hand-drawn marks, and reading them back.
+ *
+ * The property worth having is the round trip: what the Manual card writes must
+ * be something this app's own loader sniffs, parses and draws — otherwise
+ * "export" means "a file, somewhere, in a format nobody promised". So these
+ * tests do not assert on the text alone; they push it back through
+ * `sniffFormat` and the parsers the annotation cards use.
+ *
+ * BED is half-open, so a mark on one base is `[bp, bp + 1)`. That is the whole
+ * of the coordinate contract, and it is the one thing a careless writer gets
+ * wrong in a way no reader complains about.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import { formatMarks, marksFor } from '@/annotations/export'
+import type { ManualMark } from '@/annotations/manual'
+import { parseBed, parseBedpe, sniffFormat } from '@/annotations/parse'
+
+const MARKS: ManualMark[] = [
+  { id: 'm1', kind: 'line', axis: 'vertical', at: { contig: 'I', bp: 120_000 }, colour: '#111318' },
+  { id: 'm2', kind: 'line', axis: 'both', at: { contig: 'XIII-syn40', bp: 964_431 }, colour: '#c0392b' },
+  {
+    id: 'm3',
+    kind: 'arrowhead',
+    a: { contig: 'I', bp: 1_000 },
+    b: { contig: 'IV', bp: 2_000 },
+    colour: '#1f5fa9',
+  },
+]
+
+describe('marksFor', () => {
+  it('sends each kind to the file that can hold it', () => {
+    expect(marksFor(MARKS, 'bed').map((mark) => mark.id)).toEqual(['m1', 'm2'])
+    expect(marksFor(MARKS, 'bedpe').map((mark) => mark.id)).toEqual(['m3'])
+  })
+})
+
+describe('formatMarks', () => {
+  it('writes lines as BED, one base wide and half-open', () => {
+    const text = formatMarks(MARKS, 'bed')
+    const rows = text.trim().split('\n').filter((line) => !line.startsWith('#'))
+    expect(rows).toEqual(['I\t120000\t120001\tvertical\t0\t.', 'XIII-syn40\t964431\t964432\tboth\t0\t.'])
+  })
+
+  it('writes loops as BEDPE, both anchors on their own contig', () => {
+    const text = formatMarks(MARKS, 'bedpe')
+    const rows = text.trim().split('\n').filter((line) => !line.startsWith('#'))
+    expect(rows).toEqual(['I\t1000\t1001\tIV\t2000\t2001\tm3\t0\t.\t.'])
+  })
+
+  it('carries where it came from, as a comment every reader skips', () => {
+    const text = formatMarks(MARKS, 'bed', { file: 'yeast.cool', created: '20260804-160000' })
+    expect(text.split('\n')[0]).toBe(
+      '# metacooler manual annotations from yeast.cool on 20260804-160000',
+    )
+  })
+
+  it('writes a header and no rows rather than nothing at all', () => {
+    const text = formatMarks([], 'bed')
+    expect(text.trim().split('\n')).toEqual(['# metacooler manual annotations'])
+  })
+})
+
+describe('the round trip', () => {
+  it('comes back through the sniffer as the format it claims', () => {
+    expect(sniffFormat(formatMarks(MARKS, 'bed'), 'marks.bed')).toBe('bed')
+    expect(sniffFormat(formatMarks(MARKS, 'bedpe'), 'marks.bedpe')).toBe('bedpe')
+  })
+
+  it('reloads as the same coordinates the marks were drawn at', () => {
+    // `contig` is an index into `contigs`, which is how both parsers hand back
+    // names: the file's own order, resolved once rather than per feature.
+    const features = parseBed(formatMarks(MARKS, 'bed'), 'marks.bed')
+    expect(features.length).toBe(2)
+    expect(features.contigs[features.contig[0]]).toBe('I')
+    expect(features.start[0]).toBe(120_000)
+    expect(features.end[0]).toBe(120_001)
+    expect(features.contigs[features.contig[1]]).toBe('XIII-syn40')
+    expect(features.start[1]).toBe(964_431)
+    // The axis rides in the name column, so a re-imported line still knows
+    // which way it was drawn.
+    expect(features.name).toEqual(['vertical', 'both'])
+
+    const pairs = parseBedpe(formatMarks(MARKS, 'bedpe'))
+    expect(pairs.length).toBe(1)
+    expect(pairs.contigs[pairs.contig1[0]]).toBe('I')
+    expect(pairs.start1[0]).toBe(1_000)
+    expect(pairs.contigs[pairs.contig2[0]]).toBe('IV')
+    expect(pairs.start2[0]).toBe(2_000)
+  })
+})

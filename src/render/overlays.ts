@@ -243,13 +243,10 @@ export function drawManualLines(
   frame: OverlayFrame,
   axes: OverlayAxes,
   lines: readonly ManualLine[],
-  font: string,
-  halo: string,
 ): void {
   if (lines.length === 0) return
   ctx.save()
   ctx.lineWidth = Math.max(1 / frame.dpr, 1)
-  ctx.font = font
   for (const line of lines) {
     ctx.strokeStyle = line.colour
     ctx.fillStyle = line.colour
@@ -265,9 +262,6 @@ export function drawManualLines(
           ctx.moveTo(x, frame.data.y)
           ctx.lineTo(x, frame.data.y + frame.data.height)
           ctx.stroke()
-          if (line.label !== '') {
-            label(ctx, line.label, x + 3, frame.data.y + 10, halo, 'left')
-          }
         }
       }
     }
@@ -280,10 +274,6 @@ export function drawManualLines(
           ctx.moveTo(frame.data.x, y)
           ctx.lineTo(frame.data.x + frame.data.width, y)
           ctx.stroke()
-          // Only when there is no vertical rule to have already written it.
-          if (line.label !== '' && !wantsVertical) {
-            label(ctx, line.label, frame.data.x + 4, y - 4, halo, 'left')
-          }
         }
       }
     }
@@ -315,14 +305,12 @@ export function drawArrowheads(
   frame: OverlayFrame,
   axes: OverlayAxes,
   marks: readonly ManualArrowhead[],
-  font: string,
   halo: string,
 ): void {
   const { rows, cols } = axes
   if (marks.length === 0 || rows === null || cols === null) return
 
   ctx.save()
-  ctx.font = font
   ctx.lineJoin = 'round'
   for (const mark of marks) {
     const row = rows.locusToUnit(mark.a.contig, mark.a.bp)
@@ -361,31 +349,7 @@ export function drawArrowheads(
     ctx.stroke()
     ctx.fillStyle = mark.colour
     ctx.fill()
-
-    if (mark.label !== '') {
-      ctx.fillStyle = mark.colour
-      label(ctx, mark.label, baseX + dx * 3, baseY + dy * 3, halo, above ? 'left' : 'right')
-    }
   }
   ctx.restore()
 }
 
-/** A small label with a halo, so it survives whatever it is drawn over. */
-function label(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  halo: string,
-  align: CanvasTextAlign,
-): void {
-  ctx.save()
-  ctx.textAlign = align
-  ctx.textBaseline = 'middle'
-  ctx.strokeStyle = halo
-  ctx.lineWidth = 3
-  ctx.lineJoin = 'round'
-  ctx.strokeText(text, x, y)
-  ctx.fillText(text, x, y)
-  ctx.restore()
-}

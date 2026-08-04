@@ -817,7 +817,7 @@ class App {
         return panel.armPicking(onPoint, onEnd)
       },
     }
-    this.manualCard = new ManualCard({ store: manual, picker })
+    this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
 
     // The demo map ships ten annotation files on its own assembly. Offering
     // them as one click is the difference between a viewer that demonstrably

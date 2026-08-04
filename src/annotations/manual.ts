@@ -25,7 +25,6 @@ export interface ManualLine {
   axis: LineAxis
   at: ManualPoint
   colour: string
-  label: string
 }
 
 /**
@@ -45,7 +44,6 @@ export interface ManualArrowhead {
   /** Where it sits on the column axis. */
   b: ManualPoint
   colour: string
-  label: string
 }
 
 export type ManualMark = ManualLine | ManualArrowhead

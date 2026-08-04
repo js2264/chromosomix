@@ -323,7 +323,6 @@ describe('manual marks', () => {
       axis: 'vertical',
       at: { contig: 'I', bp: 100 },
       colour: '#111318',
-      label: '',
     }
     store.add(line)
     store.add({
@@ -332,7 +331,6 @@ describe('manual marks', () => {
       a: { contig: 'I', bp: 1 },
       b: { contig: 'I', bp: 2 },
       colour: '#c0392b',
-      label: 'loop',
     })
     expect(store.lines).toHaveLength(1)
     expect(store.arrowheads).toHaveLength(1)
@@ -351,11 +349,17 @@ describe('manual marks', () => {
       axis: 'both',
       at: { contig: 'IV', bp: 400_000 },
       colour: '#111318',
-      label: 'centromere',
     })
     const second = new ManualStore(uri)
     expect(second.marks).toHaveLength(1)
-    expect(second.lines[0].label).toBe('centromere')
+    // Everything a mark is: where it is, what it looks like, and which one it
+    // is. A caption used to be the fourth and is not a thing a mark carries.
+    expect(second.lines[0]).toMatchObject({
+      kind: 'line',
+      axis: 'both',
+      at: { contig: 'IV', bp: 400_000 },
+      colour: '#111318',
+    })
   })
 })
 

@@ -740,6 +740,37 @@ p {
   padding: 0.2rem;
 }
 
+/* A right-click menu is the breadcrumb's menu with more in it: wider, because
+   its rows are sentences rather than table names, and with a hint column for
+   the coordinate a row would act on. */
+.context-menu {
+  min-width: 13rem;
+  max-width: 22rem;
+}
+
+.context-menu .crumb-menu-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.context-menu-hint {
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  white-space: nowrap;
+}
+
+/* Names the group under it; not a target. */
+.context-menu-head {
+  padding: 0.3rem 0.5rem 0.15rem;
+  font-size: var(--step--2, 0.72rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
 /* Shown, not offered: a cooler has no genomes, and hiding the entry would raise
    the question this answers. */
 .crumb-menu-item.disabled {
@@ -1407,6 +1438,27 @@ p {
 }
 
 .panel-head .plot-option-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Resolution, format, and the button that acts on both, in that reading order.
+   A grid rather than a flex row, for the reason `.clip-boxes` is one: the two
+   selects are bounded by their tracks instead of by the width a `<select>` would
+   like to be, and the button keeps the width of its own label however narrow the
+   column is dragged. */
+.export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  /* Stretched, not centred: a `<select>` and a `<button>` disagree about their
+     padding by half a pixel, and three controls that are read as one row should
+     share their top and bottom edges rather than only their centre line. */
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+/* In the panel header there is no column to divide, so the row is just a row. */
+.panel-head .export-row {
   display: flex;
   flex-wrap: wrap;
 }
@@ -2948,11 +3000,6 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.manual-label {
-  width: 100%;
-  font-size: var(--step--2, 0.72rem);
 }
 
 /* The one-click offer, when the open map has annotations published beside it.

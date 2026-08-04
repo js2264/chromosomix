@@ -20,7 +20,9 @@ import {
   type ManualPoint,
   type ManualStore,
 } from '../annotations/manual'
+import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
 import { button, el } from './dom'
+import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { iconButton } from './icons'
 
 /**
@@ -54,6 +56,8 @@ export interface MapPicker {
 export interface ManualCardProps {
   store: ManualStore
   picker: MapPicker
+  /** The open file's short name, for what a saved file is called. */
+  fileLabel: string
 }
 
 export class ManualCard {
@@ -61,8 +65,14 @@ export class ManualCard {
   private readonly list = el('div', { class: 'ann-list' })
   private readonly unsubscribe: () => void
   private readonly buttons: HTMLButtonElement[] = []
+  private readonly formatSelect = el('select', { class: 'select' })
+  private readonly saveButton: HTMLButtonElement
 
   constructor(private readonly props: ManualCardProps) {
+    this.saveButton = button('Save', () => this.save(), {
+      class: 'btn',
+      title: 'Write these marks to a file this app — and bedtools — reads back',
+    })
     this.el = el(
       'section',
       { class: 'card annotation-card' },
@@ -70,6 +80,7 @@ export class ManualCard {
       this.lineForm(),
       this.arrowForm(),
       this.list,
+      this.exportRow(),
     )
     this.unsubscribe = props.store.subscribe(() => this.render())
     this.render()
@@ -107,7 +118,6 @@ export class ManualCard {
         axis: axis.value as LineAxis,
         at: point,
         colour: this.props.store.nextColour(),
-        label: '',
       })
     }
     const typed = button('add', () => {
@@ -155,7 +165,6 @@ export class ManualCard {
         a,
         b,
         colour: this.props.store.nextColour(),
-        label: '',
       })
     }
     const typed = button('add', () => {
@@ -245,7 +254,58 @@ export class ManualCard {
   // The list
   // -------------------------------------------------------------------------
 
+  /**
+   * Saving the marks: a format, and a button — the export row from the
+   * Aesthetics panel, in the card whose contents it writes.
+   *
+   * The dropdown chooses *which marks*, not just which container, because the
+   * two kinds are different objects and there is one standard file for each: a
+   * line is a point on the genome and a loop is a pair of them. Saying so in
+   * the option label is more honest than a single "export" that quietly writes
+   * half of what is on screen.
+   */
+  private exportRow(): HTMLElement {
+    for (const [value, text] of [
+      ['bed', 'lines (BED)'],
+      ['bedpe', 'loops (BEDPE)'],
+    ] as Array<[MarkFormat, string]>) {
+      this.formatSelect.appendChild(el('option', { value, text }))
+    }
+    this.formatSelect.addEventListener('change', () => this.paintSave())
+    return el(
+      'div',
+      { class: 'field field-block manual-export' },
+      el('span', { class: 'field-label', text: 'export' }),
+      el('div', { class: 'export-row' }, this.formatSelect, this.saveButton),
+    )
+  }
+
+  /** Nothing of this kind to write is a disabled button, not an empty file. */
+  private paintSave(): void {
+    const format = this.formatSelect.value as MarkFormat
+    const count = marksFor(this.props.store.marks, format).length
+    this.saveButton.disabled = count === 0
+    this.saveButton.title =
+      count === 0
+        ? `No ${format === 'bed' ? 'lines' : 'loops'} have been drawn yet`
+        : `Write ${count} to a file this app — and bedtools — reads back`
+  }
+
+  private save(): void {
+    const format = this.formatSelect.value as MarkFormat
+    const now = new Date()
+    const text = formatMarks(this.props.store.marks, format, {
+      file: this.props.fileLabel,
+      created: fileStamp(now),
+    })
+    downloadBlob(
+      new Blob([text], { type: 'text/plain' }),
+      `${exportBaseName(this.props.fileLabel)}-marks-${fileStamp(now)}.${format}`,
+    )
+  }
+
   private render(): void {
+    this.paintSave()
     const marks = this.props.store.marks
     if (marks.length === 0) {
       this.list.replaceChildren()
@@ -264,15 +324,9 @@ export class ManualCard {
     const colour = el('input', { class: 'ann-colour', type: 'color', value: mark.colour })
     colour.addEventListener('input', () => this.props.store.update(mark.id, { colour: colour.value }))
 
-    const label = el('input', {
-      class: 'input manual-label',
-      type: 'text',
-      value: mark.label,
-      placeholder: describe(mark),
-    })
-    label.title = 'A caption drawn beside the mark. Empty draws none.'
-    label.addEventListener('change', () => this.props.store.update(mark.id, { label: label.value }))
-
+    // A colour, where it is, and a way to remove it. A mark says *look here*;
+    // what to look at is the map, and a caption box under every one of them was
+    // a text field to fill in for a sentence the figure already makes.
     return el(
       'div',
       { class: 'ann-row manual-mark' },
@@ -286,7 +340,6 @@ export class ManualCard {
           size: 14,
         }),
       ),
-      label,
     )
   }
 }

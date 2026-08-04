@@ -24,6 +24,7 @@ import type { LocusAxis } from '../render/locus'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
 import { drawTrack, formatLimit, profileOf, resolveLimits, type PixelProfile } from '../render/tracks'
+import type { ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, TrackSampleSet } from '../annotations/types'
 import { el, fmt } from './dom'
@@ -121,6 +122,15 @@ interface Lane {
   profile: PixelProfile | null
 }
 
+/**
+ * How close to a lane's far border counts as being on it.
+ *
+ * Four pixels either side. The same number the side panels' drag handle is
+ * wide, and for the same reason: a border is a line, and a line is not
+ * something a hand can be asked to hit.
+ */
+const LANE_GRIP = 4
+
 /** Both edges, in the order they are drawn. */
 const EDGES: readonly LaneEdge[] = ['bottom', 'right']
 
@@ -140,6 +150,12 @@ export class AnnotationLanes {
   constructor(
     private readonly options: {
       store: AnnotationStore
+      /**
+       * The reader's own marks. Drawn *into* the lanes as well as onto the map:
+       * a line called out on the matrix is a coordinate, and the tracks beside
+       * it are what a coordinate is usually being compared against.
+       */
+      manual: ManualStore
       client: AnnotationClient
       /** Ask for a repaint; the panel coalesces it into its own frame. */
       onChange(): void
@@ -471,6 +487,45 @@ export class AnnotationLanes {
       if (geometry.guide !== null && geometry.guide.edge === edge) {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }
+
+      // The reader's hand-drawn lines, continued off the map. Only the ones
+      // this edge measures: a vertical rule is a column and belongs under the
+      // map, a horizontal one is a row and belongs beside it. A mark drawn on
+      // the axis it does not name would point at the wrong coordinate.
+      for (const line of this.options.manual.lines) {
+        if (line.axis !== 'both' && line.axis !== (edge === 'bottom' ? 'vertical' : 'horizontal')) {
+          continue
+        }
+        const unit = axis.locusToUnit(line.at.contig, line.at.bp)
+        if (unit === null) continue
+        hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
+      }
+    }
+
+    // Loop anchors, once per stack rather than once per lane: a triangle on the
+    // axis says "this coordinate", and one per track would say it four times.
+    // Drawn on the stack's outer edge, pointing back at the map, so it reads as
+    // a pointer into the picture rather than as another feature in a track.
+    //
+    // **Both** anchors on **both** axes. A loop is a statement about two loci,
+    // and a reader looking at the tracks under one end of it is asking what is
+    // at the other — putting the row anchor only beside the map and the column
+    // anchor only under it would answer half of that on each edge, and neither
+    // half where the comparison is made. A coordinate is a coordinate: each end
+    // is drawn wherever the axis in front of it has room for it.
+    const last = lanes[lanes.length - 1]
+    if (last !== undefined) {
+      for (const mark of this.options.manual.arrowheads) {
+        let drawn: number | null = null
+        for (const anchor of [mark.a, mark.b]) {
+          const unit = axis.locusToUnit(anchor.contig, anchor.bp)
+          // An on-diagonal loop names one place twice; drawing the triangle
+          // twice would only darken it.
+          if (unit === null || unit === drawn) continue
+          drawn = unit
+          anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+        }
+      }
     }
   }
 
@@ -517,6 +572,44 @@ export class AnnotationLanes {
    * question for every lane in the stack, and reading them all is the whole
    * point of stacking them.
    */
+  /**
+   * Which lane a point in a stack's canvas is on, and whether it is on the
+   * *border* between that lane and the next.
+   *
+   * The border is what a resize drag grabs, so it is given a few pixels of
+   * slack on either side — a one-pixel target is a target nobody hits. Ordering
+   * matters: a point in the slack of one lane's far border belongs to that
+   * border, not to the lane after it, because the border is what the pointer
+   * changed shape for.
+   *
+   * `null` between lanes and past the last one, so a drag begun in the gap does
+   * nothing rather than something arbitrary.
+   */
+  laneAt(
+    edge: LaneEdge,
+    x: number,
+    y: number,
+  ): { entry: AnnotationEntry; index: number; onBorder: boolean } | null {
+    const across = edge === 'bottom' ? y : x
+    const slots = this.slotsFor(edge)
+    for (let index = 0; index < slots.length; index++) {
+      const slot = slots[index]
+      const offset = across - slot.acrossFrom
+      if (offset < -LANE_GRIP || offset > slot.thickness + LANE_GRIP) continue
+      return {
+        entry: slot.entry,
+        index,
+        onBorder: offset > slot.thickness - LANE_GRIP,
+      }
+    }
+    return null
+  }
+
+  /** Where each lane on an edge begins, for a drag that is reordering them. */
+  boundariesOf(edge: LaneEdge): number[] {
+    return this.slotsFor(edge).map((slot) => slot.acrossFrom)
+  }
+
   readout(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry): LaneReadout | null {
     const axis = edge === 'bottom' ? this.axes.cols : this.axes.rows
     if (axis === null) return null
@@ -584,6 +677,44 @@ export class AnnotationLanes {
  * as a two-pixel grey smear — which on a lane 16 pixels tall is a band, not a
  * mark.
  */
+/**
+ * A loop's anchor, as a small triangle on the stack's outer edge.
+ *
+ * Pointing *inwards*, towards the map: the mark it belongs to is a pixel over
+ * there, and a glyph aimed at it is the difference between "this coordinate" and
+ * "something else drawn here". Outlined in nothing — it sits on the canvas's own
+ * edge, where there is no track ink to be lost against.
+ */
+function anchorMark(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  along: number,
+  colour: string,
+): void {
+  if (along < frame.alongFrom || along > frame.alongTo) return
+  const outer = frame.acrossFrom + frame.thickness
+  const half = ANCHOR_HALF
+  ctx.save()
+  ctx.fillStyle = colour
+  ctx.beginPath()
+  if (frame.orientation === 'bottom') {
+    ctx.moveTo(along, outer - ANCHOR_LENGTH)
+    ctx.lineTo(along - half, outer)
+    ctx.lineTo(along + half, outer)
+  } else {
+    ctx.moveTo(outer - ANCHOR_LENGTH, along)
+    ctx.lineTo(outer, along - half)
+    ctx.lineTo(outer, along + half)
+  }
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+/** Tip to base, and half the base: a glyph, not a shape to be read. */
+const ANCHOR_LENGTH = 7
+const ANCHOR_HALF = 4
+
 function hairline(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,

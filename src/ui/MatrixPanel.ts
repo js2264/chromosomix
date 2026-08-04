@@ -23,8 +23,17 @@
  * it is the only thing that can move it coherently.
  */
 
-import type { ManualPoint, ManualStore } from '../annotations/manual'
+import {
+  formatPoint,
+  mintMarkId,
+  type ManualArrowhead,
+  type ManualLine,
+  type ManualMark,
+  type ManualPoint,
+  type ManualStore,
+} from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
+import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
@@ -58,8 +67,9 @@ import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { button, el, field, fmt } from './dom'
 import {
-  CSS_DPI,
   EXPORT_DPI_CHOICES,
+  EXPORT_FORMATS,
+  type ExportFormat,
   canvasToPdf,
   canvasToPng,
   captionStamp,
@@ -69,6 +79,7 @@ import {
   largestDpiThatFits,
   scaleForDpi,
 } from './export'
+import { openMenu, type MenuItem } from './Menu'
 import { setReadout } from './readout'
 import {
   PLOT_OPTION_LABELS,
@@ -248,6 +259,7 @@ export class MatrixPanel {
   private readonly observer: ResizeObserver | null
   private readonly exportStatus: HTMLElement
   private exportDpi = 300
+  private exportFormat: ExportFormat = 'pdf'
   /** What the figure is called, for the download name. */
   private exportName = 'contact-map'
 
@@ -395,6 +407,7 @@ export class MatrixPanel {
         : { onSelect: (box: SelectionBox) => this.emitSelection(box) }),
     })
     this.heatmap.attach()
+    this.watchContextMenu()
     this.colorbar = new ColorbarView(this.barCanvas, { caption: 'count' })
 
     const transformSelect = el('select', { class: 'select' })
@@ -466,16 +479,37 @@ export class MatrixPanel {
       return node
     }
 
-    const dpiSelect = el('select', { class: 'select' })
+    // Saving a figure is one question with three parts — how fine, what file,
+    // go — so it is one row: resolution, format, and the button that acts on
+    // both. Two buttons labelled by format made the choice of file into the
+    // action itself, which left the resolution stranded in a row of its own two
+    // lines above the thing it applied to.
+    const dpiSelect = el('select', {
+      class: 'select',
+      title: 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.',
+    })
     for (const dpi of EXPORT_DPI_CHOICES) {
-      dpiSelect.appendChild(
-        el('option', { value: String(dpi), text: dpi === CSS_DPI ? `${dpi} (screen)` : `${dpi}` }),
-      )
+      dpiSelect.appendChild(el('option', { value: String(dpi), text: `${dpi} dpi` }))
     }
     dpiSelect.value = String(this.exportDpi)
     dpiSelect.addEventListener('change', () => {
       this.exportDpi = Number(dpiSelect.value)
     })
+
+    const formatSelect = el('select', {
+      class: 'select',
+      title:
+        'PDF is a one-page document holding the figure losslessly, at the size the DPI implies; ' +
+        'PNG is the same picture as an image.',
+    })
+    for (const format of EXPORT_FORMATS) {
+      formatSelect.appendChild(el('option', { value: format, text: format.toUpperCase() }))
+    }
+    formatSelect.value = this.exportFormat
+    formatSelect.addEventListener('change', () => {
+      this.exportFormat = formatSelect.value as ExportFormat
+    })
+
     this.exportStatus = el('span', { class: 'clip-note export-note' })
 
     this.plotEl = el(
@@ -503,18 +537,18 @@ export class MatrixPanel {
           class: 'btn btn-wide',
           title: 'Undo every pan and zoom (key: 0, or a double click on the plot)',
         }),
-        field('export at', dpiSelect, 'Dots per inch of the saved image. 96 is what is on screen.'),
         el(
           'div',
           { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'save as' }),
+          el('span', { class: 'field-label', text: 'export' }),
           el(
             'div',
-            { class: 'plot-option-row' },
-            button('PNG', () => void this.save('png'), { class: 'btn', title: 'Save the figure as a PNG' }),
-            button('PDF', () => void this.save('pdf'), {
+            { class: 'export-row' },
+            dpiSelect,
+            formatSelect,
+            button('Save', () => void this.save(this.exportFormat), {
               class: 'btn',
-              title: 'Save the figure as a one-page PDF, at the same resolution',
+              title: 'Save the figure, at the resolution and in the format chosen beside this',
             }),
           ),
         ),
@@ -576,6 +610,7 @@ export class MatrixPanel {
         ? null
         : new AnnotationLanes({
             store: options.annotations.store,
+            manual: options.annotations.manual,
             client: options.annotations.client,
             onChange: () => this.schedule(),
           })
@@ -906,8 +941,8 @@ export class MatrixPanel {
     return { title, detail: parts.join(' · ') }
   }
 
-  /** Save the figure. The status line under the buttons reports what happened. */
-  private async save(format: 'png' | 'pdf'): Promise<void> {
+  /** Save the figure. The status line under the row reports what happened. */
+  private async save(format: ExportFormat): Promise<void> {
     const now = new Date()
     // The stamp is in the name because two exports of the same view are the
     // same filename otherwise, and the second one silently becomes
@@ -964,15 +999,8 @@ export class MatrixPanel {
       }
     }
 
-    drawManualLines(ctx, frame, this.locusAxes, context.manual.lines, MARK_FONT, palette.labelHaloColor)
-    drawArrowheads(
-      ctx,
-      frame,
-      this.locusAxes,
-      context.manual.arrowheads,
-      MARK_FONT,
-      palette.labelHaloColor,
-    )
+    drawManualLines(ctx, frame, this.locusAxes, context.manual.lines)
+    drawArrowheads(ctx, frame, this.locusAxes, context.manual.arrowheads, palette.labelHaloColor)
     this.paintLaneGuide(ctx, frame)
   }
 
@@ -1064,6 +1092,75 @@ export class MatrixPanel {
   }
 
   /**
+   * The right-click menu on the map: place a mark exactly here.
+   *
+   * "Here" is the cell under the pointer, which is the thing a right click is
+   * *for* — the two ways in that already existed are typing a coordinate you
+   * know and arming a mode and clicking, and neither answers "this one, the one
+   * I am pointing at". The coordinates go in the menu beside the actions so the
+   * reader can see what they are about to mark before they mark it.
+   *
+   * Only where the file can carry marks (§8.5) and only over the data, not over
+   * the gutters: a right click on a label is the browser's menu, and taking it
+   * over to offer nothing would be worse than leaving it.
+   */
+  private watchContextMenu(): void {
+    const onMenu = (event: MouseEvent): void => {
+      const context = this.options.annotations
+      if (context === undefined) return
+      const box = this.canvas.getBoundingClientRect()
+      const cell = this.heatmap.cellAt(event.clientX - box.left, event.clientY - box.top)
+      if (cell === null) return
+      const at = this.locusOf(cell)
+      if (at === null) return
+      event.preventDefault()
+
+      const { manual } = context
+      const add = (mark: Omit<ManualLine, 'id' | 'colour'> | Omit<ManualArrowhead, 'id' | 'colour'>): void => {
+        manual.add({ ...mark, id: mintMarkId(), colour: manual.nextColour() } as ManualMark)
+      }
+      openMenu(event.clientX, event.clientY, [
+        { label: 'Mark this point' },
+        {
+          label: 'Vertical line',
+          hint: formatPoint(at.cols),
+          run: () => add({ kind: 'line', axis: 'vertical', at: at.cols }),
+        },
+        {
+          label: 'Horizontal line',
+          hint: formatPoint(at.rows),
+          run: () => add({ kind: 'line', axis: 'horizontal', at: at.rows }),
+        },
+        {
+          label: 'Crosshair',
+          hint: 'both axes',
+          // The row's coordinate, because a crosshair is drawn from one point on
+          // both axes and on the diagonal — where these are nearly always placed
+          // — the two are the same.
+          run: () => add({ kind: 'line', axis: 'both', at: at.rows }),
+        },
+        {
+          label: 'Loop',
+          hint: `${formatPoint(at.rows)} × ${formatPoint(at.cols)}`,
+          run: () => add({ kind: 'arrowhead', a: at.rows, b: at.cols }),
+        },
+        { label: 'This cell' },
+        {
+          label: 'Copy coordinates',
+          hint: 'to the clipboard',
+          run: () => {
+            void navigator.clipboard?.writeText(
+              `${formatPoint(at.rows)}\t${formatPoint(at.cols)}`,
+            )
+          },
+        },
+      ])
+    }
+    this.canvas.addEventListener('contextmenu', onMenu)
+    this.laneListeners.push(() => this.canvas.removeEventListener('contextmenu', onMenu))
+  }
+
+  /**
    * Turn a clicked cell into a point on each axis.
    *
    * The cell's *centre*, not its corner: a click lands somewhere inside a cell,
@@ -1117,6 +1214,147 @@ export class MatrixPanel {
    * to the grid's — the tooltip is parented there and knows nothing about which
    * canvas asked for it.
    */
+  /**
+   * Dragging a lane: its border resizes it, its body reorders the stack.
+   *
+   * Both gestures already existed in the side panel — a height box and a drag
+   * handle in the card — and both are being asked for *here* because here is
+   * where the tracks are being looked at. A reader comparing two profiles moves
+   * them next to each other and makes the interesting one taller, and having to
+   * cross the window to a list to do either is the reason the card grew a
+   * handle in the first place.
+   *
+   * Pointer capture, and the same reason the panel columns take it: a drag that
+   * leaves a 44-pixel strip — which every resize does — must not be dropped on
+   * the map underneath, where it would become a pan.
+   */
+  private dragLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+    const lanes = this.lanes
+    const context = this.options.annotations
+    if (lanes === null || context === undefined) return
+
+    /**
+     * Three gestures on one surface, told apart without a modifier key.
+     *
+     * A press on a lane's *border* is a resize, because that is the only thing a
+     * border can be dragged for. A press on its *body* waits for the first
+     * movement and reads its direction: **along** the axis is a pan, which is
+     * what dragging a track beside the map has always done and must keep doing,
+     * and **across** it is a reorder, because moving a lane up the stack is a
+     * movement up the stack. The two are perpendicular, so no gesture has to be
+     * guessed at and neither has to be given up.
+     */
+    let drag:
+      | { id: string; kind: 'size' | 'order' | 'pan' | 'undecided'; from: number; along: number; size: number }
+      | null = null
+
+    const onDown = (event: PointerEvent): void => {
+      if (event.button !== 0 || this.picking !== null) return
+      const box = canvas.getBoundingClientRect()
+      const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+      if (hit === null) return
+      drag = {
+        id: hit.entry.id,
+        kind: hit.onBorder ? 'size' : 'undecided',
+        from: edge === 'bottom' ? event.clientY : event.clientX,
+        along: edge === 'bottom' ? event.clientX : event.clientY,
+        size: hit.entry.style.size,
+      }
+      canvas.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    }
+
+    const onMove = (event: PointerEvent): void => {
+      const box = canvas.getBoundingClientRect()
+      if (drag === null) {
+        // Not dragging: say what a press would do. A border that does not
+        // change the cursor is a border nobody knows is draggable.
+        const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+        canvas.style.cursor =
+          hit === null
+            ? ''
+            : hit.onBorder
+              ? edge === 'bottom'
+                ? 'row-resize'
+                : 'col-resize'
+              : 'grab'
+        return
+      }
+      const now = edge === 'bottom' ? event.clientY : event.clientX
+      const alongNow = edge === 'bottom' ? event.clientX : event.clientY
+
+      if (drag.kind === 'undecided') {
+        const across = Math.abs(now - drag.from)
+        const along = Math.abs(alongNow - drag.along)
+        // A few pixels of slack before committing: the first event of a drag is
+        // usually one pixel in a direction nobody meant.
+        if (Math.max(across, along) < DRAG_SLACK) return
+        drag.kind = along > across ? 'pan' : 'order'
+        // The inline cursor the hover above sets would otherwise win over the
+        // class, and the hand would never close.
+        canvas.style.cursor = 'grabbing'
+        canvas.classList.add('grabbing')
+      }
+
+      if (drag.kind === 'pan') {
+        const delta = alongNow - drag.along
+        drag.along = alongNow
+        if (delta === 0) return
+        // `panBy` takes a *canvas* displacement, which is what this is: the lane
+        // and the map share their pixels on this axis by construction (§8.4).
+        if (edge === 'bottom') this.heatmap.panBy(delta, 0)
+        else this.heatmap.panBy(0, delta)
+        return
+      }
+
+      if (drag.kind === 'size') {
+        // Thickness grows *away* from the map on both edges, so the delta is the
+        // pointer's own displacement in the across direction.
+        const next = Math.round(drag.size + (now - drag.from))
+        context.store.restyle(drag.id, { size: Math.max(LANE_MIN_SIZE, Math.min(400, next)) })
+        return
+      }
+
+      // Reordering: the lane lands where the pointer is, counted in lane
+      // boundaries rather than in pixels, so a tall lane and a short one are one
+      // step apart either way.
+      const across = edge === 'bottom' ? event.clientY - box.top : event.clientX - box.left
+      const bounds = lanes.boundariesOf(edge)
+      let to = 0
+      while (to + 1 < bounds.length && across >= bounds[to + 1]) to++
+      context.store.move(drag.id, to)
+    }
+
+    const onUp = (event: PointerEvent): void => {
+      if (drag === null) return
+      drag = null
+      canvas.style.cursor = ''
+      canvas.classList.remove('grabbing')
+      canvas.releasePointerCapture(event.pointerId)
+    }
+
+    const onMenu = (event: MouseEvent): void => {
+      const box = canvas.getBoundingClientRect()
+      const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+      if (hit === null) return
+      event.preventDefault()
+      openLaneMenu(event.clientX, event.clientY, hit.entry, context.store)
+    }
+
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('contextmenu', onMenu)
+    this.laneListeners.push(() => {
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('contextmenu', onMenu)
+    })
+  }
+
   private watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
     const onMove = (event: MouseEvent): void => {
       const lanes = this.lanes
@@ -1175,6 +1413,7 @@ export class MatrixPanel {
       canvas.removeEventListener('mouseleave', onLeave)
     })
     this.driveFromLane(edge, canvas)
+    this.dragLane(edge, canvas)
   }
 
   /**
@@ -1204,34 +1443,6 @@ export class MatrixPanel {
       return { x: data.x + data.width / 2, y: data.y + data.height / 2 }
     }
 
-    let panning = false
-    let last = 0
-
-    const onDown = (event: MouseEvent): void => {
-      // Left button only, and never while a mark is being placed: a click on the
-      // map means "place" then, and a drag beside it must not mean "pan".
-      if (event.button !== 0 || this.picking !== null) return
-      panning = true
-      last = edge === 'bottom' ? event.clientX : event.clientY
-      canvas.classList.add('grabbing')
-      event.preventDefault()
-    }
-    const onMoveWindow = (event: MouseEvent): void => {
-      if (!panning) return
-      const now = edge === 'bottom' ? event.clientX : event.clientY
-      const delta = now - last
-      last = now
-      if (delta === 0) return
-      // `panBy` takes a *canvas* displacement, which is what this is: the lane
-      // and the map share their pixels on this axis by construction (§8.4).
-      if (edge === 'bottom') this.heatmap.panBy(delta, 0)
-      else this.heatmap.panBy(0, delta)
-    }
-    const onUpWindow = (): void => {
-      if (!panning) return
-      panning = false
-      canvas.classList.remove('grabbing')
-    }
     const onWheel = (event: WheelEvent): void => {
       // The same two rules the map's own wheel handler follows: a sideways
       // two-finger scroll is the browser's back gesture and is left alone, and
@@ -1246,19 +1457,8 @@ export class MatrixPanel {
       this.heatmap.zoomAt(at.x, at.y, Math.exp(-event.deltaY * 0.002))
     }
 
-    canvas.addEventListener('mousedown', onDown)
     canvas.addEventListener('wheel', onWheel, { passive: false })
-    // On the window, not the canvas: a pan that leaves the four-pixel-tall lane
-    // it started in — which every pan does — would otherwise stop dead there and
-    // never hear the button come back up.
-    window.addEventListener('mousemove', onMoveWindow)
-    window.addEventListener('mouseup', onUpWindow)
-    this.laneListeners.push(() => {
-      canvas.removeEventListener('mousedown', onDown)
-      canvas.removeEventListener('wheel', onWheel)
-      window.removeEventListener('mousemove', onMoveWindow)
-      window.removeEventListener('mouseup', onUpWindow)
-    })
+    this.laneListeners.push(() => canvas.removeEventListener('wheel', onWheel))
   }
 
   /** Load a block. `HeatmapView` refits and recomputes the auto range (§7.1). */
@@ -2023,11 +2223,81 @@ export function toDense(data: MatrixResult): DenseMatrix {
   }
 }
 
+
+/** The smallest a lane may be dragged to; below this it is a line, not a track. */
+const LANE_MIN_SIZE = 12
+
+/** How far a press must travel before it is a drag with a direction. */
+const DRAG_SLACK = 3
+
 /**
- * The type size hand-drawn marks and overlay labels are written at.
+ * The right-click menu on a lane: its colour, and what its value axis spans.
  *
- * A shade larger than the lanes' 9 px: these are the reader's own annotations on
- * a figure, and they are meant to be read from the page rather than glanced at
- * on screen.
+ * The two things the side panel offers for a track that a reader beside the map
+ * actually reaches for, brought to where the track is. Colour opens the
+ * browser's own picker — the same control the card uses, so the two cannot drift
+ * — and the range is offered as the choices worth having rather than as two
+ * boxes: auto, and the round steps around what is on screen. A number box in a
+ * context menu is a form in a menu.
  */
-const MARK_FONT = '10px system-ui, sans-serif'
+function openLaneMenu(
+  x: number,
+  y: number,
+  entry: AnnotationEntry,
+  store: AnnotationStore,
+): void {
+  const limits = entry.style.limits
+  const items: MenuItem[] = [
+    { label: entry.label },
+    {
+      label: 'Colour…',
+      hint: entry.style.colour,
+      // The browser's own picker, opened from a hidden input — the same control
+      // the side panel's swatch is, so the two cannot come to disagree about
+      // what a colour is. Built here rather than up front because a menu that is
+      // opened and dismissed should leave nothing behind, and taken away again
+      // on the commit *or* on the window coming back, which is what a cancelled
+      // picker looks like from this side.
+      run: () => {
+        const swatch = el('input', {
+          class: 'hidden-input',
+          type: 'color',
+          value: entry.style.colour,
+        })
+        swatch.addEventListener('input', () => store.restyle(entry.id, { colour: swatch.value }))
+        const done = (): void => swatch.remove()
+        swatch.addEventListener('change', done, { once: true })
+        window.addEventListener('focus', done, { once: true })
+        document.body.appendChild(swatch)
+        swatch.click()
+      },
+    },
+  ]
+
+  if (entry.kind === 'track') {
+    items.push(
+      { label: 'Range' },
+      {
+        label: 'Auto',
+        hint: 'this view',
+        disabled: limits.auto,
+        run: () => store.restyle(entry.id, { limits: { ...limits, auto: true } }),
+      },
+      ...[1, 5, 10, 50, 100].map((max) => ({
+        label: `0 – ${max}`,
+        disabled: !limits.auto && limits.min === 0 && limits.max === max,
+        run: () => store.restyle(entry.id, { limits: { auto: false, min: 0, max } }),
+      })),
+    )
+  }
+
+  items.push(
+    { label: 'This track' },
+    {
+      label: entry.visible ? 'Hide' : 'Show',
+      run: () => store.update(entry.id, { visible: !entry.visible }),
+    },
+    { label: 'Remove', run: () => store.remove(entry.id) },
+  )
+  openMenu(x, y, items)
+}

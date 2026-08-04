@@ -23,6 +23,16 @@ export const CSS_DPI = 96
 /** Offered resolutions. 96 is "what is on screen"; 300 is print. */
 export const EXPORT_DPI_CHOICES = [96, 150, 300, 600] as const
 
+/**
+ * The two files this app writes, in the order they are offered.
+ *
+ * PDF leads because it is the default: a figure ends up in a manuscript, and a
+ * one-page PDF carrying a lossless image is what a journal asks for. PNG is the
+ * same picture for a slide or an email.
+ */
+export const EXPORT_FORMATS = ['pdf', 'png'] as const
+export type ExportFormat = (typeof EXPORT_FORMATS)[number]
+
 /** Device pixels per CSS pixel for a target DPI. */
 export function scaleForDpi(dpi: number): number {
   return dpi / CSS_DPI
