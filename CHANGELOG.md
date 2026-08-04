@@ -176,7 +176,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The tabs are shaped like tabs**, with tilted sides, the active one raised
   and lit along its top edge, and the pointer is the same black-filled arrowhead
-  over the tracks that it is over the map.
+  over the tracks that it is over the map. The × appears on the tab under the
+  pointer and on no other — including the active one, which used to be an
+  exception — and it lost the bordered box that was most of what the corner of a
+  tab showed. One session is a title rather than a tab: the strip stays, because
+  the way to a second session is the button on it, but a lone trapezoid with an
+  accent bar is machinery announcing a choice nobody has been offered.
+
+- **Every sequence in the genome, with its length, under the Genome card.** The
+  first question a genome browser is asked, and until now the only answer was a
+  count. Each row is a click that goes there, which is also the fastest way to
+  navigate — a chromosome *is* a locus, and the locus box is for the case where
+  you already know the coordinate. The bar behind each row is its length against
+  the longest, which costs a gradient and turns a column of numbers into the
+  shape of an assembly: sixteen bars in a staircase is a yeast, one bar with a
+  thousand slivers under it is a draft. A filter appears above a dozen
+  sequences, and at most three hundred rows are built at once, because forty
+  thousand scaffolds is a second of layout for a list nobody scrolled to the end
+  of.
+
+- **A track's range is under its name, and you can type in it.** Two changes
+  that are one change. A number at the far end of a lane from the name it
+  belongs to has to be paired up by eye every time, and with four tracks stacked
+  that is four crossings of the window — so it moved under the name. And a
+  number that is under its name is a number you can put a caret in: hovering
+  either end gives a text cursor, and clicking opens a box exactly where the
+  number was drawn, so nothing moves when it becomes editable. Typing a bound
+  turns autoscale off, because that is what typing a bound means. The two boxes
+  that used to live in the lane's hover row are gone with it — the range is
+  edited where it is read now, and what is left there is `auto`, the ceiling
+  slider, the colour and the group.
+
+- **A toggle for the shading under a track's line.** The pale envelope that says
+  what a zoomed-out mean hid, and the fill an area track carries: one switch,
+  because they are one thing to the eye. Both are *context* for the line, and
+  context is the first thing to go when three tracks share a lane or a figure is
+  going into a caption. Shared with the heatmap's own panel and the command
+  palette, like the track-text toggle beside it.
+
+- **The Plot card is marks rather than sentences.** Fit across, fit down, words
+  on or off, shading on or off — four things a reader does over and over while
+  reading, in a row of four icons instead of a column of full-width buttons
+  spelling each of them out. The same two fit marks are on the toolbar above the
+  tracks, because they are the same two actions. And the export controls are one
+  line again: a vector page has no resolution, so the resolution is *absent*
+  exactly when the long format name needs the width.
 
 ### Changed
 
@@ -198,6 +242,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is known about it. A `samtools faidx` `.fai` counts as one, decided by its
   name, which is the tiebreak `sniffFormat` already uses for the two cases its
   columns cannot settle.
+
+- The colour swatch beside a track's name in the Annotations panel appears when
+  the row is pointed at or has the focus, like the drag handle it sits next to.
+  A column of coloured squares down the panel is a second legend for something
+  the picture already says where it matters — the lane is drawn in that colour,
+  and where two share a lane so is each name. It keeps its space while it is
+  invisible, so reaching for it is one movement rather than a hunt.
 
 ### Fixed
 
@@ -222,6 +273,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the view was mounted in, walking past the `display: contents` wrapper that
   gives a session's panels to the shell's grid and reports every rectangle as
   zero.
+
+- Every control that appears on hover — a tab's ×, a track's colour swatch — is
+  now inert while it is invisible, and shown outright where there is no pointer
+  to hover with (`@media (hover: none)`). Both halves matter: `opacity: 0` hides
+  a button and does not stop it taking a click, and a control revealed by
+  pointing is a control that appears never on a touch screen.
 
 - Ticking a track did not open the batch bar until the focus left the list. The
   rebuild is deferred while a control in the list is being edited — a colour

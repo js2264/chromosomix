@@ -63,6 +63,13 @@
 - [x] The 1D browser's PDF is vector: paths and text through the same renderers, Helvetica for type, deflated. The heatmap's stays a raster, because a contact map is one.
 - [x] Tabs with tilted sides, the active one raised and lit along its top edge.
 
+- [x] A Sequences card under the Genome card: every contig, its length, a bar of that length against the longest, a filter above a dozen of them, and a click that goes there.
+- [x] A slicker tab strip: the × on the tab under the pointer and on no other, with no border of its own; one session drawn as a title rather than as a tab.
+- [x] The Plot card as marks — fit across, fit down, track text, track fill — with the export controls back on one line.
+- [x] The value range under the track name, and editable where it is drawn: a text cursor over either end, a box in its place on a click.
+- [x] The colour swatch beside a track name only while the row is pointed at.
+- [x] A shared toggle for the shading under a track's line, in the browser and beside the map.
+
 ## FOR NOW
 
 

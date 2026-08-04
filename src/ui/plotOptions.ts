@@ -35,6 +35,7 @@ const KEY = 'metacooler-viewer:overlays'
  */
 export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
+  fills: true,
   crosshair: true,
   dividers: false,
   breaks: true,
@@ -49,6 +50,12 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   text: {
     label: 'track text',
     hint: 'Track names, their value ranges and feature names. Off leaves the ink only.',
+  },
+  fills: {
+    label: 'track fill',
+    hint:
+      'The shaded area under a track’s line: its envelope, and the fill an area track carries. ' +
+      'Off leaves the lines, which is what several tracks in one lane usually want.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
@@ -78,6 +85,7 @@ function read(): PlotOptions {
       typeof record[key] === 'boolean' ? (record[key] as boolean) : DEFAULT_UI_PLOT_OPTIONS[key]
     return {
       text: pick('text'),
+      fills: pick('fills'),
       crosshair: pick('crosshair'),
       dividers: pick('dividers'),
       breaks: pick('breaks'),

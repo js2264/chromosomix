@@ -64,6 +64,7 @@ import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import type { Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
+import { icon } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
 
@@ -139,7 +140,11 @@ function toWire(source: SourceSpec): WireSource {
  * sequence ends are a lower bound, and a reader who opened one from a bigWig
  * needs to know they are not.
  */
-function genomeCard(assembly: Assembly, onOpenFile: () => void): HTMLElement {
+function genomeCard(
+  assembly: Assembly,
+  onOpenFile: () => void,
+  onGoTo: (locus: string) => void,
+): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
     ['uri', assembly.uri],
@@ -173,6 +178,7 @@ function genomeCard(assembly: Assembly, onOpenFile: () => void): HTMLElement {
             }),
           ]),
     ),
+    sequenceCard(assembly, onGoTo),
     el(
       'div',
       { class: 'card' },
@@ -185,6 +191,89 @@ function genomeCard(assembly: Assembly, onOpenFile: () => void): HTMLElement {
       }),
       button('open a file…', onOpenFile, { class: 'btn btn-wide' }),
     ),
+  )
+}
+
+/**
+ * How many sequence rows are built at once.
+ *
+ * A `chrom.sizes` is as likely to be sixteen yeast chromosomes as forty thousand
+ * scaffolds off an assembler, and forty thousand buttons is a second of layout
+ * for a card nobody scrolled to the end of. The filter above the list is what
+ * reaches the rest, which is also the faster way to reach one of sixteen.
+ */
+const SEQUENCE_ROWS = 300
+
+/** Above this many, the list gets a filter box; below it, it does not need one. */
+const SEQUENCES_WORTH_FILTERING = 12
+
+/**
+ * Every sequence, its length, and a click that goes there.
+ *
+ * The one question a genome browser is asked before any other — *what is in
+ * this genome, and how big is each of them* — and until now the only answer was
+ * a count in the card above. It is also the fastest way to navigate: a
+ * chromosome is a locus, and the locus box exists for the case where you know
+ * the coordinate rather than the case where you want to look at chromosome IV.
+ *
+ * The bar behind each row is the length, against the longest. It costs a
+ * gradient and it turns a column of numbers into the shape of an assembly:
+ * sixteen bars in a staircase is a yeast, and one bar with a thousand slivers
+ * under it is a draft.
+ */
+function sequenceCard(assembly: Assembly, onGoTo: (locus: string) => void): HTMLElement {
+  const list = el('div', { class: 'seq-list' })
+  const note = el('p', { class: 'hint seq-note' })
+  const longest = assembly.contigs.reduce((most, contig) => Math.max(most, contig.length), 1)
+
+  const paint = (query: string): void => {
+    const wanted = query.trim().toLowerCase()
+    const matching =
+      wanted === ''
+        ? assembly.contigs
+        : assembly.contigs.filter((contig) => contig.name.toLowerCase().includes(wanted))
+    const shown = matching.slice(0, SEQUENCE_ROWS)
+    list.replaceChildren(
+      ...shown.map((contig) => {
+        const row = el(
+          'button',
+          {
+            class: 'seq-row',
+            type: 'button',
+            title: `${contig.name} — ${fmt.int(contig.length)} bp. Click to show the whole sequence.`,
+          },
+          el('span', { class: 'seq-name', text: contig.name }),
+          el('span', { class: 'seq-len', text: fmt.bp(contig.length) }),
+        )
+        row.style.setProperty('--seq-share', `${(contig.length / longest) * 100}%`)
+        row.addEventListener('click', () => onGoTo(contig.name))
+        return row
+      }),
+    )
+    note.textContent =
+      matching.length > shown.length
+        ? `${fmt.int(shown.length)} of ${fmt.int(matching.length)} — narrow the filter to reach the rest`
+        : matching.length === 0
+          ? 'nothing by that name'
+          : ''
+    note.classList.toggle('hidden', note.textContent === '')
+  }
+
+  const filter = el('input', {
+    class: 'input input-tiny seq-filter',
+    type: 'search',
+    placeholder: `filter ${fmt.int(assembly.contigs.length)} sequences…`,
+  })
+  filter.addEventListener('input', () => paint(filter.value))
+  paint('')
+
+  return el(
+    'div',
+    { class: 'card seq-card' },
+    el('h3', { class: 'card-head' }, icon('list', { size: 13 }), el('span', { text: 'Sequences' })),
+    ...(assembly.contigs.length > SEQUENCES_WORTH_FILTERING ? [filter] : []),
+    list,
+    note,
   )
 }
 
@@ -1002,7 +1091,7 @@ export class Session {
       new AnnotationCard({ card: 'linear', store, loader, context: 'browser' }).el,
       new AnnotationCard({ card: 'overlay', store, loader, context: 'browser' }).el,
     ])
-    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this))])
+    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
     loader.restore(AnnotationStore.stored(scope))
   }
 
@@ -1110,7 +1199,7 @@ export class Session {
         contigs: result.contigs,
         origin: 'sizes',
       })
-      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this))])
+      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
       const state = this.store.state
       if (state === null) return
       // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
@@ -1171,7 +1260,7 @@ export class Session {
         new AnnotationCard({ card: 'linear', store: held.store, loader: held.loader, context: 'browser' }).el,
         new AnnotationCard({ card: 'overlay', store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
-      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this))])
+      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
     }
     this.mounted = null
     const target: ViewState = { uri: file.uri, view: 'browser' }

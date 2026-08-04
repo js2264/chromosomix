@@ -305,10 +305,38 @@ it. And a drag on the **ruler** selects a range to zoom into with no modifier at
 strip is where a reader points to say "this much", and it is the one gesture whose meaning its
 position already settles, so spending a keystroke on it buys nothing.
 
-Each lane carries its own controls — colour, limits, a ceiling slider, its group — revealed by
+Each lane carries its own controls — colour, `auto`, a ceiling slider, its group — revealed by
 pointing at it and drawn under the track's name rather than over its data. They are transparent to
 the pointer while they are hidden, so a lane that has not been pointed at yet has no invisible band
 across it where a drag would fail to pan.
+
+The lane's **value range is drawn under its name and edited there**. Under the name because a number
+at the far end of a lane has to be paired with its track by eye; edited there because it is the one
+thing on a lane a reader changes, and a number that is already under its name is a number that can
+have a caret put in it. Pointing at either end gives a text cursor and pressing opens a box at the
+same size in the same place, so nothing moves when the number becomes editable. Typing a bound turns
+autoscale off — that is what typing a bound means — and the other bound comes from the axis on
+screen rather than from whatever was last stored, because the axis on screen is the one that was
+being read. (The side panel's own boxes seed from the file's whole-genome extent instead: a panel is
+not a view, and a number in it must not change when the view is panned.)
+
+Four things the edit refuses, all for one reason — a limit nobody typed must never be stored.
+Opening a bound and leaving it alone, or emptying the box, closes it and changes nothing; an
+unreadable number and an inverted pair are marked in place with the caret still in them, rather than
+silently discarded or answered with the `{0, 1}` axis `resolveLimits` gives an impossible range. And
+the edit applies to **every track in the lane**, because a lane draws one range under however many
+names it holds — committing to only the first would leave an overlay group as two lines at two
+scales under one label, which is the picture the group exists to prevent.
+
+The same layout applies beside a heatmap, on any lane tall enough for two lines. Where a lane is not,
+the range goes back beside the name and stops being clickable, because its box would then overlap the
+lower border that resizes the lane — an overlap in which the canvas promises a drag and the press
+opens a text box is worse than either alone.
+
+The **General column lists the sequences** under the Genome card: every contig, its length, a bar of
+its length against the longest, and a click that shows the whole of it. A filter appears above a
+dozen of them and the list is capped, because a `chrom.sizes` is as likely to be forty thousand
+scaffolds as sixteen chromosomes.
 
 ---
 
@@ -447,7 +475,18 @@ colormap is selectable; keyboard pan and zoom are supported.
 
 **Touch is a first-class input**, not a fallback: one finger pans, two pinch, a tap opens what it
 lands on and a double tap refits. Below 34rem the app is one column — the plot as wide as the screen,
-the legend on its side beneath it.
+the legend on its side beneath it. Every control revealed by *pointing* — a tab's ×, a track's colour
+— is shown outright under `(hover: none)`, because a control that appears on hover appears never
+where there is no hover; and every one of them is inert while it is invisible, so a tap or a click
+that lands where one is hidden reaches what is behind it rather than firing a button nobody saw.
+
+**Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
+both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
+and `fills` takes the shading out from under their lines, which is the envelope and an area track's
+own fill together. Both are one thing to the eye and both are context for a line rather than a
+series, which is what makes them the first things to go when several tracks share a lane or a figure
+is going into a caption. They live in the same store as the matrix's own overlays (`localStorage`,
+not the hash: §5.5 shares what is being looked at, not whether the reader likes shading).
 
 **The figure saves as PNG or PDF at a chosen DPI.** It is re-rendered at that resolution through the
 same drawing code rather than screen-grabbed, so the labels and hairlines are drawn rather than
@@ -462,8 +501,9 @@ rectangle, a polyline or a word. So the browser's PDF carries paths and text, an
 into a manuscript can be restyled, recoloured and scaled by whoever receives it. It is produced by
 handing the *same renderers* a context that emits PDF operators instead of pixels, so there is no
 second drawing of the view to keep in step; text is Helvetica, one of the fourteen fonts every reader
-has, so nothing is embedded. A vector page has no resolution, so the DPI control is disabled while it
-is chosen rather than quietly ignored.
+has, so nothing is embedded. A vector page has no resolution, so the DPI control is *absent* while
+one is chosen rather than greyed out — which is also what puts the format's full name and the button
+on one line.
 
 ### 7.3 Genome × genome overview — gated, not default
 

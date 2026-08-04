@@ -53,7 +53,7 @@ import {
 } from './export'
 import { VectorPage } from './vector'
 import { isMac } from './commands'
-import { iconButton } from './icons'
+import { iconButton, type IconName } from './icons'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
@@ -148,6 +148,19 @@ export class BrowserView {
   private gripping: string | null = null
   /** Whether track text is drawn at all — the shared `text` plot option. */
   private text = true
+  /** Whether the shaded areas are drawn — the shared `fills` plot option. */
+  private fills = true
+  /**
+   * Where each lane's two limits were drawn, from the last frame.
+   *
+   * Recorded by {@link labelLane} rather than recomputed, because the box a
+   * reader is pointing at is the box the text was measured into: any second
+   * measurement is a second opinion about the same font, and the difference
+   * between the two is exactly the pixel the click misses by.
+   */
+  private rangeHits: RangeHit[] = []
+  /** The limit being typed into, while one is, and how to abandon it. */
+  private editor: { input: HTMLInputElement; cancel: () => void } | null = null
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
@@ -219,8 +232,10 @@ export class BrowserView {
           button('go', () => this.goTo(this.locusInput.value)),
           iconButton('zoom-out', 'Zoom out (key: −)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (key: +)', () => this.zoomBy(1.8)),
-          iconButton('maximize', 'The whole genome (key: 0, or a double click)', () => this.fit()),
-          iconButton('layers', 'Fit every track into the space there is', () => this.fitTracks()),
+          // The same two marks the Plot card uses, because they are the same two
+          // actions and a reader should not have to learn them twice.
+          iconButton('unfold-horizontal', 'The whole genome (key: 0, or a double click)', () => this.fit()),
+          iconButton('unfold-vertical', 'Fit every track into the height there is', () => this.fitTracks()),
           el('div', { class: 'browser-search' }, this.searchInput, this.searchList),
         ),
         el(
@@ -275,6 +290,7 @@ export class BrowserView {
 
   destroy(): void {
     this.disposed = true
+    this.closeRangeEditor()
     if (this.frameHandle !== 0) cancelAnimationFrame(this.frameHandle)
     if (this.clickTimer !== null) clearTimeout(this.clickTimer)
     if (this.reportTimer !== null) clearTimeout(this.reportTimer)
@@ -636,7 +652,9 @@ export class BrowserView {
   private paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     // Read once for the whole frame: every lane asks the same question, and the
     // export asks it too so that what is saved is what was on screen.
-    this.text = getPlotOptions().text
+    const options = getPlotOptions()
+    this.text = options.text
+    this.fills = options.fills
     const palette = readCanvasPalette(this.canvas)
     const ruler = {
       x: 0,
@@ -659,6 +677,7 @@ export class BrowserView {
     drawBoundaries(ctx, ruler, RULER_HEIGHT, height)
 
     this.layouts.clear()
+    this.rangeHits = []
     const groups = this.groupRanges()
     for (const lane of this.lanes) this.paintLane(ctx, lane, groups, palette)
 
@@ -713,6 +732,7 @@ export class BrowserView {
           guideColour: palette.labelColor,
           haloColour: palette.labelHaloColor,
           font: LANE_FONT,
+          fills: this.fills,
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
           // what overlaying them was for.
@@ -731,7 +751,7 @@ export class BrowserView {
           frame,
           palette,
           lane.profiles.map((row) => row.entry),
-          `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`,
+          { limits },
         )
       }
     } else if (entry.payload?.kind === 'pairs') {
@@ -771,13 +791,26 @@ export class BrowserView {
     ctx.restore()
   }
 
-  /** The lane's name — or names, overlaid — and what its value axis spans. */
+  /**
+   * The lane's name — or names, overlaid — and what its value axis spans.
+   *
+   * The range goes **under** the name rather than across the lane at its far
+   * right. Two reasons, and the second is the one that matters. A number at the
+   * opposite end of a lane from the name it belongs to has to be paired up by
+   * eye every time, and with four tracks stacked that is four crossings of the
+   * window. And a number that is *under its name* is a number you can put a
+   * caret in: the range is the one thing on a lane a reader edits, and it should
+   * be edited where it is read (see {@link openRangeEditor}).
+   *
+   * On a lane too short for a second line the range goes back beside the name,
+   * because a clipped lane should lose the *layout* rather than the fact.
+   */
   private labelLane(
     ctx: CanvasRenderingContext2D,
     frame: LaneFrame,
     palette: ReturnType<typeof readCanvasPalette>,
     entries: AnnotationEntry[],
-    detail: string,
+    detail: string | { limits: { min: number; max: number } },
   ): void {
     ctx.save()
     ctx.font = NAME_FONT
@@ -791,13 +824,198 @@ export class BrowserView {
       laneText(ctx, frame, entry.label, at, NAME_TOP, { halo: palette.labelHaloColor })
       at += ctx.measureText(entry.label).width + 12
     }
-    if (detail !== '') {
-      ctx.font = LANE_FONT
-      ctx.fillStyle = palette.labelColor
-      ctx.textAlign = 'right'
-      laneText(ctx, frame, detail, frame.alongTo - 4, NAME_TOP, { halo: palette.labelHaloColor })
+
+    ctx.font = LANE_FONT
+    ctx.fillStyle = palette.labelColor
+    ctx.textAlign = 'left'
+    const stacked = frame.thickness >= NAME_TOP + DETAIL_DROP + 6
+    const across = stacked ? NAME_TOP + DETAIL_DROP : NAME_TOP
+    const along = stacked ? frame.alongFrom + 5 : at
+
+    if (typeof detail === 'string') {
+      if (detail !== '') {
+        laneText(ctx, frame, detail, along, across, { halo: palette.labelHaloColor })
+      }
+      ctx.restore()
+      return
+    }
+
+    // Each end written separately, so each end has a box of its own to point at.
+    const min = formatLimit(detail.limits.min)
+    const max = formatLimit(detail.limits.max)
+    const top = frame.acrossFrom + across - HIT_HEIGHT / 2
+    // …but only where the box is clear of the lane's own lower border, which is
+    // the resize grip. On a short lane the two overlap, and an overlap is worse
+    // than either alone: the canvas draws the resize hairline, promising a drag,
+    // and the press opens a text box instead. A lane too short to hold both
+    // keeps the gesture and gives up the caret — the range is still drawn, and
+    // it is still editable the moment the lane is dragged taller.
+    const clear = top + HIT_HEIGHT <= frame.acrossFrom + frame.thickness - LANE_GRIP
+    let x = along
+    for (const part of ['min', 'max'] as const) {
+      const value = part === 'min' ? min : max
+      const width = ctx.measureText(value).width
+      laneText(ctx, frame, value, x, across, { halo: palette.labelHaloColor })
+      if (clear) {
+        this.rangeHits.push({ entries, part, value, x, y: top, width, height: HIT_HEIGHT })
+      }
+      x += width
+      if (part === 'min') {
+        const dash = ' – '
+        laneText(ctx, frame, dash, x, across, { halo: palette.labelHaloColor })
+        x += ctx.measureText(dash).width
+      }
     }
     ctx.restore()
+  }
+
+  /** The min or max box under a track's name at this point, if any. */
+  private rangeAt(x: number, y: number): RangeHit | null {
+    for (const hit of this.rangeHits) {
+      if (x >= hit.x - 2 && x <= hit.x + hit.width + 2 && y >= hit.y && y <= hit.y + hit.height) {
+        return hit
+      }
+    }
+    return null
+  }
+
+  /**
+   * Put a caret in a limit, exactly where the limit is drawn.
+   *
+   * An `<input>` laid over the canvas at the box the text was measured into, so
+   * the number does not move when it becomes editable — which is the whole
+   * claim being made by drawing a text cursor over it. Committing sets the pair
+   * explicitly and turns autoscale off, because typing a bound *is* the decision
+   * that this track's axis is not the data's any more.
+   */
+  private openRangeEditor(hit: RangeHit): void {
+    this.closeRangeEditor()
+    const named = hit.entries.map((entry) => entry.label).join(', ')
+    const input = el('input', {
+      class: 'input browser-edit',
+      type: 'text',
+      value: hit.value,
+      title:
+        `${hit.part === 'min' ? 'Bottom' : 'Top'} of ${named}’s value axis. ` +
+        'Enter commits, Escape leaves it alone.',
+    })
+    input.style.left = `${Math.max(0, hit.x - 3)}px`
+    input.style.top = `${hit.y - 2}px`
+    input.style.width = `${Math.max(44, hit.width + 22)}px`
+
+    let closed = false
+    const close = (): void => {
+      if (closed) return
+      closed = true
+      input.remove()
+      if (this.editor?.input === input) this.editor = null
+      this.schedule()
+    }
+    /** Say no without closing, so the reader can correct what they typed. */
+    const refuse = (): void => {
+      input.classList.add('is-bad')
+      window.setTimeout(() => input.classList.remove('is-bad'), 700)
+      input.focus()
+      input.select()
+    }
+    const commit = (typing: boolean): void => {
+      // Escape closes by removing the node, and removing a focused node is a
+      // blur — so without this guard the blur handler would commit the value
+      // the reader had just cancelled, which is the opposite of what Escape is.
+      if (closed) return
+      const text = input.value.trim()
+      // Opening a limit and not changing it is not a decision, and must not be
+      // recorded as one. Without this, clicking a limit on an autoscaled track
+      // and clicking away again takes it off autoscale for ever — at the
+      // *rounded* number the label showed, which is not even the ceiling it had.
+      // An emptied box is the same thing said differently: `input.select()` puts
+      // the whole number under the first keystroke, so Backspace is how an edit
+      // begun by accident is abandoned — and `Number('')` is `0`, which would
+      // otherwise store a floor nobody typed.
+      if (text === hit.value || text === '') {
+        close()
+        return
+      }
+      const typed = Number(text)
+      const first = this.props.store.byId(hit.entries[0]?.id ?? '')?.style.limits
+      if (!Number.isFinite(typed) || first === undefined) {
+        if (typing) refuse()
+        else close()
+        return
+      }
+      // Resolved rather than stored: an autoscaled track has no *stored* pair to
+      // amend, so the other end has to come from the axis on screen — which is
+      // the one the reader was looking at when they typed. (The side panel's own
+      // boxes seed from the file's whole-genome extent instead, because a panel
+      // is not a view and must not show a number that changes when you pan.)
+      const shown = this.shownLimits(hit.entries[0]?.id ?? '') ?? {
+        min: first.min,
+        max: first.max,
+      }
+      const next =
+        hit.part === 'min' ? { min: typed, max: shown.max } : { min: shown.min, max: typed }
+      // An inverted pair is refused rather than swallowed. `resolveLimits` would
+      // answer it with `{0, 1}`, which is a lane redrawn against an axis nobody
+      // asked for — and the reader would be left looking for the number they
+      // typed. Refused *in place*, with the caret still in it.
+      if (!(next.max > next.min)) {
+        if (typing) refuse()
+        else close()
+        return
+      }
+      close()
+      // Every track in the lane, not just the one whose numbers were written
+      // down: a lane draws one range under however many names it holds.
+      for (const entry of hit.entries) {
+        this.props.store.restyle(entry.id, { limits: { auto: false, ...next } })
+      }
+    }
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commit(true)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        close()
+      }
+    })
+    // A blur is not a keystroke: whatever it carries is either good or gone.
+    // Refusing in place would fight for a focus the reader has already moved on
+    // from — and the box is closed by then anyway.
+    input.addEventListener('blur', () => commit(false))
+    this.stage.appendChild(input)
+    this.editor = { input, cancel: close }
+    input.focus()
+    input.select()
+    this.schedule()
+  }
+
+  /**
+   * Take the caret away without taking the value.
+   *
+   * Through the editor's own `close`, not by detaching the node: removing a
+   * focused input *is* a blur, so a raw `remove()` would hand the blur handler a
+   * live editor and commit a value on the way out — from `destroy()`, that is a
+   * store write by a view that no longer exists.
+   */
+  private closeRangeEditor(): void {
+    this.editor?.cancel()
+    this.editor = null
+  }
+
+  /** The pair a track's axis is drawn with right now, group included. */
+  private shownLimits(id: string): { min: number; max: number } | null {
+    const groups = this.groupRanges()
+    for (const lane of this.lanes) {
+      const row = lane.profiles.find((profile) => profile.entry.id === id)
+      if (row === undefined) continue
+      const extent =
+        row.entry.style.group === ''
+          ? row.profile.extent
+          : (groups.get(row.entry.style.group) ?? row.profile.extent)
+      return resolveLimits(row.entry.style.limits, extent)
+    }
+    return null
   }
 
   /** Resolve every lane's samples and profiles for this frame. */
@@ -872,12 +1090,9 @@ export class BrowserView {
     // Rebuilt only when something they *describe* has changed — never on a pan
     // frame. These are inputs: replacing the element under a caret loses the
     // half-typed number in it, and a pan redraws sixty times a second.
-    // Deliberately *not* including the limits. They are what the two boxes edit,
-    // so a commit would always fail the guard and rebuild the row — removing the
-    // very input the change event came from, taking the focus with it and, since
-    // the pointer is on a control rather than on the lane, hiding the row.
-    // The numbers are written back below instead, into the boxes that are
-    // already there and are not being typed into.
+    // Deliberately *not* including the limits, which the ceiling slider moves
+    // continuously: a commit would fail the guard and rebuild the row, removing
+    // the control the event came from mid-drag.
     const signature = this.lanes
       .map((lane) => {
         const target = lane.profiles[0]?.entry ?? lane.entry
@@ -889,8 +1104,18 @@ export class BrowserView {
           target.style.group,
         ].join('/')
       })
+      // The `text` option is in it because it decides whether the row carries
+      // the limit boxes: with the words off there is no drawn number to click,
+      // and the boxes are the only way left to type one.
+      .concat(this.text ? 'text' : 'no-text')
       .join('|')
     if (signature !== this.controlSignature) {
+      // The same signature the rows are rebuilt on is the one an open limit
+      // editor is anchored to: a track added, removed, resized or regrouped
+      // moves the lane the caret was measured into, and a box hanging over the
+      // wrong lane would commit its number to the right one. A pan is not in the
+      // signature and does not move it, which is why the caret survives one.
+      if (this.controlSignature !== '') this.closeRangeEditor()
       this.controlSignature = signature
       this.overlays.replaceChildren(
         ...this.lanes.map((lane) => {
@@ -900,11 +1125,21 @@ export class BrowserView {
           // they want to change something about *that* track — and it keeps the
           // busiest part of a coverage profile, which grows from the baseline,
           // clear of a row of inputs.
-          row.style.top = `${lane.frame.acrossFrom + NAME_TOP + 8}px`
+          // Clear of the range, which now sits directly under the name and is
+          // typed into where it is drawn: a row of controls over it would be a
+          // row of controls over a text box. Clamped to stay *inside* the lane,
+          // because the row is only revealed while the pointer is in the lane it
+          // belongs to — a row that hangs below its own lane is a row you have
+          // to point somewhere else to see and cannot then reach.
+          const inset = Math.min(NAME_TOP + DETAIL_DROP + 8, lane.frame.thickness - CONTROL_ROW)
+          row.style.top = `${lane.frame.acrossFrom + Math.max(2, inset)}px`
           const target = lane.profiles[0]?.entry ?? lane.entry
           row.appendChild(this.colourControl(target))
           if (target.kind === 'track') {
-            row.append(this.rangeControl(target), this.ceilingSlider(target), this.groupControl(target))
+            // The boxes come back only when the words are off, because then the
+            // range is not drawn and there is nothing on the lane to click.
+            if (!this.text) row.appendChild(this.rangeControl(target))
+            row.append(this.autoControl(target), this.ceilingSlider(target), this.groupControl(target))
           }
           return row
         }),
@@ -925,11 +1160,10 @@ export class BrowserView {
         this.hover.y <= lane.frame.acrossFrom + lane.frame.thickness
       row.classList.toggle('is-active', over || row.contains(document.activeElement))
       if (lane === undefined) continue
-      // What the boxes say, from what the lane is actually drawn with — so an
-      // auto-scaled track's numbers follow the view, and the `auto` button
-      // reflects the store. Never into a control that has the caret or the
-      // grab: the reader is mid-number or mid-drag, and half of either is not a
-      // value to overwrite them with.
+      // What the slider and the `auto` button say, from what the lane is
+      // actually drawn with — so an autoscaled track's handle follows the view.
+      // Never into a control that has the grab: the reader is mid-drag, and half
+      // a drag is not a value to overwrite them with.
       const first = lane.profiles[0]
       const target = first?.entry ?? lane.entry
       if (target.kind !== 'track') continue
@@ -938,13 +1172,6 @@ export class BrowserView {
           ? (first?.profile.extent ?? null)
           : (groups.get(target.style.group) ?? first?.profile.extent ?? null)
       const limits = resolveLimits(target.style.limits, extent)
-      const boxes = row.querySelectorAll<HTMLInputElement>('.input-tiny')
-      if (boxes[0] !== undefined && boxes[0] !== document.activeElement) {
-        boxes[0].value = formatLimit(limits.min)
-      }
-      if (boxes[1] !== undefined && boxes[1] !== document.activeElement) {
-        boxes[1].value = formatLimit(limits.max)
-      }
       const slider = row.querySelector<HTMLInputElement>('.browser-slider')
       if (slider !== null && slider !== document.activeElement) {
         const auto = resolveLimits({ auto: true, min: 0, max: 1 }, extent).max
@@ -1017,49 +1244,64 @@ export class BrowserView {
   }
 
   /**
-   * A track's ceiling, editable in place.
+   * The two limits as boxes, for the one case where they cannot be typed on the
+   * lane: the `text` option is off, so there is no drawn number to click.
    *
-   * Two boxes and an auto button, exactly as the side panel offers them — one
-   * implementation of what the numbers mean, because a range edited here and a
-   * range edited there are the same range, and two of them would drift.
+   * Not offered otherwise. The range is edited where it is read — that is the
+   * whole point of §5.8's arrangement — and a second pair of boxes on hover
+   * would be three hundred pixels of every track that a drag cannot pan.
    */
   private rangeControl(entry: AnnotationEntry): HTMLElement {
-    const limits = entry.style.limits
-    const min = el('input', {
-      class: 'input input-tiny',
-      type: 'text',
-      value: formatLimit(limits.min),
-      title: 'Bottom of this track’s value axis',
-    })
-    const max = el('input', {
-      class: 'input input-tiny',
-      type: 'text',
-      value: formatLimit(limits.max),
-      title: `Top of this track’s value axis. ${CEILING_LABEL} over the lane moves it too.`,
-    })
+    const shown = this.shownLimits(entry.id) ?? { min: entry.style.limits.min, max: entry.style.limits.max }
+    const box = (part: 'min' | 'max'): HTMLInputElement => {
+      const node = el('input', {
+        class: 'input input-tiny',
+        type: 'text',
+        value: formatLimit(part === 'min' ? shown.min : shown.max),
+        title: `${part === 'min' ? 'Bottom' : 'Top'} of ${entry.label}’s value axis`,
+      })
+      return node
+    }
+    const min = box('min')
+    const max = box('max')
     const commit = (): void => {
-      const low = Number(min.value)
-      const high = Number(max.value)
+      const low = Number(min.value.trim())
+      const high = Number(max.value.trim())
       if (!Number.isFinite(low) || !Number.isFinite(high) || !(high > low)) return
       this.props.store.restyle(entry.id, { limits: { auto: false, min: low, max: high } })
     }
-    for (const box of [min, max]) {
-      box.addEventListener('change', commit)
-      box.addEventListener('keydown', (event) => {
+    for (const node of [min, max]) {
+      node.addEventListener('change', commit)
+      node.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') commit()
       })
     }
+    return el('div', { class: 'browser-range' }, min, el('span', { text: '–' }), max)
+  }
+
+  /**
+   * Hand the value axis back to the data.
+   *
+   * All that is normally left of the range control here: the two numbers moved
+   * onto the lane itself, where they are read (see {@link labelLane}), and
+   * typing one is what turns this off. So the button's only job is turning it
+   * back on — and saying, by being lit, that the axis on screen is the data's
+   * rather than somebody's.
+   */
+  private autoControl(entry: AnnotationEntry): HTMLElement {
     // Read from the store at click time, not from the entry this row was built
-    // with: the row now outlives changes to the limits, so a captured `auto`
-    // would go stale the first time anything else moved them.
-    const auto = button('auto', () => {
-      const current = this.props.store.byId(entry.id)?.style.limits ?? limits
+    // with: the row outlives changes to the limits, so a captured `auto` would
+    // go stale the first time anything else moved them.
+    return button('auto', () => {
+      const current = this.props.store.byId(entry.id)?.style.limits ?? entry.style.limits
       this.props.store.restyle(entry.id, { limits: { ...current, auto: !current.auto } })
     }, {
-      class: `btn btn-tiny${limits.auto ? ' is-on' : ''}`,
-      title: 'Scale to whatever is in view, and follow it as the view moves',
+      class: `btn btn-tiny${entry.style.limits.auto ? ' is-on' : ''}`,
+      title:
+        'Scale to whatever is in view, and follow it as the view moves. ' +
+        `Typing a limit under the track name turns it off; ${CEILING_LABEL} over the lane moves ` +
+        'the ceiling.',
     })
-    return el('div', { class: 'browser-range' }, min, el('span', { text: '–' }), max, auto)
   }
 
   /**
@@ -1150,8 +1392,33 @@ export class BrowserView {
     this.groupsHost.replaceChildren(...rows)
   }
 
+  /**
+   * One of the two shared overlay preferences, as a pressed-in icon.
+   *
+   * It *writes* to the shared store and *reads* from the subscription, so the
+   * same toggle flipped from the command palette or from the heatmap's own panel
+   * lights this one up: the button never holds the state itself. Both live here
+   * rather than beside the map because both are about the tracks, and the tracks
+   * are the whole picture in this view.
+   */
+  private optionToggle(key: 'text' | 'fills', name: IconName): HTMLButtonElement {
+    const { label, hint } = PLOT_OPTION_LABELS[key]
+    const node = iconButton(name, `${label} — ${hint}`, () =>
+      setPlotOption(key, !getPlotOptions()[key]),
+    { class: 'btn btn-icon btn-toggle', size: 15 })
+    const sync = (): void => {
+      node.setAttribute('aria-pressed', String(getPlotOptions()[key]))
+    }
+    sync()
+    this.unsubscribes.push(subscribePlotOptions(sync))
+    return node
+  }
+
   private exportCard(): HTMLElement {
-    const dpiSelect = el('select', { class: 'select' })
+    const dpiSelect = el('select', {
+      class: 'select select-dpi',
+      title: 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.',
+    })
     for (const dpi of EXPORT_DPI_CHOICES) {
       dpiSelect.appendChild(el('option', { value: String(dpi), text: `${dpi} dpi` }))
     }
@@ -1164,38 +1431,17 @@ export class BrowserView {
       formatSelect.appendChild(el('option', { value: format.value, text: format.label }))
     }
     formatSelect.value = this.exportFormat
-    // A vector PDF has no resolution to choose, so the choice goes away rather
-    // than sitting there doing nothing.
+    // A vector PDF has no resolution, so the resolution *goes* rather than
+    // sitting there greyed out — which also gives the format the width it needs
+    // to say "vector" on one line, the only line the row has.
     const syncDpi = (): void => {
-      const raster = this.exportFormat !== 'pdf'
-      dpiSelect.disabled = !raster
-      dpiSelect.title = raster
-        ? 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.'
-        : 'A vector PDF has no resolution: it carries the drawing, not a picture of it.'
+      dpiSelect.hidden = this.exportFormat === 'pdf'
     }
     formatSelect.addEventListener('change', () => {
       this.exportFormat = formatSelect.value as BrowserExportFormat
       syncDpi()
     })
     syncDpi()
-
-    // The same shared store the heatmap's panel writes to, so the choice
-    // survives a switch between the two and the command palette lights this
-    // button up too. It is more use here than there: beside a map the text is
-    // two names, and here it is every gene in view.
-    const { label, hint } = PLOT_OPTION_LABELS.text
-    const textToggle = el('button', {
-      class: 'btn btn-toggle',
-      type: 'button',
-      text: label,
-      title: hint,
-    })
-    textToggle.addEventListener('click', () => setPlotOption('text', !getPlotOptions().text))
-    const syncText = (): void => {
-      textToggle.setAttribute('aria-pressed', String(getPlotOptions().text))
-    }
-    syncText()
-    this.unsubscribes.push(subscribePlotOptions(syncText))
 
     return el(
       'div',
@@ -1204,30 +1450,35 @@ export class BrowserView {
       el(
         'div',
         { class: 'panel-controls' },
+        // Four marks rather than four sentences. Each of these is a thing a
+        // reader does repeatedly while reading — refit across, refit down, take
+        // the words off, take the shading off — and a column of full-width
+        // buttons spelling them out is four lines of prose in place of a row of
+        // controls. The words survive in every tooltip.
         el(
           'div',
-          { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'overlays' }),
-          el('div', { class: 'plot-option-row' }, textToggle),
+          { class: 'plot-icon-row' },
+          iconButton('unfold-horizontal', 'Fit the whole genome across (key: 0, or a double click on the tracks)', () => this.fit(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+          iconButton('unfold-vertical', 'Fit every track into the height there is, in the proportions they are in now', () => this.fitTracks(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+          el('span', { class: 'plot-option-gap' }),
+          this.optionToggle('text', 'type'),
+          this.optionToggle('fills', 'chart-area'),
         ),
-        button('fit to view', () => this.fit(), {
-          class: 'btn btn-wide',
-          title: 'The whole genome (key: 0, or a double click on the tracks)',
-        }),
-        button('fit tracks to the space', () => this.fitTracks(), {
-          class: 'btn btn-wide',
-          title:
-            'Share the height there is between every track, in the proportions they are in now',
-        }),
         el(
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'export' }),
           el(
             'div',
-            { class: 'export-row export-row-wide' },
-            formatSelect,
+            { class: 'export-row export-row-flex' },
             dpiSelect,
+            formatSelect,
             button('Save', () => void this.save(), { class: 'btn' }),
           ),
         ),
@@ -1358,6 +1609,15 @@ export class BrowserView {
     const onDown = (event: PointerEvent): void => {
       if (event.button !== 0) return
       const { x, y } = at(event)
+      // A limit under a track's name is a text box that happens to be painted.
+      // Checked before the pointer is captured, so the press never becomes the
+      // start of a pan the reader did not ask for.
+      const limit = this.rangeAt(x, y)
+      if (limit !== null) {
+        event.preventDefault()
+        this.openRangeEditor(limit)
+        return
+      }
       canvas.setPointerCapture(event.pointerId)
       canvas.focus({ preventScroll: true })
       // A press on the *ruler* is a range selection, with no modifier. The
@@ -1387,6 +1647,10 @@ export class BrowserView {
         // everywhere on this canvas, so the affordance has to be in the picture.
         const grip = this.laneAt(y)
         this.gripping = grip?.onBorder === true ? grip.lane.entry.id : null
+        // …with the one exception the arrowhead cannot make: a caret. Over a
+        // limit the pointer *is* the affordance, because "this text is a text
+        // box" is a claim only a text cursor makes.
+        canvas.classList.toggle('is-text', this.rangeAt(x, y) !== null)
         this.schedule()
         return
       }
@@ -1477,6 +1741,7 @@ export class BrowserView {
     const forget = (): void => {
       this.hover = null
       this.gripping = null
+      canvas.classList.remove('is-text')
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()
@@ -1825,6 +2090,47 @@ function clampPercent(value: number): number {
 
 /** Where the track name sits inside its lane, from the lane's top edge. */
 const NAME_TOP = 9
+
+/** How far under the name the value range sits, when the lane is tall enough. */
+const DETAIL_DROP = 12
+
+/** How tall a limit's click target is: the text, plus a little either side. */
+const HIT_HEIGHT = 13
+
+/**
+ * How tall a lane's hover-control row is, for keeping it inside its lane.
+ *
+ * Measured rather than derived: the swatch, the `auto` button, the slider and
+ * the group menu are four controls of three different heights, and the row is as
+ * tall as the tallest — which the stylesheet pins, precisely so this number can
+ * be relied on. A lane shorter than the row plus the two lines of label above it
+ * cannot hold both; the clamp then keeps the row inside the lane and lets it
+ * cover the range, because a row that hangs into the *next* lane disappears the
+ * moment a hand moves toward it.
+ */
+const CONTROL_ROW = 20
+
+/** One end of a lane's value axis, and the box it was drawn in. */
+interface RangeHit {
+  /**
+   * Every track the range belongs to — which for an overlay group is all of
+   * them, not the one whose limits happened to be written down.
+   *
+   * A lane draws one range under however many names it holds, and that single
+   * pair is a claim about the *lane*: the whole point of overlaying two tracks
+   * is that they are drawn against one axis. Committing to only the first would
+   * leave two lines at two scales in one lane with one label, which is the exact
+   * picture the group exists to prevent.
+   */
+  entries: AnnotationEntry[]
+  part: 'min' | 'max'
+  value: string
+  /** Canvas pixels, in the browser's own coordinates. */
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 /** Room under the figure for the one-line caption the export adds. */
 const CAPTION_HEIGHT = 18

@@ -872,14 +872,26 @@ export class AnnotationCard {
      * rescale, and is still looking at a button that says it is on auto.
      */
     const setAuto = (on: boolean): void => {
+      const low = Number(min.value)
+      const high = Number(max.value)
+      // Refused rather than stored. `resolveLimits` answers an inverted or
+      // unreadable pair with `{0, 1}`, so a mistyped bound would redraw the lane
+      // against an axis nobody asked for and leave the reader hunting for the
+      // number they typed. The box says so and keeps what was there — the same
+      // answer the range under the track's name gives to the same mistake.
+      if (!on && (!Number.isFinite(low) || !Number.isFinite(high) || !(high > low))) {
+        for (const box of [min, max]) {
+          box.classList.add('is-bad')
+          window.setTimeout(() => box.classList.remove('is-bad'), 700)
+        }
+        return
+      }
       auto.classList.toggle('is-on', on)
       auto.setAttribute('aria-pressed', String(on))
       auto.title = on
         ? 'Rescaling to what is on screen. Type a bound, or press this, to fix the range.'
         : 'Fixed to the pair beside this. Press to rescale to what is on screen instead.'
-      this.props.store.restyle(entry.id, {
-        limits: { auto: on, min: Number(min.value), max: Number(max.value) },
-      })
+      this.props.store.restyle(entry.id, { limits: { auto: on, min: low, max: high } })
     }
 
     for (const box of [min, max]) {

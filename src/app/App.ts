@@ -577,6 +577,7 @@ export class App implements SessionHost {
 
     const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
       ['text', 'n'],
+      ['fills', 'f'],
       ['crosshair', 'x'],
       ['dividers', 'd'],
       ['breaks', 'e'],

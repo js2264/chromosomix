@@ -477,6 +477,20 @@ export interface PlotOptions {
    * caption beside one, every word drawn into it is ink somebody may want out.
    */
   text: boolean
+  /**
+   * The shaded area under a value track's line.
+   *
+   * Two fills, one switch, because they are one thing to the eye: the pale
+   * envelope that says what a zoomed-out mean hid, and the area an `area` track
+   * carries under its own line. Both are context for the line rather than a
+   * second series, and both stop being context the moment three tracks share a
+   * lane — at which point what a reader wants is three lines.
+   *
+   * The matrix ignores it, like `text`, and for the same reason: it is an option
+   * about the *tracks*, and the tracks are drawn beside a map as often as they
+   * are drawn without one.
+   */
+  fills: boolean
   /** Contig and genome boundary hairlines. */
   dividers: boolean
   /**
@@ -509,6 +523,7 @@ export const CROSSHAIR_COLOR = '#1f5fa9'
 
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   text: true,
+  fills: true,
   dividers: true,
   breaks: true,
   labels: true,
