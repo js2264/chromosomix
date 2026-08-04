@@ -195,6 +195,12 @@ export class PairView {
       this.panel.setData(result, `${this.props.rowGenome} × ${this.props.colGenome}`)
       this.renderSummary(result)
     } catch (err) {
+      // A view that has been torn down must not navigate the shell. Closing the
+      // map puts the reader down, which rejects every read still in flight —
+      // and a rejection arriving after the browser has been mounted in this
+      // view's place would replace it with an error screen about a worker
+      // nobody is waiting for.
+      if (this.disposed) return
       this.props.onError(err)
     }
   }

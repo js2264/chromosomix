@@ -831,10 +831,12 @@ export class Session {
       // actually is before reporting a failure: a bigWig with no suffix, or a
       // `chrom.sizes` called `yeast.txt`, is a perfectly good genome to browse
       // and only looks like a broken cooler from here.
-      if (route === 'unknown' && (await this.openUnknown(uri, source, carry))) {
-        this.opening = null
-        return
-      }
+      // Cleared *before* the attempt, not after: `openGenome` refuses to open a
+      // URI that is already opening, which this one is — the guard belongs to
+      // the read that just failed. The two other redirects out of this catch
+      // clear it for the same reason.
+      this.opening = null
+      if (route === 'unknown' && (await this.openUnknown(uri, source, carry))) return
       this.showError(err, uri, source)
     } finally {
       this.opening = null
@@ -1019,7 +1021,10 @@ export class Session {
     this.browser = view
     this.showContent(view.el, {
       destroy: () => {
-        this.browser = null
+        // Only if it is still this one. `showContent` destroys what was mounted
+        // *after* the replacement has been built, so a remount would otherwise
+        // have the outgoing view's teardown null the incoming one.
+        if (this.browser === view) this.browser = null
         view.destroy()
       },
       sideEl: view.sideEl,
@@ -1041,6 +1046,13 @@ export class Session {
       void this.open(file.name, { kind: 'local', file })
       return
     }
+    // A sizes file dropped on a browser is not a track — it is an answer to the
+    // question the browser is asking when its lengths were inferred. It replaces
+    // them and keeps everything else, tracks included.
+    if (this.assembly !== null && /\.(chrom\.sizes|sizes|genome|fai)$/i.test(file.name)) {
+      void this.adoptSizes(file)
+      return
+    }
     const held = this.annotations
     if (held === null) return
     const card = /\.bedpe$/i.test(file.name) ? 'overlay' : 'linear'
@@ -1052,6 +1064,52 @@ export class Session {
       ? 'pairs'
       : 'segments'
     held.loader.addFiles(card, zone, [file])
+  }
+
+  /**
+   * Take this browser's sequence lengths from a `chrom.sizes` instead.
+   *
+   * The case it exists for is a browser opened on a BED or a GTF, whose
+   * sequences end at their last feature because that is all such a file knows.
+   * Dropping the assembly's own sizes replaces the guesses with the lengths —
+   * and replaces *only* those: the URI, the session memory and every loaded
+   * track are what they were, because the genome did not change, only what is
+   * known about it.
+   */
+  private async adoptSizes(file: File): Promise<void> {
+    const assembly = this.assembly
+    if (assembly === null) return
+    const client = new AnnotationClient()
+    try {
+      const result = await client.request<'assembly'>({
+        kind: 'assembly',
+        source: { kind: 'local', file, name: file.name },
+      })
+      if (this.destroyed || this.assembly !== assembly) return
+      if (result.format !== 'sizes' || result.contigs.length === 0) {
+        // Named like a sizes file and is not one. Offer it to the loader, which
+        // reads its bytes and refuses it by name if it is nothing at all.
+        this.annotations?.loader.addFiles('linear', 'segments', [file])
+        return
+      }
+      this.assembly = assemblyOf({
+        uri: assembly.uri,
+        name: assembly.name,
+        contigs: result.contigs,
+        origin: 'sizes',
+      })
+      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this))])
+      const state = this.store.state
+      if (state === null) return
+      // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
+      // *of*, and its axis is built once from it.
+      this.mounted = state
+      this.mountBrowser(state)
+    } catch (err) {
+      if (!this.destroyed) this.showError(err)
+    } finally {
+      client.destroy()
+    }
   }
 
   /**
@@ -1079,6 +1137,11 @@ export class Session {
     // The annotations survive: they are keyed on this session and this URI, and
     // both are exactly what they were. Only the *map* is being closed.
     const held = this.annotations
+    // The mounted view first, and the reader after it: terminating a worker
+    // rejects every read still in flight, and a view that is still mounted
+    // answers that by putting an error screen where the browser is about to go.
+    this.current?.destroy?.()
+    this.current = null
     this.compare?.client.terminate()
     this.compare = null
     this.compareCard = null
@@ -1269,11 +1332,19 @@ export class Session {
     try {
       const info = await client.request<'open'>({ kind: 'open', uri, source })
       const contigs = await client.request<'contigs'>({ kind: 'contigs' })
-      if (this.destroyed) {
+      // The primary file may have been replaced while this one was opening — a
+      // resolution picked from the breadcrumb is enough. The gate is about *two*
+      // files, so it has to be the two it started with, or it would compare one
+      // file's bin size against another file's contigs and pass.
+      if (this.destroyed || this.file !== file) {
         client.terminate()
         return
       }
       const mine = await this.contigs()
+      if (this.destroyed || this.file !== file) {
+        client.terminate()
+        return
+      }
       const refusal = compareRefusal(file.info, info, {
         primary: contigPairs(mine),
         second: contigPairs(contigs),
@@ -1442,8 +1513,13 @@ export class Session {
         remember(this.memoryKey(file.uri), 'compare:normalise', on)
         this.remount()
       },
-      onFailure: (message) =>
-        this.compareCard?.set({ kind: 'error', label: fileLabel(held.uri), message }),
+      onFailure: (message) => {
+        // Terminating the second reader rejects its in-flight reads, which
+        // arrive here as failures — of a comparison that is no longer on
+        // screen, on a card that is now offering to start a new one.
+        if (this.compare !== held) return
+        this.compareCard?.set({ kind: 'error', label: fileLabel(held.uri), message })
+      },
     }
   }
 

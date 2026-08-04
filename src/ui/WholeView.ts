@@ -462,6 +462,9 @@ export class WholeView {
       this.panel.setData(result, 'Whole genome', second)
       this.summary.textContent = this.summarise(result)
     } catch (err) {
+      // `disposed` covers the case the others need a guard for: closing the map
+      // puts the reader down, which rejects this read after the browser has
+      // been mounted in this view's place.
       if (this.disposed || this.running !== task) return
       // A cancel is an answer, not a failure: `cancel` has already put the gate
       // back, so there is nothing to say here.

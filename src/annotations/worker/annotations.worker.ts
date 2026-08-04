@@ -140,7 +140,7 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   const text = await decodeAnnotationText(bytes)
   if (text.trim() === '') throw new Error('This file is empty.')
 
-  if (looksLikeChromSizes(text)) {
+  if (looksLikeChromSizes(text, source.name)) {
     recent = { key: cacheKey(source), format: 'sizes', features: null }
     return { format: 'sizes', contigs: parseChromSizes(text), origin: 'sizes', exact: true }
   }

@@ -61,28 +61,32 @@ export interface RulerBand {
  */
 export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): RulerBand[] {
   const { x, y, width, palette } = frame
-  const segments = frame.axis.segments.filter(
-    (segment) => segment.unitEnd > frame.domain[0] && segment.unitStart < frame.domain[1],
-  )
+  // Kept with their index in the *assembly*, because that is what decides which
+  // of them is shaded: parity taken over the visible ones instead inverts every
+  // band on screen the moment a sequence leaves the left edge, which during a
+  // drag is a flicker with no change in the data behind it.
+  const segments = frame.axis.segments
+    .map((segment, index) => ({ segment, index }))
+    .filter(
+      ({ segment }) => segment.unitEnd > frame.domain[0] && segment.unitStart < frame.domain[1],
+    )
   ctx.save()
   ctx.beginPath()
   ctx.rect(x, y, width, RULER_HEIGHT)
   ctx.clip()
 
   const bands: RulerBand[] = []
-  let alternate = false
-  for (const segment of segments) {
+  for (const { segment, index } of segments) {
     const from = frame.toPixel(Math.max(segment.unitStart, frame.domain[0]))
     const to = frame.toPixel(Math.min(segment.unitEnd, frame.domain[1]))
     bands.push({ contig: segment.contig, from, to })
     // Alternating shading rather than a line between sequences: at whole-genome
     // zoom the lines are three pixels apart on a 4,000-contig metagenome and
     // read as a texture, while alternating blocks stay legible at any density.
-    if (alternate) {
+    if (index % 2 === 1) {
       ctx.fillStyle = palette.band
       ctx.fillRect(from, y, Math.max(1, to - from), BAND_HEIGHT)
     }
-    alternate = !alternate
   }
 
   // The names, where there is room for them. A name that does not fit its own
