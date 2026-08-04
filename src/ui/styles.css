@@ -490,6 +490,10 @@ p {
   display: flex;
 }
 
+.colorbar-slot.is-compare .colorbar-canvas {
+  width: 7rem;
+}
+
 /* --- the 1D genome browser ---------------------------------------------- */
 
 /* The whole view is a drop target, which is what makes "drop a .cool to switch

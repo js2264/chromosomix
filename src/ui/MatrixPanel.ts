@@ -1588,6 +1588,10 @@ export class MatrixPanel {
             values: blendAcrossDiagonal(data, this.second.data, { gain: this.second.gain }).values,
           }
     this.barCanvas2.classList.toggle('hidden', this.second === null)
+    // Two legends need more room than one: each caption gains a triangle and
+    // there are two of them side by side, and a clipped caption on a legend is
+    // worse than a narrower plot.
+    this.barSlot.classList.toggle('is-compare', this.second !== null)
     // The second legend is a function of the gain as well as of the colour
     // scale, and the gain is recomputed per block. Without this the legend
     // redraw is skipped whenever a *pinned* clip survives a navigation, and the
