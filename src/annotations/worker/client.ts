@@ -59,7 +59,12 @@ export class AnnotationClient {
   ): Promise<AnnotationResultMap[K]> {
     const worker = this.ensure()
     const id = this.nextId++
-    const message = { ...payload, id } as AnnotationRequest
+    // Through `unknown`: the union's members no longer share a field — only
+    // three of the four name an `entry`, since asking what genome a file is on
+    // is a question about a file nothing has opened yet — so TypeScript can no
+    // longer see the spread as any one member of it. The discriminant is
+    // `payload.kind`, which `AnnotationRequestOf<K>` has already pinned.
+    const message = { ...payload, id } as unknown as AnnotationRequest
     return new Promise<AnnotationResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
       worker.postMessage(message)

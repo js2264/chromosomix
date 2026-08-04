@@ -2135,10 +2135,12 @@ function positionIn(
  * before it is in the document has no computed custom properties, and the right
  * answer for it is the palette it is going to be mounted into.
  */
-function readCanvasPalette(from: Element): {
+export function readCanvasPalette(from: Element): {
   labelColor: string
   labelHaloColor: string
   plotBorderColor: string
+  /** A wash for alternating blocks — the browser's sequence bands. */
+  bandColor: string
 } {
   const style = getComputedStyle(from)
   const pick = (name: string, fallback: string): string => {
@@ -2149,6 +2151,7 @@ function readCanvasPalette(from: Element): {
     labelColor: pick('--text-dim', '#5b6169'),
     labelHaloColor: pick('--bg', '#ffffff'),
     plotBorderColor: pick('--border-strong', '#b9bec5'),
+    bandColor: pick('--bg-sunken', '#f6f7f8'),
   }
 }
 
@@ -2409,7 +2412,7 @@ const DRAG_SLACK = 3
  * boxes: auto, and the round steps around what is on screen. A number box in a
  * context menu is a form in a menu.
  */
-function openLaneMenu(
+export function openLaneMenu(
   x: number,
   y: number,
   entry: AnnotationEntry,

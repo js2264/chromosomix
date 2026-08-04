@@ -61,8 +61,20 @@ export class FilePicker {
     this.drop = el(
       'div',
       { class: 'dropzone', attrs: { tabindex: '0', role: 'button' } },
-      el('div', { class: 'dropzone-title', text: 'Drop a .metacool, .mmetacool, .cool or .mcool file here' }),
-      el('div', { class: 'dropzone-sub', text: 'or click to choose one' }),
+      el('div', {
+        class: 'dropzone-title',
+        text: 'Drop a .metacool, .mmetacool, .cool or .mcool file here',
+      }),
+      el('div', {
+        class: 'dropzone-sub',
+        // The second sentence is the genome browser's whole entry point, and it
+        // belongs here rather than in a section of its own: to a reader with a
+        // bigWig and no map, "this app is not for me" is the wrong conclusion
+        // and this is the only place it can be corrected before they leave.
+        text:
+          'or click to choose one — or drop a chrom.sizes, a bigWig, a bigBed, a GTF or a BED ' +
+          'to browse that genome with no map at all',
+      }),
     )
 
     const fileInput = el('input', { class: 'hidden-input', type: 'file' })

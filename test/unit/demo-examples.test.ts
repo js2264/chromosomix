@@ -17,7 +17,12 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 
-import { DEMO_ANNOTATION_FILES, DEMO_FILES, demoAnnotationsFor } from '../../src/ui/examples'
+import {
+  DEMO_ANNOTATION_FILES,
+  DEMO_FILES,
+  DEMO_GENOME_FILES,
+  demoAnnotationsFor,
+} from '../../src/ui/examples'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
@@ -50,6 +55,23 @@ describe('the picker examples', () => {
       expect(mc.binsize).toBeGreaterThan(0)
       expect(mc.nContigs).toBeGreaterThan(0)
       mc.close()
+    })
+  }
+
+  /**
+   * The genome-browser demos are on disk too.
+   *
+   * Existence only, and deliberately: they are not coolers, so opening one
+   * through `MetaCooler` is the wrong check. What makes them valid is that the
+   * annotations worker can read an assembly out of them, and `annotation-parse`
+   * already covers that for this very file.
+   */
+  for (const file of DEMO_GENOME_FILES) {
+    it(`has ${file} for the genome browser`, () => {
+      expect(
+        existsSync(`${DIR}${file}`),
+        `${file} is offered as a genome-browser example but is not in public/demo/`,
+      ).toBe(true)
     })
   }
 })

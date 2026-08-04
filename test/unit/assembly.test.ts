@@ -1,0 +1,204 @@
+/**
+ * A genome with no contact map behind it.
+ *
+ * Two of these are worth pinning because they are silent when wrong. The
+ * `chrom.sizes` sniffer has to tell a two-column sizes file from a three-column
+ * BED *without* ever mistaking one for the other, since reading a peak set as an
+ * assembly would invent a genome out of it. And the locus box has to round-trip:
+ * what it shows must be what it would accept, or a coordinate copied out of one
+ * view and into another moves by a base.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import {
+  assemblyAxis,
+  assemblyOf,
+  findContig,
+  formatLocus,
+  lengthsAreExact,
+  looksLikeChromSizes,
+  parseChromSizes,
+  parseLocus,
+  rangeToUnits,
+  unitsToRange,
+} from '../../src/genome/assembly'
+
+const YEAST = assemblyOf({
+  uri: 'yeast.chrom.sizes',
+  name: 'yeast',
+  origin: 'sizes',
+  contigs: [
+    { name: 'I', length: 230_218 },
+    { name: 'II', length: 813_184 },
+    { name: 'III', length: 316_620 },
+  ],
+})
+
+describe('parseChromSizes', () => {
+  it('reads the two leading columns, whatever whitespace separates them', () => {
+    expect(parseChromSizes('I\t230218\nII 813184\n')).toEqual([
+      { name: 'I', length: 230_218 },
+      { name: 'II', length: 813_184 },
+    ])
+  })
+
+  it('skips comments, blank lines and a UCSC header', () => {
+    expect(parseChromSizes('# a comment\ntrack name=x\n\nI\t100\n')).toEqual([
+      { name: 'I', length: 100 },
+    ])
+  })
+
+  it('takes a .fai, which is the same two leading columns', () => {
+    expect(parseChromSizes('I\t230218\t7\t60\t61\n')).toEqual([{ name: 'I', length: 230_218 }])
+  })
+
+  it('refuses a row whose second column is not a length', () => {
+    expect(parseChromSizes('I\tchr\n')).toEqual([])
+    expect(parseChromSizes('I\t0\n')).toEqual([])
+  })
+
+  it('keeps the first of two rows with one name', () => {
+    expect(parseChromSizes('I\t100\nI\t200\n')).toEqual([{ name: 'I', length: 100 }])
+  })
+})
+
+describe('looksLikeChromSizes', () => {
+  it('accepts a sizes file', () => {
+    expect(looksLikeChromSizes('I\t230218\nII\t813184\n')).toBe(true)
+  })
+
+  // The distinction one line cannot always make: `chr1 248956422` is a legal
+  // sizes row and an illegal BED row, so the test has to be every row.
+  it('refuses a BED, which has three columns', () => {
+    expect(looksLikeChromSizes('I\t0\t100\nI\t200\t300\n')).toBe(false)
+  })
+
+  it('refuses a two-column file whose second column is not a positive integer', () => {
+    expect(looksLikeChromSizes('gene1\t3.5\n')).toBe(false)
+    expect(looksLikeChromSizes('gene1\t-4\n')).toBe(false)
+  })
+
+  it('refuses an empty file, which declares no genome', () => {
+    expect(looksLikeChromSizes('\n# nothing\n')).toBe(false)
+  })
+})
+
+describe('assemblyAxis', () => {
+  it('lays the sequences end to end, one unit per base pair', () => {
+    const axis = assemblyAxis(YEAST)
+    expect(axis.segments.map((segment) => segment.unitStart)).toEqual([0, 230_218, 1_043_402])
+    expect(axis.unitEnd).toBe(YEAST.total)
+    expect(axis.uniformBpPerUnit).toBe(1)
+  })
+
+  it('maps a unit back to the sequence and position it is on', () => {
+    const axis = assemblyAxis(YEAST)
+    expect(axis.unitToLocus(0)).toEqual({ contig: 'I', bp: 0 })
+    expect(axis.unitToLocus(230_218)).toEqual({ contig: 'II', bp: 0 })
+    expect(axis.unitToLocus(230_218 + 500)).toEqual({ contig: 'II', bp: 500 })
+  })
+
+  it('clips a window to the sequences it touches', () => {
+    const axis = assemblyAxis(YEAST)
+    const windows = axis.windows([230_000, 231_000])
+    expect(windows.map((window) => window.contig)).toEqual(['I', 'II'])
+    expect(windows[0].start).toBe(230_000)
+    expect(windows[1].end).toBe(782)
+  })
+})
+
+describe('parseLocus', () => {
+  it('takes a bare sequence name as the whole sequence', () => {
+    expect(parseLocus('II', YEAST)).toEqual({ contig: 'II', start: 0, end: 813_184 })
+  })
+
+  // 1-based inclusive in, 0-based half-open out. Getting this wrong shifts every
+  // view by one base in a way nothing on screen would show.
+  it('converts a 1-based inclusive window to a 0-based half-open one', () => {
+    expect(parseLocus('I:1,001-2,000', YEAST)).toEqual({ contig: 'I', start: 1000, end: 2000 })
+  })
+
+  it('widens a bare position into a window around it', () => {
+    const parsed = parseLocus('I:100000', YEAST)
+    expect(parsed).not.toBeNull()
+    if (parsed === null || parsed === 'whole') throw new Error('expected a range')
+    expect(parsed.start).toBeLessThan(99_999)
+    expect(parsed.end).toBeGreaterThan(100_000)
+  })
+
+  it('takes the four spellings of "everything"', () => {
+    for (const text of ['*', 'all', 'genome', 'WHOLE']) {
+      expect(parseLocus(text, YEAST)).toBe('whole')
+    }
+  })
+
+  it('refuses a name it has never heard of', () => {
+    expect(parseLocus('chrZ', YEAST)).toBeNull()
+    expect(parseLocus('II:banana', YEAST)).toBeNull()
+    expect(parseLocus('II:900-800', YEAST)).toBeNull()
+  })
+
+  it('clamps a window to the sequence it is on', () => {
+    expect(parseLocus('I:1-999999999', YEAST)).toEqual({ contig: 'I', start: 0, end: 230_218 })
+  })
+
+  // What the box shows must be what the box would accept.
+  it('round-trips through its own formatter', () => {
+    const range = { contig: 'II', start: 1000, end: 2000 }
+    expect(parseLocus(formatLocus(range), YEAST)).toEqual(range)
+  })
+})
+
+describe('findContig', () => {
+  it('matches the whole name first, so a name with a colon survives', () => {
+    const odd = assemblyOf({
+      uri: 'x',
+      name: 'x',
+      origin: 'sizes',
+      contigs: [{ name: 'NODE_1:2', length: 500 }],
+    })
+    expect(findContig(odd, 'NODE_1:2')?.name).toBe('NODE_1:2')
+    expect(parseLocus('NODE_1:2', odd)).toEqual({ contig: 'NODE_1:2', start: 0, end: 500 })
+  })
+
+  it('forgives case, and a chr prefix in either direction', () => {
+    expect(findContig(YEAST, 'ii')?.name).toBe('II')
+    const ucsc = assemblyOf({
+      uri: 'x',
+      name: 'x',
+      origin: 'sizes',
+      contigs: [{ name: 'chr1', length: 100 }],
+    })
+    expect(findContig(ucsc, '1')?.name).toBe('chr1')
+    expect(findContig(YEAST, 'chrII')?.name).toBe('II')
+  })
+})
+
+describe('units and ranges', () => {
+  it('round-trip through the genome-wide axis', () => {
+    const units = rangeToUnits(YEAST, { contig: 'II', start: 1000, end: 2000 })
+    expect(units).toEqual([231_218, 232_218])
+    expect(unitsToRange(YEAST, units as [number, number])).toEqual({
+      contig: 'II',
+      start: 1000,
+      end: 2000,
+    })
+  })
+
+  // A window spanning a boundary is named by the sequence most of it is on,
+  // rather than by whichever end happens to come first.
+  it('names a straddling window by its midpoint', () => {
+    expect(unitsToRange(YEAST, [230_000, 240_000])?.contig).toBe('II')
+    expect(unitsToRange(YEAST, [220_000, 231_000])?.contig).toBe('I')
+  })
+})
+
+describe('lengthsAreExact', () => {
+  it('is false only for lengths inferred from features', () => {
+    for (const origin of ['sizes', 'bigwig', 'bigbed', 'cooler'] as const) {
+      expect(lengthsAreExact({ ...YEAST, origin })).toBe(true)
+    }
+    expect(lengthsAreExact({ ...YEAST, origin: 'features' })).toBe(false)
+  })
+})

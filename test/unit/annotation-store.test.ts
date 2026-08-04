@@ -262,7 +262,13 @@ describe('drop routing (§8.3)', () => {
     expect(kindFor('linear', 'bedpe')).toBeNull()
     expect(kindFor('overlay', 'bigwig')).toBeNull()
     expect(kindFor('overlay', 'gtf')).toBeNull()
-    expect(kindFor('linear', 'bigbed')).toBeNull()
+  })
+
+  // A bigBed is read whole and parsed as the BED it holds, so from either card
+  // it is one: boxes on a lane, and a BED12 inside one draws its exons.
+  it('takes a bigBed as the segments it contains', () => {
+    expect(kindFor('linear', 'bigbed')).toBe('segments')
+    expect(kindFor('overlay', 'bigbed')).toBe('segments')
   })
 })
 

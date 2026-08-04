@@ -33,6 +33,14 @@ export interface Example {
   label: string
   url: string
   note?: string
+  /**
+   * What opening it produces: a contact map, or a 1D genome browser.
+   *
+   * Both are "open this file and see something", and the picker lists them
+   * together for that reason — but a reader choosing one is choosing between two
+   * different applications, so the list says which.
+   */
+  kind?: 'map' | 'genome'
 }
 
 /**
@@ -79,6 +87,26 @@ const DEMO: Array<{ file: string; label: string; note: string }> = [
       'A mitotic micro-C map of synthetic yeast: 16 chromosomes ' +
       '(XIII carries a 40 kb insertion, hence XIII-syn40), 12,118 bins of ' +
       '1 kb, 13.7 M pixels, 179 M contacts, balanced (19 MB).',
+  },
+]
+
+/**
+ * The demos that open a *genome browser* rather than a map.
+ *
+ * One entry, and one is enough to make the point: a bigWig declares its own
+ * assembly in its header, so dropping one is all it takes to get a browser over
+ * a real genome with a real track already in it. Everything else — the gene
+ * model, the peak calls, the loops — is then a drop away, and they are the same
+ * ten files the map beside them offers.
+ */
+const DEMO_GENOMES: Array<{ file: string; label: string; note: string }> = [
+  {
+    file: 'Yeast_ATAC.bw',
+    label: 'Yeast ATAC — a genome browser, no map (bigWig)',
+    note:
+      'Opens the 1D browser on the sixteen chromosomes this bigWig’s header names, with the ' +
+      'track already drawn across all of them. Drop the gene model, the peak calls or the ' +
+      'loops on it — or drop a .cool to turn the same session into a contact map.',
   },
 ]
 
@@ -158,6 +186,15 @@ export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOT
 export const DEMO_FILES: readonly string[] = DEMO.map((entry) => entry.file)
 
 /**
+ * The genome-browser demos, for the test that checks they are on disk.
+ *
+ * Checked for existence only, and not opened as a cooler, because they are not
+ * one: what makes them valid is that the annotations worker can read an assembly
+ * out of them, which `annotation-parse` already covers for this very file.
+ */
+export const DEMO_GENOME_FILES: readonly string[] = DEMO_GENOMES.map((entry) => entry.file)
+
+/**
  * Absolute URLs for the published demo files, in the order they should be
  * offered — the metacool first, because it is the file type this viewer exists
  * for, then the plain coolers, as the fallback path they exercise: the `.mcool`s
@@ -170,9 +207,20 @@ export function demoExamples(): Example[] {
   // it got: `inferSource` still sees `http(s)://`, and a view state naming a
   // demo re-opens in the desktop build exactly as it does on the website.
   const base = DEMO_BASE !== '' ? DEMO_BASE : import.meta.env.BASE_URL
-  return DEMO.map((entry) => ({
-    label: entry.label,
-    url: new URL(`${base}demo/${entry.file}`, window.location.href).href,
-    note: entry.note,
-  }))
+  const absolute = (file: string): string =>
+    new URL(`${base}demo/${file}`, window.location.href).href
+  return [
+    ...DEMO.map((entry) => ({
+      label: entry.label,
+      url: absolute(entry.file),
+      note: entry.note,
+      kind: 'map' as const,
+    })),
+    ...DEMO_GENOMES.map((entry) => ({
+      label: entry.label,
+      url: absolute(entry.file),
+      note: entry.note,
+      kind: 'genome' as const,
+    })),
+  ]
 }

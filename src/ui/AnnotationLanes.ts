@@ -17,6 +17,7 @@
  * lands, so a lane never blinks.
  */
 
+import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit, type FeatureLayout } from '../render/features'
 import { clipLane, laneText, type LaneFrame } from '../render/lane'
@@ -90,23 +91,6 @@ export interface LaneReadout {
 /** Gap between two stacked lanes, in CSS pixels. */
 const LANE_GAP = 4
 
-/**
- * How much wider than the view a fetch reaches, as a fraction of the view.
- *
- * Half a window on each side, so a pan of up to half a screen is free. Wider
- * costs bytes nobody looks at; narrower and the first pixel of a drag misses.
- */
-const FETCH_PAD = 0.5
-
-/** Cached samples for one track on one edge. */
-interface TrackCache {
-  /** The power-of-two bases-per-pixel these were fetched at. */
-  bucket: number
-  /** Genomic span held per contig. */
-  covered: Map<string, [number, number]>
-  samples: TrackSampleSet
-}
-
 /** A lane's position in its stack, resolved per frame. */
 interface Slot {
   entry: AnnotationEntry
@@ -140,12 +124,10 @@ export class AnnotationLanes {
   readonly rightEl: HTMLCanvasElement
 
   private axes: { rows: LocusAxis | null; cols: LocusAxis | null } = { rows: null, cols: null }
-  private readonly cache = new Map<string, TrackCache>()
-  private readonly inflight = new Set<string>()
+  private readonly cache: SampleCache
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: FeatureLayout }>()
   private dpr = 1
-  private disposed = false
 
   constructor(
     private readonly options: {
@@ -163,6 +145,7 @@ export class AnnotationLanes {
   ) {
     this.bottomEl = el('canvas', { class: 'lane-canvas lane-bottom' })
     this.rightEl = el('canvas', { class: 'lane-canvas lane-right' })
+    this.cache = new SampleCache(options.client, () => options.onChange())
   }
 
   /**
@@ -177,25 +160,8 @@ export class AnnotationLanes {
     this.layouts.clear()
   }
 
-  /**
-   * Drop cached samples for entries that are no longer in the store.
-   *
-   * Done here rather than through a removal event, because the cache is a
-   * *derived* thing and the store is the truth: reconciling against it once per
-   * frame cannot go stale, whereas an event that is not sent leaks a track's
-   * worth of typed arrays for as long as the file is open.
-   */
-  private prune(): void {
-    if (this.cache.size === 0) return
-    const live = new Set(this.options.store.entries.map((entry) => entry.id))
-    for (const key of [...this.cache.keys()]) {
-      if (!live.has(key.slice(0, key.lastIndexOf(':')))) this.cache.delete(key)
-    }
-  }
-
   destroy(): void {
-    this.disposed = true
-    this.cache.clear()
+    this.cache.destroy()
     this.layouts.clear()
   }
 
@@ -292,7 +258,7 @@ export class AnnotationLanes {
     right: Lane[]
     groups: Map<string, { min: number; max: number }>
   } {
-    this.prune()
+    this.cache.prune(new Set(this.options.store.entries.map((entry) => entry.id)))
     const bottom = this.buildEdge('bottom', geometry)
     const right = this.buildEdge('right', geometry)
 
@@ -369,51 +335,13 @@ export class AnnotationLanes {
     axis: LocusAxis,
     frame: LaneFrame,
   ): TrackSampleSet | null {
-    const key = `${entry.id}:${edge}`
-    const cached = this.cache.get(key) ?? null
-    const view = axis.windows(frame.domain)
-    if (view.length === 0) return cached?.samples ?? null
-
-    const pixels = Math.max(1, Math.abs(frame.alongTo - frame.alongFrom))
-    const bases = view.reduce((sum, window) => sum + (window.end - window.start), 0)
-    // Rounded to a power of two so a slow zoom does not refetch every frame: the
-    // file's zoom levels are powers of two apart anyway, so anything finer would
-    // ask for the same level under a different name.
-    const bucket = 2 ** Math.round(Math.log2(Math.max(1, bases / pixels)))
-
-    if (cached !== null && cached.bucket === bucket && covers(cached.covered, view)) {
-      return cached.samples
-    }
-    if (this.inflight.has(key)) return cached?.samples ?? null
-
-    const wanted = axis.windows(frame.domain, FETCH_PAD)
-    this.inflight.add(key)
-    void this.options.client
-      .request<'sample'>({
-        kind: 'sample',
-        entry: entry.id,
-        regions: wanted.map((window) => ({
-          contig: window.contig,
-          start: window.start,
-          end: window.end,
-        })),
-        basesPerPixel: bucket,
-      })
-      .then((samples) => {
-        if (this.disposed) return
-        const covered = new Map<string, [number, number]>()
-        for (const window of wanted) covered.set(window.contig, [window.start, window.end])
-        this.cache.set(key, { bucket, covered, samples })
-        this.options.onChange()
-      })
-      .catch(() => {
-        // A failed sample is not an error screen: the track keeps whatever it
-        // had, the card already reports a load failure, and the next view change
-        // tries again.
-      })
-      .finally(() => this.inflight.delete(key))
-
-    return cached?.samples ?? null
+    return this.cache.samplesFor({
+      entry: entry.id,
+      scope: edge,
+      axis,
+      domain: frame.domain,
+      pixels: Math.abs(frame.alongTo - frame.alongFrom),
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -629,8 +557,8 @@ export class AnnotationLanes {
       if (here) onALane = true
 
       if (slot.entry.kind === 'track') {
-        const cache = this.cache.get(`${slot.entry.id}:${edge}`)
-        const value = cache === undefined ? null : valueAtPixel(cache.samples, axis, frame, along)
+        const cached = this.cache.peek(slot.entry.id, edge)
+        const value = cached === null ? null : valueAtPixel(cached, axis, frame, along)
         rows.push({
           label: slot.entry.label,
           colour: slot.entry.style.colour,
@@ -742,18 +670,6 @@ function hairline(
 
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */
 const LANE_FONT = '9px system-ui, sans-serif'
-
-/** `true` when every visible window is inside what was fetched. */
-function covers(
-  covered: Map<string, [number, number]>,
-  windows: Array<{ contig: string; start: number; end: number }>,
-): boolean {
-  for (const window of windows) {
-    const span = covered.get(window.contig)
-    if (span === undefined || span[0] > window.start || span[1] < window.end) return false
-  }
-  return true
-}
 
 /** `I:412,000` — the same phrasing the matrix readout uses. */
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {

@@ -12,17 +12,21 @@
  * follows for h5wasm: the main-thread bundle never pulls in a file parser.
  */
 
-import { BigWig } from '@gmod/bbi'
+import { BigBed, BigWig } from '@gmod/bbi'
+import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
 
 import { transfersFor } from '../../worker/protocol'
+import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
 import { decodeAnnotationText, parseBed, parseBedpe, parseGtf, sniffFormat } from '../parse'
-import type { Region, TrackSamples, TrackSampleSet } from '../types'
+import type { FeatureSet, Region, TrackSamples, TrackSampleSet } from '../types'
 import {
   bbiMagic,
+  isHdf5,
   type AnnotationRequest,
   type AnnotationResponse,
+  type AssemblyResult,
   type DetectedFormat,
   type LoadResult,
   type WireSource,
@@ -36,6 +40,25 @@ interface OpenTrack {
 }
 
 const tracks = new Map<string, OpenTrack>()
+
+/**
+ * The last file read whole, so the same one is not parsed twice.
+ *
+ * Starting a genome browser from a GTF asks this worker two questions about one
+ * file — *what genome is this on*, and then *give me its features* — and both
+ * answers come from the same parse. The demo GTF is 9.5 MB and ~310 ms of it, so
+ * the second question is answered from here instead.
+ *
+ * One entry, and keyed on name and size rather than on content: the two requests
+ * are consecutive and about the same drop, so anything longer-lived would be a
+ * cache of files nobody is looking at.
+ */
+let recent: { key: string; format: DetectedFormat; features: FeatureSet | null } | null = null
+
+/** A local file's identity for {@link recent}; a URL is its own. */
+function cacheKey(source: WireSource): string {
+  return source.kind === 'local' ? `${source.name}|${source.file.size}` : source.url
+}
 
 self.onmessage = (event: MessageEvent<AnnotationRequest>) => {
   void handle(event.data)
@@ -62,10 +85,119 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
       return sample(request.entry, request.regions, request.basesPerPixel)
+    case 'assembly':
+      return assemblyOf(request.source)
     case 'drop':
       tracks.delete(request.entry)
       return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// What genome is this on
+// ---------------------------------------------------------------------------
+
+/**
+ * Identify a file and say what sequences it knows about.
+ *
+ * The order is the order the answers get cheaper to trust, and it is also the
+ * order they get cheaper to obtain:
+ *
+ * 1. **HDF5** — a contact map. Named and handed straight back, because the
+ *    reader worker is what opens one; recognising it here is what lets a `.cool`
+ *    dropped on a genome browser switch the session to the map rather than fail
+ *    as an unreadable track.
+ * 2. **BBI** — a bigWig or a bigBed. Its header carries every sequence and its
+ *    true length, in a few kilobytes, at any file size.
+ * 3. **`chrom.sizes`** — two columns, and the whole file is checked before it is
+ *    believed, because one row of a BED looks exactly like one row of a sizes
+ *    file ({@link looksLikeChromSizes}).
+ * 4. **A feature file** — no lengths at all, so each sequence is reported as the
+ *    end of its last feature. The browser draws it, and says the edges are a
+ *    lower bound.
+ */
+async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
+  const handle = handleFor(source)
+  const head = await handle.read(8, 0)
+  if (isHdf5(head)) return { format: 'hdf5', contigs: [], origin: 'features', exact: true }
+
+  const magic = bbiMagic(head)
+  if (magic !== null) {
+    const bbi =
+      magic === 'bigwig'
+        ? new BigWig({ filehandle: handleFor(source) })
+        : new BigBed({ filehandle: handleFor(source) })
+    const header = await bbi.getHeader()
+    return {
+      format: magic,
+      contigs: contigsOfHeader(header),
+      origin: magic,
+      exact: true,
+    }
+  }
+
+  const bytes = await handle.readFile()
+  const text = await decodeAnnotationText(bytes)
+  if (text.trim() === '') throw new Error('This file is empty.')
+
+  if (looksLikeChromSizes(text)) {
+    recent = { key: cacheKey(source), format: 'sizes', features: null }
+    return { format: 'sizes', contigs: parseChromSizes(text), origin: 'sizes', exact: true }
+  }
+
+  const format = sniffFormat(text, source.name)
+  if (format === 'bedpe') {
+    const data = parseBedpe(text)
+    recent = { key: cacheKey(source), format, features: null }
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) {
+      note(ends, data.contigs[data.contig1[i]], data.end1[i])
+      note(ends, data.contigs[data.contig2[i]], data.end2[i])
+    }
+    return { format, contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
+  const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
+  recent = { key: cacheKey(source), format, features: data }
+  const ends = new Map<string, number>()
+  for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+  return { format, contigs: contigsOf(ends), origin: 'features', exact: false }
+}
+
+/**
+ * Sequence names and lengths out of a BBI header, in the file's own order.
+ *
+ * `refsByNumber` rather than `refsByName`, because the latter is a map to
+ * integer ids and carries no lengths — and because the file's own numbering is
+ * the order a bigWig was written in, which is the order a reader expects its
+ * chromosomes listed in.
+ */
+function contigsOfHeader(header: { refsByNumber: Record<number, RefInfo> }): Contig[] {
+  return Object.values(header.refsByNumber)
+    .sort((a, b) => a.id - b.id)
+    .map((ref) => ({ name: ref.name, length: ref.length }))
+}
+
+/** Keep the furthest coordinate seen on a sequence. */
+function note(ends: Map<string, number>, contig: string, end: number): void {
+  const seen = ends.get(contig)
+  if (seen === undefined || end > seen) ends.set(contig, end)
+}
+
+/**
+ * Inferred lengths, in first-mention order.
+ *
+ * Rounded *up* to a round number, so a browser opened on a peak set does not
+ * end each chromosome exactly on the last peak — which reads as a sequence that
+ * stops there rather than as the limit of what this file knows.
+ */
+function contigsOf(ends: Map<string, number>): Contig[] {
+  const out: Contig[] = []
+  for (const [name, end] of ends) {
+    const magnitude = 10 ** Math.max(3, Math.floor(Math.log10(Math.max(1, end))))
+    out.push({ name, length: Math.ceil(end / magnitude) * magnitude })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -91,11 +223,14 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
   const magic = bbiMagic(head)
 
   if (magic === 'bigwig') return loadBigWig(entry, source, mapContigs)
-  if (magic === 'bigbed') {
-    throw new Error(
-      'This is a bigBed. Only bigWig is read as a track; export the intervals as BED and ' +
-        'drop that instead.',
-    )
+  if (magic === 'bigbed') return loadBigBed(source, mapContigs)
+
+  // The parse this file already had, when the browser asked what genome it was
+  // on a moment ago. Same bytes, same answer; the overlap report is recomputed
+  // because it is about the *map*, which that request knew nothing about.
+  const cached = recent
+  if (cached !== null && cached.key === cacheKey(source) && cached.features !== null) {
+    return featureResult(cached.format, cached.features, mapContigs)
   }
 
   const bytes = await handle.readFile()
@@ -115,6 +250,16 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
   }
 
   const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
+  recent = { key: cacheKey(source), format, features: data }
+  return featureResult(format, data, mapContigs)
+}
+
+/** One shape of answer for every format that resolves to intervals. */
+function featureResult(
+  format: DetectedFormat,
+  data: FeatureSet,
+  mapContigs: string[],
+): LoadResult {
   const exons = data.exonStart.length
   return {
     format,
@@ -125,6 +270,60 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
         ? `${count(data.length)} transcripts · ${count(exons)} exons`
         : `${count(data.length)} feature${data.length === 1 ? '' : 's'}`,
     payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * How many intervals a bigBed may contribute before it is cut off.
+ *
+ * A bigBed is read whole, exactly as a BED is, and for the same reason: a
+ * `FeatureSet` lives on the main thread so that a pan redraws with no round trip
+ * (§8.4), and a windowed one would give that up. Most bigBeds are gene models or
+ * peak calls and are well under this; a variant track is not, and the cap is
+ * what stops one from taking the tab with it. It is *reported* rather than
+ * silently applied — a truncated track that says so is usable, one that does not
+ * is a lie about the genome.
+ */
+const BIGBED_FEATURE_CAP = 1_000_000
+
+/**
+ * A bigBed, read whole and parsed as the BED it is.
+ *
+ * bbi hands back `{ start, end, rest }` per feature, where `rest` is the
+ * remaining BED columns exactly as they were written. Re-joining them into BED
+ * lines and running the ordinary parser is not a shortcut: it is what makes a
+ * bigBed12 draw its exons, a bigNarrowPeak keep its score, and a renamed column
+ * behave the same way it does in the text file it came from — one parser, one
+ * set of rules, one place where BED's quirks live.
+ */
+async function loadBigBed(source: WireSource, mapContigs: string[]): Promise<LoadResult> {
+  const bigbed = new BigBed({ filehandle: handleFor(source) })
+  const header = await bigbed.getHeader()
+  const refs = contigsOfHeader(header)
+  const lines: string[] = []
+  let truncated = false
+  for (const ref of refs) {
+    if (lines.length >= BIGBED_FEATURE_CAP) {
+      truncated = true
+      break
+    }
+    const features = await bigbed.getFeatures(ref.name, 0, ref.length)
+    for (const feature of features) {
+      if (lines.length >= BIGBED_FEATURE_CAP) {
+        truncated = true
+        break
+      }
+      const rest = typeof feature.rest === 'string' && feature.rest !== '' ? `\t${feature.rest}` : ''
+      lines.push(`${ref.name}\t${feature.start}\t${feature.end}${rest}`)
+    }
+  }
+  const data = parseBed(lines.join('\n'), source.name)
+  const result = featureResult('bigbed', data, mapContigs)
+  return {
+    ...result,
+    summary: truncated
+      ? `${count(data.length)} features · cut off at ${count(BIGBED_FEATURE_CAP)}`
+      : result.summary,
   }
 }
 

@@ -212,6 +212,7 @@ export type ViewKind =
   | 'whole'
   | 'overview'
   | 'selection'
+  | 'browser'
 
 export interface ViewState {
   /** The full URI, `file` or `file::group`. */
@@ -275,6 +276,12 @@ export interface ViewState {
    * were looking at would mislead its recipient.
    */
   balance?: boolean
+  /**
+   * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
+   * inclusive, as every genome browser writes one and as the locus box accepts
+   * one. Absent means the whole genome, which is where a browser opens.
+   */
+  locus?: string
   transform?: Transform
   colormap?: string
   /**

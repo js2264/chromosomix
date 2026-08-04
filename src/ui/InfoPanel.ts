@@ -50,6 +50,15 @@ export interface InfoPanelProps {
    * perfectly ordinary one-file map.
    */
   onCloseFile?(which: 1 | 2): void
+  /**
+   * Close the contact map and keep browsing the genome under it.
+   *
+   * Offered on the *single* File card, where there is no second file to fall
+   * back to and there is something better than nothing to fall back to: a
+   * cooler carries a chromosome list, the tracks beside the map are already
+   * drawn against it, and closing the matrix need not throw either away.
+   */
+  onCloseMap?(): void
 }
 
 export class InfoPanel {
@@ -103,8 +112,28 @@ export class InfoPanel {
 
   private paintFiles(): void {
     if (this.compare === null) {
+      const close = this.props.onCloseMap
       this.fileHost.replaceChildren(
-        el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable(this.props.info)),
+        el(
+          'div',
+          { class: 'card' },
+          el(
+            'h3',
+            { class: 'file-head' },
+            el('span', { class: 'file-name', text: 'File' }),
+            ...(close === undefined
+              ? []
+              : [
+                  iconButton(
+                    'x',
+                    'Close the map and keep browsing this genome as tracks',
+                    close,
+                    { class: 'btn btn-icon btn-close', size: 13 },
+                  ),
+                ]),
+          ),
+          this.fileTable(this.props.info),
+        ),
       )
       return
     }
@@ -127,7 +156,7 @@ export class InfoPanel {
           text: which === 1 ? '◤' : '◣',
           title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
         }),
-        el('span', { text: `File ${which}` }),
+        el('span', { class: 'file-name', text: `File ${which}` }),
         ...(close === undefined
           ? []
           : [

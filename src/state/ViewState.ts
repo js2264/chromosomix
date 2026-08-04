@@ -29,6 +29,7 @@ const VIEW_KINDS: ViewKind[] = [
   'whole',
   'overview',
   'selection',
+  'browser',
 ]
 const LEVELS = ['bin', 'contig', 'genome'] as const
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
@@ -44,6 +45,7 @@ const KEY_ORDER = [
   'region',
   'region2',
   'regions',
+  'locus',
   'level',
   'transform',
   'colormap',
@@ -61,6 +63,7 @@ const OPTIONAL_KEYS = [
   'region',
   'region2',
   'regions',
+  'locus',
   'level',
   'transform',
   'colormap',
@@ -75,7 +78,12 @@ const OPTIONAL_KEYS = [
  * keeps the split unambiguous.
  */
 function encode(value: string): string {
-  return encodeURIComponent(value).replace(/%2F/g, '/').replace(/%3A/g, ':')
+  // `,` joins the names of a selection and separates the thousands of a locus,
+  // so it is in roughly half the links this app produces; leaving it as `%2C`
+  // made `genomes=MAG_1%2CMAG_2` and `locus=IV:400%2C000-460%2C000` out of two
+  // strings a reader would otherwise recognise at a glance. It is legal in a
+  // fragment and it is not one of the two characters the split depends on.
+  return encodeURIComponent(value).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%2C/g, ',')
 }
 
 function decode(value: string): string {
@@ -140,6 +148,8 @@ export function parseViewState(hash: string): ViewState | null {
   if (genomes !== undefined) state.genomes = genomes
   const regions = raw.get('regions')
   if (regions !== undefined) state.regions = regions
+  const locus = raw.get('locus')
+  if (locus !== undefined && locus !== '') state.locus = locus
   const colormap = raw.get('colormap')
   if (colormap !== undefined) state.colormap = colormap
 

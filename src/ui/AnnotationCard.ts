@@ -60,6 +60,28 @@ const LINEAR_ZONES: ZoneSpec[] = [
   },
 ]
 
+/**
+ * The same two files, described as a 1D browser draws them.
+ *
+ * A BED is boxes on a lane, exactly as it is under Linear annotations, and a
+ * BEDPE is an arc joining its two ends — which is what a loop call *is*, and
+ * the picture every genome browser draws for one.
+ */
+const BROWSER_OVERLAY_ZONES: ZoneSpec[] = [
+  {
+    zone: 'segments',
+    label: 'Regions',
+    hint: 'BED-like, drawn as boxes on a lane of their own.',
+    accept: '.bed,.narrowPeak,.broadPeak,.txt,.tsv',
+  },
+  {
+    zone: 'pairs',
+    label: 'Interactions',
+    hint: 'BEDPE, or a table with chrom1/start1/end1/chrom2/start2/end2, drawn as arcs.',
+    accept: '.bedpe,.txt,.tsv',
+  },
+]
+
 const OVERLAY_ZONES: ZoneSpec[] = [
   {
     zone: 'segments',
@@ -100,6 +122,17 @@ export interface AnnotationCardProps {
    * the same thing would raise the question of how they differ.
    */
   demo?: { label: string; hint: string; run(): void }
+  /**
+   * Which kind of session this card is in.
+   *
+   * The controls are the same either way — a colour is a colour and a group is a
+   * group — but three of the *sentences* are not: beside a map an overlay is
+   * drawn on the diagonal and a pair is a circle off it, and in a 1D browser
+   * there is no diagonal, a pair is an arc, and "bottom or right edge" is not a
+   * choice anybody has. Saying so wrongly is worse than saying nothing, so the
+   * card is told where it is.
+   */
+  context?: 'map' | 'browser'
 }
 
 export class AnnotationCard {
@@ -117,7 +150,8 @@ export class AnnotationCard {
 
   constructor(private readonly props: AnnotationCardProps) {
     const linear = props.card === 'linear'
-    const zones = linear ? LINEAR_ZONES : OVERLAY_ZONES
+    const browsing = props.context === 'browser'
+    const zones = linear ? LINEAR_ZONES : browsing ? BROWSER_OVERLAY_ZONES : OVERLAY_ZONES
 
     this.el = el(
       'section',
@@ -126,7 +160,9 @@ export class AnnotationCard {
       // and how it is drawn, so a line saying it again for the card as a whole
       // was a line every reader scrolls past twice a session in a column that
       // has better uses for four rows of height.
-      el('h3', { text: linear ? 'Linear annotations' : 'Map overlays' }),
+      el('h3', {
+        text: linear ? 'Linear annotations' : browsing ? 'Interactions' : 'Map overlays',
+      }),
       ...(props.demo === undefined
         ? []
         : [
@@ -322,7 +358,11 @@ export class AnnotationCard {
         ...(total > 1 ? [this.grip(entry, index, total)] : []),
         this.swatch(entry),
         this.name(entry),
-        ...(entry.card === 'linear' ? [this.placement(entry)] : []),
+        // Which edge of the map — a choice a 1D browser does not have, since
+        // there is one axis and everything is drawn along it.
+        ...(entry.card === 'linear' && this.props.context !== 'browser'
+          ? [this.placement(entry)]
+          : []),
         this.visibility(entry),
         more,
         iconButton('x', 'Remove this annotation', () => this.props.store.remove(entry.id), {

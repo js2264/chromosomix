@@ -58,7 +58,11 @@ function shapesOf(svg) {
   let match
   while ((match = element.exec(body)) !== null) {
     const attrs = {}
-    const attribute = /([a-zA-Z-]+)="([^"]*)"/g
+    // `[\w-]` after the first character, not `[a-zA-Z-]`: `x1`, `y2` and
+    // `stroke-width` are all legal attribute names and two of the three contain
+    // a digit. Without it every `<line>` came through with no coordinates and
+    // drew nothing, which is how a magnifier icon became a bare circle.
+    const attribute = /([a-zA-Z][\w:-]*)="([^"]*)"/g
     let pair
     while ((pair = attribute.exec(match[2])) !== null) attrs[pair[1]] = pair[2]
     shapes.push([match[1], attrs])
