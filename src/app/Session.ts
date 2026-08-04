@@ -856,15 +856,20 @@ export class Session {
     source: SourceSpec,
     carry?: ViewState,
   ): Promise<boolean> {
+    // Hoisted above the `try` and released in the `finally`, as `openGenome`
+    // does: the request starts a worker lazily and every failure path here is
+    // reachable — an empty file, a truncated header, a fetch that 404s — and a
+    // worker that is never terminated is a thread for the life of the page.
+    const client = new AnnotationClient()
     try {
-      const client = new AnnotationClient()
       const result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
-      client.destroy()
       if (result.format === null || result.format === 'hdf5' || result.contigs.length === 0) {
         return false
       }
     } catch {
       return false
+    } finally {
+      client.destroy()
     }
     if (this.destroyed) return false
     await this.openGenome(uri, source, carry?.locus)
@@ -1220,6 +1225,13 @@ export class Session {
     // how long one cell is. It is read once per file and cached, so this is the
     // only place that pays for it.
     const contigs = await this.contigs().catch(() => null)
+    // A live reader request, so the session may have been closed while it was
+    // outstanding — and closing it rejects exactly this read. Without the check
+    // a destroyed session goes on to build an annotation client, mount cards
+    // and `restore()` its remembered rows, which spawns a worker and re-fetches
+    // every remote track into a tab that is no longer on screen and holds no
+    // reference that could ever put it down again.
+    if (this.destroyed) return
     const names = contigNames(contigs)
     const lengths = contigLengths(contigs)
 
@@ -1670,6 +1682,14 @@ export class Session {
       this.annotations?.client.destroy()
       this.annotations = null
       this.manualCard = null
+      // The second file too, and for the same reason: it is a second map *of a
+      // file that is no longer open*, and with no state there is no `uri2` left
+      // to reconcile against — so nothing downstream would ever reach it again,
+      // and its worker would sit on an h5wasm instance and an open handle for as
+      // long as this tab stayed on the picker. Every other teardown here already
+      // released it; this was the one that did not.
+      this.dropCompare()
+      this.compareCard = null
       // For the same reason, and it is the one view the session holds: a cached
       // whole-file matrix is a picture of a file nobody can now navigate to,
       // and the scan that produced it may still be running.
