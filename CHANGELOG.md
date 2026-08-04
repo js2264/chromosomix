@@ -128,6 +128,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   old data on screen until the new data lands — is fiddly enough that two copies
   would drift.
 
+- A `chrom.sizes` dropped on a browser whose lengths were *inferred* replaces
+  them, and replaces only them: the URI, the session memory and every loaded
+  track stay exactly as they were, because the genome did not change — only what
+  is known about it. A `samtools faidx` `.fai` counts as one, decided by its
+  name, which is the tiebreak `sniffFormat` already uses for the two cases its
+  columns cannot settle.
+
 ### Fixed
 
 - The icon generator dropped every SVG attribute whose name contained a digit,

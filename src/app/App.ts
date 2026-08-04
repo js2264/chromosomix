@@ -301,7 +301,12 @@ export class App implements SessionHost {
     this.mountActive()
     const session = this.sessions[index]
     session.activate()
-    this.writeHash(session.state, { replace: false })
+    // Replace, never push. `readHash` moves the *active* tab and has no way to
+    // switch tabs, so a history entry left by a tab switch would, when popped,
+    // hand one tab's file to another — two tabs on one file, which §5.6 exists
+    // to prevent. The back button then walks the active tab's own navigation,
+    // which is the history a reader is actually thinking about.
+    this.writeHash(session.state, { replace: true })
     this.remember()
   }
 

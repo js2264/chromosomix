@@ -82,6 +82,23 @@ describe('looksLikeChromSizes', () => {
   it('refuses an empty file, which declares no genome', () => {
     expect(looksLikeChromSizes('\n# nothing\n')).toBe(false)
   })
+
+  // A `.fai` is a five-column file whose first two columns are a chrom.sizes,
+  // so by shape alone it is a BED. Only the name can settle it — the same
+  // tiebreak `sniffFormat` uses for narrowPeak against BED9.
+  it('takes a .fai on its name, and only on its name', () => {
+    const fai = 'I\t230218\t7\t60\t61\nII\t813184\t234249\t60\t61\n'
+    expect(looksLikeChromSizes(fai, 'sacCer3.fa.fai')).toBe(true)
+    expect(looksLikeChromSizes(fai)).toBe(false)
+    expect(parseChromSizes(fai)).toEqual([
+      { name: 'I', length: 230_218 },
+      { name: 'II', length: 813_184 },
+    ])
+  })
+
+  it('still refuses a BED that happens to be named .fai', () => {
+    expect(looksLikeChromSizes('I\t0\t100\n', 'peaks.fai')).toBe(false)
+  })
 })
 
 describe('assemblyAxis', () => {

@@ -91,14 +91,22 @@ export function parseChromSizes(text: string): Contig[] {
  * is a legal sizes row and an illegal BED row, but `chr1 0 100` is a legal BED
  * row and an illegal sizes row. So the test is *every* row: two columns
  * throughout, second column a positive integer. A BED has three or more.
+ *
+ * A `samtools faidx` index is the one file that breaks that rule honestly: its
+ * first two columns *are* a `chrom.sizes` and it has three more after them, so
+ * by shape alone it is a five-column BED whose second column is a length. The
+ * file name settles it, which is the same tiebreak `sniffFormat` uses for the
+ * two cases its own columns cannot decide — narrowPeak against BED9, broadPeak
+ * against BED12 — and for the same reason.
  */
-export function looksLikeChromSizes(text: string): boolean {
+export function looksLikeChromSizes(text: string, fileName = ''): boolean {
+  const indexed = /\.fai$/i.test(fileName)
   let rows = 0
   for (const raw of text.split(/\r?\n/, 200)) {
     const line = raw.trim()
     if (line === '' || line.startsWith('#') || /^(track|browser)\b/.test(line)) continue
     const parts = line.split(/\s+/)
-    if (parts.length !== 2) return false
+    if (indexed ? parts.length < 2 : parts.length !== 2) return false
     if (!/^\d+$/.test(parts[1]) || Number(parts[1]) <= 0) return false
     rows++
   }

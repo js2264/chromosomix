@@ -459,7 +459,7 @@ export class MatrixPanel {
     // on the two File cards, both of which carry the same two marks.
     this.colorbar = new ColorbarView(this.barCanvas, {
       caption: 'count',
-      ...(options.compare === undefined ? {} : { prefix: '◤ ' }),
+      ...(options.compare === undefined ? {} : { prefix: '◥ ' }),
     })
     this.colorbar2 = new ColorbarView(this.barCanvas2, { caption: 'count', prefix: '◣ ' })
 
@@ -1588,6 +1588,11 @@ export class MatrixPanel {
             values: blendAcrossDiagonal(data, this.second.data, { gain: this.second.gain }).values,
           }
     this.barCanvas2.classList.toggle('hidden', this.second === null)
+    // The second legend is a function of the gain as well as of the colour
+    // scale, and the gain is recomputed per block. Without this the legend
+    // redraw is skipped whenever a *pinned* clip survives a navigation, and the
+    // second file's ticks keep the previous block's numbers.
+    this.painted = null
     this.heatmap.setMatrix(dense, separatorsFor(data))
     // A cell is a bin, so a block's span in cells is its length in base pairs:
     // the contigs worth naming in a 300-contig genome are the long ones, and

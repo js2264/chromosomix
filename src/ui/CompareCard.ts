@@ -140,7 +140,7 @@ export class CompareCard {
             el(
               'div',
               { class: 'compare-row' },
-              el('span', { class: 'compare-mark compare-upper', text: '◤' }),
+              el('span', { class: 'compare-mark compare-upper', text: '◥' }),
               el('span', {
                 class: 'compare-name',
                 text: this.props.primaryLabel(),

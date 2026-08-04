@@ -153,7 +153,7 @@ export class InfoPanel {
         { class: 'file-head' },
         el('span', {
           class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
-          text: which === 1 ? '◤' : '◣',
+          text: which === 1 ? '◥' : '◣',
           title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
         }),
         el('span', { class: 'file-name', text: `File ${which}` }),

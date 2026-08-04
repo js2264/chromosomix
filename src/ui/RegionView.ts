@@ -265,6 +265,12 @@ export class RegionView {
       this.describePair(parsed, other)
       this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
     } catch (err) {
+      // A view that has been torn down must not navigate the shell. Closing the
+      // map puts the reader down, which rejects every read still in flight —
+      // and a rejection arriving after the browser has been mounted in this
+      // view's place would replace it with an error screen about a worker
+      // nobody is waiting for.
+      if (this.disposed) return
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is
       // a real failure and belongs on the error screen.
