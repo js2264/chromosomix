@@ -150,6 +150,16 @@ describe('parseLocus', () => {
     }
   })
 
+  // A position past the end of a sequence is one mistyped digit away, and an
+  // inverted range is a `RangeError` out of `Scale.setDomain` — from the locus
+  // box an uncaught throw, from a link a blank page.
+  it('clamps a position past the end of the sequence rather than inverting', () => {
+    const parsed = parseLocus('I:999999999', YEAST)
+    if (parsed === null || parsed === 'whole') throw new Error('expected a range')
+    expect(parsed.end).toBeGreaterThan(parsed.start)
+    expect(parsed.end).toBeLessThanOrEqual(230_218)
+  })
+
   it('refuses a name it has never heard of', () => {
     expect(parseLocus('chrZ', YEAST)).toBeNull()
     expect(parseLocus('II:banana', YEAST)).toBeNull()
