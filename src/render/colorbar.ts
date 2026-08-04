@@ -267,15 +267,34 @@ export class ColorbarView {
     return { width: this.cssWidth, height: this.cssHeight }
   }
 
-  /** Re-read the canvas's CSS size and resize its backing store. */
+  /**
+   * Re-read the canvas's CSS size, resize its backing store, and repaint.
+   *
+   * The repaint is not a convenience. Assigning `canvas.width` **clears** the
+   * canvas, so a resize that did not redraw left the legend blank — and the
+   * owner's redraw is guarded on the colour *scale* having changed, which a
+   * resize does not change. Adding a track was enough to trigger it: the lanes
+   * relayout the plot, the resize observer fires, the bar is cleared, the guard
+   * says the scale is the same, and the legend simply disappears for as long as
+   * the view lasts.
+   *
+   * So the invariant lives here, where it cannot be forgotten by a third
+   * caller: a resize never leaves the bar empty. Guarded on the backing store
+   * actually changing, because the observer fires on every layout pass and this
+   * is 256 `fillRect`s and a tick layout.
+   */
   resize(cssWidth?: number, cssHeight?: number): void {
     const w = cssWidth ?? this.canvas.clientWidth
     const h = cssHeight ?? this.canvas.clientHeight
     this.cssWidth = w > 0 ? w : this.canvas.width || 1
     this.cssHeight = h > 0 ? h : this.canvas.height || 1
     this.dpr = this.opts.devicePixelRatio > 0 ? this.opts.devicePixelRatio : detectDpr()
-    this.canvas.width = Math.max(1, Math.round(this.cssWidth * this.dpr))
-    this.canvas.height = Math.max(1, Math.round(this.cssHeight * this.dpr))
+    const width = Math.max(1, Math.round(this.cssWidth * this.dpr))
+    const height = Math.max(1, Math.round(this.cssHeight * this.dpr))
+    if (this.canvas.width === width && this.canvas.height === height) return
+    this.canvas.width = width
+    this.canvas.height = height
+    this.draw()
   }
 
   draw(): void {
