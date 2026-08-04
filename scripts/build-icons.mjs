@@ -32,6 +32,10 @@ const LUCIDE = [
   'monitor',
   'panel-left-close',
   'panel-left-open',
+  'panel-right-close',
+  'panel-right-open',
+  'layers',
+  'grip-vertical',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

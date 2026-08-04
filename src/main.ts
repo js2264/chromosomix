@@ -46,7 +46,12 @@ import { findRow, recordFields, type RecordField, type RecordSpec } from './ui/R
 import { RegionView } from './ui/RegionView'
 import { WholeView } from './ui/WholeView'
 import { Modal } from './ui/Modal'
-import { SidebarToggle } from './ui/SidebarToggle'
+import {
+  AESTHETICS_PANEL,
+  ANNOTATION_PANEL,
+  GENERAL_PANEL,
+  SidePanel,
+} from './ui/SidePanel'
 import { StatusBar } from './ui/StatusBar'
 import { ThemeToggle, initTheme } from './ui/ThemeToggle'
 import { registerServiceWorker } from './pwa'
@@ -91,18 +96,21 @@ class App {
   private readonly store = new ViewStore()
   private readonly content: HTMLElement
   private readonly breadcrumbHost: HTMLElement
-  private readonly sideHost: HTMLElement
   /**
-   * The right-hand column, holding whatever controls the mounted view offers.
+   * The three columns beside the map, outward from it in order of how often
+   * they are touched.
    *
-   * A shell column rather than part of the view, for the same two reasons the
-   * file sidebar is one: it starts under the breadcrumb instead of below the
-   * view's own heading, and it scrolls on its own instead of dragging the
-   * heatmap up the page when there is one card too many.
+   * Shell columns rather than parts of a view, for three reasons that apply to
+   * all of them: they start under the breadcrumb instead of below the view's own
+   * heading, they scroll on their own instead of dragging the heatmap up the
+   * page when one grows a card too many, and they outlive every navigation —
+   * which for {@link annotations} is not a nicety but the whole design, since
+   * the cards in it hold the loaded tracks.
    */
-  private readonly rightHost: HTMLElement
+  private readonly generalPanel: SidePanel
+  private readonly annotationsPanel: SidePanel
+  private readonly aestheticsPanel: SidePanel
   private readonly picker: FilePicker
-  private readonly sidebar: SidebarToggle
   private readonly theme: ThemeToggle
   private readonly status: StatusBar
   /** At most one dialog at a time; it owns the keyboard while it is up. */
@@ -160,9 +168,15 @@ class App {
 
     this.breadcrumbHost = el('div', { class: 'breadcrumb-host' })
     this.content = el('main', { class: 'content' })
-    this.sideHost = el('div', { class: 'side-host' })
-    this.rightHost = el('div', { class: 'right-host' })
-    this.sidebar = new SidebarToggle(this.sideHost)
+    // Folding or dragging a column changes how much room the plot has and where
+    // its centre is. A `ResizeObserver` inside the view cannot see all of that:
+    // the plot is usually sized by the window's *height*, so widening its column
+    // changes no box the observer watches while still moving where the plot
+    // should sit. Telling the mounted view directly is the reliable half.
+    const relayout = (): void => this.current?.panel?.remeasure()
+    this.generalPanel = new SidePanel(GENERAL_PANEL, relayout)
+    this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout)
+    this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout)
 
     this.status = new StatusBar({ client: this.client })
     this.theme = new ThemeToggle()
@@ -197,7 +211,9 @@ class App {
         el(
           'div',
           { class: 'head-left' },
-          this.sidebar.el,
+          this.generalPanel.toggle,
+          this.annotationsPanel.toggle,
+          this.aestheticsPanel.toggle,
           el(
             'div',
             { class: 'brand' },
@@ -228,9 +244,16 @@ class App {
         ),
       ),
       this.breadcrumbHost,
-      // `side-host` also carries `order: -1`, so it renders left; keeping it
-      // second in the DOM keeps the tab order content-first.
-      el('div', { class: 'app-body' }, this.content, this.sideHost, this.rightHost),
+      // Each column carries its own `order`, so the DOM order here is free —
+      // and it is content-first, which is what the tab order should be.
+      el(
+        'div',
+        { class: 'app-body' },
+        this.content,
+        this.generalPanel.el,
+        this.annotationsPanel.el,
+        this.aestheticsPanel.el,
+      ),
       this.status.el,
     )
 
@@ -376,10 +399,31 @@ class App {
       {
         id: 'fold-sidebar',
         group: 'View',
-        title: 'Fold or show the file info sidebar',
+        title: 'Fold or show the General panel',
         keys: 'b',
         enabled: file !== null,
-        run: () => this.sidebar.el.click(),
+        run: () => this.generalPanel.toggle.click(),
+      },
+      {
+        id: 'fold-annotations',
+        group: 'View',
+        title: 'Fold or show the Annotations panel',
+        hint: 'A metacool carries no annotations (§8.5), so it has no panel to fold.',
+        keys: 'a',
+        // The same gate the button is under: it is `hidden` on a file with a
+        // genome layer, and a shortcut that folds an invisible column is a key
+        // that appears to do nothing.
+        enabled: file !== null && !isMetacool,
+        run: () => this.annotationsPanel.toggle.click(),
+      },
+      {
+        id: 'fold-aesthetics',
+        group: 'View',
+        title: 'Fold or show the Aesthetics panel',
+        hint: 'A table view offers none, so there is nothing to fold there.',
+        keys: 'm',
+        enabled: file !== null,
+        run: () => this.aestheticsPanel.toggle.click(),
       },
       {
         id: 'theme',
@@ -646,8 +690,8 @@ class App {
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
-      this.sideHost.replaceChildren(this.infoPanel.el)
-      this.sidebar.setAvailable(true)
+      this.generalPanel.setContent([this.infoPanel.el])
+      this.generalPanel.setAvailable(true)
       this.status.reset()
       this.overview = null
       this.showingOverview = false
@@ -710,7 +754,8 @@ class App {
     this.annotations = null
     this.manualCard = null
     if (info.hasGenomes) {
-      this.infoPanel?.setAnnotationCards([])
+      this.annotationsPanel.setContent([])
+      this.annotationsPanel.setAvailable(false)
       return
     }
 
@@ -730,19 +775,17 @@ class App {
 
     const picker: MapPicker = {
       available: () => this.current?.panel !== undefined,
-      pick: (count) =>
-        new Promise((resolve) => {
-          const panel = this.current?.panel
-          if (panel === undefined) {
-            resolve(null)
-            return
-          }
-          panel.armPicking(
-            count,
-            (points) => resolve(points),
-            () => resolve(null),
-          )
-        }),
+      start: (onPoint, onEnd) => {
+        const panel = this.current?.panel
+        // No plot to click on. The mode ends before it starts, which the card
+        // reads as "put the button back" — the button was disabled anyway, so
+        // this is the race where a view was torn down between the two.
+        if (panel === undefined) {
+          onEnd()
+          return () => {}
+        }
+        return panel.armPicking(onPoint, onEnd)
+      },
     }
     this.manualCard = new ManualCard({ store: manual, picker })
 
@@ -750,7 +793,7 @@ class App {
     // them as one click is the difference between a viewer that demonstrably
     // works and one a reader has to assemble a test case for.
     const published = demoAnnotationsFor(uri)
-    this.infoPanel?.setAnnotationCards([
+    this.annotationsPanel.setContent([
       new AnnotationCard({
         card: 'linear',
         store,
@@ -774,6 +817,7 @@ class App {
       new AnnotationCard({ card: 'overlay', store, loader }).el,
       this.manualCard.el,
     ])
+    this.annotationsPanel.setAvailable(true)
 
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
@@ -907,8 +951,15 @@ class App {
       this.annotations?.client.destroy()
       this.annotations = null
       this.manualCard = null
-      this.sideHost.replaceChildren()
-      this.sidebar.setAvailable(false)
+      this.generalPanel.setContent([])
+      this.generalPanel.setAvailable(false)
+      // The cards described a file that is no longer open, and they hold the
+      // stores that were just destroyed. Cleared with the column, so returning
+      // to the picker does not leave three dropzones wired to nothing.
+      this.annotationsPanel.setContent([])
+      this.annotationsPanel.setAvailable(false)
+      this.aestheticsPanel.setContent([])
+      this.aestheticsPanel.setAvailable(false)
       this.showContent(this.picker.el)
       return
     }
@@ -1356,7 +1407,8 @@ class App {
     // Its own controls, but *not* as the current view: the overview is cached
     // across navigations and `showContent` destroys what it replaces.
     this.showContent(this.overview.el)
-    this.rightHost.replaceChildren(this.overview.sideEl)
+    this.aestheticsPanel.setContent([this.overview.sideEl])
+    this.aestheticsPanel.setAvailable(true)
   }
 
   // -------------------------------------------------------------------------
@@ -1390,8 +1442,10 @@ class App {
     this.content.replaceChildren(node)
     // Emptied rather than hidden when a view has no controls: `:empty` is what
     // takes the column's width back for the table views.
-    if (view?.sideEl === undefined) this.rightHost.replaceChildren()
-    else this.rightHost.replaceChildren(view.sideEl)
+    // A table view offers no aesthetics, so the column leaves the layout and
+    // its button goes with it — the same rule the other two follow.
+    this.aestheticsPanel.setContent(view?.sideEl === undefined ? [] : [view.sideEl])
+    this.aestheticsPanel.setAvailable(view?.sideEl !== undefined)
   }
 
   private pickerWithNote(uri: string): HTMLElement {

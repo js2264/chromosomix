@@ -276,51 +276,161 @@ p {
   min-height: 0;
 }
 
+/*
+ * The centre column, and the one part of the app the theme does not reach.
+ *
+ * A contact map is a *figure*. Its colormaps are built for ink on white, the
+ * labels and the plot frame are drawn in the same greys `ops/show.py` uses, and
+ * what leaves here as a PNG or a PDF is light whatever the screen was. Letting
+ * the theme through meant the picture on screen was not the picture exported,
+ * and the halo behind every label — which is `--bg` — turned black behind dark
+ * grey text on a white plot.
+ *
+ * So the palette is re-declared, not patched: every variable, set to the light
+ * value, on the element every part of the centre column inherits from. That
+ * covers the canvases, the tables, the breadcrumbs inside a view, the region
+ * box and the buttons in one stroke, and it means a control added here later is
+ * light without anyone remembering to make it so. `readCanvasPalette` reads its
+ * three colours off a node inside this box for the same reason.
+ *
+ * Everything outside — header, the three panels, the status bar — stays dark.
+ */
 .content {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 1rem;
+
+  --bg: #ffffff;
+  --bg-sunken: #f6f7f8;
+  --bg-raised: #ffffff;
+  --border: #dcdfe3;
+  --border-strong: #b9bec5;
+  --text: #16181d;
+  --text-dim: #5b6169;
+  --text-faint: #868d96;
+  --accent: #1f5fa9;
+  --accent-soft: #e6effa;
+  --danger: #a32020;
+  --danger-soft: #fdecec;
+  --ok: #1d6b3f;
+
+  /* Declared as well as inherited: a form control inside this box asks the UA
+     which scheme to render itself in, and the answer has to be this one or a
+     `<select>` in the view controls comes back dark on white. */
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* The file info sidebar sits on the *left*: it describes the open file, which
-   is context for everything to its right, and it is the one panel whose content
-   does not change as you navigate. */
-.side-host {
-  width: 22rem;
+/* The three columns beside the map — General, Annotations, Aesthetics — which
+   are one thing and are therefore styled once.
+
+   Each starts under the breadcrumb rather than below the view's own heading, and
+   each scrolls on its own rather than dragging the heatmap up the page when it
+   grows a card too many. Their `order` is set inline, from the panel's spec, so
+   the DOM order here is free to be the tab order: content first.
+
+   The width is inline too, because it is draggable and remembered. `flex: 0 0
+   auto` is what keeps the flex row from renegotiating it afterwards. */
+.panel-column {
   flex: 0 0 auto;
-  order: -1;
-  border-right: 1px solid var(--border);
-  background: var(--bg-sunken);
-  overflow: auto;
-  padding: 0.75rem 1rem 1rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.side-host.collapsed {
-  display: none;
-}
-
-/* The view's controls, as a column of the shell rather than part of the view.
-   Inside the content it began below the view's own heading and scrolled the
-   heatmap off the top of the page whenever it grew a card; here it starts under
-   the breadcrumb, like the file sidebar opposite it, and scrolls on its own. */
-.right-host {
-  width: 16rem;
-  flex: 0 0 auto;
-  border-left: 1px solid var(--border);
   background: var(--bg-sunken);
   overflow: auto;
   padding: 0.75rem 0.9rem 1rem;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
+  /* The handle is absolutely positioned against this. `position: relative` on a
+     scroll container pins the handle to the *content* box, so it would scroll
+     away with the cards; `sticky` on the handle itself is what keeps it on the
+     edge, and that needs the column to be the scroll port it sticks in. */
+  position: relative;
 }
 
-/* A table view offers no controls; the column gives its width back. */
-.right-host:empty {
+.panel-column-left {
+  border-right: 1px solid var(--border);
+}
+
+.panel-column-right {
+  border-left: 1px solid var(--border);
+}
+
+/* Folded, or nothing to show. One rule, because the reader cannot tell the
+   difference and should not have to: an empty named column is worse than none. */
+.panel-column.collapsed {
   display: none;
+}
+
+/* The column's own heading. Quieter than a card's, because it names the column
+   rather than anything in it — the cards under it carry the headings that say
+   what each one takes. */
+.panel-column-title {
+  margin: 0;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+/* Everything under the heading. `1 0 auto` rather than `1 1 auto`: the content
+   may be taller than the column, and it must be allowed to overflow it — the
+   column scrolls — rather than be squeezed to fit. */
+.panel-column-body {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* A card narrower than its own contents scrolls sideways inside the column,
+   instead of spilling over the column's edge or forcing it wider than the
+   reader dragged it. Only the axis that can overflow: `overflow: auto` on both
+   would give a card a vertical scrollbar the moment its own content grew, and
+   the column is what should scroll vertically. */
+.panel-column .card,
+.panel-column .qc,
+.panel-column .meta,
+.panel-column .meta-empty {
+  overflow-x: auto;
+}
+
+/* The drag handle: the column's inner edge, four pixels of it.
+
+   Sticky rather than absolute so it stays on the edge as the column scrolls, and
+   `align-self` is what puts it on the correct side without a second rule per
+   panel. It is pulled out of the flex flow by a negative margin so it costs the
+   column no height — it is an edge, not a row. */
+.panel-column-handle {
+  position: sticky;
+  top: 0;
+  height: 100%;
+  width: 5px;
+  flex: 0 0 auto;
+  margin-block: 0 -100%;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.panel-column-left > .panel-column-handle {
+  align-self: flex-end;
+  margin-right: -0.9rem;
+}
+
+.panel-column-right > .panel-column-handle {
+  align-self: flex-start;
+  margin-left: -0.9rem;
+}
+
+.panel-column-handle:hover,
+.panel-column-handle.is-dragging {
+  background: var(--accent, #1f5fa9);
 }
 
 /* --- status bar -------------------------------------------------------- */
@@ -451,6 +561,16 @@ p {
   justify-content: center;
   line-height: 1;
   padding: 0.35rem;
+}
+
+/* A fold button whose panel is folded. The two panel toggles need to say which
+   state they are in, and only one of them can do it by swapping its icon: the
+   file sidebar's arrow points the way it will move, while the annotations
+   toggle is a `layers` mark that means the same thing either way. Dimming is
+   what carries it there, and it costs the other button nothing. */
+.btn-icon.is-off {
+  color: var(--text-faint);
+  opacity: 0.65;
 }
 
 /* Centred, and moving. A line of grey text in the corner reads as a page that
@@ -993,10 +1113,28 @@ p {
 .panel-grid {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto;
+  /* The map's column gives way to the lane stack beside it, down to a floor.
+
+     Not plain `auto`: an `auto` track will not go under its own min-content,
+     which for a canvas is whatever width it was last given, so the grid would
+     simply keep growing — and a right-hand stack would push the pair out under
+     the view controls, where the far half of it could not even be hovered.
+
+     But not `minmax(0, ...)` either: with nine tracks on the right edge and
+     three panels open, "shrink to fit" resolves to a four-pixel map. The floor
+     is the same 20rem the plot's own `clamp` uses, so past that the content
+     column scrolls — the honest answer to a window with no room for both, and
+     one the reader can also answer by folding a panel. */
+  grid-template-columns: minmax(min(20rem, 100%), auto) auto;
   grid-template-rows: auto auto;
   align-items: start;
   justify-items: start;
+  /* Shrinkable, and shrunk by the flex row it sits in rather than by a cap of
+     its own. `max-width: 100%` would work for the lanes and starve the
+     colourbar beside it: 100% of the body is the *whole* body, so a wide enough
+     stack of tracks would leave the legend nothing and it would vanish exactly
+     when tracks were added. Flex shrink divides the shortfall instead, and
+     `min-width: 0` is what lets this item take any of it. */
   min-width: 0;
 }
 
@@ -1043,6 +1181,8 @@ p {
      property is written by the panel and defaults to nothing, so a view with no
      annotations is sized exactly as it was before they existed. */
   width: clamp(20rem, calc(100vh - 14rem - var(--lane-bottom, 0px)), 60rem);
+  /* Of its own grid track, which the grid's cap has already taken the right-hand
+     lane stack out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
   flex: 0 1 auto;
 }
@@ -1056,16 +1196,26 @@ p {
      for its own double-tap zoom. Without this the first drag scrolls the
      document out from under the finger and the handler never sees the rest. */
   touch-action: none;
-  /* A drawn arrowhead, not the OS pointer: thinner, sharper, and with its tip
-     on the cell it is pointing at, which is what you need over a matrix where a
-     cell can be one pixel. Black on white so it survives every colormap; the
-     hotspot is the tip, at 2 2. `default` is the fallback for anything that
-     refuses an SVG cursor. */
+  outline: none;
+}
+
+/* A drawn arrowhead, not the OS pointer: thinner, sharper, and with its tip on
+   the cell it is pointing at, which is what you need over a matrix where a cell
+   can be one pixel. Black on white so it survives every colormap; the hotspot is
+   the tip, at 2 2. `default` is the fallback for anything that refuses an SVG
+   cursor.
+
+   The lanes share it. They are the same picture of the same window, read at the
+   same position, and they pan and zoom the map exactly as the map does — so a
+   pointer that changed shape on the way from the map to the track beside it
+   would be saying the two are different surfaces, which is the one thing they
+   are not. */
+.heatmap-canvas,
+.lane-canvas {
   cursor:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M2.5 1.6 L2.5 13.6 L9.6 8.4 Z' fill='%23111' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E")
       2 2,
     default;
-  outline: none;
 }
 
 /* The arrowhead stays the resting cursor — it is the one that points *at* a
@@ -1076,7 +1226,8 @@ p {
   cursor: crosshair;
 }
 
-.heatmap-canvas.grabbing {
+.heatmap-canvas.grabbing,
+.lane-canvas.grabbing {
   cursor: grabbing;
 }
 
@@ -1587,6 +1738,45 @@ p {
   color: var(--text);
 }
 
+/* A lane readout is one row per track on that edge, so the rows have to line up
+   as a table: a name column that gives way, and a value column that does not.
+   Reading four numbers off a ragged right edge is the thing this replaced. */
+.cell-tip-line:has(> .cell-tip-val) {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.cell-tip-chip {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 1px;
+  flex: 0 0 auto;
+  /* The track's own colour, so the row is matched to the lane by eye rather
+     than by reading its name. */
+}
+
+.cell-tip-key {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-tip-val {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* The one lane the pointer is actually inside. The others are context; this is
+   the one being pointed at, and without the distinction a stack of eight rows
+   gives no clue which of them the pointer is on. */
+.cell-tip-here {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .panel-overlay {
   position: absolute;
   inset: 0;
@@ -1605,21 +1795,31 @@ p {
 
 /* --- genome view ------------------------------------------------------- */
 
-/* Narrow: the file sidebar goes, and the controls column stops being a column
-   — it stacks under the plot with a bounded height, which is the same trade the
-   grid used to make one level down. */
+/* Narrow: the columns stop being columns and stack under the plot with a
+   bounded height, which is the same trade the panel grid makes one level down.
+
+   The General panel goes entirely rather than stacking. Of the three it is the
+   only one that is purely *read* — attributes, a record card, a QC number — so
+   it is the one whose absence costs nothing you cannot get back by widening the
+   window, while hiding either of the other two would take away controls. Its
+   inline width has to be overridden here, and so does the drag handle: there is
+   no horizontal room left to trade. */
 @media (max-width: 60rem) {
-  .side-host {
-    display: none;
-  }
   .app-body {
     flex-direction: column;
   }
-  .right-host {
-    width: auto;
+  .panel-general {
+    display: none;
+  }
+  .panel-column {
+    width: auto !important;
     max-height: 45vh;
+    border-right: none;
     border-left: none;
     border-top: 1px solid var(--border);
+  }
+  .panel-column-handle {
+    display: none;
   }
 }
 
@@ -2242,19 +2442,10 @@ p {
 
 /* --- annotations (spec §8) --------------------------------------------- */
 
-/* The three cards sit between the record card and Binning QC. `:empty`
-   collapses the host on a `.metacool`, where there are no cards at all — §8.5's
-   "not rendered", rather than a disabled card nobody can enable. */
-.annotation-host {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.annotation-host:not(:empty) {
-  margin-top: 0.6rem;
-}
-
+/* The three cards go straight into the Annotations column's body, which already
+   stacks and spaces them; there is no host of their own. On a `.metacool` the
+   column is `setAvailable(false)` and leaves the layout entirely — §8.5's "not
+   rendered", rather than a disabled card nobody can enable. */
 .annotation-card {
   display: flex;
   flex-direction: column;
@@ -2357,38 +2548,122 @@ p {
 .ann-head {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
   min-width: 0;
+}
+
+/* The drag handle, and the only part of the row that starts a drag: every other
+   thing on it is a control that a drag would fight. Dim until the row is under
+   the pointer, because it is the least of the four things the head offers and
+   should not be the first one the eye lands on. */
+.ann-grip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+  cursor: grab;
+  opacity: 0.35;
+  transition: opacity 0.12s ease;
+  /* A drag from here must not also select the text of the name beside it. */
+  user-select: none;
+}
+
+.ann-row:hover .ann-grip,
+.ann-grip:focus-visible {
+  opacity: 1;
+}
+
+.ann-grip:active {
+  cursor: grabbing;
+}
+
+.ann-row.is-dragging {
+  opacity: 0.4;
+}
+
+/* Where the dragged row would land. A rule on one edge rather than a gap opened
+   in the list: the gap costs a reflow per pointer move, and on a list of four
+   rows in a 20 rem column the movement is more distracting than the line is
+   informative. */
+.ann-row.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--accent, #1f5fa9);
+}
+
+.ann-row.drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--accent, #1f5fa9);
 }
 
 /* The colour is the annotation's identity on the plot, so it is the first thing
-   in its row — the row is found by matching it to the lane, not by reading. */
+   in its row — the row is found by matching it to the lane, not by reading. It
+   is the picker itself, stripped of the chrome a browser gives a colour input,
+   so that clicking the colour opens the picker in one gesture. */
 .ann-swatch {
-  width: 0.7rem;
-  height: 0.7rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  padding: 0;
   border-radius: 2px;
   border: 1px solid var(--border-strong);
+  background: none;
+  cursor: pointer;
   flex: 0 0 auto;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
+/* The swatch's own well is inset by a few pixels in every engine, which at this
+   size leaves a square of border with a dot in it. */
+.ann-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.ann-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 1px;
+}
+
+.ann-swatch::-moz-color-swatch {
+  border: none;
+  border-radius: 1px;
+}
+
+/* The name reads as text and edits as a field: no border and no background
+   until it is hovered or has the caret, so a row of them is a list of names
+   rather than a form. */
 .ann-name {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 2rem;
   text-align: left;
   background: none;
-  border: 0;
-  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.05rem 0.2rem;
   font: inherit;
   font-weight: 600;
   color: var(--text);
-  cursor: pointer;
-  overflow: hidden;
+  cursor: text;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ann-name:hover {
-  text-decoration: underline;
+  border-color: var(--border);
+}
+
+.ann-name:focus,
+.ann-name:focus-visible {
+  border-color: var(--accent, #1f5fa9);
+  background: var(--bg-raised);
+  outline: none;
+  text-overflow: clip;
+}
+
+/* The settings disclosure. Quiet, and narrow: it sits between the eye and the
+   close button, and three icons of equal weight in a row is a row nobody reads.
+   Sized to the icon rather than to the button padding `btn-icon` carries, which
+   in this head would push the name into two lines. */
+.ann-more {
+  flex: 0 0 auto;
+  padding: 0.1rem;
+  color: var(--text-dim);
 }
 
 .ann-edges {
@@ -2467,6 +2742,66 @@ p {
   min-width: 0;
 }
 
+/* Two controls on one row, because neither fills one: a settings body of six
+   half-empty rows is a body that has to be scrolled to reach the limits. */
+.ann-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Inside a shared row a label may not claim the fixed 3.6rem column: two of
+   them would leave nothing for the controls. */
+.ann-field-tight {
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.ann-field-tight > .field-label {
+  flex: 0 0 auto;
+}
+
+/* The height box holds three digits; the style select holds a word. So the row
+   is split by what each needs rather than evenly — evenly gave the number box
+   room for eight digits and truncated `area` to `are`.
+
+   `.ann-field >` on both, because the generic `.ann-field > .input` rule above
+   is a two-class selector and a bare `.ann-size` loses to it. */
+.ann-inline > .ann-field-tight:first-child {
+  flex: 0 0 auto;
+}
+
+.ann-inline > .ann-field-tight:last-child {
+  flex: 1 1 auto;
+}
+
+.ann-field > .ann-size {
+  flex: 0 0 3.2rem;
+  width: 3.2rem;
+  min-width: 0;
+}
+
+.ann-unit {
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+/* The group picker swaps a `<select>` for an `<input>` while a new name is being
+   typed, so the host holds whichever is up and both fill it. */
+.ann-group {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.ann-group > .select,
+.ann-group > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .ann-colour {
   width: 1.8rem;
   height: 1.3rem;
@@ -2487,20 +2822,44 @@ p {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-}
-
-.ann-limits > .input-num {
-  flex: 1 1 3rem;
+  /* The row overflowed its card: three controls, two of them number boxes that
+     ask for about twenty characters' worth of room as a *minimum*, in a column
+     under 20 rem wide. `min-width: 0` is what lets them be told otherwise. */
   min-width: 0;
 }
 
+.ann-limits > .input-num {
+  flex: 1 1 0;
+  min-width: 0;
+  /* A number box reserves room for its spinner whether or not one is shown, and
+     at this width that room is most of the box. The value is typed and read,
+     never stepped — the useful step for a track limit is not 1. */
+  appearance: textfield;
+  -webkit-appearance: textfield;
+}
+
+.ann-limits > .input-num::-webkit-outer-spin-button,
+.ann-limits > .input-num::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* The auto toggle. Sized to its word and no wider, so the two boxes beside it
+   keep the rest of the row. */
 .ann-auto {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
+  flex: 0 0 auto;
+  padding: 0.1rem 0.35rem;
   font-size: var(--step--2, 0.72rem);
-  color: var(--text-dim);
-  cursor: pointer;
+  line-height: 1.5;
+}
+
+/* On, and saying so with its own border — the state a tick box used to carry
+   with a tick and a label. */
+.ann-auto.is-on {
+  border-color: var(--accent, #1f5fa9);
+  color: var(--accent, #1f5fa9);
+  background: color-mix(in srgb, var(--accent, #1f5fa9) 12%, var(--bg));
 }
 
 /* --- manual annotations ------------------------------------------------ */
