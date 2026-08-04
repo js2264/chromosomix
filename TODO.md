@@ -15,15 +15,43 @@
 - [x] The track annotations should be draggable in the side panel to rearrange their order in the list. 
 - [x] When clicking to "pick on map" manual annotations, the mode should be activated for multiple clicks, and the user should be able to click on multiple points on the map to create multiple annotations in one go. The mode should be deactivated when clicking "Done" or pressing "Esc".
 
-## FOR NOW
+-  [x] Also, in the tooltip when showing values for all tracks, do NOT show the name of the hovered track, as it is already clear from the position of the tooltip.
+- [x] The pointer when hovering over the track values should be the same as the pointer when hovering over the heatmap (a black-filled arrowhead). 
+- [x] The heatmap color scale is gone when tracks are shown
+- [x] for tracks settings, limits are overflowing. Also, the "auto" should be just a clickable button (with a border that appears if it is active), not a tick box. Whenever the user changes the limits manually, the "auto" button should be deactivated.
+- [x] Remove subtitles for each card in the annotation side bar ("Drawn on the map itself." or "Drawn on the bottom or the right edges, or both." etc). 
+- [x] All side bars should be explicitely named: General, Annotations, and Aesthetics. They all should have the title as currently set for Annotations. They all should be resizable and foldable (currently Aesthetics is not foldable). If too narrow for the cards within the bars, each card should be scrollable within the side bar.
+- [x] Resizing or folding the side panels should affect how heatmap + tracks are centered in the remaining space within the main panel. 
+- [x] In dark theme, all should be dark EXCEPT THE CENTER PANEL (heatmap + tracks), which should NOT change at all! 
+- [x] It should be possible to zoom in/out or drag the TRACKS, this should also affect the heatmap. 
 
--  Also, in the tooltip when showing values for all tracks, do NOT show the name of the hovered track, as it is already clear from the position of the tooltip.
-- [ ] The pointer when hovering over the track values should be the same as the pointer when hovering over the heatmap (a black-filled arrowhead). 
-- [ ] The heatmap color scale is gone when tracks are shown
-- [ ] for tracks settings, limits are overflowing. Also, the "auto" should be just a clickable button (with a border that appears if it is active), not a tick box. Whenever the user changes the limits manually, the "auto" button should be deactivated.
-- [ ] Remove subtitles for each card in the annotation side bar ("Drawn on the map itself." or "Drawn on the bottom or the right edges, or both." etc). 
-- [ ] All side bars should be explicitely named: General, Annotations, and Aesthetics. They all should have the title as currently set for Annotations. They all should be resizable and foldable (currently Aesthetics is not foldable). If too narrow for the cards within the bars, each card should be scrollable within the side bar.
-- [ ] Resizing or folding the side panels should affect how heatmap + tracks are centered in the remaining space within the main panel. 
-- [ ] In dark theme, all should be dark EXCEPT THE CENTER PANEL (heatmap + tracks), which should NOT change at all! 
-- [ ] It should be possible to zoom in/out or drag the TRACKS, this should also affect the heatmap. 
+- [x] A "whole genome" button in the genomes and chromosomes tables — the same place the root crumb leads, offered where someone is standing when they wonder. Not on a metacool's per-genome contigs table, where "the whole file" is not the question; "with all selected" waits on the multi-select item below.
+- [x] The mark on the landing page, big, with the name and the tagline over the drop area; and small in the header, before the name.
+- [x] No captions on hand-drawn marks any more — gone from the card, from the model and from the drawing.
+- [x] Export for hand-drawn marks, in the Aesthetics export row's shape: lines as BED, loops as BEDPE, both read back by this app's own loader.
+- [x] The Annotations panel scrolls as a whole. Every card was its own scroll box, because `overflow-x: auto` makes a box scroll in *both* directions and a flex item shrinks by default.
+- [x] The FILE card's key column takes the width its keys need instead of a fixed 9rem.
+
+- [x] The header mark is aligned with the name and bigger (26 px). The brand row was baseline-aligned, and an image's baseline is its bottom edge; all three items share a centre now.
+- [x] The landing masthead is one line — mark and name, centred, 80% of the drop zone's width, both scaled by a single `clamp`ed font size.
+- [x] The cooler's whole-genome read has the metagenome scan's progress bar and cancel, because it is the same pass over every pixel. The reader walks the span asynchronously now, which is what makes a cancel arrive at all.
+
+- [x] Multi-select across the tables: tick any number of genomes or sequences, "select all" / "clear" over whatever the filters leave visible, and "show N selected →" opens them as one map — each on the diagonal, every block between them off it. `view=selection` with `genomes=` or `regions=` in the hash, so a selection is a link. The pair view stays for the links and clicks that already point at it; a pair is now the two-element case of this.
+
+- [x] Lanes beside the map are draggable: the border resizes, the body reorders, and dragging *along* the axis still pans the map — the direction of the first movement tells the three apart, so no gesture was given up for another. Right-click a lane for its colour, its range, hide and remove.
+- [x] Right-click the map for a menu that marks the cell under the pointer: vertical line, horizontal line, crosshair, loop — each showing the coordinate it would use — and copy coordinates.
+- [x] Hand-drawn lines are continued into the lanes: verticals under the map, horizontals beside it, each on the axis it names. Loop anchors are small triangles on the outer edge of each stack, pointing back at the map.
+- [x] A 20 px margin over the landing masthead.
+
+## FOR NOW
+
+
+
+## FOR LATER
+
+- [ ] A tabbed interface, with multiple concurrent sessions, should exist. Each session should have its own file, tracks, annotations, and settings. The user should be able to switch between sessions by clicking on the tabs.
+
+- [ ] A way to load another file (cooler or metacool) in the Annotation panel to "compare" with the current file. It should update the GENERAL cards to File 1 and File 2. It should use the second file only for File info and for pixels in the bottom left triangle of the heatmap (still square, but not symmetric). The second heatmap essentially replaces pixels in the bottom left triangle of the heatmap. Panning off-diagonal or zooming/selecting anywhere is still possible. 
+
+- [ ] It should be possible to browse tracks WITHOUT LOADING A COOL/METACOOL file. It could be done by loading a bigwig track first, in the file drop area. This would start a plain 1D, horizontal genome browser, with all the features we discussed and have implemented for the annotation tracks, but as a real genome. And other niceties common in genome browsers if any. Think about how this could be implemented. 
 

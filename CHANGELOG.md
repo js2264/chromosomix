@@ -10,6 +10,246 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Right-click the map to mark the cell under the pointer.** Vertical line,
+  horizontal line, crosshair, loop — each row showing the coordinate it would
+  use, so what is about to be marked is visible before it is — and copy
+  coordinates. The two ways in that existed were typing a coordinate you already
+  know and arming a mode and clicking; neither answers "this one, the one I am
+  pointing at".
+
+- **Lanes beside the map are draggable, and carry their own menu.** The border
+  resizes a track, the body reorders the stack, and dragging *along* the axis
+  still pans the map — which it has to, since that is what dragging a track has
+  always done. The direction of the first movement tells the three apart, so
+  nothing needs a modifier key and no gesture was given up for another. A right
+  click on a lane offers its colour, its range, hide and remove: the two
+  controls a reader beside the map actually reaches for, where the track is
+  rather than across the window in a card.
+
+- **Hand-drawn lines are continued into the lanes.** A vertical rule is a column
+  and is drawn under the map; a horizontal one is a row and is drawn beside it;
+  a crosshair is both. Loop anchors are small triangles on each stack's outer
+  edge, pointing back at the map. A mark called out on the matrix is a
+  coordinate, and the tracks beside it are what a coordinate is usually being
+  compared against — the marks were on the map alone, which is where the
+  comparison could not be made.
+
+- **Tick any number of genomes or sequences and see them as one map.** Each on
+  the diagonal and every block between them off it — the picture the pair view
+  showed for exactly two, without the two diagonals that make an off-diagonal
+  block readable. Both tables carry checkboxes now, with "select all" over
+  whatever the filters leave visible (filter to completeness above 90, then take
+  all of them) and "clear"; the button names two and counts more, because
+  `MAG_7 × MAG_12 →` is worth more than a number and four names are longer than
+  a button.
+
+  It is a view state — `view=selection&genomes=a,b,c`, or `regions=` for
+  sequences — so a selection is a link, a history entry and a back button, and
+  `genomes=a,b` is precisely what `view=pair` used to be. The pair view stays
+  where it is: the overview's cross-genome clicks lead there and so do links
+  already sent.
+
+  The read is the whole-file scan with most of the file left out. A selection is
+  scattered through the pixels, so there is no shorter span to walk — the gate
+  says so, and the progress bar and cancel are the ones the whole-genome read
+  just gained. The axis is built from the selection in *file* order rather than
+  the order it was ticked in, because a matrix whose rows jump about is a
+  picture of the clicking; it is pooled against its own size, so four MAGs are
+  drawn at four MAGs' resolution however large the file they came from is; and a
+  genome resolves to its contigs, so ticking four MAGs and ticking their contigs
+  are the same map. Checked on every fixture against the same oracle the pooled
+  read uses: a scattered selection equals the dense block rolled up over the
+  same grouping, cell for cell.
+
+- **The app says what it is on the way in.** The mark — the same drawing as the
+  favicon, the install prompt and the dock icon — is now a masthead on the
+  landing page: mark and name on one line, centred, spanning 80% of the drop
+  zone below them, with the tagline under and 20 px of air above. Both are
+  scaled by one `clamp`ed font size, so the pair stays one thing from a phone to
+  a wide window. In the header
+  it sits at 26 px before the name, sharing its centre — the brand row was
+  baseline-aligned, and an image's baseline is its bottom edge, so the mark hung
+  visibly high against the words. The first screen used to open on an
+  instruction, which made it a dialog rather than a page. It is read from the
+  192 px file `npm run icons:app` already writes, not a fifth copy of the shapes.
+
+- **"whole genome →" in the genomes and chromosomes tables.** The whole-file view
+  was reachable from the chevron beside the root crumb and nowhere else, which is
+  a corner of the window to find something the table in front of you is the
+  question about. The metacool gets its scan, the cooler its map; the button is
+  absent on a metacool's per-genome contigs table, where "the whole file" is not
+  what is being asked.
+
+- **The cooler's whole-genome read has a progress bar and a cancel**, the same
+  two the whole-metagenome scan has always had — it is the same pass over every
+  pixel of the same file, and the difference was in the plumbing rather than in
+  the wait. What made it possible is the reader walking a span *asynchronously*:
+  a cancel arrives as a message, and a synchronous loop never lets the message
+  queue run however many microtasks it awaits, so a read that could take twenty
+  seconds could not be called off and could not say how far along it was. The
+  contig roll-up is watched the same way, since it walks the same pixels.
+
+- **Hand-drawn marks can be saved.** The Manual annotations card grows the export
+  row the Aesthetics panel has — a format, and a Save — writing lines as BED and
+  loops as BEDPE, one base wide and half-open. Both come back through this app's
+  own sniffer and parsers as an overlay on the map, which is the property
+  `manual-export.test.ts` checks rather than the text; and both are what bedtools
+  reads, because a coordinate someone chose outlives the session they chose it
+  in. Nothing to write is a disabled button rather than an empty file.
+
+- **The whole-genome view of a cooler is read at the resolution it is drawn at,
+  and there is no longer a file size that defeats it.** It used to ask for one
+  cell per file bin, which at 24,228 bins is 2.3 GB of values in one array — and
+  a browser serves at most 2 GiB in one, whatever the machine has, so a whole
+  yeast genome at 500 bp was offered, computed for several seconds, and then
+  refused. The picture it was refused for was one nothing could have shown: the
+  renderer pools any raster to 4,096 px per axis, so those 24,228 rows were
+  always going to be drawn as about 4,000 pixels.
+
+  So the pooling moved to the read. Every `stride` consecutive bins of a
+  chromosome are summed into one cell, in the worker, straight from the stored
+  pixels — the block that arrives is the one that was always going to be drawn.
+  Yeast at 500 bp is 4,047 cells and 66 MB instead of 24,228 and 2.3 GB; at
+  200 bp, where the dense block would have been 14.7 GB, it is the same 66 MB.
+  A human cooler at 10 kb, 381.9 GB dense, is 67 MB and 760 kb cells. The read
+  is bounded by construction at every bin size a file can have.
+
+  **What arrives is an ordinary block one bin size up**, not a new kind of
+  object: the stride restarts at every chromosome, so a cell is `stride` bins of
+  one sequence and a run of cells is that sequence. The panel is told the coarser
+  bin size and every coordinate, tick, tooltip, region box and figure caption is
+  then right without knowing pooling happened — a box drawn on the 3 kb overview
+  still opens that region at the file's own 500 bp. It is the relationship an
+  `.mcool`'s 5 kb level has to its 1 kb level, computed on the way through rather
+  than stored, and the sums are identical to `metacooler aggregate` over the same
+  squares (`pooling.test.ts` checks every fixture, cell for cell, against the
+  dense read rolled up by the existing folded aggregation).
+
+  What the view still costs is the pass over the stored pixels, which is what it
+  always cost, and that is now what it asks about: above ten million pixels the
+  map waits behind a button that states how many there are and what resolution
+  they will be summed into. Below it nothing is asked. The whole-metagenome scan
+  is gated for that same reason, and the two views now behave alike down to the
+  wording.
+
+- **Both whole-file views are kept across navigation.** They are the expensive
+  reads, so the shell holds whichever one it built, keyed on what was read (uri,
+  level, balance): leaving one for a chromosome and coming back returns to the
+  picture rather than to the gate. Changing the level or the balance is a
+  different read, so that one is rebuilt and the old block released rather than
+  left in memory unread.
+
+### Removed
+
+- **Captions on hand-drawn marks.** A text box under every mark, for a sentence
+  the figure already makes. Gone from the card, from the model and from the
+  drawing — and with it the label helper, the halo it needed and the type size it
+  was written at.
+
+### Fixed
+
+- **A right-click on the map no longer navigates.** `mousedown` fires for every
+  button, and the map's press/release pair had no guard, so a right-press was
+  answered as a click on release: right-clicking a whole-genome view opened
+  whatever cell was under the pointer, and the menu the press was for arrived
+  over the view it had just left. The primary button only, now — and the same
+  guard on the side panels' drag handle, where a right-press armed a resize the
+  browser's own menu then sat on top of.
+
+- **Both ends of a loop are marked on both 1D axes.** A loop is a statement
+  about two loci, and a reader looking at the tracks under one end of it is
+  asking what is at the other. Drawing the row anchor only beside the map and
+  the column anchor only under it answered half of that on each edge, and
+  neither half where the comparison is made.
+
+- **The masthead's mark sits on the word's centre line.** Centring the two boxes
+  left it visibly high: a line box carries the font's ascent and descent, so the
+  ink of a word sits below the middle of its box while a square's ink is its
+  box. Measured on the rendered pixels — 10.5 px of offset at a 97.6 px font —
+  and corrected in `em`, so it holds at every size the `clamp` produces.
+
+- **A block too large for one typed array says which limit it hit.** A browser
+  serves at most 2 GiB in a single `Float32Array` whatever the machine has:
+  measured in Chrome on a 16 GB Mac, 2,140,000,000 bytes is served, `2**31 - 4`
+  is not, and four separate 1 GB arrays live side by side. It is a limit on one
+  array, not on the tab, and the refusal used to blame "this machine".
+
+  It is now checked ahead of the memory budget and cannot be overridden by a
+  confirmation, because there is nothing to override; the message names the
+  largest square block that can be made (about 23,170 × 23,170 bins) and the ways
+  through. The whole-genome view no longer reaches it at all — it reads pooled —
+  so what it governs now is a region, a genome or a pair.
+
+  A test asserted that yeast at 500 bp loads densely, and was passing, because it
+  exercised the *estimate* and the estimate never tried to allocate anything.
+
+- **The Annotations panel scrolls as a whole, not card by card.** Twelve little
+  scrollbars where the reader wanted one. `overflow-x: auto` was set on the cards
+  so a wide one could scroll sideways inside a narrow column — but a box with
+  `overflow-x: auto` and `overflow-y: visible` is not a thing CSS has: the
+  visible half computes to `auto`, so every card was a scroll container in both
+  directions, and a flex item shrinks by default, so each one was squeezed and
+  scrolled inside itself the moment the panel was full. `flex: 0 0 auto` on the
+  cards is the whole fix. `.side` keeps the opposite behaviour deliberately: a
+  view's sidebar fills the column so its contig list can scroll where it is.
+
+- **Less white between a key and its value in the File card.** The key column was
+  a fixed 9rem, set when values were elided and had to start at a predictable
+  place. They run to their full width now, so there is nothing to line up with,
+  and the column takes what its longest key needs.
+
+- **More room before any of that.** The memory budget is now half of what the
+  device claims rather than a third, and the assumed memory where the browser
+  says nothing — Firefox and Safari, on every machine — is 8 GiB rather than 4.
+  A 20,000-bin block, 1.9 GB, was refused outright on both of those engines and
+  now loads. Guessing high costs nothing since the allocation itself is caught
+  and translated; guessing low was costing pictures the machine could draw.
+
+- **The whole-metagenome view is a view state, not a mode the shell holds.** It
+  was the only landing view of a file with no link, no history entry and no back
+  button — pick it and the URL did not move, so it could not be shared, and
+  reloading landed on the genomes table. It is `view=overview` now, a peer of
+  the two tables it shares the root menu with, and everything that follows from
+  that follows: the level and the colour scale are in the hash like every other
+  view's, the back button leaves it, and the plot re-measures when a side panel
+  is dragged — which, being mounted outside the shell's own view slot, it did
+  not.
+
+- **The three panels resize — which, despite 0.4.0, is the first time.** The
+  drag handle, the remembered width and the double-click reset all shipped, and
+  none of them could be reached: the handle was a sticky flex item at the end of
+  a column that was already full, so it was laid out *below* the fold, and
+  `sticky` only holds an element that scrolling would carry away — it never
+  pulls one up into view. The negative margin meant to cancel its height could
+  not, because a percentage margin resolves against the containing block's
+  width whatever axis it is on. So the strip was real, painted, and permanently
+  out of sight.
+
+  It is now positioned against the column, and the column no longer scrolls:
+  its body does. The heading staying put while the cards move under it is the
+  same change seen from the front.
+
+### Changed
+
+- **Saving a figure is one row: resolution, format, Save.** It was a DPI
+  dropdown, then a line of two buttons labelled `PNG` and `PDF`, two rows
+  further down — which made the choice of file into the action itself and left
+  the resolution stranded above the thing it applied to. Now the row reads the
+  way the sentence does: 300 dpi, PDF, Save. Both defaults are unchanged; PDF
+  simply stops being the second button and becomes the one that is already
+  chosen.
+
+- **Cards in General scroll sideways rather than eliding or wrapping.** A URI
+  cut off at `Hum66.met…` and a genome name broken across three lines are the
+  same failure: this panel is where you go to read the identity of what is on
+  screen, and an identity you cannot read whole is not one. Keys and values now
+  keep to a single line and the card scrolls under them. Hovering still gives
+  the full text, for the reader who would rather not.
+
 ## [0.4.1] - 2026-08-04
 
 ### Changed
