@@ -268,15 +268,28 @@ export function landingState(uri: string, view: ViewKind = 'genomes'): ViewState
 // Store
 // ---------------------------------------------------------------------------
 
-export type ViewListener = (state: ViewState | null) => void
+/**
+ * How a state arrived, which is not the same question as what it is.
+ *
+ * `replace` is the difference between a navigation and a nudge: the browser's
+ * back button should walk the breadcrumb (§5.5), not undo the last colour-scale
+ * tweak. The store does not act on it — it has no address bar of its own any
+ * more — it passes it to whoever does.
+ */
+export interface ViewChange {
+  replace: boolean
+}
+
+export type ViewListener = (state: ViewState | null, change: ViewChange) => void
 
 /**
- * A subscribe/notify store over one {@link ViewState}, optionally bound to the
- * address bar.
+ * A subscribe/notify store over one {@link ViewState}.
  *
- * Navigation uses `pushState` rather than assigning `location.hash`, so the
- * browser's back button walks the breadcrumb (§5.5) instead of just undoing the
- * last colour-scale tweak — those go through `patch(..., { replace: true })`.
+ * Deliberately *not* bound to the address bar. There is one address bar and
+ * there may be several of these — one per open session — so the binding belongs
+ * to whatever knows which session is on screen. Sessions are then identical
+ * whether they are the visible one or not, which is what stops a background tab
+ * from writing the hash.
  */
 export class ViewStore {
   private current: ViewState | null
@@ -294,8 +307,7 @@ export class ViewStore {
   set(next: ViewState | null, options: { replace?: boolean } = {}): void {
     if (viewStateEquals(next, this.current)) return
     this.current = next
-    this.writeHash(options.replace === true)
-    this.notify()
+    this.notify({ replace: options.replace === true })
   }
 
   /**
@@ -319,46 +331,18 @@ export class ViewStore {
     return () => this.listeners.delete(listener)
   }
 
-  private notify(): void {
-    for (const listener of this.listeners) listener(this.current)
-  }
-
-  private hashWriting = false
-
-  private writeHash(replace: boolean): void {
-    if (!this.bound) return
-    const hash = this.current === null ? '' : `#${serialiseViewState(this.current)}`
-    if (window.location.hash === hash) return
-    this.hashWriting = true
-    const url = `${window.location.pathname}${window.location.search}${hash}`
-    if (replace) window.history.replaceState(null, '', url)
-    else window.history.pushState(null, '', url)
-    this.hashWriting = false
-  }
-
-  private bound = false
-
   /**
-   * Two-way bind to the address bar. Reads the current hash immediately, then
-   * follows `popstate` (back/forward) and `hashchange` (a hand-edited or pasted
-   * URL). Returns an unbind function.
+   * Adopt a state without telling anybody.
+   *
+   * For a restored tab, and for that alone: the state is what the session
+   * *will* show, and rendering it now would open a file nobody has asked to
+   * look at. The shell notifies itself once, when the tab is clicked.
    */
-  connectHash(): () => void {
-    this.bound = true
-    const read = (): void => {
-      if (this.hashWriting) return
-      const parsed = parseViewState(window.location.hash)
-      if (viewStateEquals(parsed, this.current)) return
-      this.current = parsed
-      this.notify()
-    }
-    window.addEventListener('popstate', read)
-    window.addEventListener('hashchange', read)
-    read()
-    return () => {
-      this.bound = false
-      window.removeEventListener('popstate', read)
-      window.removeEventListener('hashchange', read)
-    }
+  adopt(next: ViewState | null): void {
+    this.current = next
+  }
+
+  private notify(change: ViewChange): void {
+    for (const listener of this.listeners) listener(this.current, change)
   }
 }
