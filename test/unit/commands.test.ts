@@ -7,7 +7,7 @@
  * held, and a contig whose *name* contains a colon.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { scoreCommand } from '@/ui/CommandPalette'
 import { keyLabel, matchesKeys } from '@/ui/commands'
@@ -99,15 +99,43 @@ describe('stepping to a neighbour', () => {
 })
 
 /**
- * Under Node there is no `navigator`, so `isMac()` is false and the labels come
- * out in their `Ctrl+` form — which is the form that was wrong.
+ * `mod` renders as ⌘ on a Mac and as `Ctrl` everywhere else, so the platform is
+ * stubbed rather than inherited.
+ *
+ * It used to be inherited, on the stated reasoning that "under Node there is no
+ * `navigator`, so `isMac()` is false". That was true when it was written and is
+ * not any more: Node grew a `navigator` global, and on macOS it reports
+ * `platform: 'MacIntel'` — the browser's own string. So the suite passed on a
+ * Linux CI runner and failed on the machine of anyone developing on a Mac, which
+ * is the worst shape a failure can have, and it failed in `preversion`, which
+ * meant it blocked a release rather than a commit.
+ *
+ * Stubbing also buys the half that was never covered: the Mac form. The bug
+ * these exist for is a separator applied to the wrong branch, and one branch
+ * cannot show that.
  */
 describe('keyLabel', () => {
+  const on = (platform: string): void => {
+    vi.stubGlobal('navigator', { platform, userAgent: platform })
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('joins the modifier once', () => {
     // `mod` used to render as the string 'Ctrl+' and then be joined on '+',
     // so every non-Mac browser showed `Ctrl++P` in the action bar and in the
     // shortcuts dialog.
+    on('Linux x86_64')
     expect(keyLabel('mod+p')).toBe('Ctrl+P')
+  })
+
+  // The Mac form is joined on the empty string, because ⌘ is a prefix rather
+  // than a word: `⌘+P` is not how the shortcut is written anywhere on the
+  // platform.
+  it('writes the Mac modifier without a separator', () => {
+    on('MacIntel')
+    expect(keyLabel('mod+p')).toBe('⌘P')
   })
 
   it('upper-cases a single-character key and leaves named keys alone', () => {
@@ -116,10 +144,14 @@ describe('keyLabel', () => {
     expect(keyLabel('Enter')).toBe('Enter')
   })
 
+  // On both platforms, since the separator is exactly what differs between them.
   it('has no stray separator anywhere', () => {
-    for (const keys of ['mod+p', 'g', 'c', 'w', '[', ']', 'x', 'd', 'l', 'b', 't', '?']) {
-      expect(keyLabel(keys)).not.toContain('++')
-      expect(keyLabel(keys).endsWith('+')).toBe(false)
+    for (const platform of ['Linux x86_64', 'MacIntel']) {
+      on(platform)
+      for (const keys of ['mod+p', 'g', 'c', 'w', '[', ']', 'x', 'd', 'l', 'b', 't', '?']) {
+        expect(keyLabel(keys)).not.toContain('++')
+        expect(keyLabel(keys).endsWith('+')).toBe(false)
+      }
     }
   })
 })
