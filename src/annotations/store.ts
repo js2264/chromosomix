@@ -136,10 +136,12 @@ export class AnnotationStore {
       source: options.source,
       status: 'loading',
       visible: true,
-      // Bottom by default and not both: two copies of one track is twice the ink
-      // for no more information, and the bottom edge is the one a reader's eye
-      // is already on after following a column down the map.
-      placement: options.placement ?? { bottom: true, right: false },
+      // One edge and not both: two copies of one track is twice the ink for no
+      // more information. The **right** edge, because the bottom is where the
+      // coordinate axis, the block labels and the colourbar caption already are
+      // — a stack of tracks there pushes the map up the page and competes with
+      // the furniture, while the space beside it is empty in every view.
+      placement: options.placement ?? { bottom: false, right: true },
       style: options.style ?? defaultStyle(options.kind, this.nextColour()),
     }
     this.items = [...this.items, entry]
@@ -169,6 +171,34 @@ export class AnnotationStore {
     const before = this.items.length
     this.items = this.items.filter((entry) => entry.id !== id)
     if (this.items.length !== before) this.changed()
+  }
+
+  /**
+   * Put one row at a new position in **its own card's** list.
+   *
+   * The order is not decoration: {@link drawnOn} hands the lanes out in it, so
+   * dragging a row up the card moves that track up the stack beside the map.
+   * That is the whole reason the list is draggable — the alternative was
+   * removing three tracks and dropping them again in the order you wanted.
+   *
+   * `to` indexes the card's own list, which is what the reader is looking at,
+   * and the other card's rows keep the absolute slots they had: the two are
+   * interleaved in `items` by load order, and a reorder of one is not an event
+   * in the other. Out-of-range indices clamp rather than throw — a drop past the
+   * last row means "last", which is what the gesture looked like.
+   */
+  move(id: string, to: number): void {
+    const entry = this.byId(id)
+    if (entry === undefined) return
+    const list = this.forCard(entry.card)
+    const from = list.findIndex((row) => row.id === id)
+    const target = Math.max(0, Math.min(list.length - 1, to))
+    if (from < 0 || from === target) return
+    list.splice(target, 0, ...list.splice(from, 1))
+    // Refill this card's slots from the reordered list, in slot order.
+    let next = 0
+    this.items = this.items.map((row) => (row.card === entry.card ? list[next++] : row))
+    this.changed()
   }
 
   clear(): void {

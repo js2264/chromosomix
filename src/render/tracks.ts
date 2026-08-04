@@ -20,7 +20,7 @@
 import { valueAcross, laneRect, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
 import { percentileOf } from './scale'
-import type { Limits, TrackSampleSet, ValueScaling } from '../annotations/types'
+import type { Limits, TrackSampleSet } from '../annotations/types'
 
 /**
  * One value per canvas pixel along the genomic axis.
@@ -210,27 +210,18 @@ export function resolveLimits(
 /**
  * A value's position in the lane, in `[0, 1]`.
  *
- * `log2` rather than `log10`, because the tracks this exists for are ratios and
- * a doubling is the unit a reader of one thinks in. Values at or below zero have
- * no logarithm, and they are drawn at the floor rather than dropped: a zero in a
- * coverage track is a fact about the sequence. The floor itself is ten doublings
- * below the ceiling whenever the limits do not supply a positive one, which is
- * enough dynamic range for any real track and finite for every input.
+ * Linear, and only linear. A `log2` option lived here for the ratio tracks, on
+ * the reasoning that a doubling is the unit a reader of one thinks in — but it
+ * was a per-track dropdown whose effect on a lane 44 pixels tall was hard to
+ * read and easy to forget having set, and a lane whose value axis is not the one
+ * its neighbour uses is the opposite of what the autoscale *group* beside it is
+ * for. A ratio that wants log is better made log by the tool that wrote the
+ * bigWig, where the axis label can say so.
  */
-export function normaliser(
-  scaling: ValueScaling,
-  limits: { min: number; max: number },
-): (value: number) => number {
-  if (scaling === 'linear') {
-    const span = limits.max - limits.min
-    if (!(span > 0)) return () => 0
-    return (value) => (value - limits.min) / span
-  }
-  const top = limits.max > 0 ? Math.log2(limits.max) : 0
-  const bottom = limits.min > 0 ? Math.log2(limits.min) : top - 10
-  const span = top - bottom
+export function normaliser(limits: { min: number; max: number }): (value: number) => number {
+  const span = limits.max - limits.min
   if (!(span > 0)) return () => 0
-  return (value) => (value > 0 ? (Math.log2(value) - bottom) / span : 0)
+  return (value) => (value - limits.min) / span
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +231,6 @@ export function normaliser(
 export interface TrackPaint {
   colour: string
   mode: 'line' | 'area' | 'bar'
-  scaling: ValueScaling
   limits: { min: number; max: number }
   /** Grid and axis-label colour; the page's, so it follows the theme. */
   guideColour: string
@@ -263,7 +253,7 @@ export function drawTrack(
   profile: PixelProfile,
   paint: TrackPaint,
 ): void {
-  const norm = normaliser(paint.scaling, paint.limits)
+  const norm = normaliser(paint.limits)
   const zero = paint.limits.min <= 0 && paint.limits.max >= 0 ? norm(0) : 0
   const baseAcross = valueAcross(frame, zero)
   const slots = profile.mean.length

@@ -20,7 +20,7 @@
  */
 
 import type { ValueRange } from '../render/scale'
-import { el } from './dom'
+import { el, trimNumber } from './dom'
 
 export interface ClipRangeProps {
   /** A bound moved. `null` means "back to auto" — both bounds unset. */
@@ -146,17 +146,6 @@ export class ClipRange {
 
   private setBox(box: HTMLInputElement, value: number): void {
     if (document.activeElement === box) return
-    box.value = Number.isFinite(value) ? trimNumber(value) : ''
+    box.value = trimNumber(value)
   }
-}
-
-/**
- * Four significant digits, without the exponent a `toPrecision` would print for
- * an ordinary number. The box is a starting point for an edit, not a readout —
- * `-4.678` is something to nudge, `-4.678039550781250` is not.
- */
-function trimNumber(value: number): string {
-  const abs = Math.abs(value)
-  if (abs !== 0 && (abs < 1e-4 || abs >= 1e6)) return value.toExponential(3)
-  return String(Number(value.toPrecision(4)))
 }

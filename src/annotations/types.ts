@@ -184,17 +184,6 @@ export interface Placement {
 /** How a value track is resolved into ink. */
 export type TrackMode = 'line' | 'area' | 'bar'
 
-/**
- * What the value axis measures.
- *
- * `log2` rather than `log10` because the tracks this is for are ratios —
- * ChIP over input, treatment over control — and a doubling is the unit a
- * reader of one thinks in. Non-positive values have no log, so they are drawn
- * at the floor rather than dropped: a zero in a coverage track is a fact about
- * the sequence.
- */
-export type ValueScaling = 'linear' | 'log2'
-
 /** A clip on the value axis. `auto` recomputes from what is in view. */
 export interface Limits {
   auto: boolean
@@ -218,7 +207,6 @@ export interface AnnotationStyle {
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
   mode: TrackMode
-  scaling: ValueScaling
   limits: Limits
   /**
    * Autoscale group. Tracks sharing a non-empty name resolve to one pair of
@@ -238,7 +226,6 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     colour,
     size: kind === 'track' ? 44 : kind === 'gtf' ? 46 : 16,
     mode: 'area',
-    scaling: 'linear',
     limits: { auto: true, min: 0, max: 1 },
     group: '',
     shape: 'element',

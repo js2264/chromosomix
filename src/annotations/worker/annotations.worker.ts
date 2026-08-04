@@ -146,14 +146,17 @@ async function loadBigWig(
     Number.isFinite(total.scoreMin) &&
     Number.isFinite(total.scoreMax) &&
     total.scoreMax > total.scoreMin
-  const levels = header.zoomLevels.length
 
   return {
     format: 'bigwig',
     contigs,
     overlap: overlapWith(contigs, mapContigs),
+    // The zoom-level count used to lead this line. It is a fact about how the
+    // file was built, not about what is in it: nothing the reader can act on,
+    // and it pushed the one number they can — the value range — onto a second
+    // line in a narrow panel.
     summary:
-      `${count(contigs.length)} contigs · ${levels} zoom level${levels === 1 ? '' : 's'}` +
+      `${count(contigs.length)} contigs` +
       (usable ? ` · ${trim(total.scoreMin)} to ${trim(total.scoreMax)}` : ''),
     ...(usable ? { fileExtent: { min: total.scoreMin, max: total.scoreMax } } : {}),
   }

@@ -49,22 +49,23 @@ describe('the annotation store', () => {
     expect(store.forCard('overlay')).toHaveLength(0)
   })
 
-  // Bottom, and not both: two copies of one track is twice the ink for no more
-  // information, and the bottom edge is where the eye already is after following
-  // a column down the map.
-  it('starts on the bottom edge only', () => {
+  // One edge and not both: two copies of one track is twice the ink for no more
+  // information. The *right* edge, because the bottom already carries the
+  // coordinate axis, the block labels and the colourbar caption, and a stack of
+  // tracks there pushes the map up the page.
+  it('starts on the right edge only', () => {
     const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
-    expect(entry.placement).toEqual({ bottom: true, right: false })
-    expect(store.drawnOn('right')).toHaveLength(0)
+    expect(entry.placement).toEqual({ bottom: false, right: true })
+    expect(store.drawnOn('bottom')).toHaveLength(0)
   })
 
   it('draws nothing that has not finished loading', () => {
     const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
-    expect(store.drawnOn('bottom')).toHaveLength(0)
+    expect(store.drawnOn('right')).toHaveLength(0)
     store.update(entry.id, { status: 'ready' })
-    expect(store.drawnOn('bottom')).toHaveLength(1)
+    expect(store.drawnOn('right')).toHaveLength(1)
     store.update(entry.id, { visible: false })
-    expect(store.drawnOn('bottom')).toHaveLength(0)
+    expect(store.drawnOn('right')).toHaveLength(0)
   })
 
   // Removing the third of four and dropping a replacement should give the
@@ -113,6 +114,91 @@ describe('the annotation store', () => {
     expect(store.hasGtf()).toBe(false)
     store.begin({ card: 'linear', kind: 'gtf', source: localSource })
     expect(store.hasGtf()).toBe(true)
+  })
+})
+
+/**
+ * Dragging a row up the card moves that track up the stack beside the map:
+ * `drawnOn` hands the lanes out in this order, so the order is not decoration.
+ */
+describe('reordering (drag, or the arrow keys)', () => {
+  let store: AnnotationStore
+  let ids: string[]
+
+  beforeEach(() => {
+    store = freshStore(`order-${Math.random()}.cool`)
+    ids = ['a', 'b', 'c'].map(
+      (name) =>
+        store.begin({
+          card: 'linear',
+          kind: 'track',
+          source: { ...localSource, name: `${name}.bw` },
+        }).id,
+    )
+  })
+
+  const order = (): string[] => store.forCard('linear').map((entry) => entry.label)
+
+  it('moves a row down to the index it is given', () => {
+    store.move(ids[0], 2)
+    expect(order()).toEqual(['b', 'c', 'a'])
+  })
+
+  it('moves a row up', () => {
+    store.move(ids[2], 0)
+    expect(order()).toEqual(['c', 'a', 'b'])
+  })
+
+  it('is a no-op for a row that is already there, and for one that has gone', () => {
+    let calls = 0
+    store.subscribe(() => calls++)
+    store.move(ids[1], 1)
+    store.move('nope', 0)
+    expect(calls).toBe(0)
+    expect(order()).toEqual(['a', 'b', 'c'])
+  })
+
+  // A drop past the last row means "last", which is what the gesture looked
+  // like — not an exception, and not a silently dropped move.
+  it('clamps an index past either end', () => {
+    store.move(ids[0], 99)
+    expect(order()).toEqual(['b', 'c', 'a'])
+    store.move(ids[0], -4)
+    expect(order()).toEqual(['a', 'b', 'c'])
+  })
+
+  /**
+   * The two cards are interleaved in one array by load order, and a reorder of
+   * one is not an event in the other. This is the case that catches an
+   * implementation that renumbers `items` wholesale: with the overlay row minted
+   * *between* two linear ones, any reordering that ignores the card would move
+   * it too.
+   */
+  it('leaves the other card’s rows exactly where they were', () => {
+    const store = freshStore(`mixed-${Math.random()}.cool`)
+    const first = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'first.bw' },
+    })
+    store.begin({
+      card: 'overlay',
+      kind: 'pairs',
+      source: { ...localSource, name: 'loops.bedpe' },
+    })
+    const last = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'last.bw' },
+    })
+
+    store.move(last.id, 0)
+    expect(store.forCard('linear').map((entry) => entry.label)).toEqual(['last', 'first'])
+    expect(store.forCard('overlay').map((entry) => entry.label)).toEqual(['loops'])
+    // And the overlay row still sits between them in the underlying array, so
+    // nothing downstream that reads `entries` sees it jump.
+    expect(store.entries.map((entry) => entry.label)).toEqual(['last', 'loops', 'first'])
+    expect(first.id).not.toBe(last.id)
   })
 })
 
@@ -307,6 +393,5 @@ describe('style defaults', () => {
   it('gives a lane a thickness its kind can use', () => {
     expect(defaultStyle('track', '#000').size).toBeGreaterThan(defaultStyle('segments', '#000').size)
     expect(defaultStyle('track', '#000').limits.auto).toBe(true)
-    expect(defaultStyle('track', '#000').scaling).toBe('linear')
   })
 })

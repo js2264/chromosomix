@@ -201,25 +201,33 @@ describe('the value axis', () => {
     expect(resolveLimits({ auto: false, min: 9, max: 1 }, null)).toEqual({ min: 0, max: 1 })
   })
 
-  it('spaces doublings evenly under log2', () => {
-    const norm = normaliser('log2', { min: 1, max: 16 })
-    expect(norm(1)).toBeCloseTo(0, 6)
-    expect(norm(2)).toBeCloseTo(0.25, 6)
-    expect(norm(4)).toBeCloseTo(0.5, 6)
-    expect(norm(16)).toBeCloseTo(1, 6)
+  // The `log2` option these three used to cover is gone: it was a per-track
+  // dropdown whose effect on a 44-pixel lane was hard to read and easy to forget
+  // having set, and it put a lane on a different value axis from the one beside
+  // it — which is the opposite of what the autoscale group is for.
+  it('places a value by where it falls between the limits', () => {
+    const norm = normaliser({ min: 0, max: 10 })
+    expect(norm(0)).toBeCloseTo(0, 6)
+    expect(norm(2.5)).toBeCloseTo(0.25, 6)
+    expect(norm(10)).toBeCloseTo(1, 6)
   })
 
-  // Zero has no logarithm and is still a fact about the sequence.
-  it('puts a non-positive value on the floor under log2', () => {
-    const norm = normaliser('log2', { min: 1, max: 16 })
-    expect(norm(0)).toBe(0)
-    expect(norm(-4)).toBe(0)
+  // A signed track's floor is not zero, and a value below it is still placed by
+  // the same subtraction — the caller clips, this does not.
+  it('measures from the floor, not from zero', () => {
+    const norm = normaliser({ min: -4, max: 4 })
+    expect(norm(-4)).toBeCloseTo(0, 6)
+    expect(norm(0)).toBeCloseTo(0.5, 6)
+    expect(norm(4)).toBeCloseTo(1, 6)
   })
 
-  it('gives log2 a finite floor when the limits do not', () => {
-    const norm = normaliser('log2', { min: 0, max: 1024 })
-    expect(Number.isFinite(norm(1))).toBe(true)
-    expect(norm(1024)).toBeCloseTo(1, 6)
+  // `resolveLimits` refuses to hand one over, but a group range collapses to a
+  // point whenever every track in it is flat — and a divide by zero there would
+  // be a lane of NaN rather than a lane of nothing.
+  it('answers zero for a span of zero rather than dividing by it', () => {
+    const norm = normaliser({ min: 5, max: 5 })
+    expect(norm(5)).toBe(0)
+    expect(norm(9)).toBe(0)
   })
 
   it('writes a limit the way an axis corner has room for', () => {

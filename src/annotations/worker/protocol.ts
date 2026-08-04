@@ -28,7 +28,7 @@ export interface LoadResult {
   /** Contig names as *this file* spells them. */
   contigs: string[]
   overlap: ContigOverlap
-  /** One line for under the label: "7,071 transcripts", "16 contigs · 5 zoom levels". */
+  /** One line for under the label: "7,071 transcripts", "16 contigs · 0 to 41.2". */
   summary: string
   /** Present for the text formats; a bigWig's data is fetched per view instead. */
   payload?: AnnotationPayload

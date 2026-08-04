@@ -106,6 +106,35 @@ export const fmt = {
   },
 }
 
+/**
+ * A number as the *starting point for an edit*, rather than as a readout.
+ *
+ * `fmt.num` is for text a reader reads; this is for what goes inside a number
+ * box they are about to nudge. `-4.678` is something to nudge,
+ * `-4.678039550781250` — which is what `String(value)` gives for a float that
+ * came off a colour scale or out of a bigWig header — is not.
+ *
+ * Four significant digits, without the exponent `toPrecision` would print for an
+ * ordinary number, and the exponent form kept for the magnitudes where the
+ * alternative is a box reading `0` or fifteen digits of integer.
+ *
+ * @param maxDecimals A cap on the places kept, for a box whose value is read off
+ * a lane 44 pixels tall: past three, the digits are below what the picture can
+ * show and they cost the box its whole width. Uncapped by default, which is what
+ * the colour clip wants — its units are the transform's, not the data's.
+ */
+export function trimNumber(value: number, maxDecimals = Number.POSITIVE_INFINITY): string {
+  if (!Number.isFinite(value)) return ''
+  const abs = Math.abs(value)
+  // Below the first bound a fixed-point rendering is all zeroes and above the
+  // second it is a wall of digits; in both, the exponent is the shorter true
+  // answer. Checked before the cap, so `maxDecimals` never turns 1.2e-7 into 0.
+  if (abs !== 0 && (abs < 1e-4 || abs >= 1e6)) return value.toExponential(3)
+  const rounded = Number(value.toPrecision(4))
+  if (!Number.isFinite(maxDecimals)) return String(rounded)
+  return String(Number(rounded.toFixed(Math.max(0, maxDecimals))))
+}
+
 /** Trailing-edge debounce, for the table's search and filter boxes. */
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {
   let timer: ReturnType<typeof setTimeout> | undefined
