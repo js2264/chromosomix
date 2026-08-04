@@ -162,10 +162,24 @@ export function drawDiagonalFeatures(
  * to judge whether the call is real, and a disc over it answers the question by
  * hiding it.
  *
- * Drawn on **both** sides of the diagonal. A cooler stores the upper triangle
- * and this app draws the full square, so a call at `(a, b)` is visible at
- * `(b, a)` too — and which of the two a reader is looking at depends on nothing
- * more than which half of the map they panned to.
+ * Drawn **once**, on the upper side of the diagonal.
+ *
+ * A call at `(a, b)` is a fact about a pair of loci, and the map draws that pair
+ * twice — the matrix is symmetric, so the pixel at `(a, b)` and the one at
+ * `(b, a)` hold the same number. Ringing both said the same thing twice, and on
+ * a set of any size the second ring was pure ink: a few hundred calls became a
+ * few hundred circles the reader has to check against the diagonal to know they
+ * are not a second set. One ring per call, always in the same half, reads as
+ * what it is.
+ *
+ * "Upper" is `row <= col`, which on a canvas — rows increasing downward — is the
+ * half above and right of the diagonal, and is the half a cooler stores.
+ *
+ * The choice only applies when both placements are actually on screen, which is
+ * the symmetric case: a view whose two axes are *different* blocks — chrI down
+ * the side, chrII across the top — represents at most one of them, and there the
+ * rule would drop the only circle there was. So the side is a preference between
+ * two candidates, not a filter applied to each.
  */
 export function drawPairs(
   ctx: CanvasRenderingContext2D,
@@ -178,6 +192,22 @@ export function drawPairs(
   if (rows === null || cols === null) return
   const radius = Math.max(2.5, paint.radius)
 
+  /** One placement of a pair, or `null` where it is off this view entirely. */
+  const place = (
+    rowContig: string,
+    rowBp: number,
+    colContig: string,
+    colBp: number,
+  ): { x: number; y: number; upper: boolean } | null => {
+    const row = rows.locusToUnit(rowContig, rowBp)
+    const col = cols.locusToUnit(colContig, colBp)
+    if (row === null || col === null) return null
+    const x = toX(frame, col)
+    const y = toY(frame, row)
+    if (!insideX(frame, x) || !insideY(frame, y)) return null
+    return { x, y, upper: row <= col }
+  }
+
   ctx.save()
   ctx.globalAlpha = paint.opacity
   ctx.strokeStyle = paint.colour
@@ -189,19 +219,15 @@ export function drawPairs(
     const two = set.contigs[set.contig2[i]]
     const bpOne = (set.start1[i] + set.end1[i]) / 2
     const bpTwo = (set.start2[i] + set.end2[i]) / 2
-    for (const [rowContig, rowBp, colContig, colBp] of [
-      [one, bpOne, two, bpTwo],
-      [two, bpTwo, one, bpOne],
-    ] as Array<[string, number, string, number]>) {
-      const row = rows.locusToUnit(rowContig, rowBp)
-      const col = cols.locusToUnit(colContig, colBp)
-      if (row === null || col === null) continue
-      const x = toX(frame, col)
-      const y = toY(frame, row)
-      if (!insideX(frame, x) || !insideY(frame, y)) continue
-      ctx.moveTo(x + radius, y)
-      ctx.arc(x, y, radius, 0, Math.PI * 2)
-    }
+    const a = place(one, bpOne, two, bpTwo)
+    const b = place(two, bpTwo, one, bpOne)
+    // Both on screen: take the upper one. One on screen: take it, wherever it
+    // fell. A call on the diagonal has `a` and `b` at the same pixel, so either
+    // answer is the same circle.
+    const at = a !== null && b !== null ? (a.upper ? a : b) : (a ?? b)
+    if (at === null) continue
+    ctx.moveTo(at.x + radius, at.y)
+    ctx.arc(at.x, at.y, radius, 0, Math.PI * 2)
   }
   ctx.stroke()
   ctx.restore()
