@@ -100,6 +100,7 @@ describe('overlay toggles', () => {
     const view = new HeatmapView(fakeCanvas(800, 800).canvas, { devicePixelRatio: 1 })
     expect(view.plotOptions).toEqual(DEFAULT_PLOT_OPTIONS)
     expect(view.plotOptions).toEqual({
+      text: true,
       dividers: true,
       breaks: true,
       labels: true,
@@ -134,6 +135,7 @@ describe('overlay toggles', () => {
     const view = new HeatmapView(fakeCanvas(400, 400).canvas, { devicePixelRatio: 1 })
     view.setPlotOptions({ crosshair: true })
     expect(view.plotOptions).toEqual({
+      text: true,
       dividers: true,
       breaks: true,
       labels: true,
@@ -142,6 +144,7 @@ describe('overlay toggles', () => {
     })
     view.setPlotOptions({ dividers: false })
     expect(view.plotOptions).toEqual({
+      text: true,
       dividers: false,
       breaks: true,
       labels: true,

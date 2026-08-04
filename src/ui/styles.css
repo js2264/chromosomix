@@ -288,7 +288,7 @@ p {
   display: flex;
   align-items: stretch;
   gap: 0.3rem;
-  padding: 0.3rem 0.6rem 0;
+  padding: 0.35rem 1rem 0;
   background: var(--bg-sunken);
   border-bottom: 1px solid var(--border);
 }
@@ -296,40 +296,85 @@ p {
 .tabs {
   display: flex;
   align-items: stretch;
-  gap: 0.2rem;
+  gap: 0.3rem;
   min-width: 0;
+  padding: 0 0.7rem;
   overflow-x: auto;
   scrollbar-width: thin;
 }
 
 /* A tab is a button and a close button that share a box, so the whole tab is a
-   click target for switching and the small square at its end is not. */
+   click target for switching and the small square at its end is not.
+
+   The shape is a trapezoid: a flat top between two skewed shoulders, which is
+   what a physical tab looks like and what stops a row of them from reading as a
+   row of buttons. It is built from two skewed pseudo-elements rather than a
+   `clip-path`, because a clipped border is a border with its sides cut off —
+   the outline has to survive, since it is the outline that joins the active tab
+   to the page below it. */
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  padding: 0 0.15rem 0 0.1rem;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+  margin: 0 0.55rem;
+  padding: 0 0.15rem;
   max-width: 15rem;
   min-width: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
 }
 
-.tab:hover {
+.tab::before,
+.tab::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: 0;
+  width: 0.75rem;
+  background: inherit;
+  border-top: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.tab::before {
+  left: -0.7rem;
+  transform: skewX(-15deg);
+  transform-origin: bottom left;
+  border-left: 1px solid var(--border);
+  border-radius: 4px 0 0 0;
+}
+
+.tab::after {
+  right: -0.7rem;
+  transform: skewX(15deg);
+  transform-origin: bottom right;
+  border-right: 1px solid var(--border);
+  border-radius: 0 4px 0 0;
+}
+
+.tab:hover,
+.tab:hover::before,
+.tab:hover::after {
   background: var(--bg-raised);
 }
 
-/* The active tab joins the page below it: same background, no bottom edge, and
-   a coloured line on top so the join reads as deliberate rather than as a gap
-   in the border. */
+/* The active tab joins the page below it: same background, and its bottom edge
+   sits *over* the strip's border rather than under it, so the join reads as one
+   surface rather than as a gap in a line. */
 .tab.is-active {
   background: var(--bg);
-  border-color: var(--border);
   box-shadow: inset 0 2px 0 var(--accent);
   margin-bottom: -1px;
   padding-bottom: 1px;
+  z-index: 1;
+}
+
+.tab.is-active::before,
+.tab.is-active::after {
+  background: var(--bg);
+  bottom: -1px;
 }
 
 .tab-label {
@@ -394,6 +439,39 @@ p {
 .session-content,
 .panel-host {
   display: contents;
+}
+
+/* The batch bar, under the rows it acts on. Only there while two or more are
+   ticked, because everything on it is meaningless for one. */
+.ann-batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.ann-batch-count {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ann-batch .select {
+  max-width: 8rem;
+}
+
+.ann-batch-remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.ann-tick {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 /* --- comparing two files ------------------------------------------------ */
@@ -496,11 +574,11 @@ p {
 
 /* --- the 1D genome browser ---------------------------------------------- */
 
-/* The whole view is a drop target, which is what makes "drop a .cool to switch
-   to its map" a gesture rather than a menu item. */
-.view-browser.over .browser-stage {
-  outline: 2px dashed var(--accent);
-  outline-offset: 2px;
+/* The whole content area is a drop target, which is what makes "drop a .cool to
+   switch to its map" — or a bigWig to add a track — a gesture rather than a trip
+   to a card. Inset rather than an outline, so it does not shift the layout. */
+.content.over {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .browser-bar {
@@ -523,7 +601,6 @@ p {
 .browser-canvas {
   display: block;
   width: 100%;
-  cursor: grab;
   outline: none;
   /* The same declaration `.heatmap-canvas` and `.lane-canvas` carry, and for
      the same reason: without it the UA claims the first touch drag for page
@@ -531,16 +608,6 @@ p {
      instead of panning the view — and the cancelled press then arrives as a
      click. */
   touch-action: none;
-}
-
-.browser-canvas:active {
-  cursor: grabbing;
-}
-
-/* The lane borders are what a resize drag grabs, so the cursor says so before
-   the press rather than after it. */
-.browser-canvas.resizing {
-  cursor: ns-resize;
 }
 
 /* The inline editors float over the canvas and must not swallow the gestures
@@ -557,12 +624,10 @@ p {
    row of controls would sit. */
 .browser-lane-controls {
   position: absolute;
-  right: 0.4rem;
+  left: 0.35rem;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  padding-top: 1px;
+  align-items: center;
+  gap: 0.2rem;
   pointer-events: none;
   opacity: 0;
   transition: opacity 100ms ease;
@@ -579,14 +644,72 @@ p {
   opacity: 1;
 }
 
-/* Readable over whatever ink is under them. */
+/* Discrete: small, quiet, and only as legible as they need to be over whatever
+   ink is under them. They sit under a name that is the loud thing on the lane,
+   and a row of controls at the same weight as the name would compete with it. */
 .browser-lane-controls.is-active > *,
 .browser-lane-controls:hover > * {
-  box-shadow: 0 0 0 3px var(--bg);
+  box-shadow: 0 0 0 2px var(--bg);
   background: var(--bg);
 }
 
-.browser-lane-controls > * {
+.browser-lane-controls .input-tiny,
+.browser-lane-controls .select-tiny,
+.browser-lane-controls .btn-tiny {
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+
+/* Narrower here than in a panel, because every pixel of this row is a pixel of
+   the track that cannot be grabbed to pan. Four digits and a decimal point is
+   what a limit needs, and a name long enough to be worth a group is elided
+   rather than given the width. */
+.browser-lane-controls .input-tiny {
+  width: 3.1rem;
+}
+
+.browser-lane-controls .select-tiny {
+  max-width: 5rem;
+}
+
+/* A swatch, not a form control: the browser's own colour input with everything
+   but the colour taken off it. */
+.browser-swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.browser-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.browser-swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.browser-slider {
+  width: 3.5rem;
+  height: 0.7rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Clickable only while they are *visible*.
+
+   Without the gate the row is an invisible obstacle: `opacity: 0` hides a
+   control but does not stop it taking a press, so a lane the pointer had not
+   yet revealed still had a band across it where a drag started on a `<select>`
+   and the view refused to pan. The class is set from the pointer being on the
+   lane, so by the time a control can be hit it is on screen to be aimed at. */
+.browser-lane-controls.is-active > *,
+.browser-lane-controls:focus-within > * {
   pointer-events: auto;
 }
 
@@ -1697,7 +1820,8 @@ p {
    would be saying the two are different surfaces, which is the one thing they
    are not. */
 .heatmap-canvas,
-.lane-canvas {
+.lane-canvas,
+.browser-canvas {
   cursor:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M2.5 1.6 L2.5 13.6 L9.6 8.4 Z' fill='%23111' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E")
       2 2,
@@ -1886,6 +2010,18 @@ p {
 .panel-head .export-row {
   display: flex;
   flex-wrap: wrap;
+}
+
+/* The browser names its formats rather than abbreviating them — "PDF (vector)"
+   is the whole of the difference between the two exports, and a truncated
+   "PDF (vecto" says nothing. So the format takes the width, and the resolution
+   it may or may not apply to sits under it beside the button. */
+.export-row-wide {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.export-row-wide > .select-format {
+  grid-column: 1 / -1;
 }
 
 /* The last line of the plot card: what was saved, or why it was not. */

@@ -299,9 +299,16 @@ memory are the same throughout.
 
 The gestures are the map's, deliberately (§7.2): a drag pans, Option-drag selects a range to zoom
 into, the wheel zooms about the pointer, a double click fits, a lane's border resizes it and its body
-reorders the stack. One gesture is the browser's own — ⌘-scroll over a lane moves *that* track's
-ceiling — because it is the adjustment a genome browser is asked for constantly and a map has no
-analogue for it.
+reorders the stack. Two are the browser's own. ⌘-scroll over a lane moves *that* track's ceiling,
+because it is the adjustment a genome browser is asked for constantly and a map has no analogue for
+it. And a drag on the **ruler** selects a range to zoom into with no modifier at all: the coordinate
+strip is where a reader points to say "this much", and it is the one gesture whose meaning its
+position already settles, so spending a keystroke on it buys nothing.
+
+Each lane carries its own controls — colour, limits, a ceiling slider, its group — revealed by
+pointing at it and drawn under the track's name rather than over its data. They are transparent to
+the pointer while they are hidden, so a lane that has not been pointed at yet has no invisible band
+across it where a drag would fail to pan.
 
 ---
 
@@ -447,6 +454,16 @@ same drawing code rather than screen-grabbed, so the labels and hairlines are dr
 enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one page holding
 one lossless image, written by the app; its page size in points is derived from the CSS size, so the
 DPI is a fact about the paper rather than a name.
+
+**The 1D browser's PDF is vector**, and that is the one place the two exports differ. A contact map is
+a raster honestly — twelve thousand bins are pixels and writing them as a million rectangles would be
+a larger, slower file of the same picture — but nothing in a genome browser is: every mark there is a
+rectangle, a polyline or a word. So the browser's PDF carries paths and text, and a figure dropped
+into a manuscript can be restyled, recoloured and scaled by whoever receives it. It is produced by
+handing the *same renderers* a context that emits PDF operators instead of pixels, so there is no
+second drawing of the view to keep in step; text is Helvetica, one of the fourteen fonts every reader
+has, so nothing is embedded. A vector page has no resolution, so the DPI control is disabled while it
+is chosen rather than quietly ignored.
 
 ### 7.3 Genome × genome overview — gated, not default
 

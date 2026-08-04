@@ -221,6 +221,31 @@ export class App implements SessionHost {
       event.preventDefault()
     })
 
+    // Dropping is *the* gesture this app is opened with, so the whole content
+    // area takes it and not only the marked rectangle on the landing page: a
+    // reader who is already looking at a map and wants a track on it should not
+    // have to find a drop zone in a column, and one who wants a different map
+    // should not have to go back to the picker for it. What each file means is
+    // the session's decision, by name — see `Session.dropFiles`.
+    this.content.addEventListener('dragover', (event) => {
+      event.preventDefault()
+      this.content.classList.add('over')
+    })
+    this.content.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget instanceof Node && this.content.contains(event.relatedTarget)) return
+      this.content.classList.remove('over')
+    })
+    this.content.addEventListener('drop', (event) => {
+      this.content.classList.remove('over')
+      // The landing page's own drop zone answers for itself, and answers
+      // differently: it opens a file rather than adding one to what is open.
+      if (event.target instanceof HTMLElement && event.target.closest('.dropzone') !== null) return
+      const files = Array.from(event.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      event.preventDefault()
+      this.current?.dropFiles(files)
+    })
+
     this.restore()
   }
 
@@ -551,6 +576,7 @@ export class App implements SessionHost {
     ]
 
     const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
+      ['text', 'n'],
       ['crosshair', 'x'],
       ['dividers', 'd'],
       ['breaks', 'e'],

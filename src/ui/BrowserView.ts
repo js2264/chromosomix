@@ -43,8 +43,6 @@ import { drawTrack, formatLimit, profileOf, resolveLimits, type PixelProfile } f
 import { button, el, fmt } from './dom'
 import {
   EXPORT_DPI_CHOICES,
-  EXPORT_FORMATS,
-  canvasToPdf,
   canvasToPng,
   captionStamp,
   downloadBlob,
@@ -52,12 +50,18 @@ import {
   fileStamp,
   largestDpiThatFits,
   scaleForDpi,
-  type ExportFormat,
 } from './export'
+import { VectorPage } from './vector'
 import { isMac } from './commands'
 import { iconButton } from './icons'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
+import {
+  PLOT_OPTION_LABELS,
+  getPlotOptions,
+  setPlotOption,
+  subscribePlotOptions,
+} from './plotOptions'
 import { setReadout } from './readout'
 
 /** How a group of tracks shares the picture. */
@@ -72,6 +76,14 @@ const DRAG_SLACK = 3
 /** The smallest a lane may be dragged to; below this it is a line, not a track. */
 const LANE_MIN_SIZE = 14
 const LANE_FONT = '10px system-ui, sans-serif'
+/**
+ * The track name, which is the one word on a lane a reader looks for.
+ *
+ * Bigger than everything else drawn on the lane and heavier, because in a
+ * browser the name is what identifies the row — the value range beside it is a
+ * fact about the axis and belongs in the small print, not at the same weight.
+ */
+const NAME_FONT = '600 12px system-ui, sans-serif'
 /** Milliseconds within which a second click is a double click. */
 const DOUBLE_CLICK_MS = 250
 /** A zoomed-to feature keeps this much of its own length as margin on each side. */
@@ -92,8 +104,6 @@ export interface BrowserViewProps {
     groups: Record<string, GroupMode>
     save(groups: Record<string, GroupMode>): void
   }
-  /** Something that is not a track was dropped on the view. */
-  onDropFile(file: File): void
 }
 
 /** One lane, resolved for a frame: where it goes and what goes in it. */
@@ -134,6 +144,10 @@ export class BrowserView {
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: ReturnType<typeof layoutFeatures> }>()
   private hover: { x: number; y: number } | null = null
+  /** The lane whose lower border the pointer is on, so the grip can be drawn. */
+  private gripping: string | null = null
+  /** Whether track text is drawn at all — the shared `text` plot option. */
+  private text = true
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
@@ -144,7 +158,7 @@ export class BrowserView {
   /** What {@link paintOverlayControls} last built, so a pan does not rebuild it. */
   private controlSignature = ''
   private exportDpi = 300
-  private exportFormat: ExportFormat = 'pdf'
+  private exportFormat: BrowserExportFormat = 'pdf'
   private clickTimer: number | null = null
   private reportTimer: number | null = null
   /**
@@ -206,6 +220,7 @@ export class BrowserView {
           iconButton('zoom-out', 'Zoom out (key: −)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (key: +)', () => this.zoomBy(1.8)),
           iconButton('maximize', 'The whole genome (key: 0, or a double click)', () => this.fit()),
+          iconButton('layers', 'Fit every track into the space there is', () => this.fitTracks()),
           el('div', { class: 'browser-search' }, this.searchInput, this.searchList),
         ),
         el(
@@ -243,9 +258,9 @@ export class BrowserView {
         this.schedule()
       }),
     )
+    this.unsubscribes.push(subscribePlotOptions(() => this.schedule()))
     this.watchPointer()
     this.watchKeys()
-    this.watchDrop()
 
     this.observer =
       typeof ResizeObserver === 'undefined'
@@ -343,6 +358,63 @@ export class BrowserView {
   private fit(): void {
     this.scale.reset()
     this.afterMove(true)
+  }
+
+  /**
+   * Share the available height between the tracks.
+   *
+   * In the proportions they are already in, rather than equally: a reader who
+   * gave the gene model three times the height of a coverage track meant it, and
+   * "fit" is a request about the *stack* running off the bottom of the window,
+   * not about the relative sizes inside it. Equal heights is the other thing,
+   * and the Groups card offers it per group.
+   *
+   * Bounded below by the lane minimum, so twenty tracks in a short window come
+   * out scrollable rather than as twenty two-pixel lines.
+   */
+  private fitTracks(): void {
+    const lanes = this.lanes
+    if (lanes.length === 0) return
+    // Measured against the *host*, from the top of the stage down to the bottom
+    // of the column this view was mounted in. Not against `this.el`, which is
+    // sized by its own content: asking that how much room there is compares the
+    // tracks against themselves and fits them to the height they already have,
+    // which is a button that appears to do nothing.
+    const host = this.roomHost()
+    if (host === null) return
+    const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
+    const room =
+      host.getBoundingClientRect().bottom -
+      (Number.isFinite(padding) ? padding : 0) -
+      this.stage.getBoundingClientRect().top -
+      RULER_HEIGHT -
+      LANE_GAP * (lanes.length + 1)
+    const current = lanes.reduce((sum, lane) => sum + lane.frame.thickness, 0)
+    if (!(room > 0) || !(current > 0)) return
+    const factor = room / current
+    for (const lane of lanes) {
+      const size = Math.max(LANE_MIN_SIZE, Math.round(lane.frame.thickness * factor))
+      for (const member of [lane.entry, ...lane.overlaid]) {
+        this.props.store.restyle(member.id, { size })
+      }
+    }
+  }
+
+  /**
+   * The nearest ancestor that has a box, which is the one with the room.
+   *
+   * The immediate parent is a session's `display: contents` wrapper — it exists
+   * so that a tab's three panels land in the shell's grid rather than inside a
+   * box of their own, and the price is that it *has* no box: every rectangle it
+   * reports is zero. Walking past it finds the column the view is actually in.
+   */
+  private roomHost(): HTMLElement | null {
+    let node = this.el.parentElement
+    while (node !== null) {
+      if (node.getBoundingClientRect().height > 0) return node
+      node = node.parentElement
+    }
+    return null
   }
 
   private zoomBy(factor: number, atPixel?: number): void {
@@ -562,6 +634,9 @@ export class BrowserView {
 
   /** Everything on the canvas, at whatever scale the context is set to. */
   private paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    // Read once for the whole frame: every lane asks the same question, and the
+    // export asks it too so that what is saved is what was on screen.
+    this.text = getPlotOptions().text
     const palette = readCanvasPalette(this.canvas)
     const ruler = {
       x: 0,
@@ -574,6 +649,7 @@ export class BrowserView {
         text: palette.labelColor,
         faint: palette.labelColor,
         line: palette.plotBorderColor,
+        divider: palette.plotBorderColor,
         band: palette.bandColor,
         halo: palette.labelHaloColor,
       },
@@ -588,6 +664,21 @@ export class BrowserView {
 
     if (this.hover !== null) {
       drawGuide(ctx, this.hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
+    }
+    // The resize grip, where the pointer is on a lane's lower border. The
+    // cursor is the drawn arrowhead everywhere here — it is what points at a
+    // base pair — so an affordance that lives in the cursor would not exist.
+    const grip = this.lanes.find((lane) => lane.entry.id === this.gripping)
+    if (grip !== undefined) {
+      ctx.save()
+      ctx.strokeStyle = CROSSHAIR_COLOR
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      const edge = grip.frame.acrossFrom + grip.frame.thickness + 1
+      ctx.moveTo(0, edge)
+      ctx.lineTo(width, edge)
+      ctx.stroke()
+      ctx.restore()
     }
     if (this.drag?.mode === 'select') {
       const from = Math.min(this.drag.x0, this.drag.x)
@@ -634,21 +725,26 @@ export class BrowserView {
           ? first.profile.extent
           : (groups.get(first.entry.style.group) ?? first.profile.extent)
       const limits = resolveLimits(first.entry.style.limits, extent)
-      this.labelLane(
-        ctx,
-        frame,
-        palette,
-        lane.profiles.map((row) => row.entry),
-        `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`,
-      )
+      if (this.text) {
+        this.labelLane(
+          ctx,
+          frame,
+          palette,
+          lane.profiles.map((row) => row.entry),
+          `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`,
+        )
+      }
     } else if (entry.payload?.kind === 'pairs') {
       const drawn = drawArcs(ctx, frame, this.axis, entry.payload.data, {
         colour: entry.style.colour,
         opacity: entry.style.opacity,
       })
-      this.labelLane(ctx, frame, palette, [entry], `${fmt.int(drawn)} in view`)
+      if (this.text) this.labelLane(ctx, frame, palette, [entry], `${fmt.int(drawn)} in view`)
     } else if (entry.payload?.kind === 'features') {
-      const rows = entry.kind === 'gtf' ? rowsThatFit(frame.thickness, 13) : rowsThatFit(frame.thickness)
+      // Taller rows than beside a map, because each one carries a name under
+      // its features. Below that height the band is refused and the names go
+      // back inside, which is what a lane dragged very short should do.
+      const rows = rowsThatFit(frame.thickness, entry.kind === 'gtf' ? 26 : 22)
       const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows)
       this.layouts.set(entry.id, { frame, layout })
       const paint = {
@@ -657,17 +753,20 @@ export class BrowserView {
         haloColour: palette.labelHaloColor,
         font: LANE_FONT,
         opacity: entry.style.opacity,
-        labels: true,
+        labels: this.text,
+        labelsBelow: true,
       }
       if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
       else drawSegments(ctx, frame, entry.payload.data, layout, paint)
-      this.labelLane(
-        ctx,
-        frame,
-        palette,
-        [entry],
-        layout.dense ? `${fmt.int(layout.total)} in view` : '',
-      )
+      if (this.text) {
+        this.labelLane(
+          ctx,
+          frame,
+          palette,
+          [entry],
+          layout.dense ? `${fmt.int(layout.total)} in view` : '',
+        )
+      }
     }
     ctx.restore()
   }
@@ -681,21 +780,22 @@ export class BrowserView {
     detail: string,
   ): void {
     ctx.save()
-    ctx.font = LANE_FONT
+    ctx.font = NAME_FONT
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
-    let at = frame.alongFrom + 4
+    let at = frame.alongFrom + 5
     for (const entry of entries) {
       // Each name in its own track's colour, which is the whole legend an
       // overlaid lane needs: the line is that colour and so is its name.
       ctx.fillStyle = entries.length > 1 ? entry.style.colour : palette.labelColor
-      laneText(ctx, frame, entry.label, at, 9, { halo: palette.labelHaloColor })
-      at += ctx.measureText(entry.label).width + 10
+      laneText(ctx, frame, entry.label, at, NAME_TOP, { halo: palette.labelHaloColor })
+      at += ctx.measureText(entry.label).width + 12
     }
     if (detail !== '') {
+      ctx.font = LANE_FONT
       ctx.fillStyle = palette.labelColor
       ctx.textAlign = 'right'
-      laneText(ctx, frame, detail, frame.alongTo - 4, 9, { halo: palette.labelHaloColor })
+      laneText(ctx, frame, detail, frame.alongTo - 4, NAME_TOP, { halo: palette.labelHaloColor })
     }
     ctx.restore()
   }
@@ -795,14 +895,16 @@ export class BrowserView {
       this.overlays.replaceChildren(
         ...this.lanes.map((lane) => {
           const row = el('div', { class: 'browser-lane-controls' })
-          row.style.top = `${lane.frame.acrossFrom}px`
-          row.style.height = `${lane.frame.thickness}px`
+          // Under the name, not beside the data. The name is drawn at the top
+          // left of the lane, so this is where a reader is already looking when
+          // they want to change something about *that* track — and it keeps the
+          // busiest part of a coverage profile, which grows from the baseline,
+          // clear of a row of inputs.
+          row.style.top = `${lane.frame.acrossFrom + NAME_TOP + 8}px`
           const target = lane.profiles[0]?.entry ?? lane.entry
-          // A group is an *autoscale* group, so it is offered on the only kind
-          // of lane that has a value axis to scale. On a gene model it would be
-          // a control with nothing to control.
+          row.appendChild(this.colourControl(target))
           if (target.kind === 'track') {
-            row.append(this.rangeControl(target), this.groupControl(target))
+            row.append(this.rangeControl(target), this.ceilingSlider(target), this.groupControl(target))
           }
           return row
         }),
@@ -825,8 +927,9 @@ export class BrowserView {
       if (lane === undefined) continue
       // What the boxes say, from what the lane is actually drawn with — so an
       // auto-scaled track's numbers follow the view, and the `auto` button
-      // reflects the store. Never into a box that has the caret: the reader is
-      // mid-number, and half of one is not a value to overwrite them with.
+      // reflects the store. Never into a control that has the caret or the
+      // grab: the reader is mid-number or mid-drag, and half of either is not a
+      // value to overwrite them with.
       const first = lane.profiles[0]
       const target = first?.entry ?? lane.entry
       if (target.kind !== 'track') continue
@@ -842,8 +945,75 @@ export class BrowserView {
       if (boxes[1] !== undefined && boxes[1] !== document.activeElement) {
         boxes[1].value = formatLimit(limits.max)
       }
+      const slider = row.querySelector<HTMLInputElement>('.browser-slider')
+      if (slider !== null && slider !== document.activeElement) {
+        const auto = resolveLimits({ auto: true, min: 0, max: 1 }, extent).max
+        slider.value = String(auto > 0 ? Math.round(clampPercent((limits.max / auto) * 100)) : 100)
+      }
       row.querySelector('.btn-tiny')?.classList.toggle('is-on', target.style.limits.auto)
     }
+  }
+
+  /**
+   * The track's colour, one click away.
+   *
+   * The browser's own swatch is the colour input itself rather than a button
+   * that opens one: `showPicker` is not offered everywhere, and an `<input
+   * type=color>` styled down to a swatch *is* the control — clicking it opens
+   * the platform picker, which is the same picker the side panel's card uses.
+   */
+  private colourControl(entry: AnnotationEntry): HTMLElement {
+    const input = el('input', {
+      class: 'browser-swatch',
+      type: 'color',
+      value: entry.style.colour,
+      title: `Colour for ${entry.label}`,
+    })
+    input.addEventListener('input', () =>
+      this.props.store.restyle(entry.id, { colour: input.value }),
+    )
+    return input
+  }
+
+  /**
+   * The ceiling, as a slider.
+   *
+   * Against the track's *own* data rather than an absolute scale: 100 is what
+   * autoscaling would choose for what is in view, and the handle runs from a
+   * tenth of that to three times it. An absolute slider would need a maximum
+   * nobody can name — a coverage track and a log ratio share no units — and
+   * would move by a different amount on every track it was dragged on.
+   */
+  private ceilingSlider(entry: AnnotationEntry): HTMLElement {
+    const input = el('input', { class: 'browser-slider', type: 'range' })
+    input.min = '10'
+    input.max = '300'
+    input.step = '1'
+    const auto = this.autoCeiling(entry)
+    const limits = entry.style.limits
+    input.value = String(
+      limits.auto || !(auto > 0) ? 100 : Math.round(clampPercent((limits.max / auto) * 100)),
+    )
+    input.title = 'Ceiling of this track’s value axis, as a percentage of what autoscale would pick'
+    input.addEventListener('input', () => {
+      const reference = this.autoCeiling(entry)
+      if (!(reference > 0)) return
+      const min = this.props.store.byId(entry.id)?.style.limits.min ?? 0
+      this.props.store.restyle(entry.id, {
+        limits: { auto: false, min, max: (reference * Number(input.value)) / 100 },
+      })
+    })
+    return input
+  }
+
+  /** What autoscaling would choose for this track right now, or 0. */
+  private autoCeiling(entry: AnnotationEntry): number {
+    for (const lane of this.lanes) {
+      const row = lane.profiles.find((profile) => profile.entry.id === entry.id)
+      if (row === undefined) continue
+      return resolveLimits({ auto: true, min: 0, max: 1 }, row.profile.extent).max
+    }
+    return 0
   }
 
   /**
@@ -981,10 +1151,7 @@ export class BrowserView {
   }
 
   private exportCard(): HTMLElement {
-    const dpiSelect = el('select', {
-      class: 'select',
-      title: 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.',
-    })
+    const dpiSelect = el('select', { class: 'select' })
     for (const dpi of EXPORT_DPI_CHOICES) {
       dpiSelect.appendChild(el('option', { value: String(dpi), text: `${dpi} dpi` }))
     }
@@ -992,14 +1159,44 @@ export class BrowserView {
     dpiSelect.addEventListener('change', () => {
       this.exportDpi = Number(dpiSelect.value)
     })
-    const formatSelect = el('select', { class: 'select' })
-    for (const format of EXPORT_FORMATS) {
-      formatSelect.appendChild(el('option', { value: format, text: format.toUpperCase() }))
+    const formatSelect = el('select', { class: 'select select-format' })
+    for (const format of BROWSER_EXPORT_FORMATS) {
+      formatSelect.appendChild(el('option', { value: format.value, text: format.label }))
     }
     formatSelect.value = this.exportFormat
+    // A vector PDF has no resolution to choose, so the choice goes away rather
+    // than sitting there doing nothing.
+    const syncDpi = (): void => {
+      const raster = this.exportFormat !== 'pdf'
+      dpiSelect.disabled = !raster
+      dpiSelect.title = raster
+        ? 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.'
+        : 'A vector PDF has no resolution: it carries the drawing, not a picture of it.'
+    }
     formatSelect.addEventListener('change', () => {
-      this.exportFormat = formatSelect.value as ExportFormat
+      this.exportFormat = formatSelect.value as BrowserExportFormat
+      syncDpi()
     })
+    syncDpi()
+
+    // The same shared store the heatmap's panel writes to, so the choice
+    // survives a switch between the two and the command palette lights this
+    // button up too. It is more use here than there: beside a map the text is
+    // two names, and here it is every gene in view.
+    const { label, hint } = PLOT_OPTION_LABELS.text
+    const textToggle = el('button', {
+      class: 'btn btn-toggle',
+      type: 'button',
+      text: label,
+      title: hint,
+    })
+    textToggle.addEventListener('click', () => setPlotOption('text', !getPlotOptions().text))
+    const syncText = (): void => {
+      textToggle.setAttribute('aria-pressed', String(getPlotOptions().text))
+    }
+    syncText()
+    this.unsubscribes.push(subscribePlotOptions(syncText))
+
     return el(
       'div',
       { class: 'controls-card' },
@@ -1007,9 +1204,20 @@ export class BrowserView {
       el(
         'div',
         { class: 'panel-controls' },
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'overlays' }),
+          el('div', { class: 'plot-option-row' }, textToggle),
+        ),
         button('fit to view', () => this.fit(), {
           class: 'btn btn-wide',
           title: 'The whole genome (key: 0, or a double click on the tracks)',
+        }),
+        button('fit tracks to the space', () => this.fitTracks(), {
+          class: 'btn btn-wide',
+          title:
+            'Share the height there is between every track, in the proportions they are in now',
         }),
         el(
           'div',
@@ -1017,9 +1225,9 @@ export class BrowserView {
           el('span', { class: 'field-label', text: 'export' }),
           el(
             'div',
-            { class: 'export-row' },
-            dpiSelect,
+            { class: 'export-row export-row-wide' },
             formatSelect,
+            dpiSelect,
             button('Save', () => void this.save(), { class: 'btn' }),
           ),
         ),
@@ -1029,55 +1237,97 @@ export class BrowserView {
   }
 
   /**
-   * The view as a figure, redrawn at the export scale.
+   * The view as a figure: a vector PDF, or a raster PNG at a chosen resolution.
    *
-   * Redrawn rather than scaled up, which is the same trade the heatmap's export
-   * makes: at 300 dpi the track names and the ruler are 300 dpi type rather than
-   * a blown-up screenshot of 96 dpi type.
+   * Both are re-*drawn* rather than screen-grabbed, which is the trade the
+   * heatmap's export makes too. Where the two part company is what a page ends
+   * up holding. A contact map is a raster honestly — twelve thousand bins are
+   * pixels and nothing else — but nothing in this view is: every mark here is a
+   * rectangle, a polyline or a word. So the PDF is written as those, through
+   * {@link VectorPage}, and a figure dropped into a manuscript can be restyled,
+   * recoloured and scaled by whoever receives it. PNG stays a raster because
+   * that is what a PNG is.
    */
   private async save(): Promise<void> {
     const width = this.scale.pixels
     const height = this.heightOf(this.lanes)
+    const now = new Date()
+    const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
+    const ink = readCanvasPalette(this.canvas).labelColor
+    const base = `${exportBaseName(this.props.assembly.name)}-${fileStamp(now)}`
+
+    let blob: Blob
+    try {
+      blob =
+        this.exportFormat === 'pdf'
+          ? await this.vectorFigure(width, height, caption, ink)
+          : await this.rasterFigure(width, height, caption, ink)
+    } catch (err) {
+      this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
+      return
+    }
+    if (blob.size === 0) return
+    downloadBlob(blob, `${base}.${this.exportFormat}`)
+    this.exportStatus.textContent = ''
+  }
+
+  /** The figure as paths and text, at no resolution at all. */
+  private async vectorFigure(
+    width: number,
+    height: number,
+    caption: string,
+    ink: string,
+  ): Promise<Blob> {
+    const page = new VectorPage(width, height + CAPTION_HEIGHT)
+    const ctx = page.ctx
+    // The page under the drawing. The raster path composites this underneath at
+    // the end; here it has to be the first thing painted, since a PDF is drawn
+    // in order and has no `destination-over`.
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, width, height + CAPTION_HEIGHT)
+    this.paint(ctx, width, height)
+    ctx.font = '11px Helvetica, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillStyle = ink
+    ctx.globalAlpha = 1
+    ctx.fillText(caption, 2, height + CAPTION_HEIGHT - 5)
+    return page.toBlob({ title: this.props.assembly.name })
+  }
+
+  /** The same figure as pixels, redrawn at the requested resolution. */
+  private async rasterFigure(
+    width: number,
+    height: number,
+    caption: string,
+    ink: string,
+  ): Promise<Blob> {
     const scale = scaleForDpi(this.exportDpi)
     const fits = largestDpiThatFits(width, height + CAPTION_HEIGHT)
     if (fits !== null && fits < this.exportDpi) {
       this.exportStatus.textContent = `${fits} dpi is the largest that fits this figure.`
-      return
+      return new Blob([])
     }
     const out = document.createElement('canvas')
     out.width = Math.max(1, Math.round(width * scale))
     out.height = Math.max(1, Math.round((height + CAPTION_HEIGHT) * scale))
     const ctx = out.getContext('2d')
-    if (ctx === null) return
+    if (ctx === null) throw new Error('Could not open a canvas to draw the figure on.')
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     this.paint(ctx, width, height)
 
-    const now = new Date()
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     ctx.font = '11px system-ui, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = readCanvasPalette(this.canvas).labelColor
-    ctx.fillText(
-      `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`,
-      2,
-      height + CAPTION_HEIGHT - 5,
-    )
+    ctx.fillStyle = ink
+    ctx.fillText(caption, 2, height + CAPTION_HEIGHT - 5)
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'destination-over'
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, out.width, out.height)
     ctx.globalCompositeOperation = 'source-over'
-
-    const base = `${exportBaseName(this.props.assembly.name)}-${fileStamp(now)}`
-    try {
-      const blob =
-        this.exportFormat === 'png' ? await canvasToPng(out) : await canvasToPdf(out, { dpi: this.exportDpi, title: this.props.assembly.name })
-      downloadBlob(blob, `${base}.${this.exportFormat}`)
-      this.exportStatus.textContent = ''
-    } catch (err) {
-      this.exportStatus.textContent = err instanceof Error ? err.message : String(err)
-    }
+    return canvasToPng(out)
   }
 
   // -------------------------------------------------------------------------
@@ -1110,6 +1360,16 @@ export class BrowserView {
       const { x, y } = at(event)
       canvas.setPointerCapture(event.pointerId)
       canvas.focus({ preventScroll: true })
+      // A press on the *ruler* is a range selection, with no modifier. The
+      // coordinate strip is where a reader points to say "this much", and
+      // asking them to hold a key to say it there — while a drag on the tracks
+      // below it means pan, which is the other thing a hand wants — is a
+      // keystroke spent on the one gesture that is unambiguous from its
+      // position alone.
+      if (y < RULER_HEIGHT) {
+        this.drag = { mode: 'select', x0: x, x }
+        return
+      }
       const hit = this.laneAt(y)
       // The direction of the first movement decides between the three things a
       // press on a lane can mean — the same rule the lanes beside the map use,
@@ -1123,7 +1383,10 @@ export class BrowserView {
       if (drag === null) {
         this.hover = { x, y }
         this.describe(x, y, event.clientX, event.clientY)
-        canvas.classList.toggle('resizing', this.laneAt(y)?.onBorder === true)
+        // Drawn rather than shown as a cursor: the pointer is the arrowhead
+        // everywhere on this canvas, so the affordance has to be in the picture.
+        const grip = this.laneAt(y)
+        this.gripping = grip?.onBorder === true ? grip.lane.entry.id : null
         this.schedule()
         return
       }
@@ -1211,11 +1474,36 @@ export class BrowserView {
       this.schedule()
     }
 
-    const onLeave = (): void => {
+    const forget = (): void => {
       this.hover = null
+      this.gripping = null
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()
+    }
+
+    /**
+     * Leaving the canvas — unless it is for the lane's own controls.
+     *
+     * Those controls are shown, and clickable, only while the lane they belong
+     * to is the one being pointed at, and the pointer being on them is *how* it
+     * is being pointed at. Counting that as having left the view starts an
+     * oscillation rather than merely hiding a row: the row goes transparent to
+     * the pointer, which puts the pointer back on the canvas, which reveals the
+     * row again, sixty times a second, and the control under the hand is never
+     * there long enough to be clicked.
+     */
+    const onLeave = (event: PointerEvent): void => {
+      const to = event.relatedTarget
+      if (to instanceof Node && this.overlays.contains(to)) return
+      forget()
+    }
+
+    /** …and leaving those controls for anywhere but the canvas ends it. */
+    const onOverlayLeave = (event: PointerEvent): void => {
+      const to = event.relatedTarget
+      if (to instanceof Node && (this.canvas.contains(to) || this.overlays.contains(to))) return
+      forget()
     }
 
     const onWheel = (event: WheelEvent): void => {
@@ -1284,6 +1572,7 @@ export class BrowserView {
     canvas.addEventListener('pointerup', onUp)
     canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('pointerleave', onLeave)
+    this.overlays.addEventListener('pointerleave', onOverlayLeave)
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('dblclick', onDouble)
     canvas.addEventListener('contextmenu', onMenu)
@@ -1293,6 +1582,7 @@ export class BrowserView {
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('pointerleave', onLeave)
+      this.overlays.removeEventListener('pointerleave', onOverlayLeave)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('dblclick', onDouble)
       canvas.removeEventListener('contextmenu', onMenu)
@@ -1384,36 +1674,6 @@ export class BrowserView {
     }
     this.canvas.addEventListener('keydown', onKey)
     this.unsubscribes.push(() => this.canvas.removeEventListener('keydown', onKey))
-  }
-
-  /**
-   * Files dropped anywhere on the browser.
-   *
-   * A track joins the stack; anything else goes back to the session, which is
-   * what turns a dropped `.cool` into a heatmap without a trip through the file
-   * picker. Deciding *here* would mean this view knowing what a contact map is,
-   * so it does not: it hands over whatever it did not recognise.
-   */
-  private watchDrop(): void {
-    const onOver = (event: DragEvent): void => {
-      event.preventDefault()
-      this.el.classList.add('over')
-    }
-    const onLeave = (): void => this.el.classList.remove('over')
-    const onDrop = (event: DragEvent): void => {
-      event.preventDefault()
-      this.el.classList.remove('over')
-      const files = Array.from(event.dataTransfer?.files ?? [])
-      for (const file of files) this.props.onDropFile(file)
-    }
-    this.el.addEventListener('dragover', onOver)
-    this.el.addEventListener('dragleave', onLeave)
-    this.el.addEventListener('drop', onDrop)
-    this.unsubscribes.push(() => {
-      this.el.removeEventListener('dragover', onOver)
-      this.el.removeEventListener('dragleave', onLeave)
-      this.el.removeEventListener('drop', onDrop)
-    })
   }
 
   // -------------------------------------------------------------------------
@@ -1558,8 +1818,30 @@ export class BrowserView {
   }
 }
 
+/** Keep a slider's percentage inside the range its track can be drawn at. */
+function clampPercent(value: number): number {
+  return Number.isFinite(value) ? Math.max(10, Math.min(300, value)) : 100
+}
+
+/** Where the track name sits inside its lane, from the lane's top edge. */
+const NAME_TOP = 9
+
 /** Room under the figure for the one-line caption the export adds. */
 const CAPTION_HEIGHT = 18
+
+/**
+ * What this view saves as.
+ *
+ * Not `EXPORT_FORMATS`, which is the heatmap's list: there the PDF is a page
+ * carrying one lossless image, because a contact map *is* a raster and pretending
+ * otherwise would mean writing down a million rectangles. Here nothing is, so
+ * the PDF is the drawing itself and says so on the button.
+ */
+const BROWSER_EXPORT_FORMATS = [
+  { value: 'pdf', label: 'PDF (vector)' },
+  { value: 'png', label: 'PNG' },
+] as const
+type BrowserExportFormat = (typeof BROWSER_EXPORT_FORMATS)[number]['value']
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220

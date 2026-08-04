@@ -1,0 +1,274 @@
+/**
+ * The vector PDF: the drawing itself, rather than a picture of it.
+ *
+ * Two things here are silent when wrong and expensive to notice. The first is
+ * the *page*: a cross-reference table is a list of byte offsets into the file,
+ * so an extra newline above it corrupts every entry below, and a reader either
+ * repairs the file or refuses it. The second is the *flip*: PDF's y runs up the
+ * page and a canvas's runs down, so a figure whose transform is upside down is
+ * still a perfectly valid PDF — of the wrong picture. Both are read back out of
+ * the bytes here rather than trusted.
+ *
+ * The content stream is deflated, so every check inflates it first. That is
+ * also the point of the compression test: a genome-wide view of a GTF is a few
+ * hundred thousand path operators of repeated digits.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import { VectorPage, escapeText, parseFont, pdfColour } from '@/ui/vector'
+
+async function bytesOf(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
+/** The whole file as latin1, which is how a PDF's structure is meant to be read. */
+function latin1(bytes: Uint8Array): string {
+  return new TextDecoder('latin1').decode(bytes)
+}
+
+/**
+ * Object 4's stream, inflated.
+ *
+ * Located by its declared `/Length` rather than by searching for `endstream`,
+ * because compressed bytes contain that word as often as chance allows.
+ */
+async function contentOf(bytes: Uint8Array): Promise<string> {
+  const text = latin1(bytes)
+  const header = /4 0 obj\n<< \/Length (\d+)( \/Filter \/FlateDecode)? >>\nstream\n/.exec(text)
+  if (header === null) throw new Error('no content stream')
+  const at = (header.index ?? 0) + header[0].length
+  const raw = bytes.slice(at, at + Number(header[1]))
+  if (header[2] === undefined) return latin1(raw)
+  const stream = new Blob([raw as BlobPart])
+    .stream()
+    .pipeThrough(new DecompressionStream('deflate'))
+  return latin1(new Uint8Array(await new Response(stream).arrayBuffer()))
+}
+
+describe('pdfColour', () => {
+  it('reads the two notations this app produces', () => {
+    expect(pdfColour('#ffffff')).toEqual([1, 1, 1])
+    expect(pdfColour('#000')).toEqual([0, 0, 0])
+    expect(pdfColour('#ff0000')).toEqual([1, 0, 0])
+    // Eight digits is a hex colour with alpha; the alpha is `globalAlpha`'s job.
+    expect(pdfColour('#00ff0080')).toEqual([0, 1, 0])
+    expect(pdfColour('rgb(255, 128, 0)')[1]).toBeCloseTo(128 / 255, 6)
+    expect(pdfColour('rgba(0, 0, 255, 0.5)')).toEqual([0, 0, 1])
+  })
+
+  // Black is a visible wrong answer rather than a silent one — a named colour
+  // would otherwise come out as whatever the last `rg` happened to leave behind.
+  it('falls back to black on anything else', () => {
+    expect(pdfColour('rebeccapurple')).toEqual([0, 0, 0])
+    expect(pdfColour('')).toEqual([0, 0, 0])
+  })
+})
+
+describe('parseFont', () => {
+  it('takes the size and the weight out of a CSS shorthand', () => {
+    expect(parseFont('11px system-ui, sans-serif')).toEqual({ size: 11, bold: false })
+    expect(parseFont('bold 12.5px Helvetica')).toEqual({ size: 12.5, bold: true })
+    expect(parseFont('600 10px ui-sans-serif')).toEqual({ size: 10, bold: true })
+    expect(parseFont('italic serif')).toEqual({ size: 10, bold: false })
+  })
+})
+
+describe('escapeText', () => {
+  it('escapes what would close the string early', () => {
+    expect(escapeText('(meta)cooler')).toBe('\\(meta\\)cooler')
+    expect(escapeText('a\\b')).toBe('a\\\\b')
+  })
+
+  it('writes a non-ASCII byte in octal, and drops what WinAnsi has no byte for', () => {
+    expect(escapeText('é')).toBe('\\351')
+    expect(escapeText('chrI‑α')).toBe('chrI??')
+  })
+
+  // The one character in an ordinary figure that Latin-1 has no byte for: every
+  // track writes its range as `0 – 130`.
+  it('finds WinAnsi’s typography, en dash included', () => {
+    expect(escapeText('0 – 130')).toBe('0 \\226 130')
+    expect(escapeText('a … b • c')).toBe('a \\205 b \\225 c')
+    expect(escapeText('0 · 1')).toBe('0 \\267 1')
+  })
+})
+
+describe('VectorPage', () => {
+  it('is a PDF a reader will open: header, xref offsets, trailer', async () => {
+    const page = new VectorPage(200, 100)
+    page.ctx.fillStyle = '#336699'
+    page.ctx.fillRect(10, 10, 30, 20)
+    const bytes = await bytesOf(await page.toBlob({ title: 'a genome' }))
+    const text = latin1(bytes)
+
+    expect(text.startsWith('%PDF-1.4')).toBe(true)
+    expect(text.trimEnd().endsWith('%%EOF')).toBe(true)
+    expect(text).toContain('/Title (a genome)')
+
+    const startxref = /startxref\s+(\d+)/.exec(text)
+    expect(startxref).not.toBeNull()
+    const tableAt = Number(startxref?.[1])
+    expect(text.slice(tableAt, tableAt + 4)).toBe('xref')
+
+    const entries = [...text.slice(tableAt).matchAll(/^(\d{10}) 00000 n $/gm)]
+    expect(entries).toHaveLength(7)
+    entries.forEach((entry, index) => {
+      expect(text.startsWith(`${index + 1} 0 obj`, Number(entry[1]))).toBe(true)
+    })
+  })
+
+  // CSS pixels are 1/96 inch and points are 1/72, so a 96-pixel figure is
+  // 72 points wide however many marks are on it.
+  it('sizes the page in points from the figure in CSS pixels', async () => {
+    const page = new VectorPage(192, 96)
+    const text = latin1(await bytesOf(await page.toBlob()))
+    expect(text).toContain('/MediaBox [0 0 144 72]')
+  })
+
+  it('carries no image: the marks are paths', async () => {
+    const page = new VectorPage(100, 50)
+    page.ctx.fillRect(0, 0, 10, 10)
+    const text = latin1(await bytesOf(await page.toBlob()))
+    expect(text).not.toContain('/Subtype /Image')
+    expect(await contentOf(await bytesOf(await page.toBlob()))).toMatch(/^f$/m)
+  })
+
+  // The whole of the coordinate conversion. A page drawn upside down is a
+  // perfectly valid PDF of the wrong picture, which is exactly the kind of bug
+  // that survives a review.
+  it('flips y, so the top of the canvas is the top of the page', async () => {
+    const page = new VectorPage(100, 50)
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 0)
+    page.ctx.lineTo(100, 50)
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    // Canvas (0, 0) is the top-left, which in page space is y = height.
+    expect(content).toContain('0 50 m')
+    expect(content).toContain('100 0 l')
+    // …and the one `cm` that turns pixels into points sits above it all.
+    expect(content).toMatch(/^q 0\.75 0 0 0\.75 0 0 cm/)
+  })
+
+  it('bakes a translate and a rotate into the coordinates', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.save()
+    page.ctx.translate(20, 30)
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 0)
+    page.ctx.lineTo(10, 0)
+    page.ctx.stroke()
+    page.ctx.restore()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(content).toContain('20 70 m')
+    expect(content).toContain('30 70 l')
+    // `save`/`restore` are `q`/`Q`, and they balance. One extra `Q` closes the
+    // page-level `q … cm` the stream opens with.
+    expect((content.match(/^q$/gm) ?? []).length).toBe(1)
+    expect((content.match(/^Q$/gm) ?? []).length).toBe(2)
+  })
+
+  // An unmatched `restore` is a no-op on a canvas and a corrupt stream in a PDF.
+  it('never writes a Q it has no q for', async () => {
+    const page = new VectorPage(10, 10)
+    page.ctx.restore()
+    page.ctx.restore()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    // Only the one that closes the page's own `q … cm`.
+    expect((content.match(/^Q$/gm) ?? []).length).toBe(1)
+  })
+
+  it('gives each distinct alpha its own graphics state, opaque included', async () => {
+    const page = new VectorPage(50, 50)
+    page.ctx.globalAlpha = 0.5
+    page.ctx.fillRect(0, 0, 10, 10)
+    page.ctx.globalAlpha = 1
+    page.ctx.fillRect(10, 0, 10, 10)
+    page.ctx.globalAlpha = 0.5
+    page.ctx.fillRect(20, 0, 10, 10)
+    const bytes = await bytesOf(await page.toBlob())
+    const text = latin1(bytes)
+
+    const names = [...text.matchAll(/\/(GS\d+) << \/Type \/ExtGState \/ca ([\d.]+)/g)]
+    expect(names).toHaveLength(2)
+    // Two states, two *different* names — a collision would make one dictionary
+    // key win and tint half the figure.
+    expect(new Set(names.map((match) => match[1])).size).toBe(2)
+    expect(new Set(names.map((match) => match[2]))).toEqual(new Set(['0.5', '1']))
+    // Opaque is restated rather than skipped, because PDF alpha is graphics
+    // state and survives until something replaces it.
+    const content = await contentOf(bytes)
+    expect((content.match(/gs$/gm) ?? []).length).toBe(3)
+  })
+
+  it('writes text as text, in a base-14 font, bold when asked', async () => {
+    const page = new VectorPage(200, 40)
+    page.ctx.font = '11px system-ui'
+    page.ctx.fillText('chrI:1,000', 5, 20)
+    page.ctx.font = 'bold 13px system-ui'
+    page.ctx.fillText('(x)', 5, 35)
+    const bytes = await bytesOf(await page.toBlob())
+    expect(latin1(bytes)).toContain('/BaseFont /Helvetica-Bold')
+
+    const content = await contentOf(bytes)
+    expect(content).toContain('(chrI:1,000) Tj')
+    expect(content).toContain('/F1 11 Tf')
+    expect(content).toContain('/F2 13 Tf')
+    // Parentheses in a track name would otherwise close the literal string.
+    expect(content).toContain('(\\(x\\)) Tj')
+  })
+
+  // `laneText` strokes a halo behind each label so a name survives over the
+  // track's own ink. PDF has a render mode for exactly that, so the figure keeps
+  // what the screen had rather than putting a name straight onto the features.
+  it('keeps a label’s halo, as a stroked run under the filled one', async () => {
+    const page = new VectorPage(100, 20)
+    page.ctx.strokeStyle = '#ffffff'
+    page.ctx.lineWidth = 3
+    page.ctx.strokeText('name', 5, 10)
+    page.ctx.fillStyle = '#000000'
+    page.ctx.fillText('name', 5, 10)
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect((content.match(/\(name\) Tj/g) ?? []).length).toBe(2)
+    // Stroke first, at the halo's colour and width; then the fill over it.
+    expect(content).toMatch(/1 1 1 RG\n3 w\n0 j\nBT\n1 Tr/)
+    expect(content.indexOf('1 Tr')).toBeLessThan(content.indexOf('0 Tr'))
+  })
+
+  it('promotes a quadratic to the cubic PDF has, keeping the endpoints', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.beginPath()
+    page.ctx.moveTo(0, 100)
+    page.ctx.quadraticCurveTo(50, 0, 100, 100)
+    page.ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    // Control points at two thirds of the way to the quadratic's, and the curve
+    // still ends where it was told to.
+    expect(content).toContain('33.333 66.667 66.667 66.667 100 0 c')
+  })
+
+  it('clips with the current path rather than painting it', async () => {
+    const page = new VectorPage(100, 100)
+    page.ctx.save()
+    page.ctx.beginPath()
+    page.ctx.rect(10, 10, 50, 50)
+    page.ctx.clip()
+    page.ctx.restore()
+    const content = await contentOf(await bytesOf(await page.toBlob()))
+    expect(content).toContain('W n')
+    // The rectangle went into the clip, so it is not also filled.
+    expect(content).not.toMatch(/^f$/m)
+  })
+
+  it('compresses the content stream, and says so', async () => {
+    const page = new VectorPage(400, 400)
+    for (let i = 0; i < 2000; i++) page.ctx.fillRect(i % 400, (i * 7) % 400, 3, 3)
+    const bytes = await bytesOf(await page.toBlob())
+    const text = latin1(bytes)
+    expect(text).toContain('/Filter /FlateDecode')
+    const declared = /4 0 obj\n<< \/Length (\d+) \/Filter/.exec(text)
+    const content = await contentOf(bytes)
+    expect(Number(declared?.[1])).toBeLessThan(content.length / 4)
+  })
+})

@@ -29,6 +29,7 @@ import type { ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, TrackSampleSet } from '../annotations/types'
 import { el, fmt } from './dom'
+import { getPlotOptions } from './plotOptions'
 
 /** Which edge a lane stack is on. `bottom` follows columns, `right` follows rows. */
 export type LaneEdge = 'bottom' | 'right'
@@ -358,6 +359,9 @@ export class AnnotationLanes {
   ): void {
     const axis = edge === 'bottom' ? this.axes.cols : this.axes.rows
     if (axis === null) return
+    // One read for the whole stack: every lane asks the same question and the
+    // store behind it is a module-level one.
+    const text = getPlotOptions().text
 
     for (const lane of lanes) {
       const { entry, frame, profile } = lane
@@ -377,7 +381,9 @@ export class AnnotationLanes {
           font: LANE_FONT,
           opacity: entry.style.opacity,
         })
-        this.labelLane(ctx, frame, geometry, entry.label, `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`)
+        if (text) {
+          this.labelLane(ctx, frame, geometry, entry.label, `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`)
+        }
       } else if (entry.payload?.kind === 'features') {
         const rows = entry.kind === 'gtf' ? rowsThatFit(frame.thickness, 13) : rowsThatFit(frame.thickness)
         const layout = layoutFeatures(frame, axis, entry.payload.data, rows)
@@ -388,17 +394,19 @@ export class AnnotationLanes {
           haloColour: geometry.palette.halo,
           font: LANE_FONT,
           opacity: entry.style.opacity,
-          labels: true,
+          labels: text,
         }
         if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
         else drawSegments(ctx, frame, entry.payload.data, layout, paint)
-        this.labelLane(
-          ctx,
-          frame,
-          geometry,
-          entry.label,
-          layout.dense ? `${fmt.int(layout.total)} in view` : '',
-        )
+        if (text) {
+          this.labelLane(
+            ctx,
+            frame,
+            geometry,
+            entry.label,
+            layout.dense ? `${fmt.int(layout.total)} in view` : '',
+          )
+        }
       }
       ctx.restore()
 

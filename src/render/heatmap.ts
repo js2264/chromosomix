@@ -467,6 +467,16 @@ export interface Cell {
  * pointer is help while you are aiming and clutter while you are reading.
  */
 export interface PlotOptions {
+  /**
+   * Text *on the tracks*: their names, their value ranges, and the names of the
+   * features in them.
+   *
+   * The matrix ignores it — its own labels are `labels` and `ticks` — but the
+   * option lives here because it is one of the same kind of thing, and because
+   * a figure is a figure: the moment a track lane is the picture rather than a
+   * caption beside one, every word drawn into it is ink somebody may want out.
+   */
+  text: boolean
   /** Contig and genome boundary hairlines. */
   dividers: boolean
   /**
@@ -498,6 +508,7 @@ export interface PlotOptions {
 export const CROSSHAIR_COLOR = '#1f5fa9'
 
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
+  text: true,
   dividers: true,
   breaks: true,
   labels: true,

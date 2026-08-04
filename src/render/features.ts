@@ -137,7 +137,20 @@ export interface FeaturePaint {
   opacity: number
   /** Write feature names where they fit. */
   labels: boolean
+  /**
+   * Put the name *under* the feature rather than inside it.
+   *
+   * What a genome browser does, and what a lane beside a contact map has no
+   * room for — which is the whole of the difference between the two callers. A
+   * name below is legible on a feature far narrower than the name, so a gene
+   * track stops being a row of anonymous boxes at any zoom where the genes are
+   * the point; a name inside is only ever legible on the wide ones.
+   */
+  labelsBelow?: boolean
 }
+
+/** Height a below-the-feature name needs, in canvas pixels. */
+export const LABEL_BAND = 11
 
 /**
  * Plain segments: a box per feature.
@@ -158,13 +171,14 @@ export function drawSegments(
     return
   }
   const rowHeight = frame.thickness / layout.rows
-  const boxHeight = Math.max(3, rowHeight - 2)
+  const band = labelBandOf(paint, rowHeight)
+  const boxHeight = Math.max(3, rowHeight - band - 2)
   ctx.save()
   ctx.globalAlpha = paint.opacity
   ctx.fillStyle = paint.colour
   ctx.beginPath()
   for (const placement of layout.placements) {
-    const top = placement.row * rowHeight + (rowHeight - boxHeight) / 2
+    const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
     const [x, y, width, height] = laneRect(
       frame,
       placement.along0,
@@ -180,6 +194,17 @@ export function drawSegments(
     labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
+}
+
+/**
+ * How much of each row is given to a name written under the feature.
+ *
+ * Zero unless names go below *and* the row is tall enough to hold both — a row
+ * that gave half of eleven pixels to text would have three left for the gene,
+ * which is a line rather than a glyph.
+ */
+export function labelBandOf(paint: FeaturePaint, rowHeight: number): number {
+  return paint.labelsBelow === true && paint.labels && rowHeight >= 20 ? LABEL_BAND : 0
 }
 
 /**
@@ -202,8 +227,13 @@ export function drawGenes(
     return
   }
   const rowHeight = frame.thickness / layout.rows
-  const exonHeight = Math.max(3, Math.min(9, rowHeight * 0.5))
-  const cdsHeight = Math.max(exonHeight + 2, Math.min(13, rowHeight * 0.78))
+  const band = labelBandOf(paint, rowHeight)
+  // The glyph is centred in what is left of the row once the name has its band,
+  // rather than in the row: centring in the row and then writing under it puts
+  // the name over the next gene down.
+  const glyph = rowHeight - band
+  const exonHeight = Math.max(3, Math.min(9, glyph * 0.5))
+  const cdsHeight = Math.max(exonHeight + 2, Math.min(13, glyph * 0.78))
 
   ctx.save()
   ctx.globalAlpha = paint.opacity
@@ -215,7 +245,7 @@ export function drawGenes(
   ctx.beginPath()
   for (const placement of layout.placements) {
     if (set.exonAt[placement.index + 1] === set.exonAt[placement.index]) continue
-    const centre = placement.row * rowHeight + rowHeight / 2
+    const centre = placement.row * rowHeight + glyph / 2
     const [x, y, width, height] = laneRect(
       frame,
       placement.along0,
@@ -237,7 +267,7 @@ export function drawGenes(
       const cdsFrom = set.cdsStart[index]
       const cdsTo = set.cdsEnd[index]
       if (pass === 1 && !(cdsTo > cdsFrom)) continue
-      const centre = placement.row * rowHeight + rowHeight / 2
+      const centre = placement.row * rowHeight + glyph / 2
       const top = centre - height / 2
       const first = set.exonAt[index]
       const last = set.exonAt[index + 1]
@@ -277,7 +307,7 @@ export function drawGenes(
   }
 
   if (!layout.dense) {
-    drawStrandMarks(ctx, frame, set, layout, paint, rowHeight)
+    drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band)
     if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
@@ -349,6 +379,7 @@ function drawStrandMarks(
   layout: FeatureLayout,
   paint: FeaturePaint,
   rowHeight: number,
+  band = 0,
 ): void {
   ctx.save()
   ctx.strokeStyle = paint.haloColour
@@ -361,7 +392,8 @@ function drawStrandMarks(
     if (strand === 0) continue
     const width = placement.along1 - placement.along0
     if (width < STRAND_MARK_GAP) continue
-    const centre = placement.row * rowHeight + rowHeight / 2
+    // The chevrons ride the spine, so they follow it above the name's band.
+    const centre = placement.row * rowHeight + (rowHeight - band) / 2
     for (let at = placement.along0 + STRAND_MARK_GAP / 2; at < placement.along1; at += STRAND_MARK_GAP) {
       // The chevron points the way the gene is transcribed. On a right-hand
       // lane the axis runs downward, so `+1` still means "further along the
@@ -393,12 +425,14 @@ function line(
 }
 
 /**
- * Names, on the features wide enough to hold one.
+ * Names: inside the feature beside a map, under it in a browser.
  *
- * Written *inside* the feature rather than beside it. Beside is what a genome
- * browser does with a whole window to itself; a lane 46 pixels thick under a
- * contact map has no beside, and a name that overflows its feature is a name
- * attached to whatever is next to it.
+ * Two placements because the two callers have two different amounts of room. A
+ * lane 46 pixels thick under a contact map has no *under*, so a name goes
+ * inside and only onto the features wide enough to hold one. A browser lane has
+ * a band to itself, so the name goes below and may run past a feature far
+ * narrower than it — which is what makes a gene track legible at the zoom where
+ * the genes, rather than their density, are the point.
  */
 function labelFeatures(
   ctx: CanvasRenderingContext2D,
@@ -409,20 +443,39 @@ function labelFeatures(
   rowHeight: number,
 ): void {
   if (rowHeight < 9) return
+  const band = labelBandOf(paint, rowHeight)
   ctx.save()
   ctx.font = paint.font
   ctx.fillStyle = paint.guideColour
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
+  // Where a name below is allowed to run past its own feature: a gene 4 px wide
+  // still has a name, and a browser that only labelled the wide ones would go
+  // blank at exactly the zoom where the names are the point. Bounded by the
+  // last name written *in the same row*, so two of them never overlap — which
+  // is the only thing that makes an overhanging label readable at all.
+  const lastRight = new Float64Array(layout.rows).fill(Number.NEGATIVE_INFINITY)
   for (const placement of layout.placements) {
     const name = set.name[placement.index]
     if (name === '') continue
     const width = placement.along1 - placement.along0
-    if (width < 18) continue
     const text = ctx.measureText(name).width
-    if (text + 6 > width) continue
-    const centre = placement.row * rowHeight + rowHeight / 2
-    laneText(ctx, frame, name, (placement.along0 + placement.along1) / 2, centre, {
+    const middle = (placement.along0 + placement.along1) / 2
+
+    if (band === 0) {
+      // Inside the feature: only where it genuinely fits, because a name that
+      // overflows its box is a name attached to whatever is next to it.
+      if (width < 18 || text + 6 > width) continue
+      laneText(ctx, frame, name, middle, placement.row * rowHeight + rowHeight / 2, {
+        halo: paint.haloColour,
+      })
+      continue
+    }
+
+    const from = middle - text / 2
+    if (from < lastRight[placement.row] + 4) continue
+    lastRight[placement.row] = middle + text / 2
+    laneText(ctx, frame, name, middle, placement.row * rowHeight + rowHeight - band / 2 - 1, {
       halo: paint.haloColour,
     })
   }

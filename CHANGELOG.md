@@ -114,6 +114,70 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the main thread precisely so that a pan redraws with no round trip (§8.4). A
   file past a million intervals is cut off and says so.
 
+- **The 1D browser exports a vector PDF**, and it is the drawing rather than a
+  photograph of it. Nothing in that view is a raster — every mark is a
+  rectangle, a polyline or a word — so a 300 dpi image of it is a figure nobody
+  can restyle, recolour or scale, in a file fifty times the size of the drawing
+  it contains. The page is produced by handing the *same* renderers a context
+  that emits PDF operators instead of pixels, so there is no second drawing of
+  the view to keep in step: `render/features.ts`, `render/tracks.ts`,
+  `render/lane.ts` and `render/browser.ts` do not know which one they are
+  talking to. Text is Helvetica, one of the fourteen fonts every reader has, so
+  nothing is embedded; the halo behind each track name survives as PDF's own
+  stroked text mode; and the content stream is deflated, which on a whole-genome
+  gene model is the difference between a twelve-megabyte figure and a
+  seven-hundred-kilobyte one. A vector page has no resolution, so the DPI
+  control is disabled while it is chosen rather than quietly ignored. The
+  heatmap's PDF is unchanged and stays a raster, because a contact map *is* one.
+
+- **The tracks answer to a hand, and the panel answers to a list.** Rows
+  reorder by their grip or by the arrow keys, and a lane reorders by dragging
+  its body; a tick box on each row opens a batch bar that puts several tracks in
+  one autoscale group, gives them one colour, one height, or removes them
+  together — six tracks from one experiment were six trips through six rows. A
+  colour swatch sits beside each name and *is* the colour input, so changing a
+  track's colour is one click rather than a menu. Every track's name is larger
+  and its controls smaller: colour, limits, a ceiling slider and its group, laid
+  out under the name where a reader is already looking, revealed by pointing at
+  the lane and drawn over the top of it rather than across its data.
+
+- **A drag on the ruler zooms, with no modifier.** The coordinate strip is where
+  a reader points to say "this much", and it is the one gesture whose meaning
+  its position already settles — so spending a keystroke on it bought nothing.
+  Option-drag still selects on the tracks themselves, where a drag means pan.
+
+- **Fit every track into the space there is**, in the proportions they are
+  already in rather than equally: a reader who gave the gene model three times
+  the height of a coverage track meant it, and "fit" is a request about the
+  stack running off the bottom of the window. Equal heights is the other thing,
+  and the Groups card still offers it per group.
+
+- **A file dropped anywhere in the middle of the window is imported.** The drop
+  zones in the Annotations column say what each kind of file becomes and are
+  still there, but a reader with a bigWig in hand and a browser on screen means
+  one thing by dropping it, and asking them to find the right box first is a
+  step that answers a question nobody had.
+
+- **Gene names sit under the features**, in a band of their own, so a name never
+  covers the exon structure it belongs to; below the height where that band
+  would leave no room for a glyph they go back inside, which is what a lane
+  dragged very short should do.
+
+- **Aesthetics can turn every word off.** One toggle hides track names, value
+  ranges and feature names together, leaving the ink — which is what a figure
+  destined for a caption usually wants, and what a screenshot of six tracks
+  usually does not. Shared with the heatmap's own panel and the command palette,
+  so all three agree.
+
+- **Chromosome boundaries are drawn**, as a full-height rule between sequences,
+  and the ruler bands alternate by the sequence's position in the assembly
+  rather than by its position on screen — so a boundary does not change shade
+  when a pan brings a new sequence into view.
+
+- **The tabs are shaped like tabs**, with tilted sides, the active one raised
+  and lit along its top edge, and the pointer is the same black-filled arrowhead
+  over the tracks that it is over the map.
+
 ### Changed
 
 - The app was one object holding a worker, a store, a file and a view, and it
@@ -141,6 +205,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   so every `<line>` was emitted with no coordinates and drew nothing. It had
   been latent because no icon used one; the magnifiers added here came out as
   bare circles.
+
+- A lane's hover controls took presses while they were invisible. `opacity: 0`
+  hides a control but does not stop it being clicked, so every track carried a
+  band across it — three hundred pixels wide and thirty tall — where a drag
+  started on a `<select>` and the view silently refused to pan. They are now
+  transparent to the pointer until the lane they belong to is the one being
+  pointed at, and the pointer moving onto them no longer counts as leaving the
+  view: without that the row goes untouchable, the pointer lands back on the
+  canvas, the row is revealed again, and the control under the hand is never
+  there long enough to be clicked.
+
+- "Fit tracks to the space" measured the element it was about to resize, which
+  is sized by its own contents — so it compared the tracks against themselves,
+  found them already fitted, and did nothing at all. It now measures the column
+  the view was mounted in, walking past the `display: contents` wrapper that
+  gives a session's panels to the shell's grid and reports every rectangle as
+  zero.
+
+- Ticking a track did not open the batch bar until the focus left the list. The
+  rebuild is deferred while a control in the list is being edited — a colour
+  picker closes and a half-typed name is lost otherwise — and a checkbox was
+  being counted as one, which deferred the very rebuild the tick was asking
+  for. It commits on the click that focuses it, so there is nothing to protect;
+  the focus is put back on the same box afterwards, so a second tick needs no
+  second aim.
 
 ## [0.5.1] - 2026-08-04
 

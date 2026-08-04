@@ -1021,7 +1021,6 @@ export class Session {
         groups: recall<Record<string, GroupMode>>(key, 'browser:groups') ?? {},
         save: (groups) => remember(key, 'browser:groups', groups),
       },
-      onDropFile: (file) => this.dropped(file),
     })
     this.browser = view
     this.showContent(view.el, {
@@ -1038,14 +1037,20 @@ export class Session {
   }
 
   /**
-   * A file dropped on the browser.
+   * A file dropped on the content area — in either shape of session.
    *
-   * A track joins the stack; anything else is opened as a file, which is what
-   * turns a dropped `.cool` into a heatmap in the tab you were already in. The
-   * decision is by name, exactly as {@link routeOf} makes it everywhere else —
-   * and a file whose name says nothing is offered to the loader, which reads its
-   * bytes and refuses it by name if it is not an annotation.
+   * Dropping is *the* gesture this app is opened with, so it works everywhere
+   * the file could plausibly be meant for rather than only on the marked
+   * rectangle: a contact map replaces what is open, a sizes file answers a
+   * browser's inferred lengths, and anything else joins the tracks. The decision
+   * is by name, exactly as {@link routeOf} makes it everywhere else — and a file
+   * whose name says nothing is offered to the loader, which reads its bytes and
+   * refuses it by name if it is not an annotation.
    */
+  dropFiles(files: readonly File[]): void {
+    for (const file of files) this.dropped(file)
+  }
+
   private dropped(file: File): void {
     if (this.routeOf(file.name) === 'map') {
       void this.open(file.name, { kind: 'local', file })
@@ -1059,6 +1064,8 @@ export class Session {
       return
     }
     const held = this.annotations
+    // A metacool carries no annotations (§8.5) and has no assembly to replace,
+    // so there is nothing a dropped track could join.
     if (held === null) return
     const card = /\.bedpe$/i.test(file.name) ? 'overlay' : 'linear'
     const zone = /\.(bw|bigwig)$/i.test(file.name)
