@@ -232,10 +232,21 @@ npm version minor        # or patch, or major
 git push --follow-tags
 ```
 
-`npm version` runs the typecheck and the test suite first (`preversion`), refuses to continue if
-`CHANGELOG.md` has no section for the new number (`version`, via `scripts/changelog-check.mjs`),
-then commits the bump together with the changelog and tags it. Write the changelog entry *before*
-running it.
+`npm version` runs the typecheck and the fixture-free suite first (`preversion`), bumps
+`package.json`, then renames `## [Unreleased]` to `## [0.3.0] - <today>` and stages it (`version`,
+via `scripts/changelog-check.mjs`), then commits the bump together with the changelog and tags it.
+
+Write the entries *before* running it, under `## [Unreleased]`, and **leave that heading alone**.
+Naming it by hand is what the hook is for, and doing it early is not a shortcut but a deadlock: the
+two hooks want opposite states of the file. `preversion` runs `version.test.ts`, which compares the
+newest section with the version `package.json` still claims — so a `## [0.3.0]` heading fails there,
+before the bump that would justify it ever happens. Between the bump and the commit, which is where
+the hook runs, the number is known and the rename is unambiguous.
+
+A changelog with neither an `[Unreleased]` section nor one already named for the new number is
+refused, and a section already named for it is left exactly as written — that is the re-run. Note
+that a refusal is not a no-op: npm has already written the new version into `package.json` and has
+not committed it, so recovery is `git checkout -- package.json` before trying again.
 
 What "major" means here is not an API: this is an application, so the contract is the **file format
 it opens and the URL hash it publishes**. A major bump is a `.metacool` the previous version could
