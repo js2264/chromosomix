@@ -10,6 +10,12 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased] 
+
+### Fixed
+
+- Fixed unit tests that errored on Github runners without fixtures.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added

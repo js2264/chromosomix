@@ -28,15 +28,20 @@ describe('yieldToEventLoop', () => {
     for (let i = 0; i < 1000; i++) await Promise.resolve()
     expect(delivered).toBe(false)
 
-    // Bounded rather than exactly one turn. In a worker — the environment that
-    // matters — a channel message and a 0 ms timer share one task queue and are
-    // delivered in insertion order, so one turn always suffices. Node runs
-    // channel messages in the check phase and timers in the timers phase, so
-    // which comes first depends on where in the loop the yield lands, and
-    // asserting one turn made this test fail about once in three runs. The
-    // regression is intact: the microtask spelling above never delivers, however
-    // many turns it is given.
-    for (let i = 0; i < 5 && !delivered; i++) await yieldToEventLoop()
+    // Bounded generously rather than tightly, and the bound is not the point.
+    // In a worker — the environment that matters — a channel message and a 0 ms
+    // timer share one task queue and are delivered in insertion order, so one
+    // turn always suffices. Node runs channel messages in the check phase and
+    // timers in the timers phase, and clamps a 0 ms timer to 1 ms: on a fast
+    // machine several channel round trips fit inside that millisecond, so a
+    // small bound is a race against the clock rather than a statement about the
+    // yield. Five failed here about once in twenty runs, and once in CI.
+    //
+    // What is being asserted is that the timer is delivered *at all* while this
+    // loop yields, which the microtask spelling above never manages however many
+    // turns it is given — 1,000 of them, right up there. 500 is the same bound
+    // the chunked-loop test below uses, for the same reason.
+    for (let i = 0; i < 500 && !delivered; i++) await yieldToEventLoop()
     expect(delivered).toBe(true)
   })
 
