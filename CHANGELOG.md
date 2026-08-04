@@ -10,6 +10,138 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Three named panels — General, Annotations, Aesthetics — all foldable and all
+  resizable.** They had grown into three unrelated things: a sidebar with a fold
+  button, a column added beside it with a fold button copied from it, and a
+  controls column with no button and no name at all. They are the same object, so
+  they are now one; what differs is a name, a side and a default width. Drag a
+  panel's inner edge to resize it, double-click the edge to reset it, and both
+  the width and the fold are remembered. <kbd>b</kbd>, <kbd>a</kbd> and
+  <kbd>m</kbd> fold them. A card too wide for the column it is in scrolls inside
+  it rather than spilling out of it.
+
+- **The tracks pan and zoom the map.** A lane is a picture of the same window the
+  map shows, drawn through the same scales, so dragging one and dragging the map
+  are the same gesture on the same data — and a track you could read but not move
+  was an exception a reader had to discover. Dragging a bottom lane scrolls the
+  columns, dragging a right lane scrolls the rows, and a wheel over either zooms
+  exactly as a wheel over the map does. The lanes carry the map's arrowhead
+  cursor for the same reason.
+
+- **An annotations panel of its own**, between the file sidebar and the map. The
+  three annotation cards used to live in the file sidebar, folded in under the
+  record card, and shared its scroll box: a growing list of tracks bought its
+  height by pushing the file's own identity off the top of the screen, and
+  folding the sidebar to get the room back took the annotations with it. They
+  are now a column with its own fold (a `layers` button beside the sidebar's, or
+  <kbd>a</kbd>) and its own scroll. The two left columns are ordered outward from
+  the map by how often they are touched.
+
+- **The colour and the name are edited where they are shown.** Clicking the
+  swatch in a row opens the colour picker; clicking the name edits it in place.
+  Both were fields behind the settings disclosure, which made the two commonest
+  changes to an annotation among the most expensive. They are no longer offered
+  in the settings, because they are no longer hidden.
+
+- **Rows can be reordered**, by dragging the grip or by focusing it and pressing
+  the arrow keys. The order is the order the lanes are stacked in beside the map,
+  so this replaces removing three tracks and dropping them again in the order you
+  wanted.
+
+- **One hairline, and every value at once, when you point at a track.** Hovering
+  a lane draws a single line — not a crosshair — across the lane stack and the
+  map, at the position under the pointer, and the tooltip reads out *every* value
+  track on that edge at that position rather than only the lane being pointed at.
+  The lane the pointer is in is marked. A gene or peak under the pointer is
+  described underneath.
+
+- **Placing marks by clicking the map is a mode**, not a single shot. "Pick on
+  map" stays on and becomes **Done**; every click places a mark until Done or
+  <kbd>Esc</kbd>. Marking up a figure is eight gestures, not one, and the trip
+  back to the sidebar between each was the whole cost of the feature.
+
+- **Autoscale groups are a picker.** A group is only a group once two tracks are
+  in it, so the second track has to be given the *same* name as the first — and
+  the free-text box gave no way to find out what that was. A misremembered name
+  raised nothing; it quietly made a group of one. The list is now the memory, and
+  `new group…` is where a name is coined.
+
+### Changed
+
+- **The centre column stays light in the dark theme.** A contact map is a
+  *figure*: its colormaps are built for ink on white, its labels and frame are
+  drawn in the greys `ops/show.py` uses, and what leaves as a PNG or a PDF is
+  light whatever the screen was. Letting the theme through meant the picture on
+  screen was not the picture exported — and the halo behind every label, which is
+  the page background, turned black behind dark grey text on a white plot.
+  Everything around it — header, panels, status bar — is dark as before.
+
+- **The lane tooltip names the position, not the lane.** The lane is the one the
+  pointer is on, which the pointer already says and the marked row repeats; the
+  heading is now the coordinate alone. Values read `name: number`.
+
+- **The `auto` limit is a button**, bordered while it is on, rather than a tick
+  box — and typing either bound turns it off, which is the only thing typing a
+  bound can mean. The tick box was a third control on a row that already held two
+  number boxes, and it took the width that made them overflow their card.
+
+- **The annotation cards have lost their subtitles.** Each drop area under the
+  heading already says what it takes and how it is drawn.
+
+- **A new annotation is drawn on the right edge**, not the bottom. The bottom
+  already carries the coordinate axis, the block labels and the colourbar
+  caption, and a stack of tracks there pushes the map up the page; the space
+  beside it is empty in every view. Both tick boxes still work as before.
+
+- **Lane height is typed in pixels**, with the drawing style beside it, in place
+  of a slider. A slider is for a quantity with no natural unit, and this one has
+  the most natural unit there is.
+
+- **Track limits are trimmed** the way the colour clip's boxes already were, and
+  capped at three decimals. A bigWig header stores `float32`, so the faithful
+  seed for a limit was `0.03999999910593033`.
+
+- **Loop calls are ringed once**, on the upper side of the diagonal, instead of
+  on both. The matrix is symmetric, so ringing both said the same thing twice —
+  and on a set of any size the second ring was a few hundred circles the reader
+  has to check against the diagonal to know they are not a second set. A view
+  whose two axes are different blocks still shows the one placement it can.
+
+- **A track's summary no longer counts the file's zoom levels.** That is a fact
+  about how the bigWig was built rather than about what is in it, and it pushed
+  the value range — the number a reader can act on — onto a second line.
+
+### Removed
+
+- **The per-track `linear`/`log2` scaling option.** It was a dropdown whose
+  effect on a lane forty pixels tall was hard to read and easy to forget having
+  set, and it put a lane on a different value axis from the one beside it, which
+  is the opposite of what the autoscale group next to it is for. A ratio that
+  wants a log axis is better written that way by the tool that made the bigWig,
+  where the axis label can say so. A stored session that had `log2` set comes
+  back linear.
+
+### Fixed
+
+- **The colourbar no longer disappears when tracks are shown.** Assigning
+  `canvas.width` clears a canvas, and the legend's redraw was guarded on the
+  colour *scale* having changed — which a resize does not change. Adding a track
+  was enough to trigger it: the lanes relayout the plot, the resize observer
+  fires, the bar is cleared, the guard says the scale is the same, and the legend
+  is gone for as long as the view lasts. The invariant now lives inside `resize`,
+  where a third caller cannot forget it.
+
+- **A right-hand lane stack no longer overflows the column it is in.** The map's
+  height budget accounted for the tracks stacked *under* it but its width
+  accounted for nothing stacked *beside* it, so nine tracks on the right edge ran
+  out under the view controls — where the far half of the stack was not merely
+  off-screen but could not be hovered at all. Unreachable before this release
+  because the bottom edge was the default; the default is now the right one.
+
 ## [0.3.0] - 2026-08-04
 
 ### Added
