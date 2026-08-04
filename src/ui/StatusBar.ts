@@ -17,7 +17,15 @@ import { el, fmt } from './dom'
 import { subscribeReadout } from './readout'
 
 export interface StatusBarProps {
-  client: ReaderClient
+  /**
+   * The reader whose counters are on the bar right now, or `null` for none.
+   *
+   * A function rather than a client, because there is one status bar and one
+   * reader *per open session*: the numbers on the bar are the active tab's, and
+   * they change when the tab does. `null` is a session that has not opened
+   * anything — the bar then has nothing to count and says so.
+   */
+  client(): ReaderClient | null
 }
 
 export class StatusBar {
@@ -29,8 +37,9 @@ export class StatusBar {
   private readonly validationDetail: HTMLElement
   private readonly validationItem: HTMLElement
   private readonly coordinates: HTMLElement
+  /** The reader the numbers on screen belong to, so a tab switch is noticed. */
+  private reader: ReaderClient | null = null
   private readonly unsubscribeReadout: () => void
-  private hasFile = false
   /** The running deep validation, if any; clicking again stops it. */
   private validation: Cancellable<DeepValidation> | null = null
 
@@ -96,11 +105,42 @@ export class StatusBar {
   }
 
   /**
-   * Reset for a newly opened file. Validation state is per-file — carrying a
-   * green tick across an `open` would vouch for a file that was never checked.
+   * Show the active session's counters, or clear them.
+   *
+   * Called after every view change *and* on every tab switch, because the two
+   * are the same event as far as this bar is concerned: what is being counted
+   * changed. Validation is per file — carrying a green tick across a switch
+   * would vouch for a file that was never checked — so it resets whenever the
+   * reader under the bar is not the one it last spoke to.
    */
-  reset(): void {
-    this.hasFile = true
+  refresh(): void {
+    const client = this.props.client()
+    if (client === null) {
+      this.reader = null
+      this.readsSummary.textContent = '—'
+      this.readsDetail.replaceChildren()
+      this.clearValidation()
+      return
+    }
+    if (client !== this.reader) {
+      this.reader = client
+      this.clearValidation()
+    }
+    void client
+      .request<'stats'>({ kind: 'stats' })
+      .then((stats) => {
+        // A reply from the reader of a tab that is no longer on screen would
+        // paint one session's numbers under another's name.
+        if (this.props.client() === client) this.renderStats(stats)
+      })
+      .catch(() => {
+        /* counters are diagnostics; never let them break a view */
+      })
+  }
+
+  private clearValidation(): void {
+    this.validation?.cancel()
+    this.validation = null
     this.validationItem.classList.remove('ok', 'bad')
     this.validationLabel.textContent = 'not run'
     this.validationDetail.replaceChildren(
@@ -109,18 +149,6 @@ export class StatusBar {
         text: 'Light checks ran at open: attributes, group presence, table lengths, the /chroms soft link.',
       }),
     )
-    this.refresh()
-  }
-
-  /** Poll the worker's counters; called after every view change. */
-  refresh(): void {
-    if (!this.hasFile) return
-    void this.props.client
-      .request<'stats'>({ kind: 'stats' })
-      .then((stats) => this.renderStats(stats))
-      .catch(() => {
-        /* counters are diagnostics; never let them break a view */
-      })
   }
 
   private renderStats(stats: StatsResult): void {
@@ -137,7 +165,8 @@ export class StatusBar {
   }
 
   private async runValidation(): Promise<void> {
-    if (!this.hasFile) return
+    const client = this.props.client()
+    if (client === null) return
     // A cancellable, reporting run. It is the same pass over every pixel the
     // overview makes, and on a reference-scale file it is minutes long; it used
     // to be a static "scanning…" with no way out.
@@ -149,7 +178,7 @@ export class StatusBar {
     }
     this.validationLabel.textContent = 'scanning…'
     this.validationItem.classList.remove('ok', 'bad')
-    const task = this.props.client.cancellable<'validateDeep'>(
+    const task = client.cancellable<'validateDeep'>(
       { kind: 'validateDeep' },
       (done, total) => {
         this.validationLabel.textContent =

@@ -276,6 +276,132 @@ p {
   gap: 0.4rem;
 }
 
+/* --- the tab strip ------------------------------------------------------ */
+
+/* One row of sessions, under the header and above the breadcrumb — which is the
+   order the three are nested in: the window, then which file, then where in it.
+
+   It scrolls sideways rather than wrapping. A second row of tabs moves the
+   whole page down by the height of one, which is a layout the reader did not
+   ask for and cannot undo without closing something. */
+.tabstrip {
+  display: flex;
+  align-items: stretch;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem 0;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* A tab is a button and a close button that share a box, so the whole tab is a
+   click target for switching and the small square at its end is not. */
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0 0.15rem 0 0.1rem;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+  max-width: 15rem;
+  min-width: 0;
+}
+
+.tab:hover {
+  background: var(--bg-raised);
+}
+
+/* The active tab joins the page below it: same background, no bottom edge, and
+   a coloured line on top so the join reads as deliberate rather than as a gap
+   in the border. */
+.tab.is-active {
+  background: var(--bg);
+  border-color: var(--border);
+  box-shadow: inset 0 2px 0 var(--accent);
+  margin-bottom: -1px;
+  padding-bottom: 1px;
+}
+
+.tab-label {
+  border: 0;
+  background: none;
+  padding: 0.35rem 0.4rem;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+  min-width: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab.is-active .tab-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Named but not read. The file is remembered and no byte of it has been
+   fetched, so the label says so the way a placeholder does. */
+.tab.is-pending .tab-label {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.tab-close {
+  padding: 0.15rem;
+  opacity: 0;
+  color: var(--text-faint);
+}
+
+.tab:hover .tab-close,
+.tab.is-active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  color: var(--danger);
+}
+
+.tab-new {
+  align-self: center;
+  flex: 0 0 auto;
+  padding: 0.2rem;
+  color: var(--text-dim);
+}
+
+.tab-new.is-off {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* The session's own DOM, parented here on activation. Laid out as though it
+   were not there: a wrapper that took part in layout would put a block between
+   `.content` and a view sized against it, and between a panel body and the
+   cards it lays out as flex items. */
+.session-content,
+.panel-host {
+  display: contents;
+}
+
+/* No file, no crumbs — and no empty bordered strip where they would be. */
+.breadcrumb-slot:empty,
+.breadcrumb-host:empty {
+  display: none;
+}
+
 .app-body {
   display: flex;
   flex: 1 1 auto;

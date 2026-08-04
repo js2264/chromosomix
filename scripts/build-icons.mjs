@@ -36,6 +36,15 @@ const LUCIDE = [
   'panel-right-open',
   'layers',
   'grip-vertical',
+  'plus',
+  'search',
+  'zoom-in',
+  'zoom-out',
+  'maximize',
+  'crosshair',
+  'git-compare',
+  'dna',
+  'trash-2',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */
