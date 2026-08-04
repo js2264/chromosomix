@@ -28,6 +28,7 @@ import type { ReaderClient } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, axisRegion, type AnnotationContext } from './MatrixPanel'
+import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -59,6 +60,15 @@ export interface RegionViewProps {
    * — do not take this at all.
    */
   annotations?: AnnotationContext
+  /**
+   * A second cooler in the lower-left triangle (`render/compare.ts`).
+   *
+   * The same block, read from the other file. The two agree about contigs and
+   * bin size — the compare gate is what establishes that — so the extents
+   * resolved for this file address the same bins in the other one, and nothing
+   * has to be parsed twice.
+   */
+  compare?: CompareRead
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
   /**
@@ -107,6 +117,9 @@ export class RegionView {
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
+      ...(presentationOf(props.compare) === undefined
+        ? {}
+        : { compare: presentationOf(props.compare) }),
       initial: props.scale,
       // Same shape as the genome view: heading names the selection, controls
       // live in the sidebar. Only the Contigs card is missing, because inside a
@@ -218,10 +231,13 @@ export class RegionView {
           rows: [lo, hi],
           balance: this.props.balance,
         })
+        const second = await secondBlock(this.props.compare, (client) =>
+          client.request<'matrix'>({ kind: 'matrix', rows: [lo, hi], balance: this.props.balance }),
+        )
         if (this.disposed) return
         this.title.textContent = this.props.region
         this.describeMatch(parsed, hi - lo)
-        this.panel.setData(result, this.props.region)
+        this.panel.setData(result, this.props.region, second)
         return
       }
 
@@ -236,10 +252,18 @@ export class RegionView {
         cols: [lo2, hi2],
         balance: this.props.balance,
       })
+      const second = await secondBlock(this.props.compare, (client) =>
+        client.request<'matrix'>({
+          kind: 'matrix',
+          rows: [lo, hi],
+          cols: [lo2, hi2],
+          balance: this.props.balance,
+        }),
+      )
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
       this.describePair(parsed, other)
-      this.panel.setData(result, `${this.props.region} × ${this.props.region2}`)
+      this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
     } catch (err) {
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is

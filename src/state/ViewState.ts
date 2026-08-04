@@ -36,6 +36,7 @@ const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
 /** Serialisation order — stable so two equal states produce equal strings. */
 const KEY_ORDER = [
   'uri',
+  'uri2',
   'view',
   'genome',
   'genome2',
@@ -53,6 +54,7 @@ const KEY_ORDER = [
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
 const OPTIONAL_KEYS = [
+  'uri2',
   'genome',
   'genome2',
   'genomes',
@@ -122,6 +124,9 @@ export function parseViewState(hash: string): ViewState | null {
     uri,
     view: isViewKind(view) ? view : 'genomes',
   }
+
+  const uri2 = raw.get('uri2')
+  if (uri2 !== undefined && uri2 !== '') state.uri2 = uri2
 
   const genome = raw.get('genome')
   if (genome !== undefined) state.genome = genome

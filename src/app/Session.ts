@@ -43,6 +43,8 @@ import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
+import { CompareCard, compareRefusal } from '../ui/CompareCard'
+import type { CompareRead } from '../ui/compare'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
@@ -110,6 +112,16 @@ export interface OpenFile {
   entries: string[]
   /** The entry this URI names, when it addresses one. */
   currentEntry: string | undefined
+}
+
+/** The second file of a comparison, and what the gate had to read to accept it. */
+interface OpenCompare {
+  uri: string
+  source: SourceSpec
+  client: ReaderClient
+  info: OpenResult
+  /** Name and length per chromosome, in file order — what the gate compared. */
+  contigs: Array<[string, number]>
 }
 
 /**
@@ -199,6 +211,20 @@ export class Session {
   private mounted: ViewState | null = null
   /** Memoised {@link stepTargets}, keyed on the state object's identity. */
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
+  /**
+   * The second file, drawn in the lower-left triangle (`render/compare.ts`).
+   *
+   * A whole open file, with a reader of its own: the same shape as
+   * {@link file}'s, minus everything only the *first* file answers — no genomes
+   * table, no annotations, no record card. That asymmetry is the feature rather
+   * than a shortcut. The comparison is one map with two sets of numbers in it,
+   * not two browsers side by side, so exactly one file decides what the axes
+   * are, what the tracks are drawn against, and what the breadcrumb says.
+   */
+  private compare: OpenCompare | null = null
+  private compareCard: CompareCard | null = null
+  /** The URI a compare open is in flight for, so a re-render does not restart it. */
+  private compareOpening: string | null = null
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
@@ -330,6 +356,8 @@ export class Session {
     this.wholeFile = null
     this.annotations?.client.destroy()
     this.annotations = null
+    this.compare?.client.terminate()
+    this.compare = null
     this.reader?.terminate()
     this.reader = null
   }
@@ -564,7 +592,7 @@ export class Session {
             this.carryAcrossEntries(`${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`),
           ),
       })
-      this.infoPanel = new InfoPanel({ info })
+      this.infoPanel = new InfoPanel({ info, onCloseFile: (which) => this.closeCompare(which) })
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
@@ -634,6 +662,11 @@ export class Session {
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
+    // The comparison belonged to the file that is being replaced. Its worker
+    // goes with it — the second map was a second map *of this one*, and there is
+    // no sense in which it survives the first being closed.
+    this.dropCompare()
+    this.compareCard = null
     if (info.hasGenomes) {
       this.setAnnotations([])
       return
@@ -670,6 +703,19 @@ export class Session {
     }
     this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
 
+    this.compareCard = new CompareCard({
+      primaryLabel: () => fileLabel(this.file?.uri ?? uri),
+      onOpen: (source) =>
+        void this.openCompare(
+          source.kind === 'local' ? source.file.name : source.url,
+          source.kind === 'local'
+            ? { kind: 'local', file: source.file }
+            : { kind: 'remote', url: splitUri(source.url).path },
+        ),
+      onClose: () => this.closeCompare(2),
+      onSwap: () => this.swapCompare(),
+    })
+
     // The demo map ships ten annotation files on its own assembly. Offering
     // them as one click is the difference between a viewer that demonstrably
     // works and one a reader has to assemble a test case for.
@@ -697,6 +743,7 @@ export class Session {
       }).el,
       new AnnotationCard({ card: 'overlay', store, loader }).el,
       this.manualCard.el,
+      this.compareCard.el,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
@@ -714,6 +761,184 @@ export class Session {
    */
   private memoryKey(uri: string): string {
     return `${this.id}|${uri}`
+  }
+
+  // -------------------------------------------------------------------------
+  // The second file (`render/compare.ts`)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Open a second cooler into the lower-left triangle, or refuse it with the
+   * reason.
+   *
+   * The gate is read *before* anything is drawn and it is three questions —
+   * cooler, same bin size, same chromosomes — because each of the three is a way
+   * the merged picture would be a lie rather than a limitation of the code. See
+   * {@link compareRefusal}, which owns the wording.
+   *
+   * A refused file leaves nothing behind: its worker is put down here, so a
+   * reader trying three files in a row does not accumulate three h5wasm
+   * instances for the two that were wrong.
+   */
+  private async openCompare(uri: string, source: SourceSpec): Promise<void> {
+    const file = this.file
+    if (file === null || this.compareOpening === uri) return
+    this.compareOpening = uri
+    this.compareCard?.set({ kind: 'loading', label: fileLabel(uri) })
+    const client = new ReaderClient()
+    try {
+      const info = await client.request<'open'>({ kind: 'open', uri, source })
+      const contigs = await client.request<'contigs'>({ kind: 'contigs' })
+      if (this.destroyed) {
+        client.terminate()
+        return
+      }
+      const mine = await this.contigs()
+      const refusal = compareRefusal(file.info, info, {
+        primary: contigPairs(mine),
+        second: contigPairs(contigs),
+      })
+      if (refusal !== null) {
+        client.terminate()
+        this.compareCard?.set({ kind: 'error', label: fileLabel(uri), message: refusal })
+        return
+      }
+      this.compare?.client.terminate()
+      this.compare = { uri, source, client, info, contigs: contigPairs(contigs) }
+      this.compareCard?.set({ kind: 'open', label: fileLabel(uri), info })
+      this.infoPanel?.setCompare(info)
+      // A remote second file survives being shared; a local one cannot be
+      // reopened from a link any more than a local first file can (§11), so it
+      // is deliberately kept out of the hash rather than written as a name
+      // nobody's browser can act on.
+      if (inferSource(uri) !== null) this.store.patch({ uri2: uri })
+      this.remount()
+    } catch (err) {
+      client.terminate()
+      if (this.destroyed) return
+      // A collection addressed at its root is a `KeyError` in Python and the
+      // reader mirrors it faithfully (§3.4) — but somebody who dropped an
+      // `.mcool` on the compare card meant "this map", so the entry is opened
+      // for them, exactly as it is when the same file is dropped on the picker.
+      // The finest resolution, which is what `firstEntry` picks; if it is the
+      // wrong one the bin-size clause of the gate says so by name.
+      const landing = firstEntry(err)
+      if (landing !== null) {
+        this.compareOpening = null
+        await this.openCompare(`${splitUri(uri).path}::${landing.group}/${landing.entry}`, source)
+        return
+      }
+      this.compareCard?.set({
+        kind: 'error',
+        label: fileLabel(uri),
+        message: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      this.compareOpening = null
+    }
+  }
+
+  /**
+   * Put the second file down.
+   *
+   * `which === 1` closes the *first* one, and the second takes its place: the
+   * comparison is symmetric in everything except which triangle each file is
+   * in, so closing either has to leave an ordinary one-file map behind. Closing
+   * the first is therefore an `open` of the second, carrying nothing but the
+   * view — the colour clip is in the first file's counts and means nothing in
+   * the second's, exactly as it does not survive a change of resolution.
+   */
+  private closeCompare(which: 1 | 2): void {
+    const held = this.compare
+    if (held === null) return
+    if (which === 2) {
+      this.dropCompare()
+      this.store.patch({ uri2: undefined })
+      this.remount()
+      return
+    }
+    const state = this.store.state
+    this.dropCompare()
+    const carry =
+      state === null
+        ? undefined
+        : (({ vmin: _vmin, vmax: _vmax, uri2: _uri2, ...rest }) => ({ ...rest, uri: held.uri }))(
+            state,
+          )
+    void this.open(held.uri, held.source, carry)
+  }
+
+  /** Swap which file is above the diagonal — the same comparison, read the other way. */
+  private swapCompare(): void {
+    this.closeCompare(1)
+  }
+
+  /**
+   * What the whole-file view's cache key has to carry about the comparison.
+   *
+   * That slot holds the result of a full pass over every stored pixel, keyed on
+   * *what was read*. A second file arriving, leaving, or being rescaled all
+   * change what the picture is of, so each of them has to miss the cache — the
+   * alternative is a whole-genome map that keeps showing one file after a second
+   * has been dropped on it.
+   */
+  private compareKey(): string {
+    return this.compare === null ? '' : `${this.compare.uri}|${String(this.normalising())}`
+  }
+
+  private dropCompare(): void {
+    this.compare?.client.terminate()
+    this.compare = null
+    this.compareCard?.set({ kind: 'empty' })
+    this.infoPanel?.setCompare(null)
+  }
+
+  /**
+   * Whether the second file's counts are scaled to the first's bright end.
+   *
+   * A preference rather than view state: it changes how the picture is drawn and
+   * not what is in it, and it is per session because it is a fact about *these
+   * two files* — one being shallower than the other — rather than about the
+   * viewer.
+   */
+  private normalising(): boolean {
+    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') === true
+  }
+
+  /** What a heatmap view needs to read and label the second file, or `undefined`. */
+  private compareContext(): CompareRead | undefined {
+    const held = this.compare
+    const file = this.file
+    if (held === null || file === null) return undefined
+    return {
+      client: held.client,
+      labels: [fileLabel(file.uri), fileLabel(held.uri)],
+      normalise: this.normalising(),
+      onNormaliseChange: (on) => {
+        remember(this.memoryKey(file.uri), 'compare:normalise', on)
+        this.remount()
+      },
+      onFailure: (message) =>
+        this.compareCard?.set({ kind: 'error', label: fileLabel(held.uri), message }),
+    }
+  }
+
+  /**
+   * Rebuild the mounted view for the state it is already in.
+   *
+   * The one thing a view cannot be told about after it is built is which blocks
+   * it should have read, and both of the things that reach here — a second file
+   * arriving or leaving, and the gain applied to it — change exactly that.
+   * Clearing `mounted` is what makes the next render a navigation rather than a
+   * repaint.
+   */
+  private remount(): void {
+    const state = this.store.state
+    if (state === null) return
+    this.mounted = null
+    this.wholeFile?.view.destroy()
+    this.wholeFile = null
+    void this.render(state)
   }
 
   /** The context a heatmap view hands to its panel, or `undefined`. */
@@ -893,6 +1118,31 @@ export class Session {
     if (state.view === 'overview' && !this.file.info.hasGenomes) {
       this.store.set({ uri: state.uri, view: 'whole' }, { replace: true })
       return
+    }
+
+    // A link may carry a second file (`uri2`), and the tab may already hold one
+    // — or the wrong one. Reconciled here rather than at the drop, so a pasted
+    // comparison and a dropped one arrive by the same road.
+    //
+    // The mount below is *not* deferred until the second file has opened: the
+    // first file's map is a complete picture on its own, and showing it while
+    // the second is read is better than showing nothing. `remount` brings the
+    // comparison in when it lands.
+    const wanted = state.uri2 ?? null
+    if (wanted !== (this.compare?.uri ?? null)) {
+      if (wanted === null) this.dropCompare()
+      else {
+        const source = inferSource(wanted)
+        // The same refusal a local `uri` gets, for the same reason: no browser
+        // re-reads a dropped file without a gesture, so a link naming one has
+        // nothing to open. Dropped from the hash rather than left there
+        // describing a comparison that is not on screen.
+        if (source === null) {
+          this.store.patch({ uri2: undefined }, { replace: true })
+          return
+        }
+        void this.openCompare(wanted, source)
+      }
     }
 
     // A colour change is a repaint, not a navigation.
@@ -1136,7 +1386,7 @@ export class Session {
     const balance = this.balanceOf(state)
     this.mountWholeFile(
       state,
-      `whole|${state.uri}|${level}|${String(balance)}`,
+      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
       () =>
         new WholeView({
           client: this.clientOf(),
@@ -1161,6 +1411,7 @@ export class Session {
           ...(this.annotationContext() === undefined
             ? {}
             : { annotations: this.annotationContext() }),
+          ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
           // The two are mutually exclusive in practice and both are passed
           // anyway: a file either has a genome layer to name in the tooltip
           // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
@@ -1224,6 +1475,7 @@ export class Session {
       ...(this.annotationContext() === undefined
         ? {}
         : { annotations: this.annotationContext() }),
+      ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
       namesGenomes: file.info.hasGenomes,
       selection: { ...selection, bins },
       onLevelChange: () => {},
@@ -1354,6 +1606,7 @@ export class Session {
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
+      ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
       balance: this.balanceOf(state),
       hasWeights: this.file?.info.hasWeights === true,
       onBalanceChange: (balance) => this.setBalance(balance),
@@ -1620,6 +1873,19 @@ function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): Sc
 export function inferSource(uri: string): SourceSpec | null {
   const { path } = splitUri(uri)
   return /^https?:\/\//i.test(path) ? { kind: 'remote', url: path } : null
+}
+
+/**
+ * Name and length per chromosome, in file order — what the compare gate reads.
+ *
+ * Both, because both have to match: a renamed assembly and a re-scaffolded one
+ * are different failures and the gate names each of them (`ui/CompareCard.ts`).
+ */
+function contigPairs(contigs: ContigsResult | null): Array<[string, number]> {
+  const names = contigNames(contigs)
+  const lengths = contigs?.table.data['length']
+  if (lengths === undefined || Array.isArray(lengths)) return names.map((name) => [name, 0])
+  return names.map((name, index) => [name, Number(lengths[index])])
 }
 
 /** Contig names from the contigs table, or `[]` if it could not be read. */

@@ -40,6 +40,7 @@ import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, axisRegion, poolingNote, type AnnotationContext } from './MatrixPanel'
+import { presentationOf, secondBlock, type CompareRead } from './compare'
 
 export interface WholeViewProps {
   client: ReaderClient
@@ -98,6 +99,15 @@ export interface WholeViewProps {
    * — do not take this at all.
    */
   annotations?: AnnotationContext
+  /**
+   * A second cooler in the lower-left triangle (`render/compare.ts`).
+   *
+   * Read with the same request, after the first — sequentially rather than in
+   * parallel, because both are full passes over their file's pixels and running
+   * two at once would double the peak memory of the operation this view already
+   * asks permission for.
+   */
+  compare?: CompareRead
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
 }
@@ -173,6 +183,9 @@ export class WholeView {
       binsize: props.binsize * this.stride,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
+      ...(presentationOf(props.compare) === undefined
+        ? {}
+        : { compare: presentationOf(props.compare) }),
       ...(props.offerLevel
         ? {
             levels: ['bin', 'contig'] as Array<'bin' | 'contig'>,
@@ -415,7 +428,38 @@ export class WholeView {
     try {
       const result = await task.promise
       if (this.disposed || this.running !== task) return
-      this.panel.setData(result, 'Whole genome')
+      // The same three shapes, against the other file. Written out for the
+      // reason the reads above are: a request type is a discriminated union and
+      // narrowing it through a ternary argument loses the discriminant.
+      const second = await secondBlock(this.props.compare, (other) =>
+        selection !== undefined && this.level === 'bin'
+          ? other.request<'selection'>({
+              kind: 'selection',
+              unit: selection.kind,
+              names: selection.names,
+              balance,
+              binsPerCell: this.stride,
+            })
+          : this.level === 'bin'
+          ? other.request<'matrix'>({
+              kind: 'matrix',
+              rows,
+              balance,
+              binsPerCell: this.stride,
+              ...budget,
+              ...genomes,
+            })
+          : other.request<'aggregate'>({
+              kind: 'aggregate',
+              rows,
+              level: 'contig',
+              balance,
+              ...budget,
+              ...genomes,
+            }),
+      )
+      if (this.disposed || this.running !== task) return
+      this.panel.setData(result, 'Whole genome', second)
       this.summary.textContent = this.summarise(result)
     } catch (err) {
       if (this.disposed || this.running !== task) return

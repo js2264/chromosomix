@@ -161,6 +161,15 @@ export interface ColorbarOptions {
   barThickness?: number
   /** Caption drawn beside the bar. Units, not the transform. */
   caption?: string
+  /**
+   * A mark before the caption, kept whatever the caption resolves to.
+   *
+   * There is one of these for each file when two are compared, and the units
+   * word is the *same* on both — they share a colormap, so they share a scale
+   * name. What has to differ is which triangle the bar measures, and a glyph
+   * says that in the width a file name would not fit into.
+   */
+  prefix?: string
   /** Also print the transform in small type, so a figure is self-describing. */
   showTransform?: boolean
   font?: string
@@ -211,6 +220,7 @@ export class ColorbarView {
       orientation: options.orientation ?? 'vertical',
       barThickness: options.barThickness ?? 14,
       caption: options.caption ?? 'contacts',
+      prefix: options.prefix ?? '',
       showTransform: options.showTransform ?? true,
       font: options.font ?? '10px system-ui, sans-serif',
       textColor: options.textColor ?? '#333333',
@@ -229,6 +239,23 @@ export class ColorbarView {
    */
   setScale(scale: ColorScale): void {
     this.scale = { ...scale }
+  }
+
+  /**
+   * Rename the units beside the bar.
+   *
+   * Two bars appear when two files are compared, and what distinguishes them is
+   * not the colours — those are shared — but whose counts they measure. The
+   * caption is therefore the whole of the legend there, and it has to be able to
+   * change without rebuilding the canvas the bar is drawn on.
+   */
+  setCaption(caption: string): void {
+    this.opts.caption = caption
+  }
+
+  /** Set the mark before the caption; see {@link ColorbarOptions.prefix}. */
+  setPrefix(prefix: string): void {
+    this.opts.prefix = prefix
   }
 
   /** The ticks {@link draw} will render. Exposed for a DOM-based legend. */
@@ -387,8 +414,11 @@ export class ColorbarView {
     // only place the reader is told which of the two the numbers beside the
     // strip are.
     const units = this.scale.balanced === true ? 'balanced' : o.caption
-    if (!o.showTransform || this.scale.transform === 'none') return units
-    return `${units} (${this.scale.transform})`
+    const body =
+      !o.showTransform || this.scale.transform === 'none'
+        ? units
+        : `${units} (${this.scale.transform})`
+    return `${o.prefix}${body}`
   }
 
   /**
