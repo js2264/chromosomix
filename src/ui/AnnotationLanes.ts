@@ -361,7 +361,7 @@ export class AnnotationLanes {
     if (axis === null) return
     // One read for the whole stack: every lane asks the same question and the
     // store behind it is a module-level one.
-    const text = getPlotOptions().text
+    const { text, fills } = getPlotOptions()
 
     for (const lane of lanes) {
       const { entry, frame, profile } = lane
@@ -380,6 +380,7 @@ export class AnnotationLanes {
           haloColour: geometry.palette.halo,
           font: LANE_FONT,
           opacity: entry.style.opacity,
+          fills,
         })
         if (text) {
           this.labelLane(ctx, frame, geometry, entry.label, `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`)
@@ -472,6 +473,13 @@ export class AnnotationLanes {
    * heatmap's block labels and collapse to six pixels when those are off — which
    * is this app's default — so a name outside would have to reopen a band the
    * reader closed. A halo is what keeps it readable over the track's own ink.
+   *
+   * The range goes **under** the name, as it does in the 1D browser, whenever
+   * the lane is tall enough for two lines. A number at the opposite end of a
+   * six-hundred-pixel lane from the name it belongs to has to be paired up by
+   * eye every time; on a lane too short for the second line it goes back beside
+   * the name, which is the same fallback and the same threshold the browser
+   * uses. Two implementations of one layout is the drift §5.8 exists to prevent.
    */
   private labelLane(
     ctx: CanvasRenderingContext2D,
@@ -486,11 +494,13 @@ export class AnnotationLanes {
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
     const near = frame.orientation === 'bottom' ? frame.alongFrom + 4 : frame.alongTo - 4
-    laneText(ctx, frame, name, near, 8, { halo: geometry.palette.halo })
+    laneText(ctx, frame, name, near, NAME_ACROSS, { halo: geometry.palette.halo })
     if (detail !== '') {
-      ctx.textAlign = 'right'
-      const far = frame.orientation === 'bottom' ? frame.alongTo - 4 : frame.alongFrom + 4
-      laneText(ctx, frame, detail, far, 8, { halo: geometry.palette.halo })
+      const stacked = frame.thickness >= NAME_ACROSS + DETAIL_DROP + 6
+      const along = stacked ? near : frame.orientation === 'bottom' ? near + ctx.measureText(name).width + 10 : near - ctx.measureText(name).width - 10
+      laneText(ctx, frame, detail, along, stacked ? NAME_ACROSS + DETAIL_DROP : NAME_ACROSS, {
+        halo: geometry.palette.halo,
+      })
     }
     ctx.restore()
   }
@@ -678,6 +688,12 @@ function hairline(
 
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */
 const LANE_FONT = '9px system-ui, sans-serif'
+
+/** Where the name sits in the lane, from its outer edge. */
+const NAME_ACROSS = 8
+
+/** How far under the name the range sits, when the lane is tall enough. */
+const DETAIL_DROP = 11
 
 /** `I:412,000` — the same phrasing the matrix readout uses. */
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {

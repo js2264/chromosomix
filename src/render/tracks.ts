@@ -237,6 +237,17 @@ export interface TrackPaint {
   haloColour: string
   font: string
   opacity: number
+  /**
+   * Whether the shaded areas are drawn: the envelope, and an area track's fill.
+   *
+   * Required rather than defaulted, so that a new caller has to decide. Both
+   * fills are *context* for the line — the envelope says what the mean hid, the
+   * area says which side of the baseline the signal is on — and context is the
+   * first thing to go when several tracks share one lane or a figure is going
+   * into a caption. Bars are unaffected: a bar is the mark itself, not a shade
+   * under one.
+   */
+  fills: boolean
 }
 
 /**
@@ -263,7 +274,7 @@ export function drawTrack(
 
   // The envelope first, underneath: it is context for the line, not a second
   // series, so it must never be the thing the eye lands on.
-  if (profile.envelope && paint.mode !== 'bar') {
+  if (profile.envelope && paint.mode !== 'bar' && paint.fills) {
     ctx.globalAlpha = paint.opacity * 0.25
     ctx.fillStyle = paint.colour
     ctx.beginPath()
@@ -302,7 +313,7 @@ export function drawTrack(
   // the baseline. Runs are broken at every gap, so a region with no data is a
   // hole in the track rather than a straight line drawn across it.
   const runs = pathRuns(profile)
-  if (paint.mode === 'area') {
+  if (paint.mode === 'area' && paint.fills) {
     ctx.fillStyle = paint.colour
     ctx.globalAlpha = paint.opacity * 0.5
     for (const [start, stop] of runs) {

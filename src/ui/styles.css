@@ -311,61 +311,66 @@ p {
    row of buttons. It is built from two skewed pseudo-elements rather than a
    `clip-path`, because a clipped border is a border with its sides cut off —
    the outline has to survive, since it is the outline that joins the active tab
-   to the page below it. */
+   to the page below it.
+
+   Everything about the resting state is quiet: no border, a background a shade
+   off the strip's own, and a label in the dim colour. The line and the lift come
+   with being active, which is the one thing the strip has to say clearly. */
 .tab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.15rem;
-  margin: 0 0.55rem;
-  padding: 0 0.15rem;
+  gap: 0.1rem;
+  margin: 0 0.6rem;
+  padding: 0 0.1rem 0 0.25rem;
   max-width: 15rem;
   min-width: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 3px 3px 0 0;
-  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+  border-radius: 5px 5px 0 0;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  transition:
+    background 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
 .tab::before,
 .tab::after {
   content: '';
   position: absolute;
-  top: -1px;
+  top: 0;
   bottom: 0;
-  width: 0.75rem;
+  width: 0.8rem;
   background: inherit;
-  border-top: 1px solid var(--border);
   pointer-events: none;
 }
 
 .tab::before {
-  left: -0.7rem;
-  transform: skewX(-15deg);
+  left: -0.75rem;
+  transform: skewX(-16deg);
   transform-origin: bottom left;
-  border-left: 1px solid var(--border);
-  border-radius: 4px 0 0 0;
+  border-radius: 6px 0 0 0;
 }
 
 .tab::after {
-  right: -0.7rem;
-  transform: skewX(15deg);
+  right: -0.75rem;
+  transform: skewX(16deg);
   transform-origin: bottom right;
-  border-right: 1px solid var(--border);
-  border-radius: 0 4px 0 0;
+  border-radius: 0 6px 0 0;
 }
 
-.tab:hover,
-.tab:hover::before,
-.tab:hover::after {
-  background: var(--bg-raised);
+.tab:hover {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 /* The active tab joins the page below it: same background, and its bottom edge
    sits *over* the strip's border rather than under it, so the join reads as one
-   surface rather than as a gap in a line. */
+   surface rather than as a gap in a line. The accent is a bar along the top,
+   the edge furthest from the join — a line drawn at the bottom would be a line
+   drawn across the seam it is trying to remove. */
 .tab.is-active {
   background: var(--bg);
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow:
+    inset 0 2px 0 var(--accent),
+    0 -1px 3px color-mix(in srgb, var(--text) 10%, transparent);
   margin-bottom: -1px;
   padding-bottom: 1px;
   z-index: 1;
@@ -375,21 +380,27 @@ p {
 .tab.is-active::after {
   background: var(--bg);
   bottom: -1px;
+  box-shadow: 0 -1px 3px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .tab-label {
   border: 0;
   background: none;
-  padding: 0.35rem 0.4rem;
+  padding: 0.4rem 0.35rem;
   color: var(--text-dim);
   font: inherit;
   font-size: var(--step--1);
+  letter-spacing: 0.005em;
   cursor: pointer;
   min-width: 0;
   max-width: 12rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tab:hover .tab-label {
+  color: var(--text);
 }
 
 .tab.is-active .tab-label {
@@ -404,27 +415,111 @@ p {
   opacity: 0.7;
 }
 
-.tab-close {
+/* Hidden until the tab is pointed at — on the active tab too, which used to be
+   an exception. A row of tabs each carrying a permanent × is a row of things
+   asking to be closed, and the one being read is the last that should. No
+   border and no box: at this size the button's chrome was most of what the
+   corner of a tab showed. It keeps its space while hidden, so the label does not
+   shuffle when a hand arrives. */
+/* `.btn.` on both, because `.btn` is declared further down this file and a tie
+   on specificity is broken by source order — which is how the close button kept
+   the bordered box it is not supposed to have.
+
+   Inert while it is invisible (§5.8's rule, which the lane controls follow for
+   the same reason). `opacity: 0` hides a button and does not stop it taking a
+   click, so the last twelve pixels of every unhovered tab were an armed close
+   button — and with a fade on it, a click aimed at the label during the fade
+   would land on a × that was not there when the hand set off. */
+.btn.tab-close {
   padding: 0.15rem;
+  border: 0;
+  background: none;
+  border-radius: 4px;
   opacity: 0;
+  pointer-events: none;
+  color: var(--text-faint);
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+/* Appears at once and fades out slowly — asymmetric on purpose. A control that
+   is clickable before it is fully drawn is a control you can hit by accident, so
+   there is no in-transition to be caught halfway through; the fade is on the way
+   out, where nobody is aiming at it. */
+.tab:hover .btn.tab-close,
+.btn.tab-close:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    opacity 0s,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+/* `.tab` in front: `.btn:hover:not(:disabled)` is also two classes and a
+   pseudo-class, and it is declared a thousand lines further down — a tie on
+   specificity goes to whoever comes last, so without the extra step the × turns
+   accent blue on a danger-red ground. */
+.tab .btn.tab-close:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.btn.tab-new {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: 0.35rem;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
   color: var(--text-faint);
 }
 
-.tab:hover .tab-close,
-.tab.is-active .tab-close,
-.tab-close:focus-visible {
-  opacity: 1;
+.btn.tab-new:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-.tab-close:hover {
-  color: var(--danger);
+/* One session is not a tab bar, it is a title.
+
+   The strip stays, because the way to a *second* session is the button on it,
+   but the only thing on it stops drawing a box around itself: there is nothing
+   to be distinguished from, and a lone trapezoid with an accent bar is a piece
+   of machinery announcing a choice that has not been offered yet. The shoulders
+   and the lift come back with the second tab, which is when they mean
+   something. */
+.tabstrip.single .tab {
+  margin: 0;
+  background: none;
+  box-shadow: none;
 }
 
-.tab-new {
-  align-self: center;
-  flex: 0 0 auto;
-  padding: 0.2rem;
-  color: var(--text-dim);
+.tabstrip.single .tab::before,
+.tabstrip.single .tab::after {
+  display: none;
+}
+
+/* --- what a hover-revealed control does where there is no hover ---------- */
+
+/* On a touch screen there is no pointer to rest anywhere, so every control that
+   appears on hover would appear *never*: closing a session and recolouring a
+   track would both become impossible rather than merely quiet. Both are shown
+   outright there, which is what §7.2's "touch is a first-class input" means when
+   it is applied to a decision made for a mouse. */
+@media (hover: none) {
+  /* `.ann-row` in front of the swatch for the same reason the tab's × carries
+     `.btn`: a media query adds no specificity, and the base `.ann-swatch` rule
+     is a single class three thousand lines further down this file. Without it
+     the override is dead and the swatch stays invisible on a touch screen —
+     invisible and, since nothing there can hover, unreachable for ever. */
+  .btn.tab-close,
+  .ann-row .ann-swatch {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .tab-new.is-off {
@@ -619,6 +714,29 @@ p {
   pointer-events: none;
 }
 
+/* One end of a value axis, with a caret in it.
+
+   Laid over the box the number was measured into, at the same size and the same
+   place, so the figure does not jump when it becomes editable — which is the
+   whole claim the text cursor was making. Opaque, because it is standing on top
+   of the number it replaces.
+
+   `.input.` because `.input` is declared further down and would otherwise supply
+   the padding, the font size, the background and the border — which between them
+   are the whole of what makes this box the size of the number it stands on. The
+   size is in pixels rather than in steps for the same reason: it is matching a
+   number painted on a canvas at `10px`, and a canvas has no rem.  */
+.input.browser-edit {
+  position: absolute;
+  z-index: 3;
+  padding: 0 0.2rem;
+  font: 10px system-ui, sans-serif;
+  line-height: 1.2;
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 /* Top-aligned, not centred: a lane's ink starts at its baseline and grows
    upwards, so the busiest part of a coverage track is exactly where a centred
    row of controls would sit. */
@@ -670,6 +788,22 @@ p {
 
 .browser-lane-controls .select-tiny {
   max-width: 5rem;
+}
+
+/* And shorter, which is the other axis the same argument runs along. A button
+   at its panel height makes this row thirty pixels tall, and thirty pixels plus
+   the two lines of label above it is more than a lane of ordinary height has —
+   so the row would have to sit either on the range it is beside or outside the
+   lane it belongs to. At this height it sits under both, on every lane taller
+   than about fifty pixels. */
+.browser-lane-controls > .btn,
+.browser-lane-controls .select,
+.browser-lane-controls .input {
+  height: 1.15rem;
+  min-height: 0;
+  line-height: 1;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 /* A swatch, not a form control: the browser's own colour input with everything
@@ -1841,6 +1975,13 @@ p {
   cursor: grabbing;
 }
 
+/* Over one end of a lane's value axis, which is a text box that happens to be
+   painted. The arrowhead is the affordance everywhere else on this canvas, and
+   this is the one thing it cannot say: "there is a caret behind this number". */
+.browser-canvas.is-text {
+  cursor: text;
+}
+
 /* While a manual annotation is waiting for its coordinates, a click places a
    mark rather than opening what it lands on. The cursor is the only warning the
    plot itself can give that the same gesture now means something else. */
@@ -2012,16 +2153,55 @@ p {
   flex-wrap: wrap;
 }
 
-/* The browser names its formats rather than abbreviating them — "PDF (vector)"
-   is the whole of the difference between the two exports, and a truncated
-   "PDF (vecto" says nothing. So the format takes the width, and the resolution
-   it may or may not apply to sits under it beside the button. */
-.export-row-wide {
-  grid-template-columns: minmax(0, 1fr) auto;
+/* One line, in a column half the width of the panel the map's row sits in.
+
+   A grid of thirds cannot do it: the browser names its formats rather than
+   abbreviating them — "PDF (vector)" is the whole of the difference between the
+   two exports, and a truncated "PDF (vecto" says nothing — so the format has to
+   take whatever the other two leave. It gets a lot, because a vector page has no
+   resolution and the resolution is therefore absent exactly when the long name
+   is showing. */
+.export-row-flex {
+  display: flex;
+  align-items: stretch;
+  gap: 0.3rem;
 }
 
-.export-row-wide > .select-format {
-  grid-column: 1 / -1;
+.export-row-flex > .select-dpi {
+  flex: 0 0 auto;
+}
+
+.export-row-flex > .select-format {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.export-row-flex > .btn {
+  flex: 0 0 auto;
+}
+
+/* The browser's own overlay row: marks rather than sentences.
+
+   Four things a reader does over and over while reading — refit across, refit
+   down, take the words off, take the shading off — and a column of full-width
+   buttons spelling each of them out is four lines of prose where a row of
+   controls belongs. The words are in the tooltips, which is where a word that
+   is read once belongs. */
+.plot-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.plot-icon-row > .btn-icon {
+  padding: 0.3rem;
+}
+
+/* A gap that reads as a divider: two buttons that *do* something, then two that
+   change what is drawn. Same row, because both are things done while reading. */
+.plot-option-gap {
+  flex: 0 0 auto;
+  width: 0.45rem;
 }
 
 /* The last line of the plot card: what was saved, or why it was not. */
@@ -2863,6 +3043,113 @@ p {
   color: var(--text-dim);
 }
 
+/* A heading with a mark before its word.
+
+   Flex rather than the inline flow an `<svg>` would otherwise take, so the icon
+   is centred on the word instead of sitting on its baseline — which at 13 px
+   against a 12 px cap height is a visible half-pixel drop. Opt-in by class, the
+   same way `.file-head` is: `.card h3` outranks a bare class, so folding this
+   into it would silently overrule the spacing of every heading that has already
+   chosen its own. */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* --- the sequences in a genome ------------------------------------------ */
+
+.seq-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+}
+
+.seq-filter {
+  width: 100%;
+}
+
+/* Scrolls at about ten rows. Long enough that a yeast, a fly and a human are
+   all one glance, short enough that a draft assembly's ten thousand scaffolds
+   do not push the Contact map card off the bottom of the column. */
+.seq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 15rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  margin: 0 -0.25rem;
+}
+
+/* A row is a button, and the bar behind it is its length against the longest.
+
+   The bar is the reason this is a list rather than a table: a column of numbers
+   says how long each sequence is and nothing about the shape of the assembly,
+   and the shape is what tells a reader at a glance whether they are looking at
+   sixteen chromosomes or at a contig set with a tail. */
+.seq-row {
+  position: relative;
+  /* `0 0 auto`, or the rows share out the list's `max-height` between them
+     instead of overflowing it: sixteen chromosomes came out as sixteen rows of
+     squashed, clipped type rather than ten rows and a scrollbar. */
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.22rem 0.35rem;
+  line-height: 1.35;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  font-size: var(--step--1);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.seq-row::before {
+  content: '';
+  position: absolute;
+  inset: 1px auto 1px 0;
+  width: var(--seq-share, 0%);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  pointer-events: none;
+}
+
+.seq-row:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.seq-row:hover::before {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.seq-name {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seq-len {
+  position: relative;
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}
+
+.seq-note {
+  margin: 0;
+}
+
 /* `1 0 auto`, not `1 1 auto`: the panel may now be taller than the sidebar, and
    it must be allowed to overflow it (the sidebar scrolls) rather than be
    squeezed to fit. */
@@ -3318,6 +3605,18 @@ p {
    in its row — the row is found by matching it to the lane, not by reading. It
    is the picker itself, stripped of the chrome a browser gives a colour input,
    so that clicking the colour opens the picker in one gesture. */
+/* Hidden until the row is under the pointer, like the grip beside it.
+
+   A column of coloured squares down the panel is a second legend for something
+   the picture already says in the only place it matters — the lane is drawn in
+   that colour, and where two share a lane so is each name. What is left in the
+   list is the names, which is what a list of tracks is read for. The square is
+   still exactly where it was, so reaching for it is one movement rather than a
+   hunt; it keeps its box while it is invisible for the same reason.
+
+   Opacity rather than `display: none` on purpose. The pointer cannot reach the
+   swatch without being on the row, and being on the row is what reveals it — so
+   there is no moment in which an invisible control could take a click. */
 .ann-swatch {
   width: 0.85rem;
   height: 0.85rem;
@@ -3329,6 +3628,20 @@ p {
   flex: 0 0 auto;
   appearance: none;
   -webkit-appearance: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.ann-row:hover .ann-swatch,
+.ann-row:focus-within .ann-swatch,
+.ann-swatch:focus-visible {
+  opacity: 1;
+}
+
+/* …except in the batch bar, which is not a row and whose swatch is the control
+   the bar exists to offer. */
+.ann-batch .ann-swatch {
+  opacity: 1;
 }
 
 /* The swatch's own well is inset by a few pixels in every engine, which at this
@@ -3610,11 +3923,12 @@ p {
   min-width: 0;
 }
 
-/* A coordinate that did not parse. Marked rather than replaced with an error
-   line, because the box still holds what was typed and the fix is usually one
-   character. */
+/* A coordinate that did not parse, or a pair of limits in the wrong order.
+   Marked rather than replaced with an error line, because the box still holds
+   what was typed and the fix is usually one character. */
 .input.is-bad {
   border-color: #c0392b;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #c0392b 22%, transparent);
 }
 
 /* Armed, and waiting for a click on the plot. */

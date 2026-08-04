@@ -89,7 +89,7 @@ export class CompareCard {
       { class: 'card compare-card' },
       el(
         'h3',
-        {},
+        { class: 'card-head' },
         icon('git-compare', { size: 14 }),
         el('span', { text: 'Compare' }),
       ),

@@ -45,6 +45,11 @@ const LUCIDE = [
   'git-compare',
   'dna',
   'trash-2',
+  'unfold-horizontal',
+  'unfold-vertical',
+  'type',
+  'chart-area',
+  'list',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

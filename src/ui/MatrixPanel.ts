@@ -580,6 +580,7 @@ export class MatrixPanel {
             'div',
             { class: 'plot-option-row' },
             optionToggle('text'),
+            optionToggle('fills'),
             optionToggle('crosshair'),
             optionToggle('dividers'),
             optionToggle('breaks'),
