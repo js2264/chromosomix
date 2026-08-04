@@ -35,10 +35,20 @@ export interface MapPicker {
   /** `true` when there is a plot to click on. */
   available(): boolean
   /**
-   * Collect `count` clicks. Resolves with one point *per axis* per click, or
-   * `null` if the reader pressed Escape or navigated away.
+   * Turn on picking. Every click on the plot reports one point *per axis*, for
+   * as long as the mode lasts.
+   *
+   * `onEnd` fires exactly once, however the mode ends — the returned stop
+   * function, Escape, another gesture arming over this one, or the plot going
+   * away underneath it. That is what the button re-labels itself from, so it
+   * must not be conditional on how the mode finished.
+   *
+   * @returns a function that ends the mode.
    */
-  pick(count: number): Promise<Array<{ rows: ManualPoint; cols: ManualPoint }> | null>
+  start(
+    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
+    onEnd: () => void,
+  ): () => void
 }
 
 export interface ManualCardProps {
@@ -57,12 +67,6 @@ export class ManualCard {
       'section',
       { class: 'card annotation-card' },
       el('h3', { text: 'Manual annotations' }),
-      el('p', {
-        class: 'hint',
-        text:
-          'Marks you place yourself, in genomic coordinates — so they survive a zoom, a pan and ' +
-          'a change of resolution.',
-      }),
       this.lineForm(),
       this.arrowForm(),
       this.list,
@@ -124,9 +128,12 @@ export class ManualCard {
     // horizontal one takes the row. "Both" is one coordinate drawn twice, and
     // on the diagonal — where these are nearly always placed — the two axes
     // give the same answer anyway.
-    const pick = this.pickButton('pick on map', 1, (points) => {
-      const choice = axis.value === 'horizontal' ? points[0].rows : points[0].cols
-      add(choice)
+    //
+    // Read from the select on every click rather than captured once: the mode
+    // now outlives a single mark, so a reader may well place two verticals,
+    // switch to horizontal and place a third without leaving it.
+    const pick = this.pickButton('pick on map', (point) => {
+      add(axis.value === 'horizontal' ? point.rows : point.cols)
     })
 
     return el(
@@ -165,9 +172,9 @@ export class ManualCard {
     })
 
     // One click is a cell, and a cell already has both coordinates — so an
-    // arrowhead needs exactly one click, not two.
-    const pick = this.pickButton('pick on map', 1, (points) => {
-      add(points[0].rows, points[0].cols)
+    // arrowhead is one click, not two.
+    const pick = this.pickButton('pick on map', (point) => {
+      add(point.rows, point.cols)
     })
 
     return el(
@@ -179,23 +186,54 @@ export class ManualCard {
     )
   }
 
+  /**
+   * A button that turns picking on, and then turns it off.
+   *
+   * One button with two labels rather than two controls: while the mode is on,
+   * the only thing the reader can want from this button is to stop, so that is
+   * what it offers. `Done` and Escape are the same act by two roads, which is
+   * why both run {@link end}.
+   *
+   * The mode is *not* ended by placing a mark. Marking up a figure means placing
+   * several — the corners of four domains, every loop worth an arrowhead — and
+   * the round trip to the sidebar between each one was the whole cost of doing
+   * it here rather than by typing coordinates.
+   */
   private pickButton(
     label: string,
-    count: number,
-    done: (points: Array<{ rows: ManualPoint; cols: ManualPoint }>) => void,
+    place: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
   ): HTMLButtonElement {
+    let stop: (() => void) | null = null
+
+    const rest = (): void => {
+      stop = null
+      node.classList.remove('is-armed')
+      node.textContent = label
+      node.title = 'Then click the plot, as often as you like. Escape or Done stops.'
+      // Every pick button on the card comes back at once: only one mode can be
+      // on, so arming the other one has just ended this.
+      this.refresh()
+    }
+
     const node = button(
       label,
       () => {
+        if (stop !== null) {
+          stop()
+          return
+        }
         node.classList.add('is-armed')
-        void this.props.picker.pick(count).then((points) => {
-          node.classList.remove('is-armed')
-          if (points !== null && points.length === count) done(points)
-        })
+        node.textContent = 'Done'
+        node.title = 'Stop placing marks. Escape does the same.'
+        // Set before `start`, so a picker that ends the mode synchronously —
+        // because there is no plot — still finds something to clear.
+        stop = () => {}
+        const end = this.props.picker.start(place, rest)
+        if (stop !== null) stop = end
       },
       {
         class: 'btn',
-        title: 'Then click the plot. Escape gives up without placing anything.',
+        title: 'Then click the plot, as often as you like. Escape or Done stops.',
       },
     )
     node.disabled = !this.props.picker.available()

@@ -43,13 +43,47 @@ export interface LaneGeometry {
   /** The cell under the pointer, for the crosshair. */
   hover: { row: number; col: number } | null
   crosshair: boolean
+  /**
+   * A pointer over one of the lane stacks, in that stack's own canvas pixels
+   * along the shared axis.
+   *
+   * Distinct from {@link hover}, which is a *cell* of the matrix and arrives
+   * only while the pointer is on the map. This is the position being pointed at
+   * from beside it, and it is what the hairline is drawn through.
+   */
+  guide: { edge: LaneEdge; along: number } | null
   palette: { guide: string; halo: string; crosshair: string }
 }
 
-/** What a pointer over a lane resolves to. */
-export interface LaneProbe {
-  title: string
-  lines: string[]
+/**
+ * What the pointer over a lane stack resolves to.
+ *
+ * Every value track on that edge, not only the lane under the pointer: the
+ * question a stack of tracks is there to answer is "what do all of these do
+ * here", and answering it one lane at a time means moving the pointer between
+ * lanes and remembering the numbers.
+ */
+export interface LaneReadout {
+  /** Where this is, phrased as the matrix readout phrases it. */
+  position: string
+  /** One per value track on this edge, nearest the map first. */
+  rows: Array<{
+    label: string
+    colour: string
+    /** The sampled value, already formatted; `—` where the track has no data. */
+    value: string
+    /** `true` for the one lane the pointer is actually inside. */
+    here: boolean
+  }>
+  /**
+   * The feature under the pointer, when it is over a lane that draws them: its
+   * name, then its coordinates, score and attributes.
+   *
+   * A gene model and a peak set have no value at a position — they have a thing
+   * or nothing — so they are not rows above. When the pointer is on one, what it
+   * is worth saying is everything about that one feature.
+   */
+  detail: string[]
 }
 
 /** Gap between two stacked lanes, in CSS pixels. */
@@ -393,7 +427,6 @@ export class AnnotationLanes {
         drawTrack(ctx, frame, profile, {
           colour: entry.style.colour,
           mode: entry.style.mode,
-          scaling: entry.style.scaling,
           limits,
           guideColour: geometry.palette.guide,
           haloColour: geometry.palette.halo,
@@ -425,8 +458,18 @@ export class AnnotationLanes {
       }
       ctx.restore()
 
+      // The map's crosshair, continued into the lane...
       if (geometry.crosshair && geometry.hover !== null) {
-        this.drawCrosshair(ctx, frame, geometry, edge, dpr)
+        const unit = (edge === 'bottom' ? geometry.hover.col : geometry.hover.row) + 0.5
+        hairline(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+      }
+      // ...and the reader's own, from pointing at this stack. Not under the
+      // crosshair preference: that option is about what the *map* draws while
+      // you move over it, and this line is the direct answer to a gesture being
+      // made right now. A pointer over a track with no line under it looks like
+      // a track that does not respond.
+      if (geometry.guide !== null && geometry.guide.edge === edge) {
+        hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }
     }
   }
@@ -461,90 +504,109 @@ export class AnnotationLanes {
     ctx.restore()
   }
 
-  /** The hovered column (or row) continued into the lane. */
-  private drawCrosshair(
-    ctx: CanvasRenderingContext2D,
-    frame: LaneFrame,
-    geometry: LaneGeometry,
-    edge: LaneEdge,
-    dpr: number,
-  ): void {
-    const hover = geometry.hover
-    if (hover === null) return
-    const unit = (edge === 'bottom' ? hover.col : hover.row) + 0.5
-    const along = frame.toPixel(unit)
-    if (along < frame.alongFrom || along > frame.alongTo) return
-    ctx.save()
-    ctx.strokeStyle = geometry.palette.crosshair
-    ctx.lineWidth = Math.max(1 / dpr, 0.75)
-    ctx.globalAlpha = 0.8
-    ctx.beginPath()
-    const snapped = (Math.round(along * dpr - 0.5) + 0.5) / dpr
-    if (edge === 'bottom') {
-      ctx.moveTo(snapped, frame.acrossFrom)
-      ctx.lineTo(snapped, frame.acrossFrom + frame.thickness)
-    } else {
-      ctx.moveTo(frame.acrossFrom, snapped)
-      ctx.lineTo(frame.acrossFrom + frame.thickness, snapped)
-    }
-    ctx.stroke()
-    ctx.restore()
-  }
-
   // -------------------------------------------------------------------------
   // Hover
   // -------------------------------------------------------------------------
 
   /**
-   * What the pointer is over, in canvas coordinates of that edge's canvas.
+   * Every value track on one edge, read at the position the pointer is at.
    *
-   * A feature wins over the track it may be sharing a lane stack with, because
-   * it is the thing with a name; a value track answers with the position and the
-   * number, which is the same pair the matrix tooltip gives.
+   * The coordinates are that edge's own canvas's. Which lane the pointer is
+   * *inside* decides only two things — which row is marked `here`, and whose
+   * feature is described — because the position along the axis is the same
+   * question for every lane in the stack, and reading them all is the whole
+   * point of stacking them.
    */
-  probe(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry): LaneProbe | null {
+  readout(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry): LaneReadout | null {
     const axis = edge === 'bottom' ? this.axes.cols : this.axes.rows
     if (axis === null) return null
-    for (const slot of this.slotsFor(edge)) {
-      const frame = this.frameOf(edge, slot, geometry)
-      const across = (edge === 'bottom' ? y : x) - frame.acrossFrom
-      if (across < 0 || across > frame.thickness) continue
+    const slots = this.slotsFor(edge)
+    if (slots.length === 0) return null
 
+    const along = edge === 'bottom' ? x : y
+    const across = edge === 'bottom' ? y : x
+    const rows: LaneReadout['rows'] = []
+    let detail: string[] = []
+    let onALane = false
+
+    for (const slot of slots) {
+      const frame = this.frameOf(edge, slot, geometry)
+      const offset = across - frame.acrossFrom
+      const here = offset >= 0 && offset <= frame.thickness
+      if (here) onALane = true
+
+      if (slot.entry.kind === 'track') {
+        const cache = this.cache.get(`${slot.entry.id}:${edge}`)
+        const value = cache === undefined ? null : valueAtPixel(cache.samples, axis, frame, along)
+        rows.push({
+          label: slot.entry.label,
+          colour: slot.entry.style.colour,
+          value: value === null ? '—' : fmt.num(value),
+          here,
+        })
+        continue
+      }
+
+      // A feature lane has no value at a position, so it is not a row. When the
+      // pointer is on one, the feature itself is what there is to say.
+      if (!here) continue
       const cached = this.layouts.get(`${slot.entry.id}:${edge}`)
       const set = slot.entry.payload?.kind === 'features' ? slot.entry.payload.data : null
-      if (cached !== undefined && set !== null) {
-        const hit = featureAt(cached.frame, cached.layout, x, y)
-        if (hit !== null) {
-          const at = hit.index
-          const strand = set.strand[at] === 1 ? ' (+)' : set.strand[at] === -1 ? ' (−)' : ''
-          const lines = [
-            `${set.contigs[set.contig[at]]}:${fmt.int(set.start[at])}–${fmt.int(set.end[at])}${strand}`,
-          ]
-          if (Number.isFinite(set.score[at])) lines.push(`score ${fmt.num(set.score[at])}`)
-          if (set.detail[at] !== '') lines.push(set.detail[at])
-          return {
-            title: set.name[at] !== '' ? set.name[at] : slot.entry.label,
-            lines: [slot.entry.label, ...lines],
-          }
-        }
-        // Inside the lane but on no feature: still say which lane it is.
-        return { title: slot.entry.label, lines: [describeAt(axis, frame, edge === 'bottom' ? x : y)] }
-      }
-
-      if (slot.entry.kind !== 'track') continue
-      const along = edge === 'bottom' ? x : y
-      const cache = this.cache.get(`${slot.entry.id}:${edge}`)
-      const value = cache === undefined ? null : valueAtPixel(cache.samples, axis, frame, along)
-      return {
-        title: slot.entry.label,
-        lines: [
-          describeAt(axis, frame, along),
-          value === null ? 'no data' : `value ${fmt.num(value)}`,
-        ],
-      }
+      if (cached === undefined || set === null) continue
+      const hit = featureAt(cached.frame, cached.layout, x, y)
+      if (hit === null) continue
+      const at = hit.index
+      const strand = set.strand[at] === 1 ? ' (+)' : set.strand[at] === -1 ? ' (−)' : ''
+      // The feature's name leads its own block. It is not the lane's name — that
+      // one the pointer already gives away — so it belongs in the readout rather
+      // than in the heading.
+      detail = set.name[at] === '' ? [] : [set.name[at]]
+      detail.push(
+        `${set.contigs[set.contig[at]]}:${fmt.int(set.start[at])}–${fmt.int(set.end[at])}${strand}`,
+      )
+      if (Number.isFinite(set.score[at])) detail.push(`score ${fmt.num(set.score[at])}`)
+      if (set.detail[at] !== '') detail.push(set.detail[at])
     }
-    return null
+
+    if (rows.length === 0 && detail.length === 0 && !onALane) return null
+    return {
+      position: describeAt(axis, this.frameOf(edge, slots[0], geometry), along),
+      rows,
+      detail,
+    }
   }
+}
+
+/**
+ * One hairline across a lane, at a position along its axis.
+ *
+ * Snapped to a device pixel, or a 0.75-wide line lands between two and is drawn
+ * as a two-pixel grey smear — which on a lane 16 pixels tall is a band, not a
+ * mark.
+ */
+function hairline(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  along: number,
+  colour: string,
+  dpr: number,
+): void {
+  if (along < frame.alongFrom || along > frame.alongTo) return
+  ctx.save()
+  ctx.strokeStyle = colour
+  ctx.lineWidth = Math.max(1 / dpr, 0.75)
+  ctx.globalAlpha = 0.8
+  ctx.beginPath()
+  const snapped = (Math.round(along * dpr - 0.5) + 0.5) / dpr
+  if (frame.orientation === 'bottom') {
+    ctx.moveTo(snapped, frame.acrossFrom)
+    ctx.lineTo(snapped, frame.acrossFrom + frame.thickness)
+  } else {
+    ctx.moveTo(frame.acrossFrom, snapped)
+    ctx.lineTo(frame.acrossFrom + frame.thickness, snapped)
+  }
+  ctx.stroke()
+  ctx.restore()
 }
 
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */

@@ -273,6 +273,15 @@ export class MatrixPanel {
   /** The cell under the pointer, so the lanes can continue the crosshair. */
   private hoverCell: Cell | null = null
   /**
+   * Where the pointer is over a lane stack, in that stack's canvas pixels.
+   *
+   * The hairline this drives runs across the lanes *and* the map, which is why
+   * it is held here rather than inside {@link lanes}: the map's half is painted
+   * through the overlay hook, and both halves have to come from one number or
+   * they would meet at a kink.
+   */
+  private laneHover: { edge: LaneEdge; along: number } | null = null
+  /**
    * The two axes as annotations see them, rebuilt with every block.
    *
    * Held here rather than only inside {@link lanes}, because the overlays and
@@ -280,13 +289,12 @@ export class MatrixPanel {
    * mapping is exactly what §8.4 exists to prevent.
    */
   private locusAxes: { rows: LocusAxis | null; cols: LocusAxis | null } = { rows: null, cols: null }
-  /** A point-picking gesture in progress; see {@link armPicking}. */
+  /** A picking mode in progress; see {@link armPicking}. */
   private picking: {
-    /** How many points it is collecting: a line takes one, an arrowhead two. */
-    wants: number
-    got: Array<{ rows: ManualPoint; cols: ManualPoint }>
-    done(points: Array<{ rows: ManualPoint; cols: ManualPoint }>): void
-    cancel(): void
+    /** Called once per click, for as long as the mode is on. */
+    onPoint(point: { rows: ManualPoint; cols: ManualPoint }): void
+    /** Called once when the mode ends, however it ends. */
+    end(): void
   } | null = null
   /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
   private readonly tip: {
@@ -313,8 +321,8 @@ export class MatrixPanel {
   private tipFrame = 0
   /** Teardowns for the lane canvases' own pointer listeners. */
   private readonly laneListeners: Array<() => void> = []
-  /** The bottom stack's thickness the stylesheet was last told about. */
-  private laneBudget = -1
+  /** The stack thicknesses the stylesheet was last told about, per edge. */
+  private laneBudget = { bottom: -1, right: -1 }
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -368,7 +376,7 @@ export class MatrixPanel {
 
     this.heatmap = new HeatmapView(this.canvas, {
       plotOptions: getPlotOptions(),
-      ...readCanvasPalette(),
+      ...readCanvasPalette(this.canvas),
       // Contig labels are drawn only below the Python threshold; above it they
       // would be a grey smear rather than information (`ops/show.py`).
       maxLabels: MAX_CATEGORICAL_TICKS,
@@ -595,7 +603,6 @@ export class MatrixPanel {
       const onEscape = (event: KeyboardEvent): void => {
         if (event.key === 'Escape' && this.picking !== null) {
           event.preventDefault()
-          this.setBusy(false)
           this.cancelPicking()
         }
       }
@@ -639,7 +646,7 @@ export class MatrixPanel {
     // for the theme that was in force when they were read — hence a watcher on
     // both the explicit override and the system preference.
     this.themeWatchers = watchTheme(() => {
-      this.heatmap.setPalette(readCanvasPalette())
+      this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.schedule()
     })
 
@@ -666,8 +673,12 @@ export class MatrixPanel {
           })
     this.observer?.observe(this.grid)
     // The canvas has no size until it is in the document; size it once laid out.
+    // And no *computed palette* either — the three colours it borrows come from
+    // the centre column it is about to be mounted in — so read them again here,
+    // rather than trust the fallbacks the constructor had to use.
     requestAnimationFrame(() => {
       this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+      this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
       this.colorbar.resize()
       this.schedule()
@@ -684,6 +695,12 @@ export class MatrixPanel {
   /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
     setReadout('')
+    // A picking mode outlives nothing: the plot it was placing marks on is going
+    // away. Ended here rather than left to be garbage-collected, because the
+    // card that armed it is *not* going away — it lives in the shell — and it
+    // learns the mode is over from this call. Without it, navigating with the
+    // mode on leaves a button reading "Done" that nothing will ever answer.
+    this.cancelPicking()
     this.unsubscribePlotOptions()
     this.themeWatchers()
     this.narrowWatcher()
@@ -697,6 +714,23 @@ export class MatrixPanel {
     this.lanes?.destroy()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
+  }
+
+  /**
+   * Re-measure everything after the *shell* changed how much room there is.
+   *
+   * Folding or dragging a side panel is the one size change nothing here can
+   * observe: the plot is normally sized by the window's height, so a wider
+   * column resizes no box the `ResizeObserver` is watching — and yet the plot
+   * has to grow into the space and re-centre itself in it. The view's own
+   * resizes still come through the observer; this is for the ones that arrive
+   * from outside it.
+   */
+  remeasure(): void {
+    this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+    this.heatmap.resize()
+    this.colorbar.resize()
+    this.schedule()
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -788,7 +822,7 @@ export class MatrixPanel {
     ctx.drawImage(barCanvas, Math.round((plot.width + rightLanes + gap) * scale), 0)
 
     if (lines.length > 0) {
-      const palette = readCanvasPalette()
+      const palette = readCanvasPalette(this.canvas)
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       ctx.textBaseline = 'alphabetic'
       ctx.textAlign = 'left'
@@ -796,7 +830,7 @@ export class MatrixPanel {
       for (const line of lines) {
         const height = line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE
         ctx.font = line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT
-        ctx.fillStyle = line.strong ? readPageText() : palette.labelColor
+        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
         // Baseline a little above the line's foot, so the two lines read as one
         // block rather than as two evenly spaced rows.
         ctx.fillText(line.text, left, y + height - 4)
@@ -912,7 +946,7 @@ export class MatrixPanel {
   private paintOverlays(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
     const context = this.options.annotations
     if (context === undefined) return
-    const palette = readCanvasPalette()
+    const palette = readCanvasPalette(this.canvas)
 
     for (const entry of context.store.overlays()) {
       if (entry.payload?.kind === 'features') {
@@ -939,39 +973,89 @@ export class MatrixPanel {
       MARK_FONT,
       palette.labelHaloColor,
     )
+    this.paintLaneGuide(ctx, frame)
   }
 
   /**
-   * Collect `wants` points by clicking the map, then hand them back.
+   * The lane hairline, continued across the map.
    *
-   * While armed, a click *places* rather than navigates — which is the only
-   * sensible reading of a click during a "pick a point" gesture, and the reason
-   * this is a mode rather than a modifier. Escape, or arming something else,
-   * abandons it; the returned function does the same, for a card that is being
-   * torn down.
+   * One line, not a crosshair. A pointer on the bottom stack is naming a
+   * *column* and has said nothing about which row, so a horizontal line through
+   * it would be an answer to a question nobody asked — and two lines crossing at
+   * an arbitrary point read as a cell being pointed at, which is exactly what is
+   * not happening.
+   *
+   * The coordinate needs no conversion: the lane canvases share the map
+   * canvas's grid cell on the axis they run along, so a pixel `x` on the bottom
+   * stack is the same `x` here. Clipped to the data rather than the plot, so it
+   * stops where the matrix does instead of running out over empty margin.
+   */
+  private paintLaneGuide(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
+    const guide = this.laneHover
+    if (guide === null) return
+    const { data, dpr } = frame
+    const at = (Math.round(guide.along * dpr - 0.5) + 0.5) / dpr
+    if (guide.edge === 'bottom') {
+      if (at < data.x || at > data.x + data.width) return
+    } else if (at < data.y || at > data.y + data.height) return
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(data.x, data.y, data.width, data.height)
+    ctx.clip()
+    ctx.strokeStyle = CROSSHAIR_COLOR
+    ctx.lineWidth = Math.max(1 / dpr, 0.75)
+    ctx.globalAlpha = 0.8
+    ctx.beginPath()
+    if (guide.edge === 'bottom') {
+      ctx.moveTo(at, data.y)
+      ctx.lineTo(at, data.y + data.height)
+    } else {
+      ctx.moveTo(data.x, at)
+      ctx.lineTo(data.x + data.width, at)
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
+   * Place marks by clicking the map, for as long as the mode is on.
+   *
+   * A **mode**, not a count. It used to collect a fixed number of points and
+   * resolve, which meant one arming per mark: click the button, click the map,
+   * click the button again. Marking up a figure is not one gesture, it is eight
+   * — the corners of four domains, or every loop worth an arrowhead — and the
+   * trip back to the sidebar between each was the whole cost of the feature.
+   * Now the mode stays on and each click reports a point; the card ends it, and
+   * so does Escape.
+   *
+   * While armed, a click *places* rather than navigates — the only sensible
+   * reading of a click during a "pick a point" gesture, and the reason this is a
+   * mode rather than a modifier.
    *
    * Each point is reported on **both** axes, because a click is one cell and a
    * cell has a row coordinate and a column coordinate. A vertical line wants the
    * column, a horizontal one the row, and an arrowhead wants both — so the panel
    * hands over both and lets the card take what it means.
+   *
+   * @returns a function that ends the mode, for a card being torn down.
    */
   armPicking(
-    wants: number,
-    done: (points: Array<{ rows: ManualPoint; cols: ManualPoint }>) => void,
-    cancel: () => void = () => {},
+    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
+    onEnd: () => void = () => {},
   ): () => void {
-    this.picking?.cancel()
-    this.picking = { wants, got: [], done, cancel }
+    this.picking?.end()
+    this.picking = { onPoint, end: onEnd }
     this.canvas.classList.add('picking')
     return () => this.cancelPicking()
   }
 
-  /** Abandon a picking gesture. Safe to call when none is in progress. */
+  /** End a picking mode. Safe to call when none is in progress. */
   cancelPicking(): void {
     const picking = this.picking
     this.picking = null
     this.canvas.classList.remove('picking')
-    picking?.cancel()
+    picking?.end()
   }
 
   /** `true` while a click would place a mark rather than navigate. */
@@ -1005,7 +1089,7 @@ export class MatrixPanel {
    * mapping", stated as one function.
    */
   private laneGeometry(): LaneGeometry {
-    const palette = readCanvasPalette()
+    const palette = readCanvasPalette(this.canvas)
     return {
       plot: this.heatmap.plotRect,
       data: this.heatmap.dataRect,
@@ -1015,6 +1099,7 @@ export class MatrixPanel {
       cssHeight: this.heatmap.cssSize.height,
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       crosshair: getPlotOptions().crosshair,
+      guide: this.laneHover,
       palette: {
         guide: palette.labelColor,
         halo: palette.labelHaloColor,
@@ -1039,28 +1124,140 @@ export class MatrixPanel {
       const box = canvas.getBoundingClientRect()
       const x = event.clientX - box.left
       const y = event.clientY - box.top
-      const probe = lanes.probe(edge, x, y, this.laneGeometry())
-      if (probe === null) {
+
+      // The hairline first, and through a repaint rather than a second canvas:
+      // it crosses the lane stack and the map, and both are redrawn from this
+      // one number on the next frame.
+      const along = edge === 'bottom' ? x : y
+      const before = this.laneHover
+      if (before === null || before.edge !== edge || before.along !== along) {
+        this.laneHover = { edge, along }
+        this.schedule()
+      }
+
+      const readout = lanes.readout(edge, x, y, this.laneGeometry())
+      if (readout === null) {
         this.tooltip.classList.add('hidden')
         return
       }
       this.tip.matrix.classList.add('hidden')
       this.tip.lane.classList.remove('hidden')
-      this.tip.laneTitle.textContent = probe.title
+      // The position, and only the position. Naming the hovered lane here as
+      // well was saying what the pointer already says: the tooltip is beside the
+      // lane it is about, and the row for that lane is marked below.
+      this.tip.laneTitle.textContent = readout.position
       this.tip.laneLines.replaceChildren(
-        ...probe.lines.map((line) => el('div', { class: 'cell-tip-line', text: line })),
+        ...readout.rows.map((row) =>
+          el(
+            'div',
+            { class: row.here ? 'cell-tip-line cell-tip-here' : 'cell-tip-line' },
+            el('span', { class: 'cell-tip-chip', style: { background: row.colour } }),
+            el('span', { class: 'cell-tip-key', text: `${row.label}:` }),
+            el('span', { class: 'cell-tip-val', text: row.value }),
+          ),
+        ),
+        ...readout.detail.map((line) => el('div', { class: 'cell-tip-line', text: line })),
       )
       this.tooltip.classList.remove('hidden')
       this.placeTooltip(canvas.offsetLeft + x, canvas.offsetTop + y)
     }
     const onLeave = (): void => {
       this.tooltip.classList.add('hidden')
+      if (this.laneHover !== null) {
+        this.laneHover = null
+        this.schedule()
+      }
     }
     canvas.addEventListener('mousemove', onMove)
     canvas.addEventListener('mouseleave', onLeave)
     this.laneListeners.push(() => {
       canvas.removeEventListener('mousemove', onMove)
       canvas.removeEventListener('mouseleave', onLeave)
+    })
+    this.driveFromLane(edge, canvas)
+  }
+
+  /**
+   * Let a lane stack pan and zoom the map.
+   *
+   * A lane is a picture of the same window the map shows, drawn through the same
+   * scales — so dragging one and dragging the map are the same gesture on the
+   * same data, and a track you could read but not move was an odd exception a
+   * reader has to discover. Dragging a bottom lane sideways scrolls the columns;
+   * dragging a right lane up and down scrolls the rows.
+   *
+   * Only along the shared axis. A bottom lane says nothing about rows, so a
+   * vertical drag on one has no meaning to forward — and forwarding it anyway
+   * would move the map in a direction the pointer never travelled over anything
+   * that represents it.
+   *
+   * The **zoom is not** restricted that way, because the map's zoom is one
+   * scalar for both axes: a wheel over a lane zooms exactly as a wheel over the
+   * map does, holding the position under the pointer fixed on the shared axis
+   * and the middle of the data on the other. Anchoring the other axis anywhere
+   * else would be inventing a row the reader never pointed at.
+   */
+  private driveFromLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+    /** The perpendicular anchor: the centre of the data actually on screen. */
+    const middle = (): { x: number; y: number } => {
+      const data = this.heatmap.dataRect
+      return { x: data.x + data.width / 2, y: data.y + data.height / 2 }
+    }
+
+    let panning = false
+    let last = 0
+
+    const onDown = (event: MouseEvent): void => {
+      // Left button only, and never while a mark is being placed: a click on the
+      // map means "place" then, and a drag beside it must not mean "pan".
+      if (event.button !== 0 || this.picking !== null) return
+      panning = true
+      last = edge === 'bottom' ? event.clientX : event.clientY
+      canvas.classList.add('grabbing')
+      event.preventDefault()
+    }
+    const onMoveWindow = (event: MouseEvent): void => {
+      if (!panning) return
+      const now = edge === 'bottom' ? event.clientX : event.clientY
+      const delta = now - last
+      last = now
+      if (delta === 0) return
+      // `panBy` takes a *canvas* displacement, which is what this is: the lane
+      // and the map share their pixels on this axis by construction (§8.4).
+      if (edge === 'bottom') this.heatmap.panBy(delta, 0)
+      else this.heatmap.panBy(0, delta)
+    }
+    const onUpWindow = (): void => {
+      if (!panning) return
+      panning = false
+      canvas.classList.remove('grabbing')
+    }
+    const onWheel = (event: WheelEvent): void => {
+      // The same two rules the map's own wheel handler follows: a sideways
+      // two-finger scroll is the browser's back gesture and is left alone, and
+      // the factor is exponential in the delta so a trackpad's many small events
+      // and a wheel's few large ones compose to the same total zoom.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+      event.preventDefault()
+      const box = canvas.getBoundingClientRect()
+      const at = middle()
+      if (edge === 'bottom') at.x = event.clientX - box.left
+      else at.y = event.clientY - box.top
+      this.heatmap.zoomAt(at.x, at.y, Math.exp(-event.deltaY * 0.002))
+    }
+
+    canvas.addEventListener('mousedown', onDown)
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    // On the window, not the canvas: a pan that leaves the four-pixel-tall lane
+    // it started in — which every pan does — would otherwise stop dead there and
+    // never hear the button come back up.
+    window.addEventListener('mousemove', onMoveWindow)
+    window.addEventListener('mouseup', onUpWindow)
+    this.laneListeners.push(() => {
+      canvas.removeEventListener('mousedown', onDown)
+      canvas.removeEventListener('wheel', onWheel)
+      window.removeEventListener('mousemove', onMoveWindow)
+      window.removeEventListener('mouseup', onUpWindow)
     })
   }
 
@@ -1194,17 +1391,25 @@ export class MatrixPanel {
   }
 
   /**
-   * Tell the stylesheet how much vertical budget the bottom lanes take.
+   * Tell the stylesheet how much vertical budget the bottom lanes take, and
+   * re-measure whenever either stack changes thickness.
    *
    * The plot's size is `100vh` minus its furniture, and a stack of tracks under
-   * it is furniture: without this, six tracks push the map off the bottom of the
-   * window. Written only when it changes, because assigning a custom property
+   * it is furniture: without the property, six tracks push the map off the
+   * bottom of the window. The *right* stack needs no property — the grid's own
+   * `max-width` takes it out of the plot's width, since a percentage written
+   * here would resolve against the plot's own track and chase its own tail — but
+   * it still has to be watched, because a lane appearing beside the map resizes
+   * the map just as surely as one appearing under it.
+   *
+   * Written only when a thickness changes, because assigning a custom property
    * invalidates layout and this runs on every frame of a drag.
    */
   private syncLaneMetrics(): void {
     const bottom = this.lanes?.thicknessOf('bottom') ?? 0
-    if (bottom === this.laneBudget) return
-    this.laneBudget = bottom
+    const right = this.lanes?.thicknessOf('right') ?? 0
+    if (bottom === this.laneBudget.bottom && right === this.laneBudget.right) return
+    this.laneBudget = { bottom, right }
     this.grid.style.setProperty('--lane-bottom', `${bottom}px`)
     // Re-measure *now*, in the same frame, rather than waiting for the resize
     // observer. The observer watches the grid, and the grid's width is the wider
@@ -1218,21 +1423,14 @@ export class MatrixPanel {
 
   private emitClick(cell: Cell): void {
     if (this.data === null) return
-    // A picking gesture owns the click outright. Navigating *and* placing would
-    // put the mark on a view the reader can no longer see.
+    // A picking mode owns the click outright. Navigating *and* placing would put
+    // the mark on a view the reader can no longer see. The mode stays on after
+    // the mark is placed: it ends when the card or Escape says so, not when a
+    // click lands.
     const picking = this.picking
     if (picking !== null) {
       const point = this.locusOf(cell)
-      if (point === null) return
-      picking.got.push(point)
-      if (picking.got.length < picking.wants) {
-        this.setBusy(true, `click ${picking.wants - picking.got.length} more…`)
-        return
-      }
-      this.picking = null
-      this.canvas.classList.remove('picking')
-      this.setBusy(false)
-      picking.done(picking.got)
+      if (point !== null) picking.onPoint(point)
       return
     }
     this.options.onCellClick?.(cell, {
@@ -1577,13 +1775,22 @@ function positionIn(
  * Only three: the labels, their halo, and the plot frame. The separator and
  * crosshair colours are `ops/show.py`'s and stay fixed, so a screenshot from
  * the browser and a figure from the CLI remain the same image.
+ *
+ * Read off `from` — a node inside the centre column — and *not* off the document
+ * element. The centre column re-declares the light palette regardless of theme
+ * (see `.content` in the stylesheet), because a contact map is a figure and its
+ * colormaps are built for ink on white. Reading from the root instead gave a
+ * dark-theme plot a black label halo on a white matrix, and exported it that
+ * way. The fallbacks are the light values for the same reason: a canvas asked
+ * before it is in the document has no computed custom properties, and the right
+ * answer for it is the palette it is going to be mounted into.
  */
-function readCanvasPalette(): {
+function readCanvasPalette(from: Element): {
   labelColor: string
   labelHaloColor: string
   plotBorderColor: string
 } {
-  const style = getComputedStyle(document.documentElement)
+  const style = getComputedStyle(from)
   const pick = (name: string, fallback: string): string => {
     const value = style.getPropertyValue(name).trim()
     return value === '' ? fallback : value
@@ -1595,9 +1802,15 @@ function readCanvasPalette(): {
   }
 }
 
-/** Body text in the theme in force, for the exported caption's first line. */
-function readPageText(): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()
+/**
+ * Body text for the exported caption's first line.
+ *
+ * From the plot's own box, not the page's: the caption is drawn onto the figure,
+ * which is light, so page text in a dark theme would have written it in pale
+ * grey on white.
+ */
+function readPageText(from: Element): string {
+  const value = getComputedStyle(from).getPropertyValue('--text').trim()
   return value === '' ? '#16181d' : value
 }
 
