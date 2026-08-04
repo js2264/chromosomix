@@ -333,19 +333,22 @@ p {
    the DOM order here is free to be the tab order: content first.
 
    The width is inline too, because it is draggable and remembered. `flex: 0 0
-   auto` is what keeps the flex row from renegotiating it afterwards. */
+   auto` is what keeps the flex row from renegotiating it afterwards.
+
+   The column is the *frame*, not the scroll port: its body scrolls inside it
+   (below). That division is what makes the drag handle reachable — it is
+   positioned against this box, and a box that scrolls carries its absolutely
+   positioned children up with the cards, which is where the handle used to go.
+   The heading staying put while the cards move under it is the same fact seen
+   from the front. */
 .panel-column {
   flex: 0 0 auto;
   background: var(--bg-sunken);
-  overflow: auto;
+  overflow: hidden;
   padding: 0.75rem 0.9rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  /* The handle is absolutely positioned against this. `position: relative` on a
-     scroll container pins the handle to the *content* box, so it would scroll
-     away with the cards; `sticky` on the handle itself is what keeps it on the
-     edge, and that needs the column to be the scroll port it sticks in. */
   position: relative;
 }
 
@@ -376,11 +379,16 @@ p {
   flex: 0 0 auto;
 }
 
-/* Everything under the heading. `1 0 auto` rather than `1 1 auto`: the content
-   may be taller than the column, and it must be allowed to overflow it — the
-   column scrolls — rather than be squeezed to fit. */
+/* Everything under the heading, and the box that scrolls. `min-height: 0` is
+   what lets it be shorter than its contents at all — without it a flex item
+   refuses to shrink below them and the overflow lands on the column instead,
+   taking the drag handle out of reach with it. Content taller than the column
+   scrolls here; a sidebar built as a `.side` fills this box exactly and scrolls
+   inside its own last card, which is why it must be allowed to shrink. */
 .panel-column-body {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -389,9 +397,7 @@ p {
 
 /* A card narrower than its own contents scrolls sideways inside the column,
    instead of spilling over the column's edge or forcing it wider than the
-   reader dragged it. Only the axis that can overflow: `overflow: auto` on both
-   would give a card a vertical scrollbar the moment its own content grew, and
-   the column is what should scroll vertically. */
+   reader dragged it. */
 .panel-column .card,
 .panel-column .qc,
 .panel-column .meta,
@@ -399,19 +405,45 @@ p {
   overflow-x: auto;
 }
 
-/* The drag handle: the column's inner edge, four pixels of it.
+/* …and never *downwards*. Only one axis was asked for above, but a box with
+   `overflow-x: auto` and `overflow-y: visible` is not a thing CSS has: the
+   visible half computes to `auto`, so every card became a scroll container in
+   both directions. A flex item shrinks by default, so as soon as the cards were
+   taller than the column each one was squeezed and scrolled *inside itself* —
+   twelve little scrollbars where the reader wanted one.
+   `flex: 0 0 auto` is the whole fix: a card keeps its content height, the
+   column's body is therefore taller than its box, and the body scrolls.
 
-   Sticky rather than absolute so it stays on the edge as the column scrolls, and
-   `align-self` is what puts it on the correct side without a second rule per
-   panel. It is pulled out of the flex flow by a negative margin so it costs the
-   column no height — it is an edge, not a row. */
-.panel-column-handle {
-  position: sticky;
-  top: 0;
-  height: 100%;
-  width: 5px;
+   `.side` is the deliberate exception and says so in its own rule: a view's
+   sidebar fills the column so that its last card — a contig list — can take the
+   height the cards above it leave and scroll there. */
+.panel-column-body > .card,
+.panel-column-body > .qc,
+.panel-column-body > .meta,
+.panel-column-body > .meta-empty {
   flex: 0 0 auto;
-  margin-block: 0 -100%;
+}
+
+/* The drag handle: the column's inner edge, six pixels of it.
+
+   Absolute against the column, which is why the column does not scroll. It was
+   a sticky flex item, which cost it the whole gesture: a flex item is laid out
+   *after* the body, so a full-height strip at the end of a column that is
+   already full begins below the fold — and `sticky` never pulls an element above
+   its own flow position, it only holds one that scrolling would carry off. The
+   `margin-block: 0 -100%` meant to cancel its height could not: a percentage
+   margin resolves against the containing block's *width*, whatever axis it is
+   on. So the handle was real, painted, and permanently out of view.
+
+   Out of flow it costs the column no height by construction, and `inset` puts it
+   on the correct edge with one declaration per side. Above the cards, because a
+   card is opaque and the strip is only six pixels wide. */
+.panel-column-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 2;
   cursor: col-resize;
   touch-action: none;
   background: transparent;
@@ -419,13 +451,11 @@ p {
 }
 
 .panel-column-left > .panel-column-handle {
-  align-self: flex-end;
-  margin-right: -0.9rem;
+  right: 0;
 }
 
 .panel-column-right > .panel-column-handle {
-  align-self: flex-start;
-  margin-left: -0.9rem;
+  left: 0;
 }
 
 .panel-column-handle:hover,
@@ -2103,10 +2133,23 @@ p {
   margin-top: 0;
 }
 
+/* A value is never elided and never wrapped: the card scrolls sideways instead.
+   A URI cut off at `Hum66.met…` and a genome name broken into three lines are
+   the same failure — the panel is where you go to *read* the identity of what is
+   on screen, and a name you cannot read whole is not an identity. The value
+   track is sized to its content (`max-content`, which `1fr` may grow but never
+   shrink below), so the grid is as wide as it needs to be and `.panel-column
+   .card`'s `overflow-x` does the rest. The `title` on every value stays, for the
+   reader who would rather hover than scroll. */
+/* The key column takes what its longest key needs and no more. It was a fixed
+   9rem, set when the values were elided and had to start at a predictable
+   place; now that they run to their full width there is nothing to line up
+   with, and the fixed column was leaving a hand's width of white between
+   `bins` and its number. */
 .kv {
   display: grid;
-  grid-template-columns: 9rem minmax(0, 1fr);
-  gap: 0.1rem 0.5rem;
+  grid-template-columns: max-content minmax(max-content, 1fr);
+  gap: 0.1rem 0.9rem;
   font-size: var(--step--1);
 }
 
@@ -2116,8 +2159,6 @@ p {
 
 .kv .v {
   font-family: var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -2168,32 +2209,26 @@ p {
   font-family: var(--mono);
   font-size: var(--step--1);
   margin: 0 0 0.4rem;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 /* The File block's key column is a fixed 9rem because its keys are ours. These
    are the file's: `n_bins` on one table, `Overlapping_bin_contigs` on the next.
-   So the column takes the width its longest key needs, and stops taking it once
-   the values would be squeezed below legibility. */
+   So the column takes the width its longest key needs — all of it, since a
+   binner's column names are the thing this card exists to show and the card
+   scrolls rather than squeezing them. */
 .kv-record {
-  grid-template-columns: minmax(0, max-content) minmax(4.5rem, 1fr);
+  grid-template-columns: max-content minmax(max-content, 1fr);
   column-gap: 0.6rem;
   row-gap: 0.2rem;
 }
 
-/* A column name is one token and reads badly broken across lines; the full text
-   is on hover. A value is prose or a number and wraps — this card is read, not
-   scanned, and the sidebar scrolls. */
+/* The key does not wrap either — a column name is one token and reads badly
+   broken across lines. The value already has this from `.kv`, and here it is
+   what matters most: `MetaTOR_MAG_0087` split over three lines is not shorter,
+   only harder to read. Both extend past the card, and the card scrolls. */
 .kv-record .k {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.kv-record .v {
-  white-space: normal;
-  overflow: visible;
-  overflow-wrap: anywhere;
 }
 
 .info-top {
