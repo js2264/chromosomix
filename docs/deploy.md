@@ -201,7 +201,7 @@ uploading them, that claim becomes something a user can *check*: load the page, 
 file on it.
 
 **What is cached is the app, never the data.** The precache is the built JS and CSS, the shell, the
-manifest and the two icons — about 5 MB, most of it the HDF5 build that makes opening a file
+manifest and the three icons — about 5 MB, most of it the HDF5 build that makes opening a file
 possible offline at all. The demo datasets and track resources under `public/demo/` are 250 MB and are *not* cached, and
 neither is anything the viewer opens: `fetch` in the worker answers only for URLs in that list, by
 exact match, and every other request reaches the network untouched. That is not a nicety — a remote

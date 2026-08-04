@@ -60,6 +60,17 @@ describe('indexHtmlProblems', () => {
     expect(indexHtmlProblems(html)).toEqual([expect.stringContaining('web manifest')])
   })
 
+  it('catches a surviving apple-touch-icon link', () => {
+    // Not a rule of its own: the touch icon is a real file in `public/`, which
+    // `publicDir: false` never copies, so it is caught as what it is — a
+    // root-absolute reference with nothing behind it.
+    const html = GOOD_HTML.replace(
+      '<meta charset="utf-8" />',
+      '<meta charset="utf-8" />\n    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+    )
+    expect(indexHtmlProblems(html)).toEqual([expect.stringContaining('/apple-touch-icon.png')])
+  })
+
   it('does not mistake the data-URI favicon for a root reference', () => {
     // `href="data:image/svg+xml,…"` contains slashes and lives in every build;
     // a rule matching on "starts with a slash somewhere" flags it forever.

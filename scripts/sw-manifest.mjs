@@ -25,15 +25,24 @@
 /**
  * Files from `public/` that are part of the app rather than data it opens.
  *
- * Named one by one, because `public/` is where both live: these three and 250 MB
+ * Named one by one, because `public/` is where both live: these four and 250 MB
  * of demo datasets and track resources sit in the same directory, and a rule
  * clever enough to tell them apart by pattern is a rule that will one day sweep
- * in a file nobody meant. Three names in a list cannot.
+ * in a file nobody meant. Four names in a list cannot.
  *
  * The manifest earns its place: without it an installed window cannot read its
- * own name and icon offline, which is the one moment it matters.
+ * own name and icon offline, which is the one moment it matters. The icons are
+ * here for the same reason and are cheap — the three together are ~40 KB against
+ * a ~5 MB precache — and `apple-touch-icon.png` is the one iOS reads when the
+ * user adds the page to the home screen, which is a moment that may well be the
+ * first time the app is asked to work without a network.
  */
-export const SHELL_PUBLIC_FILES = ['manifest.webmanifest', 'icon-192.png', 'icon-512.png']
+export const SHELL_PUBLIC_FILES = [
+  'manifest.webmanifest',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+]
 
 /** Extensions the app is *made of*, as opposed to ones it reads. */
 const SHELL_EXTENSIONS = ['.js', '.css', '.html', '.woff2']

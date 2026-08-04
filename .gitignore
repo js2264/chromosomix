@@ -9,6 +9,13 @@ release/
 *.asar
 *.log
 .DS_Store
+__pycache__/
+
+# The icon size ladder `npm run icons:app` draws alongside the five icons the
+# app actually installs. Those five are committed (see the script's docstring);
+# this is the by-hand overflow — both variants at every size — and nothing in
+# the build reads it.
+out/
 
 # Fixtures and goldens are generated (`npm run fixtures`); the large real-world
 # datasets in data/ are never committed.

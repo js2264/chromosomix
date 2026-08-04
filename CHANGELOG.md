@@ -10,6 +10,50 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **A real app icon, dark, everywhere an icon appears.** The mark is the thing
+  the viewer draws — a block-diagonal contact map, three genomes on the
+  diagonal and two long-range contacts off it — on a macOS-style plate. It
+  replaces the flat blue square with two white blocks, and it is now one
+  drawing rather than two: `scripts/make-app-icons.py` renders the browser tab
+  favicon, the install prompt's 192 and 512, a new `apple-touch-icon.png` for
+  the iOS home screen, and the 1024 square electron-builder derives every
+  macOS, Windows and Linux icon from. The favicon is written into `index.html`
+  by the same script, from the same constants, so the tab icon and the dock
+  icon cannot drift apart the way the two hand-kept drawings could.
+
+  The dark variant is the one that ships at every size. The light one is still
+  drawn, into an ignored `out/`, so the mark exists in both values — but
+  nothing in the build reads it.
+
+  The plate's edge is now a ring band — the difference of two squircles, filled
+  with a vertical gradient — rather than a stroked outline clipped back to the
+  silhouette. The old way drew the border at full strength and then threw most
+  of it away in the compositing, against a mask whose own edge is antialiased,
+  which is why the light plate had a border only in the sense that something
+  was there. Each variant now names a `rim` and a `bevel`: the light plate gets
+  a warm dark hairline with a white highlight inside it, the dark plate the
+  white hairline it already had, crisper.
+
+- **The Linux window carries the icon too.** electron-builder installs the
+  launcher entry and the hicolor ladder, but the window itself is drawn from
+  what the process declares, so the taskbar and the alt-tab switcher showed the
+  default Electron icon. `build/icon.png` now ships beside the asar as an extra
+  resource and `BrowserWindow` names it. No change on macOS or Windows, where
+  the bundle and the `.exe` already answer that question.
+
+### Removed
+
+- `scripts/make-app-icons.mjs`, superseded by `scripts/make-app-icons.py`. It
+  wrote the same three files, so leaving it would have meant one `npm run
+  icons:app` away from silently reinstating the old mark. `icons:app` now runs
+  the Python script and takes `METACOOLER_PYTHON` the way `fixtures` does; it
+  needs `pillow` and `numpy`, and the icons it draws stay committed, so no
+  clone and no CI runner has to have either.
+
 ## [0.4.0] - 2026-08-04
 
 ### Added

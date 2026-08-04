@@ -115,5 +115,6 @@ describe('precacheUrls', () => {
     expect(urls).toContain('/metacooler.js/manifest.webmanifest')
     expect(urls).toContain('/metacooler.js/icon-192.png')
     expect(urls).toContain('/metacooler.js/icon-512.png')
+    expect(urls).toContain('/metacooler.js/apple-touch-icon.png')
   })
 })

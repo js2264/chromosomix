@@ -34,6 +34,30 @@ import { APP_INDEX, APP_ORIGIN, APP_SCHEME, CSP, contentType, resolveInside } fr
 const RENDERER_ROOT = join(__dirname, '..', 'renderer')
 
 /**
+ * The window icon, which is a Linux-only concern and not a cosmetic one.
+ *
+ * macOS takes the icon from the bundle and Windows from the `.exe`; on both,
+ * passing one here changes nothing. Linux is the exception: electron-builder
+ * installs a hicolor ladder and a `.desktop` entry, and the *window* is still
+ * drawn by the compositor from whatever the process itself declares — so
+ * without this the app appears correctly in the launcher and generically in the
+ * taskbar and the alt-tab switcher, which are where a user actually looks.
+ *
+ * Two paths because the file lives in two places. Packaged, it is an
+ * `extraResources` entry beside the asar rather than inside it: `BrowserWindow`
+ * hands the path to the platform, which is not going to read an archive.
+ * Unpackaged, `__dirname` is `dist-electron/main`, so this reaches the
+ * committed `build/icon.png` that electron-builder derives everything else
+ * from — one drawing, both cases.
+ *
+ * A missing file is a warning on stderr and the default icon, not a crash, so
+ * this cannot be the reason a launch fails.
+ */
+const WINDOW_ICON = app.isPackaged
+  ? join(process.resourcesPath, 'icon.png')
+  : join(__dirname, '..', '..', 'build', 'icon.png')
+
+/**
  * Register the scheme before anything else can ask about it.
  *
  * This must run at module top level: `registerSchemesAsPrivileged` is only read
@@ -210,6 +234,9 @@ function createWindow(): void {
     show: false,
     backgroundColor: '#ffffff',
     title: '(meta)cooler',
+    // Linux only; see WINDOW_ICON. `undefined` is what the option means by
+    // "leave it to the platform", which is the right answer on the other two.
+    icon: process.platform === 'linux' ? WINDOW_ICON : undefined,
     webPreferences: {
       // Two members wide, and CommonJS because a sandboxed preload cannot be
       // ESM. A window whose preload fails to load still works: `src/desktop.ts`

@@ -65,6 +65,17 @@ module.exports = {
   ],
 
   /**
+   * The icon again, this time as a file the running app can hand to the OS.
+   *
+   * `icon:` below is a *build* input — electron-builder reads it, converts it,
+   * and the original is not in the package afterwards. `main.cts` needs the
+   * path at runtime for the Linux window icon, and beside the asar rather than
+   * inside it, because the compositor is given a path and will not read an
+   * archive. 60 KB, on an installer measured in tens of megabytes.
+   */
+  extraResources: [{ from: 'build/icon.png', to: 'icon.png' }],
+
+  /**
    * Flags compiled into the Electron binary itself, which a packaged app cannot
    * talk its way out of the way it can talk its way past a JavaScript check.
    *
