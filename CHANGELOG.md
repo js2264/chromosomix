@@ -10,6 +10,131 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Tabs, and a real session behind each one.** Several files open at once, each
+  with its own reader worker, its own annotation worker, its own stores and its
+  own DOM. Switching a tab in re-parents that DOM rather than rebuilding it, so
+  a map comes back with its pixels, its zoom and its scroll exactly as they
+  were and without a single byte re-read — which is what a tab has to be for it
+  to be worth having over a second browser window.
+
+  The address bar names **the active tab and nothing else**, which is what was
+  asked for and also the only coherent answer: a hash is one view state, and
+  writing several would make every link a description of somebody else's
+  workspace and make the back button walk a history that interleaves three
+  files. The rest of the strip lives in `sessionStorage` beside the annotations
+  (§8.6), and a restored tab is *named* rather than opened — the label and the
+  view state come back, the worker does not, and clicking is what reads the
+  file. Eight remembered tabs therefore cost eight labels. One that named a
+  local file comes back to the picker with the explanation a pasted local-file
+  link has always given, because no browser re-reads a dropped file without a
+  gesture.
+
+  Two tabs on one file now share nothing: the per-session memory is keyed on the
+  session as well as the URI, so the second view starts with no tracks, no
+  filters and no marks rather than adopting the first one's.
+
+- **A second cooler in the lower-left triangle.** A contact matrix is symmetric,
+  so half of every square on screen is a mirror of the other half and carries no
+  information at all. That is the room this uses: the second file fills it, the
+  picture stops being symmetric, and a broken symmetry is read far faster than
+  two maps side by side.
+
+  The split is the **matrix** diagonal, not the viewport's, which is what makes
+  panning off the diagonal need no rule of its own — the far corner of a trans
+  block is entirely above the line and shows the first file alone, and its
+  transpose shows the second. Zoom, selection and every other gesture are
+  untouched, because the merge happens once per read and hands the renderer an
+  ordinary block.
+
+  Dropped on a card in the Annotations column, where everything else that is
+  laid over a map already lives. Refused *by name*: a metacool (§8.5's argument,
+  applied to a whole matrix), a different bin size (one grid cannot be two
+  resolutions), or a chromosome list differing in count, order, spelling or
+  length (every coordinate is an index into one such list). An `.mcool` dropped
+  at its root opens its finest resolution, as it does on the picker.
+
+  GENERAL becomes File 1 and File 2, each with the mark of its own triangle and
+  a close button: closing the second returns to one map, closing the first
+  promotes the second, so either is reversible and what remains is an ordinary
+  one-file map. `uri2` is in the hash, so a comparison is a link.
+
+  One scale by default, because the same colour meaning the same count is the
+  stronger claim. **Match depth** scales the second file so its 99th percentile
+  meets the first's — the same order statistic §7.1 picks `vmax` with — for the
+  case that motivates it: two libraries of different depth, where the shallower
+  is otherwise a pale triangle telling you only that it was sequenced less. Two
+  colourbars then read the same colours in each file's own counts, and the
+  tooltip and the status line carry both numbers at every cell.
+
+- **A genome browser that needs no contact map.** Until now a bigWig could only
+  be looked at beside a cooler of the same assembly, and that was never a
+  property of the tracks — it was a property of the coordinate model, which
+  started from a matrix and had no way to describe a genome that was not one.
+
+  So there is a second starting point. A `chrom.sizes`, a bigWig, a bigBed or a
+  feature file declares the assembly — outright in the first three cases, and as
+  a lower bound in the fourth, which is marked as inferred wherever the genome
+  is described — and the axis becomes the whole genome laid end to end at one
+  unit per base pair. Everything drawn on it is drawn by the code that draws the
+  lanes beside a heatmap, through the same `LocusAxis` §8.4 already made the
+  only one: a track cannot be at two positions because only one thing knows
+  where a base pair is.
+
+  The gestures are the map's, deliberately. A drag pans, Option-drag selects a
+  range to zoom into, the wheel zooms about the pointer, a double click fits, a
+  lane's border resizes it and its body reorders the stack — every one of them
+  the gesture that already meant that. The one that is the browser's own is
+  ⌘-scroll over a lane, which moves *that* track's ceiling from whatever it is
+  currently resolved to; it is the adjustment a genome browser is asked for
+  constantly and a map has no analogue for it.
+
+  With it: a locus box that accepts `chrI:1,000-20,000`, a bare sequence name or
+  `*`, and shows back exactly what it would accept; a feature search over every
+  loaded gene model and peak set; click a gene to zoom to it and a sequence name
+  to go there; a ruler that draws sequence bands zoomed out and base pairs
+  zoomed in, because at those two extremes they are different questions; arcs
+  for a BEDPE, which is what a loop call looks like in one dimension; range and
+  group editors on each lane, revealed by pointing at it; autoscale groups that
+  stack or share a single lane; and PDF/PNG export redrawn at the export scale.
+
+  The two shapes of browser are one session. Drop a `.cool` anywhere on the
+  tracks and the tab becomes its map, tracks and all; close the map from the
+  File card and it falls back to a browser on the cooler's own `/chroms`, with
+  the same tracks still loaded. A file whose name says nothing is opened as a
+  map and, if that fails, identified by its bytes and re-routed rather than
+  reported as broken.
+
+- **bigBed is read.** Whole, and parsed as the BED it holds, so a bigBed12 draws
+  its exons exactly as the text file would — one parser, one set of rules, one
+  place where BED's quirks live. Not windowed, because a `FeatureSet` lives on
+  the main thread precisely so that a pan redraws with no round trip (§8.4). A
+  file past a million intervals is cut off and says so.
+
+### Changed
+
+- The app was one object holding a worker, a store, a file and a view, and it
+  bound itself to the address bar in its constructor. It is now `app/Session.ts`
+  — a file and the views of it — and `app/App.ts` — the window around them —
+  with `main.ts` as three lines of bootstrap. `ViewStore` stops owning the hash,
+  because there is one address bar and there may be six stores.
+
+- The sample cache that keeps pan and zoom free of I/O moved out of
+  `AnnotationLanes` into `annotations/samples.ts`. Two widgets need that rule now
+  and its arithmetic — the padded window, the power-of-two bucket, keeping the
+  old data on screen until the new data lands — is fiddly enough that two copies
+  would drift.
+
+### Fixed
+
+- The icon generator dropped every SVG attribute whose name contained a digit,
+  so every `<line>` was emitted with no coordinates and drew nothing. It had
+  been latent because no icon used one; the magnifiers added here came out as
+  bare circles.
+
 ## [0.5.1] - 2026-08-04
 
 ### Fixed

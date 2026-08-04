@@ -43,15 +43,16 @@
 - [x] Hand-drawn lines are continued into the lanes: verticals under the map, horizontals beside it, each on the axis it names. Loop anchors are small triangles on the outer edge of each stack, pointing back at the map.
 - [x] A 20 px margin over the landing masthead.
 
+- [x] A tabbed interface, with multiple concurrent sessions. Each tab is a real session — its own reader worker, its own annotation worker, its own stores, its own DOM — so switching one in re-parents a canvas rather than re-reading a file. The address bar names the active tab and nothing else; the rest of the strip is in `sessionStorage`, and a restored tab is *named* rather than opened, so eight remembered files cost eight labels rather than eight workers.
+
+- [x] A second cooler in the lower-left triangle, dropped on a card in the Annotations column. The split is the *matrix* diagonal, so panning off it needs no rule of its own. GENERAL becomes File 1 and File 2, each closeable — closing the second returns to one map, closing the first promotes the second. Refused by name on a metacool, a different bin size, or a chromosome list that differs in count, order, spelling or length. One scale by default; "match depth" for two libraries of different depth, with a colourbar in each file's own counts.
+
+- [x] A 1D genome browser with no contact map: a chrom.sizes, a bigWig, a bigBed or a feature file declares the assembly, and the axis becomes the whole genome end to end at one unit per base pair. Same tracks, same cards, same renderers — §8.4's one coordinate model is what made it possible. Locus box, feature search, click-to-zoom on a gene, ruler and readout, arcs for a BEDPE, inline range and group editing, stacked and overlay group presets, ⌘-scroll for a track's ceiling, export. Drop a `.cool` on it to become its map; close a map to fall back to one.
+
 ## FOR NOW
 
 
 
-## FOR LATER
+## FOR LATER
 
-- [ ] A tabbed interface, with multiple concurrent sessions, should exist. Each session should have its own file, tracks, annotations, and settings. The user should be able to switch between sessions by clicking on the tabs.
-
-- [ ] A way to load another file (cooler or metacool) in the Annotation panel to "compare" with the current file. It should update the GENERAL cards to File 1 and File 2. It should use the second file only for File info and for pixels in the bottom left triangle of the heatmap (still square, but not symmetric). The second heatmap essentially replaces pixels in the bottom left triangle of the heatmap. Panning off-diagonal or zooming/selecting anywhere is still possible. 
-
-- [ ] It should be possible to browse tracks WITHOUT LOADING A COOL/METACOOL file. It could be done by loading a bigwig track first, in the file drop area. This would start a plain 1D, horizontal genome browser, with all the features we discussed and have implemented for the annotation tracks, but as a real genome. And other niceties common in genome browsers if any. Think about how this could be implemented. 
 

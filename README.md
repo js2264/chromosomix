@@ -7,6 +7,11 @@ Drop a file on the page and you get a sortable table of every MAG in it, the int
 map of any one of them, and — the part no other browser does — the rectangular off-diagonal block
 between *two* MAGs, which is where phage–host, plasmid–host and HGT signal lives.
 
+Several files at once, as tabs. Two coolers in one square, split on the diagonal, when the question
+is how they differ. And a plain 1D genome browser for when there is no contact map at all — a
+`chrom.sizes` or a bigWig is enough to start one, and dropping a `.cool` on it turns the same tab
+into its map.
+
 There is no server. There is no upload. There is no preprocessing step. A file straight out of
 `metacooler create` opens and works.
 
@@ -97,12 +102,16 @@ src/
   sources/       ByteSource implementations: LocalFileSource, RemoteRangeSource
   h5/            the only code that imports h5wasm or touches raw HDF5 bytes
   metacooler/    the reader: detect, MetaCooler, coords, range, matrix, aggregate
+  genome/        an assembly with no matrix behind it, and its one axis
   worker/        message protocol; the worker owns all I/O
-  render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar
+  render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar, the
+                 diagonal blend for two files, the 1D browser's ruler and arcs
   state/         ViewState and its URL-hash serialisation
-  ui/            file picker, genomes/contigs tables, genome/pair/region views, errors
+  ui/            file picker, genomes/contigs tables, genome/pair/region views,
+                 the 1D browser, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
-  main.ts        the app shell
+  app/           App (the window, the tabs, the address bar) and Session (one file)
+  main.ts        three lines of bootstrap
 scripts/
   make_fixtures.py  make_golden.py  gen_luts.py
 test/
@@ -143,6 +152,7 @@ not the plan.
 | M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12 and BEDPE in a worker of their own; `src/render/` draws them as lanes on either edge of the map and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
+| — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed or a feature file (§5.8) |
 
 Other gaps worth naming rather than discovering:
 
@@ -194,11 +204,17 @@ is one read-only QC statistic in the file info panel — *"unassigned: 67,058 co
 bins"* — because that fraction is a direct diagnostic of binning quality that a metagenomics reader
 will look for. It is a number, not a view: it opens nothing and selects nothing.
 
-**Annotations are for cool and mcool only.** Gene models, tracks, peak sets, loop calls and
-hand-drawn marks are offered on a cooler and are *absent* — not disabled — on a `.metacool`. A
-metagenome's axis is contigs from thousands of independently assembled organisms, so a file keyed on
-contig names either coincides with it or misleads, and a gene model drawn across a MAG boundary would
-assert a coordinate system that does not exist. See SPECS §8.5.
+**Annotations are for one assembly at a time.** Gene models, tracks, peak sets, loop calls and
+hand-drawn marks are offered on a cooler — and on a genome opened with no map at all — and are
+*absent*, not disabled, on a `.metacool`. A metagenome's axis is contigs from thousands of
+independently assembled organisms, so a file keyed on contig names either coincides with it or
+misleads, and a gene model drawn across a MAG boundary would assert a coordinate system that does not
+exist. See SPECS §8.5.
+
+**Two files compared, not N.** The second map goes in the half of the square the first one was
+mirroring, and there is no third half. It must be a cooler with the same chromosomes and the same bin
+size, because every coordinate in the picture is an index into one list of sequences and one grid
+cannot be two resolutions. See SPECS §5.7.
 
 **cool and mcool are region-level only, and this is not a HiGlass replacement.** A eukaryotic cooler
 reintroduces exactly the streaming problem the design avoids, so those files are supported as
