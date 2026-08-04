@@ -216,6 +216,16 @@ export type ViewKind =
 export interface ViewState {
   /** The full URI, `file` or `file::group`. */
   uri: string
+  /**
+   * A second cooler, drawn in the lower-left triangle of the same square.
+   *
+   * Part of the view, not a preference: two files in one picture is what is
+   * being looked at, and a link that dropped the second would send its recipient
+   * a symmetric map of one file with no sign that anything was missing. Only a
+   * remote URL survives being shared, which is the same limit `uri` has always
+   * had and for the same reason (§11).
+   */
+  uri2?: string
   view: ViewKind
   /** Genome name for `genome`; row genome for `pair`. */
   genome?: string

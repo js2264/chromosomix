@@ -396,6 +396,100 @@ p {
   display: contents;
 }
 
+/* --- comparing two files ------------------------------------------------ */
+
+/* The two triangle marks. They carry the whole legend: which file is where,
+   said once in the card and once in each File heading, in a glyph rather than
+   in a sentence repeated four times. */
+.compare-mark {
+  font-size: 0.95em;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.compare-lower {
+  color: var(--text-dim);
+}
+
+.compare-open {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.4rem;
+}
+
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.compare-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--step--1);
+}
+
+/* The File cards' headings, which gain a mark and a close button when there are
+   two of them. */
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.file-head > span:nth-child(2) {
+  flex: 1 1 auto;
+}
+
+.file-host {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* A drop target inside a card rather than on a landing page: a third of the
+   height, and no room for a second line of explanation it does not need. */
+.dropzone-small {
+  padding: 0.7rem 0.6rem;
+  min-height: 0;
+}
+
+.dropzone-small .dropzone-title {
+  font-size: var(--step--1);
+  font-weight: 600;
+}
+
+.dropzone-small .dropzone-sub {
+  font-size: var(--step--2);
+}
+
+.compare-url summary {
+  cursor: pointer;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  margin-top: 0.4rem;
+}
+
+.compare-url .input-url {
+  width: 100%;
+  margin-top: 0.3rem;
+}
+
+.compare-line {
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+/* Two legends stand side by side, which is what the export does too. */
+.colorbar-slot {
+  display: flex;
+}
+
 /* No file, no crumbs — and no empty bordered strip where they would be. */
 .breadcrumb-slot:empty,
 .breadcrumb-host:empty {

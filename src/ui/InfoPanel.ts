@@ -36,26 +36,47 @@
 
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { iconButton } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
   info: OpenResult
+  /**
+   * Close one of the two open files.
+   *
+   * Offered only while there are two: the button is what makes the comparison
+   * reversible from where it is described, and `1` promotes the second file to
+   * the first rather than closing the session — the map that remains is a
+   * perfectly ordinary one-file map.
+   */
+  onCloseFile?(which: 1 | 2): void
 }
 
 export class InfoPanel {
   readonly el: HTMLElement
   /** Empty on a table view; `:empty` in the stylesheet is what hides it. */
   private readonly recordHost = el('div', { class: 'record-host' })
+  /**
+   * The File card(s). One while one file is open, two while two are.
+   *
+   * A host rather than a fixed card, because the second file arrives and leaves
+   * without the rest of this panel changing: the QC statistic and the metadata
+   * below describe the *first* file whichever way, since that is the file whose
+   * genomes and attributes every other view is about.
+   */
+  private readonly fileHost = el('div', { class: 'file-host' })
+  private compare: OpenResult | null = null
 
   constructor(private readonly props: InfoPanelProps) {
     this.el = el(
       'aside',
       { class: 'info-panel' },
-      el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable()),
+      this.fileHost,
       this.recordHost,
       this.unassignedBlock(),
       this.metadataBlock(),
     )
+    this.paintFiles()
   }
 
   /**
@@ -68,8 +89,63 @@ export class InfoPanel {
     this.recordHost.replaceChildren(...records.map(recordCard))
   }
 
-  private fileTable(): HTMLElement {
-    const { info } = this.props
+  /**
+   * Adopt, or drop, the second file.
+   *
+   * The heading is the tell: one file is *File*, two are *File 1* and *File 2*,
+   * and the numbers are the triangles — 1 above the diagonal, 2 below it. The
+   * mark beside each name says which without a legend.
+   */
+  setCompare(info: OpenResult | null): void {
+    this.compare = info
+    this.paintFiles()
+  }
+
+  private paintFiles(): void {
+    if (this.compare === null) {
+      this.fileHost.replaceChildren(
+        el('div', { class: 'card' }, el('h3', { text: 'File' }), this.fileTable(this.props.info)),
+      )
+      return
+    }
+    this.fileHost.replaceChildren(
+      this.fileCard(1, this.props.info),
+      this.fileCard(2, this.compare),
+    )
+  }
+
+  private fileCard(which: 1 | 2, info: OpenResult): HTMLElement {
+    const close = this.props.onCloseFile
+    return el(
+      'div',
+      { class: 'card card-file' },
+      el(
+        'h3',
+        { class: 'file-head' },
+        el('span', {
+          class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
+          text: which === 1 ? '◤' : '◣',
+          title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
+        }),
+        el('span', { text: `File ${which}` }),
+        ...(close === undefined
+          ? []
+          : [
+              iconButton(
+                'x',
+                which === 1
+                  ? 'Close this file. The other takes its place and the map goes back to one.'
+                  : 'Close this file and go back to one map.',
+                () => close(which),
+                { class: 'btn btn-icon btn-close', size: 13 },
+              ),
+            ]),
+      ),
+      this.fileTable(info),
+    )
+  }
+
+  private fileTable(info: OpenResult): HTMLElement {
     const rows: Array<[string, string]> = [
       ['uri', info.uri],
       ['layout', info.layout.kind],

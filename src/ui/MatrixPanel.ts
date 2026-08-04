@@ -46,6 +46,7 @@ import {
   type OverlayFrame,
 } from '../render/overlays'
 import { AnnotationLanes, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
+import { alignable, blendAcrossDiagonal, matchGain } from '../render/compare'
 import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
@@ -61,7 +62,7 @@ import {
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
-import { inverseTransform } from '../render/scale'
+import { inverseTransform, transformValue } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
@@ -207,6 +208,29 @@ export interface MatrixPanelOptions {
    * annotations existed — no lanes, no listeners, no worker.
    */
   annotations?: AnnotationContext
+  /**
+   * Draw a second file in the lower-left triangle (`render/compare.ts`).
+   *
+   * Present only while two files are open. The *data* arrives through
+   * {@link MatrixPanel.setData}; this is what the panel needs to talk about it:
+   * whose numbers are on which side of the diagonal, and the one control the
+   * comparison has of its own.
+   */
+  compare?: ComparePresentation
+}
+
+export interface ComparePresentation {
+  /** The two file names, in order: above the diagonal, then below it. */
+  labels: [string, string]
+  /**
+   * Whether the second file's counts are scaled to the first's bright end.
+   *
+   * Off by default, because one scale for both is the stronger claim: the same
+   * colour is the same number of contacts, wherever it is. On when the two
+   * files differ enough in depth that the shallower is a blank triangle.
+   */
+  normalise: boolean
+  onNormaliseChange(on: boolean): void
 }
 
 /** What the panel needs to draw annotations against this file. */
@@ -244,8 +268,19 @@ export class MatrixPanel {
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
+  /**
+   * The second file's legend, beside the first.
+   *
+   * One colormap, two value axes. The colours are shared — that is what makes
+   * the picture one picture — so the only thing a second bar can add is what
+   * those colours are worth in the other file's counts, which after a
+   * normalisation is a different number at every position.
+   */
+  private readonly barCanvas2: HTMLCanvasElement
   private readonly heatmap: HeatmapView
   private readonly colorbar: ColorbarView
+  private readonly colorbar2: ColorbarView
+  private readonly barSlot: HTMLElement
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly clip: ClipRange
@@ -264,6 +299,15 @@ export class MatrixPanel {
   private exportName = 'contact-map'
 
   private data: MatrixResult | null = null
+  /**
+   * The second file's block, when one is open, and the factor applied to it.
+   *
+   * Kept beside the merged values rather than only merged into them, because a
+   * reader hovering a cell wants *both* numbers — the whole question a compared
+   * map asks is how the two differ here — and after the merge only one of them
+   * is still in the matrix.
+   */
+  private second: { data: MatrixResult; gain: number } | null = null
   private transform: Transform
   private colormap: string
   private manualVmin: number | undefined
@@ -345,6 +389,7 @@ export class MatrixPanel {
 
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
     this.barCanvas = el('canvas', { class: 'colorbar-canvas' })
+    this.barCanvas2 = el('canvas', { class: 'colorbar-canvas hidden' })
     // A tooltip follows the pointer with the same three facts as the readout.
     // Both exist on purpose: the tooltip answers "what is under my cursor"
     // without a glance away from the matrix, and the readout keeps the last
@@ -408,7 +453,15 @@ export class MatrixPanel {
     })
     this.heatmap.attach()
     this.watchContextMenu()
-    this.colorbar = new ColorbarView(this.barCanvas, { caption: 'count' })
+    // The two bars share a colormap and therefore a units word; what differs is
+    // which triangle each measures, and the mark says so in the width a file
+    // name would not fit into. The names themselves are on the compare card and
+    // on the two File cards, both of which carry the same two marks.
+    this.colorbar = new ColorbarView(this.barCanvas, {
+      caption: 'count',
+      ...(options.compare === undefined ? {} : { prefix: '◤ ' }),
+    })
+    this.colorbar2 = new ColorbarView(this.barCanvas2, { caption: 'count', prefix: '◣ ' })
 
     const transformSelect = el('select', { class: 'select' })
     this.transformSelect = transformSelect
@@ -581,6 +634,22 @@ export class MatrixPanel {
       )
     }
 
+    if (options.compare !== undefined) {
+      const compare = options.compare
+      const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
+      normalise.checked = compare.normalise
+      normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
+      controls.unshift(
+        field(
+          'match depth',
+          normalise,
+          `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s, ` +
+            'so the two triangles saturate together. Off, one colour is one count on both sides of ' +
+            'the diagonal — the stronger claim, and wrong to read when the files differ in depth.',
+        ),
+      )
+    }
+
     if (options.levels && options.levels.length > 1) {
       const levelSelect = el('select', { class: 'select' })
       for (const name of options.levels) {
@@ -653,12 +722,8 @@ export class MatrixPanel {
     // The colourbar sits immediately right of the plot and is deliberately
     // short: it is a legend, and a legend as tall as the figure reads as a
     // second panel competing with it.
-    const body = el(
-      'div',
-      { class: 'panel-body' },
-      this.grid,
-      el('div', { class: 'colorbar-slot' }, this.barCanvas),
-    )
+    this.barSlot = el('div', { class: 'colorbar-slot' }, this.barCanvas, this.barCanvas2)
+    const body = el('div', { class: 'panel-body' }, this.grid, this.barSlot)
 
     this.el = el(
       'section',
@@ -690,7 +755,8 @@ export class MatrixPanel {
     // stated once here because the canvas cannot read a media query.
     this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
       this.colorbar.setOrientation(narrow ? 'horizontal' : 'vertical')
-      this.colorbar.resize()
+      this.colorbar2.setOrientation(narrow ? 'horizontal' : 'vertical')
+      this.resizeBars()
       this.schedule()
     })
 
@@ -703,7 +769,7 @@ export class MatrixPanel {
             // appears — which the plot's own size does not.
             this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
             this.heatmap.resize()
-            this.colorbar.resize()
+            this.resizeBars()
             this.schedule()
           })
     this.observer?.observe(this.grid)
@@ -715,7 +781,7 @@ export class MatrixPanel {
       this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
-      this.colorbar.resize()
+      this.resizeBars()
       this.schedule()
     })
   }
@@ -764,8 +830,22 @@ export class MatrixPanel {
   remeasure(): void {
     this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
     this.heatmap.resize()
-    this.colorbar.resize()
+    this.resizeBars()
     this.schedule()
+  }
+
+  /**
+   * Re-measure the legend, and the second one when two files are open.
+   *
+   * `painted` is cleared with it: the bars are only redrawn when the resolved
+   * scale changes, and a resize changes neither — but it does throw away what
+   * was on the canvas, so the guard has to be told the picture is gone.
+   */
+  private resizeBars(): void {
+    this.colorbar.resize()
+    if (this.second === null) return
+    this.colorbar2.resize()
+    this.painted = null
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -794,8 +874,11 @@ export class MatrixPanel {
     // off.
     const rightLanes = this.lanes?.thicknessOf('right') ?? 0
     const bottomLanes = this.lanes?.thicknessOf('bottom') ?? 0
-    const width = plot.width + rightLanes + gap + bar.width
-    const body = Math.max(plot.height + bottomLanes, bar.height)
+    // A compared figure carries both legends, side by side, because the two
+    // value axes are the only thing distinguishing whose counts a colour is.
+    const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
+    const width = plot.width + rightLanes + gap + bar.width + bar2.width
+    const body = Math.max(plot.height + bottomLanes, bar.height, bar2.height)
 
     const out = document.createElement('canvas')
     const ctx = out.getContext('2d')
@@ -854,7 +937,18 @@ export class MatrixPanel {
     // context, and drawing the legend through that would put it at 3× its
     // offset, which is off the canvas entirely.
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.drawImage(barCanvas, Math.round((plot.width + rightLanes + gap) * scale), 0)
+    const barLeft = plot.width + rightLanes + gap
+    ctx.drawImage(barCanvas, Math.round(barLeft * scale), 0)
+
+    if (this.second !== null) {
+      const second = document.createElement('canvas')
+      second.width = Math.max(1, Math.round(bar2.width * scale))
+      second.height = Math.max(1, Math.round(bar2.height * scale))
+      const secondCtx = second.getContext('2d')
+      if (secondCtx !== null) this.colorbar2.renderTo(secondCtx, scale)
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.drawImage(second, Math.round((barLeft + bar.width) * scale), 0)
+    }
 
     if (lines.length > 0) {
       const palette = readCanvasPalette(this.canvas)
@@ -1461,12 +1555,40 @@ export class MatrixPanel {
     this.laneListeners.push(() => canvas.removeEventListener('wheel', onWheel))
   }
 
-  /** Load a block. `HeatmapView` refits and recomputes the auto range (§7.1). */
-  setData(data: MatrixResult, title: string): void {
+  /**
+   * Load a block. `HeatmapView` refits and recomputes the auto range (§7.1).
+   *
+   * `second` is the same block read from the second open file, and it is merged
+   * across the matrix diagonal *here* rather than by the caller: the merge has
+   * to happen exactly once per read, because `setMatrix` refits the view, and a
+   * view that refitted whenever the colour scale moved would throw away the pan
+   * and zoom the reader had arrived at.
+   */
+  setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
-    this.heatmap.setMatrix(toDense(data), separatorsFor(data))
+    this.second =
+      second !== undefined && alignable(data, second)
+        ? {
+            data: second,
+            gain: this.options.compare?.normalise === true ? matchGain(data, second) : 1,
+          }
+        : null
+    // Two aligned blocks with two axes each — the merged values are the first
+    // file's above the diagonal and the second's below, and everything else
+    // about the block (its extents, its runs, its level) is unchanged, because
+    // the two files agree on all of it. That agreement is what the compare gate
+    // checks before either read is made.
+    const dense =
+      this.second === null
+        ? toDense(data)
+        : {
+            ...toDense(data),
+            values: blendAcrossDiagonal(data, this.second.data, { gain: this.second.gain }).values,
+          }
+    this.barCanvas2.classList.toggle('hidden', this.second === null)
+    this.heatmap.setMatrix(dense, separatorsFor(data))
     // A cell is a bin, so a block's span in cells is its length in base pairs:
     // the contigs worth naming in a 300-contig genome are the long ones, and
     // they are named however many short ones surround them. Above bin level a
@@ -1580,6 +1702,14 @@ export class MatrixPanel {
         this.painted = { ...effective }
         this.colorbar.setScale(effective)
         this.colorbar.draw()
+        // The second file's legend measures the same colours in *its* counts.
+        // With no gain the two bars carry identical numbers, and the second is
+        // still worth drawing: what it says then is that the two are on one
+        // scale, which is exactly the claim the reader is relying on.
+        if (this.second !== null) {
+          this.colorbar2.setScale(rescaledBy(effective, this.second.gain))
+          this.colorbar2.draw()
+        }
       }
       if (Number.isFinite(effective.vmin) && Number.isFinite(effective.vmax)) {
         this.clip.setValues(
@@ -1724,13 +1854,28 @@ export class MatrixPanel {
     const colStart = data.colExtent[0]
     const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
     const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize, colStart)
-    const count = Number.isNaN(cell.value) ? 'NaN (unbalanced)' : fmt.num(cell.value)
+    // `cell.value` is what was *drawn*, which below the diagonal of a compared
+    // map is the second file's count with any gain already in it. Neither half
+    // of that is what a reader is asking about, so the numbers here come from
+    // the blocks themselves: each file's own count, unscaled, at this cell.
+    const compare = this.options.compare
+    const slot = cell.row * data.ncols + cell.col
+    const mine = this.second === null ? cell.value : data.values[slot]
+    const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
+    const counts =
+      this.second === null || compare === undefined
+        ? `count ${count}`
+        : `${compare.labels[0]} ${count}   ·   ${compare.labels[1]} ${
+            Number.isNaN(this.second.data.values[slot])
+              ? 'NaN (unbalanced)'
+              : fmt.num(this.second.data.values[slot])
+          }`
     const distance = separationOf(rowGroup, colGroup, cell, data.level, this.options.binsize)
 
     setReadout(
       `${rowLabel}  ×  ${colLabel}` +
         (distance === null ? '' : `   ${fmt.bp(distance)} apart`) +
-        `   count ${count}`,
+        `   ${counts}`,
     )
 
     // The names in full, unabbreviated, and each name written *once*: the axis
@@ -1772,7 +1917,12 @@ export class MatrixPanel {
 
     tip.distance.classList.toggle('hidden', distance === null)
     if (distance !== null) tip.distance.textContent = `${fmt.bp(distance)} apart`
-    tip.count.textContent = `count ${count}`
+
+    // With two files open the count line carries both — the whole question a
+    // compared map is asked at every position is how the two differ *here*, and
+    // answering it with only the visible half would mean reading the picture
+    // twice, once on each side of the diagonal, to compare one locus.
+    tip.count.textContent = counts
 
     this.tooltip.classList.remove('hidden')
     if (at !== undefined) this.placeTooltip(at.x, at.y)
@@ -2210,6 +2360,25 @@ export function poolingNote(
   return {
     phrase: `aggregated ${strideX} × ${strideY} bins to a pixel`
   }
+}
+
+/**
+ * The same colours, measured in the second file's counts.
+ *
+ * A gain of `g` multiplies the second file's values before they are coloured, so
+ * a colour standing at transformed level `t` is `T⁻¹(t)` contacts in the first
+ * file and `T⁻¹(t) / g` in the second. Converting the *bounds* that way and
+ * handing the result to a second colourbar is all it takes: every tick it
+ * derives is then in the second file's units, from the one implementation that
+ * already knows how to derive them.
+ */
+function rescaledBy(scale: ColorScale, gain: number): ColorScale {
+  if (!(gain > 0) || gain === 1) return scale
+  const back = (value: number): number =>
+    Number.isFinite(value)
+      ? transformValue(inverseTransform(value, scale.transform) / gain, scale.transform)
+      : value
+  return { ...scale, vmin: back(scale.vmin), vmax: back(scale.vmax) }
 }
 
 /** Adapt a worker result to the renderer's {@link DenseMatrix}. */
