@@ -239,7 +239,72 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is the point — a whole-genome scan pins a worker for minutes while the main
   thread sits idle.
 
+- **Drop a file on the map itself to make it a track**, on the edge you aim at:
+  the bottom quarter for the horizontal stack, the right fifth for the vertical
+  one. Two rectangles appear while a drag carrying files is over the panel and
+  are inert the rest of the time, because the map's own gestures — pan, the
+  Option-drag selection, the click that opens a cell — live in the same pixels.
+  What the file *is* is still decided by its bytes (§8.3): a `.cool` aimed at
+  the bottom of the map is a map, not a track drawn along the bottom.
+
+- **`/` puts the caret in the box, in every view.** It was the genome browser's
+  alone, so the same key that found a gene did nothing the moment a `.cool` was
+  dropped in the same tab. Each view now answers it with its own box: the region
+  box on a region, the filter above a table, and a new one in the heading of the
+  whole-genome, genome, pair and scan views — which is also the only way to
+  leave those pictures by typing rather than by aiming, and a genome of one
+  metagenome's four thousand is a quarter of a pixel to aim at. The key is
+  printed in the box and steps out of the way when the caret arrives.
+
+- **Every shortcut is on the button that performs it.** Tooltips name their key
+  — the panel folds, the theme, the tab strip, both Plot cards, every overlay
+  toggle, the breadcrumb's landing views — and the two `whole genome →` buttons
+  and the breadcrumb menu print theirs as a badge. The bindings come from two
+  tables (`ui/commands.ts` and `ui/plotOptions.ts`) that the key handler, the
+  palette, the shortcuts dialog and every one of those tooltips now share, and a
+  test asserts no two actions claim the same key.
+
+- **A mark before every card title** in the three panels, so a column of five
+  cards is recognised by shape before it is read.
+
 ### Changed
+
+- **A track lands under the map, not beside it.** The bottom edge is where a
+  track is read — under a ruler, left to right — and a coverage profile turned
+  on its side has to be read with your head tilted. The right-hand stack is
+  still there and is now something you choose: the `B`/`R` boxes on the row, or
+  the edge you drop the file on.
+
+- **`S` stretches the tracks** to fill the height, all of them to one height,
+  which is the thing a reader reaches for several times a session. Autoscale,
+  which had `S`, is now `Y` — the axis it acts on — and works beside a map as
+  well as under a browser, since they are the same tracks in the same store.
+
+- **The status bar is one line, always.** It is the bottom edge every view is
+  measured against, and it grew a second line exactly when the pointer was over
+  a stack of tracks — when the reader is least interested in it. So `read` is
+  bytes and keeps the request count in the panel it already opens on hover,
+  `memory` is bytes and keeps the share of the ceiling there too, and the
+  coordinate readout is the item that gives way, being the one thing here that
+  is re-said a moment later.
+
+- **The standing `read in place · nothing is sent` line is gone from the bar.**
+  The claim is not: the picker states it where a file is about to be opened, and
+  About states it in full. It was a sentence you finish reading once, permanently
+  occupying a corner of a bar whose other three items are numbers that change.
+
+- **The shortcuts dialog has no Help group**, so the two gesture tables — what a
+  drag, a wheel and a double click do on a map, against what they do on the
+  tracks — sit side by side, which is how they are read. `⌘/` was the only bound
+  command in Help and is now beside the palette in App, where it belongs. Both
+  tables also gained the gestures they had been missing: the lane resize, the
+  edge drops, and dropping a file on the browser's tracks.
+
+- **The Compare card and the browser's Contact map card wear the Tracks card's
+  load zone** — a thin unshaded box with a bold line and a quiet one, then the
+  URL behind a fold. All three ask the reader for a file, and three shaded
+  variations of one gesture in one column read as three applications. The
+  Contact map card can now take a URL, which it could not before.
 
 - **One box in the browser's toolbar**, not two. `chrIV:1,000-2,000`, `chrIV`
   and `GAL4` are three spellings of "where do I want to be", and asking which of
@@ -280,6 +345,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   invisible, so reaching for it is one movement rather than a hunt.
 
 ### Fixed
+
+- **The labels overlay could not be toggled in a genome browser session.** `L`
+  was bound twice — the overlay, and "go to a locus" — and the command list is
+  searched in order, so in a browser the locus box always won. The browser has
+  one box that is both a locus bar and a search field, and it now has one key
+  for it (`/`), which is the key every other view answers too.
 
 - The icon generator dropped every SVG attribute whose name contained a digit,
   so every `<line>` was emitted with no coordinates and drew nothing. It had

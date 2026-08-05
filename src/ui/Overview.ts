@@ -32,7 +32,9 @@ import type { Cancellable, ReaderClient } from '../worker/client'
 import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
+import { cardTitle } from './icons'
 import { MatrixPanel } from './MatrixPanel'
+import { SearchBox } from './SearchBox'
 
 /**
  * Above this, a remote full scan is refused outright. A scan reads every pixel,
@@ -60,6 +62,15 @@ export interface OverviewProps {
   onLevelChange(level: 'genome' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenPair(rowGenome: string, colGenome: string): void
+  /**
+   * Every genome in this file, for the box in the heading.
+   *
+   * A name typed there is one or the other — a genome or a contig — and the two
+   * open different views. The list is already in memory (the genomes table is
+   * read at open), so the box can settle it here rather than navigate and let
+   * the reader find out from an error.
+   */
+  genomeNames: string[]
   /** A cell within one genome, which is the genome view. */
   onOpenGenome(genome: string): void
   /**
@@ -94,6 +105,8 @@ export class Overview {
   private readonly panelHost: HTMLElement
   private readonly summary: HTMLElement
   private readonly note: HTMLElement
+  /** Where a genome is named; the `/` key puts the caret here. */
+  private readonly search: SearchBox
   private readonly levelSelect = el('select', { class: 'select' })
   private running: Cancellable<OverviewResult> | null = null
   /**
@@ -144,6 +157,17 @@ export class Overview {
     this.panelHost = el('div', { class: 'overview-host hidden' })
     this.summary = el('p', { class: 'summary' })
     this.note = el('p', { class: 'note hidden' })
+    this.search = new SearchBox({
+      placeholder: 'a genome, or a contig',
+      title:
+        'Open one genome of this file by name. A name that is not a genome is tried as a ' +
+        'contig, which is the other thing an axis of this map is made of.',
+      onSubmit: (text) => {
+        if (text === '') return
+        if (this.props.genomeNames.includes(text)) this.props.onOpenGenome(text)
+        else this.props.onOpenContig(text)
+      },
+    })
 
     // The same shape as the genome and region views: heading, summary, then the
     // plot with its controls in the sidebar. This view used to be laid out on
@@ -189,7 +213,15 @@ export class Overview {
       el(
         'header',
         { class: 'view-head' },
-        el('div', { class: 'title-bar' }, el('h2', { text: 'Whole genome' })),
+        el(
+          'div',
+          { class: 'title-bar' },
+          el('h2', { text: 'Whole genome' }),
+          // A metagenome's axis is thousands of MAGs, so the picture cannot be
+          // aimed at: the cell for one genome of four thousand is a quarter of a
+          // pixel. Naming it is the only way in, and this is the box `/` opens.
+          this.search.el,
+        ),
         this.summary,
         this.note,
       ),
@@ -204,7 +236,7 @@ export class Overview {
       el(
         'section',
         { class: 'card' },
-        el('h3', { text: 'Scan' }),
+        cardTitle('Scan', 'scan'),
         this.levelPicker(),
         el('p', {
           class: 'hint',
@@ -226,6 +258,11 @@ export class Overview {
    */
   applyScale(scale: ScaleState): void {
     this.panel.applyScale(scale)
+  }
+
+  /** The `/` key. */
+  focusSearch(): void {
+    this.search.focus()
   }
 
   destroy(): void {

@@ -36,7 +36,7 @@
 
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
-import { iconButton } from './icons'
+import { cardTitle, icon, iconButton } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
@@ -119,7 +119,8 @@ export class InfoPanel {
           { class: 'card' },
           el(
             'h3',
-            { class: 'file-head' },
+            { class: 'file-head card-head' },
+            icon('file', { size: 13 }),
             el('span', { class: 'file-name', text: 'File' }),
             ...(close === undefined
               ? []
@@ -150,7 +151,7 @@ export class InfoPanel {
       { class: 'card card-file' },
       el(
         'h3',
-        { class: 'file-head' },
+        { class: 'file-head card-head' },
         el('span', {
           class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
           text: which === 1 ? '◥' : '◣',
@@ -240,7 +241,12 @@ export class InfoPanel {
   private metadataBlock(): HTMLElement {
     const metadata = this.props.info.metadata
     if (metadata === null || Object.keys(metadata).length === 0) {
-      return el('div', { class: 'meta-empty' }, el('h3', { text: 'Metadata' }), el('p', { class: 'hint', text: 'No metadata was stored in this file.' }))
+      return el(
+        'div',
+        { class: 'meta-empty' },
+        cardTitle('Metadata', 'info'),
+        el('p', { class: 'hint', text: 'No metadata was stored in this file.' }),
+      )
     }
     return el(
       'details',

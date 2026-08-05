@@ -11,7 +11,9 @@ import type { ParsedRange, Transform } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
+import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, poolingNote } from './MatrixPanel'
+import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
 /** The colour-scale fields that are carried in the URL hash (§5.5). */
@@ -64,6 +66,8 @@ export class GenomeView {
    */
   readonly panel: MatrixPanel
   private readonly summary: HTMLElement
+  /** Where a contig is typed; the `/` key puts the caret here. */
+  private readonly search: SearchBox
   private readonly contigList: HTMLElement
   private readonly contigBox: HTMLElement
   private readonly note: HTMLElement
@@ -75,6 +79,13 @@ export class GenomeView {
     this.level = props.level
     this.summary = el('p', { class: 'summary' })
     this.note = el('p', { class: 'note hidden' })
+    this.search = new SearchBox({
+      placeholder: 'contig, or contig:start-end',
+      title: 'Open one contig of this genome, or a range within it.',
+      onSubmit: (text) => {
+        if (text !== '') props.onOpenRegion(text)
+      },
+    })
     this.contigList = el('div', { class: 'contig-list' })
 
     this.panel = new MatrixPanel({
@@ -124,7 +135,7 @@ export class GenomeView {
     this.contigBox = el(
       'section',
       { class: 'card contig-box' },
-      el('h3', { text: 'Contigs' }),
+      cardTitle('Contigs', 'list'),
       this.contigList,
     )
     this.contigBox.classList.toggle('hidden', this.level === 'contig')
@@ -142,6 +153,7 @@ export class GenomeView {
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: 'genome' })]),
+          this.search.el,
         ),
         this.summary,
         this.note,
@@ -170,6 +182,11 @@ export class GenomeView {
    */
   applyScale(scale: ScaleState): void {
     this.panel.applyScale(scale)
+  }
+
+  /** The `/` key. */
+  focusSearch(): void {
+    this.search.focus()
   }
 
   destroy(): void {

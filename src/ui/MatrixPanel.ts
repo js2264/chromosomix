@@ -34,7 +34,8 @@ import {
 } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
-import { iconButton } from './icons'
+import { KEYS, withKey } from './commands'
+import { cardTitle, iconButton } from './icons'
 import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
@@ -87,6 +88,7 @@ import { setReadout } from './readout'
 import {
   MATRIX_OPTIONS,
   PLOT_OPTION_ICONS,
+  PLOT_OPTION_KEYS,
   PLOT_OPTION_LABELS,
   TRACK_OPTIONS,
   getPlotOptions,
@@ -251,6 +253,17 @@ export interface AnnotationContext {
    * business knowing the reader's table shapes.
    */
   contigLength(name: string): number | undefined
+  /**
+   * Files were dropped on one edge of the map: load them, drawn on that edge.
+   *
+   * The panel does not load anything itself — it has no loader and no idea what
+   * a bigWig is — it only knows *where the pointer was*, which is the one thing
+   * the session cannot know. The edge is the whole of what this adds over
+   * dropping on the card in the sidebar: aiming at the bottom of the map is a
+   * reader saying which stack they want it in, in the same gesture that brings
+   * the file in.
+   */
+  loadOnEdge?(files: readonly File[], edge: LaneEdge): void
 }
 
 export class MatrixPanel {
@@ -544,9 +557,12 @@ export class MatrixPanel {
     // beside it has two rows of glyphs — and they are the same eight options.
     const optionToggle = (key: PlotOptionKey): HTMLElement => {
       const { label, hint } = PLOT_OPTION_LABELS[key]
-      const node = iconButton(PLOT_OPTION_ICONS[key], `${label} — ${hint}`, () =>
-        setPlotOption(key, !getPlotOptions()[key]),
-      { class: 'btn btn-icon btn-toggle', size: 15 })
+      const node = iconButton(
+        PLOT_OPTION_ICONS[key],
+        withKey(`${label} — ${hint}`, PLOT_OPTION_KEYS[key]),
+        () => setPlotOption(key, !getPlotOptions()[key]),
+        { class: 'btn btn-icon btn-toggle', size: 15 },
+      )
       this.optionButtons.set(key, node)
       return node
     }
@@ -587,7 +603,7 @@ export class MatrixPanel {
     this.plotEl = el(
       'div',
       { class: 'controls-card' },
-      el('h3', { class: 'controls-title', text: 'Plot' }),
+      cardTitle('Plot', 'palette', 'controls-title'),
       el(
         'div',
         { class: 'panel-controls' },
@@ -598,14 +614,19 @@ export class MatrixPanel {
         el(
           'div',
           { class: 'plot-icon-row' },
-          iconButton('maximize', 'Undo every pan and zoom (key: 0, or a double click on the plot)', () => this.fit(), {
+          iconButton('maximize', 'Undo every pan and zoom (0, or a double click on the plot)', () => this.fit(), {
             class: 'btn btn-icon',
             size: 15,
           }),
-          iconButton('chevrons-up-down', 'Autoscale every track to what is in view — a group resolves as a group', () => this.autoscaleTracks(), {
-            class: 'btn btn-icon',
-            size: 15,
-          }),
+          iconButton(
+            'chevrons-up-down',
+            withKey(
+              'Autoscale every track to what is in view — a group resolves as a group',
+              KEYS.autoscale,
+            ),
+            () => this.autoscaleTracks(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
         ),
         // Split by what each one draws on, because half of these do nothing to
         // the matrix and half do nothing to the tracks — and an undifferentiated
@@ -709,7 +730,7 @@ export class MatrixPanel {
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
-      el('h3', { class: 'controls-title', text: 'View' }),
+      cardTitle('View', 'sliders-horizontal', 'controls-title'),
       el('div', { class: 'panel-controls' }, ...controls),
     )
 
@@ -733,12 +754,16 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
+      ...(options.annotations?.loadOnEdge === undefined
+        ? []
+        : [this.edgeZone('bottom'), this.edgeZone('right')]),
       this.tooltip,
     )
     if (this.lanes !== null) {
       this.watchLane('bottom', this.lanes.bottomEl)
       this.watchLane('right', this.lanes.rightEl)
     }
+    if (options.annotations?.loadOnEdge !== undefined) this.watchEdgeDrops()
     if (options.annotations !== undefined) {
       this.heatmap.setOverlayPainter((ctx, frame) => this.paintOverlays(ctx, frame))
       // Escape abandons a half-finished pick. On the window rather than the
@@ -827,16 +852,89 @@ export class MatrixPanel {
     })
   }
 
-  /** Reflect the shared overlay state on the buttons. */
   /**
-   * Hand every lane's value axis back to the data.
+   * One of the two rectangles a file can be dropped on to become a track.
+   *
+   * Invisible and inert until a drag carrying files is over the panel, which is
+   * the whole trick: the map's own gestures — pan, the Option-drag selection,
+   * the click that opens a cell — happen in the same pixels, and a target that
+   * was always live would eat all three along the bottom edge.
+   */
+  private edgeZone(edge: LaneEdge): HTMLElement {
+    const zone = el(
+      'div',
+      { class: `lane-drop lane-drop-${edge}` },
+      el('span', {
+        class: 'lane-drop-label',
+        text: edge === 'bottom' ? 'tracks below the map' : 'tracks beside the map',
+      }),
+    )
+    zone.addEventListener('dragover', (event) => {
+      if (!carriesFiles(event)) return
+      // Both, and in this order: the default action for a dropped file is to
+      // navigate the window to it, and the panel above is not the one that
+      // decides where this file goes.
+      event.preventDefault()
+      event.stopPropagation()
+      zone.classList.add('over')
+    })
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
+    zone.addEventListener('drop', (event) => {
+      const files = Array.from(event.dataTransfer?.files ?? [])
+      zone.classList.remove('over')
+      this.grid.classList.remove('is-dropping')
+      if (files.length === 0) return
+      event.preventDefault()
+      // Not stopped: the shell's content-wide handler has to see this drop to
+      // put its own highlight away, and it stands aside for a `.lane-drop`
+      // target exactly as it does for the picker's zone — so the files are
+      // loaded once, here, with the edge the reader aimed at.
+      this.options.annotations?.loadOnEdge?.(files, edge)
+    })
+    return zone
+  }
+
+  /**
+   * Show the two zones while a file is being dragged over this panel, and only
+   * then.
+   *
+   * On the panel rather than on the zones themselves, because a zone that is
+   * invisible cannot be dragged *onto* — the reader has to see it appear while
+   * the pointer is still over the middle of the map, which is where a drag from
+   * the desktop arrives.
+   */
+  private watchEdgeDrops(): void {
+    const show = (event: DragEvent): void => {
+      if (!carriesFiles(event)) return
+      this.grid.classList.add('is-dropping')
+    }
+    const hide = (event: DragEvent): void => {
+      // A drag crossing from the map onto a zone leaves the panel by the letter
+      // of the event and not in fact; the related target is what tells the two
+      // apart, and `null` (leaving the window) is a real departure.
+      const to = event.relatedTarget
+      if (to instanceof Node && this.el.contains(to)) return
+      this.grid.classList.remove('is-dropping')
+    }
+    this.el.addEventListener('dragenter', show)
+    this.el.addEventListener('dragover', show)
+    this.el.addEventListener('dragleave', hide)
+    this.el.addEventListener('drop', () => this.grid.classList.remove('is-dropping'))
+  }
+
+  /**
+   * Hand every lane's value axis back to the data — the `y` key, and the button.
    *
    * The browser's own button, beside a map. One press for what is otherwise one
    * press per lane, and the commonest thing a reader wants after dragging three
    * ceilings about. A group needs nothing special: `auto` resolves through the
    * group's own range, so its members come back to one shared pair.
+   *
+   * Public because the key is a session command: the shortcut and the mark in
+   * the Plot card have to be the same action, or one of them is a second
+   * implementation waiting to drift from the other.
    */
-  private autoscaleTracks(): void {
+  autoscaleTracks(): void {
     const store = this.options.annotations?.store
     if (store === undefined) return
     for (const entry of store.entries) {
@@ -846,6 +944,7 @@ export class MatrixPanel {
     }
   }
 
+  /** Reflect the shared overlay state on the buttons. */
   private paintPlotOptions(options: PlotOptions): void {
     for (const [key, node] of this.optionButtons) {
       node.setAttribute('aria-pressed', String(options[key]))
@@ -2371,6 +2470,18 @@ function captionLines(
 }
 
 /** The page colour an export is flattened onto — the theme in force. */
+/**
+ * Whether a drag is carrying files, rather than text or a row from a card.
+ *
+ * The Tracks card's own rows are draggable — that is how a stack is reordered —
+ * and one dragged over the map must not light up two rectangles offering to
+ * load it. `types` is the only thing a browser exposes during a drag; the files
+ * themselves are readable at `drop` and not before.
+ */
+function carriesFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
 function readPageBackground(): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
   return value === '' ? '#ffffff' : value

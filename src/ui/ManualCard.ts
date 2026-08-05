@@ -23,7 +23,7 @@ import {
 import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
 import { button, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
-import { iconButton } from './icons'
+import { cardTitle, iconButton } from './icons'
 
 /**
  * How the card reaches the mounted plot.
@@ -76,7 +76,7 @@ export class ManualCard {
     this.el = el(
       'section',
       { class: 'card annotation-card' },
-      el('h3', { text: 'Manual annotations' }),
+      cardTitle('Manual annotations', 'pencil'),
       this.lineForm(),
       this.arrowForm(),
       this.list,

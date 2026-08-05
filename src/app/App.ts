@@ -33,7 +33,15 @@ import {
 import { StatusBar } from '../ui/StatusBar'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { IS_DESKTOP, desktop } from '../desktop'
-import { isChord, isTypingTarget, keyLabel, matchesKeys, type Command } from '../ui/commands'
+import {
+  KEYS,
+  isChord,
+  isTypingTarget,
+  keyLabel,
+  matchesKeys,
+  withKey,
+  type Command,
+} from '../ui/commands'
 import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, el } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
@@ -42,7 +50,12 @@ import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { configFileName } from '../state/SessionConfig'
 import { fileLabel } from '../ui/labels'
 import { appMark } from '../ui/mark'
-import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from '../ui/plotOptions'
+import {
+  PLOT_OPTION_KEYS,
+  PLOT_OPTION_LABELS,
+  getPlotOptions,
+  togglePlotOption,
+} from '../ui/plotOptions'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
@@ -123,9 +136,9 @@ export class App implements SessionHost {
     const palette = button('', () => this.openPalette(), { class: 'action-bar' })
     palette.replaceChildren(
       el('span', { class: 'action-bar-text', text: 'Search commands…' }),
-      el('kbd', { class: 'kbd', text: keyLabel('mod+p') }),
+      el('kbd', { class: 'kbd', text: keyLabel(KEYS.palette) }),
     )
-    palette.title = 'Every action in this app, searchable'
+    palette.title = withKey('Every action in this app, searchable', KEYS.palette)
 
     const source = el('a', {
       class: 'btn btn-icon',
@@ -174,11 +187,15 @@ export class App implements SessionHost {
           // Save the session, theme, shortcuts, source, about. No "open a
           // file" button: the title is the way back to the picker and says so
           // on hover.
-          iconButton('save', 'Save this session as a file, to open again later', () =>
-            this.exportSession(),
+          iconButton(
+            'save',
+            withKey('Save this session as a file, to open again later', KEYS.saveSession),
+            () => this.exportSession(),
           ),
           this.theme.el,
-          iconButton('keyboard', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
+          iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
+            this.openShortcutsDialog(),
+          ),
           source,
           iconButton('info', 'About this viewer', () => this.openAboutDialog()),
         ),
@@ -243,9 +260,17 @@ export class App implements SessionHost {
     })
     this.content.addEventListener('drop', (event) => {
       this.content.classList.remove('over')
-      // The landing page's own drop zone answers for itself, and answers
-      // differently: it opens a file rather than adding one to what is open.
-      if (event.target instanceof HTMLElement && event.target.closest('.dropzone') !== null) return
+      // Two targets answer for themselves. The landing page's drop zone answers
+      // differently — it opens a file rather than adding one to what is open —
+      // and the map's edge zones answer *more specifically*: the same file, and
+      // the stack of lanes the reader aimed at. Both still bubble here, so this
+      // handler is what takes the highlight off.
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('.dropzone, .lane-drop') !== null
+      ) {
+        return
+      }
       const files = Array.from(event.dataTransfer?.files ?? [])
       if (files.length === 0) return
       event.preventDefault()
@@ -559,7 +584,7 @@ export class App implements SessionHost {
         id: 'palette',
         group: 'App',
         title: 'Search commands',
-        keys: 'mod+p',
+        keys: KEYS.palette,
         run: () => this.openPalette(),
       },
       {
@@ -577,7 +602,7 @@ export class App implements SessionHost {
         // `o`, not ⌘T: every browser claims ⌘T for a tab of its own and never
         // lets the page see it, so the binding was one a reader could read in
         // this dialog and never once perform.
-        keys: 'o',
+        keys: KEYS.newSession,
         enabled: this.sessions.length < MAX_SESSIONS,
         run: () => this.newSession(),
       },
@@ -588,7 +613,7 @@ export class App implements SessionHost {
         hint:
           'Everything about this tab as a file: the view, every track and its settings, the ' +
           'groups, the marks. Drop it back on the page to open it again.',
-        keys: 'mod+s',
+        keys: KEYS.saveSession,
         enabled: file,
         run: () => this.exportSession(),
       },
@@ -600,14 +625,14 @@ export class App implements SessionHost {
           this.sessions.length === 1
             ? 'The last tab is emptied rather than closed — there would be nothing to drop a file on.'
             : undefined,
-        keys: 'mod+w',
+        keys: KEYS.closeSession,
         run: () => this.closeSession(this.active),
       },
       {
         id: 'next-session',
         group: 'Go',
         title: 'Next session',
-        keys: 'mod+]',
+        keys: KEYS.nextSession,
         enabled: this.sessions.length > 1,
         run: () => this.activate((this.active + 1) % this.sessions.length),
       },
@@ -615,7 +640,7 @@ export class App implements SessionHost {
         id: 'prev-session',
         group: 'Go',
         title: 'Previous session',
-        keys: 'mod+[',
+        keys: KEYS.prevSession,
         enabled: this.sessions.length > 1,
         run: () =>
           this.activate((this.active - 1 + this.sessions.length) % this.sessions.length),
@@ -623,24 +648,17 @@ export class App implements SessionHost {
       ...(session?.commands() ?? []),
     ]
 
-    const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
-      ['text', 'n'],
-      ['fills', 'f'],
-      ['baseline', 'r'],
-      ['gutter', 'u'],
-      ['crosshair', 'x'],
-      ['dividers', 'd'],
-      ['breaks', 'e'],
-      ['labels', 'l'],
-      ['ticks', 'k'],
-    ]
-    for (const [key, binding] of overlayKeys) {
+    // The bindings come from `plotOptions.ts`, beside the labels and the marks,
+    // because the two Plot cards print them in their tooltips: a list of pairs
+    // here and a lookup there is the same table written twice, and the copy
+    // that goes stale is the one nothing tests.
+    for (const key of Object.keys(PLOT_OPTION_KEYS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
       list.push({
         id: `overlay-${key}`,
         group: 'View',
         title: `${overlays[key] ? 'Hide' : 'Show'} ${PLOT_OPTION_LABELS[key].label}`,
         hint: PLOT_OPTION_LABELS[key].hint,
-        keys: binding,
+        keys: PLOT_OPTION_KEYS[key],
         run: () => void togglePlotOption(key),
       })
     }
@@ -650,7 +668,7 @@ export class App implements SessionHost {
         id: 'fold-sidebar',
         group: 'View',
         title: 'Fold or show the General panel',
-        keys: 'b',
+        keys: GENERAL_PANEL.keys,
         enabled: file,
         run: () => this.generalPanel.toggle.click(),
       },
@@ -659,7 +677,7 @@ export class App implements SessionHost {
         group: 'View',
         title: 'Fold or show the Annotations panel',
         hint: 'A metacool carries no annotations (§8.5), so it has no panel to fold.',
-        keys: 'a',
+        keys: ANNOTATION_PANEL.keys,
         // The same gate the button is under: it is `hidden` on a file with a
         // genome layer, and a shortcut that folds an invisible column is a key
         // that appears to do nothing.
@@ -671,7 +689,7 @@ export class App implements SessionHost {
         group: 'View',
         title: 'Fold or show the Aesthetics panel',
         hint: 'A table view offers none, so there is nothing to fold there.',
-        keys: 'm',
+        keys: AESTHETICS_PANEL.keys,
         enabled: file,
         run: () => this.aestheticsPanel.toggle.click(),
       },
@@ -679,14 +697,19 @@ export class App implements SessionHost {
         id: 'theme',
         group: 'View',
         title: 'Cycle the theme: system, light, dark',
-        keys: 't',
+        keys: KEYS.theme,
         run: () => this.theme.el.click(),
       },
       {
         id: 'shortcuts',
-        group: 'Help',
+        // `App`, not `Help`. The shortcuts dialog lists one section per group of
+        // *bound* commands, and this was the only bound command in Help — so
+        // that group existed to hold a single row, which then decided where the
+        // two gesture tables below it landed. It belongs beside the palette in
+        // any case: both are ways of asking the app what it can do.
+        group: 'App',
         title: 'Keyboard shortcuts',
-        keys: 'mod+/',
+        keys: KEYS.shortcuts,
         run: () => this.openShortcutsDialog(),
       },
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },

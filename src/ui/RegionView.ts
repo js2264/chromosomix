@@ -29,6 +29,7 @@ import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, axisRegion, type AnnotationContext } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -94,21 +95,19 @@ export class RegionView {
    * that gap. The shell forwards to this; the view itself stays unaware.
    */
   readonly panel: MatrixPanel
-  private readonly input: HTMLInputElement
+  private readonly search: SearchBox
   private readonly matched: HTMLElement
   private readonly title: HTMLElement
   private readonly problem: HTMLElement
   private disposed = false
 
   constructor(private readonly props: RegionViewProps) {
-    this.input = el('input', {
-      class: 'input input-region',
-      type: 'text',
+    this.search = new SearchBox({
+      inputClass: 'input-region',
       value: props.region,
       placeholder: 'contig, contig:start-end, or a genome name',
-    })
-    this.input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') props.onChangeRegion(this.input.value.trim())
+      title: 'What this view is of. Type a contig or a range and press Enter.',
+      onSubmit: (text) => props.onChangeRegion(text),
     })
     this.matched = el('span', { class: 'match-kind' })
     this.problem = el('p', { class: 'inline-error hidden' })
@@ -173,8 +172,8 @@ export class RegionView {
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
-          this.input,
-          button('go', () => props.onChangeRegion(this.input.value.trim())),
+          this.search.el,
+          button('go', () => props.onChangeRegion(this.search.input.value.trim())),
           // Back, beside the box that got you here. Every navigation is a
           // history entry (§5.5 puts the whole view state in the hash), so this
           // is the browser's own back — the same button the keyboard and the
@@ -207,6 +206,11 @@ export class RegionView {
    */
   applyScale(scale: ScaleState): void {
     this.panel.applyScale(scale)
+  }
+
+  /** The `/` key: this view's box is the region box, which is also its title. */
+  focusSearch(): void {
+    this.search.focus()
   }
 
   destroy(): void {

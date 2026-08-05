@@ -55,12 +55,14 @@ import {
   scaleForDpi,
 } from './export'
 import { VectorPage } from './vector'
-import { isMac } from './commands'
-import { iconButton, type IconName } from './icons'
+import { KEYS, isMac, withKey } from './commands'
+import { searchKey } from './SearchBox'
+import { type IconName, cardTitle, iconButton } from './icons'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 import { transparencyField } from './AnnotationCard'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
+  PLOT_OPTION_KEYS,
   PLOT_OPTION_LABELS,
   getPlotOptions,
   setPlotOption,
@@ -363,14 +365,26 @@ export class BrowserView {
           //
           // The box and its hit list are one element, because the list is
           // positioned against the box it belongs to.
-          el('div', { class: 'browser-search' }, this.locusInput, this.searchList),
+          // The badge rides in the box rather than beside it, and steps out of
+          // the way as soon as the caret arrives: `/` is worth knowing exactly
+          // once, and after that it is furniture over the placeholder.
+          el('div', { class: 'browser-search search-box' }, this.locusInput, searchKey(), this.searchList),
           button('go', () => this.submit()),
-          iconButton('zoom-out', 'Zoom out (key: −)', () => this.zoomBy(1 / 1.8)),
-          iconButton('zoom-in', 'Zoom in (key: +)', () => this.zoomBy(1.8)),
-          // The same two marks the Plot card uses, because they are the same two
-          // actions and a reader should not have to learn them twice.
-          iconButton('unfold-horizontal', 'The whole genome (key: 0, or a double click)', () => this.fit()),
-          iconButton('unfold-vertical', 'Fit every track into the height there is', () => this.fitTracks()),
+          iconButton('zoom-out', 'Zoom out (−)', () => this.zoomBy(1 / 1.8)),
+          iconButton('zoom-in', 'Zoom in (+)', () => this.zoomBy(1.8)),
+          // The same three marks the Plot card uses, because they are the same
+          // three actions and a reader should not have to learn them twice.
+          iconButton('unfold-horizontal', 'The whole genome (0, or a double click)', () => this.fit()),
+          iconButton(
+            'stretch-vertical',
+            withKey('Stretch every track to fill the height, all to one height', KEYS.stretch),
+            () => this.fitTracks(),
+          ),
+          iconButton(
+            'chevrons-up-down',
+            withKey('Autoscale every track to what is in view', KEYS.autoscale),
+            () => this.autoscaleAll(),
+          ),
         ),
         el(
           'p',
@@ -394,7 +408,7 @@ export class BrowserView {
       el(
         'div',
         { class: 'controls-card' },
-        el('h3', { class: 'controls-title', text: 'Groups' }),
+        cardTitle('Groups', 'layers', 'controls-title'),
         this.groupsHost,
       ),
       this.exportCard(),
@@ -437,22 +451,18 @@ export class BrowserView {
     setReadout('')
   }
 
-  /** Put the caret in the locus box — the `l` key, and the palette. */
-  focusLocus(): void {
-    this.locusInput.focus()
-    this.locusInput.select()
-  }
-
   /**
-   * The same box: there is only one now, and `/` is muscle memory.
+   * Put the caret in the box — the `/` key, and the palette.
    *
-   * Kept as its own method rather than collapsed into the caller, because the
-   * two keys mean different things to the person pressing them — "go somewhere"
-   * and "find something" — and the box answers both. Removing the binding would
-   * teach that lesson by doing nothing.
+   * Named as every other view names it, because the shell now asks all of them
+   * the same question. There is one box here and it is both things: `chrIV`,
+   * `chrIV:1,000-2,000` and `GAL4` are three spellings of *where do I want to
+   * be*, and the text decides which. It answered to `l` as well until `l` was
+   * found to be the labels overlay too — see `Session.commands`.
    */
   focusSearch(): void {
-    this.focusLocus()
+    this.locusInput.focus()
+    this.locusInput.select()
   }
 
   /**
@@ -1953,9 +1963,12 @@ export class BrowserView {
    */
   private optionToggle(key: PlotOptionKey, name: IconName): HTMLButtonElement {
     const { label, hint } = PLOT_OPTION_LABELS[key]
-    const node = iconButton(name, `${label} — ${hint}`, () =>
-      setPlotOption(key, !getPlotOptions()[key]),
-    { class: 'btn btn-icon btn-toggle', size: 15 })
+    const node = iconButton(
+      name,
+      withKey(`${label} — ${hint}`, PLOT_OPTION_KEYS[key]),
+      () => setPlotOption(key, !getPlotOptions()[key]),
+      { class: 'btn btn-icon btn-toggle', size: 15 },
+    )
     const sync = (): void => {
       node.setAttribute('aria-pressed', String(getPlotOptions()[key]))
     }
@@ -1996,7 +2009,7 @@ export class BrowserView {
     return el(
       'div',
       { class: 'controls-card' },
-      el('h3', { class: 'controls-title', text: 'Plot' }),
+      cardTitle('Plot', 'palette', 'controls-title'),
       el(
         'div',
         { class: 'panel-controls' },
@@ -2008,18 +2021,28 @@ export class BrowserView {
         el(
           'div',
           { class: 'plot-icon-row' },
-          iconButton('unfold-horizontal', 'Fit the whole genome across (key: 0, or a double click on the tracks)', () => this.fit(), {
+          iconButton('unfold-horizontal', 'Fit the whole genome across (0, or a double click on the tracks)', () => this.fit(), {
             class: 'btn btn-icon',
             size: 15,
           }),
-          iconButton('unfold-vertical', 'Fit every track into the height there is, in the proportions they are in now', () => this.fitTracks(), {
-            class: 'btn btn-icon',
-            size: 15,
-          }),
-          iconButton('chevrons-up-down', 'Autoscale every track to what is in view — a group resolves as a group', () => this.autoscaleAll(), {
-            class: 'btn btn-icon',
-            size: 15,
-          }),
+          iconButton(
+            'stretch-vertical',
+            withKey(
+              'Stretch every track to fill the height there is, all of them to one height',
+              KEYS.stretch,
+            ),
+            () => this.fitTracks(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+          iconButton(
+            'chevrons-up-down',
+            withKey(
+              'Autoscale every track to what is in view — a group resolves as a group',
+              KEYS.autoscale,
+            ),
+            () => this.autoscaleAll(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
         ),
         el(
           'div',

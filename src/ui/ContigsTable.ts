@@ -15,6 +15,7 @@
 
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
+import { KEYS, keyedButton, withKey } from './commands'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 const CORE_ORDER = ['name', 'length']
@@ -121,9 +122,8 @@ export class ContigsTable {
     const whole = options.onOpenWhole
     if (whole !== undefined) {
       this.table.addToolbarItem(
-        button('whole genome →', () => whole(), {
-          class: 'btn',
-          title: 'Every sequence at once, as one map',
+        keyedButton('whole genome →', KEYS.whole, () => whole(), {
+          title: withKey('Every sequence at once, as one map', KEYS.whole),
         }),
       )
     }
@@ -150,6 +150,11 @@ export class ContigsTable {
       ),
       this.table.el,
     )
+  }
+
+  /** The `/` key: a table's box is the filter above it. */
+  focusSearch(): void {
+    this.table.focusSearch()
   }
 
   /** Release the table's listeners and flush its pending filter state. */

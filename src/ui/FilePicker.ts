@@ -277,7 +277,7 @@ export class FilePicker {
       ),
       iconButton(
         'x',
-        'Dismiss. The footer keeps the same statement.',
+        'Dismiss. The About dialog states the same thing, in full, whenever you want it.',
         () => {
           dismissPrivacy()
           note.remove()
