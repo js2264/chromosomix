@@ -159,8 +159,16 @@ export class BrowserView {
    * between the two is exactly the pixel the click misses by.
    */
   private rangeHits: RangeHit[] = []
-  /** The limit being typed into, while one is, and how to abandon it. */
-  private editor: { input: HTMLInputElement; cancel: () => void } | null = null
+  /**
+   * The limit being typed into, while one is, and the two ways it can end.
+   *
+   * `cancel` for the cases where the number has nowhere to go — the view is
+   * being torn down, or the lane it was measured into has moved — and `commit`
+   * for the case where the reader simply moved the caret somewhere else.
+   */
+  private editor:
+    | { input: HTMLInputElement; cancel: () => void; commit: () => void }
+    | null = null
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
@@ -310,6 +318,22 @@ export class BrowserView {
   focusSearch(): void {
     this.searchInput.focus()
     this.searchInput.select()
+  }
+
+  /**
+   * Go somewhere, because something outside asked — the Sequences card.
+   *
+   * Directly rather than through the view state, and that is the whole point.
+   * A locus that reaches this view as a state patch has to survive two equality
+   * gates on the way: `ViewStore.set` drops a patch that serialises to what is
+   * already stored, and `applyLocus` drops one equal to what it last reported.
+   * Both gates are right for what they were built for — no redundant history
+   * entries, no re-applying a window mid-drag — and both are wrong for a click
+   * on a list, which must move the view whether or not the address bar happens
+   * to differ. Reporting still happens, so the hash follows as it always did.
+   */
+  showLocus(text: string): void {
+    this.goTo(text)
   }
 
   /** Re-measure after a column was folded or the window changed shape. */
@@ -889,6 +913,14 @@ export class BrowserView {
    * that this track's axis is not the data's any more.
    */
   private openRangeEditor(hit: RangeHit): void {
+    // The one that is open is *finished*, not abandoned. `onDown` runs on
+    // `pointerdown` and calls `preventDefault`, so the press that lands on a
+    // second limit never produces the focus change that would have committed the
+    // first — and cancelling here would make the natural gesture for setting the
+    // same bound on two tracks in a row the one gesture that silently throws the
+    // first number away. Clicking anywhere *else* on the canvas already commits
+    // it; these two have to agree.
+    this.editor?.commit()
     this.closeRangeEditor()
     const named = hit.entries.map((entry) => entry.label).join(', ')
     const input = el('input', {
@@ -984,7 +1016,7 @@ export class BrowserView {
     // from — and the box is closed by then anyway.
     input.addEventListener('blur', () => commit(false))
     this.stage.appendChild(input)
-    this.editor = { input, cancel: close }
+    this.editor = { input, cancel: close, commit: () => commit(false) }
     input.focus()
     input.select()
     this.schedule()
@@ -1177,6 +1209,15 @@ export class BrowserView {
         const auto = resolveLimits({ auto: true, min: 0, max: 1 }, extent).max
         slider.value = String(auto > 0 ? Math.round(clampPercent((limits.max / auto) * 100)) : 100)
       }
+      // …and the two limit boxes, where the `text` option put them. They are
+      // built once and the row is not rebuilt when the limits move, so without
+      // this they show whatever the axis was the last time the stack changed
+      // shape — a number that contradicts the track drawn right beside it.
+      for (const part of ['min', 'max'] as const) {
+        const box = row.querySelector<HTMLInputElement>(`[data-limit="${part}"]`)
+        if (box === null || box === document.activeElement) continue
+        box.value = formatLimit(part === 'min' ? limits.min : limits.max)
+      }
       row.querySelector('.btn-tiny')?.classList.toggle('is-on', target.style.limits.auto)
     }
   }
@@ -1253,27 +1294,49 @@ export class BrowserView {
    */
   private rangeControl(entry: AnnotationEntry): HTMLElement {
     const shown = this.shownLimits(entry.id) ?? { min: entry.style.limits.min, max: entry.style.limits.max }
-    const box = (part: 'min' | 'max'): HTMLInputElement => {
-      const node = el('input', {
+    const box = (part: 'min' | 'max'): HTMLInputElement =>
+      el('input', {
         class: 'input input-tiny',
         type: 'text',
         value: formatLimit(part === 'min' ? shown.min : shown.max),
         title: `${part === 'min' ? 'Bottom' : 'Top'} of ${entry.label}’s value axis`,
+        attrs: { 'data-limit': part },
       })
-      return node
-    }
     const min = box('min')
     const max = box('max')
-    const commit = (): void => {
-      const low = Number(min.value.trim())
-      const high = Number(max.value.trim())
-      if (!Number.isFinite(low) || !Number.isFinite(high) || !(high > low)) return
-      this.props.store.restyle(entry.id, { limits: { auto: false, min: low, max: high } })
+    /**
+     * One box commits **one** bound.
+     *
+     * The other comes from the axis on screen at commit time, exactly as the
+     * drawn range does — never from the sibling box. These two are built once
+     * and deliberately not rebuilt when the limits move (the ceiling slider
+     * drags continuously, and a rebuild mid-drag would remove the control the
+     * event came from), so the sibling's text is only ever as fresh as the last
+     * time the row happened to be built. Reading it back would republish a
+     * number nobody typed: zoom in, type a floor, and the ceiling would silently
+     * revert to whatever it was two views ago.
+     */
+    const commitOne = (node: HTMLInputElement, part: 'min' | 'max'): void => {
+      const typed = Number(node.value.trim())
+      const current = this.props.store.byId(entry.id)?.style.limits
+      if (current === undefined) return
+      const live = this.shownLimits(entry.id) ?? { min: current.min, max: current.max }
+      if (node.value.trim() === '' || !Number.isFinite(typed)) {
+        node.value = formatLimit(part === 'min' ? live.min : live.max)
+        return
+      }
+      const next = part === 'min' ? { min: typed, max: live.max } : { min: live.min, max: typed }
+      if (!(next.max > next.min)) {
+        node.classList.add('is-bad')
+        window.setTimeout(() => node.classList.remove('is-bad'), 700)
+        return
+      }
+      this.props.store.restyle(entry.id, { limits: { auto: false, ...next } })
     }
-    for (const node of [min, max]) {
-      node.addEventListener('change', commit)
+    for (const [node, part] of [[min, 'min'], [max, 'max']] as const) {
+      node.addEventListener('change', () => commitOne(node, part))
       node.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') commit()
+        if (event.key === 'Enter') commitOne(node, part)
       })
     }
     return el('div', { class: 'browser-range' }, min, el('span', { text: '–' }), max)

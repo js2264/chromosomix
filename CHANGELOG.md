@@ -278,7 +278,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now inert while it is invisible, and shown outright where there is no pointer
   to hover with (`@media (hover: none)`). Both halves matter: `opacity: 0` hides
   a button and does not stop it taking a click, and a control revealed by
-  pointing is a control that appears never on a touch screen.
+  pointing is a control that appears never on a touch screen. Each appears with
+  no transition and fades only on the way out, so there is no moment in which
+  one is clickable and barely drawn.
+
+- Moving the caret from one lane's limit straight to another's kept the first
+  number. The press that lands on a second limit is handled on `pointerdown` and
+  calls `preventDefault`, so it never produces the focus change that would have
+  committed the first — and the editor was being *cancelled* on the way out. The
+  natural gesture for setting the same bound on two tracks was therefore the one
+  gesture that silently threw the first value away, while clicking anywhere else
+  on the canvas committed it.
+
+- With the words switched off, the lane's two limit boxes were seeded once and
+  never refreshed, and committing either one wrote *both* — so typing a floor
+  republished whatever ceiling the row happened to be built with, silently
+  undoing a zoom or a drag of the ceiling slider. Each box now commits its own
+  bound and takes the other from the axis on screen, exactly as the drawn range
+  does, and the untouched box follows the lane it is beside.
+
+- Choosing PNG collapsed the export row: the resolution select inherits
+  `width: 100%` from the controls card, and a `flex-basis: auto` resolves to it,
+  so a control that must not shrink claimed the whole line — crushing the format
+  select to nothing and pushing Save off the card.
+
+- A click in the Sequences card now moves the view directly rather than through
+  the view state. A patch that serialises to what is already stored is dropped
+  without notifying, so clicking the sequence the hash already named could do
+  nothing at all.
+
+- `fmt.int` groups digits in the *viewer's* locale, and half of Europe groups
+  them with a space WinAnsi has no byte for — so a figure exported in French
+  read `7?071 in view`, every grouped number corrupted by the app's own
+  formatter, in the one place nobody would look for a locale bug. Those spaces
+  now fold onto the non-breaking space WinAnsi does have.
 
 - Ticking a track did not open the batch bar until the focus left the list. The
   rebuild is deferred while a control in the list is being edited — a colour

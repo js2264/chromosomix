@@ -2167,12 +2167,18 @@ p {
   gap: 0.3rem;
 }
 
+/* `width: auto` on both, because `.controls-card .select` further up sets
+   `width: 100%` and a `flex-basis: auto` resolves to it — so the resolution,
+   which must not shrink, claimed the whole row, crushed the format select to
+   nothing and pushed Save off the card the moment PNG was chosen. */
 .export-row-flex > .select-dpi {
   flex: 0 0 auto;
+  width: auto;
 }
 
 .export-row-flex > .select-format {
   flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 
@@ -3614,9 +3620,13 @@ p {
    still exactly where it was, so reaching for it is one movement rather than a
    hunt; it keeps its box while it is invisible for the same reason.
 
-   Opacity rather than `display: none` on purpose. The pointer cannot reach the
-   swatch without being on the row, and being on the row is what reveals it — so
-   there is no moment in which an invisible control could take a click. */
+   Opacity rather than `display: none` on purpose: the square keeps its box, so
+   reaching for it is one movement rather than a hunt. Inert while it is
+   invisible all the same, and revealed with no transition on the way *in* — the
+   pointer cannot reach the swatch without being on the row, but a fade means
+   there are 120 ms in which it is clickable and barely drawn, and a colour
+   picker opened by a click aimed at the name beside it is a surprise nobody
+   needs. It fades on the way out, where nothing is being aimed at. */
 .ann-swatch {
   width: 0.85rem;
   height: 0.85rem;
@@ -3629,6 +3639,7 @@ p {
   appearance: none;
   -webkit-appearance: none;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
@@ -3636,12 +3647,15 @@ p {
 .ann-row:focus-within .ann-swatch,
 .ann-swatch:focus-visible {
   opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0s;
 }
 
 /* …except in the batch bar, which is not a row and whose swatch is the control
    the bar exists to offer. */
 .ann-batch .ann-swatch {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* The swatch's own well is inset by a few pixels in every engine, which at this

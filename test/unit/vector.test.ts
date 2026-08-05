@@ -92,6 +92,20 @@ describe('escapeText', () => {
     expect(escapeText('a … b • c')).toBe('a \\205 b \\225 c')
     expect(escapeText('0 · 1')).toBe('0 \\267 1')
   })
+
+  // `fmt.int` groups digits in the *viewer's* locale, and half of Europe groups
+  // them with a space that WinAnsi has no byte for. Without the fold, a figure
+  // exported in French read `7?071 in view` — every grouped number corrupted by
+  // the app's own formatter.
+  it('folds the spaces a locale groups digits with onto the one WinAnsi has', () => {
+    const french = new Intl.NumberFormat('fr-FR').format(7071)
+    expect(french).not.toBe('7071')
+    expect(escapeText(french)).toBe('7\\240071')
+    expect(escapeText('7\u202f071')).toBe('7\\240071')
+    expect(escapeText('7\u2009071')).toBe('7\\240071')
+    // The one Latin-1 already had keeps its own byte, which is the same byte.
+    expect(escapeText('7\u00a0071')).toBe('7\\240071')
+  })
 })
 
 describe('VectorPage', () => {
