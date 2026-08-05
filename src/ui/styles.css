@@ -3818,7 +3818,8 @@ p {
    A path is looked up rather than read: it answers "which of the four files
    called coverage is this one" and then goes back to being furniture. Wrapped
    rather than clipped, because half a path answers nothing. */
-/* No boxes on a loaded row.
+/* No boxes on a loaded row, or on a group's head — which is the same row in a
+   different card, and has to look like one.
 
    A row that has finished loading carries six or seven controls — the eye, the
    flip, the fold arrow, the ×, `auto`, the batch tick — and a border around each
@@ -3827,11 +3828,13 @@ p {
    an outline actually tells a reader something. Rows that are *not* ready are
    left alone: their one button ("open it again") is the whole point of the row
    and should look like a button. */
-.ann-row.ann-ready .btn {
+.ann-row.ann-ready .btn,
+.group-head .btn {
   border-color: transparent;
 }
 
-.ann-row.ann-ready .btn:hover:not(:disabled) {
+.ann-row.ann-ready .btn:hover:not(:disabled),
+.group-head .btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 

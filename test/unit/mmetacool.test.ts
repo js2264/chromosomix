@@ -271,6 +271,29 @@ describe('which entry an mmetacool opens at', () => {
     expect(firstEntry(rootError(['treated', 'control']))).toEqual({ group: 'entries', entry: 'treated' })
   })
 
+  it('lands on a wanted resolution when the ladder has it', () => {
+    // What a *comparison* needs: the map already open is at 2 kb, and a second
+    // file dropped beside it has to come up at 2 kb rather than at its finest
+    // and be refused for differing. Nothing else passes a preference, so the
+    // finest-level rule above is untouched for every other caller.
+    expect(firstEntry(rootError(['500', '1000', '2000']), 2000)).toEqual({
+      group: 'entries',
+      entry: '2000',
+    })
+    // …and falls back to the finest when it has not, which is what makes the
+    // gate's bin-size message the thing the reader sees rather than a silent
+    // mismatch.
+    expect(firstEntry(rootError(['500', '1000']), 2000)).toEqual({
+      group: 'entries',
+      entry: '500',
+    })
+    // A preference means nothing to a collection whose entries are samples.
+    expect(firstEntry(rootError(['rep1', 'rep2']), 2000)).toEqual({
+      group: 'entries',
+      entry: 'rep1',
+    })
+  })
+
   it('declines to redirect for anything that is not an mmetacool root', () => {
     expect(firstEntry(new ViewerError('bad-ordering', 'nope', { entries: ['1000'] }))).toBeNull()
     expect(firstEntry(rootError([]))).toBeNull()

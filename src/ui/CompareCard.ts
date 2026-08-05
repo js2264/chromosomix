@@ -27,8 +27,15 @@ export type CompareState =
 export interface CompareCardProps {
   /** A file was dropped or a URL typed. */
   onOpen(source: { kind: 'local'; file: File } | { kind: 'remote'; url: string }): void
-  /** Put the second file down and go back to one map. */
-  onClose(): void
+  /**
+   * Put one of the two down and go back to a single map.
+   *
+   * Either one: closing the second leaves the first as it was, and closing the
+   * first opens the second on its own — which is what a × beside a name has to
+   * mean when there are two names, and is the same pair of actions the two File
+   * cards in General already offer.
+   */
+  onClose(which: 1 | 2): void
   /** Swap which file is above the diagonal. */
   onSwap(): void
   /** The name of the file already open, for the labels. */
@@ -146,6 +153,12 @@ export class CompareCard {
                 text: this.props.primaryLabel(),
                 title: 'Upper-right triangle',
               }),
+              iconButton(
+                'x',
+                `Close ${this.props.primaryLabel()} and keep ${this.state.label} on its own`,
+                () => this.props.onClose(1),
+                { class: 'btn-close', size: 14 },
+              ),
             ),
             el(
               'div',
@@ -156,9 +169,12 @@ export class CompareCard {
                 text: this.state.label,
                 title: 'Lower-left triangle',
               }),
-              iconButton('x', 'Close the second file and go back to one map', () =>
-                this.props.onClose(),
-              { class: 'btn btn-icon btn-close', size: 13 }),
+              iconButton(
+                'x',
+                `Close ${this.state.label} and go back to one map`,
+                () => this.props.onClose(2),
+                { class: 'btn-close', size: 14 },
+              ),
             ),
           ),
           el('p', {
