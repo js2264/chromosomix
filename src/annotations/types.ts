@@ -339,6 +339,16 @@ export interface AnnotationEntry {
   payload?: AnnotationPayload
   /** Value extent over the whole bigWig, from its header. Seeds a manual clip. */
   fileExtent?: { min: number; max: number }
+  /**
+   * The feature set the browser's search reads.
+   *
+   * Several gene models can be *drawn* — comparing two annotations of one genome
+   * is a thing people do — but a search box that answers from all of them at
+   * once answers "GAL4" with four rows that differ only in which file they came
+   * from. So one of them is the one being searched, marked with a filled star,
+   * and the others carry an empty one that makes them it.
+   */
+  primary?: boolean
 }
 
 /** The part of an entry that is worth remembering across a reload (§8.6). */
@@ -351,4 +361,6 @@ export interface StoredEntry {
   visible: boolean
   placement: Placement
   style: AnnotationStyle
+  /** Which feature set the search reads; see {@link AnnotationEntry.primary}. */
+  primary?: boolean
 }

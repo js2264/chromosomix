@@ -253,6 +253,16 @@ export class BrowserView {
   /** Set while a navigation is ticking a sequence on its way — see {@link ensureOnAxis}. */
   private adopting = false
   /**
+   * Groups the reader has unfolded, so a repaint does not shut them.
+   *
+   * A group is a row in a card, exactly as a track is one in the panel beside
+   * it: a name, an eye, and everything else behind a chevron. Held here rather
+   * than in the store for the reason a card's own `open` set is held in the
+   * card — which of them is unfolded is a gesture in progress, not a property of
+   * the group.
+   */
+  private readonly openGroups = new Set<string>()
+  /**
    * Width of the column the track names are drawn in; 0 when they are not.
    *
    * The whole of what the `gutter` option does. Every frame starts at it, the
@@ -335,7 +345,9 @@ export class BrowserView {
         el(
           'div',
           { class: 'title-bar browser-bar' },
-          el('h2', { class: 'region-title', text: props.assembly.name }),
+          // No title. The file's name is on its tab, in the Genome card and in
+          // the crumb; a fourth copy of it took the width the locus box wants
+          // and said nothing the other three had not.
           this.locusInput,
           button('go', () => this.goTo(this.locusInput.value)),
           iconButton('zoom-out', 'Zoom out (key: −)', () => this.zoomBy(1 / 1.8)),
@@ -1766,75 +1778,112 @@ export class BrowserView {
     for (const [name, members] of groups) {
       const overlaid = this.modeOf(name) === 'overlay'
       const shared = this.scalingOf(name) === 'shared'
+      const open = this.openGroups.has(name)
+      // A group is shown when any of its members is: hiding one member by hand
+      // and then pressing the group's eye should hide the rest, not reveal the
+      // one that was put away.
+      const shown = members.some((member) => member.visible)
+
+      const eye = iconButton(
+        shown ? 'eye' : 'eye-off',
+        shown ? `Hide every track in ${name}` : `Show ${name} again`,
+        () => {
+          for (const member of members) this.props.store.update(member.id, { visible: !shown })
+        },
+        { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+      )
+      eye.setAttribute('aria-pressed', String(shown))
+
+      const fold = iconButton(
+        open ? 'chevron-down' : 'chevron-right',
+        open ? `Fold ${name}` : `What is in ${name}, and how it is drawn`,
+        () => {
+          if (open) this.openGroups.delete(name)
+          else this.openGroups.add(name)
+          this.paintGroups()
+        },
+        { class: 'btn btn-icon ann-fold', size: 14 },
+      )
+      fold.setAttribute('aria-expanded', String(open))
+
+      const head = el(
+        'div',
+        { class: 'group-head' },
+        el('span', { class: 'group-title', text: name, title: name }),
+        el('span', { class: 'hint group-count', text: `${members.length}` }),
+        eye,
+        fold,
+      )
+
+      const body = el(
+        'div',
+        { class: 'group-body' },
+        el(
+          'div',
+          { class: 'plot-icon-row' },
+          // Each of the three is a state the group is *in*, so each is one mark
+          // that changes to the other — `layers` for one lane, rows for several;
+          // a link for one shared axis, a broken one for each track's own. A word
+          // would say the same thing in a column sixteen characters wide that has
+          // four other things to fit in it.
+          iconButton(
+            overlaid ? 'rows-3' : 'layers',
+            overlaid
+              ? 'Stacked: give each of these a lane of its own again'
+              : 'Overlay: draw all of these into one lane, against one axis',
+            () => this.setMode(name, overlaid ? 'stacked' : 'overlay'),
+            { class: 'btn btn-icon', size: 14 },
+          ),
+          iconButton(
+            shared ? 'unlink' : 'link',
+            shared
+              ? 'Scale each: let every track here find its own limits, as an ungrouped one does'
+              : 'Scale together: one pair of limits over all of them, which is what makes them comparable',
+            () => this.setScaling(name, shared ? 'each' : 'shared'),
+            { class: 'btn btn-icon', size: 14 },
+          ),
+          iconButton(
+            'stretch-vertical',
+            'Give every track in this group the height of its tallest member',
+            () => {
+              const tallest = Math.max(...members.map((member) => member.style.size))
+              for (const member of members) this.props.store.restyle(member.id, { size: tallest })
+            },
+            { class: 'btn btn-icon', size: 14 },
+          ),
+        ),
+        el(
+          'div',
+          { class: 'group-members' },
+          // One member per row, name left and × right, so the crosses line up as
+          // a column: pills wrapping mid-name put every × at a different offset,
+          // and a list of things you can remove wants one place to aim at.
+          ...members.map((member) =>
+            el(
+              'div',
+              { class: 'group-member', title: member.label },
+              el('span', {
+                class: 'group-member-chip',
+                style: { background: member.style.colour },
+              }),
+              el('span', { class: 'group-member-name', text: member.label }),
+              // The same × the annotations card puts on a row, at the same size:
+              // this one takes a track out of a group rather than out of the
+              // session, and the two should not be two different marks.
+              iconButton('x', `Take ${member.label} out of ${name}`, () =>
+                this.props.store.restyle(member.id, { group: '' }),
+              { class: 'btn-close group-member-out', size: 14 }),
+            ),
+          ),
+        ),
+      )
+
       rows.push(
         el(
           'div',
-          { class: 'field field-block group-card' },
-          el(
-            'span',
-            { class: 'field-label' },
-            el('span', { text: name }),
-            el('span', { class: 'hint', text: ` ${members.length} tracks` }),
-          ),
-          el(
-            'div',
-            { class: 'plot-icon-row' },
-            // Each of the three is a state the group is *in*, so each is one
-            // mark that changes to the other — `layers` for one lane, rows for
-            // several; a link for one shared axis, a broken one for each track's
-            // own. A word would say the same thing in a column sixteen
-            // characters wide that has four other things to fit in it.
-            iconButton(
-              overlaid ? 'rows-3' : 'layers',
-              overlaid
-                ? 'Stacked: give each of these a lane of its own again'
-                : 'Overlay: draw all of these into one lane, against one axis',
-              () => this.setMode(name, overlaid ? 'stacked' : 'overlay'),
-              { class: 'btn btn-icon', size: 14 },
-            ),
-            iconButton(
-              shared ? 'unlink' : 'link',
-              shared
-                ? 'Scale each: let every track here find its own limits, as an ungrouped one does'
-                : 'Scale together: one pair of limits over all of them, which is what makes them comparable',
-              () => this.setScaling(name, shared ? 'each' : 'shared'),
-              { class: 'btn btn-icon', size: 14 },
-            ),
-            iconButton(
-              'stretch-vertical',
-              'Give every track in this group the height of its tallest member',
-              () => {
-                const tallest = Math.max(...members.map((member) => member.style.size))
-                for (const member of members) this.props.store.restyle(member.id, { size: tallest })
-              },
-              { class: 'btn btn-icon', size: 14 },
-            ),
-          ),
-          el(
-            'div',
-            { class: 'group-members' },
-            // One member per row, name left and × right, so the crosses line up
-            // as a column: three pills wrapping mid-name put every × at a
-            // different offset, and a list of things you can remove wants one
-            // place to aim at rather than three.
-            ...members.map((member) =>
-              el(
-                'div',
-                { class: 'group-member', title: member.label },
-                el('span', {
-                  class: 'group-member-chip',
-                  style: { background: member.style.colour },
-                }),
-                el('span', { class: 'group-member-name', text: member.label }),
-                // The same × the annotations card puts on a row, at the same
-                // size: this one takes a track out of a group rather than out of
-                // the session, and the two should not be two different marks.
-                iconButton('x', `Take ${member.label} out of ${name}`, () =>
-                  this.props.store.restyle(member.id, { group: '' }),
-                { class: 'btn-close group-member-out', size: 14 }),
-              ),
-            ),
-          ),
+          { class: `group-card${shown ? '' : ' is-hidden'}` },
+          head,
+          ...(open ? [body] : []),
         ),
       )
     }
@@ -2215,15 +2264,17 @@ export class BrowserView {
       if (index < 0 || index === drag.over) return
       drag.over = index
       const over = this.lanes[index]
-      if (over.entry.card !== drag.entry.card || over.entry.id === drag.entry.id) return
-      const list = this.props.store.forCard(drag.entry.card)
-      const to = list.findIndex((row) => row.id === over.entry.id)
+      if (over.entry.id === drag.entry.id) return
+      // The whole list, because the lanes are drawn from the whole list: in this
+      // view a pair is an arc in a lane of its own, so the two store cards are
+      // one stack on screen and one order underneath it.
+      const to = this.props.store.entries.findIndex((row) => row.id === over.entry.id)
       if (to < 0) return
       // The whole lane moves, which for a group drawn in overlay mode is every
       // member of it: they share one slot on screen and splitting them would
       // put half a group somewhere else.
       const members = [drag.entry, ...(this.laneOf(drag.entry)?.overlaid ?? [])]
-      members.forEach((member, offset) => this.props.store.move(member.id, to + offset))
+      members.forEach((member, offset) => this.props.store.moveTo(member.id, to + offset))
     }
 
     const onUp = (event: PointerEvent): void => {
@@ -2618,19 +2669,22 @@ export class BrowserView {
     const contig = findContig(this.props.assembly, query)
     if (contig !== null) hits.push({ label: `${contig.name} · whole sequence`, locus: contig.name })
 
-    for (const entry of this.props.store.entries) {
-      if (entry.payload?.kind !== 'features') continue
-      const set = entry.payload.data
+    // One feature set, the starred one. Searching every loaded annotation at
+    // once answers "GAL4" with the same gene four times over, differing only in
+    // which file it came from — and the four are usually the same coordinates.
+    // Which one is searched is a press on the star beside its name.
+    const source = this.props.store.searchSource()
+    if (source !== null && source.payload?.kind === 'features') {
+      const set = source.payload.data
       for (let i = 0; i < set.length && hits.length < 10; i++) {
         const name = set.name[i]
         if (name === '' || !name.toLowerCase().startsWith(query)) continue
         const pad = Math.max(50, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
         hits.push({
-          label: `${name} · ${set.contigs[set.contig[i]]}:${fmt.int(set.start[i])} · ${entry.label}`,
+          label: `${name} · ${set.contigs[set.contig[i]]}:${fmt.int(set.start[i])} · ${source.label}`,
           locus: `${set.contigs[set.contig[i]]}:${Math.max(1, set.start[i] + 1 - pad)}-${set.end[i] + pad}`,
         })
       }
-      if (hits.length >= 10) break
     }
 
     if (hits.length === 0) {

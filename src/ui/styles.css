@@ -38,6 +38,15 @@
    * the tab is one colour.
    */
   --tab-rest: #edeeee;
+  /*
+   * How much of the window the tab strip takes.
+   *
+   * Named rather than folded into the two `calc(100vh - …)` allowances below,
+   * because it was added *after* them: the strip appeared above the content and
+   * every view sized against the window kept the budget it had before there was
+   * one, so the map and the tables each ran a strip's height off the bottom.
+   */
+  --tabstrip-h: 2.4rem;
 
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
@@ -337,7 +346,11 @@ p {
   align-items: center;
   gap: 0.1rem;
   margin: 0 0.6rem;
-  padding: 0 0.1rem 0 0.25rem;
+  /* Room either side of the label for the × and its hover ground. At a tenth of
+     a rem the button sat against the tab's own edge, where the skewed shoulder
+     — which is a pseudo-element, and so paints *after* every real child — took
+     the outer half of its red background off. */
+  padding: 0 0.45rem;
   max-width: 15rem;
   min-width: 0;
   border-radius: 5px 5px 0 0;
@@ -406,6 +419,14 @@ p {
   background: var(--bg);
   bottom: -1px;
   box-shadow: 0 -1px 3px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.tab-label,
+.btn.tab-close {
+  /* Above the shoulders. `::after` is the last child in paint order, so without
+     this it covers whatever reaches the tab's right edge. */
+  position: relative;
+  z-index: 1;
 }
 
 .tab-label {
@@ -890,10 +911,47 @@ p {
   background: var(--danger-soft);
 }
 
+/* A group is a row in a card, exactly as a track is one in the panel beside it:
+   a name, an eye, and everything else behind a chevron. Same shape, because it
+   is the same kind of thing — a thing you can hide, open and take apart. */
 .group-card + .group-card {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
   border-top: 1px solid var(--border);
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.group-count {
+  flex: 0 0 auto;
+}
+
+/* Hidden is a state of the whole group, and it reads the way a hidden row does:
+   the name goes quiet rather than the card going away. */
+.group-card.is-hidden .group-title,
+.group-card.is-hidden .group-count {
+  opacity: 0.5;
+}
+
+.group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
 }
 
 
@@ -1649,7 +1707,7 @@ p {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-raised);
-  height: calc(100vh - 15rem);
+  height: calc(100vh - 15rem - var(--tabstrip-h));
   min-height: 22rem;
 }
 
@@ -1935,7 +1993,7 @@ p {
      tall stack of tracks pushes the plot off the bottom of the window. The
      property is written by the panel and defaults to nothing, so a view with no
      annotations is sized exactly as it was before they existed. */
-  width: clamp(20rem, calc(100vh - 14rem - var(--lane-bottom, 0px)), 60rem);
+  width: clamp(20rem, calc(100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px)), 60rem);
   /* Of its own grid track, which the grid's cap has already taken the right-hand
      lane stack out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
@@ -3545,7 +3603,7 @@ p {
   }
 
   .table {
-    height: calc(100vh - 12rem);
+    height: calc(100vh - 12rem - var(--tabstrip-h));
   }
 }
 
@@ -3767,6 +3825,47 @@ p {
 /* Which file this is, in the smallest type the panel has: it is looked up rather
    than read, and the name above it — which a reader may have changed — is what
    identifies the track. */
+/* The card takes a file, and says so once, quietly, under its own title. */
+.ann-drop-note {
+  margin: -0.35rem 0 0;
+  font-size: x-small;
+  color: var(--text-faint);
+}
+
+/* The whole card is a target while a file is over it. No dashes at rest: it is
+   a card that also accepts a file, not a rectangle pretending to be a button. */
+.annotation-card.over,
+.map-card.over {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--accent-soft);
+}
+
+/* Which feature set the search reads. Filled for the one it does — a `fill` on
+   the glyph, which beats the `fill="none"` the icon builder writes — and an
+   outline on every other one that could be it. */
+.ann-star {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.ann-star:hover {
+  color: var(--accent);
+}
+
+.ann-star.is-on {
+  color: var(--accent);
+}
+
+.ann-star.is-on .icon {
+  fill: currentColor;
+}
+
+.ann-star:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
 .ann-origin {
   margin: 0.15rem 0 0;
   font-family: var(--mono);

@@ -14,8 +14,21 @@ import type { AnnotationCard, AnnotationEntry, AnnotationKind, AnnotationSource,
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
 
-/** Which drop area a file landed on. */
-export type DropZone = 'gtf' | 'track' | 'segments' | 'pairs'
+/**
+ * What a file's *name* suggests it is.
+ *
+ * A guess, and only ever used for the placeholder row while the bytes are being
+ * read: §8.3 makes the content decide, and it corrects this a moment later. It
+ * exists at all because a row that says "reading…" under the wrong colour and
+ * the wrong height is a row that jumps when it lands.
+ */
+function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
+  if (/\.bedpe(\.gz)?$/i.test(name)) return { card: 'overlay', kind: 'pairs' }
+  if (/\.(bw|bigwig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
+  if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
+  return { card: 'linear', kind: 'segments' }
+}
 
 export class AnnotationLoader {
   constructor(
@@ -25,19 +38,28 @@ export class AnnotationLoader {
     private readonly mapContigs: string[],
   ) {}
 
-  /** Load one or more dropped files onto a card. */
-  addFiles(card: AnnotationCard, zone: DropZone, files: readonly File[]): void {
+  /**
+   * Load one or more files, whatever they are.
+   *
+   * No zone and no card: the reader drops a file on the tracks, and where it is
+   * drawn — a lane beside the map, or a mark on it — is a property of the
+   * *format*, which only the bytes can settle (§8.3). Asking a reader to route
+   * a file into one of five rectangles was asking them to know the answer to a
+   * question the application is about to answer anyway, and to be told off when
+   * they guessed wrong.
+   */
+  addFiles(files: readonly File[]): void {
     for (const file of files) {
-      this.begin(card, zone, { kind: 'local', file, name: file.name })
+      this.begin({ kind: 'local', file, name: file.name })
     }
   }
 
   /** Load a file named by URL — a published track, or one of the demo files. */
-  addUrl(card: AnnotationCard, zone: DropZone, url: string, label?: string): void {
+  addUrl(url: string, label?: string): void {
     const trimmed = url.trim()
     if (trimmed === '') return
     const name = trimmed.split('/').pop() ?? trimmed
-    this.begin(card, zone, { kind: 'remote', url: trimmed, name }, label)
+    this.begin({ kind: 'remote', url: trimmed, name }, label)
   }
 
   /**
@@ -52,8 +74,6 @@ export class AnnotationLoader {
     for (const row of stored) {
       if (row.source.kind === 'remote' && row.source.url !== undefined) {
         this.begin(
-          row.card,
-          zoneOf(row.kind),
           { kind: 'remote', url: row.source.url, name: row.source.name },
           row.label,
           row,
@@ -92,29 +112,52 @@ export class AnnotationLoader {
       source: { kind: 'local', file, name: file.name },
       error: undefined,
     })
-    void this.read(entry.card, id, { kind: 'local', file, name: file.name }, false)
+    void this.read(id, { kind: 'local', file, name: file.name }, false)
+  }
+
+  /**
+   * Take over a row from the file this session was showing before.
+   *
+   * The live source, the id, the label and every setting — so a genome browser
+   * that becomes a map keeps its tracks *as they were*, rather than as eight
+   * names to drop again. Distinct from {@link restore}, which reads a previous
+   * visit out of storage and can only bring a local file back detached: here the
+   * `File` handle is still open, because the tab never went away.
+   */
+  carry(entry: AnnotationEntry): void {
+    if (entry.source.kind === 'detached') return
+    this.begin(entry.source, entry.label, {
+      id: entry.id,
+      card: entry.card,
+      kind: entry.kind,
+      label: entry.label,
+      source:
+        entry.source.kind === 'remote'
+          ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
+          : { kind: 'local', name: entry.source.name },
+      visible: entry.visible,
+      placement: entry.placement,
+      style: entry.style,
+      ...(entry.primary === true ? { primary: true } : {}),
+    })
   }
 
   private begin(
-    card: AnnotationCard,
-    zone: DropZone,
     source: AnnotationSource,
     label?: string,
     stored?: StoredEntry,
   ): AnnotationEntry {
+    const guess = guessOf(source.name)
     const entry = this.store.begin({
-      card,
-      // The placeholder takes the zone's kind; the file's own format corrects it
-      // a moment later. Guessing here is only about what the row *looks* like
-      // while it loads.
-      kind: stored?.kind ?? kindOfZone(zone),
+      card: stored?.card ?? guess.card,
+      kind: stored?.kind ?? guess.kind,
       source,
       ...(stored === undefined ? {} : { id: stored.id, placement: stored.placement, style: stored.style }),
       ...(label === undefined ? {} : { label }),
     })
     // `stored === undefined` is what makes the style a *guess*: a restored row
     // brings the settings a reader chose, and those are never re-derived.
-    void this.read(card, entry.id, toWire(source), stored === undefined)
+    void this.read(entry.id, toWire(source), stored === undefined)
     return entry
   }
 
@@ -126,7 +169,6 @@ export class AnnotationLoader {
    * comes back decides the rest (§8.3).
    */
   private async read(
-    card: AnnotationCard,
     id: string,
     source: WireSource,
     /** The style is the placeholder's, and may be corrected by what arrives. */
@@ -139,21 +181,10 @@ export class AnnotationLoader {
         source,
         mapContigs: this.mapContigs,
       })
-      const kind = kindFor(card, result.format)
-      if (kind === null) {
-        this.store.update(id, { status: 'error', error: refusal(card, result.format) })
-        this.client.drop(id)
-        return
-      }
-      // Exactly one gene model (§8.1). Checked here rather than at the drop,
-      // because until the bytes are read nothing knows this file is one.
-      if (kind === 'gtf' && this.store.entries.some((row) => row.kind === 'gtf' && row.id !== id)) {
-        this.store.update(id, {
-          status: 'error',
-          error:
-            'One gene model at a time: a second drawn over the first is a smear rather than a ' +
-            'comparison. Remove the loaded one first.',
-        })
+      const card = cardFor(result.format)
+      const kind = card === null ? null : kindFor(card, result.format)
+      if (card === null || kind === null) {
+        this.store.update(id, { status: 'error', error: refusal(result.format) })
         this.client.drop(id)
         return
       }
@@ -170,6 +201,7 @@ export class AnnotationLoader {
           ? { style: defaultStyle(kind, held.style.colour) }
           : {}
       this.store.update(id, {
+        card,
         kind,
         ...restyle,
         status: 'ready',
@@ -195,17 +227,27 @@ function toWire(source: AnnotationSource): WireSource {
     : { kind: 'remote', url: source.url, name: source.name }
 }
 
-/** What a zone's placeholder row calls itself while it loads. */
-function kindOfZone(zone: DropZone): AnnotationKind {
-  return zone === 'pairs' ? 'pairs' : zone === 'track' ? 'track' : zone === 'gtf' ? 'gtf' : 'segments'
-}
-
-/** The zone a loaded kind belongs to, for a restore or a re-attach. */
-function zoneOf(kind: AnnotationKind): DropZone {
-  // A sequence has no zone of its own: it lands where a value track does, and
-  // the bytes correct the placeholder the moment they are read (§8.3).
-  if (kind === 'track' || kind === 'sequence') return 'track'
-  return kind === 'gtf' ? 'gtf' : kind === 'pairs' ? 'pairs' : 'segments'
+/**
+ * Where a format is *drawn*, which is the only thing the two store cards mean.
+ *
+ * A pair joins two places, so beside a map it is an arc across the matrix and
+ * belongs on it; everything else is a value or an interval along one axis and
+ * belongs in a lane. That is a fact about the format, not a choice, which is
+ * why the reader is no longer asked to make it.
+ */
+export function cardFor(format: DetectedFormat): AnnotationCard | null {
+  switch (format) {
+    case 'bedpe':
+      return 'overlay'
+    case 'bigwig':
+    case 'bigbed':
+    case 'gtf':
+    case 'bed':
+    case 'fasta':
+      return 'linear'
+    default:
+      return null
+  }
 }
 
 /**
@@ -230,8 +272,14 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
   return null
 }
 
-/** Why a card cannot take this file, and which card can. */
-function refusal(card: AnnotationCard, format: DetectedFormat): string {
+/**
+ * Why this file cannot be a track.
+ *
+ * Two cases left, and both are files that are *something else* rather than
+ * files in the wrong place: one declares a genome and the other is a contact
+ * map. Every format that annotates a genome now lands wherever it was dropped.
+ */
+function refusal(format: DetectedFormat): string {
   if (format === 'sizes') {
     return (
       'This is a chrom.sizes: two columns naming an assembly. It declares a genome rather than ' +
@@ -241,17 +289,5 @@ function refusal(card: AnnotationCard, format: DetectedFormat): string {
   if (format === 'hdf5') {
     return 'This is a contact map, not an annotation. Open it as a file, or drop it to compare.'
   }
-  if (format === 'fasta') {
-    return (
-      'This is a FASTA: the sequence itself. It is drawn along the genome — GC content zoomed ' +
-      'out, the bases themselves zoomed in — so drop it on Linear annotations.'
-    )
-  }
-  if (card === 'linear') {
-    return 'This is a paired file. Pairs are drawn on the map, not beside it — drop it on Map overlays.'
-  }
-  if (format === 'bigwig') {
-    return 'A bigWig is a value track, which is drawn beside the map — drop it on Linear annotations.'
-  }
-  return 'A gene model is a linear annotation, which is drawn beside the map — drop it on Linear annotations.'
+  return 'This file is not one this viewer can draw along a genome.'
 }

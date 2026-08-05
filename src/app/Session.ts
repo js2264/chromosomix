@@ -44,7 +44,8 @@ import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../wo
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
-import { AnnotationCard } from '../ui/AnnotationCard'
+import type { AnnotationEntry } from '../annotations/types'
+import { AnnotationCard, loadCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView, type GroupMode, type GroupScaling } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
@@ -146,6 +147,7 @@ function genomeCard(
   onOpenFile: () => void,
   onGoTo: (locus: string) => void,
   selection: SequenceSelection,
+  onOpenMap: (file: File) => void,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -181,19 +183,48 @@ function genomeCard(
           ]),
     ),
     sequenceCard(assembly, onGoTo, selection),
-    el(
-      'div',
-      { class: 'card' },
-      el('h3', { text: 'Contact map' }),
-      el('p', {
-        class: 'hint',
-        text:
-          'Drop a .cool or .mcool anywhere on the tracks to switch this session to its map. The ' +
-          'tracks come with it.',
-      }),
-      button('open a file…', onOpenFile, { class: 'btn btn-wide' }),
-    ),
+    mapCard(onOpenFile, onOpenMap),
   )
+}
+
+/**
+ * Where a contact map is opened from, and dropped on.
+ *
+ * A card that says "drop a map somewhere else" is a card telling a reader to
+ * aim at a rectangle it is not — so it takes one itself, as well as offering
+ * the dialog. Everywhere else in the session still works: this is the place a
+ * reader looks when the thought is "and now the map", and the thought arrives
+ * while they are reading this card.
+ */
+function mapCard(onOpenFile: () => void, onOpenMap: (file: File) => void): HTMLElement {
+  const card = el(
+    'div',
+    { class: 'card map-card' },
+    el('h3', { text: 'Contact map' }),
+    el('p', {
+      class: 'hint',
+      text:
+        'Drop a .cool or .mcool here — or anywhere on the tracks — to switch this session to ' +
+        'its map. The tracks come with it.',
+    }),
+    button('open a file…', onOpenFile, { class: 'btn btn-wide' }),
+  )
+  card.addEventListener('dragover', (event) => {
+    event.preventDefault()
+    card.classList.add('over')
+  })
+  card.addEventListener('dragleave', (event) => {
+    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return
+    card.classList.remove('over')
+  })
+  card.addEventListener('drop', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    card.classList.remove('over')
+    const file = event.dataTransfer?.files?.[0]
+    if (file !== undefined) onOpenMap(file)
+  })
+  return card
 }
 
 /**
@@ -500,6 +531,7 @@ export class Session {
     this.id = id ?? `s${nextSessionId++}`
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.open(uri, source),
+      onOpenFiles: (files) => void this.openFiles(files),
       examples: demoExamples(),
     })
     this.store.subscribe((state, change) => {
@@ -854,6 +886,42 @@ export class Session {
    * collection root lost its view, genome, region and colour scale on the way
    * in (spec §5.5).
    */
+  /**
+   * Open a set of files as one session.
+   *
+   * What a reader means by selecting five files and dropping them is one view
+   * with all five in it, and which of them is the *view* is not a question they
+   * should have to answer: a contact map wins, because everything else can be
+   * drawn beside one; failing that, the first file that names a genome, because
+   * the rest are annotations of it. Everything left over is loaded as a track
+   * once the view exists, through the same routing a drop onto the tracks takes.
+   *
+   * A second contact map is the one interesting case: it is not a track and it
+   * is not a second view, it is a comparison — which is exactly the gesture the
+   * compare card asks for, so it is taken as one.
+   */
+  async openFiles(files: readonly File[]): Promise<void> {
+    if (files.length === 0) return
+    if (files.length === 1) {
+      await this.open(files[0].name, { kind: 'local', file: files[0] })
+      return
+    }
+    const maps = files.filter((file) => this.routeOf(file.name) === 'map')
+    const lead = maps[0] ?? files.find((file) => this.routeOf(file.name) === 'genome') ?? files[0]
+    await this.open(lead.name, { kind: 'local', file: lead })
+    if (this.destroyed) return
+    for (const file of files) {
+      if (file === lead) continue
+      if (maps.includes(file)) {
+        // Only the first spare map: two comparisons is not a thing this viewer
+        // has, and the second would silently replace the first.
+        if (maps[1] === file) void this.openCompare(file.name, { kind: 'local', file })
+        continue
+      }
+      this.dropped(file)
+    }
+  }
+
   async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
     if (this.opening === uri) return
     // A file that is not a contact map starts a genome browser instead. Decided
@@ -864,6 +932,10 @@ export class Session {
       await this.openGenome(uri, source, carry?.locus)
       return
     }
+    // The tracks this session is holding, before anything is torn down. A map
+    // opened over a genome browser is the same genome by a different file, and
+    // the tracks were drawn against it.
+    this.carry()
     this.opening = uri
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
     this.host.sessionChanged(this)
@@ -1103,23 +1175,15 @@ export class Session {
         contigs: result.contigs,
         origin: result.origin,
       })
+      this.carry()
       this.tearDown()
       this.assembly = assembly
       this.setUpBrowserAnnotations(assembly)
       // The file that named the genome is also its first track — unless it was a
       // `chrom.sizes`, which declares an assembly and draws nothing.
       if (result.format !== 'sizes' && this.annotations !== null) {
-        const card = result.format === 'bedpe' ? 'overlay' : 'linear'
-        const zone =
-          result.format === 'gtf'
-            ? 'gtf'
-            : result.format === 'bigwig' || result.format === 'fasta'
-            ? 'track'
-            : result.format === 'bedpe'
-            ? 'pairs'
-            : 'segments'
-        if (source.kind === 'local') this.annotations.loader.addFiles(card, zone, [source.file])
-        else this.annotations.loader.addUrl(card, zone, source.url)
+        if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
+        else this.annotations.loader.addUrl(source.url)
       }
       const target: ViewState = {
         uri,
@@ -1158,8 +1222,8 @@ export class Session {
     this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
 
     this.setAnnotations([
-      new AnnotationCard({ card: 'linear', store, loader, context: 'browser' }).el,
-      new AnnotationCard({ card: 'overlay', store, loader, context: 'browser' }).el,
+      new AnnotationCard({ store, loader, context: 'browser' }).el,
+      loadCard(loader),
     ])
     this.setGeneral([
       genomeCard(
@@ -1167,6 +1231,7 @@ export class Session {
         () => this.host.openFileDialog(this),
         (locus) => this.goToLocus(locus),
         this.selectionFor(assembly),
+        (file) => this.dropped(file),
       ),
     ])
     loader.restore(AnnotationStore.stored(scope))
@@ -1278,15 +1343,7 @@ export class Session {
     // A metacool carries no annotations (§8.5) and has no assembly to replace,
     // so there is nothing a dropped track could join.
     if (held === null) return
-    const card = /\.bedpe$/i.test(file.name) ? 'overlay' : 'linear'
-    const zone = /\.(bw|bigwig|fa|fasta|fna|fas)(\.gz)?$/i.test(file.name)
-      ? 'track'
-      : /\.(gtf|gff3?)(\.gz)?$/i.test(file.name)
-      ? 'gtf'
-      : /\.bedpe$/i.test(file.name)
-      ? 'pairs'
-      : 'segments'
-    held.loader.addFiles(card, zone, [file])
+    held.loader.addFiles([file])
   }
 
   /**
@@ -1312,7 +1369,7 @@ export class Session {
       if (result.format !== 'sizes' || result.contigs.length === 0) {
         // Named like a sizes file and is not one. Offer it to the loader, which
         // reads its bytes and refuses it by name if it is nothing at all.
-        this.annotations?.loader.addFiles('linear', 'segments', [file])
+        this.annotations?.loader.addFiles([file])
         return
       }
       this.assembly = assemblyOf({
@@ -1327,6 +1384,7 @@ export class Session {
           () => this.host.openFileDialog(this),
           (locus) => this.goToLocus(locus),
           this.selectionFor(this.assembly),
+          (file) => this.dropped(file),
         ),
       ])
       const state = this.store.state
@@ -1386,8 +1444,8 @@ export class Session {
     if (held === null) this.setUpBrowserAnnotations(assembly)
     else {
       this.setAnnotations([
-        new AnnotationCard({ card: 'linear', store: held.store, loader: held.loader, context: 'browser' }).el,
-        new AnnotationCard({ card: 'overlay', store: held.store, loader: held.loader, context: 'browser' }).el,
+        new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
+        loadCard(held.loader),
       ])
       this.setGeneral([
       genomeCard(
@@ -1395,6 +1453,7 @@ export class Session {
         () => this.host.openFileDialog(this),
         (locus) => this.goToLocus(locus),
         this.selectionFor(assembly),
+        (file) => this.dropped(file),
       ),
     ])
     }
@@ -1510,7 +1569,6 @@ export class Session {
     const published = demoAnnotationsFor(uri)
     this.setAnnotations([
       new AnnotationCard({
-        card: 'linear',
         store,
         loader,
         ...(published.length === 0
@@ -1523,13 +1581,13 @@ export class Session {
                   'assembly. They open the same way any remote file does.',
                 run: () => {
                   for (const entry of published) {
-                    loader.addUrl(entry.card, entry.zone, entry.url, entry.label)
+                    loader.addUrl(entry.url, entry.label)
                   }
                 },
               },
             }),
       }).el,
-      new AnnotationCard({ card: 'overlay', store, loader }).el,
+      loadCard(loader),
       this.manualCard.el,
       this.compareCard.el,
     ])
@@ -1537,6 +1595,43 @@ export class Session {
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
     loader.restore(AnnotationStore.stored(scope))
+    // …and what this session was already holding, when the file under it has
+    // just changed. Dropping a cooler on a genome browser is the case: the
+    // tracks were opened against that genome and the map is of the same genome,
+    // so throwing them away would be answering "show me the map of this" with
+    // "start again". They come across live — the `File` handles are still open —
+    // rather than through storage, which would bring them back detached.
+    this.adoptCarried(loader)
+  }
+
+  /**
+   * Tracks held by the outgoing file, taken over by the incoming one.
+   *
+   * Held on the session across the tear-down between the two, since that is the
+   * only moment when neither store exists. Memory is keyed on the *file*, so
+   * nothing arrives on its own: without this the rows are still in storage under
+   * the old URI and the new store opens empty.
+   */
+  private carried: AnnotationEntry[] | null = null
+
+  /**
+   * Remember the loaded tracks, if the file about to open is a different one.
+   *
+   * Only the rows that are actually readable: a detached row is a name and a
+   * colour with no bytes behind it, and carrying it across would produce a
+   * second "drop this again" in a session that already has one under the old
+   * file's memory.
+   */
+  private carry(): void {
+    const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
+    this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
+  }
+
+  private adoptCarried(loader: AnnotationLoader): void {
+    const rows = this.carried
+    this.carried = null
+    if (rows === null) return
+    for (const row of rows) loader.carry(row)
   }
 
   /**
