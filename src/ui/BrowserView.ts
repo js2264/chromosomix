@@ -19,10 +19,11 @@
  * browser and which has no analogue on a map.
  */
 
+import { BaseCache } from '../annotations/bases'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import type { AnnotationEntry, FeatureSet } from '../annotations/types'
+import type { AnnotationEntry, BaseRegion, FeatureSet } from '../annotations/types'
 import {
   assemblyAxis,
   findContig,
@@ -34,11 +35,13 @@ import {
   type Assembly,
   type LocusRange,
 } from '../genome/assembly'
+import type { SequenceSelection } from '../genome/selection'
 import { RULER_HEIGHT, drawArcs, drawBoundaries, drawGuide, drawRuler, type RulerBand } from '../render/browser'
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit } from '../render/features'
 import { clipLane, laneText, type LaneFrame } from '../render/lane'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
+import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
 import { drawTrack, formatLimit, profileOf, resolveLimits, type PixelProfile } from '../render/tracks'
 import { button, el, fmt } from './dom'
 import {
@@ -85,6 +88,16 @@ const LANE_FONT = '10px system-ui, sans-serif'
  * fact about the axis and belongs in the small print, not at the same weight.
  */
 const NAME_FONT = '600 12px system-ui, sans-serif'
+/**
+ * The residues of a sequence lane.
+ *
+ * Not a monospace, though a column of letters is the one place it would be the
+ * reflex: every glyph here is placed individually at the centre of its own base,
+ * so nothing is gained by their all being the same width — and the page's own
+ * face keeps a lane of bases looking like part of the same drawing as the names
+ * above them.
+ */
+const BASE_FONT = '600 11px system-ui, sans-serif'
 /** Milliseconds within which a second click is a double click. */
 const DOUBLE_CLICK_MS = 250
 /** A zoomed-to feature keeps this much of its own length as margin on each side. */
@@ -96,6 +109,14 @@ export interface BrowserViewProps {
   assembly: Assembly
   store: AnnotationStore
   client: AnnotationClient
+  /**
+   * Which of the assembly's sequences are on the axis.
+   *
+   * Shared with the Sequences card rather than owned here, because both are
+   * views of one decision: the card is where it is made and this is where it is
+   * *visible*, and a copy on either side is a copy that can disagree.
+   */
+  selection: SequenceSelection
   /** The window to open at, from the view state. Absent means the whole genome. */
   locus?: string
   /** The view moved; the hash follows. `undefined` is the whole genome. */
@@ -114,6 +135,14 @@ interface Lane {
   overlaid: AnnotationEntry[]
   frame: LaneFrame
   profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
+  /**
+   * Residues to draw, for a FASTA zoomed in far enough to show them.
+   *
+   * Exclusive with {@link profiles} for the same entry: a sequence lane is a GC
+   * line or a row of bases, never both, and which one it is is decided per frame
+   * from the frame itself (`basesAreDrawable`).
+   */
+  residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
 }
 
 export class BrowserView {
@@ -121,7 +150,15 @@ export class BrowserView {
   /** The controls column, mounted by the session in the Aesthetics panel. */
   readonly sideEl: HTMLElement
 
-  private readonly axis: LocusAxis
+  /**
+   * The assembly this view is *of*: the whole one, or the ticked part of it.
+   *
+   * Not `props.assembly`, which stays the genome in full so the locus box, the
+   * feature search and the Sequences card can all still name a sequence that is
+   * not currently on screen.
+   */
+  private view: Assembly
+  private axis: LocusAxis
   private readonly scale: Scale
   private readonly canvas: HTMLCanvasElement
   private readonly stage: HTMLElement
@@ -134,6 +171,7 @@ export class BrowserView {
   private readonly groupsHost = el('div', { class: 'panel-controls' })
   private readonly exportStatus = el('span', { class: 'clip-note export-note' })
   private readonly cache: SampleCache
+  private readonly bases: BaseCache
   private readonly unsubscribes: Array<() => void> = []
   private readonly observer: ResizeObserver | null
 
@@ -183,6 +221,8 @@ export class BrowserView {
     | null = null
   /** What {@link paintOverlayControls} last built, so a pan does not rebuild it. */
   private controlSignature = ''
+  /** Set while a navigation is ticking a sequence on its way — see {@link ensureOnAxis}. */
+  private adopting = false
   private exportDpi = 300
   private exportFormat: BrowserExportFormat = 'pdf'
   private clickTimer: number | null = null
@@ -198,8 +238,9 @@ export class BrowserView {
   private reported: string | undefined
 
   constructor(private readonly props: BrowserViewProps) {
-    this.axis = assemblyAxis(props.assembly)
-    this.scale = new Scale([0, Math.max(1, props.assembly.total)], 1)
+    this.view = props.selection.restrict(props.assembly)
+    this.axis = assemblyAxis(this.view)
+    this.scale = new Scale([0, Math.max(1, this.view.total)], 1)
 
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
     this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip)
@@ -280,6 +321,7 @@ export class BrowserView {
     )
 
     this.cache = new SampleCache(props.client, () => this.schedule())
+    this.bases = new BaseCache(props.client, () => this.schedule())
     this.unsubscribes.push(
       props.store.subscribe(() => {
         this.paintGroups()
@@ -287,6 +329,7 @@ export class BrowserView {
       }),
     )
     this.unsubscribes.push(subscribePlotOptions(() => this.schedule()))
+    this.unsubscribes.push(props.selection.subscribe(() => this.applySelection()))
     this.watchPointer()
     this.watchKeys()
 
@@ -310,6 +353,7 @@ export class BrowserView {
     for (const off of this.unsubscribes) off()
     this.observer?.disconnect()
     this.cache.destroy()
+    this.bases.destroy()
     setReadout('')
   }
 
@@ -373,10 +417,71 @@ export class BrowserView {
       this.afterMove(false)
       return
     }
-    const units = rangeToUnits(this.props.assembly, parsed)
+    this.ensureOnAxis(parsed.contig)
+    const units = rangeToUnits(this.view, parsed)
     if (units === null) return
     this.scale.setDomain(units)
     this.afterMove(false)
+  }
+
+  // -------------------------------------------------------------------------
+  // Which sequences are on the axis
+  // -------------------------------------------------------------------------
+
+  /**
+   * Rebuild the axis around the ticked sequences.
+   *
+   * The restriction is not a filter over a whole-genome axis; it *is* the axis,
+   * built from a narrower assembly by the same function that builds the wide one
+   * (§8.4). That is what makes a pan unable to leave the selection — there is
+   * nothing outside it to pan to — rather than requiring a second clamp that the
+   * wheel, the arrow keys and the drag-to-zoom would each have to remember.
+   *
+   * The window survives where it can. Ticking a second chromosome while reading
+   * a promoter on the first should not throw the promoter away; opening the
+   * whole of a selection, on the other hand, is what ticking one chromosome
+   * *means*, so a view that was showing everything goes on showing everything.
+   */
+  private applySelection(): void {
+    const next = this.props.selection.restrict(this.props.assembly)
+    if (next.contigs.length === 0) return
+    const keep = this.reportedLocus() === undefined ? null : this.currentRange()
+    this.view = next
+    this.axis = assemblyAxis(next)
+    // Resets the domain to all of the new selection, which is the answer when
+    // there is no window worth keeping.
+    this.scale.setFull([0, Math.max(1, next.total)])
+    const units = keep === null ? null : rangeToUnits(next, keep)
+    if (units !== null) this.scale.setDomain(units)
+    // The caret was measured into a lane of the outgoing axis, and the number in
+    // it belongs to a view that no longer exists.
+    this.closeRangeEditor()
+    if (this.adopting) {
+      this.clamp()
+      this.schedule()
+      return
+    }
+    this.afterMove(true)
+  }
+
+  /**
+   * Tick a sequence that is being navigated to but is not on the axis.
+   *
+   * `adopting` is what keeps the hash honest across the two-step move that
+   * follows. Ticking notifies, {@link applySelection} runs *inside* this call,
+   * and reporting from there would write "the whole selection" to the address
+   * bar a moment before the caller sets the window it was actually asked for —
+   * which is only ever seen when the second report is suppressed, as it is when
+   * a locus is being adopted *from* the hash.
+   */
+  private ensureOnAxis(contig: string): void {
+    if (this.axis.segmentOf(contig) !== null) return
+    this.adopting = true
+    try {
+      this.props.selection.ensure(contig)
+    } finally {
+      this.adopting = false
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -394,7 +499,8 @@ export class BrowserView {
       this.fit()
       return
     }
-    const units = rangeToUnits(this.props.assembly, parsed)
+    this.ensureOnAxis(parsed.contig)
+    const units = rangeToUnits(this.view, parsed)
     if (units === null) return
     this.scale.setDomain(units)
     this.afterMove(true)
@@ -564,7 +670,7 @@ export class BrowserView {
 
   /** The window, as one sequence and a span in it — what the box shows. */
   private currentRange(): LocusRange | null {
-    return unitsToRange(this.props.assembly, this.scale.domain as [number, number])
+    return unitsToRange(this.view, this.scale.domain as [number, number])
   }
 
   /**
@@ -621,6 +727,7 @@ export class BrowserView {
         overlaid: [],
         frame: this.frameAt(across, thickness),
         profiles: [],
+        residues: [],
       }
       drawn.push(lane)
       if (overlaid) claimed.set(group, lane)
@@ -667,7 +774,9 @@ export class BrowserView {
   }
 
   private draw(): void {
-    this.cache.prune(new Set(this.props.store.entries.map((entry) => entry.id)))
+    const live = new Set(this.props.store.entries.map((entry) => entry.id))
+    this.cache.prune(live)
+    this.bases.prune(live)
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     const width = Math.max(1, this.stage.clientWidth)
     this.scale.setPixels(width)
@@ -824,7 +933,21 @@ export class BrowserView {
   ): void {
     const { entry, frame } = lane
     clipLane(ctx, frame)
-    if (lane.profiles.length > 0) {
+    if (lane.residues.length > 0) {
+      for (const { entry: member, regions } of lane.residues) {
+        drawSequence(ctx, frame, this.axis, regions, {
+          font: BASE_FONT,
+          opacity: member.style.opacity,
+          letters: this.text,
+        })
+      }
+      // The name alone. A second line saying how many bases are on screen is
+      // what the ruler above it already says, and it would say it *through* the
+      // letters — the one thing on this lane that is there to be read.
+      if (this.text) {
+        this.labelLane(ctx, frame, palette, lane.residues.map((row) => row.entry), '')
+      }
+    } else if (lane.profiles.length > 0) {
       for (const { entry: member, profile } of lane.profiles) {
         const extent =
           member.style.group === ''
@@ -858,7 +981,15 @@ export class BrowserView {
           ctx,
           frame,
           palette,
-          lane.profiles.map((row) => row.entry),
+          // A sequence drawn as a value track is drawn as its GC content, and
+          // an unlabelled line between 0 and 1 under a genome's name is a line
+          // nobody can name. The entry is copied rather than renamed, because
+          // the label belongs to this frame's picture and not to the file.
+          lane.profiles.map((row) =>
+            row.entry.kind === 'sequence'
+              ? { ...row.entry, label: `${row.entry.label} · GC` }
+              : row.entry,
+          ),
           { limits },
         )
       }
@@ -1158,7 +1289,21 @@ export class BrowserView {
   private fill(lane: Lane): void {
     const members = [lane.entry, ...lane.overlaid]
     for (const member of members) {
-      if (member.kind !== 'track') continue
+      // A FASTA is the one lane whose *picture* changes with the zoom rather
+      // than only its resolution, and this is where the switch is thrown: close
+      // enough for a base to own a pixel and it asks for residues, otherwise it
+      // asks for GC content and is a value track like any other from here on.
+      if (member.kind === 'sequence' && basesAreDrawable(lane.frame)) {
+        const regions = this.bases.basesFor({
+          entry: member.id,
+          scope: 'browser',
+          axis: this.axis,
+          domain: lane.frame.domain,
+        })
+        lane.residues.push({ entry: member, regions: regions ?? [] })
+        continue
+      }
+      if (member.kind !== 'track' && member.kind !== 'sequence') continue
       const samples = this.cache.samplesFor({
         entry: member.id,
         scope: 'browser',
@@ -1203,11 +1348,26 @@ export class BrowserView {
     const range = this.currentRange()
     const span = this.scale.domain[1] - this.scale.domain[0]
     const perPixel = span / Math.max(1, this.scale.pixels)
+    // "4 of 16 sequences" while a selection is in force, because the difference
+    // between a four-chromosome assembly and four ticked chromosomes is not
+    // otherwise visible anywhere on screen — and it is the difference between
+    // "this genome has four" and "you cannot currently pan to the other twelve".
+    const shown = this.view.contigs.length
+    const all = this.props.assembly.contigs.length
+    const counted = shown === all ? `${fmt.int(all)} sequences` : `${shown} of ${fmt.int(all)} sequences`
     const where =
       range === null || span >= this.scale.full[1] - this.scale.full[0]
-        ? `${fmt.int(this.props.assembly.contigs.length)} sequences · ${fmt.bp(span)}`
+        ? `${counted} · ${fmt.bp(span)}`
         : `${range.contig} · ${fmt.bp(span)}`
-    return `${where} · ${fmt.bp(perPixel)} per pixel`
+    // Turned upside down below one base per pixel, where "0 bp per pixel" is
+    // what rounding a fraction of a base to a readable unit produces — and where
+    // the number a reader wants is the other one anyway, because it says whether
+    // the sequence lane is about to show them letters.
+    const resolution =
+      perPixel >= 1
+        ? `${fmt.bp(perPixel)} per pixel`
+        : `${fmt.int(Math.round(1 / perPixel))} px per base`
+    return `${where} · ${resolution}`
   }
 
   // -------------------------------------------------------------------------
@@ -2210,6 +2370,30 @@ export class BrowserView {
           ),
         )
         parts.push(`${entry.label} ${text}`)
+      }
+      // …and the base under the pointer, where a lane is showing them. The one
+      // readout in this view that is a letter rather than a number, and the
+      // question a reader zoomed in this far is asking.
+      for (const { entry, regions } of lane.residues) {
+        const letter = baseAt(regions, locus.contig, locus.bp) ?? '—'
+        const here =
+          inside !== undefined &&
+          (inside.entry.id === entry.id ||
+            inside.overlaid.some((member) => member.id === entry.id))
+        rows.push(
+          el(
+            'div',
+            { class: `cell-tip-row${here ? ' is-here' : ''}` },
+            el('span', { class: 'cell-tip-chip', style: { background: entry.style.colour } }),
+            el('span', {
+              class: 'cell-tip-key',
+              text: `${entry.label}:`,
+              style: { color: entry.style.colour },
+            }),
+            el('span', { class: 'cell-tip-val', text: letter }),
+          ),
+        )
+        parts.push(`${entry.label} ${letter}`)
       }
     }
     const feature = this.featureAtPoint(x, y)

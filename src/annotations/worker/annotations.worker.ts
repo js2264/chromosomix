@@ -19,14 +19,22 @@ import { BlobFile, RemoteFile } from 'generic-filehandle2'
 import { transfersFor } from '../../worker/protocol'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
-import { decodeAnnotationText, parseBed, parseBedpe, parseGtf, sniffFormat } from '../parse'
-import type { FeatureSet, Region, TrackSamples, TrackSampleSet } from '../types'
+import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
+import {
+  decodeAnnotationBytes,
+  parseBed,
+  parseBedpe,
+  parseGtf,
+  sniffFormat,
+} from '../parse'
+import type { BaseRegion, FeatureSet, Region, TrackSamples, TrackSampleSet } from '../types'
 import {
   bbiMagic,
   isHdf5,
   type AnnotationRequest,
   type AnnotationResponse,
   type AssemblyResult,
+  type BaseResult,
   type DetectedFormat,
   type LoadResult,
   type WireSource,
@@ -42,6 +50,26 @@ interface OpenTrack {
 const tracks = new Map<string, OpenTrack>()
 
 /**
+ * The sequences of every open FASTA, by the entry that owns them.
+ *
+ * Kept here rather than handed over, exactly as a bigWig's handle is: a lane
+ * draws a window at a time, and a chromosome sent to the main thread would be
+ * twelve megabytes carried across so that a few thousand bases of it could be
+ * read (§8.2).
+ */
+const sequences = new Map<string, SequenceStore>()
+
+/**
+ * How large a FASTA this reads.
+ *
+ * It is read whole and held whole, which is what makes a pan free — and what
+ * makes a mammalian genome the wrong thing to open this way. Three gigabases is
+ * three gigabytes here, and the honest answer is a refusal naming the number
+ * rather than a tab that stops responding while it allocates.
+ */
+const FASTA_BYTE_CAP = 300_000_000
+
+/**
  * The last file read whole, so the same one is not parsed twice.
  *
  * Starting a genome browser from a GTF asks this worker two questions about one
@@ -54,6 +82,14 @@ const tracks = new Map<string, OpenTrack>()
  * cache of files nobody is looking at.
  */
 let recent: { key: string; format: DetectedFormat; features: FeatureSet | null } | null = null
+
+/**
+ * The last FASTA parsed, for the same two-questions-one-file reason as
+ * {@link recent} — and with none of its danger. A sequence store is never
+ * transferred, so unlike a `FeatureSet` it cannot be detached out from under the
+ * second question.
+ */
+let recentFasta: { key: string; store: SequenceStore } | null = null
 
 /** A local file's identity for {@link recent}; a URL is its own. */
 function cacheKey(source: WireSource): string {
@@ -85,11 +121,21 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
       return sample(request.entry, request.regions, request.basesPerPixel)
+    case 'bases':
+      return bases(request.entry, request.regions)
     case 'assembly':
       return assemblyOf(request.source)
-    case 'drop':
+    case 'drop': {
       tracks.delete(request.entry)
+      // …and let go of the parse behind it. A sequence store is up to three
+      // hundred megabytes, and `recentFasta` exists only to answer the second of
+      // two consecutive questions about one drop — holding a dropped genome
+      // alive afterwards would be the largest leak in the application.
+      const store = sequences.get(request.entry)
+      if (store !== undefined && recentFasta?.store === store) recentFasta = null
+      sequences.delete(request.entry)
       return null
+    }
   }
 }
 
@@ -136,8 +182,22 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
     }
   }
 
-  const bytes = await handle.readFile()
-  const text = await decodeAnnotationText(bytes)
+  // A FASTA answers this question better than anything else can: it carries
+  // every sequence *and* its exact length, like a `chrom.sizes`, and it is the
+  // genome those lengths describe rather than a file asserting them.
+  if (looksLikeFasta(head)) {
+    const store = await readFasta(source, handle)
+    return { format: 'fasta', contigs: store.contigs, origin: 'fasta', exact: true }
+  }
+
+  const raw = await handle.readFile()
+  const bytes = await decodeAnnotationBytes(raw)
+  // …and a gzipped one is only recognisable here, once it has been inflated.
+  if (looksLikeFasta(bytes)) {
+    const store = keepFasta(source, bytes)
+    return { format: 'fasta', contigs: store.contigs, origin: 'fasta', exact: true }
+  }
+  const text = new TextDecoder().decode(bytes)
   if (text.trim() === '') throw new Error('This file is empty.')
 
   if (looksLikeChromSizes(text, source.name)) {
@@ -224,6 +284,7 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
 
   if (magic === 'bigwig') return loadBigWig(entry, source, mapContigs)
   if (magic === 'bigbed') return loadBigBed(source, mapContigs)
+  if (looksLikeFasta(head)) return loadFasta(entry, await readFasta(source, handle), mapContigs)
 
   // The parse this file already had, when the browser asked what genome it was
   // on a moment ago. Same bytes, same answer; the overlap report is recomputed
@@ -242,8 +303,9 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
     return featureResult(cached.format, cached.features, mapContigs)
   }
 
-  const bytes = await handle.readFile()
-  const text = await decodeAnnotationText(bytes)
+  const bytes = await decodeAnnotationBytes(await handle.readFile())
+  if (looksLikeFasta(bytes)) return loadFasta(entry, keepFasta(source, bytes), mapContigs)
+  const text = new TextDecoder().decode(bytes)
   if (text.trim() === '') throw new Error('This file is empty.')
 
   const format: DetectedFormat = sniffFormat(text, source.name)
@@ -283,6 +345,144 @@ function featureResult(
         : `${count(data.length)} feature${data.length === 1 ? '' : 's'}`,
     payload: { kind: 'features', data },
   }
+}
+
+// ---------------------------------------------------------------------------
+// FASTA
+// ---------------------------------------------------------------------------
+
+/**
+ * The file's sequences, parsed once however many times they are asked for.
+ *
+ * Opening a browser from a FASTA asks this worker the same two questions any
+ * other file gets — *what genome is this* and then *give me its data* — and here
+ * they have the same answer, so the second is served from {@link recentFasta}.
+ * That cache is safe in a way {@link recent} is not: a sequence store is never
+ * transferred, so there is no way for the entry to come back detached.
+ */
+async function readFasta(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+): Promise<SequenceStore> {
+  const held = recentFasta
+  if (held !== null && held.key === cacheKey(source)) return held.store
+  // Refused before it is read, where the size is known without reading it. A
+  // local file's is free; a remote one is found out the hard way, below.
+  if (source.kind === 'local' && source.file.size > FASTA_BYTE_CAP) {
+    throw tooLarge(source.file.size)
+  }
+  return keepFasta(source, await decodeAnnotationBytes(await handle.readFile()))
+}
+
+function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
+  if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length)
+  const store = parseFasta(bytes)
+  if (store.contigs.length === 0) {
+    throw new Error('This looks like a FASTA but holds no sequences.')
+  }
+  recentFasta = { key: cacheKey(source), store }
+  return store
+}
+
+function tooLarge(size: number): Error {
+  return new Error(
+    `This FASTA is ${count(Math.round(size / 1e6))} MB. It would be read whole and held whole — ` +
+      `which is what makes panning free — so anything over ${count(FASTA_BYTE_CAP / 1e6)} MB is ` +
+      'refused rather than allowed to take the tab with it. A chrom.sizes declares the same ' +
+      'genome for a few kilobytes.',
+  )
+}
+
+/** A FASTA as a row: the sequences stay here, the summary goes back. */
+function loadFasta(entry: string, store: SequenceStore, mapContigs: string[]): LoadResult {
+  sequences.set(entry, store)
+  const names = store.contigs.map((contig) => contig.name)
+  return {
+    format: 'fasta',
+    contigs: names,
+    overlap: overlapWith(names, mapContigs),
+    summary: `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp`,
+  }
+}
+
+/**
+ * GC content, in the shape a value track takes.
+ *
+ * Deliberately answered through `sample` rather than through a request of its
+ * own: a GC profile *is* a value per window, so the caching, the power-of-two
+ * resolution ladder and the per-pixel reduction that every bigWig already goes
+ * through are exactly right for it, and reproducing any of that for one format
+ * would be a second copy of the hard part (§8.4).
+ *
+ * `summary: true` because a bin is a mean over its bases in the same sense a
+ * bigWig's zoom level is — the flag is what tells the readout that the number
+ * under the pointer describes a window rather than a position.
+ */
+function gcSamples(
+  store: SequenceStore,
+  regions: Region[],
+  basesPerPixel: number,
+): TrackSampleSet {
+  const out: TrackSamples[] = []
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const region of regions) {
+    const seq = store.bases.get(region.contig)
+    if (seq === undefined || !(region.end > region.start)) continue
+    const bins = gcBins(seq, region.start, region.end, basesPerPixel)
+    if (bins.values.length === 0) continue
+    for (const value of bins.values) {
+      if (!Number.isFinite(value)) continue
+      if (value < min) min = value
+      if (value > max) max = value
+    }
+    out.push({
+      contig: region.contig,
+      start: region.start,
+      end: region.end,
+      starts: bins.starts,
+      ends: bins.ends,
+      values: bins.values,
+      min: null,
+      max: null,
+      summary: true,
+    })
+  }
+  return { basesPerPixel, regions: out, extent: min <= max ? { min, max } : null }
+}
+
+/**
+ * How many residues one request may bring back.
+ *
+ * Only asked for at a zoom where a base is at least a pixel, so a screen's worth
+ * is a few thousand and this is two orders of magnitude of headroom. It is a
+ * backstop against a caller asking for a chromosome, not a working limit.
+ */
+const BASES_PER_REQUEST = 400_000
+
+/** The residues of each visible window, for a view drawing them one by one. */
+function bases(entry: string, regions: Region[]): BaseResult {
+  const store = sequences.get(entry)
+  if (store === undefined) {
+    throw new Error('This sequence is no longer open. Drop the file again.')
+  }
+  const out: BaseRegion[] = []
+  let budget = BASES_PER_REQUEST
+  for (const region of regions) {
+    const seq = store.bases.get(region.contig)
+    if (seq === undefined) continue
+    const start = Math.max(0, Math.floor(region.start))
+    const end = Math.min(seq.length, Math.ceil(region.end), start + budget)
+    if (!(end > start)) continue
+    budget -= end - start
+    // `slice`, not `subarray`. The reply is posted with `transfersFor`, which
+    // moves the buffer behind whatever typed arrays it finds — and a view onto
+    // the store would take the entire chromosome with it, leaving this worker
+    // holding a detached genome.
+    out.push({ contig: region.contig, start, end, bases: seq.slice(start, end) })
+    if (budget <= 0) break
+  }
+  return { regions: out }
 }
 
 /**
@@ -396,6 +596,12 @@ async function sample(
   regions: Region[],
   basesPerPixel: number,
 ): Promise<TrackSampleSet> {
+  // A FASTA answers the same question with the same shape of answer, and this
+  // is where the two formats part company: one has zoom levels on disk, the
+  // other computes its summary from the residues it is holding.
+  const sequence = sequences.get(entry)
+  if (sequence !== undefined) return gcSamples(sequence, regions, basesPerPixel)
+
   const track = tracks.get(entry)
   if (track === undefined) {
     throw new Error('This track is no longer open. Drop the file again.')

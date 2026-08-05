@@ -9,8 +9,9 @@ between *two* MAGs, which is where phage–host, plasmid–host and HGT signal l
 
 Several files at once, as tabs. Two coolers in one square, split on the diagonal, when the question
 is how they differ. And a plain 1D genome browser for when there is no contact map at all — a
-`chrom.sizes` or a bigWig is enough to start one, and dropping a `.cool` on it turns the same tab
-into its map.
+`chrom.sizes`, a bigWig or a FASTA is enough to start one, and dropping a `.cool` on it turns the
+same tab into its map. Tick a few chromosomes and the axis becomes those chromosomes; open a FASTA
+and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in.
 
 There is no server. There is no upload. There is no preprocessing step. A file straight out of
 `metacooler create` opens and works.
@@ -149,10 +150,10 @@ not the plan.
 | M3 | Render and first visible app | **done** — canvas heatmap with matplotlib's own LUTs, `metacooler show` defaults, genomes table, genome/pair/region views, breadcrumb, URL-hash state |
 | M4 | Interaction | **mostly** — pan, zoom, level toggle and cross-navigation are all local and I/O-free; the mmetacool *zoom ladder* is classified but not yet wired to a zoom control (see below) |
 | M5 | Remote sources | **done** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals), `docs/hosting.md`, and the §12 request-budget regression tests in `test/budgets/` |
-| M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12 and BEDPE in a worker of their own; `src/render/` draws them as lanes on either edge of the map and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
+| M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12, BEDPE and FASTA in a worker of their own; `src/render/` draws them as lanes on either edge of the map and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
-| — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed or a feature file (§5.8) |
+| — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA or a feature file (§5.8) |
 
 Other gaps worth naming rather than discovering:
 

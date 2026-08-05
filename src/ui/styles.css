@@ -3149,13 +3149,39 @@ p {
      squashed, clipped type rather than ten rows and a scrollbar. */
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* The tick that puts this sequence on the axis. Always visible rather than
+   revealed on hover: it is a *state* of the row — the difference between a
+   genome and the part of it being read — and a state nobody can see is a
+   restriction with no way back. */
+.seq-tick {
+  position: relative;
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
+}
+
+/* The name and the length, which is what a click goes to. A button *inside* the
+   row rather than the row itself, because the row now holds a checkbox and a
+   control inside a control is reachable by neither keyboard nor screen reader. */
+.seq-go {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.22rem 0.35rem;
+  padding: 0.22rem 0;
   line-height: 1.35;
   border: 0;
-  border-radius: 3px;
   background: none;
   font: inherit;
   font-size: var(--step--1);
@@ -3163,6 +3189,42 @@ p {
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+}
+
+/* A ticked row is one of the ones on screen, and says so in the same accent the
+   bar behind it uses. */
+.seq-row.is-on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.seq-row.is-on .seq-name {
+  font-weight: 600;
+}
+
+/* One flowing line rather than a flex row: the column is sixteen characters
+   wide, so "showing 2 of 16 — the whole genome" has to wrap *inside* itself
+   like the sentence it is, not break between two boxes and leave the dash
+   stranded on a line of its own. */
+.seq-chosen {
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Written as a link because it is one: it goes somewhere (back to the whole
+   genome) rather than doing something to what is on screen. */
+.seq-all {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.seq-all:hover {
+  color: var(--text);
 }
 
 .seq-row::before {
@@ -3177,6 +3239,10 @@ p {
 
 .seq-row:hover {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.seq-row.is-on:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .seq-row:hover::before {

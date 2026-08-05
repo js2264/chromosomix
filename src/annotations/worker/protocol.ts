@@ -15,7 +15,7 @@
  * needs at the resolution it needs them (spec §8.2, §8.4).
  */
 
-import type { AnnotationPayload, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type { AnnotationPayload, BaseRegion, ContigOverlap, Region, TrackSampleSet } from '../types'
 import type { AssemblyOrigin, Contig } from '../../genome/assembly'
 
 /**
@@ -26,8 +26,20 @@ import type { AssemblyOrigin, Contig } from '../../genome/assembly'
  * other is a contact matrix that belongs to the reader worker instead. Both are
  * decided here because this is already the only place that looks at bytes before
  * anything has committed to what they are.
+ *
+ * `fasta` is both at once — it declares an assembly *and* it is the thing being
+ * annotated — which is why it is the one format that answers the `assembly`
+ * question with exact lengths and still becomes a lane of its own.
  */
-export type DetectedFormat = 'bigwig' | 'bigbed' | 'gtf' | 'bed' | 'bedpe' | 'sizes' | 'hdf5'
+export type DetectedFormat =
+  | 'bigwig'
+  | 'bigbed'
+  | 'gtf'
+  | 'bed'
+  | 'bedpe'
+  | 'sizes'
+  | 'hdf5'
+  | 'fasta'
 
 /** How to reach the bytes, in the shape that survives `postMessage`. */
 export type WireSource = { kind: 'local'; file: File; name: string } | { kind: 'remote'; url: string; name: string }
@@ -61,9 +73,15 @@ export interface AssemblyResult {
   exact: boolean
 }
 
+/** The residues a view asked for, one window per region it could answer. */
+export interface BaseResult {
+  regions: BaseRegion[]
+}
+
 export interface AnnotationResultMap {
   load: LoadResult
   sample: TrackSampleSet
+  bases: BaseResult
   assembly: AssemblyResult
   drop: null
 }
@@ -84,6 +102,12 @@ export type AnnotationRequest =
       /** Drives the file's own zoom-level choice; `basesPerSpan` in bbi's terms. */
       basesPerPixel: number
     }
+  // The residues themselves, which only a FASTA can answer and only a view
+  // zoomed in far enough to draw them ever asks for. Separate from `sample`
+  // because it is a different *kind* of answer — letters rather than a value per
+  // pixel — and because the window it is asked over is the one a screen of
+  // single bases covers, never a chromosome.
+  | { id: number; kind: 'bases'; entry: string; regions: Region[] }
   | { id: number; kind: 'drop'; entry: string }
 
 export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
