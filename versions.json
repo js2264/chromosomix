@@ -1,5 +1,5 @@
 {
-  "latest": "e98eaf7",
+  "latest": "48afb37",
   "versions": [
     {
       "commit": "e98eaf7",
@@ -13,6 +13,13 @@
       "version": "0.6.0",
       "date": "2026-08-05T23:12:58+02:00",
       "subject": "feat(deploy): releases keep their name, and the version rule keeps the right build",
+      "tag": ""
+    },
+    {
+      "commit": "48afb37",
+      "version": "0.6.1",
+      "date": "2026-08-05T21:38:11Z",
+      "subject": "fix(versions): going to the newest build is not the same as going to the root",
       "tag": ""
     }
   ]
