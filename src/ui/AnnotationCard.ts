@@ -49,8 +49,8 @@ const LINEAR_ZONES: ZoneSpec[] = [
   {
     zone: 'track',
     label: 'Tracks',
-    hint: 'bigWig tracks, drawn as lines or areas.',
-    accept: '.bw,.bigwig,.bigWig',
+    hint: 'bigWig tracks, drawn as lines or areas. A FASTA lands here too.',
+    accept: '.bw,.bigwig,.bigWig,.fa,.fasta,.fna,.fas,.fa.gz,.fasta.gz,.fna.gz',
   },
   {
     zone: 'segments',
@@ -749,6 +749,11 @@ export class AnnotationCard {
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
     if (entry.card === 'linear') out.push(this.laneRow(entry))
     if (entry.kind === 'track') out.push(this.limits(entry), this.group(entry))
+    // A sequence lane's value axis is GC, and it is worth being able to clip:
+    // between 0.3 and 0.5 is where a genome's variation actually lives. No
+    // group, though — GC shares no units with anything else on the stack, so
+    // resolving it together with a coverage track would flatten both.
+    if (entry.kind === 'sequence') out.push(this.limits(entry))
     if (entry.card === 'overlay') {
       if (entry.kind === 'segments') out.push(this.shape(entry))
       if (entry.kind === 'pairs') out.push(this.radius(entry))
@@ -823,6 +828,7 @@ export class AnnotationCard {
         el('span', { class: 'ann-unit', text: 'px' }),
       ),
       ...(entry.kind === 'track' ? [this.mode(entry), this.flip(entry)] : []),
+      ...(entry.kind === 'sequence' ? [this.mode(entry)] : []),
     )
   }
 

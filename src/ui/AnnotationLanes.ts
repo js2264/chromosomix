@@ -291,8 +291,11 @@ export class AnnotationLanes {
     if (axis === null) return []
     return this.slotsFor(edge).map((slot) => {
       const frame = this.frameOf(edge, slot, geometry)
+      // A sequence is a value track from here: beside a map, where a pixel is a
+      // whole bin, a FASTA can only ever be its GC content — the residues need
+      // a base per pixel and a bin is a thousand of them.
       const profile =
-        slot.entry.kind === 'track'
+        slot.entry.kind === 'track' || slot.entry.kind === 'sequence'
           ? profileOf(frame, axis, this.samplesFor(slot.entry, edge, axis, frame))
           : null
       return { entry: slot.entry, frame, profile }
@@ -368,7 +371,7 @@ export class AnnotationLanes {
     for (const lane of lanes) {
       const { entry, frame, profile } = lane
       clipLane(ctx, frame)
-      if (entry.kind === 'track' && profile !== null) {
+      if ((entry.kind === 'track' || entry.kind === 'sequence') && profile !== null) {
         const extent =
           entry.style.group === ''
             ? profile.extent
@@ -387,7 +390,13 @@ export class AnnotationLanes {
           flip: entry.style.flip,
         })
         if (text) {
-          this.labelLane(ctx, frame, geometry, entry.label, `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`)
+          this.labelLane(
+            ctx,
+            frame,
+            geometry,
+            entry.kind === 'sequence' ? `${entry.label} · GC` : entry.label,
+            `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`,
+          )
         }
       } else if (entry.payload?.kind === 'features') {
         const rows = entry.kind === 'gtf' ? rowsThatFit(frame.thickness, 13) : rowsThatFit(frame.thickness)
@@ -599,11 +608,11 @@ export class AnnotationLanes {
       const here = offset >= 0 && offset <= frame.thickness
       if (here) onALane = true
 
-      if (slot.entry.kind === 'track') {
+      if (slot.entry.kind === 'track' || slot.entry.kind === 'sequence') {
         const cached = this.cache.peek(slot.entry.id, edge)
         const value = cached === null ? null : valueAtPixel(cached, axis, frame, along)
         rows.push({
-          label: slot.entry.label,
+          label: slot.entry.kind === 'sequence' ? `${slot.entry.label} GC` : slot.entry.label,
           colour: slot.entry.style.colour,
           value: value === null ? '—' : fmt.num(value),
           here,

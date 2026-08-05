@@ -20,6 +20,12 @@
 /**
  * The four things a loaded file can be.
  *
+ * `sequence` is the odd one: a FASTA is not an annotation *of* a genome, it is
+ * the genome, and what a lane shows for it depends entirely on the zoom — GC
+ * content where a pixel is a hundred bases, the residues themselves where a base
+ * is a pixel. Like a bigWig it carries no payload, because the sequence stays in
+ * the worker and each view asks for the window it is drawing.
+ *
  * `gtf` and `segments` are both {@link FeatureSet}s and differ only in what the
  * reader means by them: a gene model is drawn as exons on a spine and there may
  * be only one, a segment file is drawn as boxes and there may be any number.
@@ -27,7 +33,7 @@
  * it is kept because "the annotation" and "a peak set" are not the same thing on
  * screen even when the file format is.
  */
-export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs'
+export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
 
 /** Which card an entry belongs to; see §8.1. */
 export type AnnotationCard = 'linear' | 'overlay'
@@ -162,6 +168,26 @@ export interface TrackSamples {
   summary: boolean
 }
 
+// ---------------------------------------------------------------------------
+// FASTA residues
+// ---------------------------------------------------------------------------
+
+/**
+ * The bases of one window, as they crossed the worker boundary.
+ *
+ * One ASCII byte per residue, exactly as the file wrote them — case included,
+ * since a soft-masked genome says something by writing its repeats in lower
+ * case. Never a whole sequence: this is only ever asked for at a zoom where
+ * single bases are drawable, which is a few thousand of them.
+ */
+export interface BaseRegion {
+  contig: string
+  /** 0-based, half-open, as every window here is. */
+  start: number
+  end: number
+  bases: Uint8Array
+}
+
 /** Everything one `sample` request answers, plus what it cost to answer it. */
 export interface TrackSampleSet {
   /** Bases per pixel the samples were chosen for; the cache key. */
@@ -243,9 +269,13 @@ export interface AnnotationStyle {
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : 16,
-    mode: 'area',
-    limits: { auto: true, min: 0, max: 1 },
+    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : kind === 'sequence' ? 46 : 16,
+    mode: kind === 'sequence' ? 'line' : 'area',
+    // GC content is a fraction, and a fraction has an axis whether or not this
+    // window happens to use all of it. Autoscaling it would make the same
+    // sequence look different in two views and put "0.41 – 0.44" under a line
+    // that is really flat — so a sequence lane starts pinned to the whole of it.
+    limits: kind === 'sequence' ? { auto: false, min: 0, max: 1 } : { auto: true, min: 0, max: 1 },
     group: '',
     shape: 'element',
     radius: 7,

@@ -276,7 +276,7 @@ function toStored(entry: AnnotationEntry): StoredEntry {
   }
 }
 
-const KINDS: AnnotationKind[] = ['gtf', 'track', 'segments', 'pairs']
+const KINDS: AnnotationKind[] = ['gtf', 'track', 'segments', 'pairs', 'sequence']
 const CARDS: AnnotationCard[] = ['linear', 'overlay']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
@@ -303,7 +303,7 @@ function isStoredEntry(value: unknown): value is StoredEntry {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|peaks|tsv|txt)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|peaks|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
     '',
   )
 }

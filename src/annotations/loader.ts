@@ -9,6 +9,7 @@
  */
 
 import type { AnnotationStore } from './store'
+import { defaultStyle } from './types'
 import type { AnnotationCard, AnnotationEntry, AnnotationKind, AnnotationSource, StoredEntry } from './types'
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
@@ -91,7 +92,7 @@ export class AnnotationLoader {
       source: { kind: 'local', file, name: file.name },
       error: undefined,
     })
-    void this.read(entry.card, id, { kind: 'local', file, name: file.name })
+    void this.read(entry.card, id, { kind: 'local', file, name: file.name }, false)
   }
 
   private begin(
@@ -111,7 +112,9 @@ export class AnnotationLoader {
       ...(stored === undefined ? {} : { id: stored.id, placement: stored.placement, style: stored.style }),
       ...(label === undefined ? {} : { label }),
     })
-    void this.read(card, entry.id, toWire(source))
+    // `stored === undefined` is what makes the style a *guess*: a restored row
+    // brings the settings a reader chose, and those are never re-derived.
+    void this.read(card, entry.id, toWire(source), stored === undefined)
     return entry
   }
 
@@ -122,7 +125,13 @@ export class AnnotationLoader {
    * only what the placeholder row looked like while this was in flight. What
    * comes back decides the rest (§8.3).
    */
-  private async read(card: AnnotationCard, id: string, source: WireSource): Promise<void> {
+  private async read(
+    card: AnnotationCard,
+    id: string,
+    source: WireSource,
+    /** The style is the placeholder's, and may be corrected by what arrives. */
+    guessed: boolean,
+  ): Promise<void> {
     try {
       const result = await this.client.request<'load'>({
         kind: 'load',
@@ -148,8 +157,21 @@ export class AnnotationLoader {
         this.client.drop(id)
         return
       }
+      // The placeholder took the *zone's* kind, and with it that kind's
+      // defaults — a lane height, a drawing mode, a value axis. Where the bytes
+      // say otherwise those defaults are wrong for what is about to be drawn: a
+      // FASTA dropped on the tracks area would come out 90 pixels tall with its
+      // GC autoscaled to whatever fraction this window happens to span, which is
+      // an axis that means nothing and changes as you pan. The colour is kept,
+      // because it is the store's and the row is already wearing it.
+      const held = this.store.byId(id)
+      const restyle =
+        guessed && held !== undefined && held.kind !== kind
+          ? { style: defaultStyle(kind, held.style.colour) }
+          : {}
       this.store.update(id, {
         kind,
+        ...restyle,
         status: 'ready',
         summary: result.summary,
         overlap: result.overlap,
@@ -180,7 +202,10 @@ function kindOfZone(zone: DropZone): AnnotationKind {
 
 /** The zone a loaded kind belongs to, for a restore or a re-attach. */
 function zoneOf(kind: AnnotationKind): DropZone {
-  return kind === 'gtf' ? 'gtf' : kind === 'track' ? 'track' : kind === 'pairs' ? 'pairs' : 'segments'
+  // A sequence has no zone of its own: it lands where a value track does, and
+  // the bytes correct the placeholder the moment they are read (§8.3).
+  if (kind === 'track' || kind === 'sequence') return 'track'
+  return kind === 'gtf' ? 'gtf' : kind === 'pairs' ? 'pairs' : 'segments'
 }
 
 /**
@@ -193,6 +218,7 @@ function zoneOf(kind: AnnotationKind): DropZone {
 export function kindFor(card: AnnotationCard, format: DetectedFormat): AnnotationKind | null {
   if (card === 'linear') {
     if (format === 'bigwig') return 'track'
+    if (format === 'fasta') return 'sequence'
     if (format === 'gtf') return 'gtf'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
@@ -214,6 +240,12 @@ function refusal(card: AnnotationCard, format: DetectedFormat): string {
   }
   if (format === 'hdf5') {
     return 'This is a contact map, not an annotation. Open it as a file, or drop it to compare.'
+  }
+  if (format === 'fasta') {
+    return (
+      'This is a FASTA: the sequence itself. It is drawn along the genome — GC content zoomed ' +
+      'out, the bases themselves zoomed in — so drop it on Linear annotations.'
+    )
   }
   if (card === 'linear') {
     return 'This is a paired file. Pairs are drawn on the map, not beside it — drop it on Map overlays.'

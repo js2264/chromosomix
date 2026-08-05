@@ -33,8 +33,21 @@ export type TextFormat = 'gtf' | 'bed' | 'bedpe'
  * `DecompressionStream` is the platform's own inflate, so this costs no bundle.
  */
 export async function decodeAnnotationText(bytes: Uint8Array): Promise<string> {
+  return new TextDecoder().decode(await decodeAnnotationBytes(bytes))
+}
+
+/**
+ * The same un-gzipping, stopping one step short of a string.
+ *
+ * A FASTA is read this way. Residues are ASCII by definition, so decoding one to
+ * UTF-16 doubles a hundred megabytes in order to walk it once and throw it away
+ * — and every byte of it is then re-encoded into the `Uint8Array` the sequence
+ * store keeps. The text formats still go through {@link decodeAnnotationText},
+ * because a GTF attribute really can be UTF-8 and its columns are strings.
+ */
+export async function decodeAnnotationBytes(bytes: Uint8Array): Promise<Uint8Array> {
   const gzipped = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
-  if (!gzipped) return new TextDecoder().decode(bytes)
+  if (!gzipped) return bytes
   if (typeof DecompressionStream === 'undefined') {
     throw new Error(
       'This file is gzipped and this browser has no DecompressionStream to un-gzip it with. ' +
@@ -42,7 +55,7 @@ export async function decodeAnnotationText(bytes: Uint8Array): Promise<string> {
     )
   }
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))
-  return new Response(stream).text()
+  return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
 /**

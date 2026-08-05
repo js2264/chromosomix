@@ -25,7 +25,7 @@ export interface Contig {
 }
 
 /** Where an assembly's lengths came from, which decides how far to trust them. */
-export type AssemblyOrigin = 'sizes' | 'bigwig' | 'bigbed' | 'features' | 'cooler'
+export type AssemblyOrigin = 'sizes' | 'bigwig' | 'bigbed' | 'fasta' | 'features' | 'cooler'
 
 export interface Assembly {
   /** What names it: the URI of the file its lengths were read from. */

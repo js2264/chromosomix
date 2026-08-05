@@ -43,6 +43,7 @@ import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
+import { SequenceSelection } from '../genome/selection'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView, type GroupMode } from '../ui/BrowserView'
@@ -144,6 +145,7 @@ function genomeCard(
   assembly: Assembly,
   onOpenFile: () => void,
   onGoTo: (locus: string) => void,
+  selection: SequenceSelection,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -178,7 +180,7 @@ function genomeCard(
             }),
           ]),
     ),
-    sequenceCard(assembly, onGoTo),
+    sequenceCard(assembly, onGoTo, selection),
     el(
       'div',
       { class: 'card' },
@@ -221,9 +223,14 @@ const SEQUENCES_WORTH_FILTERING = 12
  * sixteen bars in a staircase is a yeast, and one bar with a thousand slivers
  * under it is a draft.
  */
-function sequenceCard(assembly: Assembly, onGoTo: (locus: string) => void): HTMLElement {
+function sequenceCard(
+  assembly: Assembly,
+  onGoTo: (locus: string) => void,
+  selection: SequenceSelection,
+): HTMLElement {
   const list = el('div', { class: 'seq-list' })
   const note = el('p', { class: 'hint seq-note' })
+  const chosen = el('p', { class: 'hint seq-chosen' })
   const longest = assembly.contigs.reduce((most, contig) => Math.max(most, contig.length), 1)
 
   const paint = (query: string): void => {
@@ -235,18 +242,32 @@ function sequenceCard(assembly: Assembly, onGoTo: (locus: string) => void): HTML
     const shown = matching.slice(0, SEQUENCE_ROWS)
     list.replaceChildren(
       ...shown.map((contig) => {
-        const row = el(
+        // A tick and a button, not a button containing a tick: a checkbox inside
+        // a `<button>` is a control inside a control, which no browser resolves
+        // the same way and none of them make keyboard-reachable.
+        const tick = el('input', {
+          class: 'checkbox seq-tick',
+          type: 'checkbox',
+          title:
+            `Show only the ticked sequences. With none ticked the whole genome is one axis; ` +
+            `ticking ${contig.name} makes it the axis, so a pan cannot leave it.`,
+          attrs: { 'data-seq': contig.name },
+        })
+        tick.checked = selection.has(contig.name)
+        tick.addEventListener('change', () => selection.toggle(contig.name, tick.checked))
+        const go = el(
           'button',
           {
-            class: 'seq-row',
+            class: 'seq-go',
             type: 'button',
             title: `${contig.name} — ${fmt.int(contig.length)} bp. Click to show the whole sequence.`,
           },
           el('span', { class: 'seq-name', text: contig.name }),
           el('span', { class: 'seq-len', text: fmt.bp(contig.length) }),
         )
+        go.addEventListener('click', () => onGoTo(contig.name))
+        const row = el('div', { class: 'seq-row' }, tick, go)
         row.style.setProperty('--seq-share', `${(contig.length / longest) * 100}%`)
-        row.addEventListener('click', () => onGoTo(contig.name))
         return row
       }),
     )
@@ -259,13 +280,58 @@ function sequenceCard(assembly: Assembly, onGoTo: (locus: string) => void): HTML
     note.classList.toggle('hidden', note.textContent === '')
   }
 
+  /**
+   * Bring the ticks and the line above them back in step with the selection.
+   *
+   * Needed because this card is not the only thing that writes to it: going to a
+   * sequence that is not on the axis ticks it (`SequenceSelection.ensure`), and
+   * a tick that appears in the model and not in the box is the one state this
+   * card must never be in.
+   */
+  const sync = (): void => {
+    for (const box of list.querySelectorAll<HTMLInputElement>('.seq-tick')) {
+      const on = selection.has(box.dataset.seq ?? '')
+      box.checked = on
+      box.closest('.seq-row')?.classList.toggle('is-on', on)
+    }
+    const count = selection.names.length
+    chosen.replaceChildren(
+      ...(count === 0
+        ? []
+        : [
+            el('span', { text: `showing ${fmt.int(count)} of ${fmt.int(assembly.contigs.length)} — ` }),
+            button('the whole genome', () => selection.clear(), {
+              class: 'seq-all',
+              title: 'Untick every sequence, which puts the whole assembly back on one axis',
+            }),
+          ]),
+    )
+    chosen.classList.toggle('hidden', count === 0)
+  }
+
   const filter = el('input', {
     class: 'input input-tiny seq-filter',
     type: 'search',
     placeholder: `filter ${fmt.int(assembly.contigs.length)} sequences…`,
   })
-  filter.addEventListener('input', () => paint(filter.value))
+  filter.addEventListener('input', () => {
+    paint(filter.value)
+    sync()
+  })
   paint('')
+
+  const off = selection.subscribe(() => {
+    // The card is replaced wholesale when the assembly's lengths are (see
+    // `adoptSizes`), and nothing hands a detached one a teardown. It
+    // unsubscribes itself the first time it is spoken to after leaving the
+    // document, which is as long as a listener on a dead card can survive.
+    if (!list.isConnected) {
+      off()
+      return
+    }
+    sync()
+  })
+  sync()
 
   return el(
     'div',
@@ -273,6 +339,7 @@ function sequenceCard(assembly: Assembly, onGoTo: (locus: string) => void): HTML
     el('h3', { class: 'card-head' }, icon('list', { size: 13 }), el('span', { text: 'Sequences' })),
     ...(assembly.contigs.length > SEQUENCES_WORTH_FILTERING ? [filter] : []),
     list,
+    chosen,
     note,
   )
 }
@@ -282,6 +349,7 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   sizes: 'declared by a chrom.sizes',
   bigwig: 'from the bigWig header',
   bigbed: 'from the bigBed header',
+  fasta: 'the sequences themselves',
   features: 'inferred from the features',
   cooler: 'from the cooler’s /chroms',
 }
@@ -410,6 +478,8 @@ export class Session {
    */
   private assembly: Assembly | null = null
   private browser: BrowserView | null = null
+  /** Which sequences are on the browser's axis; see {@link selectionFor}. */
+  private sequences: SequenceSelection | null = null
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
@@ -765,7 +835,7 @@ export class Session {
     const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
     if (/\.(m?cool|m?metacool|h5|hdf5)$/i.test(name)) return 'map'
     if (
-      /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
+      /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
         name,
       )
     ) {
@@ -1043,7 +1113,7 @@ export class Session {
         const zone =
           result.format === 'gtf'
             ? 'gtf'
-            : result.format === 'bigwig'
+            : result.format === 'bigwig' || result.format === 'fasta'
             ? 'track'
             : result.format === 'bedpe'
             ? 'pairs'
@@ -1091,7 +1161,14 @@ export class Session {
       new AnnotationCard({ card: 'linear', store, loader, context: 'browser' }).el,
       new AnnotationCard({ card: 'overlay', store, loader, context: 'browser' }).el,
     ])
-    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
+    this.setGeneral([
+      genomeCard(
+        assembly,
+        () => this.host.openFileDialog(this),
+        (locus) => this.goToLocus(locus),
+        this.selectionFor(assembly),
+      ),
+    ])
     loader.restore(AnnotationStore.stored(scope))
   }
 
@@ -1109,6 +1186,34 @@ export class Session {
     else this.store.patch({ locus })
   }
 
+  /**
+   * Which sequences this session is browsing, made once and shared.
+   *
+   * One object behind both the Sequences card's tick boxes and the browser's
+   * axis, because they are two views of one decision (see `SequenceSelection`).
+   * It outlives the `BrowserView`, which is remounted whenever the assembly's
+   * lengths are replaced, and it is remembered per session and per file so that
+   * a reload comes back to the four chromosomes that were being read rather than
+   * to all sixteen.
+   *
+   * Names the assembly does not have are dropped on the way in: a `chrom.sizes`
+   * dropped on a browser can replace the sequence list wholesale, and a stored
+   * tick for a sequence that no longer exists would be a restriction the card
+   * shows no way to lift.
+   */
+  private selectionFor(assembly: Assembly): SequenceSelection {
+    if (this.sequences !== null) return this.sequences
+    const key = this.memoryKey(assembly.uri)
+    const known = new Set(assembly.contigs.map((contig) => contig.name))
+    const stored = (recall<string[]>(key, 'browser:sequences') ?? []).filter((name) =>
+      known.has(name),
+    )
+    this.sequences = new SequenceSelection(stored, (names) =>
+      remember(key, 'browser:sequences', names),
+    )
+    return this.sequences
+  }
+
   private mountBrowser(state: ViewState): void {
     const assembly = this.assembly
     const held = this.annotations
@@ -1118,6 +1223,7 @@ export class Session {
       assembly,
       store: held.store,
       client: held.client,
+      selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       memory: {
@@ -1171,7 +1277,7 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const card = /\.bedpe$/i.test(file.name) ? 'overlay' : 'linear'
-    const zone = /\.(bw|bigwig)$/i.test(file.name)
+    const zone = /\.(bw|bigwig|fa|fasta|fna|fas)(\.gz)?$/i.test(file.name)
       ? 'track'
       : /\.(gtf|gff3?)(\.gz)?$/i.test(file.name)
       ? 'gtf'
@@ -1213,7 +1319,14 @@ export class Session {
         contigs: result.contigs,
         origin: 'sizes',
       })
-      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
+      this.setGeneral([
+        genomeCard(
+          this.assembly,
+          () => this.host.openFileDialog(this),
+          (locus) => this.goToLocus(locus),
+          this.selectionFor(this.assembly),
+        ),
+      ])
       const state = this.store.state
       if (state === null) return
       // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
@@ -1274,7 +1387,14 @@ export class Session {
         new AnnotationCard({ card: 'linear', store: held.store, loader: held.loader, context: 'browser' }).el,
         new AnnotationCard({ card: 'overlay', store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
-      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
+      this.setGeneral([
+      genomeCard(
+        assembly,
+        () => this.host.openFileDialog(this),
+        (locus) => this.goToLocus(locus),
+        this.selectionFor(assembly),
+      ),
+    ])
     }
     this.mounted = null
     const target: ViewState = { uri: file.uri, view: 'browser' }
@@ -1297,6 +1417,7 @@ export class Session {
     this.wholeFile = null
     this.file = null
     this.assembly = null
+    this.sequences = null
     this.breadcrumb = null
     this.breadcrumbHost.replaceChildren()
   }
