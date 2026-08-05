@@ -1,0 +1,12 @@
+{
+  "latest": "c797c1e",
+  "versions": [
+    {
+      "commit": "c797c1e",
+      "version": "0.6.0",
+      "date": "2026-08-05T23:12:58+02:00",
+      "subject": "feat(deploy): releases keep their name, and the version rule keeps the right build",
+      "tag": ""
+    }
+  ]
+}
