@@ -4070,23 +4070,53 @@ p {
   color: var(--text-dim);
 }
 
-.ann-edges {
+/* Which edge a lane is drawn on, as two words that latch rather than two
+   initials with tick boxes. Not a choice between them — a track can be on one
+   edge or on both — so they are drawn as one segmented control with two
+   independent segments rather than as a radio pair.
+
+   The frame is on the *group* and the segments have none. A ready row makes
+   every button inside it borderless (see `.ann-row.ann-ready .btn`), which is
+   right for the icons on the head and wrong for a toggle, whose unpressed state
+   would then be indistinguishable from a word of prose. One frame around the
+   pair says "these are controls" once, without putting boxes back on the row. */
+.ann-places {
   display: flex;
-  gap: 0.2rem;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.ann-edge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
+.ann-place {
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0.15rem 0.4rem;
   font-size: var(--step--2, 0.72rem);
+  background: var(--bg);
   color: var(--text-dim);
-  cursor: pointer;
 }
 
-.ann-edge .checkbox {
-  margin: 0;
+.ann-place + .ann-place {
+  border-left: 1px solid var(--border);
+}
+
+.ann-place[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The row's own borderless rule sets a colour, not a width, so a segment stays
+   flat under it — but its hover fill has to be kept off the *pressed* segment,
+   which already carries one. */
+.ann-row.ann-ready .ann-place:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+
+.ann-row.ann-ready .ann-place[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--accent-soft);
 }
 
 .ann-eye {

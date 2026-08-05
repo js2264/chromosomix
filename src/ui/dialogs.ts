@@ -28,6 +28,8 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.
   ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
+  ['drag a lane across its stack', 'Move it up or down the order'],
+  ['drag a lane onto the other edge', 'Draw it there instead — below the map, or beside it'],
   ['drop a file below or right of the map', 'Load it as a track on that edge'],
 ]
 

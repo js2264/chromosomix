@@ -366,6 +366,16 @@ export class MatrixPanel {
    */
   private laneGrip: string | null = null
   /**
+   * The two edge rectangles, by the edge they stand for.
+   *
+   * Kept because two gestures aim at them and only one of them is a DOM event
+   * on the zone itself: a file drop is, and a lane dragged off its own stack is
+   * not — that drag holds the pointer captured on a canvas, so the zone under
+   * the pointer has to be found by arithmetic. Empty when the panel has no
+   * annotations and therefore no lanes.
+   */
+  private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
+  /**
    * The two axes as annotations see them, rebuilt with every block.
    *
    * Held here rather than only inside {@link lanes}, because the overlays and
@@ -754,7 +764,11 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
-      ...(options.annotations?.loadOnEdge === undefined
+      // Built whenever there are annotations at all, not only when files can be
+      // loaded: the two rectangles are also where a lane already on the map is
+      // dragged to move it from one edge to the other, and that gesture needs
+      // no loader.
+      ...(options.annotations === undefined
         ? []
         : [this.edgeZone('bottom'), this.edgeZone('right')]),
       this.tooltip,
@@ -763,7 +777,7 @@ export class MatrixPanel {
       this.watchLane('bottom', this.lanes.bottomEl)
       this.watchLane('right', this.lanes.rightEl)
     }
-    if (options.annotations?.loadOnEdge !== undefined) this.watchEdgeDrops()
+    if (options.annotations !== undefined) this.watchEdgeDrops()
     if (options.annotations !== undefined) {
       this.heatmap.setOverlayPainter((ctx, frame) => this.paintOverlays(ctx, frame))
       // Escape abandons a half-finished pick. On the window rather than the
@@ -869,6 +883,7 @@ export class MatrixPanel {
         text: edge === 'bottom' ? 'tracks below the map' : 'tracks beside the map',
       }),
     )
+    this.edgeZones.set(edge, zone)
     zone.addEventListener('dragover', (event) => {
       if (!dragHasFiles(event)) return
       // Both, and in this order: the default action for a dropped file is to
@@ -1560,7 +1575,7 @@ export class MatrixPanel {
     if (lanes === null || context === undefined) return
 
     /**
-     * Three gestures on one surface, told apart without a modifier key.
+     * Four gestures on one surface, told apart without a modifier key.
      *
      * A press on a lane's *border* is a resize, because that is the only thing a
      * border can be dragged for. A press on its *body* waits for the first
@@ -1569,10 +1584,52 @@ export class MatrixPanel {
      * and **across** it is a reorder, because moving a lane up the stack is a
      * movement up the stack. The two are perpendicular, so no gesture has to be
      * guessed at and neither has to be given up.
+     *
+     * The fourth is a continuation of the third rather than a rival to it:
+     * keep dragging *across* until the pointer leaves the stack altogether and
+     * lands on one of the map's two edge rectangles, and the lane moves to that
+     * edge. A reorder that has left its own stack has nowhere left to reorder
+     * to — it clamps at the last slot and does nothing more — so the movement
+     * beyond it was free to mean something, and this is the thing a reader is
+     * already trying to do when they drag a track off the bottom of the map
+     * towards the side of it.
      */
     let drag:
-      | { id: string; kind: 'size' | 'order' | 'pan' | 'undecided'; from: number; along: number; size: number }
+      | {
+          id: string
+          kind: 'size' | 'order' | 'pan' | 'undecided' | 'move'
+          from: number
+          along: number
+          size: number
+        }
       | null = null
+
+    /** The edge rectangle under a point, or `null`. */
+    const zoneAt = (x: number, y: number): LaneEdge | null => {
+      for (const [name, node] of this.edgeZones) {
+        const box = node.getBoundingClientRect()
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return name
+      }
+      return null
+    }
+
+    /**
+     * Show the two rectangles, and mark the one being aimed at.
+     *
+     * Shown from the moment a drag is committed to *across* rather than only
+     * once the pointer has left the stack: the reader is already moving the
+     * lane, and the two rectangles appearing under their hand are what says the
+     * other edge is somewhere it can go. Nothing else on the map moves.
+     */
+    const markZones = (target: LaneEdge | null): void => {
+      this.grid.classList.add('is-dropping')
+      for (const [name, node] of this.edgeZones) node.classList.toggle('over', name === target)
+    }
+
+    const clearZones = (): void => {
+      this.grid.classList.remove('is-dropping')
+      for (const node of this.edgeZones.values()) node.classList.remove('over')
+    }
 
     const onDown = (event: PointerEvent): void => {
       if (event.button !== 0 || this.picking !== null) return
@@ -1641,6 +1698,20 @@ export class MatrixPanel {
         return
       }
 
+      // A reorder that has left its own stack is a move to the other edge, from
+      // here until the pointer comes up. Once, and not back again: a gesture
+      // that changed its mind every time the pointer crossed a boundary would
+      // reorder the stack behind the reader while they aim at a rectangle.
+      const target = zoneAt(event.clientX, event.clientY)
+      const inside =
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom
+      if (drag.kind === 'order' && !inside && target !== null) drag.kind = 'move'
+      markZones(drag.kind === 'move' ? target : null)
+      if (drag.kind === 'move') return
+
       // Reordering: the lane lands where the pointer is, counted in lane
       // boundaries rather than in pixels, so a tall lane and a short one are one
       // step apart either way.
@@ -1653,6 +1724,19 @@ export class MatrixPanel {
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
+      if (drag.kind === 'move') {
+        const target = zoneAt(event.clientX, event.clientY)
+        const entry = target === null ? undefined : context.store.byId(drag.id)
+        // A move, not a copy: the edge it came from is cleared. Released
+        // anywhere else — over the map's middle, off the window — nothing
+        // happens, which is how a drag is called off.
+        if (target !== null && target !== edge && entry !== undefined) {
+          context.store.update(drag.id, {
+            placement: { ...entry.placement, [edge]: false, [target]: true },
+          })
+        }
+      }
+      clearZones()
       drag = null
       canvas.style.cursor = ''
       canvas.classList.remove('grabbing')
