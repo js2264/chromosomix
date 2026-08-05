@@ -1,6 +1,14 @@
 node_modules/
 dist/
 .vite/
+# The archived copy of one commit (`npm run build:pinned`). Built in CI, copied
+# into the published site under v/<commit>/, and never committed here — the
+# archive lives on its own branch, written by scripts/archive-versions.mjs.
+dist-pinned/
+# Where that branch is checked out during a deploy, beside the build it is
+# about to receive. Only ever present on a runner, but a stray local run of the
+# workflow's steps must not offer to commit a copy of it into main.
+archive/
 # The desktop build's two outputs, and the archive it packs. `build/` is
 # deliberately absent: that is electron-builder's `buildResources` input, and
 # ignoring it would drop the icon and the entitlements out of the repository.

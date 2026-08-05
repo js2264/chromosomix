@@ -17,6 +17,7 @@
 
 import { el } from './ui/dom'
 import { TARGET } from './version'
+import { ARCHIVE_SEGMENT, PINNED_COMMIT, SITE_BASE } from './versions'
 
 /**
  * Register, and watch for a replacement.
@@ -39,6 +40,13 @@ export function registerServiceWorker(): void {
   // registered without `allowServiceWorkers`, which Chromium refuses outright --
   // "The URL protocol of the current origin ('app://viewer') is not supported".
   if (TARGET !== 'web') return
+  // Guard four, and the only one that is about a *web* build. An archived copy
+  // of the site (`…/v/<commit>/`) is deliberately not installable and emits no
+  // `sw.js`, so registering here would 404 at best — and at worst, if the file
+  // ever were emitted, it would put a second worker under a nested scope,
+  // caching a build somebody pinned in July for as long as the browser feels
+  // like keeping it. See `vite.pinned.config.ts`.
+  if (PINNED_COMMIT !== null) return
   if (!('serviceWorker' in navigator)) return
 
   window.addEventListener('load', () => {
@@ -70,6 +78,58 @@ export function registerServiceWorker(): void {
     reloading = true
     window.location.reload()
   })
+}
+
+/** Where the one recovery attempt is remembered, so it cannot become a loop. */
+const RECOVERED = 'metacooler-viewer:unpinned'
+
+/**
+ * Undo a worker that answered an archived build's URL with the site's shell.
+ *
+ * A transitional bug with a long tail. Every worker published before archived
+ * builds existed answers *every* navigation in its scope from the precache, and
+ * `…/v/<commit>/` is in its scope — so a reader carrying one of those workers
+ * who follows a pinned link gets this build at that address: the version picker
+ * would show the wrong thing, and the whole feature would be silently a lie for
+ * as long as that worker lives. The fix is in `src/sw.js`, but a worker only
+ * updates when the page it controls is loaded, and this is that page.
+ *
+ * The symptom is exactly detectable, which is what makes recovery safe rather
+ * than a guess: the document's path is under the archive prefix, and the code
+ * reading it was built for the site root. Those two cannot both be true of a
+ * correctly served page.
+ *
+ * Recovery is to unregister and reload — coarse, and deliberately so. The
+ * registration is what is serving the wrong document, `update()` would not
+ * change what this page already is, and a site whose worker has been dropped
+ * simply registers a fresh one on the next visit to the root, which is where
+ * the reader is going. It costs one visit of offline and buys the correct code.
+ *
+ * Once per tab, and recorded before the reload rather than after: if this does
+ * not work — a proxy, an extension, a cache doing something unusual — the
+ * second attempt would be a reload loop, which is a far worse failure than the
+ * one being repaired.
+ *
+ * Returns `true` when a reload is on the way, so the caller can decline to
+ * mount an interface over a page that is about to be replaced.
+ */
+export function recoverPinnedNavigation(): boolean {
+  if (TARGET !== 'web' || PINNED_COMMIT !== null) return false
+  if (!window.location.pathname.startsWith(`${SITE_BASE}${ARCHIVE_SEGMENT}/`)) return false
+  if (!('serviceWorker' in navigator) || navigator.serviceWorker.controller === null) return false
+  try {
+    if (window.sessionStorage.getItem(RECOVERED) !== null) return false
+    window.sessionStorage.setItem(RECOVERED, '1')
+  } catch {
+    // No storage means no way to stop at one attempt, and a reload loop is
+    // worse than an old build at a pinned address.
+    return false
+  }
+  void navigator.serviceWorker
+    .getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((one) => one.unregister())))
+    .then(() => window.location.reload())
+  return true
 }
 
 /** Offer the reload as soon as a replacement is installed and waiting. */

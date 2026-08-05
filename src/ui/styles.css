@@ -1709,6 +1709,14 @@ p {
   color: var(--text-dim);
 }
 
+/* The same bar, saying the opposite thing (`src/ui/VersionPicker.ts`): not "a
+   newer build is ready" but "this is not the newest build". Shown only by an
+   archived copy of the site, where it is the only thing on screen that says so
+   — which is why it is tinted rather than left to read as furniture. */
+.pinned-bar {
+  border-color: var(--accent);
+}
+
 .input,
 .select,
 .search {
@@ -2723,6 +2731,33 @@ p {
   border-top: 1px solid var(--border);
   padding-top: 0.6rem;
   user-select: text;
+}
+
+/* The version picker, directly under that stamp and deliberately continuous
+   with it: no rule between them, the same quiet colour, because it is the same
+   sentence carried on. The select itself is monospace, since every row is a
+   version and a commit hash and those are read character by character. */
+.version-picker {
+  font-size: var(--step--1);
+  color: var(--text-faint);
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 0;
+}
+
+.version-select {
+  font-family: var(--mono);
+  max-width: 100%;
+}
+
+.version-note {
+  margin: 0.4rem 0 0;
+  max-width: 60ch;
 }
 
 .link {
