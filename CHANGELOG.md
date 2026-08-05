@@ -31,11 +31,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   button back to the newest.
 
   What is kept is the **last 20 pushes** — the debugging window; past fifty the
-  answer is a bisect rather than a menu — and the **newest build of every
-  version ever published**, which is the archive proper and the reason to cut a
-  release even though every push is already live. A released number is
-  something people cite in a methods section, and one that answers 404 two
-  months later is worse than never having offered it.
+  answer is a bisect rather than a menu — and **every tagged commit, for ever**,
+  which is the archive proper and the reason to cut a release even though every
+  push is already live. A released number is something people cite in a methods
+  section, and one that answers 404 two months later is worse than never having
+  offered it.
+
+  A release also gets a **permanent address of its own**, `…/v/v0.5.1/`, which
+  is a one-kilobyte redirect to the commit rather than a second copy of it. That
+  is the URL worth writing down: a commit URL is equally permanent and says
+  nothing to a reader. It carries the query and the hash across, so a citation
+  can name a *view* of a release and not only the build, and the About dialog
+  offers it whenever the build in front of you is one. Tags are read with
+  `git ls-remote --tags` — asking the server for its ref names costs a few
+  kilobytes, where fetching tags into a depth-1 checkout would drag down an
+  object per tag in a repository carrying 250 MB of demo data.
+
+  Kept alongside that is **the oldest build of each `package.json` version**,
+  which is the same rule for a release whose tag was pushed after its commit.
+  The *oldest* is deliberate and the obvious alternative is wrong: `npm version`
+  bumps the version and tags that commit, so every push until the next bump
+  reports the same number — keeping the newest would keep a build that calls
+  itself `0.6.0`, is labelled `0.6.0` in the menu, and is not `v0.6.0`. That is
+  worse than keeping nothing, because it is wrong rather than absent.
 
   An archived copy leaves out the demo data, the source maps, the manifest and
   the service worker (`vite.pinned.config.ts`), which is ~5 MB against a build's

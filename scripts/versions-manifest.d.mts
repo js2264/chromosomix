@@ -15,6 +15,8 @@ export interface ManifestEntry {
   date: string
   /** The commit subject, one line. */
   subject: string
+  /** The tag on that commit, when there is one and it is safe to publish. */
+  tag: string
 }
 
 /** The manifest as a whole, newest first. */
@@ -30,6 +32,9 @@ export declare const KEEP_RECENT: number
 /** An empty manifest, which is what a first deploy starts from. */
 export declare const EMPTY: Manifest
 
+/** Whether a tag may be published as a directory beside the commits. */
+export declare function isPublishableTag(tag: unknown): boolean
+
 /** Read a manifest that may not exist, may be empty, or may have been edited. */
 export declare function parseManifest(text: string): Manifest
 
@@ -42,3 +47,9 @@ export declare function nextManifest(
 
 /** Which commits are in the old manifest and not the new one. */
 export declare function droppedCommits(previous: Manifest, next: Manifest): string[]
+
+/** Which tag aliases are in the old manifest and not the new one. */
+export declare function droppedTags(previous: Manifest, next: Manifest): string[]
+
+/** Every tag the manifest publishes, with the commit it points at. */
+export declare function tagAliases(manifest: Manifest): Array<{ tag: string; commit: string }>

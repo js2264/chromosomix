@@ -177,6 +177,7 @@ So every deploy publishes **two** things:
 ```
 https://<owner>.github.io/<repo>/                 the newest build
 https://<owner>.github.io/<repo>/v/<commit>/      a copy of it, and of the recent ones before it
+https://<owner>.github.io/<repo>/v/v0.5.1/        a release, by its tag — kept for ever
 https://<owner>.github.io/<repo>/versions.json    what is published, newest first
 ```
 
@@ -238,20 +239,48 @@ Two builds pushing that branch at once would each write a manifest missing the o
 cannot: the workflow's `concurrency: pages` group already serialises runs, which is what makes a
 plain push safe here rather than a merge.
 
-### What is kept
+### What is kept, and how releases are treated
 
-Two rules, in `scripts/versions-manifest.mjs`, pinned by `test/unit/versions-manifest.test.ts`
+Three rules, in `scripts/versions-manifest.mjs`, pinned by `test/unit/versions-manifest.test.ts`
 because this is the one thing the deploy does that pushing again cannot undo:
 
-- **the last 20 pushes**, which is the debugging window — "it worked on Tuesday" is a question about
-  a handful of commits, and by the time it is about fifty the answer is a bisect;
-- **the newest build of every `package.json` version ever published**, which is the archive proper.
-  A released version is something people cite in a methods section, and one that answers 404 two
-  months later is worse than never having offered it.
+1. **the last 20 pushes**, which is the debugging window — "it worked on Tuesday" is a question
+   about a handful of commits, and by the time it is about fifty the answer is a bisect;
+2. **every tagged commit, for ever.** A release is what somebody cites in a methods section, and
+   one that answers 404 two months later is worse than never having offered it;
+3. **the oldest build of each distinct `package.json` version, for ever** — rule 2 for the case
+   where the tag is not visible yet.
 
-The second rule is the reason to cut a release even though every push is published: the version
-number is what makes a build *keepable*. There is one such entry per release, so that set grows at
-the rate releases happen and not at the rate pushes do.
+Rule 3 wants explaining, because the obvious version of it is wrong and was wrong here first.
+`npm version minor` bumps `package.json` **and tags that same commit**, so the release is the
+*oldest* build carrying a version; the *newest* one carrying it is whatever was pushed just before
+the next bump. A rule that kept the newest would keep a build that calls itself `0.6.0`, is labelled
+`0.6.0` in the menu, and is not `v0.6.0` — worse than keeping nothing, because it is wrong rather
+than absent. Keeping the oldest also stops the archive churning: the pinned build is decided the
+moment a version first appears and never moves.
+
+Rules 2 and 3 overlap on purpose. `git push --follow-tags` sends the commit and the tag together, so
+the tag is normally visible to the deploy — but a release pushed in two steps deploys before its tag
+exists, and rule 3 catches that build anyway. The cost of rule 3 is one extra kept build per version
+(on a fresh archive, its first entry is not a release at all, just the oldest one it ever saw).
+
+**Tags are read with `git ls-remote --tags`, not by fetching them.** `actions/checkout` clones at
+depth 1, and asking it for tags would drag down an object per tag in a repository carrying 250 MB of
+demo data in its history. `ls-remote` asks the server for its ref names — a few kilobytes, no
+objects. Annotated tags are advertised twice (`refs/tags/v1` and the peeled `refs/tags/v1^{}`); the
+peeled line is the one that matches a commit.
+
+Each kept release also gets a **directory of its own** — `v/v0.5.1/` — holding a one-kilobyte
+redirect to `v/<commit>/`. That is the address worth writing down: a commit URL is equally permanent
+but says nothing to a reader. The redirect carries the query and the hash across, so a citation can
+name a *view* of a release and not just the build; the `meta refresh` beside it is the no-JavaScript
+path and loses the hash, which is the right order of failure. The About dialog shows this URL
+whenever the build in front of you is a release.
+
+Tag names are filtered to `[A-Za-z0-9][A-Za-z0-9._+-]*` — a tag is a path segment and is written
+into that HTML page unescaped, so `release/1.0` gets no alias (the build is still archived and still
+in the menu, it just has no name of its own). A tag spelt like a short hash is refused too, since it
+would claim the directory a *build* is published in.
 
 To reset the archive, delete the `pages-archive` branch; the next deploy starts a new one holding
 that build alone. To change the window, change `KEEP_RECENT` — and read the arithmetic above first,
@@ -376,6 +405,13 @@ as a **draft** is the recommended shape: the three legs attach their artifacts, 
 and then you press publish. Publishing an existing draft does not re-fire the workflow — nothing
 has changed to rebuild — so re-running a leg against an existing tag is `workflow_dispatch` with
 the tag as input.
+
+The tag does one other thing, from the moment it is pushed rather than when a release is created:
+the deploy that publishes that commit records the tag in `versions.json`, keeps that build for ever,
+and gives it a permanent address at `/v/<tag>/`. See
+[What is kept, and how releases are treated](#what-is-kept-and-how-releases-are-treated) — and push
+the commit and the tag *together* (`--follow-tags`), or the deploy runs before the tag exists and
+the build is kept by its version number without a name.
 
 The trigger is the release rather than the tag because a tag on its own does not mean "ship
 binaries": `npm version` makes one on every patch bump, and building three installers to renumber

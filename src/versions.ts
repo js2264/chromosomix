@@ -50,6 +50,16 @@ const COMMIT = /^[0-9a-f]{7,40}$/
 /** How much of a commit subject is worth putting in a tooltip. */
 const SUBJECT_LIMIT = 120
 
+/**
+ * A tag name, on the same terms `scripts/versions-manifest.mjs` publishes one.
+ *
+ * Narrower than git's own rules on purpose: a tag is also a *directory* beside
+ * the commits, so a slash would nest it somewhere unintended. Checked again
+ * here rather than trusted, because this side reads the file over the network
+ * and puts what it finds into a link.
+ */
+const TAG = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/
+
 /** One published build. */
 export interface VersionEntry {
   /** Short commit hash, and the directory the build is published under. */
@@ -60,6 +70,15 @@ export interface VersionEntry {
   date: string
   /** The commit subject, one line. Empty when it could not be read. */
   subject: string
+  /**
+   * The tag on that commit — a release — or `''`.
+   *
+   * Worth carrying separately from `version` even though the two nearly always
+   * say the same thing, because "nearly always" is the problem: every build
+   * between two releases reports the version of the release *before* it, and
+   * only the tag says which one is the release.
+   */
+  tag: string
 }
 
 /** The manifest, once it has survived being read. */
@@ -98,9 +117,16 @@ export const SITE_BASE: string = HERE.site
 /** The commit this build is pinned to, or `null` when it is the site itself. */
 export const PINNED_COMMIT: string | null = HERE.commit
 
-/** Where a given build lives. `null` is the newest, which is the site root. */
-export function versionPath(site: string, commit: string | null): string {
-  return commit === null ? site : `${site}${ARCHIVE_SEGMENT}/${commit}/`
+/**
+ * Where a given build lives. `null` is the newest, which is the site root.
+ *
+ * A release's tag alias has the same shape — `…/v/v0.5.1/` is a redirect to
+ * `…/v/<commit>/`, written by `scripts/archive-versions.mjs` — so this builds
+ * that too, and the name is `name` rather than `commit` because the directory
+ * does not care which it was given.
+ */
+export function versionPath(site: string, name: string | null): string {
+  return name === null ? site : `${site}${ARCHIVE_SEGMENT}/${name}/`
 }
 
 /**
@@ -128,11 +154,13 @@ export function parseVersions(raw: unknown): Versions | null {
     // is newest first.
     if (typeof commit !== 'string' || !COMMIT.test(commit) || seen.has(commit)) continue
     seen.add(commit)
+    const tag = row['tag']
     entries.push({
       commit,
       version: text(row['version'], 32),
       date: text(row['date'], 32),
       subject: text(row['subject'], SUBJECT_LIMIT),
+      tag: typeof tag === 'string' && TAG.test(tag) && !COMMIT.test(tag) ? tag : '',
     })
   }
   // A manifest that lists nothing is the same as no manifest, and saying so
@@ -173,14 +201,25 @@ export async function fetchVersions(): Promise<Versions | null> {
 }
 
 /**
- * How one build reads in a menu: `0.5.1 · a1b2c3d · 2026-08-05`.
+ * How one build reads in a menu:
+ * `0.5.1 · a1b2c3d · 2026-08-05 — release v0.5.1, latest`.
  *
- * The same three facts in the same order as the about dialog's build line, so
+ * The first three facts in the same order as the about dialog's build line, so
  * the row a reader picks and the stamp they see afterwards are recognisably the
  * same thing. Parts that are unknown are absent rather than empty, which is the
  * rule `buildLine()` follows for the same reason.
+ *
+ * The markers after the dash are what a reader is actually scanning the list
+ * for. **release** is not redundant with the version beside it: every build
+ * between two releases reports the earlier release's version, so a list without
+ * this marker shows a dozen rows saying `0.5.1` of which exactly one is
+ * `v0.5.1`. The tag is named rather than implied because it does not have to
+ * match — `v0.5.1` and `0.5.1` are the convention here, not a rule.
  */
 export function versionLabel(entry: VersionEntry, latest: boolean): string {
   const parts = [entry.version, entry.commit, entry.date.slice(0, 10)].filter((p) => p !== '')
-  return latest ? `${parts.join(' · ')} — latest` : parts.join(' · ')
+  const marks = [entry.tag === '' ? '' : `release ${entry.tag}`, latest ? 'latest' : ''].filter(
+    (mark) => mark !== '',
+  )
+  return marks.length === 0 ? parts.join(' · ') : `${parts.join(' · ')} — ${marks.join(', ')}`
 }
