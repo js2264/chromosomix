@@ -80,6 +80,74 @@ export function registerServiceWorker(): void {
   })
 }
 
+/**
+ * Make the newest build actually arrive, rather than the one a worker is
+ * holding on to.
+ *
+ * The bug this exists for is worth stating plainly, because everything about it
+ * looks like it works. A visitor at the site root is served by a worker whose
+ * cache is a build or two old — which is the *designed* behaviour, since an
+ * update installs and waits for consent rather than swapping code under a
+ * half-read file. They open the version menu, see that they are running 0.6.0
+ * and that 0.6.1 is marked "latest", and pick it. The picker sends them to the
+ * site root. The worker answers that navigation from the same cache. The page
+ * flickers and comes back as 0.6.0, and it will do that for ever, because
+ * nothing in the round trip ever asked the network for anything.
+ *
+ * So going to the newest build cannot be a navigation. It is:
+ *
+ * 1. **Ask now.** `update()` fetches `sw.js` rather than waiting for whenever
+ *    the browser would have. If the site has moved on, a new worker installs.
+ * 2. **Take what is waiting**, by the same handshake the update bar uses:
+ *    `skip-waiting`, then `controllerchange` above reloads the page. This is
+ *    the good path — the cache is replaced rather than dropped, so the visitor
+ *    keeps offline throughout.
+ * 3. **Otherwise, if we know the shell is stale, drop the worker.** There is
+ *    nothing waiting and the page is still not the newest, so the polite
+ *    mechanism has no answer: the worker is serving a cache it has no reason to
+ *    doubt. Unregistering costs one page load of offline and is the only thing
+ *    left that certainly works.
+ *
+ * `stuck` is what tells step 3 apart from an ordinary click. A reader on an
+ * archived build asking for the newest is not evidence that anything is wrong
+ * at the root, and dropping a working worker to satisfy them would be a cost
+ * with no cause.
+ *
+ * Returns `true` when a reload is already on its way, so the caller knows not
+ * to navigate on top of it.
+ */
+export async function takeNewestBuild(stuck: boolean): Promise<boolean> {
+  if (TARGET !== 'web' || !('serviceWorker' in navigator)) return false
+  const registration = await navigator.serviceWorker.getRegistration()
+  if (registration === undefined) return false
+
+  try {
+    await registration.update()
+  } catch {
+    /* Offline, or `sw.js` did not answer. There is nothing to take. */
+  }
+  // `update()` resolving does not guarantee the new worker has finished
+  // installing in every browser, and a worker that is still `installing` is not
+  // yet `waiting` — reading `waiting` at that moment sees null and falls
+  // through to the coarse path for no reason.
+  const installing = registration.installing
+  if (installing !== null) {
+    await new Promise<void>((resolve) => {
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'installed' || installing.state === 'redundant') resolve()
+      })
+    })
+  }
+
+  if (registration.waiting !== null) {
+    registration.waiting.postMessage('skip-waiting')
+    return true
+  }
+  if (!stuck) return false
+  await registration.unregister()
+  return false
+}
+
 /** Where the one recovery attempt is remembered, so it cannot become a loop. */
 const RECOVERED = 'metacooler-viewer:unpinned'
 

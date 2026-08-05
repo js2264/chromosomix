@@ -118,6 +118,25 @@ export const SITE_BASE: string = HERE.site
 export const PINNED_COMMIT: string | null = HERE.commit
 
 /**
+ * Is this page running something older than what the site root now serves?
+ *
+ * Only ever true at the root itself, and it means one thing: a service worker
+ * is answering with a shell it cached earlier. That is the app's own design —
+ * an update installs and *waits* rather than swapping the code under a
+ * half-read file (`src/pwa.ts`) — but it makes "go to the newest build" a lie
+ * when the way there is an ordinary navigation, because the worker answers
+ * that navigation from the same cache and the page comes back unchanged. The
+ * picker has to know, so that it can take the update instead of walking into
+ * it.
+ *
+ * A build with no commit stamp — a tarball, a test — knows nothing and is
+ * therefore never stale: an unknown answer must not become an accusation.
+ */
+export function isStaleShell(running: string, latest: string, pinned: string | null): boolean {
+  return pinned === null && running !== '' && running !== latest
+}
+
+/**
  * Where a given build lives. `null` is the newest, which is the site root.
  *
  * A release's tag alias has the same shape — `…/v/v0.5.1/` is a redirect to

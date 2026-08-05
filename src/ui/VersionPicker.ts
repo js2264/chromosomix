@@ -32,10 +32,12 @@
  */
 
 import { COMMIT, TARGET } from '../version'
+import { takeNewestBuild } from '../pwa'
 import {
   PINNED_COMMIT,
   SITE_BASE,
   fetchVersions,
+  isStaleShell,
   versionLabel,
   versionPath,
   type Versions,
@@ -56,9 +58,42 @@ function goTo(commit: string | null): void {
   window.location.assign(`${path}${window.location.search}${window.location.hash}`)
 }
 
+/**
+ * Go to the newest build — which is not the same thing as going to the site
+ * root, and that difference is a bug this got wrong first.
+ *
+ * The root is *where* the newest build is published, but what a visitor is
+ * served there is whatever their service worker has cached, and a navigation is
+ * exactly the request that worker answers from cache. Ask the worker for the
+ * update first (`takeNewestBuild`); only navigate if there was nothing to take.
+ *
+ * `stuck` says we already know this page is not the newest, which is the case
+ * where the worker has to be got out of the way rather than asked politely.
+ */
+async function goToNewest(stuck: boolean): Promise<void> {
+  if (await takeNewestBuild(stuck)) return
+  goTo(null)
+}
+
+/**
+ * How a build reads inside a sentence: `0.6.0 (c797c1e)`, or the bare commit
+ * when the manifest has never heard of it.
+ *
+ * Shorter than the menu row on purpose — a date is what tells two rows apart in
+ * a list and is noise in prose, where the two things being compared are the
+ * only two things there.
+ */
+function describeBuild(
+  entry: { version: string; commit: string } | undefined,
+  fallback: string,
+): string {
+  if (entry === undefined) return fallback === '' ? 'an unknown build' : fallback
+  return entry.version === '' ? entry.commit : `${entry.version} (${entry.commit})`
+}
+
 /** One button, back to the newest build, carrying the view. */
 function latestButton(): HTMLButtonElement {
-  return button('newest build', () => goTo(null), {
+  return button('newest build', () => void goToNewest(false), {
     class: 'btn btn-small',
     title: 'Reload this view from the newest published build',
   })
@@ -108,7 +143,8 @@ function picker(versions: Versions): HTMLElement[] {
   // than guessing keeps the control honest: it never shows a row that is not
   // what is running.
   const current = PINNED_COMMIT ?? COMMIT
-  const known = versions.entries.some((entry) => entry.commit === current)
+  const running = versions.entries.find((entry) => entry.commit === current)
+  const known = running !== undefined
 
   const select = el('select', {
     class: 'select version-select',
@@ -139,14 +175,27 @@ function picker(versions: Versions): HTMLElement[] {
   }
   select.value = known ? current : ''
 
+  // Running the root build, but not the one the root now publishes: a worker is
+  // serving a cache from an earlier visit. It changes what "go to the newest"
+  // has to mean, and it is worth saying out loud — until this was written the
+  // menu simply showed an older build as the selected one and left the reader
+  // to work out why picking the newest did nothing.
+  const stale = isStaleShell(COMMIT, versions.latest, PINNED_COMMIT)
+
   select.addEventListener('change', () => {
     const commit = select.value
     if (commit === '' || commit === current) return
     // The newest build is served from the site root, which is the copy with the
     // service worker and the install prompt behind it. Sending someone to
     // `v/<latest>/` instead would hand them a second, worker-less copy of the
-    // same code and quietly cost them offline.
-    goTo(commit === versions.latest ? null : commit)
+    // same code and quietly cost them offline. But the root is also the one
+    // destination a stale worker can refuse to deliver, which is what
+    // `goToNewest` is for.
+    if (commit === versions.latest) {
+      void goToNewest(stale)
+      return
+    }
+    goTo(commit)
   })
 
   const rows = [
@@ -160,12 +209,24 @@ function picker(versions: Versions): HTMLElement[] {
     }),
   ]
 
+  if (stale) {
+    const newest = versions.entries.find((entry) => entry.commit === versions.latest)
+    rows.push(
+      el('p', {
+        class: 'version-note version-stale',
+        text:
+          `This page is running ${describeBuild(running, COMMIT)} from the offline cache, while the site ` +
+          `now publishes ${describeBuild(newest, versions.latest)}. Choosing it above takes the update — ` +
+          'an ordinary reload will not, because the cache is what answers one.',
+      }),
+    )
+  }
+
   // A release has a second, permanent address — its tag — and that is the one
   // worth writing down. A commit URL is equally permanent but says nothing to a
   // reader; `…/v/v0.5.1/` is what belongs in a methods section, and offering it
   // only when the build in front of you *is* a release is what keeps it from
   // being a line of chrome nobody reads.
-  const running = versions.entries.find((entry) => entry.commit === current)
   if (running !== undefined && running.tag !== '') {
     const href = new URL(versionPath(SITE_BASE, running.tag), window.location.href).href
     rows.push(

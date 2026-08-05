@@ -2760,6 +2760,13 @@ p {
   max-width: 60ch;
 }
 
+/* The one line in this block that is news rather than reference: the page is
+   not the build the site is publishing. Not an error — the offline cache
+   working as designed — so it is emphasised rather than coloured like one. */
+.version-stale {
+  color: var(--text);
+}
+
 /* A release's permanent address, which exists to be copied into a methods
    section — so it wraps rather than overflowing, and it is selectable text
    before it is a link. */

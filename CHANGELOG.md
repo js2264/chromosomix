@@ -10,6 +10,37 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **Picking the newest build did nothing, on the one page where it mattered.**
+  Reported from the deployed site: the menu showed `0.6.0` selected with
+  `0.6.1` marked *latest*, and choosing `0.6.1` reloaded quickly and changed
+  nothing at all.
+
+  Every part of that was working as built. A visitor at the site root is served
+  by their service worker, whose cache was a build old — which is the design,
+  since an update installs and *waits* for consent rather than swapping code
+  under a half-read file. The picker sent them to the site root. The worker
+  answered that navigation from the same cache. Nothing in the round trip ever
+  asked the network for anything, so it would have done that for ever.
+
+  The newest build is now **taken** rather than navigated to: check for an
+  update now, take what is waiting by the same `skip-waiting` handshake the
+  update bar uses, and only if the shell is known stale and nothing is waiting,
+  drop the worker and reload. The first path replaces the cache rather than
+  dropping it, and so keeps offline.
+
+  The state is no longer silent either. When the running build is not the one
+  the root publishes, the dialog now says which build is on screen, which one
+  the site has, and that an ordinary reload will not fetch it — the absence of
+  that sentence is what made this hard to read from the outside.
+
+  This cannot rescue a page that is *already* stuck, since that page is running
+  the code without the fix. The update bar is the way out of one, as it always
+  was.
+
 ## [0.6.1] - 2026-08-05
 
 ### Added

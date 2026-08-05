@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { parseVersions, splitBase, versionLabel, versionPath } from '@/versions'
+import { isStaleShell, parseVersions, splitBase, versionLabel, versionPath } from '@/versions'
 
 describe('splitBase', () => {
   it('reads the commit and the site out of an archived base', () => {
@@ -164,6 +164,33 @@ describe('parseVersions', () => {
 
   it('treats an empty list as no manifest, so one fallback serves every caller', () => {
     expect(parseVersions({ latest: 'a1b2c3d', versions: [] })).toBeNull()
+  })
+})
+
+describe('isStaleShell', () => {
+  it('is true when the root serves a build newer than the one running', () => {
+    // The reported bug: at the site root, a worker answering with a shell it
+    // cached two deploys ago. The menu showed 0.6.0 selected with 0.6.1 marked
+    // latest, and picking 0.6.1 navigated to the root — which that same worker
+    // answered from the same cache, for ever.
+    expect(isStaleShell('c797c1e', 'e98eaf7', null)).toBe(true)
+  })
+
+  it('is false when the running build is what the root publishes', () => {
+    expect(isStaleShell('e98eaf7', 'e98eaf7', null)).toBe(false)
+  })
+
+  it('is false on an archived build, however old it is', () => {
+    // A pinned build is *meant* to be older than the root, and it is served
+    // from its own directory rather than from the root's cache. Calling that
+    // stale would drop a working worker on every visit to one.
+    expect(isStaleShell('c797c1e', 'e98eaf7', 'c797c1e')).toBe(false)
+  })
+
+  it('is false when the build cannot say what it is', () => {
+    // A tarball build, or a test: an unknown answer must not become an
+    // accusation, and the coarse recovery it unlocks must not fire on a guess.
+    expect(isStaleShell('', 'e98eaf7', null)).toBe(false)
   })
 })
 

@@ -302,6 +302,39 @@ unregisters and reloads, once per tab.
 **Deleting `pages-archive` is not enough to unpublish a build**, incidentally: whoever has the site
 cached has the copy they were served. The archive controls what is *offered*, not what has been.
 
+### "The newest build" is something you take, not somewhere you go
+
+The same worker causes a second problem, and this one looks like it works. A visitor at the site
+root is served by their worker, whose cache may be a build or two old — by design, since an update
+installs and **waits** for consent rather than swapping code under a half-read file. So the menu
+correctly shows them running `0.6.0` with `0.6.1` marked *latest*; they pick `0.6.1`; the picker
+navigates to the site root; the worker answers that navigation from the same cache. The page
+flickers and comes back unchanged, for ever, because nothing in the round trip asked the network
+for anything.
+
+`takeNewestBuild()` in `src/pwa.ts` is the answer, and it is three steps rather than a navigation:
+
+1. `registration.update()` — check now, rather than whenever the browser would have;
+2. if something is **waiting**, take it with the same `skip-waiting` handshake the update bar uses.
+   `controllerchange` reloads the page, the cache is replaced rather than dropped, and offline
+   survives. This is the path that normally runs;
+3. only if the shell is *known* stale and nothing is waiting, unregister and navigate. That costs
+   one page load of offline and is the only thing left that certainly works.
+
+`isStaleShell()` is what distinguishes step 3 from an ordinary click: running the root build, and
+not the one the root publishes. A reader on an archived build asking for the newest is not evidence
+that anything is wrong at the root, so it does not drop a working worker.
+
+The dialog also *says* so when it holds — which build is on screen, which one the site has, and
+that an ordinary reload will not fetch it. It was silent about that first, which is what made the
+bug hard to read from the outside.
+
+Note what this cannot do: **a visitor already stuck on an older build is running that build's
+code**, so a fix shipped afterwards is not code they are executing. Their way out is the update bar
+(`src/pwa.ts` offers it within a second or two of any load, because `updateViaCache: 'none'` forces
+a real check), or a hard reload. There is no way to reach back into a shell that is already being
+served — which is the argument for the update bar existing at all.
+
 ## Why Pages works at all for this app
 
 Worth recording, because it is the usual reason a wasm app *cannot* be on Pages: GitHub Pages does
