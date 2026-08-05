@@ -69,7 +69,7 @@ import { inverseTransform, transformValue } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
-import { dragHasFiles, el, field, fmt } from './dom'
+import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt } from './dom'
 import {
   EXPORT_DPI_CHOICES,
   EXPORT_FORMATS,
@@ -671,7 +671,7 @@ export class MatrixPanel {
             { class: 'export-row' },
             dpiSelect,
             formatSelect,
-            iconButton('download', 'Save the figure, at the resolution and in the format chosen beside this', () => void this.save(this.exportFormat), {
+            iconButton('download', withKey('Save the figure, at the resolution and in the format chosen beside this', KEYS.savePlot), () => this.savePlot(), {
               class: 'btn btn-icon',
               size: 15,
             }),
@@ -885,19 +885,42 @@ export class MatrixPanel {
     )
     this.edgeZones.set(edge, zone)
     zone.addEventListener('dragover', (event) => {
-      if (!dragHasFiles(event)) return
+      if (!dragHasFiles(event) && !dragHasTrack(event)) return
       // Both, and in this order: the default action for a dropped file is to
       // navigate the window to it, and the panel above is not the one that
       // decides where this file goes.
       event.preventDefault()
       event.stopPropagation()
+      // A row dragged out of the Tracks card is being *moved*, and saying so is
+      // what stops the pointer showing a copy cursor over the target.
+      if (event.dataTransfer !== null && dragHasTrack(event)) {
+        event.dataTransfer.dropEffect = 'move'
+      }
       zone.classList.add('over')
     })
     zone.addEventListener('dragleave', () => zone.classList.remove('over'))
     zone.addEventListener('drop', (event) => {
-      const files = Array.from(event.dataTransfer?.files ?? [])
       zone.classList.remove('over')
       this.grid.classList.remove('is-dropping')
+
+      // A track already loaded, dragged here by its grip to change which edge it
+      // is drawn on. A move rather than a copy: the other edge is cleared, which
+      // is what dragging a thing from one place to another means. `location` in
+      // the row's settings is the same field, for the reader who wants both.
+      const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
+      if (moved !== '') {
+        event.preventDefault()
+        const store = this.options.annotations?.store
+        const entry = store?.byId(moved)
+        if (store !== undefined && entry !== undefined) {
+          store.update(moved, {
+            placement: { bottom: edge === 'bottom', right: edge === 'right' },
+          })
+        }
+        return
+      }
+
+      const files = Array.from(event.dataTransfer?.files ?? [])
       if (files.length === 0) return
       event.preventDefault()
       // Not stopped: the shell's content-wide handler has to see this drop to
@@ -928,7 +951,7 @@ export class MatrixPanel {
    */
   private watchEdgeDrops(): void {
     const show = (event: DragEvent): void => {
-      if (!dragHasFiles(event)) return
+      if (!dragHasFiles(event) && !dragHasTrack(event)) return
       this.grid.classList.add('is-dropping')
     }
     const hide = (event: DragEvent): void => {
@@ -943,6 +966,24 @@ export class MatrixPanel {
     this.grid.addEventListener('dragover', show)
     this.grid.addEventListener('dragleave', hide)
     this.grid.addEventListener('drop', () => this.grid.classList.remove('is-dropping'))
+    // A row dragged out of the Tracks card and then abandoned — Escape, or a
+    // release over nothing — ends with `dragend` on the row and no event of any
+    // kind here, so without this the two rectangles would stay up until the next
+    // drag. On the window because the row is not in this panel's tree.
+    const done = (): void => this.grid.classList.remove('is-dropping')
+    window.addEventListener('dragend', done)
+    this.laneListeners.push(() => window.removeEventListener('dragend', done))
+  }
+
+  /**
+   * Save the map as a figure — the `S` key, and the button in the Plot card.
+   *
+   * In the format and at the resolution that card is set to, because a shortcut
+   * that exported something other than the button beside it would be a second
+   * export to keep in step with the first.
+   */
+  savePlot(): void {
+    void this.save(this.exportFormat)
   }
 
   /**
@@ -1575,7 +1616,7 @@ export class MatrixPanel {
     if (lanes === null || context === undefined) return
 
     /**
-     * Four gestures on one surface, told apart without a modifier key.
+     * Three gestures on one surface, told apart without a modifier key.
      *
      * A press on a lane's *border* is a resize, because that is the only thing a
      * border can be dragged for. A press on its *body* waits for the first
@@ -1585,51 +1626,18 @@ export class MatrixPanel {
      * movement up the stack. The two are perpendicular, so no gesture has to be
      * guessed at and neither has to be given up.
      *
-     * The fourth is a continuation of the third rather than a rival to it:
-     * keep dragging *across* until the pointer leaves the stack altogether and
-     * lands on one of the map's two edge rectangles, and the lane moves to that
-     * edge. A reorder that has left its own stack has nowhere left to reorder
-     * to — it clamps at the last slot and does nothing more — so the movement
-     * beyond it was free to mean something, and this is the thing a reader is
-     * already trying to do when they drag a track off the bottom of the map
-     * towards the side of it.
+     * A fourth was tried here and taken out again: dragging a lane off its stack
+     * and onto the other edge's rectangle. There is no room for it. Whichever
+     * way that drag travels it has already committed to one of the three above —
+     * sideways out of the bottom stack is a pan, upwards is a reorder — so it
+     * either fought the reorder or fought the pan, depending on the edge, and a
+     * gesture that has to be performed *carefully* is not one. Moving a track
+     * between the edges is now a drag of its **row**, from the Tracks card onto
+     * the same two rectangles: see `edgeZone` and `AnnotationCard.grip`.
      */
     let drag:
-      | {
-          id: string
-          kind: 'size' | 'order' | 'pan' | 'undecided' | 'move'
-          from: number
-          along: number
-          size: number
-        }
+      | { id: string; kind: 'size' | 'order' | 'pan' | 'undecided'; from: number; along: number; size: number }
       | null = null
-
-    /** The edge rectangle under a point, or `null`. */
-    const zoneAt = (x: number, y: number): LaneEdge | null => {
-      for (const [name, node] of this.edgeZones) {
-        const box = node.getBoundingClientRect()
-        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return name
-      }
-      return null
-    }
-
-    /**
-     * Show the two rectangles, and mark the one being aimed at.
-     *
-     * Shown from the moment a drag is committed to *across* rather than only
-     * once the pointer has left the stack: the reader is already moving the
-     * lane, and the two rectangles appearing under their hand are what says the
-     * other edge is somewhere it can go. Nothing else on the map moves.
-     */
-    const markZones = (target: LaneEdge | null): void => {
-      this.grid.classList.add('is-dropping')
-      for (const [name, node] of this.edgeZones) node.classList.toggle('over', name === target)
-    }
-
-    const clearZones = (): void => {
-      this.grid.classList.remove('is-dropping')
-      for (const node of this.edgeZones.values()) node.classList.remove('over')
-    }
 
     const onDown = (event: PointerEvent): void => {
       if (event.button !== 0 || this.picking !== null) return
@@ -1698,20 +1706,6 @@ export class MatrixPanel {
         return
       }
 
-      // A reorder that has left its own stack is a move to the other edge, from
-      // here until the pointer comes up. Once, and not back again: a gesture
-      // that changed its mind every time the pointer crossed a boundary would
-      // reorder the stack behind the reader while they aim at a rectangle.
-      const target = zoneAt(event.clientX, event.clientY)
-      const inside =
-        event.clientX >= box.left &&
-        event.clientX <= box.right &&
-        event.clientY >= box.top &&
-        event.clientY <= box.bottom
-      if (drag.kind === 'order' && !inside && target !== null) drag.kind = 'move'
-      markZones(drag.kind === 'move' ? target : null)
-      if (drag.kind === 'move') return
-
       // Reordering: the lane lands where the pointer is, counted in lane
       // boundaries rather than in pixels, so a tall lane and a short one are one
       // step apart either way.
@@ -1724,19 +1718,6 @@ export class MatrixPanel {
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
-      if (drag.kind === 'move') {
-        const target = zoneAt(event.clientX, event.clientY)
-        const entry = target === null ? undefined : context.store.byId(drag.id)
-        // A move, not a copy: the edge it came from is cleared. Released
-        // anywhere else — over the map's middle, off the window — nothing
-        // happens, which is how a drag is called off.
-        if (target !== null && target !== edge && entry !== undefined) {
-          context.store.update(drag.id, {
-            placement: { ...entry.placement, [edge]: false, [target]: true },
-          })
-        }
-      }
-      clearZones()
       drag = null
       canvas.style.cursor = ''
       canvas.classList.remove('grabbing')

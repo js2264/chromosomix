@@ -277,19 +277,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   instruction, so it keeps what you last applied and the next file is one press
   away from it.
 
-- **Drag a lane onto the other edge of the map to move it there.** The two
-  rectangles that take a dropped file take a lane already on the map as well:
-  keep dragging a track *across* its own stack until the pointer leaves it, and
-  both rectangles appear under your hand — drop on one and the lane is drawn
-  there instead. A reorder that has left its own stack had nowhere left to
-  reorder to, so the movement past it was free to mean the thing a reader was
-  already trying to do. Released anywhere else, nothing happens.
+- **Drag a track onto the other edge of the map to move it there.** The two
+  rectangles that take a dropped file take a *loaded* track as well: pick a row
+  up by its grip in the Tracks card, and both rectangles appear the moment it is
+  over the map — drop on one and the track is drawn there instead.
 
-  It is the same state as the `location` setting on the row, because it is the
-  same field: dragging a lane to the right edge is what the row's `right` button
-  does, and the row shows it a frame later.
+  The gesture is on the row rather than on the lane, and that is the second
+  attempt. Dragging the lane itself is what a reader reaches for and there is no
+  room for it: a lane already answers three drags — its border resizes, along
+  the axis pans, across reorders — so a fourth had to be read out of one of
+  them, and the trip from the bottom stack to the right-hand rectangle is mostly
+  sideways, which is a bottom lane's *pan*. It worked from one stack and fought
+  the other. The row carries no such freight, and it is where the track's other
+  settings are.
 
-### Changed
+  A row now has a grip beside a map even when it is the only one, since there it
+  has something to do besides reorder. The drag carries its own MIME type, so
+  the rectangles can tell it from a dropped file and from a dragged word while
+  the drag is still in the air, and the whole content area no longer lights up
+  for it. It is the same state as the `location` setting on the row, because it
+  is the same field.
+
+- **`S` saves the plot.** Whichever view is mounted exports itself — the map or
+  the browser — in the format and at the resolution its own Plot card is set to,
+  because a shortcut that saved something other than the button beside it would
+  be a second export to keep in step. It is one letter from `⌘S`, which saves
+  the *session*, and that is the pairing: two things a reader means by "save
+  this", told apart by the modifier. Stretching the tracks moves to `H`, for
+  height.
 
 - **`location`, in the row's settings, rather than `B`/`R` tick boxes on its
   head.** Two buttons with the words on them — `bottom` and `right`, and not a

@@ -775,6 +775,14 @@ export class Session {
           run: () => this.browser?.fitTracks(),
         },
         {
+          id: 'browser-export',
+          group: 'File',
+          title: 'Save this plot as a figure',
+          hint: 'The Plot card decides the format and the resolution; this is its button.',
+          keys: KEYS.savePlot,
+          run: () => this.browser?.savePlot(),
+        },
+        {
           id: 'browser-autoscale',
           group: 'View',
           title: 'Autoscale every track',
@@ -821,6 +829,15 @@ export class Session {
         keys: KEYS.find,
         enabled: this.current?.focusSearch !== undefined,
         run: () => this.current?.focusSearch?.(),
+      },
+      {
+        id: 'map-export',
+        group: 'File',
+        title: 'Save this plot as a figure',
+        hint: 'The Plot card decides the format and the resolution; this is its button.',
+        keys: KEYS.savePlot,
+        enabled: this.current?.panel !== undefined,
+        run: () => this.current?.panel?.savePlot(),
       },
       {
         id: 'map-autoscale',

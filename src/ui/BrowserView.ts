@@ -467,6 +467,17 @@ export class BrowserView {
   }
 
   /**
+   * Save this view as a figure — the `S` key, and the button in the Plot card.
+   *
+   * The same call either way, in the format and at the resolution the card is
+   * set to: a shortcut that exported something *else* than the button beside it
+   * would be a second export to keep in step.
+   */
+  savePlot(): void {
+    void this.save()
+  }
+
+  /**
    * Put the caret in the box — the `/` key, and the palette.
    *
    * Named as every other view names it, because the shell now asks all of them
@@ -2159,7 +2170,7 @@ export class BrowserView {
             { class: 'export-row export-row-flex' },
             dpiSelect,
             formatSelect,
-            iconButton('download', 'Save the figure, in the format chosen beside this', () => void this.save(), {
+            iconButton('download', withKey('Save the figure, in the format chosen beside this', KEYS.savePlot), () => this.savePlot(), {
               class: 'btn btn-icon',
               size: 15,
             }),
