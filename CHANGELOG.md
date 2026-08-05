@@ -10,7 +10,7 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
-## [0.6.0] - 2026-08-05
+## [Unreleased]
 
 ### Added
 
@@ -67,6 +67,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   archived build is the artifact nobody opens for months, so a wrong base is a
   blank page found in November, and a `publicDir` left on exhausts the site's
   budget several deploys after the change that caused it.
+
+## [0.6.0] - 2026-08-05
+
+### Added
 
 - **Tabs, and a real session behind each one.** Several files open at once, each
   with its own reader worker, its own annotation worker, its own stores and its
