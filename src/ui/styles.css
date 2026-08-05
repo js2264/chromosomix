@@ -726,9 +726,16 @@ p {
   gap: 0.4rem;
 }
 
-.browser-bar .input-region {
-  flex: 1 1 18rem;
+/* The wrapper carries the width, not the box: the box fills it. There is one
+   box in this bar and it does both jobs, so it gets the room both used to have
+   between them. */
+.browser-bar .browser-search {
+  flex: 1 1 22rem;
   min-width: 12rem;
+}
+
+.browser-bar .browser-search .input-region {
+  width: 100%;
 }
 
 /* The stage is `relative` because three things are positioned against it: the
@@ -851,14 +858,11 @@ p {
   font-size: var(--step--2);
 }
 
-/* Search sits at the end of the locus bar and drops its hits under itself. */
+/* The box that drops its hits under itself. `relative` is the whole job: the
+   list is absolutely positioned against it. */
 .browser-search {
   position: relative;
   flex: 0 1 14rem;
-}
-
-.browser-search .input-search {
-  width: 100%;
 }
 
 .browser-hits {
@@ -1341,6 +1345,12 @@ p {
 .status-item:focus-visible > .status-pop {
   visibility: visible;
   opacity: 1;
+}
+
+/* A panel that is a table *and* a paragraph: the numbers first, then what they
+   mean. Without this they touch, and the sentence reads as another row. */
+.status-pop > .kv + .hint {
+  margin: 0.5rem 0 0;
 }
 
 /* Drawn icons, not glyphs: one weight and one box, whatever the OS fonts do. */
@@ -3598,6 +3608,12 @@ p {
     display: none;
   }
 
+  /* Memory and CPU go: four instruments do not fit a phone bar, and of the four
+     these are the two nobody opened a file to look at. */
+  .status-usage {
+    display: none;
+  }
+
   /* The disclosure stays on a phone, abbreviated rather than dropped: it is the
      one thing in this bar that is a promise rather than an instrument. */
   .status-privacy {
@@ -3636,14 +3652,6 @@ p {
   margin: 0;
 }
 
-/* One row per drop area, because their labels are what says which file goes
-   where and a grid of two would truncate them. */
-.drop-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
 .ann-drop {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
@@ -3660,15 +3668,6 @@ p {
 .ann-drop:focus-visible {
   border-color: var(--accent, #1f5fa9);
   background: var(--bg-sunken);
-}
-
-/* The drag is over this zone rather than over one of its neighbours: the whole
-   card is a drop target from the pointer's point of view, so the highlight has
-   to say which of the three would take the file. */
-.ann-drop.over {
-  border-style: solid;
-  border-color: var(--accent, #1f5fa9);
-  background: color-mix(in srgb, var(--accent, #1f5fa9) 12%, var(--bg));
 }
 
 .ann-drop-label {
@@ -3836,16 +3835,6 @@ p {
 .ann-row.ann-ready .btn:hover:not(:disabled),
 .group-head .btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-/* Which file this is, in the smallest type the panel has: it is looked up rather
-   than read, and the name above it — which a reader may have changed — is what
-   identifies the track. */
-/* The card takes a file, and says so once, quietly, under its own title. */
-.ann-drop-note {
-  margin: -0.35rem 0 0;
-  font-size: x-small;
-  color: var(--text-faint);
 }
 
 /* The whole card is a target while a file is over it. No dashes at rest: it is

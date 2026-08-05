@@ -46,6 +46,7 @@ import {
   type WorkerResponse,
 } from './protocol'
 import { createSource, releaseSources } from './sources'
+import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -762,3 +763,10 @@ async function handle(request: WorkerRequest): Promise<void> {
 ctx.onmessage = (event: MessageEvent<WorkerRequest>): void => {
   void handle(event.data)
 }
+
+// How busy this thread has been, once a second, unasked. The status bar's CPU
+// figure is about the tab, and the tab's expensive moments happen here: a
+// whole-genome scan pins this worker for minutes while the main thread sits
+// idle, and a reading taken only on the main thread would call that 0%.
+const probe = startBusyProbe()
+setInterval(() => post({ type: 'busy', fraction: probe.busy() }), LOAD_REPORT_MS)

@@ -118,6 +118,11 @@ export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
 export type AnnotationResponse =
   | { type: 'result'; id: number; payload: unknown }
   | { type: 'error'; id: number; message: string }
+  // Unsolicited: how busy this thread has been, for the status bar's CPU
+  // figure. No id, because it answers no request (see `perf/busy.ts`). Not
+  // called `load` — that is already a *request* kind here, and one word for two
+  // unrelated messages in one protocol is how a switch ends up in the wrong arm.
+  | { type: 'busy'; fraction: number }
 
 /**
  * The two BBI magic numbers, little-endian as written.

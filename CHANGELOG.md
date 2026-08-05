@@ -222,7 +222,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   line again: a vector page has no resolution, so the resolution is *absent*
   exactly when the long format name needs the width.
 
+- **Memory and CPU on the status bar**, after what has been read and whether the
+  file checks out. Per *browser tab* rather than per session, because the memory
+  a gene model holds and the core a scan is burning are shared by every tab in
+  the window.
+
+  Both are weaker than what a task manager shows, and the tooltips say so
+  outright. A page cannot see its own process — a precise figure would read
+  across origins — so memory is the JavaScript heap and its ceiling where that
+  is all Chromium offers, and the whole-agent measurement where a build is
+  cross-origin isolated. CPU has no API at all, so it is measured from the
+  inside: every thread in the tab times its own event loop, and the share of the
+  last three seconds they could not answer in, summed against the machine's
+  cores, is the number. Work too brief to delay anything never appears, so the
+  reading is a floor rather than an estimate. The workers report their own, which
+  is the point — a whole-genome scan pins a worker for minutes while the main
+  thread sits idle.
+
 ### Changed
+
+- **One box in the browser's toolbar**, not two. `chrIV:1,000-2,000`, `chrIV`
+  and `GAL4` are three spellings of "where do I want to be", and asking which of
+  two boxes each spelling belonged in was a taxonomy the reader had to learn in
+  order to type a word. Coordinates win when the text is coordinates; anything
+  else falls to the list of names under the box. Clicking it selects what is
+  there, because what is there is where you already are, and `/` still lands in
+  it.
+
+- **Loading a track is at the top of the Tracks card**, rather than in a card of
+  its own below it. The two questions are asked of the same thing, and with
+  eight tracks loaded the way to load a ninth was to scroll past the eight.
 
 - The app was one object holding a worker, a store, a file and a view, and it
   bound itself to the address bar in its constructor. It is now `app/Session.ts`

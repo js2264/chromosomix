@@ -8,6 +8,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { registerThread } from '../perf/threads'
 import {
   reviveError,
   type ProgressHandler,
@@ -34,6 +35,8 @@ export class ReaderClient {
   private readonly worker: Worker
   private readonly pending = new Map<number, Pending>()
   private nextId = 1
+  /** This worker's line in the status bar's CPU figure. */
+  private readonly thread = registerThread('reader')
 
   /**
    * `new URL(..., import.meta.url)` is the form the bundler rewrites, and the
@@ -47,6 +50,11 @@ export class ReaderClient {
   }
 
   private receive(response: WorkerResponse): void {
+    // Before the correlation, because it answers no request and carries no id.
+    if (response.type === 'busy') {
+      this.thread.report(response.fraction)
+      return
+    }
     const entry = this.pending.get(response.id)
     if (entry === undefined) return
     switch (response.type) {
@@ -105,6 +113,7 @@ export class ReaderClient {
   /** Drop the worker entirely. Any in-flight request rejects. */
   terminate(): void {
     this.failAll(new Error('reader worker terminated'))
+    this.thread.release()
     this.worker.terminate()
   }
 }

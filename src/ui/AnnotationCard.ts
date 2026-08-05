@@ -93,13 +93,13 @@ export class AnnotationCard {
       'section',
       { class: 'card annotation-card' },
       el('h3', { text: 'Tracks' }),
-      // The whole card takes a file, and says so once in the smallest type it
-      // has. What was here instead was five labelled rectangles — one per
-      // format — which between them asked the reader to know, before dropping,
-      // an answer the application works out from the bytes a moment later, and
-      // which said "wrong rectangle" when they guessed. No dashes: the card is
-      // not pretending to be a button, it is a card that also accepts a file.
-      el('p', { class: 'ann-drop-note', text: 'Drop any file here' }),
+      // Where a file goes in, above the list of what is already in. What was
+      // here instead was five labelled rectangles — one per format — which
+      // between them asked the reader to know, before dropping, an answer the
+      // application works out from the bytes a moment later, and which said
+      // "wrong rectangle" when they guessed. One zone, and the card around it
+      // takes a file too.
+      ...loadZone(props.loader),
       ...(props.demo === undefined
         ? []
         : [
@@ -1058,15 +1058,20 @@ export function overlapWarning(overlap: ContigOverlap | undefined): string | nul
 }
 
 /**
- * The other half of the pair: a card that is only a place to put a file.
+ * Where a file goes in: a dashed zone, and a URL under a fold.
  *
- * Separate from the list above rather than folded into it, because the two
- * answer different questions — *what is loaded* and *put something else here* —
- * and a list of eight tracks with a drop area at the bottom of it is a drop area
- * you have to scroll to. This one carries the dashes, since being a target is
- * all it is.
+ * At the *top* of the Tracks card, above the list, rather than in a card of its
+ * own below it. The two questions — *what is loaded* and *put something else
+ * here* — are asked of the same thing, and separating them put the answer to the
+ * second below however many rows the first had: with eight tracks loaded, the
+ * way to load a ninth was to scroll past the eight. Above the list it stays
+ * where it was whatever the list does.
+ *
+ * The zone carries the dashes because being a target is all it is; the card
+ * around it takes a dropped file as well, anywhere on it, which is why the hint
+ * says so rather than leaving the reader to aim.
  */
-export function loadCard(loader: AnnotationLoader): HTMLElement {
+function loadZone(loader: AnnotationLoader): HTMLElement[] {
   const input = el('input', { class: 'hidden-input', type: 'file' })
   input.multiple = true
   input.addEventListener('change', () => {
@@ -1083,8 +1088,8 @@ export function loadCard(loader: AnnotationLoader): HTMLElement {
     el('span', {
       class: 'ann-drop-hint',
       text:
-        'Drop a bigWig, bigBed, GTF, BED, BEDPE or FASTA here, or click to choose. What it is ' +
-        'and where it is drawn come from the file itself.',
+        'bigWig, bigBed, GTF, BED, BEDPE or FASTA. Click to choose, or drop one anywhere on ' +
+        'this card — what it is and where it is drawn come from the file itself.',
     }),
     input,
   )
@@ -1095,18 +1100,10 @@ export function loadCard(loader: AnnotationLoader): HTMLElement {
       input.click()
     }
   })
-  zone.addEventListener('dragover', (event) => {
-    event.preventDefault()
-    zone.classList.add('over')
-  })
-  zone.addEventListener('dragleave', () => zone.classList.remove('over'))
-  zone.addEventListener('drop', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    zone.classList.remove('over')
-    const files = Array.from(event.dataTransfer?.files ?? [])
-    if (files.length > 0) loader.addFiles(files)
-  })
+  // No drop handling of its own: it sits inside a card that already takes a
+  // file anywhere on it, and a drop landing on the zone bubbles there. Two
+  // handlers would mean two highlights lighting up together — the card outlined
+  // and the zone filled — over one gesture that has one destination.
 
   const url = el('input', {
     class: 'input',
@@ -1123,9 +1120,7 @@ export function loadCard(loader: AnnotationLoader): HTMLElement {
     if (event.key === 'Enter') submit()
   })
 
-  return el(
-    'section',
-    { class: 'card annotation-card' },
+  return [
     zone,
     el(
       'details',
@@ -1133,7 +1128,7 @@ export function loadCard(loader: AnnotationLoader): HTMLElement {
       el('summary', { text: 'or open one by URL' }),
       el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
     ),
-  )
+  ]
 }
 
 /**

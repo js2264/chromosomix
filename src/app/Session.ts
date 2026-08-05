@@ -53,7 +53,7 @@ import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
 import type { AnnotationEntry } from '../annotations/types'
-import { AnnotationCard, loadCard } from '../ui/AnnotationCard'
+import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView, type GroupMode, type GroupScaling } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
@@ -706,7 +706,7 @@ export class Session {
           id: 'browser-locus',
           group: 'Go',
           title: 'Go to a locus',
-          hint: 'chrI:1,000-20,000, a sequence name, or a gene from the search box.',
+          hint: 'One box takes all three: chrI:1,000-20,000, a sequence name, or a gene name.',
           keys: 'l',
           run: () => this.browser?.focusLocus(),
         },
@@ -730,7 +730,9 @@ export class Session {
           id: 'browser-search',
           group: 'Go',
           title: 'Find a gene or feature',
-          hint: 'Searches the names in every loaded gene model and peak set.',
+          hint:
+            'The same box as “go to a locus”: type a name and the starred gene model answers ' +
+            'under it.',
           keys: '/',
           run: () => this.browser?.focusSearch(),
         },
@@ -1364,10 +1366,7 @@ export class Session {
     const loader = new AnnotationLoader(store, client, names)
     this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
 
-    this.setAnnotations([
-      new AnnotationCard({ store, loader, context: 'browser' }).el,
-      loadCard(loader),
-    ])
+    this.setAnnotations([new AnnotationCard({ store, loader, context: 'browser' }).el])
     this.setGeneral([
       genomeCard(
         assembly,
@@ -1594,7 +1593,6 @@ export class Session {
     else {
       this.setAnnotations([
         new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
-        loadCard(held.loader),
       ])
       this.setGeneral([
       genomeCard(
@@ -1736,7 +1734,6 @@ export class Session {
               },
             }),
       }).el,
-      loadCard(loader),
       this.manualCard.el,
       this.compareCard.el,
     ])
