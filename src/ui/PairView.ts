@@ -209,6 +209,11 @@ export class PairView {
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
+      // The reader may have planned a coarser grid than the file's bins — a
+      // whole chromosome at 10 kb is more cells than any picture holds — and
+      // every coordinate on screen is the bin size times a cell offset, so the
+      // panel is told before it is given the block.
+      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.rowGenome} × ${this.props.colGenome}`)
       this.renderSummary(result)
     } catch (err) {

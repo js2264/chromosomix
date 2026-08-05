@@ -2072,6 +2072,20 @@ export class MatrixPanel {
   }
 
   /** Show or hide the "loading" veil; the canvas keeps its last picture. */
+  /**
+   * The bin size of the grid actually on screen, when the read decided it.
+   *
+   * A view builds its panel before it knows how coarse the block will come
+   * back — a genome's contig count is not known until the range resolves — so
+   * the resolution is set from the result rather than guessed at construction.
+   * Every coordinate the panel computes is `binsize` times a cell offset, so
+   * this must be called *before* {@link setData} or the first frame is drawn
+   * against the previous grid.
+   */
+  setResolution(binsize: number): void {
+    if (binsize > 0) this.options.binsize = binsize
+  }
+
   setBusy(busy: boolean, message = 'loading…'): void {
     this.overlay.textContent = message
     this.overlay.classList.toggle('hidden', !busy)

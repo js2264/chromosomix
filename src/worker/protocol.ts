@@ -273,11 +273,27 @@ export interface MatrixResult {
    */
   binsPerCell?: number
   /**
-   * `false` when a pooled cell may straddle two contigs, which happens only on
-   * an axis with more contigs than cells. The coordinates are then approximate
-   * near the boundaries and the view says so.
+   * Whole sequences summed into one cell, where the axis had more of them than
+   * the picture has pixels. Absent, or 1, for every axis with room for a cell
+   * per sequence — which is every cooler and most assemblies.
+   *
+   * Above 1 the axis is no longer one of positions: a cell is a named set of
+   * sequences, `binsPerCell` says nothing about it, and the view labels it as
+   * sequences rather than as base pairs. A cell still never holds part of a
+   * sequence, which is the property that makes the picture readable at all
+   * (`metacooler/pooling.ts`).
    */
-  poolSnapped?: boolean
+  contigsPerCell?: number
+  /**
+   * Sequences on each axis, as against cells.
+   *
+   * The two part company exactly when {@link contigsPerCell} is above one: an
+   * axis run is one *cell's* name, so counting runs then counts cells, and a
+   * summary saying "4,885 bins across 2,441 contigs" of a 4,882-contig genome
+   * reports the pooling as though it were the assembly.
+   */
+  rowContigs?: number
+  colContigs?: number
 }
 
 export interface OverviewResult {
@@ -384,6 +400,7 @@ export type WorkerRequest =
       budgetBytes?: number
       genomes?: boolean
       binsPerCell?: number
+      contigsPerCell?: number
     }
   | {
       id: number
@@ -407,6 +424,7 @@ export type WorkerRequest =
       names: string[]
       balance?: boolean
       binsPerCell?: number
+      contigsPerCell?: number
     }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }

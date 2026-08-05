@@ -1632,7 +1632,15 @@ export class HeatmapView {
     // matrix space and is unaffected.
     const sx = this.raster?.strideX ?? 1
     const sy = this.raster?.strideY ?? 1
-    ctx.imageSmoothingEnabled = this.zoom * Math.min(sx, sy) < 1
+    // Measured in the pixels the image is actually resampled into, which are
+    // device pixels: the transform below carries `dpr` and this test did not, so
+    // on a 2× display everything between one and two raster pixels per device
+    // pixel was *magnified* through a bilinear filter — the one combination that
+    // has nothing to recommend it, since filtering exists to keep minification
+    // from dropping cells and there is nothing to drop while enlarging. It also
+    // matters on export, where `dpr` becomes the DPI scale (`renderTo`) and a
+    // 300 dpi figure was being smoothed as though it were a screen.
+    ctx.imageSmoothingEnabled = this.zoom * Math.min(sx, sy) * this.dpr < 1
 
     ctx.setTransform(
       this.zoom * sx * this.dpr,

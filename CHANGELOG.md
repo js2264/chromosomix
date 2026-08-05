@@ -41,6 +41,63 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the code without the fix. The update bar is the way out of one, as it always
   was.
 
+- **A drawn pixel no longer straddles two sequences.** A metagenome view was
+  reducing the same picture three times over, and two of the three did not know
+  where the contigs were: the read summed bins into contig-snapped cells, the
+  renderer then pooled *those* into raster pixels flat and two at a time, and the
+  browser filtered the result down to the screen. On a 4,882-contig genome each
+  drawn pixel therefore held two different contigs and was coloured by the
+  brighter of their two diagonals, so pairs of sequences that never touched were
+  drawn as one solid block on the diagonal — with the boundary hairline running
+  through the middle of it, because the separators were the one layer still drawn
+  at the true positions.
+
+  There is now one rule and one place that keeps it: a cell is a run of bins
+  inside one sequence, or a run of *whole* sequences, never part of one plus
+  something else. `partitionAxis` builds every grid in the app against a cap it
+  never exceeds, so the grid the reader builds is the grid the renderer draws and
+  nothing pools a second time. `POOLED_CELL_LIMIT` — the 1,024 cells of slack
+  that guaranteed the second pooling for any axis between 4,096 and 5,120 cells —
+  is gone, and so is `flatBinPooling`, which above 5,120 contigs was mixing whole
+  sequences together *in the data* rather than only in the picture.
+
+- **Where sequences outnumber pixels, cells hold whole sequences and say so.** An
+  axis of 4,882 contigs cannot give each one a cell in a 4,096-pixel picture, and
+  the old answer was to pretend otherwise. Now such a cell is a named set of whole
+  sequences, summed, kept inside one genome — the rule the metagenome overview
+  already applied to its slots, for the same reason and for the further one that a
+  cell belonging to exactly one genome is a cell that can be clicked through. The
+  summary states it in the unit the cells actually are: `2 contigs per cell,
+  summed`, rather than a base-pair width that no longer means anything.
+
+- **The genome view plans its grid instead of asking for whatever fits.** It sent
+  no resolution at all, so a genome of thousands of contigs arrived as a dense
+  block that the renderer coarsened on arrival — the path the report above came
+  through — and a mammalian chromosome at 10 kb was refused outright for being
+  larger than one typed array. The reader now plans any block that begins on a
+  contig boundary and reports the plan it used, which is where the view reads its
+  resolution from. A region starting mid-contig is left alone: its coordinate
+  origin has no cell in a coarse grid, and moving it silently is worse than
+  refusing by size.
+
+- **Selections larger than the picture are drawn rather than refused.** "This
+  selection is 6,000 cells per axis … Select fewer sequences" is a strange thing
+  to say to someone who has just ticked *select all*. The axis is named sequences
+  either way; only how many share a cell was ever in question, and that is a
+  number the summary can state.
+
+- **The summary counts the assembly, not the pooling.** An axis run is one cell's
+  name, so counting runs counts cells — and a 4,882-contig genome was reported as
+  "across 2,441 contigs" the moment its cells held two apiece.
+
+- **Filtering is decided in the pixels it happens in.** `imageSmoothingEnabled`
+  was tested in CSS pixels while the image was placed in device pixels, so on a
+  2x display everything between one and two raster pixels per device pixel was
+  *magnified* through a bilinear filter — the one combination with nothing to
+  recommend it. The same slip applied to every export, where the DPI scale takes
+  the place of the device ratio, so a 300 dpi figure was asked the screen's
+  question.
+
 ## [0.6.1] - 2026-08-05
 
 ### Added
