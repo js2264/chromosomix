@@ -1,6 +1,13 @@
 {
-  "latest": "c797c1e",
+  "latest": "e98eaf7",
   "versions": [
+    {
+      "commit": "e98eaf7",
+      "version": "0.6.1",
+      "date": "2026-08-05T23:17:20+02:00",
+      "subject": "0.6.1",
+      "tag": "v0.6.1"
+    },
     {
       "commit": "c797c1e",
       "version": "0.6.0",
