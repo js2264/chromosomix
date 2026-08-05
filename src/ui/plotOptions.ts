@@ -12,6 +12,7 @@
  */
 
 import type { PlotOptions } from '../render/heatmap'
+import type { IconName } from './icons'
 
 /**
  * A new key, not a migration of the old one.
@@ -37,6 +38,7 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
   baseline: true,
+  gutter: false,
   crosshair: true,
   dividers: false,
   breaks: true,
@@ -58,6 +60,27 @@ export type PlotOptionKey = keyof PlotOptions
 export const TRACK_OPTIONS: readonly PlotOptionKey[] = ['text', 'fills', 'baseline', 'crosshair']
 export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', 'labels', 'ticks']
 
+/**
+ * The mark each option is drawn as, shared by both Plot cards.
+ *
+ * One table rather than one per card: these are the same eight preferences
+ * about the same two pictures, and a toggle that is a word beside a map and a
+ * glyph beside a browser is two controls as far as a reader is concerned. The
+ * words survive in every tooltip, which is where {@link PLOT_OPTION_LABELS}
+ * goes.
+ */
+export const PLOT_OPTION_ICONS: Record<PlotOptionKey, IconName> = {
+  text: 'type',
+  fills: 'chart-area',
+  baseline: 'align-end-horizontal',
+  gutter: 'align-right',
+  crosshair: 'crosshair',
+  dividers: 'grid-2x2',
+  breaks: 'separator-vertical',
+  labels: 'tag',
+  ticks: 'ruler',
+}
+
 /** Label and one-line explanation, shared by the view card and the palette. */
 export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: string }> = {
   text: {
@@ -75,6 +98,12 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
     hint:
       'The area under a track’s line, filled. Off leaves the line alone, which is what ' +
       'several tracks in one lane usually want.',
+  },
+  gutter: {
+    label: 'name column',
+    hint:
+      'Start the tracks after the widest track name, with the names right-aligned in the ' +
+      'column that leaves. Off, a name is drawn over the data it belongs to.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
@@ -106,6 +135,7 @@ function read(): PlotOptions {
       text: pick('text'),
       fills: pick('fills'),
       baseline: pick('baseline'),
+      gutter: pick('gutter'),
       crosshair: pick('crosshair'),
       dividers: pick('dividers'),
       breaks: pick('breaks'),

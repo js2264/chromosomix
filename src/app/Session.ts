@@ -46,7 +46,7 @@ import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
-import { BrowserView, type GroupMode } from '../ui/BrowserView'
+import { BrowserView, type GroupMode, type GroupScaling } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
@@ -1228,7 +1228,9 @@ export class Session {
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       memory: {
         groups: recall<Record<string, GroupMode>>(key, 'browser:groups') ?? {},
+        scaling: recall<Record<string, GroupScaling>>(key, 'browser:scaling') ?? {},
         save: (groups) => remember(key, 'browser:groups', groups),
+        saveScaling: (scaling) => remember(key, 'browser:scaling', scaling),
       },
     })
     this.browser = view
