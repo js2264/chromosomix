@@ -75,7 +75,11 @@ const entry = {
   version: '0.5.1',
   date: '2026-08-05T11:22:33+02:00',
   subject: 'feat(ui): a dropdown that runs another commit',
+  tag: '',
 }
+
+/** The same build, as it would be recorded if it were a release. */
+const released = { ...entry, tag: 'v0.5.1' }
 
 describe('parseVersions', () => {
   it('reads a manifest the deploy wrote', () => {
@@ -122,7 +126,32 @@ describe('parseVersions', () => {
     // A build made where git could answer nothing is still a build somebody can
     // run; it just has less to say about itself, exactly as `buildLine()` does.
     const parsed = parseVersions({ latest: 'a1b2c3d', versions: [{ commit: 'a1b2c3d' }] })
-    expect(parsed?.entries[0]).toEqual({ commit: 'a1b2c3d', version: '', date: '', subject: '' })
+    expect(parsed?.entries[0]).toEqual({
+      commit: 'a1b2c3d',
+      version: '',
+      date: '',
+      subject: '',
+      tag: '',
+    })
+  })
+
+  it('reads a release tag', () => {
+    expect(parseVersions({ latest: 'a1b2c3d', versions: [released] })?.entries[0]?.tag).toBe('v0.5.1')
+  })
+
+  it('drops a tag that would not be a directory, keeping the build', () => {
+    // The tag becomes a path segment — `…/v/v0.5.1/` — so this is the check
+    // standing between a manifest somebody edited and a link out of the app.
+    for (const tag of ['release/1.0', '../etc', '.hidden', 'a b', 42, null]) {
+      const parsed = parseVersions({ latest: 'a1b2c3d', versions: [{ ...entry, tag }] })
+      expect(parsed?.entries).toHaveLength(1)
+      expect(parsed?.entries[0]?.tag).toBe('')
+    }
+  })
+
+  it('drops a tag spelt like a commit, which would shadow a build directory', () => {
+    const parsed = parseVersions({ latest: 'a1b2c3d', versions: [{ ...entry, tag: 'deadbee' }] })
+    expect(parsed?.entries[0]?.tag).toBe('')
   })
 
   it('bounds a subject, which is arbitrary text from a commit message', () => {
@@ -147,9 +176,26 @@ describe('versionLabel', () => {
     expect(versionLabel(entry, true)).toBe('0.5.1 · a1b2c3d · 2026-08-05 — latest')
   })
 
-  it('omits what it does not know rather than writing empty parts', () => {
-    expect(versionLabel({ commit: 'a1b2c3d', version: '', date: '', subject: '' }, false)).toBe(
-      'a1b2c3d',
+  it('marks a release, which the version beside it does not', () => {
+    // The point of the marker: every build between two releases reports the
+    // earlier release's version, so a dozen rows say `0.5.1` and one of them
+    // is `v0.5.1`. Without this they are indistinguishable.
+    expect(versionLabel(released, false)).toBe('0.5.1 · a1b2c3d · 2026-08-05 — release v0.5.1')
+  })
+
+  it('marks a release that is also what the root serves', () => {
+    expect(versionLabel(released, true)).toBe(
+      '0.5.1 · a1b2c3d · 2026-08-05 — release v0.5.1, latest',
     )
+  })
+
+  it('names the tag rather than implying it, since it need not match the version', () => {
+    expect(versionLabel({ ...entry, tag: '2026.04' }, false)).toContain('release 2026.04')
+  })
+
+  it('omits what it does not know rather than writing empty parts', () => {
+    expect(
+      versionLabel({ commit: 'a1b2c3d', version: '', date: '', subject: '', tag: '' }, false),
+    ).toBe('a1b2c3d')
   })
 })

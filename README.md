@@ -268,8 +268,9 @@ of this code existed.
   stay reachable, and how a release is cut.
 - `CHANGELOG.md` — what changed between versions. The running build names itself in
   **About → version**: version, commit and commit date — and the dropdown under it runs any of the
-  recent builds, or any version ever released, at `…/v/<commit>/`. Useful when a figure came out
-  differently last month; not available in the desktop app, which is versioned by being installed.
+  recent builds at `…/v/<commit>/`, or any tagged release, permanently, at `…/v/v0.5.1/`. Useful
+  when a figure came out differently last month, and the release URL is the one to cite; not
+  available in the desktop app, which is versioned by being installed.
 
 ## Licence
 

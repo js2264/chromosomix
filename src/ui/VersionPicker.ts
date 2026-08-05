@@ -149,7 +149,7 @@ function picker(versions: Versions): HTMLElement[] {
     goTo(commit === versions.latest ? null : commit)
   })
 
-  return [
+  const rows = [
     el('div', { class: 'version-row' }, el('span', { text: 'Run build' }), select),
     el('p', {
       class: 'version-note',
@@ -159,6 +159,27 @@ function picker(versions: Versions): HTMLElement[] {
         'be dropped again — the same as after any reload.',
     }),
   ]
+
+  // A release has a second, permanent address — its tag — and that is the one
+  // worth writing down. A commit URL is equally permanent but says nothing to a
+  // reader; `…/v/v0.5.1/` is what belongs in a methods section, and offering it
+  // only when the build in front of you *is* a release is what keeps it from
+  // being a line of chrome nobody reads.
+  const running = versions.entries.find((entry) => entry.commit === current)
+  if (running !== undefined && running.tag !== '') {
+    const href = new URL(versionPath(SITE_BASE, running.tag), window.location.href).href
+    rows.push(
+      el(
+        'p',
+        { class: 'version-note' },
+        `This build is release ${running.tag}, so it also answers, permanently, at `,
+        el('a', { class: 'link version-permalink', href, text: href }),
+        '.',
+      ),
+    )
+  }
+
+  return rows
 }
 
 /**

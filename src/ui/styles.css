@@ -2760,6 +2760,14 @@ p {
   max-width: 60ch;
 }
 
+/* A release's permanent address, which exists to be copied into a methods
+   section — so it wraps rather than overflowing, and it is selectable text
+   before it is a link. */
+.version-permalink {
+  word-break: break-all;
+  user-select: text;
+}
+
 .link {
   color: var(--accent);
   font-family: var(--mono);

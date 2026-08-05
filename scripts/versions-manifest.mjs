@@ -14,19 +14,33 @@
  * and "unbounded" is what a rule of the form "keep everything" becomes after a
  * year of pushes to `main`.
  *
- * Two rules, because there are two reasons anyone opens an old build:
+ * Three rules, because there are three reasons anyone opens an old build:
  *
  * 1. **The last {@link KEEP_RECENT} pushes**, which is the debugging window —
  *    "it worked on Tuesday" is a question about a handful of commits, and by
  *    the time it is about fifty the answer is a bisect and not a dropdown.
- * 2. **The newest build of every `package.json` version ever published**, which
- *    is the archive proper. A released version is a thing people cite in a
+ * 2. **Every tagged commit**, forever. A release is what somebody cites in a
  *    methods section, and one that answers 404 two months later is worse than
- *    never having offered it. There is one of these per release, so the set
- *    grows at the rate releases happen and not at the rate pushes do.
+ *    never having offered it. This is the exact rule: the tag names the build.
+ * 3. **The oldest build of each distinct `package.json` version**, forever,
+ *    which is rule 2 for the case where the tag is not visible yet.
  *
- * The second rule is why a release is worth cutting even though the site is
- * built from every push: the version number is what makes a build *keepable*.
+ * That third rule wants explaining, because the obvious version of it is wrong.
+ * `npm version minor` bumps `package.json` and tags *the same commit* — so the
+ * **oldest** build carrying a version is the release, and the newest one
+ * carrying it is whatever was pushed just before the next bump. A rule that
+ * kept the newest would keep a build that calls itself `0.6.0`, is labelled
+ * `0.6.0` in the menu, and is not `v0.6.0`: the one outcome worse than not
+ * keeping it at all. It also churns — the kept build would change under every
+ * push — whereas the oldest is decided once, when the version first appears,
+ * and never moves.
+ *
+ * Keeping both 2 and 3 is deliberate. Tags are read from the remote
+ * (`archive-versions.mjs`) and `git push --follow-tags` sends the commit and
+ * the tag together, so the tag is normally there — but a release pushed in two
+ * steps would deploy before its tag existed, and rule 3 is what catches that
+ * build anyway. Neither rule needs the other to be correct; each covers a hole
+ * in the other's assumptions.
  *
  * Everything here is a pure function over plain objects. The caller reads,
  * writes and deletes; this only ever decides.
@@ -38,8 +52,34 @@ export const KEEP_RECENT = 20
 /** A short commit hash, which is also the directory a build is published in. */
 const COMMIT = /^[0-9a-f]{7,40}$/
 
+/**
+ * A tag name this is willing to put in a URL.
+ *
+ * Deliberately narrower than git's own rules. A tag becomes a **directory name
+ * beside the commits** — `v/v0.5.1/` redirects to `v/<commit>/` — so a slash
+ * would nest it somewhere unintended and a leading dot would be a name no
+ * server serves. It is also written into an HTML page unescaped, which this
+ * character class is what makes safe.
+ *
+ * `release/1.0` and `déjà` are therefore not published as aliases. The build is
+ * still archived and still in the menu; it just has no name of its own, which
+ * is a fair trade for not generating a path out of arbitrary text.
+ */
+const TAG = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/
+
 /** An empty manifest, which is what a first deploy starts from. */
 export const EMPTY = { latest: '', versions: [] }
+
+/**
+ * Is this a tag that may be published as a directory beside the commits?
+ *
+ * The second test is the one that is easy to miss: a tag spelt like a short
+ * hash would claim the directory a *build* is published in, and the alias would
+ * overwrite it. Vanishingly unlikely and trivially cheap to rule out.
+ */
+export function isPublishableTag(tag) {
+  return typeof tag === 'string' && TAG.test(tag) && !COMMIT.test(tag)
+}
 
 /**
  * Read a manifest that may not exist, may be empty, and may have been edited.
@@ -69,6 +109,7 @@ export function parseManifest(text) {
       version: string(entry.version),
       date: string(entry.date),
       subject: string(entry.subject),
+      tag: isPublishableTag(entry.tag) ? entry.tag : '',
     })
   }
   return { latest: typeof raw.latest === 'string' ? raw.latest : '', versions }
@@ -97,7 +138,13 @@ export function nextManifest(previous, build, keepRecent = KEEP_RECENT) {
     throw new Error(`not a commit hash: ${JSON.stringify(build.commit)}`)
   }
   const merged = [
-    { commit: build.commit, version: string(build.version), date: string(build.date), subject: string(build.subject) },
+    {
+      commit: build.commit,
+      version: string(build.version),
+      date: string(build.date),
+      subject: string(build.subject),
+      tag: isPublishableTag(build.tag) ? build.tag : '',
+    },
     ...previous.versions.filter((entry) => entry.commit !== build.commit),
   ]
   // Descending, and stable, so an entry with no date at all sinks rather than
@@ -105,12 +152,21 @@ export function nextManifest(previous, build, keepRecent = KEEP_RECENT) {
   // the reason the timestamp is stored in that form and not as a date.
   merged.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 
+  // Rule 1: the debugging window. Plus this build, whatever its date — a
+  // `workflow_dispatch` rebuild of something ancient is still what the root is
+  // serving, and publishing a site that does not list its own build would be
+  // the one inconsistency a reader is guaranteed to hit.
   const keep = new Set([build.commit])
   for (const entry of merged.slice(0, keepRecent)) keep.add(entry.commit)
-  // The newest surviving build of each distinct version, taken in the sorted
-  // order, so "newest" means newest commit and not first seen.
+
+  // Rule 2: every release, by its tag.
+  for (const entry of merged) if (entry.tag !== '') keep.add(entry.commit)
+
+  // Rule 3: the *oldest* build of each version — see the note at the top of
+  // this file, because the newest is the plausible answer and the wrong one.
   const versions = new Set()
-  for (const entry of merged) {
+  for (let i = merged.length - 1; i >= 0; i -= 1) {
+    const entry = merged[i]
     if (entry.version === '' || versions.has(entry.version)) continue
     versions.add(entry.version)
     keep.add(entry.commit)
@@ -122,12 +178,33 @@ export function nextManifest(previous, build, keepRecent = KEEP_RECENT) {
 /**
  * Which commits are in the old manifest and not the new one.
  *
- * The directories to remove, in other words. Derived by comparison rather than
- * returned from {@link nextManifest} so that the deletion is driven by what is
- * actually being published: a caller that wrote a manifest and then deleted a
- * different set of directories is the failure this shape rules out.
+ * The build directories to remove, in other words. Derived by comparison rather
+ * than returned from {@link nextManifest} so that the deletion is driven by
+ * what is actually being published: a caller that wrote a manifest and then
+ * deleted a different set of directories is the failure this shape rules out.
+ *
+ * It is also what makes a failed manifest *read* harmless rather than
+ * catastrophic. An unreadable `versions.json` parses to an empty manifest, so
+ * `previous` is empty, so this returns nothing and the run deletes nothing —
+ * where a rule of the form "delete every directory the new manifest does not
+ * mention" would have emptied the archive.
  */
 export function droppedCommits(previous, next) {
   const kept = new Set(next.versions.map((entry) => entry.commit))
   return previous.versions.map((entry) => entry.commit).filter((commit) => !kept.has(commit))
+}
+
+/** The tag aliases the new manifest no longer covers, on the same terms. */
+export function droppedTags(previous, next) {
+  const kept = new Set(next.versions.map((entry) => entry.tag).filter((tag) => tag !== ''))
+  return previous.versions
+    .map((entry) => entry.tag)
+    .filter((tag) => tag !== '' && !kept.has(tag))
+}
+
+/** Every tag the new manifest publishes, with the commit it points at. */
+export function tagAliases(manifest) {
+  return manifest.versions
+    .filter((entry) => entry.tag !== '')
+    .map((entry) => ({ tag: entry.tag, commit: entry.commit }))
 }
