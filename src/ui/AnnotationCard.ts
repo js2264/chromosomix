@@ -22,80 +22,11 @@
  * behind the chevron is what genuinely wants a form.
  */
 
-import type { AnnotationLoader, DropZone } from '../annotations/loader'
+import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import type {
-  AnnotationCard as CardKind,
-  AnnotationEntry,
-  ContigOverlap,
-} from '../annotations/types'
+import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { button, el, fmt, trimNumber } from './dom'
 import { icon, iconButton } from './icons'
-
-interface ZoneSpec {
-  zone: DropZone
-  label: string
-  hint: string
-  accept: string
-}
-
-const LINEAR_ZONES: ZoneSpec[] = [
-  {
-    zone: 'gtf',
-    label: 'Annotation',
-    hint: 'One GTF or GFF gene model.',
-    accept: '.gtf,.gff,.gff3,.gtf.gz,.gff.gz,.gff3.gz',
-  },
-  {
-    zone: 'track',
-    label: 'Tracks',
-    hint: 'bigWig tracks, drawn as lines or areas. A FASTA lands here too.',
-    accept: '.bw,.bigwig,.bigWig,.fa,.fasta,.fna,.fas,.fa.gz,.fasta.gz,.fna.gz',
-  },
-  {
-    zone: 'segments',
-    label: 'Segments',
-    hint: 'BED-like, drawn as boxes.',
-    accept: '.bed,.narrowPeak,.broadPeak,.gappedPeak,.txt,.tsv',
-  },
-]
-
-/**
- * The same two files, described as a 1D browser draws them.
- *
- * A BED is boxes on a lane, exactly as it is under Linear annotations, and a
- * BEDPE is an arc joining its two ends — which is what a loop call *is*, and
- * the picture every genome browser draws for one.
- */
-const BROWSER_OVERLAY_ZONES: ZoneSpec[] = [
-  {
-    zone: 'segments',
-    label: 'Regions',
-    hint: 'BED-like, drawn as boxes on a lane of their own.',
-    accept: '.bed,.narrowPeak,.broadPeak,.txt,.tsv',
-  },
-  {
-    zone: 'pairs',
-    label: 'Interactions',
-    hint: 'BEDPE, or a table with chrom1/start1/end1/chrom2/start2/end2, drawn as arcs.',
-    accept: '.bedpe,.txt,.tsv',
-  },
-]
-
-const OVERLAY_ZONES: ZoneSpec[] = [
-  {
-    zone: 'segments',
-    label: 'On the diagonal',
-    hint: 'BED-like, drawn as a mark across the diagonal.',
-    accept: '.bed,.narrowPeak,.broadPeak,.txt,.tsv',
-  },
-  {
-    zone: 'pairs',
-    label: 'Off the diagonal',
-    hint: 'BEDPE, or a table with chrom1/start1/end1/chrom2/start2/end2, drawn as circles.',
-    accept: '.bedpe,.tsv,.txt',
-  },
-]
 
 /**
  * The `<option>` value that means "not one of these" in the group picker.
@@ -111,7 +42,6 @@ const MIN_SIZE = 12
 const MAX_SIZE = 400
 
 export interface AnnotationCardProps {
-  card: CardKind
   store: AnnotationStore
   loader: AnnotationLoader
   /**
@@ -159,20 +89,17 @@ export class AnnotationCard {
   private readonly ticked = new Set<string>()
 
   constructor(private readonly props: AnnotationCardProps) {
-    const linear = props.card === 'linear'
-    const browsing = props.context === 'browser'
-    const zones = linear ? LINEAR_ZONES : browsing ? BROWSER_OVERLAY_ZONES : OVERLAY_ZONES
-
     this.el = el(
       'section',
       { class: 'card annotation-card' },
-      // No subtitle. Each drop area under the heading already says what it takes
-      // and how it is drawn, so a line saying it again for the card as a whole
-      // was a line every reader scrolls past twice a session in a column that
-      // has better uses for four rows of height.
-      el('h3', {
-        text: linear ? 'Linear annotations' : browsing ? 'Interactions' : 'Map overlays',
-      }),
+      el('h3', { text: 'Tracks' }),
+      // The whole card takes a file, and says so once in the smallest type it
+      // has. What was here instead was five labelled rectangles — one per
+      // format — which between them asked the reader to know, before dropping,
+      // an answer the application works out from the bytes a moment later, and
+      // which said "wrong rectangle" when they guessed. No dashes: the card is
+      // not pretending to be a button, it is a card that also accepts a file.
+      el('p', { class: 'ann-drop-note', text: 'Drop any file here' }),
       ...(props.demo === undefined
         ? []
         : [
@@ -181,10 +108,9 @@ export class AnnotationCard {
               title: props.demo.hint,
             }),
           ]),
-      el('div', { class: 'drop-row' }, ...zones.map((spec) => this.dropzone(spec))),
-      this.urlRow(zones),
       this.list,
     )
+    this.cardDrops(this.el)
 
     // Focus leaving the list is what releases a deferred rebuild. Deferred to a
     // task, because at `focusout` time the *new* focus owner is not set yet, so
@@ -209,84 +135,31 @@ export class AnnotationCard {
   // -------------------------------------------------------------------------
 
   /**
-   * One drop area.
+   * Make an element take a dropped file.
    *
-   * Clickable as well as droppable, because "drag a file here" is not a gesture
-   * everyone has, and because a file manager is not always on screen beside the
-   * browser. `multiple` on every zone but the gene model, which takes one.
+   * Shared with the "load a track" card below, because they are the same
+   * gesture landing in the same place; the only difference is that one of them
+   * is *only* that and says so with a dashed border.
    */
-  private dropzone(spec: ZoneSpec): HTMLElement {
-    const input = el('input', { class: 'hidden-input', type: 'file' })
-    input.accept = spec.accept
-    input.multiple = spec.zone !== 'gtf'
-    input.addEventListener('change', () => {
-      const files = Array.from(input.files ?? [])
-      if (files.length > 0) this.props.loader.addFiles(this.props.card, spec.zone, files)
-      // Cleared so choosing the same file twice fires `change` the second time.
-      input.value = ''
-    })
-
-    const zone = el(
-      'div',
-      { class: 'ann-drop', title: spec.hint, attrs: { tabindex: '0', role: 'button' } },
-      el('span', { class: 'ann-drop-label', text: spec.label }),
-      el('span', { class: 'ann-drop-hint', text: spec.hint }),
-      input,
-    )
-    zone.addEventListener('click', () => input.click())
-    zone.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault()
-        input.click()
-      }
-    })
-    zone.addEventListener('dragover', (event) => {
+  private cardDrops(host: HTMLElement): void {
+    host.addEventListener('dragover', (event) => {
       event.preventDefault()
-      zone.classList.add('over')
+      host.classList.add('over')
     })
-    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
-    zone.addEventListener('drop', (event) => {
+    host.addEventListener('dragleave', (event) => {
+      // Only when the pointer has actually left the card, not when it crosses
+      // from the card onto a row inside it — `dragleave` fires for every child
+      // boundary, and without this the highlight flickers all the way down.
+      if (event.relatedTarget instanceof Node && host.contains(event.relatedTarget)) return
+      host.classList.remove('over')
+    })
+    host.addEventListener('drop', (event) => {
       event.preventDefault()
-      zone.classList.remove('over')
+      event.stopPropagation()
+      host.classList.remove('over')
       const files = Array.from(event.dataTransfer?.files ?? [])
-      if (files.length > 0) this.props.loader.addFiles(this.props.card, spec.zone, files)
+      if (files.length > 0) this.props.loader.addFiles(files)
     })
-    return zone
-  }
-
-  /**
-   * A URL box, folded away until it is wanted.
-   *
-   * Published tracks live on buckets beside published maps, and a reader
-   * following a link to one should not have to download it first. The zone
-   * picker is only offered when the card has more than one, and it decides
-   * nothing that the file's own bytes will not overrule (§8.3).
-   */
-  private urlRow(zones: ZoneSpec[]): HTMLElement {
-    const input = el('input', {
-      class: 'input',
-      type: 'url',
-      placeholder: 'https://bucket.example.org/ATAC.bw',
-    })
-    const select = el('select', { class: 'select' })
-    for (const spec of zones) select.appendChild(el('option', { value: spec.zone, text: spec.label }))
-
-    const submit = (): void => {
-      const url = input.value.trim()
-      if (url === '') return
-      this.props.loader.addUrl(this.props.card, select.value as DropZone, url)
-      input.value = ''
-    }
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') submit()
-    })
-
-    return el(
-      'details',
-      { class: 'ann-url' },
-      el('summary', { text: 'or open one by URL' }),
-      el('div', { class: 'ann-url-row' }, select, input, button('add', submit, { class: 'btn' })),
-    )
   }
 
   // -------------------------------------------------------------------------
@@ -326,7 +199,11 @@ export class AnnotationCard {
     }
     this.pending = false
 
-    const entries = this.props.store.forCard(this.props.card)
+    // Every loaded file, in one list. Which of the store's two cards an entry
+    // belongs to still decides where it is *drawn* — a pair goes on the map,
+    // everything else beside it — but that is a fact about the format and not a
+    // shelf the reader has to put it on.
+    const entries = [...this.props.store.entries]
     // Rows that have gone take their tick with them, or a batch would act on
     // ids the store has never heard of.
     for (const id of [...this.ticked]) {
@@ -384,6 +261,7 @@ export class AnnotationCard {
         ...(total > 1 ? [this.tick(entry)] : []),
         this.swatch(entry),
         this.name(entry),
+        ...(entry.payload?.kind === 'features' ? [this.star(entry)] : []),
         // Which edge of the map — a choice a 1D browser does not have, since
         // there is one axis and everything is drawn along it.
         ...(entry.card === 'linear' && this.props.context !== 'browser'
@@ -588,7 +466,7 @@ export class AnnotationCard {
       const to = index + step
       if (to < 0 || to >= total) return
       this.refocus = { attribute: 'data-grip', id: entry.id }
-      this.props.store.move(entry.id, to)
+      this.props.store.moveTo(entry.id, to)
     })
     return node
   }
@@ -624,14 +502,18 @@ export class AnnotationCard {
       event.preventDefault()
       this.dragging = null
 
-      const entries = this.props.store.forCard(this.props.card)
+      // Every loaded file, in one list. Which of the store's two cards an entry
+    // belongs to still decides where it is *drawn* — a pair goes on the map,
+    // everything else beside it — but that is a fact about the format and not a
+    // shelf the reader has to put it on.
+    const entries = [...this.props.store.entries]
       const from = entries.findIndex((candidate) => candidate.id === moved)
       if (from < 0) return
       // Where it goes in the list as it stands, then the same place counted in
       // the list with the dragged row already taken out of it — which is the
       // list `move` inserts into.
       const insertAt = index + (sideOf(event) === 'after' ? 1 : 0)
-      this.props.store.move(moved, insertAt > from ? insertAt - 1 : insertAt)
+      this.props.store.moveTo(moved, insertAt > from ? insertAt - 1 : insertAt)
     })
   }
 
@@ -726,6 +608,30 @@ export class AnnotationCard {
       )
     }
     return el('div', { class: 'ann-edges' }, box('bottom', 'B'), box('right', 'R'))
+  }
+
+  /**
+   * Which feature set the search reads.
+   *
+   * Several gene models can be drawn at once — comparing two annotations of one
+   * genome is a thing people do — but a search box answering from all of them
+   * returns the same gene four times over, differing only in which file it came
+   * from. So exactly one is the one being searched: filled here, empty on the
+   * others, and one press moves it.
+   */
+  private star(entry: AnnotationEntry): HTMLElement {
+    const current = this.props.store.searchSource()?.id === entry.id
+    const node = iconButton(
+      'star',
+      current
+        ? `${entry.label} is what the feature search reads`
+        : `Search ${entry.label} instead`,
+      () => this.props.store.makePrimary(entry.id),
+      { class: `btn btn-icon ann-star${current ? ' is-on' : ''}`, size: 13 },
+    )
+    node.setAttribute('aria-pressed', String(current))
+    node.disabled = current
+    return node
   }
 
   private visibility(entry: AnnotationEntry): HTMLElement {
@@ -1149,6 +1055,85 @@ export function overlapWarning(overlap: ContigOverlap | undefined): string | nul
       `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`
   }
   return null
+}
+
+/**
+ * The other half of the pair: a card that is only a place to put a file.
+ *
+ * Separate from the list above rather than folded into it, because the two
+ * answer different questions — *what is loaded* and *put something else here* —
+ * and a list of eight tracks with a drop area at the bottom of it is a drop area
+ * you have to scroll to. This one carries the dashes, since being a target is
+ * all it is.
+ */
+export function loadCard(loader: AnnotationLoader): HTMLElement {
+  const input = el('input', { class: 'hidden-input', type: 'file' })
+  input.multiple = true
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files ?? [])
+    if (files.length > 0) loader.addFiles(files)
+    // Cleared so choosing the same file twice fires `change` the second time.
+    input.value = ''
+  })
+
+  const zone = el(
+    'div',
+    { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
+    el('span', { class: 'ann-drop-label', text: 'Load a track' }),
+    el('span', {
+      class: 'ann-drop-hint',
+      text:
+        'Drop a bigWig, bigBed, GTF, BED, BEDPE or FASTA here, or click to choose. What it is ' +
+        'and where it is drawn come from the file itself.',
+    }),
+    input,
+  )
+  zone.addEventListener('click', () => input.click())
+  zone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      input.click()
+    }
+  })
+  zone.addEventListener('dragover', (event) => {
+    event.preventDefault()
+    zone.classList.add('over')
+  })
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'))
+  zone.addEventListener('drop', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    zone.classList.remove('over')
+    const files = Array.from(event.dataTransfer?.files ?? [])
+    if (files.length > 0) loader.addFiles(files)
+  })
+
+  const url = el('input', {
+    class: 'input',
+    type: 'url',
+    placeholder: 'https://bucket.example.org/ATAC.bw',
+  })
+  const submit = (): void => {
+    const value = url.value.trim()
+    if (value === '') return
+    loader.addUrl(value)
+    url.value = ''
+  }
+  url.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') submit()
+  })
+
+  return el(
+    'section',
+    { class: 'card annotation-card' },
+    zone,
+    el(
+      'details',
+      { class: 'ann-url' },
+      el('summary', { text: 'or open one by URL' }),
+      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+    ),
+  )
 }
 
 /**

@@ -456,6 +456,10 @@ export class App implements SessionHost {
             modal.close()
             void session.open(uri, source)
           },
+          onOpenFiles: (files) => {
+            modal.close()
+            void session.openFiles(files)
+          },
           examples: demoExamples(),
         }).el,
       onClose: () => {

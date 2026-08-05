@@ -82,6 +82,28 @@ export class AnnotationStore {
     )
   }
 
+  /**
+   * The feature set the browser's search reads.
+   *
+   * The one marked, or — until anything is marked — the first loaded, which is
+   * what a reader who has opened exactly one gene model means without being
+   * asked. Falls through when the marked one is removed or is still loading, so
+   * the search never quietly stops working.
+   */
+  searchSource(): AnnotationEntry | null {
+    const usable = this.items.filter(
+      (entry) => entry.status === 'ready' && entry.payload?.kind === 'features',
+    )
+    return usable.find((entry) => entry.primary === true) ?? usable[0] ?? null
+  }
+
+  /** Make one feature set the one the search reads, and the others not. */
+  makePrimary(id: string): void {
+    if (this.byId(id) === undefined) return
+    this.items = this.items.map((entry) => ({ ...entry, primary: entry.id === id }))
+    this.changed()
+  }
+
   /** The rows drawn on the matrix itself. */
   overlays(): AnnotationEntry[] {
     return this.items.filter(
@@ -201,6 +223,27 @@ export class AnnotationStore {
     this.changed()
   }
 
+  /**
+   * Put one row at a position in the **whole** list.
+   *
+   * What the panel's own drag means now that it shows every loaded file in one
+   * list: the reader is looking at one order and moving a row within it. A
+   * global move also keeps the relative order of everything it steps over, so
+   * the per-edge lane stacks beside a map reorder exactly as they would have
+   * under the card-local {@link move} — which the map's own lane drag still
+   * uses, because there the reader is looking at one edge rather than at a list.
+   */
+  moveTo(id: string, to: number): void {
+    const from = this.items.findIndex((row) => row.id === id)
+    if (from < 0) return
+    const target = Math.max(0, Math.min(this.items.length - 1, to))
+    if (from === target) return
+    const next = [...this.items]
+    next.splice(target, 0, ...next.splice(from, 1))
+    this.items = next
+    this.changed()
+  }
+
   clear(): void {
     if (this.items.length === 0) return
     this.items = []
@@ -273,6 +316,7 @@ function toStored(entry: AnnotationEntry): StoredEntry {
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
+    ...(entry.primary === true ? { primary: true } : {}),
   }
 }
 

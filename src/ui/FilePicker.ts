@@ -47,6 +47,15 @@ function dismissPrivacy(): void {
 
 export interface FilePickerProps {
   onOpen(uri: string, source: SourceSpec): void
+  /**
+   * Several files at once, which is how a genome browser is usually opened.
+   *
+   * A reader with a map and four bigWigs selects five files and drops them; the
+   * old handler took `files[0]` and silently discarded the rest, which reads as
+   * the application losing them. The session decides which of them is the view
+   * and which are its tracks.
+   */
+  onOpenFiles(files: readonly File[]): void
   /** Optional example files, e.g. from a published catalog (§11). */
   examples?: Array<{ label: string; url: string; note?: string }>
 }
@@ -63,7 +72,7 @@ export class FilePicker {
       { class: 'dropzone', attrs: { tabindex: '0', role: 'button' } },
       el('div', {
         class: 'dropzone-title',
-        text: 'Drop a .metacool, .mmetacool, .cool or .mcool file here',
+        text: 'Drop a file here',
       }),
       el('div', {
         class: 'dropzone-sub',
@@ -72,15 +81,19 @@ export class FilePicker {
         // bigWig and no map, "this app is not for me" is the wrong conclusion
         // and this is the only place it can be corrected before they leave.
         text:
-          'or click to choose one — or drop a chrom.sizes, a bigWig, a bigBed, a GTF or a BED ' +
-          'to browse that genome with no map at all',
+          'or click to choose one. A contact map — .cool, .mcool, .metacool, .mmetacool — opens ' +
+          'as a map; anything genomic (a chrom.sizes, a FASTA, a bigWig, a bigBed, a GTF, a BED, ' +
+          'a BEDPE) opens as a browser over that genome. Drop several at once and they come up ' +
+          'together.',
       }),
     )
 
     const fileInput = el('input', { class: 'hidden-input', type: 'file' })
+    fileInput.multiple = true
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0]
-      if (file) this.openLocal(file)
+      const files = Array.from(fileInput.files ?? [])
+      if (files.length > 0) this.props.onOpenFiles(files)
+      fileInput.value = ''
     })
     this.drop.addEventListener('click', () => fileInput.click())
     this.drop.addEventListener('keydown', (event) => {
@@ -94,8 +107,8 @@ export class FilePicker {
     this.drop.addEventListener('drop', (event) => {
       event.preventDefault()
       this.drop.classList.remove('over')
-      const file = event.dataTransfer?.files?.[0]
-      if (file) this.openLocal(file)
+      const files = Array.from(event.dataTransfer?.files ?? [])
+      if (files.length > 0) this.props.onOpenFiles(files)
     })
 
     this.urlInput = el('input', {
@@ -273,10 +286,6 @@ export class FilePicker {
       ),
     )
     return note
-  }
-
-  private openLocal(file: File): void {
-    this.props.onOpen(file.name, { kind: 'local', file })
   }
 
   private openRemote(): void {
