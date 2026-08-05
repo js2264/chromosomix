@@ -1802,7 +1802,9 @@ export class BrowserView {
           else this.openGroups.add(name)
           this.paintGroups()
         },
-        { class: 'btn btn-icon ann-fold', size: 14 },
+        // The row's own classes, not lookalikes: a group *is* a row, and two
+        // sets of rules for the same control is how the two drift apart.
+        { class: 'btn btn-icon ann-more', size: 14 },
       )
       fold.setAttribute('aria-expanded', String(open))
 

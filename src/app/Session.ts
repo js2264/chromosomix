@@ -1708,7 +1708,7 @@ export class Session {
             ? { kind: 'local', file: source.file }
             : { kind: 'remote', url: splitUri(source.url).path },
         ),
-      onClose: () => this.closeCompare(2),
+      onClose: (which) => this.closeCompare(which),
       onSwap: () => void this.swapCompare(),
     })
 
@@ -1861,9 +1861,12 @@ export class Session {
       // reader mirrors it faithfully (§3.4) — but somebody who dropped an
       // `.mcool` on the compare card meant "this map", so the entry is opened
       // for them, exactly as it is when the same file is dropped on the picker.
-      // The finest resolution, which is what `firstEntry` picks; if it is the
-      // wrong one the bin-size clause of the gate says so by name.
-      const landing = firstEntry(err)
+      // The resolution *this map is at*, where the collection has it: two files
+      // with the same five levels are comparable at any of them, and landing on
+      // the finest regardless meant a reader looking at 1 kb was told the bin
+      // sizes differ by a file that has 1 kb in it. Where it does not, the
+      // finest is the fallback and the gate's bin-size clause says so by name.
+      const landing = firstEntry(err, file.info.binsize ?? undefined)
       if (landing !== null) {
         this.compareOpening = null
         await this.openCompare(`${splitUri(uri).path}::${landing.group}/${landing.entry}`, source)
@@ -2249,9 +2252,18 @@ export class Session {
     // the second is read is better than showing nothing. `remount` brings the
     // comparison in when it lands.
     const wanted = state.uri2 ?? null
-    if (wanted !== (this.compare?.uri ?? null)) {
-      if (wanted === null) this.dropCompare()
-      else {
+    // Only a *remote* second file is in the state, because only a remote one
+    // can be re-opened from a link (§11) — so a local comparison is invisible
+    // here, and reading its absence as "put it down" is exactly what happened:
+    // `openCompare` finished, called `remount`, and this line threw the file
+    // away again before it could be drawn. A local comparison is left alone; the
+    // × on the card is what closes it, and that goes through `closeCompare`.
+    const shareable = this.compare !== null && this.compare.source.kind === 'remote'
+    const held = shareable ? (this.compare?.uri ?? null) : null
+    if (wanted !== held) {
+      if (wanted === null) {
+        if (shareable) this.dropCompare()
+      } else {
         const source = inferSource(wanted)
         // The same refusal a local `uri` gets, for the same reason: no browser
         // re-reads a dropped file without a gesture, so a link naming one has

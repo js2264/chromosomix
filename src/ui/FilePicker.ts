@@ -313,17 +313,33 @@ export class FilePicker {
  * For a sample collection the names are datasets with no order to exploit, so
  * the file's own order wins.
  */
-export function firstEntry(err: unknown): { group: string; entry: string } | null {
+export function firstEntry(
+  err: unknown,
+  /**
+   * A bin size to land on if the collection has one.
+   *
+   * What a *comparison* needs: the map already open is at some resolution, and
+   * an `.mcool` dropped beside it should come up at the same one rather than at
+   * its finest and be refused for it. Without this, comparing two five-level
+   * files worked only while the reader was looking at the finest level of the
+   * first — which is not a rule anybody could infer from the message.
+   */
+  prefer?: number,
+): { group: string; entry: string } | null {
   if (!(err instanceof ViewerError)) return null
   if (err.code !== 'mmetacool-root' && err.code !== 'mcool-root') return null
   const entries = err.detail['entries']
   if (!Array.isArray(entries) || entries.length === 0) return null
   const names = entries as string[]
   const group = typeof err.detail['group'] === 'string' ? (err.detail['group'] as string) : 'entries'
-  // An mcool's resolutions are always integers, so this is the finest level —
-  // the same rule that lands an mmetacool ladder on its base resolution.
-  const entry = allIntegers(names) ? [...names].sort((a, b) => Number(a) - Number(b))[0] : names[0]
-  return { group, entry }
+  if (!allIntegers(names)) return { group, entry: names[0] }
+  // An mcool's resolutions are always integers, so a name *is* a bin size: the
+  // wanted one where it exists, and otherwise the finest level — the same rule
+  // that lands an mmetacool ladder on its base resolution.
+  if (prefer !== undefined && names.includes(String(prefer))) {
+    return { group, entry: String(prefer) }
+  }
+  return { group, entry: [...names].sort((a, b) => Number(a) - Number(b))[0] }
 }
 
 /** `true` when every entry name parses as a positive integer (§3.4). */
