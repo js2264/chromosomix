@@ -14,6 +14,7 @@ import { icon } from './icons'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import type { DeepValidation, StatsResult } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { deviceBytes, UsageMeter } from '../perf/usage'
 import { subscribeReadout } from './readout'
 
 export interface StatusBarProps {
@@ -42,6 +43,22 @@ export class StatusBar {
   private readonly unsubscribeReadout: () => void
   /** The running deep validation, if any; clicking again stops it. */
   private validation: Cancellable<DeepValidation> | null = null
+
+  /**
+   * What this browser tab is costing the machine.
+   *
+   * The one thing on the bar that is not about the open file, and deliberately
+   * so: it is per *tab* rather than per session, because the memory a gene model
+   * holds and the core a scan is burning are shared by every session in the
+   * window and there is nothing useful to say about one of them alone.
+   */
+  private readonly usage = new UsageMeter()
+  private readonly memoryValue: HTMLElement
+  private readonly memoryDetail: HTMLElement
+  private readonly memoryItem: HTMLElement
+  private readonly cpuValue: HTMLElement
+  private readonly cpuDetail: HTMLElement
+  private readonly usageTimer: ReturnType<typeof setInterval>
 
   constructor(private readonly props: StatusBarProps) {
     this.readsSummary = el('span', { class: 'status-value', text: '—' })
@@ -72,6 +89,18 @@ export class StatusBar {
       this.coordinates.textContent = text
     })
 
+    this.memoryValue = el('span', { class: 'status-value', text: '—' })
+    this.memoryDetail = el('div', { class: 'status-pop' })
+    this.memoryItem = el(
+      'div',
+      { class: 'status-item status-usage' },
+      el('span', { class: 'status-key', text: 'memory' }),
+      this.memoryValue,
+      this.memoryDetail,
+    )
+    this.cpuValue = el('span', { class: 'status-value', text: '—' })
+    this.cpuDetail = el('div', { class: 'status-pop' })
+
     this.el = el(
       'footer',
       { class: 'app-foot' },
@@ -96,12 +125,89 @@ export class StatusBar {
         this.readsDetail,
       ),
       this.validationItem,
+      this.memoryItem,
+      el(
+        'div',
+        { class: 'status-item status-usage' },
+        el('span', { class: 'status-key', text: 'cpu' }),
+        this.cpuValue,
+        this.cpuDetail,
+      ),
     )
+
+    // Once a second: the CPU reading is a three-second average, so faster would
+    // redraw the same number, and slower would lag behind the pan that caused
+    // it. Skipped outright while the tab is hidden — nobody is reading it, and
+    // the numbers there describe timer throttling rather than work.
+    this.usageTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') this.renderUsage()
+    }, USAGE_TICK_MS)
+    this.renderUsage()
   }
 
-  /** Release the readout subscription. */
+  /** Release the readout subscription and stop measuring. */
   destroy(): void {
     this.unsubscribeReadout()
+    clearInterval(this.usageTimer)
+    this.usage.destroy()
+  }
+
+  /**
+   * Memory and CPU, redrawn.
+   *
+   * Text assignments rather than a rebuild, because this runs every second for
+   * as long as the application is open and replacing the nodes under a tooltip
+   * the reader has open would close it once a second.
+   */
+  private renderUsage(): void {
+    const device = deviceBytes()
+    const memory = this.usage.memory()
+    // Hidden rather than dashed on an engine that has no answer: an em dash that
+    // never fills in reads as a number that failed to load.
+    this.memoryItem.classList.toggle('hidden', memory === null)
+    if (memory !== null) {
+      const share =
+        memory.ceiling === null || memory.ceiling <= 0
+          ? null
+          : memory.used / memory.ceiling
+      this.memoryValue.textContent =
+        share === null
+          ? fmt.bytes(memory.used)
+          : // A decimal below a tenth, because the honest answer usually is a
+            // fraction of a percent — a tab is small against the memory a
+            // machine has — and `0%` for everything under half of one reads as a
+            // figure that never arrived rather than as a small one.
+            `${fmt.bytes(memory.used)} · ${fmt.pct(share, share < 0.1 ? 1 : 0)}`
+      this.memoryDetail.replaceChildren(
+        el(
+          'div',
+          { class: 'kv' },
+          ...keyValue(memory.scope === 'tab' ? 'this tab' : 'JavaScript heap', fmt.bytes(memory.used)),
+          ...(memory.ceiling === null ? [] : keyValue(memory.ceilingLabel, fmt.bytes(memory.ceiling))),
+          ...(device === null ? [] : keyValue('device memory, as reported', fmt.bytes(device))),
+        ),
+        el('p', { class: 'hint', text: MEMORY_NOTE[memory.scope] }),
+      )
+    }
+
+    const cpu = this.usage.cpu()
+    this.cpuValue.textContent = fmt.pct(cpu.fraction, 0)
+    this.cpuDetail.replaceChildren(
+      el(
+        'div',
+        { class: 'kv' },
+        // Numbered where a label repeats: two open sessions are two readers, and
+        // two rows both called "reader" read as the same one written twice.
+        ...cpu.threads.flatMap((thread, index) => {
+          const seen = cpu.threads.filter((other, i) => other.label === thread.label && i < index)
+          const repeats = cpu.threads.filter((other) => other.label === thread.label).length > 1
+          const label = repeats ? `${thread.label} ${seen.length + 1}` : thread.label
+          return keyValue(label, thread.busy === null ? 'starting…' : fmt.pct(thread.busy, 0))
+        }),
+        ...keyValue('cores in use', `${cpu.cores.toFixed(2)} of ${fmt.int(cpu.hardware)}`),
+      ),
+      el('p', { class: 'hint', text: CPU_NOTE }),
+    )
   }
 
   /**
@@ -216,3 +322,38 @@ export class StatusBar {
 function keyValue(key: string, value: string): HTMLElement[] {
   return [el('div', { class: 'k', text: key }), el('div', { class: 'v', text: value })]
 }
+
+/** How often the usage figures are redrawn. */
+const USAGE_TICK_MS = 1000
+
+/**
+ * What the memory number covers, which depends on how it was obtained.
+ *
+ * Said in the tooltip rather than implied by the value, because the two
+ * measurements differ by more than precision: one is the tab and one is a part
+ * of it, and a reader comparing either against their operating system's task
+ * manager deserves to know which they are holding.
+ */
+const MEMORY_NOTE: Record<'tab' | 'heap', string> = {
+  tab:
+    'The whole of this browser tab — this page, its workers, and the arrays and images they ' +
+    'hold. Measured by the browser on request; it can lag a few seconds behind a large file ' +
+    'being released.',
+  heap:
+    'The main thread’s JavaScript heap. It is not the tab’s whole memory: the reader and ' +
+    'annotations workers have heaps of their own, and canvases, decoded images and the file ' +
+    'being read are outside all of them. A browser cannot tell a page its process size — that ' +
+    'figure would leak across origins — so this is the closest one available here.',
+}
+
+/**
+ * What the CPU number is, which is not what a task manager measures.
+ *
+ * Worth spelling out: it is a floor, not an estimate that could be high. Nothing
+ * it reports is work that did not happen.
+ */
+const CPU_NOTE =
+  'No browser reports a tab’s CPU. This is measured from the inside instead: every thread in ' +
+  'the tab times its own event loop, and what you see is the share of the last three seconds ' +
+  'they spent unable to answer, summed and taken against this machine’s cores. Work too brief ' +
+  'to delay anything does not appear, so the true figure is never lower than this one.'

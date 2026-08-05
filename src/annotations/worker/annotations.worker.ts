@@ -17,6 +17,7 @@ import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
 
 import { transfersFor } from '../../worker/protocol'
+import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
@@ -99,6 +100,15 @@ function cacheKey(source: WireSource): string {
 self.onmessage = (event: MessageEvent<AnnotationRequest>) => {
   void handle(event.data)
 }
+
+// How busy this thread has been, once a second, unasked: parsing a GTF or
+// walking a FASTA happens here, and a CPU figure read only on the main thread
+// would report those as an idle tab.
+const probe = startBusyProbe()
+setInterval(() => {
+  const response: AnnotationResponse = { type: 'busy', fraction: probe.busy() }
+  ;(self as unknown as Worker).postMessage(response)
+}, LOAD_REPORT_MS)
 
 async function handle(request: AnnotationRequest): Promise<void> {
   try {

@@ -11,6 +11,7 @@
  * downloaded, parsed and thrown away for those.
  */
 
+import { registerThread, type ThreadHandle } from '../../perf/threads'
 import type {
   AnnotationRequest,
   AnnotationRequestKind,
@@ -28,6 +29,8 @@ export class AnnotationClient {
   private worker: Worker | null = null
   private readonly pending = new Map<number, Pending>()
   private nextId = 1
+  /** This worker's line in the status bar's CPU figure, once it exists. */
+  private thread: ThreadHandle | null = null
 
   constructor(private readonly factory: () => Worker = defaultWorker) {}
 
@@ -38,10 +41,19 @@ export class AnnotationClient {
     worker.onerror = (event) =>
       this.failAll(new Error(`annotations worker failed: ${event.message}`))
     this.worker = worker
+    // Registered here rather than in the constructor, because the worker is
+    // created lazily: a session that never loads a track has no annotations
+    // thread, and listing one in the CPU tooltip would be inventing it.
+    this.thread = registerThread('annotations')
     return worker
   }
 
   private receive(response: AnnotationResponse): void {
+    // Before the correlation, because it answers no request and carries no id.
+    if (response.type === 'busy') {
+      this.thread?.report(response.fraction)
+      return
+    }
     const entry = this.pending.get(response.id)
     if (entry === undefined) return
     this.pending.delete(response.id)
@@ -86,6 +98,8 @@ export class AnnotationClient {
     this.failAll(new Error('annotations worker closed'))
     this.worker?.terminate()
     this.worker = null
+    this.thread?.release()
+    this.thread = null
   }
 }
 

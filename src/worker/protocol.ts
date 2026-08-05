@@ -438,6 +438,11 @@ export type WorkerResponse =
   | { type: 'result'; id: number; kind: RequestKind; payload: unknown }
   | { type: 'error'; id: number; error: SerialisedError }
   | { type: 'progress'; id: number; done: number; total: number; note?: string }
+  // Unsolicited, and the only message here that answers no request: the worker
+  // saying how busy it has been. It carries no id because there is nothing to
+  // correlate it with — the status bar's CPU figure is about the thread, not
+  // about any one read (see `perf/busy.ts`).
+  | { type: 'busy'; fraction: number }
 
 /** Progress callbacks receive the same numbers the worker emits. */
 export type ProgressHandler = (done: number, total: number, note?: string) => void

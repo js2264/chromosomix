@@ -189,8 +189,8 @@ export class BrowserView {
   private readonly stage: HTMLElement
   private readonly overlays = el('div', { class: 'browser-overlays' })
   private readonly tooltip = el('div', { class: 'cell-tip hidden' })
+  /** The one box: a locus, a sequence name or a feature name, all three. */
   private readonly locusInput: HTMLInputElement
-  private readonly searchInput: HTMLInputElement
   private readonly searchList = el('div', { class: 'browser-hits hidden' })
   private readonly zoomNote = el('span', { class: 'browser-zoom' })
   private readonly groupsHost = el('div', { class: 'panel-controls' })
@@ -309,29 +309,41 @@ export class BrowserView {
     this.canvas = el('canvas', { class: 'browser-canvas', attrs: { tabindex: '0' } })
     this.stage = el('div', { class: 'browser-stage' }, this.canvas, this.overlays, this.tooltip)
 
+    // One box, not two. What a reader types into a genome browser is "where do
+    // I want to be", and `chrIV:1,000-2,000`, `chrIV` and `GAL4` are three
+    // spellings of that one question — asking which of two boxes each spelling
+    // belonged in was a taxonomy the reader had to learn in order to type a
+    // word. The parser already accepts the first two and the name index answers
+    // the third, so the box tries both and the text decides.
     this.locusInput = el('input', {
       class: 'input input-region',
       type: 'text',
-      placeholder: 'chrI:1,000-20,000, a sequence name, or * for the whole genome',
+      placeholder: 'chrI:1,000-20,000, a sequence, a gene, or * for the whole genome',
     })
+    // A click selects what is in the box, because what is in the box is where
+    // you already are. Merging the two boxes made this necessary rather than
+    // merely convenient: the search box was always empty, and this one is
+    // always full of the current locus, so a click that only placed the caret
+    // would turn "find GAL4" into `IV:400,000-500,000GAL4`. `mouseup` is
+    // suppressed for that first click alone — otherwise the browser collapses
+    // the selection back to where the pointer landed — and a second click
+    // inside the box behaves as any text field does.
+    let takingFocus = false
+    this.locusInput.addEventListener('mousedown', () => {
+      takingFocus = document.activeElement !== this.locusInput
+    })
+    this.locusInput.addEventListener('mouseup', (event) => {
+      if (!takingFocus) return
+      takingFocus = false
+      event.preventDefault()
+    })
+    this.locusInput.addEventListener('focus', () => this.locusInput.select())
+    this.locusInput.addEventListener('input', () => this.search())
     this.locusInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') this.goTo(this.locusInput.value)
-    })
-
-    this.searchInput = el('input', {
-      class: 'input input-search',
-      type: 'search',
-      placeholder: 'find a gene or feature…',
-    })
-    this.searchInput.addEventListener('input', () => this.search())
-    this.searchInput.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.closeSearch()
-      if (event.key === 'Enter') {
-        const first = this.searchList.querySelector<HTMLElement>('.browser-hit')
-        first?.click()
-      }
+      if (event.key === 'Enter') this.submit()
     })
-    this.searchInput.addEventListener('blur', () => {
+    this.locusInput.addEventListener('blur', () => {
       // Deferred, or the blur beats the click on the hit it is about to take.
       window.setTimeout(() => this.closeSearch(), 150)
     })
@@ -348,15 +360,17 @@ export class BrowserView {
           // No title. The file's name is on its tab, in the Genome card and in
           // the crumb; a fourth copy of it took the width the locus box wants
           // and said nothing the other three had not.
-          this.locusInput,
-          button('go', () => this.goTo(this.locusInput.value)),
+          //
+          // The box and its hit list are one element, because the list is
+          // positioned against the box it belongs to.
+          el('div', { class: 'browser-search' }, this.locusInput, this.searchList),
+          button('go', () => this.submit()),
           iconButton('zoom-out', 'Zoom out (key: −)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (key: +)', () => this.zoomBy(1.8)),
           // The same two marks the Plot card uses, because they are the same two
           // actions and a reader should not have to learn them twice.
           iconButton('unfold-horizontal', 'The whole genome (key: 0, or a double click)', () => this.fit()),
           iconButton('unfold-vertical', 'Fit every track into the height there is', () => this.fitTracks()),
-          el('div', { class: 'browser-search' }, this.searchInput, this.searchList),
         ),
         el(
           'p',
@@ -429,10 +443,16 @@ export class BrowserView {
     this.locusInput.select()
   }
 
-  /** Put the caret in the feature search — the `/` key, and the palette. */
+  /**
+   * The same box: there is only one now, and `/` is muscle memory.
+   *
+   * Kept as its own method rather than collapsed into the caller, because the
+   * two keys mean different things to the person pressing them — "go somewhere"
+   * and "find something" — and the box answers both. Removing the binding would
+   * teach that lesson by doing nothing.
+   */
   focusSearch(): void {
-    this.searchInput.focus()
-    this.searchInput.select()
+    this.focusLocus()
   }
 
   /**
@@ -2651,6 +2671,29 @@ export class BrowserView {
   // -------------------------------------------------------------------------
 
   /**
+   * Go where the box says, whichever of the two things it says.
+   *
+   * Coordinates win when the text is coordinates: `chrIV:1,000-2,000` is
+   * unambiguous, and a gene that happened to match it would be a surprise. A
+   * name the parser cannot read falls to the list under the box — the first hit,
+   * which is the one the reader is looking at. Only when neither can make
+   * anything of it does the box flash.
+   */
+  private submit(): void {
+    const text = this.locusInput.value.trim()
+    if (text === '') return
+    if (parseLocus(text, this.props.assembly) === null) {
+      const first = this.searchList.querySelector<HTMLElement>('.browser-hit:not(.is-empty)')
+      if (first !== null) {
+        first.click()
+        return
+      }
+    }
+    this.goTo(text)
+    this.closeSearch()
+  }
+
+  /**
    * Find a feature by name across every loaded feature set.
    *
    * A linear scan over the `name` arrays, capped at the first handful of hits.
@@ -2660,8 +2703,11 @@ export class BrowserView {
    * types in this box.
    */
   private search(): void {
-    const query = this.searchInput.value.trim().toLowerCase()
-    if (query.length < 2) {
+    const raw = this.locusInput.value.trim()
+    const query = raw.toLowerCase()
+    // A colon means coordinates, and coordinates have no names to suggest. The
+    // list would be a "no match" hanging under a perfectly good locus.
+    if (query.length < 2 || raw.includes(':')) {
       this.closeSearch()
       return
     }
@@ -2699,7 +2745,11 @@ export class BrowserView {
         button(hit.label, () => {
           this.goTo(hit.locus)
           this.closeSearch()
-          this.searchInput.value = ''
+          // The box keeps the locus it went to, as it does for a typed one: it
+          // is a locus bar as well as a search box, and a bar that empties
+          // itself after every jump tells the reader nothing about where they
+          // are.
+          this.locusInput.value = hit.locus
         }, { class: 'browser-hit' }),
       ),
     )
