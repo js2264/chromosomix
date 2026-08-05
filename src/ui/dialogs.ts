@@ -28,8 +28,8 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.
   ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
-  ['drag a lane across its stack', 'Move it up or down the order'],
-  ['drag a track’s grip onto an edge', 'Draw it there instead — below the map, or beside it'],
+  ['drag a lane’s grip', 'Reorder it, or drop it on either rectangle in the map to change edge'],
+  ['drag a track’s row from the panel', 'The same, for the reader looking at the list'],
   ['drop a file below or right of the map', 'Load it as a track on that edge'],
 ]
 
@@ -46,7 +46,7 @@ const BROWSER_KEYS: Array<[string, string]> = [
   ['drag on the chromosome bar', 'Select a span, with both ends written out to the base'],
   ['⌥ / Alt + drag', 'The same selection, over the tracks'],
   ['drag a track’s lower edge', 'Make that track taller or shorter'],
-  ['drag a track up or down', 'Move it in the stack'],
+  ['drag a track’s grip', 'Move it up or down the stack'],
   ['double click', 'The whole genome'],
   ['wheel', 'Zoom about the pointer'],
   ['⌘ / Alt + wheel over a track', 'Raise or lower that track’s ceiling'],

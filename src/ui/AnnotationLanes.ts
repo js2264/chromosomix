@@ -20,7 +20,16 @@
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit, type FeatureLayout } from '../render/features'
-import { clipLane, laneText, type LaneFrame } from '../render/lane'
+import {
+  GRIP_ROOM,
+  clipLane,
+  drawGrip,
+  gripAcross,
+  gripBox,
+  laneText,
+  withinGrip,
+  type LaneFrame,
+} from '../render/lane'
 import type { LocusAxis } from '../render/locus'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
@@ -56,6 +65,16 @@ export interface LaneGeometry {
    */
   guide: { edge: LaneEdge; along: number } | null
   /** The id of the lane whose far border is under the pointer, if any. */
+  border: string | null
+  /**
+   * Whether the lanes draw their handles at all.
+   *
+   * Chrome rather than picture, so the export path turns it off: a saved figure
+   * would otherwise carry a column of grey dots that mean nothing to anyone
+   * reading it.
+   */
+  handles: boolean
+  /** The id of the lane under the pointer, whose handle is drawn full strength. */
   grip: string | null
   palette: { guide: string; halo: string; crosshair: string }
 }
@@ -182,12 +201,48 @@ export class AnnotationLanes {
     return out
   }
 
+  /**
+   * Extra canvas the right stack needs past the map for its handles.
+   *
+   * Those handles hang *below* the data, where a right-hand lane's rotated name
+   * begins, and the room for them is whatever the heatmap left under its plot —
+   * which in a view with no column labels is a couple of pixels. Rather than
+   * back the handle into the signal, the stack takes the few pixels it is short
+   * onto the end of its own canvas: added after the data, so no coordinate
+   * moves and the map is not touched. Zero whenever the margin is already
+   * enough, which is most views, and always zero for the bottom stack — the
+   * space *before* a bottom lane is the plot's left margin, and a canvas cannot
+   * grow backwards without shifting everything drawn in it.
+   */
+  private tailFor(edge: LaneEdge, geometry: LaneGeometry): number {
+    if (edge !== 'right') return 0
+    const below = geometry.cssHeight - (geometry.data.y + geometry.data.height)
+    return Math.max(0, GRIP_ROOM - below)
+  }
+
+  /**
+   * Room past the last lane for the loop anchors, when there are any.
+   *
+   * The triangles used to be drawn *in* that lane, over the last seven pixels of
+   * whatever it is a picture of — which on a coverage track is the busiest part
+   * of it, and on a full one is a mark you cannot see at all. A band of their
+   * own is the only place a glyph about the axis can go without being ink on
+   * somebody's data.
+   *
+   * Zero while no loop is marked, so the map keeps those pixels in the session
+   * that never places one: the band is the cost of a mark, and it arrives with
+   * the mark that needs it.
+   */
+  private anchorBand(): number {
+    return this.options.manual.arrowheads.length > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
+  }
+
   /** Total thickness one edge needs, or `0` when it has no lanes. */
   thicknessOf(edge: LaneEdge): number {
     const slots = this.slotsFor(edge)
     if (slots.length === 0) return 0
     const last = slots[slots.length - 1]
-    return last.acrossFrom + last.thickness
+    return last.acrossFrom + last.thickness + this.anchorBand()
   }
 
   /**
@@ -211,9 +266,11 @@ export class AnnotationLanes {
 
       // The lane canvas matches the heatmap canvas on the shared axis exactly,
       // so the two are drawn in one coordinate system rather than in two that
-      // agree by arrangement.
+      // agree by arrangement — plus whatever tail the right stack's handles
+      // need, which is added *after* the data and so moves nothing.
       const total = this.thicknessOf(edge)
-      const cssAlong = edge === 'bottom' ? geometry.cssWidth : geometry.cssHeight
+      const cssAlong =
+        (edge === 'bottom' ? geometry.cssWidth : geometry.cssHeight) + this.tailFor(edge, geometry)
       const cssWidth = edge === 'bottom' ? cssAlong : total
       const cssHeight = edge === 'bottom' ? total : cssAlong
       canvas.style.width = `${cssWidth}px`
@@ -424,6 +481,23 @@ export class AnnotationLanes {
       }
       ctx.restore()
 
+      // The handle, outside the clip because it hangs outside the lane: in the
+      // plot's own margin, just before the column of the map this track is drawn
+      // under. Every lane has one at all times — it costs the picture nothing
+      // out there — and the one under the pointer is drawn at full strength.
+      //
+      // Not under the `text` option: that option is about what the figure
+      // carries, and this is a control.
+      if (geometry.handles) {
+        drawGrip(
+          ctx,
+          frame,
+          gripAcross(frame, NAME_ACROSS),
+          geometry.palette.guide,
+          geometry.grip === entry.id ? 1 : GRIP_IDLE,
+        )
+      }
+
       // The map's crosshair, continued into the lane...
       if (geometry.crosshair && geometry.hover !== null) {
         const unit = (edge === 'bottom' ? geometry.hover.col : geometry.hover.row) + 0.5
@@ -438,11 +512,11 @@ export class AnnotationLanes {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
       }
 
-      // The resize grip, where the pointer is on this lane's far border. The
+      // The resize rule, where the pointer is on this lane's far border. The
       // cursor is the drawn arrowhead everywhere on these canvases — it is what
       // points at a base pair — so an affordance that lived in the cursor would
       // not exist. The same rule the 1D browser draws, for the same gesture.
-      if (geometry.grip === entry.id) {
+      if (geometry.border === entry.id) {
         ctx.save()
         ctx.strokeStyle = geometry.palette.crosshair
         ctx.lineWidth = 2
@@ -527,11 +601,14 @@ export class AnnotationLanes {
     ctx.fillStyle = geometry.palette.guide
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
-    const near = frame.orientation === 'bottom' ? frame.alongFrom + 4 : frame.alongTo - 4
+    // Against the start of the data, as it has always been: the handle hangs in
+    // the margin outside the lane and takes nothing off the front of the label.
+    const dir = frame.orientation === 'bottom' ? 1 : -1
+    const near = labelNear(frame)
     laneText(ctx, frame, name, near, NAME_ACROSS, { halo: geometry.palette.halo })
     if (detail !== '') {
       const stacked = frame.thickness >= NAME_ACROSS + DETAIL_DROP + 6
-      const along = stacked ? near : frame.orientation === 'bottom' ? near + ctx.measureText(name).width + 10 : near - ctx.measureText(name).width - 10
+      const along = stacked ? near : near + dir * (ctx.measureText(name).width + 10)
       laneText(ctx, frame, detail, along, stacked ? NAME_ACROSS + DETAIL_DROP : NAME_ACROSS, {
         halo: geometry.palette.halo,
       })
@@ -588,6 +665,30 @@ export class AnnotationLanes {
   /** Where each lane on an edge begins, for a drag that is reordering them. */
   boundariesOf(edge: LaneEdge): number[] {
     return this.slotsFor(edge).map((slot) => slot.acrossFrom)
+  }
+
+  /**
+   * The lane whose handle is under a point in a stack's canvas.
+   *
+   * Recomputed rather than recorded, unlike the browser's limits and swatches:
+   * the handle is placed against the frame and not against measured text, so
+   * there is no second opinion to be had — the same numbers that put it on
+   * screen put the box here.
+   */
+  gripAt(
+    edge: LaneEdge,
+    x: number,
+    y: number,
+    geometry: LaneGeometry,
+  ): { entry: AnnotationEntry; index: number } | null {
+    const slots = this.slotsFor(edge)
+    for (let index = 0; index < slots.length; index++) {
+      const frame = this.frameOf(edge, slots[index], geometry)
+      if (withinGrip(gripBox(frame, gripAcross(frame, NAME_ACROSS)), x, y)) {
+        return { entry: slots[index].entry, index }
+      }
+    }
+    return null
   }
 
   readout(edge: LaneEdge, x: number, y: number, geometry: LaneGeometry): LaneReadout | null {
@@ -658,12 +759,13 @@ export class AnnotationLanes {
  * mark.
  */
 /**
- * A loop's anchor, as a small triangle on the stack's outer edge.
+ * A loop's anchor, as a small triangle in the band past the stack.
  *
  * Pointing *inwards*, towards the map: the mark it belongs to is a pixel over
  * there, and a glyph aimed at it is the difference between "this coordinate" and
- * "something else drawn here". Outlined in nothing — it sits on the canvas's own
- * edge, where there is no track ink to be lost against.
+ * "something else drawn here". Outlined in nothing — it sits past the last lane,
+ * where there is no track ink to be lost against, and where it takes none of the
+ * picture it is pointing into.
  */
 function anchorMark(
   ctx: CanvasRenderingContext2D,
@@ -672,28 +774,31 @@ function anchorMark(
   colour: string,
 ): void {
   if (along < frame.alongFrom || along > frame.alongTo) return
-  const outer = frame.acrossFrom + frame.thickness
+  // The band begins where the last lane ends, a couple of pixels clear of it.
+  const tip = frame.acrossFrom + frame.thickness + ANCHOR_GAP
+  const base = tip + ANCHOR_LENGTH
   const half = ANCHOR_HALF
   ctx.save()
   ctx.fillStyle = colour
   ctx.beginPath()
   if (frame.orientation === 'bottom') {
-    ctx.moveTo(along, outer - ANCHOR_LENGTH)
-    ctx.lineTo(along - half, outer)
-    ctx.lineTo(along + half, outer)
+    ctx.moveTo(along, tip)
+    ctx.lineTo(along - half, base)
+    ctx.lineTo(along + half, base)
   } else {
-    ctx.moveTo(outer - ANCHOR_LENGTH, along)
-    ctx.lineTo(outer, along - half)
-    ctx.lineTo(outer, along + half)
+    ctx.moveTo(tip, along)
+    ctx.lineTo(base, along - half)
+    ctx.lineTo(base, along + half)
   }
   ctx.closePath()
   ctx.fill()
   ctx.restore()
 }
 
-/** Tip to base, and half the base: a glyph, not a shape to be read. */
+/** Tip to base, half the base, and the air between the tip and the last track. */
 const ANCHOR_LENGTH = 7
 const ANCHOR_HALF = 4
+const ANCHOR_GAP = 2
 
 function hairline(
   ctx: CanvasRenderingContext2D,
@@ -723,8 +828,28 @@ function hairline(
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */
 const LANE_FONT = '9px system-ui, sans-serif'
 
+/**
+ * How strongly a handle nobody is pointing at is drawn.
+ *
+ * Every lane has one, and eight of them at full strength would be a column of
+ * furniture down the side of the figure. Faint enough to read as a set of
+ * controls waiting to be used, solid enough to be seen without hunting.
+ */
+const GRIP_IDLE = 0.45
+
 /** Where the name sits in the lane, from its outer edge. */
 const NAME_ACROSS = 8
+
+/**
+ * Where a lane's label block starts, before the handle's slot is taken off it.
+ *
+ * One function because two things are placed against it — the handle and the
+ * name after it — and a lane where those two disagreed would have a name
+ * written over its own grip.
+ */
+function labelNear(frame: LaneFrame): number {
+  return frame.orientation === 'bottom' ? frame.alongFrom + 4 : frame.alongTo - 4
+}
 
 /** How far under the name the range sits, when the lane is tall enough. */
 const DETAIL_DROP = 11

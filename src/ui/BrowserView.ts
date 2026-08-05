@@ -38,7 +38,18 @@ import {
 import type { SequenceSelection } from '../genome/selection'
 import { RULER_HEIGHT, drawArcs, drawBoundaries, drawGuide, drawRuler, type RulerBand } from '../render/browser'
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit } from '../render/features'
-import { clipLane, laneRect, laneText, snapTo, type LaneFrame } from '../render/lane'
+import {
+  GRIP_ROOM,
+  clipLane,
+  drawGrip,
+  gripAcross,
+  gripBox,
+  laneRect,
+  laneText,
+  snapTo,
+  withinGrip,
+  type LaneFrame,
+} from '../render/lane'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
 import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
@@ -244,6 +255,16 @@ export class BrowserView {
   /** Where each lane's autoscale button goes: just past its range. */
   private autoSpots: Array<{ entries: AnnotationEntry[]; x: number; y: number }> = []
   /**
+   * The line each lane's handle sits on, by entry, from the labels being drawn.
+   *
+   * The handle is level with the track's *name*, and where a name sits is a
+   * layout question this view answers per lane — a column or the data, a flipped
+   * track hanging from the ceiling, one line or one per overlaid name. So the
+   * pass that places the name says where the handle goes, exactly as it already
+   * does for the limits and the swatches.
+   */
+  private gripRows = new Map<string, number>()
+  /**
    * The limit being typed into, while one is, and the two ways it can end.
    *
    * `cancel` for the cases where the number has nowhere to go — the view is
@@ -282,7 +303,15 @@ export class BrowserView {
    * through it ({@link atUnit}) — one number, applied once, so the ruler and the
    * tracks under it cannot start in different places.
    */
-  private gutter = 0
+  private gutter = GRIP_MARGIN
+  /**
+   * How much of {@link gutter} the *names* have; 0 when they are off.
+   *
+   * The two are not the same number any more: the axis always starts past the
+   * handles' margin, and only the part beyond it is a name column. Everything
+   * that asks "is there a column" asks this one.
+   */
+  private nameColumn = 0
   /**
    * What the gutter *wants* to be, measured from the labels last drawn.
    *
@@ -934,10 +963,17 @@ export class BrowserView {
     // pixels it has. Capped at a third of the window — a column wider than that
     // is a panel, and the tracks are what this view is.
     const options = getPlotOptions()
-    this.gutter =
+    this.nameColumn =
       options.gutter && options.text
         ? Math.min(Math.round(this.wantGutter), Math.floor(width / 3))
         : 0
+    // …and the handles' own margin before it, which is there whether or not the
+    // names have a column: a handle hangs outside its lane, and outside the
+    // first lane of this view is off the left of the canvas unless the canvas
+    // keeps it a strip. Thirteen pixels, once, for the whole picture — against
+    // the alternative, which was every track name shifted along to make room and
+    // handles that could only appear on hover.
+    this.gutter = GRIP_MARGIN + this.nameColumn
     this.scale.setPixels(Math.max(1, width - this.gutter))
     this.clamp()
 
@@ -961,8 +997,19 @@ export class BrowserView {
     this.zoomNote.textContent = this.zoomPhrase()
   }
 
-  /** Everything on the canvas, at whatever scale the context is set to. */
-  private paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  /**
+   * Everything on the canvas, at whatever scale the context is set to.
+   *
+   * `chrome` is what separates the screen from a saved figure: the handles are
+   * controls, they are on screen because the pointer is over a track, and `S`
+   * can be pressed with the pointer exactly there.
+   */
+  private paint(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    chrome = true,
+  ): void {
     // Read once for the whole frame: every lane asks the same question, and the
     // export asks it too so that what is saved is what was on screen.
     const options = getPlotOptions()
@@ -999,6 +1046,7 @@ export class BrowserView {
     this.rangeHits = []
     this.swatchHits = []
     this.autoSpots = []
+    this.gripRows.clear()
     this.measuredGutter = 0
     const groups = this.groupRanges()
     for (const lane of this.lanes) this.paintLane(ctx, lane, groups, palette)
@@ -1016,17 +1064,30 @@ export class BrowserView {
     // The resize grip, where the pointer is on a lane's lower border. The
     // cursor is the drawn arrowhead everywhere here — it is what points at a
     // base pair — so an affordance that lives in the cursor would not exist.
-    const grip = this.lanes.find((lane) => lane.entry.id === this.gripping)
-    if (grip !== undefined) {
+    const border = this.lanes.find((lane) => lane.entry.id === this.gripping)
+    if (border !== undefined) {
       ctx.save()
       ctx.strokeStyle = CROSSHAIR_COLOR
       ctx.lineWidth = 2
       ctx.beginPath()
-      const edge = grip.frame.acrossFrom + grip.frame.thickness + 1
+      const edge = border.frame.acrossFrom + border.frame.thickness + 1
       ctx.moveTo(0, edge)
       ctx.lineTo(width, edge)
       ctx.stroke()
       ctx.restore()
+    }
+    // A handle for every lane, in the margin the view keeps for them, and never
+    // on a figure: a column of grey dots means nothing to a reader of the saved
+    // picture. The one under the pointer — or the one being carried — is drawn
+    // at full strength, which is the only feedback it needs to give.
+    if (chrome) {
+      const held = this.drag?.mode === 'reorder' ? this.drag.entry.id : null
+      const under = this.hover === null ? null : (this.laneAt(this.hover.y)?.lane.entry.id ?? null)
+      const active = held ?? under
+      for (const lane of this.lanes) {
+        const across = this.gripRow(lane)
+        drawGrip(ctx, lane.frame, across, palette.labelColor, lane.entry.id === active ? 1 : GRIP_IDLE)
+      }
     }
     if (this.drag?.mode === 'select') {
       const from = Math.min(this.drag.x0, this.drag.x)
@@ -1156,7 +1217,9 @@ export class BrowserView {
       if (ctx.roundRect === undefined) ctx.rect(0, run.from, GROUP_BAR, run.to - run.from)
       ctx.fill()
       // The name, turned a quarter turn to run with the bar — the only
-      // orientation that fits a word beside a three-pixel rule.
+      // orientation that fits a word beside a three-pixel rule. Past the
+      // handles' margin rather than immediately beside the bar: with no name
+      // column those nine pixels are exactly where the handles hang.
       const room = run.to - run.from
       if (!this.text || room < 34) continue
       ctx.save()
@@ -1165,7 +1228,7 @@ export class BrowserView {
       ctx.fillStyle = run.colour
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.translate(GROUP_BAR + 2, (run.from + run.to) / 2)
+      ctx.translate(GRIP_MARGIN + 2, (run.from + run.to) / 2)
       ctx.rotate(-Math.PI / 2)
       const text = ctx.measureText(run.group).width > room - 6 ? '' : run.group
       ctx.fillText(text, 0, 0)
@@ -1270,7 +1333,7 @@ export class BrowserView {
       }
     }
     ctx.restore()
-    if (label !== null) this.labelLane(ctx, frame, palette, label.entries, label.detail)
+    if (label !== null) this.labelLane(ctx, lane, palette, label.entries, label.detail)
   }
 
   /**
@@ -1289,11 +1352,12 @@ export class BrowserView {
    */
   private labelLane(
     ctx: CanvasRenderingContext2D,
-    frame: LaneFrame,
+    lane: Lane,
     palette: ReturnType<typeof readCanvasPalette>,
     entries: AnnotationEntry[],
     detail: string | { limits: { min: number; max: number } },
   ): void {
+    const frame = lane.frame
     ctx.save()
     ctx.font = NAME_FONT
     ctx.textBaseline = 'middle'
@@ -1302,7 +1366,7 @@ export class BrowserView {
     // the floor: at the top they would sit inside the ink they are labelling,
     // which is the one place a caption must not be.
     const inverted = entries.some((entry) => entry.style.flip)
-    const column = this.gutter > 0
+    const column = this.nameColumn > 0
     // In the column, one name per line — because the column is as wide as the
     // widest of them, and two names side by side would make it as wide as both.
     // Only where the lane has the height for it; a short overlay lane keeps the
@@ -1335,11 +1399,22 @@ export class BrowserView {
     const runWidth = (run: AnnotationEntry[]): number =>
       run.reduce((total, entry) => total + widthOf(entry), 0) + (run.length - 1) * 12
 
+    // The handle goes on the first name's line, whatever that line turned out to
+    // be: in the column it is centred on the lane, over the data it is at the
+    // top, and on a flipped track it is down at the floor with the name.
+    this.gripRows.set(lane.entry.id, nameTop)
+
+    // Where a right-aligned label block ends: clear of the data, and clear of
+    // the handle hanging in front of it. Without the handle's room the name ran
+    // straight into the dots, which is exactly what a label and a control must
+    // not do — the eye reads them as one mark.
+    const labelEnd = this.gutter - GUTTER_PAD - GRIP_ROOM
+
     for (const [row, run] of runs.entries()) {
       const across = nameTop + row * NAME_LINE
       const total = runWidth(run)
-      this.wanted(total + GUTTER_PAD)
-      let at = column ? Math.max(2, this.gutter - GUTTER_PAD - total) : frame.alongFrom + 5
+      this.wanted(total + GUTTER_PAD + GRIP_ROOM)
+      let at = column ? Math.max(GRIP_MARGIN, labelEnd - total) : frame.alongFrom + 5
       for (const entry of run) {
         // The colour, immediately before the name it belongs to. Drawn on the
         // canvas rather than laid over it, so it is a legend rather than a
@@ -1371,13 +1446,15 @@ export class BrowserView {
     ctx.fillStyle = palette.labelColor
     ctx.textAlign = 'left'
     const across = stacked ? nameTop + block + DETAIL_DROP : nameTop + block
-    const along = stacked ? (column ? 2 : frame.alongFrom + 5) : this.lastNameEnd
+    // The same slot the names gave up, so the range stays under the name it
+    // belongs to rather than starting a handle's width to the left of it.
+    const along = stacked ? (column ? GRIP_MARGIN : frame.alongFrom + 5) : this.lastNameEnd
 
     if (typeof detail === 'string') {
       if (detail !== '') {
         const width = ctx.measureText(detail).width
-        const at = column && stacked ? Math.max(2, this.gutter - GUTTER_PAD - width) : along
-        if (column && stacked) this.wanted(width + GUTTER_PAD)
+        const at = column && stacked ? Math.max(GRIP_MARGIN, labelEnd - width) : along
+        if (column && stacked) this.wanted(width + GUTTER_PAD + GRIP_ROOM)
         laneText(ctx, frame, detail, at, across, { halo: palette.labelHaloColor })
       }
       ctx.restore()
@@ -1393,9 +1470,9 @@ export class BrowserView {
     // kept inside the column rather than pushed onto the data.
     const range = ctx.measureText(`${min} – ${max}`).width
     const from = column && stacked
-      ? Math.max(2, this.gutter - GUTTER_PAD - AUTO_SLOT - range)
+      ? Math.max(GRIP_MARGIN, labelEnd - AUTO_SLOT - range)
       : along
-    if (column && stacked) this.wanted(range + AUTO_SLOT + GUTTER_PAD)
+    if (column && stacked) this.wanted(range + AUTO_SLOT + GUTTER_PAD + GRIP_ROOM)
     // …but only where the box is clear of the lane's own lower border, which is
     // the resize grip. On a short lane the two overlap, and an overlap is worse
     // than either alone: the canvas draws the resize hairline, promising a drag,
@@ -1450,6 +1527,22 @@ export class BrowserView {
       if (x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1) return band
     }
     return null
+  }
+
+  /**
+   * The line a lane's handle sits on: the one its name was drawn on.
+   *
+   * `NAME_TOP` is the fallback, for a lane with no label at all — the text
+   * option off, or a kind that writes nothing — which is where the name *would*
+   * have gone, so switching the names back on moves no handle.
+   */
+  private gripRow(lane: Lane): number {
+    return gripAcross(lane.frame, this.gripRows.get(lane.entry.id) ?? NAME_TOP)
+  }
+
+  /** The lane whose handle is under a point, if any. */
+  private gripAt(x: number, y: number): Lane | null {
+    return this.lanes.find((lane) => withinGrip(gripBox(lane.frame, this.gripRow(lane)), x, y)) ?? null
   }
 
   /** The min or max box under a track's name at this point, if any. */
@@ -2233,7 +2326,7 @@ export class BrowserView {
     // in order and has no `destination-over`.
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, width, height + CAPTION_HEIGHT)
-    this.paint(ctx, width, height)
+    this.paint(ctx, width, height, false)
     ctx.font = '11px Helvetica, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
@@ -2262,7 +2355,7 @@ export class BrowserView {
     const ctx = out.getContext('2d')
     if (ctx === null) throw new Error('Could not open a canvas to draw the figure on.')
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
-    this.paint(ctx, width, height)
+    this.paint(ctx, width, height, false)
 
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     ctx.font = '11px system-ui, sans-serif'
@@ -2315,6 +2408,18 @@ export class BrowserView {
         this.openRangeEditor(limit)
         return
       }
+      // The handle, before anything reads a direction out of the press: it is
+      // inside the lane, so the lane's own three-way drag would take it, and the
+      // whole point of a handle is that it needs no direction at all.
+      const held = this.gripAt(x, y)
+      if (held !== null) {
+        canvas.setPointerCapture(event.pointerId)
+        canvas.classList.add('grabbing')
+        this.tooltip.classList.add('hidden')
+        this.drag = { mode: 'reorder', entry: held.entry, over: this.lanes.indexOf(held) }
+        event.preventDefault()
+        return
+      }
       canvas.setPointerCapture(event.pointerId)
       canvas.focus({ preventScroll: true })
       // The readout is about where the pointer *was*: `describe` only runs when
@@ -2333,9 +2438,8 @@ export class BrowserView {
         return
       }
       const hit = this.laneAt(y)
-      // The direction of the first movement decides between the three things a
-      // press on a lane can mean — the same rule the lanes beside the map use,
-      // and the reason no gesture had to be given up for another.
+      // What is left once the handle has been ruled out: a lane's lower border
+      // resizes it, and everything else is a pan (or a selection, with the key).
       this.drag = { mode: 'press', x0: x, y0: y, lane: hit?.lane ?? null, onBorder: hit?.onBorder ?? false }
     }
 
@@ -2356,7 +2460,17 @@ export class BrowserView {
         // the rest of the band is a range waiting to be dragged out.
         const onRuler = y < RULER_HEIGHT
         const onName = onRuler && this.bandNameAt(x, y) !== null
-        canvas.classList.toggle('is-text', !onRuler && this.rangeAt(x, y) !== null)
+        // …and over a handle, where the open hand is the one shape that says
+        // "take hold of this". The arrowhead points *at* a base pair, which is
+        // the one thing the handle is not.
+        // In this order, because the press is tested in this order: a limit and a
+        // handle can come within a couple of pixels of each other on a lane
+        // whose name column is narrower than its range, and a cursor promising
+        // one while the press does the other is worse than either.
+        const onRange = !onRuler && this.rangeAt(x, y) !== null
+        const onGrip = !onRuler && !onRange && this.gripAt(x, y) !== null
+        canvas.classList.toggle('is-grab', onGrip)
+        canvas.classList.toggle('is-text', onRange)
         canvas.classList.toggle('is-link', onName)
         canvas.classList.toggle('is-span', onRuler && !onName)
         this.schedule()
@@ -2368,12 +2482,6 @@ export class BrowserView {
         if (Math.abs(dx) + Math.abs(dy) < DRAG_SLACK) return
         if (drag.onBorder && drag.lane !== null) {
           this.drag = { mode: 'resize', entry: drag.lane.entry, y0: drag.y0, size: drag.lane.entry.style.size }
-        } else if (Math.abs(dy) > Math.abs(dx) && drag.lane !== null) {
-          this.drag = {
-            mode: 'reorder',
-            entry: drag.lane.entry,
-            over: this.lanes.indexOf(drag.lane),
-          }
         } else if (event.altKey) {
           this.drag = { mode: 'select', x0: drag.x0, x }
         } else {
@@ -2459,7 +2567,7 @@ export class BrowserView {
     const forget = (): void => {
       this.hover = null
       this.gripping = null
-      canvas.classList.remove('is-text', 'is-link', 'is-span')
+      canvas.classList.remove('is-text', 'is-link', 'is-span', 'is-grab')
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()
@@ -2912,6 +3020,30 @@ const SELECTION_PAD = 5
 /** How wide the group bar in the left gutter is, in CSS pixels. */
 const GROUP_BAR = 3
 const GROUP_FONT = '600 9px system-ui, sans-serif'
+
+/**
+ * The strip this view keeps at its left for the lane handles.
+ *
+ * The group bar, then the handle hanging just before the data starts. Every
+ * lane in this view begins at the same place, so this is also what makes the
+ * handles a *column* — one line of them down the side, at a constant x, which
+ * is what a stack of rows with grips looks like everywhere else.
+ *
+ * Faint, permanent and outside every lane: the alternative was a slot cut out
+ * of each track's label, which moved every name along and could only show the
+ * handle on hover — because a permanent one would have been sitting on the
+ * signal.
+ */
+const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
+
+/**
+ * How strongly a handle nobody is pointing at is drawn.
+ *
+ * Eight handles at full strength is a column of furniture down the side of the
+ * picture. Faint enough to read as controls waiting to be used, solid enough to
+ * be seen without hunting.
+ */
+const GRIP_IDLE = 0.45
 
 /** How tall a limit's click target is: the text, plus a little either side. */
 const HIT_HEIGHT = 15
