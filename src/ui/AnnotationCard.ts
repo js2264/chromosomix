@@ -267,11 +267,6 @@ export class AnnotationCard {
         this.swatch(entry),
         this.name(entry),
         ...(entry.payload?.kind === 'features' ? [this.star(entry)] : []),
-        // Which edge of the map — a choice a 1D browser does not have, since
-        // there is one axis and everything is drawn along it.
-        ...(entry.card === 'linear' && this.props.context !== 'browser'
-          ? [this.placement(entry)]
-          : []),
         this.visibility(entry),
         more,
         iconButton('x', 'Remove this annotation', () => this.props.store.remove(entry.id), {
@@ -595,24 +590,53 @@ export class AnnotationCard {
     return input
   }
 
-  /** The bottom/right tick boxes — §8.1's "bottom, right, or both". */
+  /**
+   * Which edge of the map this lane is drawn on — §8.1's "bottom, right, or
+   * both".
+   *
+   * Two buttons that are not a choice between each other: a track can be on one
+   * edge or on both, and both is a real answer for a feature set you want to
+   * read against either axis. They were two `B`/`R` tick boxes on the row's
+   * head, in six-point type between the name and the eye, which is a lot of
+   * standing furniture for a decision taken once — and the same decision can now
+   * be taken by dragging the lane itself onto the other edge of the map, which
+   * is where a reader is looking when they want it moved. So they come down here
+   * with the rest of the settings, as words rather than as initials.
+   *
+   * The last edge on cannot be turned off. A lane on no edge is drawn nowhere
+   * while still saying it is visible, which is a track that has silently
+   * disappeared; the eye beside the name is what hides a track, and it says so.
+   */
   private placement(entry: AnnotationEntry): HTMLElement {
-    const box = (edge: 'bottom' | 'right', label: string): HTMLElement => {
-      const input = el('input', { class: 'checkbox', type: 'checkbox' })
-      input.checked = entry.placement[edge]
-      input.addEventListener('change', () =>
+    const only = (['bottom', 'right'] as const).filter((edge) => entry.placement[edge])
+    const button = (edge: 'bottom' | 'right'): HTMLElement => {
+      const on = entry.placement[edge]
+      const last = on && only.length === 1
+      const node = el('button', {
+        class: 'btn btn-toggle ann-place',
+        type: 'button',
+        text: edge,
+        title: last
+          ? `Drawn on the ${edge} edge, and the only edge it is on — use the eye to hide it`
+          : on
+            ? `Stop drawing this on the ${edge} edge`
+            : `Draw this on the ${edge} edge as well`,
+      })
+      node.setAttribute('aria-pressed', String(on))
+      node.addEventListener('click', () => {
+        if (last) return
         this.props.store.update(entry.id, {
-          placement: { ...entry.placement, [edge]: input.checked },
-        }),
-      )
-      return el(
-        'label',
-        { class: 'ann-edge', title: `Draw this on the ${edge} edge of the map` },
-        input,
-        el('span', { text: label }),
-      )
+          placement: { ...entry.placement, [edge]: !on },
+        })
+      })
+      return node
     }
-    return el('div', { class: 'ann-edges' }, box('bottom', 'B'), box('right', 'R'))
+    return el(
+      'div',
+      { class: 'field ann-field' },
+      el('span', { class: 'field-label', text: 'location' }),
+      el('div', { class: 'ann-places' }, button('bottom'), button('right')),
+    )
   }
 
   /**
@@ -669,6 +693,11 @@ export class AnnotationCard {
     const out: HTMLElement[] = []
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
     if (entry.card === 'linear') out.push(this.laneRow(entry))
+    // Which edge of the map — a choice a 1D browser does not have, since there
+    // is one axis and everything is drawn along it.
+    if (entry.card === 'linear' && this.props.context !== 'browser') {
+      out.push(this.placement(entry))
+    }
     if (entry.kind === 'track') out.push(this.limits(entry), this.group(entry))
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No

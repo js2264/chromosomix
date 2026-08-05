@@ -277,7 +277,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   instruction, so it keeps what you last applied and the next file is one press
   away from it.
 
+- **Drag a lane onto the other edge of the map to move it there.** The two
+  rectangles that take a dropped file take a lane already on the map as well:
+  keep dragging a track *across* its own stack until the pointer leaves it, and
+  both rectangles appear under your hand — drop on one and the lane is drawn
+  there instead. A reorder that has left its own stack had nowhere left to
+  reorder to, so the movement past it was free to mean the thing a reader was
+  already trying to do. Released anywhere else, nothing happens.
+
+  It is the same state as the `location` setting on the row, because it is the
+  same field: dragging a lane to the right edge is what the row's `right` button
+  does, and the row shows it a frame later.
+
 ### Changed
+
+- **`location`, in the row's settings, rather than `B`/`R` tick boxes on its
+  head.** Two buttons with the words on them — `bottom` and `right`, and not a
+  choice between each other, since a track can be on both — drawn as one
+  segmented control below `height`. The initials were standing furniture in
+  six-point type between a track's name and its eye, for a decision taken once
+  per track and now also takeable by dragging the lane itself. The last edge a
+  track is on cannot be switched off: a lane on neither edge is drawn nowhere
+  while still calling itself visible, and the eye beside the name is what hides
+  a track.
 
 - **The drop zone is what lights up**, not the card around it. A card that asks
   for a file still takes one anywhere on it — a reader whose pointer is over the
