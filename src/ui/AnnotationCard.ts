@@ -719,16 +719,17 @@ export class AnnotationCard {
   }
 
   private visibility(entry: AnnotationEntry): HTMLElement {
-    const node = el('button', {
-      class: 'btn btn-toggle ann-eye',
-      type: 'button',
-      text: entry.visible ? '◉' : '○',
-      title: entry.visible ? 'Hide, keeping the settings' : 'Show again',
-    })
-    node.setAttribute('aria-pressed', String(entry.visible))
-    node.addEventListener('click', () =>
-      this.props.store.update(entry.id, { visible: !entry.visible }),
+    // An eye, drawn at the size of the fold arrow beside it. The two glyphs it
+    // used — a filled circle and an empty one — were a radio button as far as
+    // anyone could tell, they were set in whatever font the OS chose, and they
+    // were a different size from every other control on the row.
+    const node = iconButton(
+      entry.visible ? 'eye' : 'eye-off',
+      entry.visible ? 'Hide, keeping the settings' : 'Show again',
+      () => this.props.store.update(entry.id, { visible: !entry.visible }),
+      { class: `btn btn-icon ann-eye${entry.visible ? '' : ' is-off'}`, size: 14 },
     )
+    node.setAttribute('aria-pressed', String(entry.visible))
     return node
   }
 
@@ -753,7 +754,28 @@ export class AnnotationCard {
       if (entry.kind === 'pairs') out.push(this.radius(entry))
       out.push(this.opacity(entry))
     }
+    out.push(this.origin(entry))
     return out
+  }
+
+  /**
+   * Where this came from, in small type at the bottom of the settings.
+   *
+   * A name is renameable and the default one is a file name with its suffix
+   * taken off, so after an hour's work a panel of five tracks says nothing about
+   * which file any of them is. Last and quiet, because it is looked up rather
+   * than read: `title` carries the whole of a URL that is too long for the
+   * column, and the text is selectable so it can be copied into a note.
+   */
+  private origin(entry: AnnotationEntry): HTMLElement {
+    const source = entry.source
+    const shown =
+      source.kind === 'remote'
+        ? source.url
+        : source.kind === 'detached'
+          ? `${source.name} — put down; the file is no longer readable`
+          : source.name
+    return el('p', { class: 'ann-origin', text: shown, title: shown })
   }
 
   /**
@@ -800,8 +822,29 @@ export class AnnotationCard {
         size,
         el('span', { class: 'ann-unit', text: 'px' }),
       ),
-      ...(entry.kind === 'track' ? [this.mode(entry)] : []),
+      ...(entry.kind === 'track' ? [this.mode(entry), this.flip(entry)] : []),
     )
+  }
+
+  /**
+   * Draw this track's value axis upside down.
+   *
+   * For the half of an experiment that is measured downwards. Stranded RNA-seq
+   * is the case that asks for it: forward reads growing up from a shared floor
+   * and reverse reads growing *down* from it is one picture of one locus, and
+   * two tracks both growing upwards is two pictures a reader has to mirror in
+   * their head. A button rather than a checkbox, because it is a state the lane
+   * is *in* and the lane shows it.
+   */
+  private flip(entry: AnnotationEntry): HTMLElement {
+    const node = iconButton(
+      'flip-vertical',
+      'Invert this track’s value axis, so it grows downwards',
+      () => this.props.store.restyle(entry.id, { flip: !entry.style.flip }),
+      { class: `btn btn-icon ann-flip${entry.style.flip ? ' is-on' : ''}`, size: 14 },
+    )
+    node.setAttribute('aria-pressed', String(entry.style.flip))
+    return node
   }
 
   private mode(entry: AnnotationEntry): HTMLElement {

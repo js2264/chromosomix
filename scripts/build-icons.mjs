@@ -50,6 +50,11 @@ const LUCIDE = [
   'type',
   'chart-area',
   'list',
+  'align-end-horizontal',
+  'chevrons-up-down',
+  'flip-vertical',
+  'eye',
+  'eye-off',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

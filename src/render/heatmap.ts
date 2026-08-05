@@ -491,6 +491,14 @@ export interface PlotOptions {
    * are drawn without one.
    */
   fills: boolean
+  /**
+   * A rule along each track lane's floor — its outer edge, not its origin.
+   *
+   * What tells four stacked coverage tracks apart from one tall one. Like
+   * `text` and `fills` it is an option about the *tracks*, and the tracks are
+   * drawn beside a map as often as they are drawn without one.
+   */
+  baseline: boolean
   /** Contig and genome boundary hairlines. */
   dividers: boolean
   /**
@@ -524,6 +532,7 @@ export const CROSSHAIR_COLOR = '#1f5fa9'
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
+  baseline: true,
   dividers: true,
   breaks: true,
   labels: true,

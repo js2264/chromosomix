@@ -19,7 +19,6 @@
 
 import { valueAcross, laneRect, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
-import { percentileOf } from './scale'
 import type { Limits, TrackSampleSet } from '../annotations/types'
 
 /**
@@ -43,34 +42,19 @@ export interface PixelProfile {
   /**
    * What "autoscale to what is in view" resolves to.
    *
-   * Neither the means' range nor the envelope's, but a considered compromise
-   * between them, because both extremes are wrong in a way that is easy to see
-   * on a whole-genome view of a real ATAC track:
+   * The means' own range, because the means are what is drawn. This used to be
+   * a compromise with the *envelope's* maximum — the highest single base inside
+   * each pixel — since the envelope was drawn too and a scale that clipped it
+   * painted a peaky track as one solid block. The envelope is gone (see
+   * {@link TrackPaint.fills}), and with it the reason: scaling a line to
+   * anything above the line's own maximum flattens it onto its baseline for a
+   * band nobody can see any more.
    *
-   * - **The envelope's maximum** is whatever single base was highest inside a
-   *   13 kb pixel. Scaling to it flattens every track in the file onto its own
-   *   baseline — the first version did this, and the picture was unreadable.
-   * - **The means' maximum** puts the line at full height and leaves the
-   *   envelope clipped over the entire lane, so a peaky track paints as one
-   *   solid block — the second version did this, which was no better.
-   *
-   * So the ceiling is the {@link ENVELOPE_PERCENTILE}th percentile of the
-   * per-pixel maxima, raised if necessary to fit the largest mean. The drawn
-   * line therefore always fits, the envelope fits except for its extreme tail,
-   * and a handful of outlier bases cannot decide the scale of the whole track.
+   * `low`/`high` remain, and are still worth having — they are what the readout
+   * can say a pixel hid — they simply no longer decide the axis.
    */
   extent: { min: number; max: number } | null
 }
-
-/**
- * Where the autoscale's ceiling sits in the per-pixel maxima.
- *
- * High enough that the envelope is genuinely informative rather than clipped
- * flat, low enough that one saturated base in a 12 Mb genome does not set the
- * scale. Same spirit as §7.1's 99th-percentile `vmax` for the matrix, and a
- * little more forgiving because a track's outliers are single bases.
- */
-export const ENVELOPE_PERCENTILE = 98
 
 /**
  * Reduce samples to one value per pixel.
@@ -153,31 +137,7 @@ export function profileOf(
   }
   if (drawn === 0) return empty
 
-  return {
-    from,
-    mean,
-    low,
-    high,
-    envelope,
-    extent: { min, max: Math.max(max, ceilingOf(high, drawn)) },
-  }
-}
-
-/**
- * The {@link ENVELOPE_PERCENTILE}th percentile of the per-pixel maxima.
- *
- * Quickselect over a scratch copy, as the matrix's own `vmax` rule does: two
- * order statistics out of a few hundred values is not worth a sort, and this
- * runs once per lane per view change.
- */
-function ceilingOf(high: Float32Array, drawn: number): number {
-  const kept = new Float32Array(drawn)
-  let at = 0
-  for (let slot = 0; slot < high.length && at < drawn; slot++) {
-    if (Number.isFinite(high[slot])) kept[at++] = high[slot]
-  }
-  if (at === 0) return Number.NEGATIVE_INFINITY
-  return percentileOf(kept.subarray(0, at) as Float32Array, ENVELOPE_PERCENTILE)
+  return { from, mean, low, high, envelope, extent: { min, max } }
 }
 
 // ---------------------------------------------------------------------------
@@ -238,16 +198,33 @@ export interface TrackPaint {
   font: string
   opacity: number
   /**
-   * Whether the shaded areas are drawn: the envelope, and an area track's fill.
+   * Whether the area under the line is filled.
    *
-   * Required rather than defaulted, so that a new caller has to decide. Both
-   * fills are *context* for the line — the envelope says what the mean hid, the
-   * area says which side of the baseline the signal is on — and context is the
-   * first thing to go when several tracks share one lane or a figure is going
-   * into a caption. Bars are unaffected: a bar is the mark itself, not a shade
-   * under one.
+   * Under it, and only under it. There used to be a second shade here — the
+   * *envelope*, the band between the lowest and highest value inside each
+   * pixel — drawn to say what a zoomed-out mean had hidden. It was honest and it
+   * was unreadable: the band goes above the line as well as below, so a track's
+   * ink extended over data it did not describe, and no reader who had not
+   * written it could tell what the pale region was. What a coverage track means
+   * by shading is the area under its own curve, which is what this is now.
+   *
+   * Required rather than defaulted, so that a new caller has to decide. Bars are
+   * unaffected: a bar is the mark itself, not a shade under one.
    */
   fills: boolean
+  /** Draw the value axis upside down — see `AnnotationStyle.flip`. */
+  flip: boolean
+  /**
+   * A rule along the lane's own floor.
+   *
+   * Not the zero line, which is where the *value axis* reads nothing and can sit
+   * anywhere in the lane on a signed track. This is the edge of the strip: it is
+   * what tells four stacked coverage tracks apart from one tall one, and what a
+   * figure needs so a reader can see where a track ends and the white space
+   * begins. Off by default would be the wrong default for a figure and the right
+   * one for a screen, so it is a preference rather than a constant.
+   */
+  baseline: boolean
 }
 
 /**
@@ -264,33 +241,18 @@ export function drawTrack(
   profile: PixelProfile,
   paint: TrackPaint,
 ): void {
-  const norm = normaliser(paint.limits)
-  const zero = paint.limits.min <= 0 && paint.limits.max >= 0 ? norm(0) : 0
+  const linear = normaliser(paint.limits)
+  // The flip is one negation, here, at the only place a value becomes a
+  // position. Everything downstream — the baseline, the area, the bars, the
+  // line — is expressed through `norm`, so an inverted track is drawn by the
+  // same code rather than by a mirrored copy of it.
+  const norm = paint.flip ? (value: number) => 1 - linear(value) : linear
+  const zero = paint.limits.min <= 0 && paint.limits.max >= 0 ? norm(0) : paint.flip ? 1 : 0
   const baseAcross = valueAcross(frame, zero)
   const slots = profile.mean.length
 
   ctx.save()
   ctx.globalAlpha = paint.opacity
-
-  // The envelope first, underneath: it is context for the line, not a second
-  // series, so it must never be the thing the eye lands on.
-  if (profile.envelope && paint.mode !== 'bar' && paint.fills) {
-    ctx.globalAlpha = paint.opacity * 0.25
-    ctx.fillStyle = paint.colour
-    ctx.beginPath()
-    let open = false
-    for (let slot = 0; slot < slots; slot++) {
-      if (Number.isNaN(profile.high[slot])) continue
-      const along = profile.from + slot + 0.5
-      const top = valueAcross(frame, norm(profile.high[slot]))
-      const bottom = valueAcross(frame, norm(profile.low[slot]))
-      const [x, y, width, height] = laneRect(frame, along - 0.5, along + 0.5, top, bottom)
-      ctx.rect(x, y, width, height)
-      open = true
-    }
-    if (open) ctx.fill()
-    ctx.globalAlpha = paint.opacity
-  }
 
   if (paint.mode === 'bar') {
     ctx.fillStyle = paint.colour
@@ -304,7 +266,8 @@ export function drawTrack(
       ctx.rect(x, y, width, height)
     }
     ctx.fill()
-    drawBaseline(ctx, frame, baseAcross, paint)
+    drawZeroLine(ctx, frame, baseAcross, paint)
+    drawFloor(ctx, frame, paint)
     ctx.restore()
     return
   }
@@ -338,7 +301,8 @@ export function drawTrack(
     ctx.stroke()
   }
 
-  drawBaseline(ctx, frame, baseAcross, paint)
+  drawZeroLine(ctx, frame, baseAcross, paint)
+  drawFloor(ctx, frame, paint)
   ctx.restore()
 }
 
@@ -380,8 +344,32 @@ function pointOf(frame: LaneFrame, along: number, across: number): [number, numb
     : [frame.acrossFrom + across, along]
 }
 
+/**
+ * A rule along the lane's floor — its outer edge, not its origin.
+ *
+ * Drawn last and in the page's own ink, so it reads as the *edge of the strip*
+ * rather than as a feature of the data: four stacked coverage tracks are four
+ * bands, and without a floor under each they are one drawing with four skylines
+ * in it.
+ */
+function drawFloor(ctx: CanvasRenderingContext2D, frame: LaneFrame, paint: TrackPaint): void {
+  if (!paint.baseline) return
+  ctx.save()
+  ctx.globalAlpha = 0.75
+  ctx.strokeStyle = paint.guideColour
+  ctx.lineWidth = 0.75
+  ctx.beginPath()
+  const across = frame.orientation === 'bottom' ? frame.thickness : 0
+  const start = pointOf(frame, frame.alongFrom, across)
+  const end = pointOf(frame, frame.alongTo, across)
+  ctx.moveTo(start[0], start[1])
+  ctx.lineTo(end[0], end[1])
+  ctx.stroke()
+  ctx.restore()
+}
+
 /** A hairline where the value axis reads zero, so a signed track has an origin. */
-function drawBaseline(
+function drawZeroLine(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,
   across: number,

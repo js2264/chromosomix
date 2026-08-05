@@ -61,6 +61,7 @@ import {
   getPlotOptions,
   setPlotOption,
   subscribePlotOptions,
+  type PlotOptionKey,
 } from './plotOptions'
 import { setReadout } from './readout'
 
@@ -150,6 +151,10 @@ export class BrowserView {
   private text = true
   /** Whether the shaded areas are drawn — the shared `fills` plot option. */
   private fills = true
+  /** Whether each lane gets a rule along its floor — the `baseline` option. */
+  private baseline = true
+  /** Whether a guide line follows the pointer — the shared `crosshair` option. */
+  private crosshair = true
   /**
    * Where each lane's two limits were drawn, from the last frame.
    *
@@ -441,6 +446,22 @@ export class BrowserView {
   }
 
   /**
+   * Hand every track's value axis back to the data.
+   *
+   * One press for what is otherwise one press per lane, and the commonest thing
+   * a reader wants after typing a bound into the wrong track or dragging three
+   * ceilings about. A group needs nothing special done to it: `auto` resolves
+   * through `groupRanges`, so the members of a group come back to one shared
+   * pair rather than to their own — which is what belonging to a group means.
+   */
+  private autoscaleAll(): void {
+    for (const entry of this.props.store.entries) {
+      if (entry.kind !== 'track' || entry.style.limits.auto) continue
+      this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
+    }
+  }
+
+  /**
    * The nearest ancestor that has a box, which is the one with the room.
    *
    * The immediate parent is a session's `display: contents` wrapper — it exists
@@ -679,6 +700,8 @@ export class BrowserView {
     const options = getPlotOptions()
     this.text = options.text
     this.fills = options.fills
+    this.baseline = options.baseline
+    this.crosshair = options.crosshair
     const palette = readCanvasPalette(this.canvas)
     const ruler = {
       x: 0,
@@ -705,7 +728,9 @@ export class BrowserView {
     const groups = this.groupRanges()
     for (const lane of this.lanes) this.paintLane(ctx, lane, groups, palette)
 
-    if (this.hover !== null) {
+    // Under the shared preference, like everything else drawn over the data: a
+    // reader who turned the crosshair off beside a map meant it off.
+    if (this.hover !== null && this.crosshair) {
       drawGuide(ctx, this.hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
     }
     // The resize grip, where the pointer is on a lane's lower border. The
@@ -757,6 +782,8 @@ export class BrowserView {
           haloColour: palette.labelHaloColor,
           font: LANE_FONT,
           fills: this.fills,
+          baseline: this.baseline,
+          flip: member.style.flip,
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
           // what overlaying them was for.
@@ -840,12 +867,17 @@ export class BrowserView {
     ctx.font = NAME_FONT
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
+    // A flipped track hangs from the ceiling, so its name and its range move to
+    // the floor: at the top they would sit inside the ink they are labelling,
+    // which is the one place a caption must not be.
+    const inverted = entries.some((entry) => entry.style.flip)
+    const nameTop = inverted ? Math.max(6, frame.thickness - NAME_TOP - DETAIL_DROP) : NAME_TOP
     let at = frame.alongFrom + 5
     for (const entry of entries) {
       // Each name in its own track's colour, which is the whole legend an
       // overlaid lane needs: the line is that colour and so is its name.
       ctx.fillStyle = entries.length > 1 ? entry.style.colour : palette.labelColor
-      laneText(ctx, frame, entry.label, at, NAME_TOP, { halo: palette.labelHaloColor })
+      laneText(ctx, frame, entry.label, at, nameTop, { halo: palette.labelHaloColor })
       at += ctx.measureText(entry.label).width + 12
     }
 
@@ -853,7 +885,7 @@ export class BrowserView {
     ctx.fillStyle = palette.labelColor
     ctx.textAlign = 'left'
     const stacked = frame.thickness >= NAME_TOP + DETAIL_DROP + 6
-    const across = stacked ? NAME_TOP + DETAIL_DROP : NAME_TOP
+    const across = stacked ? nameTop + DETAIL_DROP : nameTop
     const along = stacked ? frame.alongFrom + 5 : at
 
     if (typeof detail === 'string') {
@@ -891,6 +923,21 @@ export class BrowserView {
       }
     }
     ctx.restore()
+  }
+
+  /** The sequence band under a point on the ruler, if any. */
+  private bandAt(x: number): RulerBand | null {
+    return this.bands.find((band) => x >= band.from && x <= band.to) ?? null
+  }
+
+  /** The sequence *name* under a point, which is the smaller target inside it. */
+  private bandNameAt(x: number, y: number): RulerBand | null {
+    for (const band of this.bands) {
+      const box = band.label
+      if (box === null) continue
+      if (x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1) return band
+    }
+    return null
   }
 
   /** The min or max box under a track's name at this point, if any. */
@@ -1464,7 +1511,7 @@ export class BrowserView {
    * rather than beside the map because both are about the tracks, and the tracks
    * are the whole picture in this view.
    */
-  private optionToggle(key: 'text' | 'fills', name: IconName): HTMLButtonElement {
+  private optionToggle(key: PlotOptionKey, name: IconName): HTMLButtonElement {
     const { label, hint } = PLOT_OPTION_LABELS[key]
     const node = iconButton(name, `${label} — ${hint}`, () =>
       setPlotOption(key, !getPlotOptions()[key]),
@@ -1513,11 +1560,11 @@ export class BrowserView {
       el(
         'div',
         { class: 'panel-controls' },
-        // Four marks rather than four sentences. Each of these is a thing a
-        // reader does repeatedly while reading — refit across, refit down, take
-        // the words off, take the shading off — and a column of full-width
-        // buttons spelling them out is four lines of prose in place of a row of
-        // controls. The words survive in every tooltip.
+        // Marks rather than sentences. Each of these is a thing a reader does
+        // repeatedly while reading — refit across, refit down, hand the value
+        // axes back to the data, take the words off — and a column of full-width
+        // buttons spelling them out is seven lines of prose in place of two rows
+        // of controls. The words survive in every tooltip.
         el(
           'div',
           { class: 'plot-icon-row' },
@@ -1529,9 +1576,23 @@ export class BrowserView {
             class: 'btn btn-icon',
             size: 15,
           }),
-          el('span', { class: 'plot-option-gap' }),
-          this.optionToggle('text', 'type'),
-          this.optionToggle('fills', 'chart-area'),
+          iconButton('chevrons-up-down', 'Autoscale every track to what is in view — a group resolves as a group', () => this.autoscaleAll(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+        ),
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'overlays' }),
+          el(
+            'div',
+            { class: 'plot-icon-row' },
+            this.optionToggle('text', 'type'),
+            this.optionToggle('fills', 'chart-area'),
+            this.optionToggle('baseline', 'align-end-horizontal'),
+            this.optionToggle('crosshair', 'crosshair'),
+          ),
         ),
         el(
           'div',
@@ -1710,10 +1771,16 @@ export class BrowserView {
         // everywhere on this canvas, so the affordance has to be in the picture.
         const grip = this.laneAt(y)
         this.gripping = grip?.onBorder === true ? grip.lane.entry.id : null
-        // …with the one exception the arrowhead cannot make: a caret. Over a
-        // limit the pointer *is* the affordance, because "this text is a text
-        // box" is a claim only a text cursor makes.
-        canvas.classList.toggle('is-text', this.rangeAt(x, y) !== null)
+        // …with the exceptions the arrowhead cannot make. Over a limit the
+        // pointer *is* the affordance, because "this text is a text box" is a
+        // claim only a caret makes; over the ruler it says which of the two
+        // things a press there will do — a name is a link to that sequence, and
+        // the rest of the band is a range waiting to be dragged out.
+        const onRuler = y < RULER_HEIGHT
+        const onName = onRuler && this.bandNameAt(x, y) !== null
+        canvas.classList.toggle('is-text', !onRuler && this.rangeAt(x, y) !== null)
+        canvas.classList.toggle('is-link', onName)
+        canvas.classList.toggle('is-span', onRuler && !onName)
         this.schedule()
         return
       }
@@ -1790,11 +1857,19 @@ export class BrowserView {
       if (drag.mode === 'select') {
         const from = this.scale.toUnit(Math.min(drag.x0, x))
         const to = this.scale.toUnit(Math.max(drag.x0, x))
-        if (to - from > 1) {
+        if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) {
           this.scale.setDomain([from, to])
           this.afterMove(true)
           return
         }
+        // A selection nobody dragged is a click, and on the ruler a click on a
+        // sequence's name goes to that sequence. Without this it went nowhere:
+        // a press on the ruler becomes a `select` immediately — that is what
+        // makes drag-to-zoom need no modifier — and this branch used to end the
+        // gesture silently, so the band-click navigation the ruler was built
+        // with had no way of being reached.
+        this.clickAt(x, y)
+        return
       }
       // The end of a gesture is the position worth a history entry.
       if (drag.mode === 'pan') this.afterMove(true)
@@ -1804,7 +1879,7 @@ export class BrowserView {
     const forget = (): void => {
       this.hover = null
       this.gripping = null
-      canvas.classList.remove('is-text')
+      canvas.classList.remove('is-text', 'is-link', 'is-span')
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()
@@ -1945,8 +2020,13 @@ export class BrowserView {
     this.clickTimer = window.setTimeout(() => {
       this.clickTimer = null
       if (y < RULER_HEIGHT) {
-        const band = this.bands.find((entry) => x >= entry.from && x <= entry.to)
-        if (band !== undefined) this.goTo(band.contig)
+        // The *name*, not the band. A band is as wide as its sequence is on
+        // screen, so at whole-genome zoom clicking anywhere in the top sixty
+        // pixels would zoom somewhere — including the click that ended a drag
+        // a few pixels short of being one. The name is what looks clickable and
+        // is the only thing that is.
+        const band = this.bandNameAt(x, y) ?? (this.bands.length === 1 ? this.bandAt(x) : null)
+        if (band !== null) this.goTo(band.contig)
         return
       }
       const hit = this.featureAtPoint(x, y)

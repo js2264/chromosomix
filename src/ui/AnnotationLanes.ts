@@ -361,7 +361,7 @@ export class AnnotationLanes {
     if (axis === null) return
     // One read for the whole stack: every lane asks the same question and the
     // store behind it is a module-level one.
-    const { text, fills } = getPlotOptions()
+    const { text, fills, baseline } = getPlotOptions()
 
     for (const lane of lanes) {
       const { entry, frame, profile } = lane
@@ -381,6 +381,8 @@ export class AnnotationLanes {
           font: LANE_FONT,
           opacity: entry.style.opacity,
           fills,
+          baseline,
+          flip: entry.style.flip,
         })
         if (text) {
           this.labelLane(ctx, frame, geometry, entry.label, `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`)

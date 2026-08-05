@@ -20,8 +20,15 @@ import { chooseBpStep, formatBpTick } from './heatmap'
 import type { LocusAxis } from './locus'
 import type { Scale } from './scale'
 
-/** How tall the ruler is, in CSS pixels. Two rows of 12 px text and its ticks. */
-export const RULER_HEIGHT = 34
+/**
+ * How tall the ruler is, in CSS pixels: the sequence band, then the coordinates.
+ *
+ * The band is most of it. It is the one part of a genome browser a hand goes to
+ * without being told — to see which chromosome is which, to drag out a region,
+ * to click a name and go there — and at sixteen pixels it was a stripe of
+ * shading with a caption, too thin to read as a control and too thin to aim at.
+ */
+export const RULER_HEIGHT = 66
 
 export interface RulerPalette {
   text: string
@@ -52,6 +59,16 @@ export interface RulerBand {
   contig: string
   from: number
   to: number
+  /**
+   * The box its name was drawn in, or `null` where there was no room for one.
+   *
+   * Reported rather than recomputed, because it is the box the *text* was
+   * measured into: a second measurement is a second opinion about the same
+   * font, and the difference between the two is the pixel a click misses by.
+   * A band with no name is still a band — it can be dragged across and clicked
+   * on — it simply has no smaller target inside it.
+   */
+  label: { x0: number; x1: number; y0: number; y1: number } | null
 }
 
 /**
@@ -81,7 +98,7 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
   for (const { segment, index } of segments) {
     const from = frame.toPixel(Math.max(segment.unitStart, frame.domain[0]))
     const to = frame.toPixel(Math.min(segment.unitEnd, frame.domain[1]))
-    bands.push({ contig: segment.contig, from, to })
+    bands.push({ contig: segment.contig, from, to, label: null })
     // Alternating shading rather than a line between sequences: at whole-genome
     // zoom the lines are three pixels apart on a 4,000-contig metagenome and
     // read as a texture, while alternating blocks stay legible at any density.
@@ -103,7 +120,17 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
     const room = band.to - band.from
     const text = ctx.measureText(band.contig).width
     if (text + 6 > room) continue
-    ctx.fillText(band.contig, (band.from + band.to) / 2, y + BAND_HEIGHT / 2)
+    const middle = (band.from + band.to) / 2
+    const centre = y + BAND_HEIGHT / 2
+    ctx.fillText(band.contig, middle, centre)
+    // Padded into a target rather than left as the glyphs' own box: a name is
+    // four pixels of ink and the thing being aimed at is a chromosome.
+    band.label = {
+      x0: middle - text / 2 - 6,
+      x1: middle + text / 2 + 6,
+      y0: centre - 11,
+      y1: centre + 11,
+    }
   }
 
   drawScale(ctx, frame, segments.length === 1)
@@ -112,8 +139,8 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
 }
 
 /** The band row's height; the scale row takes what is left. */
-const BAND_HEIGHT = 16
-const RULER_FONT = '11px system-ui, sans-serif'
+const BAND_HEIGHT = 48
+const RULER_FONT = '600 13px system-ui, sans-serif'
 const TICK_FONT = '10px system-ui, sans-serif'
 
 /**
