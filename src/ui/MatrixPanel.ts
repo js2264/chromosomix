@@ -71,7 +71,6 @@ import {
   EXPORT_DPI_CHOICES,
   EXPORT_FORMATS,
   type ExportFormat,
-  canvasToPdf,
   canvasToPng,
   captionStamp,
   downloadBlob,
@@ -81,6 +80,7 @@ import {
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
+import { VectorPage } from './vector'
 import { setReadout } from './readout'
 import {
   MATRIX_OPTIONS,
@@ -339,6 +339,16 @@ export class MatrixPanel {
    * they would meet at a kink.
    */
   private laneHover: { edge: LaneEdge; along: number } | null = null
+  /**
+   * The lane whose far border the pointer is on, so the grip can be drawn.
+   *
+   * Drawn rather than shown as a cursor, which is the rule this canvas already
+   * follows: the pointer is the arrowhead everywhere here, so an affordance that
+   * lived in the cursor would not exist. Same accent rule the 1D browser marks
+   * its own lane borders with, because it is the same gesture on the same kind
+   * of edge.
+   */
+  private laneGrip: string | null = null
   /**
    * The two axes as annotations see them, rebuilt with every block.
    *
@@ -987,6 +997,78 @@ export class MatrixPanel {
   }
 
   /**
+   * The same figure as a vector page: the matrix as an image, everything else
+   * as paths and text.
+   *
+   * The honest hybrid, and the reason the browser's page and this one are the
+   * same class. A contact matrix *is* a raster — twelve thousand bins are
+   * pixels, and writing them as a million rectangles would be a larger, slower
+   * file of the same picture — but the axes, the tick labels, the boundary
+   * marks, the tracks beside it, the legend and the caption are none of them
+   * pixels, and a reader who wants to restyle a figure wants exactly those.
+   *
+   * Drawn at 1:1 rather than at a DPI, because a vector page has no resolution.
+   * The image inside it does, and it is the screen's — which is the resolution
+   * the matrix actually has, since a bin is a bin however large the page is.
+   */
+  private async vectorFigure(now: Date): Promise<Blob> {
+    const plot = this.heatmap.cssSize
+    const bar = this.colorbar.cssSize
+    const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
+    const gap = 10
+    const rightLanes = this.lanes?.thicknessOf('right') ?? 0
+    const bottomLanes = this.lanes?.thicknessOf('bottom') ?? 0
+    const width = plot.width + rightLanes + gap + bar.width + bar2.width
+    const body = Math.max(plot.height + bottomLanes, bar.height, bar2.height)
+
+    const measure = document.createElement('canvas').getContext('2d')
+    if (measure === null) throw new Error('Could not measure the caption.')
+    const left = this.heatmap.dataRect.x
+    const caption = this.figureCaption(now)
+    const lines = captionLines(measure, caption, Math.max(120, width - left))
+    const height = body + captionHeightOf(lines)
+
+    const page = new VectorPage(width, height)
+    const ctx = page.ctx
+    // The page under the drawing, first: a PDF is drawn in order and has no
+    // `destination-over`.
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, width, height)
+
+    this.heatmap.renderTo(ctx, 1)
+    this.lanes?.renderInto(ctx, this.laneGeometry(), 1)
+
+    // Each legend where the grid puts it. `renderTo` draws from the origin and
+    // sets an absolute transform, so an offset has to be applied under it —
+    // which is what `setOrigin` is for, and why this is not the intermediate
+    // canvas the raster path needs.
+    const barLeft = plot.width + rightLanes + gap
+    page.setOrigin(barLeft, 0)
+    this.colorbar.renderTo(ctx, 1)
+    if (this.second !== null) {
+      page.setOrigin(barLeft + bar.width, 0)
+      this.colorbar2.renderTo(ctx, 1)
+    }
+    page.setOrigin(0, 0)
+
+    if (lines.length > 0) {
+      const palette = readCanvasPalette(this.canvas)
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'left'
+      let y = body + CAPTION_TOP
+      for (const line of lines) {
+        const step = line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE
+        ctx.font = line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT
+        ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
+        ctx.fillText(line.text, left, y + step - 4)
+        y += step
+      }
+    }
+    return page.toBlob({ title: caption.title, created: now })
+  }
+
+  /**
    * What the figure is of, with the coordinates it is *actually framed at*.
    *
    * A view is panned and zoomed before it is exported, and the export keeps
@@ -1049,17 +1131,10 @@ export class MatrixPanel {
     const name = `${exportBaseName(this.exportName)}-${fileStamp(now)}-${this.exportDpi}dpi.${format}`
     this.exportStatus.textContent = `saving ${name}…`
     try {
-      const canvas = this.exportCanvas(this.exportDpi, now)
-      const caption = this.figureCaption(now)
       const blob =
         format === 'png'
-          ? await canvasToPng(canvas)
-          : await canvasToPdf(canvas, {
-              dpi: this.exportDpi,
-              title: caption.title,
-              subject: caption.detail,
-              created: now,
-            })
+          ? await canvasToPng(this.exportCanvas(this.exportDpi, now))
+          : await this.vectorFigure(now)
       downloadBlob(blob, name)
       this.exportStatus.textContent = `${name} · ${fmt.bytes(blob.size)}`
     } catch (err) {
@@ -1296,6 +1371,7 @@ export class MatrixPanel {
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       crosshair: getPlotOptions().crosshair,
       guide: this.laneHover,
+      grip: this.laneGrip,
       palette: {
         guide: palette.labelColor,
         halo: palette.labelHaloColor,
@@ -1366,17 +1442,20 @@ export class MatrixPanel {
     const onMove = (event: PointerEvent): void => {
       const box = canvas.getBoundingClientRect()
       if (drag === null) {
-        // Not dragging: say what a press would do. A border that does not
-        // change the cursor is a border nobody knows is draggable.
+        // Not dragging, and the cursor does not change. The arrowhead is what
+        // points *at* a base pair, and it is the same shape over the map, over
+        // the lanes and over the 1D browser — a hand appearing on the way from
+        // one to the other would be saying they are different surfaces, which is
+        // the one thing they are not. What a draggable border gets instead is
+        // the accent rule the browser draws for it, which is an affordance the
+        // reader can see rather than one they have to discover.
         const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
-        canvas.style.cursor =
-          hit === null
-            ? ''
-            : hit.onBorder
-              ? edge === 'bottom'
-                ? 'row-resize'
-                : 'col-resize'
-              : 'grab'
+        canvas.style.cursor = ''
+        const grip = hit?.onBorder === true ? hit.entry.id : null
+        if (grip !== this.laneGrip) {
+          this.laneGrip = grip
+          this.schedule()
+        }
         return
       }
       const now = edge === 'bottom' ? event.clientY : event.clientX
@@ -1389,9 +1468,6 @@ export class MatrixPanel {
         // usually one pixel in a direction nobody meant.
         if (Math.max(across, along) < DRAG_SLACK) return
         drag.kind = along > across ? 'pan' : 'order'
-        // The inline cursor the hover above sets would otherwise win over the
-        // class, and the hand would never close.
-        canvas.style.cursor = 'grabbing'
         canvas.classList.add('grabbing')
       }
 
@@ -1489,7 +1565,13 @@ export class MatrixPanel {
             'div',
             { class: row.here ? 'cell-tip-line cell-tip-here' : 'cell-tip-line' },
             el('span', { class: 'cell-tip-chip', style: { background: row.colour } }),
-            el('span', { class: 'cell-tip-key', text: `${row.label}:` }),
+            // In the track's own colour, which is the legend the picture already
+            // uses — the lane is drawn in it and so is its name on the lane.
+            el('span', {
+              class: 'cell-tip-key',
+              text: `${row.label}:`,
+              style: { color: row.colour },
+            }),
             el('span', { class: 'cell-tip-val', text: row.value }),
           ),
         ),
@@ -1500,6 +1582,10 @@ export class MatrixPanel {
     }
     const onLeave = (): void => {
       this.tooltip.classList.add('hidden')
+      if (this.laneGrip !== null) {
+        this.laneGrip = null
+        this.schedule()
+      }
       if (this.laneHover !== null) {
         this.laneHover = null
         this.schedule()
