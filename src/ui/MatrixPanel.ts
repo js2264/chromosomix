@@ -68,7 +68,7 @@ import { inverseTransform, transformValue } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
-import { button, el, field, fmt } from './dom'
+import { el, field, fmt } from './dom'
 import {
   EXPORT_DPI_CHOICES,
   EXPORT_FORMATS,
@@ -640,9 +640,9 @@ export class MatrixPanel {
             { class: 'export-row' },
             dpiSelect,
             formatSelect,
-            button('Save', () => void this.save(this.exportFormat), {
-              class: 'btn',
-              title: 'Save the figure, at the resolution and in the format chosen beside this',
+            iconButton('download', 'Save the figure, at the resolution and in the format chosen beside this', () => void this.save(this.exportFormat), {
+              class: 'btn btn-icon',
+              size: 15,
             }),
           ),
         ),

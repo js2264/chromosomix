@@ -21,6 +21,7 @@
 
 import type { ValueRange } from '../render/scale'
 import { el, trimNumber } from './dom'
+import { iconButton } from './icons'
 
 export interface ClipRangeProps {
   /** A bound moved. `null` means "back to auto" — both bounds unset. */
@@ -45,17 +46,18 @@ export class ClipRange {
     this.lowInput = this.buildBox('low')
     this.highInput = this.buildBox('high')
 
-    this.autoButton = el('button', {
-      class: 'btn btn-quiet clip-auto',
-      type: 'button',
-      text: 'auto',
-      title: 'Back to the §7.1 default: the 99th percentile of the values in view.',
-    })
-    this.autoButton.addEventListener('click', () => {
-      this.auto = true
-      this.paint()
-      this.props.onChange(null)
-    })
+    // The same mark autoscale carries everywhere else in this application,
+    // because it is the same action: hand the range back to the data.
+    this.autoButton = iconButton(
+      'chevrons-up-down',
+      'Back to the §7.1 default: the 99th percentile of the values in view.',
+      () => {
+        this.auto = true
+        this.paint()
+        this.props.onChange(null)
+      },
+      { class: 'btn btn-icon clip-auto', size: 14 },
+    )
 
     this.note = el('span', { class: 'clip-note' })
 

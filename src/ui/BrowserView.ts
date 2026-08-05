@@ -1778,42 +1778,60 @@ export class BrowserView {
           ),
           el(
             'div',
-            { class: 'group-row' },
-            button(overlaid ? 'stack' : 'overlay', () => this.setMode(name, overlaid ? 'stacked' : 'overlay'), {
-              class: 'btn',
-              title: overlaid
-                ? 'Give each of these a lane of its own again'
-                : 'Draw all of these into one lane, against one axis',
-            }),
-            button(shared ? 'scale each' : 'scale together', () => this.setScaling(name, shared ? 'each' : 'shared'), {
-              class: 'btn',
-              title: shared
-                ? 'Let every track in this group find its own limits, as an ungrouped track does'
-                : 'Resolve one pair of limits over all of them, which is what makes them comparable',
-            }),
-            button('equal heights', () => {
-              const tallest = Math.max(...members.map((member) => member.style.size))
-              for (const member of members) this.props.store.restyle(member.id, { size: tallest })
-            }, {
-              class: 'btn',
-              title: 'Give every track in this group the height of its tallest member',
-            }),
+            { class: 'plot-icon-row' },
+            // Each of the three is a state the group is *in*, so each is one
+            // mark that changes to the other — `layers` for one lane, rows for
+            // several; a link for one shared axis, a broken one for each track's
+            // own. A word would say the same thing in a column sixteen
+            // characters wide that has four other things to fit in it.
+            iconButton(
+              overlaid ? 'rows-3' : 'layers',
+              overlaid
+                ? 'Stacked: give each of these a lane of its own again'
+                : 'Overlay: draw all of these into one lane, against one axis',
+              () => this.setMode(name, overlaid ? 'stacked' : 'overlay'),
+              { class: 'btn btn-icon', size: 14 },
+            ),
+            iconButton(
+              shared ? 'unlink' : 'link',
+              shared
+                ? 'Scale each: let every track here find its own limits, as an ungrouped one does'
+                : 'Scale together: one pair of limits over all of them, which is what makes them comparable',
+              () => this.setScaling(name, shared ? 'each' : 'shared'),
+              { class: 'btn btn-icon', size: 14 },
+            ),
+            iconButton(
+              'stretch-vertical',
+              'Give every track in this group the height of its tallest member',
+              () => {
+                const tallest = Math.max(...members.map((member) => member.style.size))
+                for (const member of members) this.props.store.restyle(member.id, { size: tallest })
+              },
+              { class: 'btn btn-icon', size: 14 },
+            ),
           ),
           el(
             'div',
             { class: 'group-members' },
+            // One member per row, name left and × right, so the crosses line up
+            // as a column: three pills wrapping mid-name put every × at a
+            // different offset, and a list of things you can remove wants one
+            // place to aim at rather than three.
             ...members.map((member) =>
               el(
-                'span',
+                'div',
                 { class: 'group-member', title: member.label },
                 el('span', {
                   class: 'group-member-chip',
                   style: { background: member.style.colour },
                 }),
                 el('span', { class: 'group-member-name', text: member.label }),
+                // The same × the annotations card puts on a row, at the same
+                // size: this one takes a track out of a group rather than out of
+                // the session, and the two should not be two different marks.
                 iconButton('x', `Take ${member.label} out of ${name}`, () =>
                   this.props.store.restyle(member.id, { group: '' }),
-                { class: 'btn btn-icon group-member-out', size: 11 }),
+                { class: 'btn-close group-member-out', size: 14 }),
               ),
             ),
           ),
@@ -1956,7 +1974,10 @@ export class BrowserView {
             { class: 'export-row export-row-flex' },
             dpiSelect,
             formatSelect,
-            button('Save', () => void this.save(), { class: 'btn' }),
+            iconButton('download', 'Save the figure, in the format chosen beside this', () => void this.save(), {
+              class: 'btn btn-icon',
+              size: 15,
+            }),
           ),
         ),
         this.exportStatus,
