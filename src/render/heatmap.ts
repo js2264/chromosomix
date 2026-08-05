@@ -499,6 +499,21 @@ export interface PlotOptions {
    * drawn beside a map as often as they are drawn without one.
    */
   baseline: boolean
+  /**
+   * A column for the track names, with the tracks starting after it.
+   *
+   * A name drawn *over* a track is a name in the way of the data on every lane
+   * whose first kilobase is the interesting one, and moving it is not free: the
+   * axis has to start where the names end, or the name column would simply be a
+   * second thing drawn on top. So this shifts the genomic axis, which is why it
+   * is a preference and not a piece of styling.
+   *
+   * Beside a map it does nothing, and must not: a lane there is drawn in the
+   * matrix's own coordinates, and a lane that started somewhere else would no
+   * longer be under the column it describes. It is stored with the other track
+   * options because it is one, and offered only where it applies (§8.4).
+   */
+  gutter: boolean
   /** Contig and genome boundary hairlines. */
   dividers: boolean
   /**
@@ -533,6 +548,9 @@ export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
   baseline: true,
+  // Off in a figure: `metacooler show` draws no name column, and a lane drawn
+  // beside a matrix cannot have one at all.
+  gutter: false,
   dividers: true,
   breaks: true,
   labels: true,

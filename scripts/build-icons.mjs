@@ -55,6 +55,11 @@ const LUCIDE = [
   'flip-vertical',
   'eye',
   'eye-off',
+  'align-right',
+  'grid-2x2',
+  'separator-vertical',
+  'tag',
+  'ruler',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

@@ -33,6 +33,8 @@ import {
   type ManualStore,
 } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
+import { transparencyField } from './AnnotationCard'
+import { iconButton } from './icons'
 import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
@@ -84,6 +86,7 @@ import { VectorPage } from './vector'
 import { setReadout } from './readout'
 import {
   MATRIX_OPTIONS,
+  PLOT_OPTION_ICONS,
   PLOT_OPTION_LABELS,
   TRACK_OPTIONS,
   getPlotOptions,
@@ -536,10 +539,14 @@ export class MatrixPanel {
      * subscription below, so a toggle flipped from the command palette lights
      * the same button up — the button never holds the state itself.
      */
+    // The same marks the 1D browser's Plot card uses, from the same table. A
+    // column of eight worded buttons is eight lines of prose where the browser
+    // beside it has two rows of glyphs — and they are the same eight options.
     const optionToggle = (key: PlotOptionKey): HTMLElement => {
       const { label, hint } = PLOT_OPTION_LABELS[key]
-      const node = el('button', { class: 'btn btn-toggle', type: 'button', text: label, title: hint })
-      node.addEventListener('click', () => setPlotOption(key, !getPlotOptions()[key]))
+      const node = iconButton(PLOT_OPTION_ICONS[key], `${label} — ${hint}`, () =>
+        setPlotOption(key, !getPlotOptions()[key]),
+      { class: 'btn btn-icon btn-toggle', size: 15 })
       this.optionButtons.set(key, node)
       return node
     }
@@ -584,6 +591,22 @@ export class MatrixPanel {
       el(
         'div',
         { class: 'panel-controls' },
+        // Marks rather than sentences, and the same marks the 1D browser's Plot
+        // card uses: these are the same two actions, and a reader should not
+        // have to learn them twice because there happens to be a matrix above
+        // the tracks this time. The words survive in the tooltips.
+        el(
+          'div',
+          { class: 'plot-icon-row' },
+          iconButton('maximize', 'Undo every pan and zoom (key: 0, or a double click on the plot)', () => this.fit(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+          iconButton('chevrons-up-down', 'Autoscale every track to what is in view — a group resolves as a group', () => this.autoscaleTracks(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+        ),
         // Split by what each one draws on, because half of these do nothing to
         // the matrix and half do nothing to the tracks — and an undifferentiated
         // row of seven made a reader try each in turn to find out which. Stored
@@ -593,18 +616,21 @@ export class MatrixPanel {
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'tracks' }),
-          el('div', { class: 'plot-option-row' }, ...TRACK_OPTIONS.map(optionToggle)),
+          el('div', { class: 'plot-icon-row' }, ...TRACK_OPTIONS.map(optionToggle)),
         ),
+        // The same control the browser's Plot card carries, writing the same
+        // field of the same store: a reader who faded the tracks beside the map
+        // and then closed it finds them faded in the browser, which is what
+        // "these are the same tracks" has to mean.
+        ...(this.options.annotations === undefined
+          ? []
+          : [transparencyField(this.options.annotations.store)]),
         el(
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'matrix' }),
-          el('div', { class: 'plot-option-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
+          el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
         ),
-        button('fit to view', () => this.fit(), {
-          class: 'btn btn-wide',
-          title: 'Undo every pan and zoom (key: 0, or a double click on the plot)',
-        }),
         el(
           'div',
           { class: 'field field-block' },
@@ -802,6 +828,24 @@ export class MatrixPanel {
   }
 
   /** Reflect the shared overlay state on the buttons. */
+  /**
+   * Hand every lane's value axis back to the data.
+   *
+   * The browser's own button, beside a map. One press for what is otherwise one
+   * press per lane, and the commonest thing a reader wants after dragging three
+   * ceilings about. A group needs nothing special: `auto` resolves through the
+   * group's own range, so its members come back to one shared pair.
+   */
+  private autoscaleTracks(): void {
+    const store = this.options.annotations?.store
+    if (store === undefined) return
+    for (const entry of store.entries) {
+      if (entry.kind !== 'track' && entry.kind !== 'sequence') continue
+      if (entry.style.limits.auto) continue
+      store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
+    }
+  }
+
   private paintPlotOptions(options: PlotOptions): void {
     for (const [key, node] of this.optionButtons) {
       node.setAttribute('aria-pressed', String(options[key]))

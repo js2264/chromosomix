@@ -26,6 +26,18 @@
   --danger: #a32020;
   --danger-soft: #fdecec;
   --ok: #1d6b3f;
+  /*
+   * The resting tab.
+   *
+   * A flat colour rather than a `color-mix(… transparent)` over the strip, and
+   * that is the whole point of its being here: a tab is drawn as three shapes —
+   * the body and two skewed shoulders — and where two translucent ones meet, the
+   * pair is darker than either. That read as a vertical bar down each side of
+   * every inactive tab, which no amount of adjusting the geometry can remove
+   * while the paint is see-through. Opaque, they can overlap by any amount and
+   * the tab is one colour.
+   */
+  --tab-rest: #edeeee;
 
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
@@ -61,6 +73,7 @@
   --danger: #ef8a8a;
   --danger-soft: #331c1c;
   --ok: #6cc48f;
+  --tab-rest: #23262c;
   }
 }
 
@@ -79,6 +92,7 @@
   --danger: #ef8a8a;
   --danger-soft: #331c1c;
   --ok: #6cc48f;
+  --tab-rest: #23262c;
 }
 
 :root[data-theme='light'] {
@@ -96,6 +110,7 @@
   --danger: #a32020;
   --danger-soft: #fdecec;
   --ok: #1d6b3f;
+  --tab-rest: #edeeee;
 }
 
 * {
@@ -326,20 +341,18 @@ p {
   max-width: 15rem;
   min-width: 0;
   border-radius: 5px 5px 0 0;
-  background: color-mix(in srgb, var(--text) 5%, transparent);
+  background: var(--tab-rest);
   transition:
     background 0.14s ease,
     box-shadow 0.14s ease;
 }
 
-/* The shoulders. `width` exactly equal to the offset, and no more.
-
-   They were a twentieth of a rem wider than they were offset, so each one
-   overlapped the tab's own box by that much — and since the resting background
-   is `color-mix(… transparent)`, two translucent layers over one another are
-   darker than one. That is the whole of the "two weird darker grey areas": a
-   rounding error in the shape, rendered as a pair of vertical bars down the
-   sides of every inactive tab. */
+/* The shoulders, which inherit the body's colour and must therefore never be
+   drawn in a translucent one: two see-through layers over one another are darker
+   than one, and that was the whole of the "two weird darker grey areas" — a pair
+   of vertical bars down the sides of every inactive tab, at exactly the width
+   the shapes overlapped by. Every tab background is now flat (`--tab-rest`), so
+   the overlap is invisible whatever it is. */
 .tab::before,
 .tab::after {
   content: '';
@@ -365,8 +378,11 @@ p {
   border-radius: 0 6px 0 0;
 }
 
+/* Opaque here too: the shoulders inherit whatever the body is, so a translucent
+   hover state would bring the doubled edges straight back the moment a hand
+   arrived. */
 .tab:hover {
-  background: color-mix(in srgb, var(--text) 9%, transparent);
+  background: color-mix(in srgb, var(--tab-rest) 88%, var(--text));
 }
 
 /* The active tab joins the page below it: same background, and its bottom edge
@@ -745,86 +761,30 @@ p {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* Top-aligned, not centred: a lane's ink starts at its baseline and grows
-   upwards, so the busiest part of a coverage track is exactly where a centred
-   row of controls would sit. */
-.browser-lane-controls {
-  position: absolute;
-  left: 0.35rem;
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
+/* The two controls that sit *on* a lane.
 
-/* Revealed by pointing at the lane they belong to. A row of inputs standing
-   permanently over the busiest part of a coverage track hides the data it is
-   there to adjust, and five tracks is five of them. */
-.browser-lane-controls.is-active,
-/* …and stay revealed once the pointer is on one of them. Reaching for a control
-   takes the pointer off the canvas, which is what revealed it — without this the
-   row disappears in the moment between deciding to click it and clicking it. */
-.browser-lane-controls:hover {
-  opacity: 1;
-}
+   Positioned per frame against marks the canvas has already drawn — the colour
+   chip before the name, the autoscale button just past the range — so nothing
+   here decides a layout; each is a hit target for something already visible.
 
-/* Discrete: small, quiet, and only as legible as they need to be over whatever
-   ink is under them. They sit under a name that is the loud thing on the lane,
-   and a row of controls at the same weight as the name would compete with it. */
-.browser-lane-controls.is-active > *,
-.browser-lane-controls:hover > * {
-  box-shadow: 0 0 0 2px var(--bg);
-  background: var(--bg);
-}
+   The container is `pointer-events: none`, so only these two small rectangles
+   are taken out of the canvas: everywhere else on a lane a press is still a pan.
+   That is why the row of six settings this replaced is gone rather than merely
+   hidden — a band of controls across every lane is a band a drag cannot start
+   in, whether or not it happens to be drawn at the time. */
 
-.browser-lane-controls .input-tiny,
-.browser-lane-controls .select-tiny,
-.browser-lane-controls .btn-tiny {
-  border-color: var(--border);
-  color: var(--text-dim);
-}
-
-/* Narrower here than in a panel, because every pixel of this row is a pixel of
-   the track that cannot be grabbed to pan. Four digits and a decimal point is
-   what a limit needs, and a name long enough to be worth a group is elided
-   rather than given the width. */
-.browser-lane-controls .input-tiny {
-  width: 3.1rem;
-}
-
-.browser-lane-controls .select-tiny {
-  max-width: 5rem;
-}
-
-/* And shorter, which is the other axis the same argument runs along. A button
-   at its panel height makes this row thirty pixels tall, and thirty pixels plus
-   the two lines of label above it is more than a lane of ordinary height has —
-   so the row would have to sit either on the range it is beside or outside the
-   lane it belongs to. At this height it sits under both, on every lane taller
-   than about fifty pixels. */
-.browser-lane-controls > .btn,
-.browser-lane-controls .select,
-.browser-lane-controls .input {
-  height: 1.15rem;
-  min-height: 0;
-  line-height: 1;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-/* A swatch, not a form control: the browser's own colour input with everything
-   but the colour taken off it. */
+/* Transparent, and clickable, over the chip painted underneath it. Normally the
+   bug (`opacity: 0` hides a control and does not stop it taking a press) and
+   here the design: the thing being aimed at is drawn on the canvas a pixel
+   below, and this is only what catches the click. */
 .browser-swatch {
-  width: 0.85rem;
-  height: 0.85rem;
+  position: absolute;
   padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
+  border: 0;
   background: none;
+  opacity: 0;
   cursor: pointer;
-  flex: 0 0 auto;
+  pointer-events: auto;
 }
 
 .browser-swatch::-webkit-color-swatch-wrapper {
@@ -833,55 +793,35 @@ p {
 
 .browser-swatch::-webkit-color-swatch {
   border: 0;
-  border-radius: 2px;
 }
 
-.browser-slider {
-  width: 3.5rem;
-  height: 0.7rem;
-  accent-color: var(--accent);
+/* Autoscale, at the end of the range it resets. Small and quiet — it stands on
+   the track's own ink — and lit while the axis on screen is the data's own. */
+.browser-auto {
+  position: absolute;
+  padding: 1px;
+  border: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  color: var(--text-dim);
+  line-height: 0;
   cursor: pointer;
-}
-
-/* Clickable only while they are *visible*.
-
-   Without the gate the row is an invisible obstacle: `opacity: 0` hides a
-   control but does not stop it taking a press, so a lane the pointer had not
-   yet revealed still had a band across it where a drag started on a `<select>`
-   and the view refused to pan. The class is set from the pointer being on the
-   lane, so by the time a control can be hit it is on screen to be aimed at. */
-.browser-lane-controls.is-active > *,
-.browser-lane-controls:focus-within > * {
   pointer-events: auto;
 }
 
-.browser-range {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  font-size: var(--step--2);
+.browser-auto:hover {
+  color: var(--accent);
+  background: var(--bg);
+}
+
+.browser-auto.is-on {
+  color: var(--accent);
 }
 
 .input-tiny {
   width: 4.2rem;
   padding: 0.05rem 0.2rem;
   font-size: var(--step--2);
-}
-
-.select-tiny {
-  padding: 0.05rem 0.2rem;
-  font-size: var(--step--2);
-  max-width: 7rem;
-}
-
-.btn-tiny {
-  padding: 0.05rem 0.3rem;
-  font-size: var(--step--2);
-}
-
-.btn-tiny.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* Search sits at the end of the locus bar and drops its hits under itself. */
@@ -944,14 +884,73 @@ p {
   background: var(--danger-soft);
 }
 
+.group-card + .group-card {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* The two decisions about a group, and the one bulk action. Wraps, because the
+   Aesthetics column is sixteen characters wide and three buttons are not. */
 .group-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
   align-items: center;
 }
 
-.group-row .select {
+/* What is *in* the group — the part the card used to give as a count.
+
+   A group is a claim about a set of tracks, and a claim whose members are not
+   listed is one a reader has to reconstruct by opening every row in the panel
+   beside it. Each chip carries the track's colour, which is how it is recognised
+   in the picture, and the × that takes it back out. */
+.group-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.group-member {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 100%;
+  padding: 0.05rem 0.1rem 0.05rem 0.25rem;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}
+
+.group-member-chip {
   flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+}
+
+.group-member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-member-out {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  line-height: 0;
+  cursor: pointer;
+}
+
+.group-member-out:hover {
+  color: var(--danger);
+  background: none;
 }
 
 /* No file, no crumbs — and no empty bordered strip where they would be. */
@@ -2010,11 +2009,13 @@ p {
 }
 
 /* Over the rest of the chromosome bar, where a drag pulls out a region to zoom
-   into. The double-headed arrow is what a hand reads as "this drags sideways" —
-   the arrowhead below says "this points at a base pair", which is the other
-   thing entirely, and the band is the one strip where the two differ. */
+   into. The I-beam, because that is what a hand already reads as "drag across
+   this to select a span" — the same cursor a line of text gives for the same
+   gesture. `ew-resize` was the other reading of the same drag, and the wrong
+   one: a double-headed arrow says the *edge* of something is about to move,
+   which is what it means everywhere else in this application. */
 .browser-canvas.is-span {
-  cursor: ew-resize;
+  cursor: text;
 }
 
 /* While a manual annotation is waiting for its coordinates, a click places a
@@ -2148,24 +2149,6 @@ p {
   grid-template-columns: none;
 }
 
-/* Toggles and actions in even columns: four overlays land as a 2 × 2 block
-   instead of wrapping 1 / 1 / 2 down the side of the card. */
-.plot-option-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.3rem;
-}
-
-/* An odd number of toggles leaves the last one alone on its row; give it the
-   width instead of a hole beside it. */
-.plot-option-row > .btn-toggle:last-child:nth-child(odd) {
-  grid-column: span 2;
-}
-
-.panel-head .plot-option-row {
-  display: flex;
-  flex-wrap: wrap;
-}
 
 /* Resolution, format, and the button that acts on both, in that reading order.
    A grid rather than a flex row, for the reason `.clip-boxes` is one: the two
@@ -3765,10 +3748,30 @@ p {
    A path is looked up rather than read: it answers "which of the four files
    called coverage is this one" and then goes back to being furniture. Wrapped
    rather than clipped, because half a path answers nothing. */
+/* No boxes on a loaded row.
+
+   A row that has finished loading carries six or seven controls — the eye, the
+   flip, the fold arrow, the ×, `auto`, the batch tick — and a border around each
+   turns the panel into a grid of little rectangles competing with the tracks
+   they describe. The controls keep their hover and focus states, which is where
+   an outline actually tells a reader something. Rows that are *not* ready are
+   left alone: their one button ("open it again") is the whole point of the row
+   and should look like a button. */
+.ann-row.ann-ready .btn {
+  border-color: transparent;
+}
+
+.ann-row.ann-ready .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* Which file this is, in the smallest type the panel has: it is looked up rather
+   than read, and the name above it — which a reader may have changed — is what
+   identifies the track. */
 .ann-origin {
   margin: 0.15rem 0 0;
   font-family: var(--mono);
-  font-size: var(--step--2);
+  font-size: x-small;
   color: var(--text-faint);
   overflow-wrap: anywhere;
   user-select: text;
@@ -3805,6 +3808,10 @@ p {
   border-radius: 3px;
   padding: 0.05rem 0.2rem;
   font: inherit;
+  /* A file name is long and there are several of them stacked; at the panel's
+     own size two tracks from the same experiment differ only in the part that
+     scrolls out of view. Small enough to fit, bold enough to lead the row. */
+  font-size: x-small;
   font-weight: 600;
   color: var(--text);
   cursor: text;
