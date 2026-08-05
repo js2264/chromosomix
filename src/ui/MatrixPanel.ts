@@ -356,7 +356,7 @@ export class MatrixPanel {
    */
   private laneHover: { edge: LaneEdge; along: number } | null = null
   /**
-   * The lane whose far border the pointer is on, so the grip can be drawn.
+   * The lane whose far border the pointer is on, so the rule can be drawn.
    *
    * Drawn rather than shown as a cursor, which is the rule this canvas already
    * follows: the pointer is the arrowhead everywhere here, so an affordance that
@@ -364,7 +364,25 @@ export class MatrixPanel {
    * its own lane borders with, because it is the same gesture on the same kind
    * of edge.
    */
-  private laneGrip: string | null = null
+  private laneBorder: string | null = null
+  /**
+   * The lane the pointer is on, which is the one that shows its handle.
+   *
+   * The whole lane and not the handle's own few pixels: a control nobody can see
+   * until they are already on it is one nobody finds. It appears the moment the
+   * pointer crosses the track it belongs to, which is also the moment the reader
+   * could plausibly want to move that track.
+   */
+  private laneHandle: string | null = null
+  /**
+   * Set while a lane is being dragged by its handle.
+   *
+   * The tooltip reads from `mousemove`, which keeps arriving through a pointer
+   * drag: without this, moving a track out to a rectangle carried a readout of
+   * the position it started from across the map with it, naming a value on a
+   * lane the reader had stopped looking at.
+   */
+  private laneGripping = false
   /**
    * The two edge rectangles, by the edge they stand for.
    *
@@ -744,7 +762,28 @@ export class MatrixPanel {
       el('div', { class: 'panel-controls' }, ...controls),
     )
 
-    const wrap = el('div', { class: 'heatmap-wrap' }, this.canvas, this.overlay)
+    // The two edge rectangles live **inside the map**, not over the grid that
+    // holds the map and its lanes. Over the grid they covered a quarter of the
+    // height and a fifth of the width of the whole thing — which is where the
+    // lane stacks are — so a track dragged towards the end of its own stack met
+    // a drop target instead of the gap it was aiming for, and the last position
+    // in the order could not be reached at all. Inside the map they overlap
+    // nothing that can be dragged, they are forty-pixel strips rather than
+    // quarters of the picture, and they still name the edge they stand for: the
+    // bottom of the picture means below it, the side of it means beside it.
+    //
+    // Built whenever there are annotations at all, not only when files can be
+    // loaded: the rectangles are also where a lane already drawn is dragged to
+    // move it from one edge to the other, and that gesture needs no loader.
+    const wrap = el(
+      'div',
+      { class: 'heatmap-wrap' },
+      this.canvas,
+      this.overlay,
+      ...(options.annotations === undefined
+        ? []
+        : [this.edgeZone('bottom'), this.edgeZone('right')]),
+    )
 
     this.lanes =
       options.annotations === undefined
@@ -764,13 +803,6 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
-      // Built whenever there are annotations at all, not only when files can be
-      // loaded: the two rectangles are also where a lane already on the map is
-      // dragged to move it from one edge to the other, and that gesture needs
-      // no loader.
-      ...(options.annotations === undefined
-        ? []
-        : [this.edgeZone('bottom'), this.edgeZone('right')]),
       this.tooltip,
     )
     if (this.lanes !== null) {
@@ -867,12 +899,17 @@ export class MatrixPanel {
   }
 
   /**
-   * One of the two rectangles a file can be dropped on to become a track.
+   * One of the two rectangles inside the map that a track lands on.
    *
-   * Invisible and inert until a drag carrying files is over the panel, which is
-   * the whole trick: the map's own gestures — pan, the Option-drag selection,
-   * the click that opens a cell — happen in the same pixels, and a target that
-   * was always live would eat all three along the bottom edge.
+   * Three gestures aim at them: a file dropped from the desktop, a row dragged
+   * out of the Tracks card, and a lane dragged by the handle on its own picture.
+   * All three mean the same thing — *this track, on that edge* — so they are one
+   * target rather than three.
+   *
+   * Invisible and inert until a drag is under way, which is the whole trick: the
+   * map's own gestures — pan, the Option-drag selection, the click that opens a
+   * cell — happen in the same pixels, and a target that was always live would eat
+   * all three along the bottom edge.
    */
   private edgeZone(edge: LaneEdge): HTMLElement {
     const zone = el(
@@ -1144,7 +1181,7 @@ export class MatrixPanel {
     // Placed exactly as the grid places them — below the plot, and beside it —
     // and *redrawn* at the export scale rather than blown up from the screen
     // canvases, so a 300 dpi figure has 300 dpi track names.
-    this.lanes?.renderInto(ctx, this.laneGeometry(), scale)
+    this.lanes?.renderInto(ctx, this.figureGeometry(), scale)
 
     // The legend renders into a canvas of its own and is then placed, because
     // `renderTo` also draws from the origin — there is nowhere to pass an
@@ -1243,7 +1280,7 @@ export class MatrixPanel {
     ctx.fillRect(0, 0, width, height)
 
     this.heatmap.renderTo(ctx, 1)
-    this.lanes?.renderInto(ctx, this.laneGeometry(), 1)
+    this.lanes?.renderInto(ctx, this.figureGeometry(), 1)
 
     // Each legend where the grid puts it. `renderTo` draws from the origin and
     // sets an absolute transform, so an offset has to be applied under it —
@@ -1578,13 +1615,27 @@ export class MatrixPanel {
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       crosshair: getPlotOptions().crosshair,
       guide: this.laneHover,
-      grip: this.laneGrip,
+      border: this.laneBorder,
+      handles: true,
+      grip: this.laneHandle,
       palette: {
         guide: palette.labelColor,
         halo: palette.labelHaloColor,
         crosshair: CROSSHAIR_COLOR,
       },
     }
+  }
+
+  /**
+   * The same frame, with the pointer taken out of it — what a figure is drawn
+   * from.
+   *
+   * The handles are controls — a column of them down the margin is furniture a
+   * reader of the figure has no use for. Everything else here is the picture and
+   * stays.
+   */
+  private figureGeometry(): LaneGeometry {
+    return { ...this.laneGeometry(), handles: false, grip: null }
   }
 
   /**
@@ -1597,14 +1648,13 @@ export class MatrixPanel {
    * canvas asked for it.
    */
   /**
-   * Dragging a lane: its border resizes it, its body reorders the stack.
+   * Dragging a lane: its handle moves it, its border resizes it, its body pans.
    *
-   * Both gestures already existed in the side panel — a height box and a drag
-   * handle in the card — and both are being asked for *here* because here is
-   * where the tracks are being looked at. A reader comparing two profiles moves
-   * them next to each other and makes the interesting one taller, and having to
-   * cross the window to a list to do either is the reason the card grew a
-   * handle in the first place.
+   * All three already existed in the side panel — a grip, a height box — and all
+   * three are being asked for *here* because here is where the tracks are being
+   * looked at. A reader comparing two profiles moves them next to each other and
+   * makes the interesting one taller, and having to cross the window to a list
+   * to do either is the reason the card grew a handle in the first place.
    *
    * Pointer capture, and the same reason the panel columns take it: a drag that
    * leaves a 44-pixel strip — which every resize does — must not be dropped on
@@ -1616,43 +1666,78 @@ export class MatrixPanel {
     if (lanes === null || context === undefined) return
 
     /**
-     * Three gestures on one surface, told apart without a modifier key.
+     * Three gestures on one surface, told apart by *where* the press lands.
      *
-     * A press on a lane's *border* is a resize, because that is the only thing a
-     * border can be dragged for. A press on its *body* waits for the first
-     * movement and reads its direction: **along** the axis is a pan, which is
-     * what dragging a track beside the map has always done and must keep doing,
-     * and **across** it is a reorder, because moving a lane up the stack is a
-     * movement up the stack. The two are perpendicular, so no gesture has to be
-     * guessed at and neither has to be given up.
+     * The **handle** moves the track: up and down its own stack to reorder, out
+     * onto either rectangle in the map to change which edge it is drawn on. The
+     * **border** resizes, because that is the only thing a border can be dragged
+     * for. Everything else is a **pan**, which is what dragging a track beside a
+     * map has always meant.
      *
-     * A fourth was tried here and taken out again: dragging a lane off its stack
-     * and onto the other edge's rectangle. There is no room for it. Whichever
-     * way that drag travels it has already committed to one of the three above —
-     * sideways out of the bottom stack is a pan, upwards is a reorder — so it
-     * either fought the reorder or fought the pan, depending on the edge, and a
-     * gesture that has to be performed *carefully* is not one. Moving a track
-     * between the edges is now a drag of its **row**, from the Tracks card onto
-     * the same two rectangles: see `edgeZone` and `AnnotationCard.grip`.
+     * The body used to reorder as well, by reading the direction of the first
+     * movement — along the axis a pan, across it a reorder. It does not any
+     * more, and the handle is why. Two meanings for one surface is a rule the
+     * reader has to know before their first drag does what they meant, and it
+     * was paid for on every pan that wandered a few pixels off the horizontal:
+     * the track jumped a slot in the stack, because a gesture that has to be
+     * performed *carefully* had been asked for. With a surface of its own for
+     * moving, the body can go back to meaning one thing.
      */
     let drag:
-      | { id: string; kind: 'size' | 'order' | 'pan' | 'undecided'; from: number; along: number; size: number }
+      | {
+          id: string
+          kind: 'size' | 'pan' | 'grip'
+          from: number
+          along: number
+          size: number
+          /** For a handle drag: the edge under the pointer, if it is on one. */
+          to: LaneEdge | null
+        }
       | null = null
+
+    const start = (id: string, kind: 'size' | 'pan' | 'grip', event: PointerEvent, size: number): void => {
+      drag = {
+        id,
+        kind,
+        from: edge === 'bottom' ? event.clientY : event.clientX,
+        along: edge === 'bottom' ? event.clientX : event.clientY,
+        size,
+        to: null,
+      }
+      canvas.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    }
 
     const onDown = (event: PointerEvent): void => {
       if (event.button !== 0 || this.picking !== null) return
       const box = canvas.getBoundingClientRect()
-      const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
-      if (hit === null) return
-      drag = {
-        id: hit.entry.id,
-        kind: hit.onBorder ? 'size' : 'undecided',
-        from: edge === 'bottom' ? event.clientY : event.clientX,
-        along: edge === 'bottom' ? event.clientX : event.clientY,
-        size: hit.entry.style.size,
+      const x = event.clientX - box.left
+      const y = event.clientY - box.top
+      // The handle first: it sits inside the lane's own rectangle, so the lane
+      // hit below would otherwise take the press and read a direction out of it.
+      const handle = lanes.gripAt(edge, x, y, this.laneGeometry())
+      if (handle !== null) {
+        start(handle.entry.id, 'grip', event, handle.entry.style.size)
+        canvas.classList.add('grabbing')
+        this.laneGripping = true
+        this.tooltip.classList.add('hidden')
+        // The rectangle comes up with the gesture, because it is where the
+        // gesture can end: a drag whose target only appears once you are on it
+        // is a drag nobody makes twice.
+        //
+        // The *other* edge's rectangle, and only that one. A track dragged out
+        // of the bottom stack cannot be moved to the bottom — it is already
+        // there — so offering it that target is offering a gesture with no
+        // outcome, and a lit rectangle that does nothing when you let go reads
+        // as the drag having failed.
+        this.edgeZones.get(edge)?.classList.add('away')
+        this.grid.classList.add('is-dropping')
+        return
       }
-      canvas.setPointerCapture(event.pointerId)
-      event.preventDefault()
+      const hit = lanes.laneAt(edge, x, y)
+      if (hit === null) return
+      start(hit.entry.id, hit.onBorder ? 'size' : 'pan', event, hit.entry.style.size)
+      if (!hit.onBorder) canvas.classList.add('grabbing')
     }
 
     const onMove = (event: PointerEvent): void => {
@@ -1665,11 +1750,20 @@ export class MatrixPanel {
         // the one thing they are not. What a draggable border gets instead is
         // the accent rule the browser draws for it, which is an affordance the
         // reader can see rather than one they have to discover.
-        const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
+        const x = event.clientX - box.left
+        const y = event.clientY - box.top
+        const hit = lanes.laneAt(edge, x, y)
         canvas.style.cursor = ''
-        const grip = hit?.onBorder === true ? hit.entry.id : null
-        if (grip !== this.laneGrip) {
-          this.laneGrip = grip
+        const border = hit?.onBorder === true ? hit.entry.id : null
+        // The handle is the one thing on these canvases the arrowhead cannot
+        // speak for: it is not pointing at a base pair, it is something to take
+        // hold of, and the open hand is what says so.
+        const onHandle = lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
+        canvas.classList.toggle('is-grab', onHandle)
+        const handle = hit === null ? null : hit.entry.id
+        if (border !== this.laneBorder || handle !== this.laneHandle) {
+          this.laneBorder = border
+          this.laneHandle = handle
           this.schedule()
         }
         return
@@ -1677,14 +1771,28 @@ export class MatrixPanel {
       const now = edge === 'bottom' ? event.clientY : event.clientX
       const alongNow = edge === 'bottom' ? event.clientX : event.clientY
 
-      if (drag.kind === 'undecided') {
-        const across = Math.abs(now - drag.from)
-        const along = Math.abs(alongNow - drag.along)
-        // A few pixels of slack before committing: the first event of a drag is
-        // usually one pixel in a direction nobody meant.
-        if (Math.max(across, along) < DRAG_SLACK) return
-        drag.kind = along > across ? 'pan' : 'order'
-        canvas.classList.add('grabbing')
+      if (drag.kind === 'grip') {
+        // Over one of the rectangles, the drag is about which edge this track is
+        // drawn on and the release decides it. The rectangles are inside the
+        // map, so this can never be true while the pointer is over a stack —
+        // which is what makes the two halves of the gesture tell themselves
+        // apart without a rule about direction.
+        const over = this.edgeUnder(event.clientX, event.clientY)
+        drag.to = over
+        for (const [name, zone] of this.edgeZones) zone.classList.toggle('over', name === over)
+        if (over !== null) return
+        // Otherwise it is a reorder, and only while the pointer is actually
+        // beside the stack: past either end there is no slot being pointed at,
+        // and answering anyway would fling the track to the top of the order on
+        // the way out to a rectangle.
+        const across = edge === 'bottom' ? event.clientY - box.top : event.clientX - box.left
+        const span = edge === 'bottom' ? canvas.clientHeight : canvas.clientWidth
+        if (across < 0 || across > span) return
+        const bounds = lanes.boundariesOf(edge)
+        let to = 0
+        while (to + 1 < bounds.length && across >= bounds[to + 1]) to++
+        context.store.move(drag.id, to)
+        return
       }
 
       if (drag.kind === 'pan') {
@@ -1698,26 +1806,29 @@ export class MatrixPanel {
         return
       }
 
-      if (drag.kind === 'size') {
-        // Thickness grows *away* from the map on both edges, so the delta is the
-        // pointer's own displacement in the across direction.
-        const next = Math.round(drag.size + (now - drag.from))
-        context.store.restyle(drag.id, { size: Math.max(LANE_MIN_SIZE, Math.min(400, next)) })
-        return
-      }
-
-      // Reordering: the lane lands where the pointer is, counted in lane
-      // boundaries rather than in pixels, so a tall lane and a short one are one
-      // step apart either way.
-      const across = edge === 'bottom' ? event.clientY - box.top : event.clientX - box.left
-      const bounds = lanes.boundariesOf(edge)
-      let to = 0
-      while (to + 1 < bounds.length && across >= bounds[to + 1]) to++
-      context.store.move(drag.id, to)
+      // Thickness grows *away* from the map on both edges, so the delta is the
+      // pointer's own displacement in the across direction.
+      const next = Math.round(drag.size + (now - drag.from))
+      context.store.restyle(drag.id, { size: Math.max(LANE_MIN_SIZE, Math.min(400, next)) })
     }
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
+      // A handle let go over a rectangle draws the track on that edge instead.
+      // A *move* and not a copy — the other edge is cleared — because that is
+      // what dragging a thing from one place to another means; `location` in the
+      // row's settings is the same field, for the reader who wants both.
+      if (drag.kind === 'grip' && drag.to !== null) {
+        const target = drag.to
+        context.store.update(drag.id, {
+          placement: { bottom: target === 'bottom', right: target === 'right' },
+        })
+      }
+      if (drag.kind === 'grip') {
+        this.grid.classList.remove('is-dropping')
+        for (const zone of this.edgeZones.values()) zone.classList.remove('over', 'away')
+        this.laneGripping = false
+      }
       drag = null
       canvas.style.cursor = ''
       canvas.classList.remove('grabbing')
@@ -1746,10 +1857,34 @@ export class MatrixPanel {
     })
   }
 
+  /**
+   * Which edge rectangle a point on the page is inside, if either.
+   *
+   * By arithmetic rather than by `dragover`, because the gesture that asks is a
+   * pointer drag with the pointer captured on a lane canvas: every event goes to
+   * that canvas, whatever it is over, which is exactly what stops the map
+   * underneath reading the drag as a pan.
+   */
+  private edgeUnder(x: number, y: number): LaneEdge | null {
+    for (const [edge, zone] of this.edgeZones) {
+      // A rectangle the gesture is not being offered is not a target either;
+      // one place decides that, so what lights up and what lands cannot differ.
+      if (zone.classList.contains('away')) continue
+      const box = zone.getBoundingClientRect()
+      if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return edge
+    }
+    return null
+  }
+
   private watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
     const onMove = (event: MouseEvent): void => {
       const lanes = this.lanes
       if (lanes === null) return
+      // A track being carried to an edge is not a position being pointed at.
+      if (this.laneGripping) {
+        this.tooltip.classList.add('hidden')
+        return
+      }
       const box = canvas.getBoundingClientRect()
       const x = event.clientX - box.left
       const y = event.clientY - box.top
@@ -1798,8 +1933,10 @@ export class MatrixPanel {
     }
     const onLeave = (): void => {
       this.tooltip.classList.add('hidden')
-      if (this.laneGrip !== null) {
-        this.laneGrip = null
+      canvas.classList.remove('is-grab')
+      if (this.laneBorder !== null || this.laneHandle !== null) {
+        this.laneBorder = null
+        this.laneHandle = null
         this.schedule()
       }
       if (this.laneHover !== null) {
@@ -2714,9 +2851,6 @@ export function toDense(data: MatrixResult): DenseMatrix {
 
 /** The smallest a lane may be dragged to; below this it is a line, not a track. */
 const LANE_MIN_SIZE = 12
-
-/** How far a press must travel before it is a drag with a direction. */
-const DRAG_SLACK = 3
 
 /**
  * The right-click menu on a lane: its colour, and what its value axis spans.

@@ -240,8 +240,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thread sits idle.
 
 - **Drop a file on the map itself to make it a track**, on the edge you aim at:
-  the bottom quarter for the horizontal stack, the right fifth for the vertical
-  one. Two rectangles appear while a drag carrying files is over the panel and
+  a strip along its bottom for the horizontal stack, one down its side for the
+  vertical one. Two rectangles appear while a drag carrying files is over it and
   are inert the rest of the time, because the map's own gestures — pan, the
   Option-drag selection, the click that opens a cell — live in the same pixels.
   What the file *is* is still decided by its bytes (§8.3): a `.cool` aimed at
@@ -282,14 +282,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   up by its grip in the Tracks card, and both rectangles appear the moment it is
   over the map — drop on one and the track is drawn there instead.
 
-  The gesture is on the row rather than on the lane, and that is the second
-  attempt. Dragging the lane itself is what a reader reaches for and there is no
-  room for it: a lane already answers three drags — its border resizes, along
-  the axis pans, across reorders — so a fourth had to be read out of one of
-  them, and the trip from the bottom stack to the right-hand rectangle is mostly
-  sideways, which is a bottom lane's *pan*. It worked from one stack and fought
-  the other. The row carries no such freight, and it is where the track's other
-  settings are.
+  The gesture is on the row rather than on the lane's *body*, and that is the
+  second attempt. Dragging the body is what a reader reaches for and there is no
+  room for it there: a lane already answers three drags — its border resizes,
+  along the axis pans, across reorders — so a fourth had to be read out of one
+  of them, and the trip from the bottom stack to the right-hand rectangle is
+  mostly sideways, which is a bottom lane's *pan*. It worked from one stack and
+  fought the other. The row carries no such freight, and it is where the track's
+  other settings are. (The lane got the gesture back in the end, on a handle of
+  its own — see below.)
 
   A row now has a grip beside a map even when it is the only one, since there it
   has something to do besides reorder. The drag carries its own MIME type, so
@@ -406,6 +407,99 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the picture already says where it matters — the lane is drawn in that colour,
   and where two share a lane so is each name. It keeps its space while it is
   invisible, so reaching for it is one movement rather than a hunt.
+
+- **Every lane has a grip, in both views.** Six dots beside the track's own
+  name — the same glyph the Tracks card puts at the head of every row, because
+  it is the same gesture on the same thing. Dragging it moves the track through
+  the stack; beside a map, dragging it out onto either rectangle draws the track
+  on that edge instead. Reordering a track was something you could only do to
+  the picture from the *list* beside it, or by learning that a drag across a
+  lane means one thing and along it means another.
+
+  It is a fourth *surface* rather than a fourth reading of one, which is what
+  makes it possible at all: a press that starts on the handle is not ambiguous
+  in any direction, so it can mean "move this track" everywhere the pointer
+  goes, and the three drags the lane's body already answers keep their pixels
+  untouched. Drawn on the canvas rather than laid over it, for the reason every
+  affordance here is: the pointer is an arrowhead pointing at a base pair, and a
+  handle that lived in the cursor would not exist until you were on it. It takes
+  the open hand as its cursor — the one thing the arrowhead cannot say — and is
+  never on a saved figure, because what a reader points at is not part of the
+  picture.
+
+  **It is the only way to move a track.** The lane's body used to reorder as
+  well, by reading the direction of the first movement — along the axis a pan,
+  across it a reorder. Two meanings for one surface is a rule you have to know
+  before your first drag does what you meant, and it was paid for on every pan
+  that wandered a few pixels off the horizontal: the track jumped a slot,
+  because a gesture that has to be performed *carefully* had been asked for.
+  With a surface of its own for moving, the body goes back to meaning one thing.
+
+  It hangs **outside** its lane, in the margin just before the data starts, and
+  that is what lets every lane show one at all times. Inside, it had to be paid
+  for twice: a slot cut out of the front of each label, which moved every track
+  name along, and a glyph that could only appear on hover — because a permanent
+  one would have been sitting on the signal. Outside, it costs the picture
+  nothing, so the names went back against the start of their own track and the
+  handles stopped being something to discover. Each one is on its name's line
+  and keeps its distance from it, wherever the layout put that name: at the top
+  over the data, centred in a column, down at the floor on a flipped track. The
+  faint one is a handle; the solid one is the lane the pointer is on.
+
+  The 1D browser keeps a thirteen-pixel strip at its left for them, since
+  outside its first lane is off the edge of the canvas otherwise. Beside a map
+  no strip is needed — the plot's own margin is where they go. Which end of a
+  lane that is depends on which way the lane reads: the left of a bottom lane,
+  and the *bottom* of a right-hand one, which turns a quarter turn and reads
+  upward from there. A handle at the far end of a track from its own name is a
+  handle belonging to nothing in particular.
+
+  A grip drag raises the **other** edge's rectangle and only that one. A track
+  taken out of the bottom stack cannot be moved to the bottom — it is already
+  there — so offering it that target is offering a gesture with no outcome, and
+  a rectangle that lights under the pointer and then does nothing when you let
+  go reads as the drag having failed. The rectangle that is not offered is not a
+  drop target either, decided in one place, so what lights up and what lands
+  cannot disagree. A file dragged in from the desktop still gets both, since it
+  is on neither edge yet.
+
+  The right-hand stack makes its own room. Its handles hang past the end of the
+  data, where the space available is whatever the heatmap left under its plot —
+  a couple of pixels in a view with no column labels — so rather than back the
+  handle into the signal, the stack adds the few pixels it is short to the end
+  of its own canvas. After the data, so no coordinate moves and the map is not
+  touched, and only when the margin is not already enough.
+
+- **Loop anchors moved off the last track.** The triangle that says "this
+  coordinate" was drawn over the last seven pixels of the last lane in the
+  stack — on a coverage track that is the busiest part of it, and on a full one
+  the mark is invisible. It now has a band of its own past the stack, on both
+  edges, which is the only place a glyph about the axis can go without being ink
+  on somebody's data. The band is nine pixels and exists only while a loop is
+  marked, so a session that never places one keeps those pixels for the map.
+
+- **The map's two drop rectangles moved inside the map, and became strips.**
+  They covered the bottom quarter and the right fifth of the whole plot area —
+  which is where the lane stacks are — so a track dragged towards the end of its
+  own stack met a drop target instead of the gap it was aiming for, and the last
+  slot in the order could not be reached at all. Inside the map they overlap
+  nothing that can be dragged, and they still name the edge they stand for: the
+  bottom of the picture means below it, the right of the picture means beside
+  it.
+
+  Narrow, too, and **centred on the edge they name**: thirty pixels thick, four
+  fifths of the map long, each in the middle of its own side. A quarter of the
+  map's height and a fifth of its width is a lot of a picture to cover in order
+  to say "this edge", and at that size the two rectangles hid the corner of the
+  matrix a reader is usually aiming past on the way to them. Centring at four
+  fifths is also what keeps them apart — each stops a tenth of the map short of
+  the corner they share — so a drop in the corner lands on neither, which is the
+  honest answer to a gesture aimed between two targets. Down the side the label
+  turns the same quarter turn as the track names in the stack it is naming. All three
+  gestures that aim at them — a file from the desktop, a row from the Tracks
+  card, a lane by its handle — now arm them, and while a lane is being carried
+  the tooltip stays down rather than following the pointer across the map with a
+  reading from where the drag started.
 
 ### Fixed
 

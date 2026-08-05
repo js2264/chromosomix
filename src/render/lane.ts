@@ -121,6 +121,133 @@ export function clipLane(ctx: CanvasRenderingContext2D, frame: LaneFrame): void 
 }
 
 /**
+ * The handle a lane is dragged by, in lane coordinates.
+ *
+ * Two columns of three dots — the same glyph the Tracks card puts at the head of
+ * every row, because it is the same gesture on the same thing, and a reader who
+ * has learned one should not have to discover the other. It is drawn *on the
+ * canvas* rather than laid over it as a control, for the reason every other
+ * affordance here is: the cursor is an arrowhead pointing at a base pair, and a
+ * handle that lived in the cursor would not exist until the pointer was already
+ * on it.
+ *
+ * It hangs **outside** the lane, in the margin before the data starts — which is
+ * what lets every lane show one at all times without a single track name moving
+ * to make room. A handle inside the lane had to be paid for twice: a slot taken
+ * off the front of the label, and a glyph that could only appear on hover
+ * because a permanent one would sit on the signal.
+ *
+ * Six pixels along and ten across: a target, not a decoration.
+ */
+export const GRIP_ALONG = 6
+export const GRIP_ACROSS = 10
+
+/**
+ * Clear space between the handle and the edge of the data it belongs to.
+ *
+ * Four, not two. Two was enough for the handle to be *outside* the track and
+ * not enough for it to look outside it: beside the map's bottom stack the plot's
+ * own left margin adds a few pixels of air and the handle read as separate,
+ * while the right-hand stack — where the space is measured from the data itself
+ * — came out with the dots against the signal.
+ */
+export const GRIP_GAP = 4
+
+/** What a lane must leave before its data for a handle to hang in it. */
+export const GRIP_ROOM = GRIP_ALONG + GRIP_GAP
+
+/**
+ * Where along the axis the handle hangs: immediately before the track's name.
+ *
+ * Which end of the lane that is depends on which way the lane reads. A bottom
+ * lane runs left to right and its name starts at the left, so the handle goes
+ * off the left. A right-hand lane turns a quarter turn and reads *upward*: its
+ * name starts at the bottom, so the handle goes below it — the end the label
+ * begins at, not the end the axis does. A handle at the far end of the track
+ * from its own name is a handle belonging to nothing in particular.
+ *
+ * It never overlaps the data, in either direction, and that is the one thing it
+ * must not do — a handle sitting on the signal is both illegible and a target
+ * you cannot tell from the picture. Before a bottom lane it is clamped at the
+ * canvas edge, because the space there is the plot's own left margin and there
+ * is nothing a stack can do to make more of it. *After* a right-hand lane the
+ * space is the stack's own canvas, so the caller sizes that canvas to fit
+ * (`AnnotationLanes.tailFor`) rather than the handle backing into the track.
+ */
+export function gripFrom(frame: LaneFrame): number {
+  return frame.orientation === 'bottom'
+    ? Math.max(0, frame.alongFrom - GRIP_GAP - GRIP_ALONG)
+    : frame.alongTo + GRIP_GAP
+}
+
+/**
+ * The box a lane's handle occupies, in canvas coordinates.
+ *
+ * Both orientations from one pair of numbers: `laneRect` is what knows which of
+ * them is x, which is the whole reason this module exists (§8.4).
+ */
+export function gripBox(frame: LaneFrame, across: number): [number, number, number, number] {
+  const from = gripFrom(frame)
+  return laneRect(frame, from, from + GRIP_ALONG, across, across + GRIP_ACROSS)
+}
+
+/**
+ * Where the handle sits across its lane: on the same line as the track's name.
+ *
+ * `labelAcross` is the middle of that name, which is where every view already
+ * draws it, so the two line up by construction rather than by two constants
+ * that agree today. A lane can be dragged down to a line, so the result is
+ * clamped inside it — level with the name where there is room, and as close as
+ * the lane allows where there is not.
+ */
+export function gripAcross(frame: LaneFrame, labelAcross: number): number {
+  const room = Math.max(0, frame.thickness - GRIP_ACROSS)
+  return Math.max(0, Math.min(labelAcross - GRIP_ACROSS / 2, room))
+}
+
+/** Whether a point is on a handle, with a few pixels of slack around it. */
+export function withinGrip(box: [number, number, number, number], x: number, y: number): boolean {
+  const [bx, by, width, height] = box
+  return x >= bx - GRIP_PAD && x <= bx + width + GRIP_PAD && y >= by - GRIP_PAD && y <= by + height + GRIP_PAD
+}
+
+/** Slack around the drawn glyph. A six-pixel target is one nobody hits. */
+const GRIP_PAD = 4
+
+/**
+ * Paint the handle.
+ *
+ * No backing: it hangs in the margin, where there is nothing to be lost
+ * against. `alpha` is the one piece of feedback it gives — every lane shows its
+ * handle, and the one under the pointer shows it at full strength.
+ */
+export function drawGrip(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  across: number,
+  colour: string,
+  alpha: number,
+): void {
+  const from = gripFrom(frame)
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = colour
+  for (const column of [0, 4]) {
+    for (const row of [0, 4, 8]) {
+      const [x, y, width, height] = laneRect(
+        frame,
+        from + column,
+        from + column + 2,
+        across + row,
+        across + row + 2,
+      )
+      ctx.fillRect(x, y, width, height)
+    }
+  }
+  ctx.restore()
+}
+
+/**
  * Draw `text` so it reads correctly on either edge.
  *
  * A right-hand lane runs top to bottom, so its labels turn a quarter turn
