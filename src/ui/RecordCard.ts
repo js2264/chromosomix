@@ -24,6 +24,7 @@
 
 import { payloadColumnIsText, type TablePayload } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { cardTitle, type IconName } from './icons'
 
 /** One row of the card's key/value grid. */
 export interface RecordField {
@@ -36,6 +37,15 @@ export interface RecordField {
 export interface RecordSpec {
   /** `Genome`, `Contig (rows)` — what this record is, and on which axis. */
   heading: string
+  /**
+   * The mark before the heading, as every card in the three panels carries one.
+   *
+   * Named by the caller rather than derived from the heading, because the
+   * heading is a *phrase* — "Chromosome (columns)" — and matching prose against
+   * a list of nouns to pick a picture is the kind of cleverness that quietly
+   * stops working the day a file calls its sequences something else.
+   */
+  icon: IconName
   name: string
   fields: RecordField[]
 }
@@ -118,7 +128,7 @@ export function recordCard(spec: RecordSpec): HTMLElement {
   return el(
     'div',
     { class: 'card record-card' },
-    el('h3', { text: spec.heading }),
+    cardTitle(spec.heading, spec.icon),
     el('p', { class: 'record-name', text: spec.name, title: spec.name }),
     el(
       'div',

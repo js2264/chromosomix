@@ -67,6 +67,14 @@ const LUCIDE = [
   'download',
   'star',
   'save',
+  // The card headings. One mark per card in the three panels, so a column of
+  // five is scanned by shape before it is read: see `ui/icons.ts` -> cardTitle.
+  'file',
+  'palette',
+  'sliders-horizontal',
+  'pencil',
+  'scan',
+  'columns-2',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

@@ -30,7 +30,7 @@
 
 import { icon, type IconName } from './icons'
 import { el } from './dom'
-import { keyLabel } from './commands'
+import { keyLabel, withKey } from './commands'
 
 export interface SidePanelSpec {
   /** Stable storage key. Not the title: renaming a panel must not forget it. */
@@ -313,9 +313,10 @@ export class SidePanel {
     this.toggle.classList.toggle('hidden', !this.available)
     this.toggle.classList.toggle('is-off', this.collapsed)
     this.toggle.replaceChildren(icon(this.collapsed ? this.spec.openIcon : this.spec.closeIcon))
-    this.toggle.title = this.collapsed
-      ? `Show the ${this.spec.title} panel`
-      : `Fold the ${this.spec.title} panel`
+    this.toggle.title = withKey(
+      this.collapsed ? `Show the ${this.spec.title} panel` : `Fold the ${this.spec.title} panel`,
+      this.spec.keys,
+    )
     this.toggle.setAttribute('aria-expanded', String(!this.collapsed))
   }
 }

@@ -52,7 +52,7 @@ import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../wo
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
-import type { AnnotationEntry } from '../annotations/types'
+import type { AnnotationEntry, Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView, type GroupMode, type GroupScaling } from '../ui/BrowserView'
@@ -72,9 +72,9 @@ import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/
 import { RegionView } from '../ui/RegionView'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import type { Command } from '../ui/commands'
+import { KEYS, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
-import { icon } from '../ui/icons'
+import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
 
@@ -105,6 +105,8 @@ interface WholeFileView {
   readonly sideEl: HTMLElement
   readonly panel: MatrixPanel
   applyScale(scale: ScaleState): void
+  /** The box in the heading — where `/` puts the caret. */
+  focusSearch(): void
   destroy(): void
 }
 
@@ -156,6 +158,7 @@ function genomeCard(
   onGoTo: (locus: string) => void,
   selection: SequenceSelection,
   onOpenMap: (file: File) => void,
+  onOpenUrl: (url: string) => void,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -170,7 +173,7 @@ function genomeCard(
     el(
       'div',
       { class: 'card' },
-      el('h3', { text: 'Genome' }),
+      cardTitle('Genome', 'dna'),
       el(
         'div',
         { class: 'kv' },
@@ -191,7 +194,7 @@ function genomeCard(
           ]),
     ),
     sequenceCard(assembly, onGoTo, selection),
-    mapCard(onOpenFile, onOpenMap),
+    mapCard(onOpenFile, onOpenMap, onOpenUrl),
   )
 }
 
@@ -204,18 +207,60 @@ function genomeCard(
  * reader looks when the thought is "and now the map", and the thought arrives
  * while they are reading this card.
  */
-function mapCard(onOpenFile: () => void, onOpenMap: (file: File) => void): HTMLElement {
+function mapCard(
+  onOpenFile: () => void,
+  onOpenMap: (file: File) => void,
+  onOpenUrl: (url: string) => void,
+): HTMLElement {
+  // The Tracks card's shape, and the Compare card's: a thin unshaded box with a
+  // bold line and a quiet one, then the URL behind a fold. All three ask the
+  // same thing of the reader — *put a file here* — and until they looked alike,
+  // the column read as three cards written by three people.
+  const zone = el(
+    'div',
+    { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
+    el('span', { class: 'ann-drop-label', text: 'Load a contact map' }),
+    el('span', {
+      class: 'ann-drop-hint',
+      text:
+        '.cool or .mcool. Click to choose, or drop one here — or anywhere on the tracks — to ' +
+        'switch this session to its map. The tracks come with it.',
+    }),
+  )
+  zone.addEventListener('click', onOpenFile)
+  zone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onOpenFile()
+    }
+  })
+
+  const url = el('input', {
+    class: 'input',
+    type: 'url',
+    placeholder: 'https://bucket.example.org/map.mcool',
+  })
+  const submit = (): void => {
+    const value = url.value.trim()
+    if (value === '') return
+    onOpenUrl(value)
+    url.value = ''
+  }
+  url.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') submit()
+  })
+
   const card = el(
     'div',
     { class: 'card map-card' },
-    el('h3', { text: 'Contact map' }),
-    el('p', {
-      class: 'hint',
-      text:
-        'Drop a .cool or .mcool here — or anywhere on the tracks — to switch this session to ' +
-        'its map. The tracks come with it.',
-    }),
-    button('open a file…', onOpenFile, { class: 'btn btn-wide' }),
+    cardTitle('Contact map', 'grid-2x2'),
+    zone,
+    el(
+      'details',
+      { class: 'ann-url' },
+      el('summary', { text: 'or open one by URL' }),
+      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+    ),
   )
   card.addEventListener('dragover', (event) => {
     event.preventDefault()
@@ -375,7 +420,7 @@ function sequenceCard(
   return el(
     'div',
     { class: 'card seq-card' },
-    el('h3', { class: 'card-head' }, icon('list', { size: 13 }), el('span', { text: 'Sequences' })),
+    cardTitle('Sequences', 'list'),
     ...(assembly.contigs.length > SEQUENCES_WORTH_FILTERING ? [filter] : []),
     list,
     chosen,
@@ -472,6 +517,15 @@ export class Session {
     panel?: MatrixPanel
     /** Present on the genome browser, which owns a canvas of its own. */
     remeasure?(): void
+    /**
+     * Put the caret in whatever box this view is typed into — the `/` key.
+     *
+     * Optional because two views have no such box: a `.metacool`'s scan is a
+     * picture with no coordinate to type, and the picker is a drop zone. A
+     * command whose target is absent is listed disabled rather than hidden, so
+     * the key is still documented where a reader looks for it.
+     */
+    focusSearch?(): void
   } | null = null
   /**
    * Everything annotations need, for the file that is open (spec §8).
@@ -699,23 +753,20 @@ export class Session {
           group: 'Go',
           title: 'The whole genome',
           hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
-          keys: 'w',
+          keys: KEYS.whole,
           run: () => this.store.patch({ locus: undefined }),
-        },
-        {
-          id: 'browser-locus',
-          group: 'Go',
-          title: 'Go to a locus',
-          hint: 'One box takes all three: chrI:1,000-20,000, a sequence name, or a gene name.',
-          keys: 'l',
-          run: () => this.browser?.focusLocus(),
         },
         {
           id: 'browser-fit-tracks',
           group: 'View',
-          title: 'Fit the tracks to the window',
+          title: 'Stretch the tracks to fill the height',
           hint: 'One height for all of them, and that height the one that fills the space.',
-          keys: 'h',
+          // `s` for stretch, which is what the button does and what a reader
+          // calls it. It cost `s` its old meaning — autoscale, which is now `y`,
+          // the axis it acts on — and that trade is the right way round: this is
+          // the one a reader reaches for several times a session, while
+          // autoscale is a repair for a bound typed into the wrong box.
+          keys: KEYS.stretch,
           run: () => this.browser?.fitTracks(),
         },
         {
@@ -723,17 +774,23 @@ export class Session {
           group: 'View',
           title: 'Autoscale every track',
           hint: 'Hand every value axis back to what is in view; a group resolves as a group.',
-          keys: 's',
+          keys: KEYS.autoscale,
           run: () => this.browser?.autoscaleAll(),
         },
         {
           id: 'browser-search',
           group: 'Go',
-          title: 'Find a gene or feature',
+          title: 'Find a gene, or go to a locus',
+          // One command, because there is one box. It used to be two — `/` to
+          // find and `l` to go — over the same field, and `l` was also the
+          // labels overlay: in a browser session the overlay could not be
+          // toggled at all, because the command list is searched in order and
+          // this half of it comes first. Two names for one box is not worth a
+          // key that silently does nothing somewhere else.
           hint:
-            'The same box as “go to a locus”: type a name and the starred gene model answers ' +
-            'under it.',
-          keys: '/',
+            'One box takes all three: chrI:1,000-20,000, a sequence name, or a gene name from ' +
+            'the starred model.',
+          keys: KEYS.find,
           run: () => this.browser?.focusSearch(),
         },
         {
@@ -747,10 +804,37 @@ export class Session {
     }
     return [
       {
+        id: 'find',
+        group: 'Go',
+        title: 'Find',
+        // Every view of a map has exactly one box you type a name into — the
+        // region box on a heatmap, the search field above a table — and `/` is
+        // where a reader's hand goes to reach it. It used to be the browser's
+        // alone, so the same key that found a gene one moment did nothing at all
+        // the moment a `.cool` was dropped on the same tab.
+        hint: this.searchNoun(),
+        keys: KEYS.find,
+        enabled: this.current?.focusSearch !== undefined,
+        run: () => this.current?.focusSearch?.(),
+      },
+      {
+        id: 'map-autoscale',
+        group: 'View',
+        title: 'Autoscale every track',
+        // The same key as in the browser, because it is the same act on the same
+        // tracks: the lanes beside a map and the stack under a browser are one
+        // store, and a key that worked in one of the two would be a key that
+        // stopped working when a `.cool` was dropped.
+        hint: 'Hand every value axis back to what is in view; a group resolves as a group.',
+        keys: KEYS.autoscale,
+        enabled: this.current?.panel !== undefined && this.annotations !== null,
+        run: () => this.current?.panel?.autoscaleTracks(),
+      },
+      {
         id: 'go-genomes',
         group: 'Go',
         title: 'Genomes table',
-        keys: 'g',
+        keys: KEYS.genomes,
         enabled: file !== null && isMetacool,
         run: () => {
           if (state !== null) this.store.set({ uri: state.uri, view: 'genomes' })
@@ -760,7 +844,7 @@ export class Session {
         id: 'go-contigs',
         group: 'Go',
         title: 'Contigs table',
-        keys: 'c',
+        keys: KEYS.contigs,
         enabled: file !== null,
         run: () => {
           if (state !== null) this.store.set({ uri: state.uri, view: 'contigs' })
@@ -778,7 +862,7 @@ export class Session {
         hint: isMetacool
           ? 'Costs a full pixel scan; it never starts on its own.'
           : 'One bounded read. It asks first when the block is large, and is refused if it would not fit this machine.',
-        keys: 'w',
+        keys: KEYS.whole,
         enabled: file !== null,
         run: () => {
           if (state !== null) {
@@ -791,7 +875,7 @@ export class Session {
         group: 'Go',
         title: 'Previous genome or contig',
         hint: this.stepTarget(-1) ?? undefined,
-        keys: '[',
+        keys: KEYS.previous,
         enabled: this.stepTarget(-1) !== null,
         run: () => this.step(-1),
       },
@@ -800,11 +884,27 @@ export class Session {
         group: 'Go',
         title: 'Next genome or contig',
         hint: this.stepTarget(1) ?? undefined,
-        keys: ']',
+        keys: KEYS.next,
         enabled: this.stepTarget(1) !== null,
         run: () => this.step(1),
       },
     ]
+  }
+
+  /**
+   * What `/` reaches, in the view that is mounted.
+   *
+   * Written per view rather than as one sentence covering all of them, because
+   * the boxes genuinely differ: a table's filters the rows in front of you, a
+   * heatmap's opens something else. A palette entry that said "the search box"
+   * would be true and useless.
+   */
+  private searchNoun(): string {
+    const view = this.store.state?.view
+    if (view === 'genomes' || view === 'contigs') return 'The filter above the table.'
+    if (view === 'region') return 'The region box, which is also this view’s title.'
+    if (view === 'overview') return 'Name a genome of this file, or one of its contigs.'
+    return 'Name a contig, or a range within one, and open it.'
   }
 
   // -------------------------------------------------------------------------
@@ -1374,6 +1474,7 @@ export class Session {
         (locus) => this.goToLocus(locus),
         this.selectionFor(assembly),
         (file) => this.dropped(file),
+        (url) => this.openRemoteMap(url),
       ),
     ])
     loader.restore(AnnotationStore.stored(scope))
@@ -1451,6 +1552,7 @@ export class Session {
       },
       sideEl: view.sideEl,
       remeasure: () => view.remeasure(),
+      focusSearch: () => view.focusSearch(),
     })
   }
 
@@ -1469,7 +1571,14 @@ export class Session {
     for (const file of files) this.dropped(file)
   }
 
-  private dropped(file: File): void {
+  /**
+   * @param placement Which lane stack a *track* should land in, when the drop
+   * said so — the two rectangles on the map's own edges. Everything else about
+   * the file is decided the same way wherever it was dropped, so this is passed
+   * through the routing rather than around it: a `.cool` aimed at the bottom of
+   * the map is still a map, not a track drawn along the bottom.
+   */
+  private dropped(file: File, placement?: Placement): void {
     // A saved session, before anything else looks at it: it is not a track, it
     // is the tab it was exported from.
     if (looksLikeConfig(file.name)) {
@@ -1491,7 +1600,21 @@ export class Session {
     // A metacool carries no annotations (§8.5) and has no assembly to replace,
     // so there is nothing a dropped track could join.
     if (held === null) return
-    held.loader.addFiles([file])
+    held.loader.addFiles([file], placement)
+  }
+
+  /**
+   * Open a map named by URL, from the Contact map card.
+   *
+   * The same call the picker's own URL box makes, and it has to be: a remote
+   * `.mcool` addressed here must land on the same entry, with the same config
+   * handling, as one addressed from the landing page. `splitUri` is what keeps
+   * an `::/resolutions/1000` suffix out of the fetch while leaving it in the URI
+   * the view state records.
+   */
+  private openRemoteMap(url: string): void {
+    const { path } = splitUri(url)
+    void this.openWithConfig(url, { kind: 'remote', url: path })
   }
 
   /**
@@ -1533,6 +1656,7 @@ export class Session {
           (locus) => this.goToLocus(locus),
           this.selectionFor(this.assembly),
           (file) => this.dropped(file),
+          (url) => this.openRemoteMap(url),
         ),
       ])
       const state = this.store.state
@@ -1601,6 +1725,7 @@ export class Session {
         (locus) => this.goToLocus(locus),
         this.selectionFor(assembly),
         (file) => this.dropped(file),
+        (url) => this.openRemoteMap(url),
       ),
     ])
     }
@@ -2040,6 +2165,17 @@ export class Session {
           manual: held.manual,
           client: held.client,
           contigLength: held.contigLength,
+          // Dropped on the map itself, on the edge the reader aimed at. A
+          // `.cool` still opens as a map and a `chrom.sizes` still replaces the
+          // lengths — `dropped` decides that by name, exactly as it does for a
+          // file dropped anywhere else — so the edge is carried through it
+          // rather than around it, and only reaches the loader for the files
+          // that actually become tracks.
+          loadOnEdge: (files, edge) => {
+            for (const file of files) {
+              this.dropped(file, { bottom: edge === 'bottom', right: edge === 'right' })
+            }
+          },
         }
   }
 
@@ -2384,6 +2520,7 @@ export class Session {
     const density = file.genomes.density[row]
     return {
       heading,
+      icon: 'dna',
       name,
       fields: recordFields(payload, row, {
         extra:
@@ -2428,6 +2565,7 @@ export class Session {
     const genome = id === undefined ? undefined : file.genomeNames[id]
     return {
       heading,
+      icon: 'list',
       name,
       fields: recordFields(payload, row, {
         // The raw index goes only when there is a name to put in its place, and
@@ -2779,6 +2917,7 @@ export class Session {
           edgeListUrl: new URLSearchParams(window.location.search).get('edges') ?? undefined,
           level,
           scale: this.scaleOf(state),
+          genomeNames: file.displayNames,
           onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
@@ -2823,6 +2962,7 @@ export class Session {
       sideEl: view.sideEl,
       panel: view.panel,
       applyScale: (scale) => view.applyScale(scale),
+      focusSearch: () => view.focusSearch(),
     })
   }
 
@@ -2853,6 +2993,8 @@ export class Session {
       panel?: MatrixPanel
       /** For a view that owns a canvas but not a {@link MatrixPanel}. */
       remeasure?(): void
+      /** The box `/` puts the caret in, for a view that has one. */
+      focusSearch?(): void
     },
   ): void {
     this.current?.destroy?.()

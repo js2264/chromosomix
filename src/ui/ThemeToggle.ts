@@ -13,6 +13,7 @@
  */
 
 import { el } from './dom'
+import { KEYS, withKey } from './commands'
 import { icon, type IconName } from './icons'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -89,6 +90,6 @@ export class ThemeToggle {
 
   private paint(): void {
     this.el.replaceChildren(icon(ICON[this.choice]))
-    this.el.title = `Theme: ${this.choice}. Click for ${this.next()}.`
+    this.el.title = withKey(`Theme: ${this.choice}. Click for ${this.next()}`, KEYS.theme)
   }
 }

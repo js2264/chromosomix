@@ -11,6 +11,92 @@
  * renders.
  */
 
+import { el } from './dom'
+
+/**
+ * Every key a *view* answers, in one object.
+ *
+ * The registry below is built fresh on demand from state the shell and the
+ * session hold, so it cannot be read by the buttons that perform the same
+ * actions — and a button's tooltip is where a reader actually discovers a key,
+ * being what they are already pointing at when the thought "is there a faster
+ * way to do this" arrives. This is the shared half: the command list binds
+ * these, the tooltips name these, and a rebinding is one edit.
+ *
+ * The three panel folds are not here. Their keys live on the {@link
+ * SidePanelSpec}s, next to the columns' names and widths, and each is already
+ * printed beside its own heading.
+ */
+export const KEYS = {
+  palette: 'mod+p',
+  newSession: 'o',
+  saveSession: 'mod+s',
+  closeSession: 'mod+w',
+  nextSession: 'mod+]',
+  prevSession: 'mod+[',
+  theme: 't',
+  shortcuts: 'mod+/',
+  /**
+   * The one box every view has, whatever it is called there.
+   *
+   * The browser's is a locus bar *and* a search field, and it used to answer to
+   * `l` as well — which was also the labels overlay, so in a browser session one
+   * of the two silently lost. One box, one key.
+   */
+  find: '/',
+  genomes: 'g',
+  contigs: 'c',
+  whole: 'w',
+  previous: '[',
+  next: ']',
+  /** Every track the same height, and that height the one that fills the space. */
+  stretch: 's',
+  /** Every value axis back to what is in view. */
+  autoscale: 'y',
+} as const
+
+/** `'Autoscale every track'` + `'y'` → `'Autoscale every track (Y)'`. */
+export function withKey(text: string, keys: string): string {
+  return `${text} (${keyLabel(keys)})`
+}
+
+/**
+ * The key as a `<kbd>`, for a control with room to print it.
+ *
+ * A tooltip is discovered by hovering, which means it is discovered by someone
+ * who already suspects there is something to discover. A badge on the button is
+ * read by everyone who looks at the button.
+ */
+export function keyBadge(keys: string, options: { class?: string } = {}): HTMLElement {
+  return el('kbd', {
+    class: options.class === undefined ? 'kbd' : `kbd ${options.class}`,
+    text: keyLabel(keys),
+  })
+}
+
+/**
+ * A text button that wears its key after the label.
+ *
+ * The same shape as {@link button}, and separate from it because the badge is
+ * a child rather than part of the text: `whole genome → W` as a string would be
+ * a word, and would be read as one.
+ */
+export function keyedButton(
+  label: string,
+  keys: string,
+  onClick: () => void,
+  options: { class?: string; title?: string } = {},
+): HTMLButtonElement {
+  const node = el('button', {
+    class: options.class ?? 'btn',
+    type: 'button',
+    title: options.title ?? withKey(label, keys),
+  })
+  node.append(el('span', { text: label }), keyBadge(keys, { class: 'kbd-inline' }))
+  node.addEventListener('click', onClick)
+  return node
+}
+
 export interface Command {
   id: string
   title: string

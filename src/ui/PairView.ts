@@ -19,7 +19,9 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { button, el, field, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
+import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion } from './MatrixPanel'
+import { SearchBox } from './SearchBox'
 
 export interface PairViewProps {
   client: ReaderClient
@@ -63,12 +65,21 @@ export class PairView {
    */
   readonly panel: MatrixPanel
   private readonly summary: HTMLElement
+  /** Where a contig is typed; the `/` key puts the caret here. */
+  private readonly search: SearchBox
   private level: 'bin' | 'contig'
   private disposed = false
 
   constructor(private readonly props: PairViewProps) {
     this.level = props.level
     this.summary = el('p', { class: 'summary' })
+    this.search = new SearchBox({
+      placeholder: 'contig, or contig:start-end',
+      title: 'Open one contig of either genome, or a range within it.',
+      onSubmit: (text) => {
+        if (text !== '') props.onOpenContig(text)
+      },
+    })
 
     const rowSelect = this.genomeSelect(props.rowGenome, (value) =>
       props.onChangeGenomes(value, props.colGenome),
@@ -121,6 +132,7 @@ export class PairView {
           'div',
           { class: 'title-bar' },
           el('h2', { text: `${props.rowGenome} × ${props.colGenome}` }),
+          this.search.el,
         ),
         this.summary,
       ),
@@ -135,7 +147,7 @@ export class PairView {
       el(
         'section',
         { class: 'card' },
-        el('h3', { text: 'Pair' }),
+        cardTitle('Pair', 'columns-2'),
         el(
           'div',
           { class: 'pair-controls' },
@@ -162,6 +174,11 @@ export class PairView {
    */
   applyScale(scale: ScaleState): void {
     this.panel.applyScale(scale)
+  }
+
+  /** The `/` key. */
+  focusSearch(): void {
+    this.search.focus()
   }
 
   destroy(): void {

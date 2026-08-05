@@ -10,7 +10,14 @@
 
 import type { AnnotationStore } from './store'
 import { defaultStyle } from './types'
-import type { AnnotationCard, AnnotationEntry, AnnotationKind, AnnotationSource, StoredEntry } from './types'
+import type {
+  AnnotationCard,
+  AnnotationEntry,
+  AnnotationKind,
+  AnnotationSource,
+  Placement,
+  StoredEntry,
+} from './types'
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
 
@@ -41,16 +48,21 @@ export class AnnotationLoader {
   /**
    * Load one or more files, whatever they are.
    *
-   * No zone and no card: the reader drops a file on the tracks, and where it is
-   * drawn — a lane beside the map, or a mark on it — is a property of the
-   * *format*, which only the bytes can settle (§8.3). Asking a reader to route
-   * a file into one of five rectangles was asking them to know the answer to a
+   * No zone and no card: the reader drops a file on the tracks, and *what it
+   * is* — a lane beside the map, or a mark on it — is a property of the format,
+   * which only the bytes can settle (§8.3). Asking a reader to route a file
+   * into one of five rectangles was asking them to know the answer to a
    * question the application is about to answer anyway, and to be told off when
    * they guessed wrong.
+   *
+   * @param placement Which of the map's two edges a lane is drawn on, when the
+   * drop said so. Not the same kind of claim: it does not decide what the file
+   * is, only where a track ends up if that is what it turns out to be, and a
+   * file dropped anywhere else omits it and takes the default.
    */
-  addFiles(files: readonly File[]): void {
+  addFiles(files: readonly File[], placement?: Placement): void {
     for (const file of files) {
-      this.begin({ kind: 'local', file, name: file.name })
+      this.begin({ kind: 'local', file, name: file.name }, undefined, undefined, placement)
     }
   }
 
@@ -142,16 +154,24 @@ export class AnnotationLoader {
     })
   }
 
+  /**
+   * @param placement Which lane stack this row is drawn in, when the caller
+   * knows — a file dropped on one edge of the map. Left out everywhere else, so
+   * the store's own default decides, and always overruled by a *stored*
+   * placement: a restored row goes back where the reader put it.
+   */
   private begin(
     source: AnnotationSource,
     label?: string,
     stored?: StoredEntry,
+    placement?: Placement,
   ): AnnotationEntry {
     const guess = guessOf(source.name)
     const entry = this.store.begin({
       card: stored?.card ?? guess.card,
       kind: stored?.kind ?? guess.kind,
       source,
+      ...(placement === undefined ? {} : { placement }),
       ...(stored === undefined ? {} : { id: stored.id, placement: stored.placement, style: stored.style }),
       ...(label === undefined ? {} : { label }),
     })

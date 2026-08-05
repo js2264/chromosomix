@@ -20,6 +20,7 @@
 
 import { payloadColumnIsText, type GenomesResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
+import { KEYS, keyedButton, withKey } from './commands'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 /** Columns the format guarantees, in the order they are shown. */
@@ -101,9 +102,8 @@ export class GenomesTable {
     this.table.addToolbarItem(none)
     this.table.addToolbarItem(show)
     this.table.addToolbarItem(
-      button('whole genome →', () => options.onOpenWhole(), {
-        class: 'btn',
-        title: 'Every genome at once, as one map',
+      keyedButton('whole genome →', KEYS.whole, () => options.onOpenWhole(), {
+        title: withKey('Every genome at once, as one map', KEYS.whole),
       }),
     )
 
@@ -126,7 +126,11 @@ export class GenomesTable {
     )
   }
 
-  /** Drop the current two-genome selection. */
+  /** The `/` key: a table's box is the filter above it. */
+  focusSearch(): void {
+    this.table.focusSearch()
+  }
+
   /** Release the table's listeners and flush its pending filter state. */
   destroy(): void {
     this.table.destroy()

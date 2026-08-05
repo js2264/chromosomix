@@ -24,6 +24,11 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['← ↑ → ↓', 'Pan by a tenth of the view (half a view with Shift)'],
   ['+ / −', 'Zoom about the centre'],
   ['0 or Home', 'Fit the block to the canvas'],
+  // The lanes are part of this picture, and their gestures are the browser's
+  // rather than the canvas's — which is exactly the kind of thing that is
+  // undiscoverable unless it is written down beside the map it is on.
+  ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
+  ['drop a file below or right of the map', 'Load it as a track on that edge'],
 ]
 
 /**
@@ -46,6 +51,7 @@ const BROWSER_KEYS: Array<[string, string]> = [
   ['click a chromosome’s name', 'Go to that chromosome'],
   ['click a feature', 'Zoom to it'],
   ['click a track’s range', 'Type a limit'],
+  ['drop a file on the tracks', 'Load it — a .cool opens the map on this genome'],
   ['← →', 'Pan by a fifth of the window'],
   ['+ / −', 'Zoom about the centre'],
   ['0', 'The whole genome'],
@@ -73,28 +79,43 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
         list.push(command)
         groups.set(command.group, list)
       }
+      // Two blocks, not one flow. The keys are short rows and pack into as many
+      // columns as the dialog is wide; the two gesture tables are the long ones
+      // and are the pair a reader compares — "what does a drag do here, and what
+      // does it do there" — so they are placed side by side rather than left to
+      // fall wherever the group count happens to put them. They used to be
+      // wherever auto-placement dropped them, which meant adding or removing one
+      // command group somewhere else in the app silently reflowed this dialog.
       return el(
         'div',
         { class: 'shortcut-body' },
-        ...[...groups].map(([group, list]) =>
-          el(
-            'section',
-            { class: 'shortcut-group' },
-            el('h3', { text: group }),
-            ...list.map((command) => keyRow(keyLabel(command.keys ?? ''), command.title)),
+        el(
+          'div',
+          { class: 'shortcut-grid' },
+          ...[...groups].map(([group, list]) =>
+            el(
+              'section',
+              { class: 'shortcut-group' },
+              el('h3', { text: group }),
+              ...list.map((command) => keyRow(keyLabel(command.keys ?? ''), command.title)),
+            ),
           ),
         ),
         el(
-          'section',
-          { class: 'shortcut-group' },
-          el('h3', { text: 'On a contact map' }),
-          ...CANVAS_KEYS.map(([keys, text]) => keyRow(keys, text)),
-        ),
-        el(
-          'section',
-          { class: 'shortcut-group' },
-          el('h3', { text: 'On the genome browser' }),
-          ...BROWSER_KEYS.map(([keys, text]) => keyRow(keys, text)),
+          'div',
+          { class: 'shortcut-grid shortcut-gestures' },
+          el(
+            'section',
+            { class: 'shortcut-group' },
+            el('h3', { text: 'On a contact map' }),
+            ...CANVAS_KEYS.map(([keys, text]) => keyRow(keys, text)),
+          ),
+          el(
+            'section',
+            { class: 'shortcut-group' },
+            el('h3', { text: 'On the genome browser' }),
+            ...BROWSER_KEYS.map(([keys, text]) => keyRow(keys, text)),
+          ),
         ),
       )
     },

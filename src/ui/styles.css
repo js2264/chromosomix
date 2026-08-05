@@ -254,6 +254,48 @@ p {
   white-space: nowrap;
 }
 
+/* A key printed *inside* a button, after its label. Quieter than a standing
+   badge — it is a footnote to the word, not a second control — and it must not
+   change the button's height, which the 2px bottom border otherwise would. */
+.kbd-inline {
+  margin-left: 0.4rem;
+  border-bottom-width: 1px;
+  opacity: 0.75;
+  font-size: 0.68rem;
+}
+
+/* The one box a view is typed into, with its key sitting at the right-hand end
+   of it. See `ui/SearchBox.ts` for why the badge is in the box. */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 18rem;
+  min-width: 8rem;
+}
+
+.search-box > .input {
+  width: 100%;
+  /* Room for the badge, so a long placeholder is elided before it rather than
+     underneath it. */
+  padding-right: 2.1rem;
+}
+
+.search-key {
+  position: absolute;
+  right: 0.4rem;
+  /* The box takes the click: a badge that swallowed one would be a target that
+     looks like a button and is not. */
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Gone the moment the caret arrives. From then on the reader is typing, and the
+   key they used to get here is the least interesting thing in the box. */
+.search-box:focus-within > .search-key {
+  display: none;
+}
+
 @media (max-width: 60rem) {
   .app-head {
     grid-template-columns: 1fr auto;
@@ -670,33 +712,11 @@ p {
   gap: 0.6rem;
 }
 
-/* A drop target inside a card rather than on a landing page: a third of the
-   height, and no room for a second line of explanation it does not need. */
-.dropzone-small {
-  padding: 0.7rem 0.6rem;
-  min-height: 0;
-}
-
-.dropzone-small .dropzone-title {
-  font-size: var(--step--1);
-  font-weight: 600;
-}
-
-.dropzone-small .dropzone-sub {
-  font-size: var(--step--2);
-}
-
-.compare-url summary {
-  cursor: pointer;
-  font-size: var(--step--1);
-  color: var(--text-dim);
-  margin-top: 0.4rem;
-}
-
-.compare-url .input-url {
-  width: 100%;
-  margin-top: 0.3rem;
-}
+/* No `.dropzone-small` and no `.compare-url` any more. A card that asks for a
+   file now wears the Tracks card's load zone — `.ann-drop` and `.ann-url`,
+   below — whichever card it is: the second map, the map under a browser's
+   tracks, and the tracks themselves are one gesture asked three times, and
+   three shaded variations of it in one column read as three applications. */
 
 .compare-line {
   font-size: var(--step--1);
@@ -1234,25 +1254,24 @@ p {
 
 /* --- status bar -------------------------------------------------------- */
 
-/* The standing privacy disclosure. Quiet — it is a statement of fact, not a
-   notice — but it never leaves: the picker's dismissable reminder promises in
-   its tooltip that the footer keeps the same statement, and until this existed
-   that promise was not kept. It shrinks before the coordinate readout does,
-   and is the last thing to be hidden. */
-.status-privacy {
-  color: var(--text-faint);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
 /* Coordinates on the left, instruments on the right: one changes with every
-   pointer move and is read continuously, the two others are glanced at. */
+   pointer move and is read continuously, the two others are glanced at.
+
+   And this is the item that gives way. It is the only one here whose length is
+   the reader's rather than the app's — one value per track under the pointer,
+   so twelve tracks is a line of text — and the only one that is re-said a
+   moment later, on the next pointer move. `min-width: 0` is what lets a flex
+   item shrink under its content at all; without it the readout pushed the
+   instruments along the bar until they wrapped, and the bar grew a second line
+   for as long as the pointer was over the tracks. */
 .status-coords {
   font-family: var(--mono);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .status-right {
@@ -1268,6 +1287,21 @@ p {
   color: var(--text-faint);
   font-size: var(--step--1);
   background: var(--bg-raised);
+  /* One line, at the height one line of this size is, whatever is in it. The
+     bar is the bottom edge every view is measured against — `.heatmap-wrap`
+     and the table both size themselves off the space it leaves — so a bar that
+     grows takes a row of pixels off the picture, and it grew exactly when the
+     pointer was over a stack of tracks, which is when the reader is least
+     interested in the bar. */
+  flex-wrap: nowrap;
+}
+
+/* Nothing in an instrument wraps: an item squeezed by a long readout gets
+   narrower than its text and is elided by the bar's own layout, rather than
+   folding its value onto a second line and taking the whole bar with it. */
+.app-foot .status-item {
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 /* Each item is one line that grows a panel on hover: a status bar should cost
@@ -1557,6 +1591,8 @@ p {
   background: none;
 }
 
+/* The word on the left, the key that reaches it on the right — the layout a
+   menu has everywhere else, and the reason this menu is worth reading twice. */
 .crumb-menu-item {
   font: inherit;
   font-size: var(--step--1);
@@ -1567,6 +1603,11 @@ p {
   padding: 0.3rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  width: 100%;
 }
 
 .crumb-menu-item:hover {
@@ -1998,6 +2039,67 @@ p {
 /* An edge with no annotations takes no space and receives no events. */
 .lane-canvas.hidden {
   display: none;
+}
+
+/* The two rectangles a file becomes a track by being dropped on: under the map
+   for the horizontal stack, beside it for the vertical one.
+
+   Laid over the grid rather than given tracks in it, because they must exist
+   before there is a lane stack to make room for them — the first track is
+   dropped on a map with no lanes at all — and because a zone that took a grid
+   track would move the map every time a file was dragged past the window.
+
+   Inert and invisible until `is-dropping`, which `MatrixPanel.watchEdgeDrops`
+   sets while a drag carrying files is over the panel. The map's own gestures
+   live in the same pixels. */
+.lane-drop {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-raised) 82%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease, border-color 90ms ease, background 90ms ease;
+}
+
+.panel-grid.is-dropping > .lane-drop {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lane-drop.over {
+  border-color: var(--accent, #1f5fa9);
+  border-style: solid;
+  background: color-mix(in srgb, var(--accent, #1f5fa9) 12%, var(--bg-raised));
+}
+
+/* A quarter of the height along the bottom, a fifth of the width down the
+   right, and no overlap between them: a drop in the corner has to mean one
+   thing. */
+.lane-drop-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+}
+
+.lane-drop-right {
+  top: 0;
+  bottom: 25%;
+  right: 0;
+  width: 20%;
+}
+
+.lane-drop-label {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 0 0.4rem;
 }
 
 /* No chrome of its own: no border, no radius, no fill, no padding. The frame
@@ -2488,9 +2590,24 @@ p {
 .shortcut-body {
   overflow: auto;
   padding: 0.75rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.shortcut-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 0.4rem 1.5rem;
+}
+
+/* The two gesture tables are a pair and are read as one: what a drag, a wheel
+   and a double click do on the map, against what they do on the tracks. A wider
+   floor than the key groups above, because these rows are sentences — below
+   about 18rem they wrap and the comparison stops lining up — and `auto-fit`
+   still collapses them to one column on a phone. */
+.shortcut-gestures {
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
 }
 
 .shortcut-group h3 {
@@ -2556,6 +2673,14 @@ p {
 
 .title-bar h2 {
   margin: 0;
+}
+
+/* In a view's heading the box goes to the right-hand end of the line: what you
+   are looking at leads, and the way to look at something else is where the eye
+   finishes. It takes the buttons that belong to it — `go`, `← back` — along
+   with it, because they are the same control. */
+.title-bar > .search-box {
+  margin-left: auto;
 }
 
 .stepper {
@@ -3614,15 +3739,6 @@ p {
     display: none;
   }
 
-  /* The disclosure stays on a phone, abbreviated rather than dropped: it is the
-     one thing in this bar that is a promise rather than an instrument. */
-  .status-privacy {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-    flex: 0 1 auto;
-  }
-
   /* Still anchored to its item's right edge — both items sit at the right end
      of the bar, so that is the edge that keeps the panel on screen. Only the
      20rem floor has to go, since 20rem is most of a phone. */
@@ -3665,7 +3781,12 @@ p {
 }
 
 .ann-drop:hover,
-.ann-drop:focus-visible {
+.ann-drop:focus-visible,
+/* A file is being dragged over this particular zone. The Compare card and the
+   browser's Contact map card take their own drops — the Tracks card lets the
+   card around it take them and needs no state of its own — and both mark the
+   zone rather than the card, because the zone is what the pointer is on. */
+.ann-drop.over {
   border-color: var(--accent, #1f5fa9);
   background: var(--bg-sunken);
 }

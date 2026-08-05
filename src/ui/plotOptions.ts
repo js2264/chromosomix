@@ -118,6 +118,27 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   },
 }
 
+/**
+ * The key that toggles each overlay.
+ *
+ * Here rather than in the command list, beside the label and the mark, because
+ * three surfaces need it and only one of them is the command list: the two Plot
+ * cards print it in the toggle's tooltip, which is where anybody actually finds
+ * a shortcut, and `App.commands` binds it. Written twice, they drift, and the
+ * one that drifts is always the tooltip — nothing fails when it is wrong.
+ */
+export const PLOT_OPTION_KEYS: Record<PlotOptionKey, string> = {
+  text: 'n',
+  fills: 'f',
+  baseline: 'r',
+  gutter: 'u',
+  crosshair: 'x',
+  dividers: 'd',
+  breaks: 'e',
+  labels: 'l',
+  ticks: 'k',
+}
+
 let current: PlotOptions | null = null
 const listeners = new Set<(options: PlotOptions) => void>()
 

@@ -6,8 +6,14 @@
  * (spec §12) and a health indicator (§6.3), so they belong where a status bar
  * belongs: one line, always visible, expanding only when asked.
  *
- * The privacy statement stays here permanently, because the dismissable notice
- * on the picker is a *reminder* and this is the standing disclosure.
+ * One line is the constraint every value here is written to, and it is a
+ * constraint about the *plot*: the bar is the bottom edge of the window the map
+ * is measured against, so a second line of status is a row of pixels taken off
+ * every view — and it appeared exactly when the reader hovered a stack of
+ * tracks, because that is when the coordinate readout is longest. So each item
+ * shows the shortest true form of its number and keeps the rest in the panel it
+ * already opens on hover, and the readout is the one thing allowed to be
+ * elided, because it is also the one thing that is re-said a moment later.
  */
 
 import { icon } from './icons'
@@ -104,18 +110,13 @@ export class StatusBar {
     this.el = el(
       'footer',
       { class: 'app-foot' },
-      // The standing disclosure, and it was missing. This module's own doc has
-      // asserted since it was written that "the privacy statement stays here
-      // permanently", and the picker's dismiss button promises in a tooltip
-      // that "the footer keeps the same statement" -- while this element
-      // rendered no such thing. So dismissing the notice made the claim
-      // disappear from the application entirely, in the shipping web build,
-      // which is the one place a privacy claim must not be a paraphrase of
-      // something that used to be there.
-      //
-      // First child, so it reads before the instruments and survives the bar
-      // being crowded from the right.
-      el('span', { class: 'status-privacy', text: 'read in place · nothing is sent' }),
+      // No standing privacy line here any more. It said "read in place · nothing
+      // is sent" on every screen of every session, which is a sentence a reader
+      // finishes reading once and then has permanently in the corner of a bar
+      // whose other three items are numbers that change. The claim itself is not
+      // gone — the picker makes it where a file is about to be opened, and the
+      // About dialog states it in full — and this is the one surface where it
+      // was competing with the instruments for a line that has to stay one line.
       this.coordinates,
       el(
         'div',
@@ -170,20 +171,25 @@ export class StatusBar {
         memory.ceiling === null || memory.ceiling <= 0
           ? null
           : memory.used / memory.ceiling
-      this.memoryValue.textContent =
-        share === null
-          ? fmt.bytes(memory.used)
-          : // A decimal below a tenth, because the honest answer usually is a
-            // fraction of a percent — a tab is small against the memory a
-            // machine has — and `0%` for everything under half of one reads as a
-            // figure that never arrived rather than as a small one.
-            `${fmt.bytes(memory.used)} · ${fmt.pct(share, share < 0.1 ? 1 : 0)}`
+      // Bytes on the bar and the share in the panel. The two together are the
+      // widest item here, and the share is the half nobody is watching: what a
+      // reader glances at this for is whether the tab is holding 200 MB or 6 GB,
+      // and against what it is a share of — the ceiling, the device — is a
+      // question they ask once, in the panel, where the answer already is.
+      this.memoryValue.textContent = fmt.bytes(memory.used)
       this.memoryDetail.replaceChildren(
         el(
           'div',
           { class: 'kv' },
           ...keyValue(memory.scope === 'tab' ? 'this tab' : 'JavaScript heap', fmt.bytes(memory.used)),
           ...(memory.ceiling === null ? [] : keyValue(memory.ceilingLabel, fmt.bytes(memory.ceiling))),
+          // A decimal below a tenth, because the honest answer usually is a
+          // fraction of a percent — a tab is small against the memory a machine
+          // has — and `0%` for everything under half of one reads as a figure
+          // that never arrived rather than as a small one.
+          ...(share === null
+            ? []
+            : keyValue('share of that', fmt.pct(share, share < 0.1 ? 1 : 0))),
           ...(device === null ? [] : keyValue('device memory, as reported', fmt.bytes(device))),
         ),
         el('p', { class: 'hint', text: MEMORY_NOTE[memory.scope] }),
@@ -258,9 +264,13 @@ export class StatusBar {
   }
 
   private renderStats(stats: StatsResult): void {
-    this.readsSummary.textContent =
-      `${fmt.bytes(stats.total.bytes)} in ${fmt.int(stats.total.requests)} ` +
-      `request${stats.total.requests === 1 ? '' : 's'}`
+    // Bytes alone. The request count is the more interesting number to whoever
+    // is tuning the reader and the less interesting one to everybody else, and
+    // spelling it out on the bar cost a phrase — "589.0 MB in 589 requests" —
+    // wide enough to wrap the item onto a second line. It is the first row of
+    // the panel this item opens on hover, which is where the other four
+    // counters have always been.
+    this.readsSummary.textContent = fmt.bytes(stats.total.bytes)
     this.readsDetail.replaceChildren(
       ...keyValue('requests, total', fmt.int(stats.total.requests)),
       ...keyValue('bytes, total', fmt.bytes(stats.total.bytes)),

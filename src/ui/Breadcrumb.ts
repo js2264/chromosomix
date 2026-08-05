@@ -18,6 +18,7 @@
  * single-genome table has nothing to show (§9), so `contigs` is the only choice.
  */
 
+import { KEYS, keyBadge, withKey } from './commands'
 import { icon } from './icons'
 import { selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
@@ -48,6 +49,20 @@ const ROOT_LABEL: Record<RootChoice, string> = {
   contigs: 'Contigs',
   overview: 'Whole genome',
   whole: 'Whole genome',
+}
+
+/**
+ * The key that reaches each landing view, for the tooltips on this crumb.
+ *
+ * The same three keys the command list binds, read from the same place: a
+ * reader who finds "Whole genome" here and presses W in the table next time is
+ * doing what this tooltip told them to.
+ */
+const ROOT_KEYS: Record<RootChoice, string> = {
+  genomes: KEYS.genomes,
+  contigs: KEYS.contigs,
+  overview: KEYS.whole,
+  whole: KEYS.whole,
 }
 
 export interface BreadcrumbProps {
@@ -220,7 +235,7 @@ export class Breadcrumb {
       class: `crumb${atRoot ? ' current' : ''}`,
       type: 'button',
       text: labelOf(active),
-      title: `Back to ${labelOf(active)}`,
+      title: withKey(`Back to ${labelOf(active)}`, ROOT_KEYS[active]),
     })
     label.addEventListener('click', () =>
       this.props.onNavigate({ uri: state.uri, view: active }),
@@ -246,8 +261,12 @@ export class Breadcrumb {
         class: `crumb-menu-item${kind === active ? ' current' : ''}${why === undefined ? '' : ' disabled'}`,
         type: 'button',
         text: labelOf(kind),
-        ...(why === undefined ? {} : { title: why }),
+        title: why ?? withKey(`Go to ${labelOf(kind)}`, ROOT_KEYS[kind]),
       })
+      // The key beside the word, for the entries that can be reached by one.
+      // The disabled entry says why it is disabled instead: a shortcut printed
+      // next to something that cannot be done is a shortcut that does nothing.
+      if (why === undefined) item.appendChild(keyBadge(ROOT_KEYS[kind], { class: 'kbd-inline' }))
       if (why !== undefined) {
         item.disabled = true
       } else {

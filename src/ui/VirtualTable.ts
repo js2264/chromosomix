@@ -130,6 +130,8 @@ export class VirtualTable {
   private readonly filterRow: HTMLElement
   private readonly status: HTMLElement
   private readonly toolbar: HTMLElement
+  /** The filter field, so `/` can reach it — see {@link focusSearch}. */
+  private readonly searchBox: HTMLInputElement
 
   constructor(options: VirtualTableOptions) {
     this.options = { rowHeight: 28, ...options }
@@ -158,6 +160,7 @@ export class VirtualTable {
       type: 'search',
       placeholder: options.searchPlaceholder ?? 'search names…',
     })
+    this.searchBox = searchBox
     searchBox.value = this.search
     searchBox.addEventListener(
       'input',
@@ -238,6 +241,18 @@ export class VirtualTable {
       this.persistTimer = undefined
       this.persist()
     }
+  }
+
+  /**
+   * Put the caret in the filter field — the `/` key.
+   *
+   * A table's box is a filter rather than a place to type a coordinate, but it
+   * is the same gesture and the same question: *where is the thing I am after*.
+   * One key for both is what makes it worth having.
+   */
+  focusSearch(): void {
+    this.searchBox.focus()
+    this.searchBox.select()
   }
 
   /** Extra controls placed in the toolbar by the owning view. */

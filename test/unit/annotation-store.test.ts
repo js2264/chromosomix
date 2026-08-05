@@ -50,22 +50,32 @@ describe('the annotation store', () => {
   })
 
   // One edge and not both: two copies of one track is twice the ink for no more
-  // information. The *right* edge, because the bottom already carries the
-  // coordinate axis, the block labels and the colourbar caption, and a stack of
-  // tracks there pushes the map up the page.
-  it('starts on the right edge only', () => {
+  // information. The *bottom* edge, because that is the orientation a track is
+  // read in — under a ruler, left to right — and the right-hand stack is the
+  // one you choose deliberately, per track or by dropping a file there.
+  it('starts on the bottom edge only', () => {
     const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
+    expect(entry.placement).toEqual({ bottom: true, right: false })
+    expect(store.drawnOn('right')).toHaveLength(0)
+  })
+
+  it('honours a placement the caller asks for', () => {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: localSource,
+      placement: { bottom: false, right: true },
+    })
     expect(entry.placement).toEqual({ bottom: false, right: true })
-    expect(store.drawnOn('bottom')).toHaveLength(0)
   })
 
   it('draws nothing that has not finished loading', () => {
     const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
-    expect(store.drawnOn('right')).toHaveLength(0)
+    expect(store.drawnOn('bottom')).toHaveLength(0)
     store.update(entry.id, { status: 'ready' })
-    expect(store.drawnOn('right')).toHaveLength(1)
+    expect(store.drawnOn('bottom')).toHaveLength(1)
     store.update(entry.id, { visible: false })
-    expect(store.drawnOn('right')).toHaveLength(0)
+    expect(store.drawnOn('bottom')).toHaveLength(0)
   })
 
   // Removing the third of four and dropping a replacement should give the

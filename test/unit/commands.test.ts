@@ -10,7 +10,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { scoreCommand } from '@/ui/CommandPalette'
-import { keyLabel, matchesKeys } from '@/ui/commands'
+import { KEYS, keyLabel, matchesKeys } from '@/ui/commands'
+import { PLOT_OPTION_KEYS } from '@/ui/plotOptions'
+import { AESTHETICS_PANEL, ANNOTATION_PANEL, GENERAL_PANEL } from '@/ui/SidePanel'
 import { contigOf, neighbour } from '@/ui/labels'
 import type { Command } from '@/ui/commands'
 
@@ -152,6 +154,58 @@ describe('keyLabel', () => {
         expect(keyLabel(keys)).not.toContain('++')
         expect(keyLabel(keys).endsWith('+')).toBe(false)
       }
+    }
+  })
+})
+
+/**
+ * The two key tables, checked against each other.
+ *
+ * Every binding in this app now comes from one of exactly two objects — `KEYS`
+ * for the actions, `PLOT_OPTION_KEYS` for the overlays — precisely so that the
+ * buttons can print what the key handler will do. That only holds while the two
+ * agree, and the failure mode when they do not is silent: two commands claim
+ * one letter, the key handler runs whichever it reaches first, and the other
+ * button's tooltip promises something that never happens. Both were rebound in
+ * the same change that added the tooltips (`s` from autoscale to stretch, `y`
+ * to autoscale), which is exactly the kind of edit this catches.
+ */
+describe('the key tables', () => {
+  // The panel folds are the third source: their keys live on the column specs,
+  // beside the names and widths, and are printed beside each column's heading.
+  const bindings = [
+    ...Object.entries(KEYS),
+    ...Object.entries(PLOT_OPTION_KEYS),
+    ...[GENERAL_PANEL, ANNOTATION_PANEL, AESTHETICS_PANEL].map(
+      (spec) => [`${spec.title} panel`, spec.keys] as const,
+    ),
+  ]
+
+  it('binds each key to one action', () => {
+    const seen = new Map<string, string>()
+    for (const [name, keys] of bindings) {
+      const already = seen.get(keys)
+      expect(already, `${name} and ${String(already)} both claim ${keys}`).toBeUndefined()
+      seen.set(keys, name)
+    }
+  })
+
+  it('has a label for every binding, with no stray separator', () => {
+    for (const [, keys] of bindings) {
+      expect(keys).not.toBe('')
+      expect(keyLabel(keys)).not.toContain('++')
+      expect(keyLabel(keys).endsWith('+')).toBe(false)
+    }
+  })
+
+  // A bare letter typed into a filter box has to reach the box. The guard for
+  // that is `isTypingTarget`, and it is only consulted for bindings without a
+  // modifier — so a *chord* is the only kind of binding that may also be a
+  // character somebody types. Nothing here should be a bare digit, either: the
+  // canvas answers 0 itself, from its own handler.
+  it('leaves the digits to the canvas', () => {
+    for (const [name, keys] of bindings) {
+      expect(/^\d$/.test(keys), `${name} claims a digit`).toBe(false)
     }
   })
 })

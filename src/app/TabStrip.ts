@@ -13,6 +13,7 @@
  */
 
 import { button, el } from '../ui/dom'
+import { KEYS, withKey } from '../ui/commands'
 import { icon } from '../ui/icons'
 
 export interface TabSpec {
@@ -44,7 +45,7 @@ export class TabStrip {
   constructor(private readonly props: TabStripProps) {
     this.add = button('', () => this.props.onNew(), {
       class: 'btn btn-icon tab-new',
-      title: 'New session — another file, with its own tracks and settings',
+      title: withKey('New session — another file, with its own tracks and settings', KEYS.newSession),
     })
     this.add.replaceChildren(icon('plus', { size: 15 }))
     this.el = el('div', { class: 'tabstrip' }, this.list, this.add)
@@ -83,10 +84,12 @@ export class TabStrip {
 
     const close = button('', () => this.props.onClose(index), {
       class: 'btn btn-icon tab-close',
-      title:
+      title: withKey(
         total === 1
-          ? 'Empty this session. The last tab is not closed — there would be nothing to drop a file on.'
+          ? 'Empty this session. The last tab is not closed — there would be nothing to drop a file on'
           : 'Close this session, and put its worker down',
+        KEYS.closeSession,
+      ),
     })
     close.replaceChildren(icon('x', { size: 13 }))
 

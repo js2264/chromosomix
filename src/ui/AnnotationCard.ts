@@ -26,7 +26,7 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { button, el, fmt, trimNumber } from './dom'
-import { icon, iconButton } from './icons'
+import { cardTitle, icon, iconButton } from './icons'
 
 /**
  * The `<option>` value that means "not one of these" in the group picker.
@@ -92,7 +92,7 @@ export class AnnotationCard {
     this.el = el(
       'section',
       { class: 'card annotation-card' },
-      el('h3', { text: 'Tracks' }),
+      cardTitle('Tracks', 'chart-area'),
       // Where a file goes in, above the list of what is already in. What was
       // here instead was five labelled rectangles — one per format — which
       // between them asked the reader to know, before dropping, an answer the

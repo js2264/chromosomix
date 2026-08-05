@@ -13,7 +13,7 @@
  */
 
 import { button, el, fmt } from './dom'
-import { icon, iconButton } from './icons'
+import { cardTitle, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
 import { fileLabel } from './labels'
 
@@ -50,13 +50,21 @@ export class CompareCard {
   private state: CompareState = { kind: 'empty' }
 
   constructor(private readonly props: CompareCardProps) {
+    // The Tracks card's load zone, to the class: a thin unshaded box with a bold
+    // line and a quiet one under it, and the URL behind a fold below. The two
+    // cards ask the same thing — *put a file here* — and they sat one above the
+    // other in the same column looking like two different applications, one with
+    // a shaded panel and a centred title, one with a hairline rectangle.
     this.drop = el(
       'div',
-      { class: 'dropzone dropzone-small', attrs: { tabindex: '0', role: 'button' } },
-      el('div', { class: 'dropzone-title', text: 'Drop a second .cool or .mcool' }),
-      el('div', {
-        class: 'dropzone-sub',
-        text: 'or click to choose one',
+      { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
+      el('span', { class: 'ann-drop-label', text: 'Load a second map' }),
+      el('span', {
+        class: 'ann-drop-hint',
+        text:
+          'A cooler with the same chromosomes and the same bin size. Click to choose, or drop ' +
+          'one here — it fills the lower-left triangle, so the square stops being symmetric and ' +
+          'the two are read against each other in one picture.',
       }),
     )
     const fileInput = el('input', { class: 'hidden-input', type: 'file' })
@@ -81,25 +89,18 @@ export class CompareCard {
     })
 
     this.urlInput = el('input', {
-      class: 'input input-url',
+      class: 'input',
       type: 'url',
       placeholder: 'https://bucket.example.org/other.cool',
     })
     this.urlInput.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return
-      const url = this.urlInput.value.trim()
-      if (url !== '') this.props.onOpen({ kind: 'remote', url })
+      if (event.key === 'Enter') this.openUrl()
     })
 
     this.el = el(
       'div',
       { class: 'card compare-card' },
-      el(
-        'h3',
-        { class: 'card-head' },
-        icon('git-compare', { size: 14 }),
-        el('span', { text: 'Compare' }),
-      ),
+      cardTitle('Compare', 'git-compare'),
       this.body,
       fileInput,
     )
@@ -111,20 +112,27 @@ export class CompareCard {
     this.render()
   }
 
+  private openUrl(): void {
+    const url = this.urlInput.value.trim()
+    if (url !== '') this.props.onOpen({ kind: 'remote', url })
+  }
+
   private render(): void {
     switch (this.state.kind) {
       case 'empty':
         this.body.replaceChildren(
-          el('p', {
-            class: 'hint',
-            text:
-              'A second map fills the lower-left triangle, so the square stops being symmetric ' +
-              'and the two are read against each other in one picture. It must be a cooler with ' +
-              'the same chromosomes and the same bin size — anything else would put one file’s ' +
-              'coordinates under another’s.',
-          }),
           this.drop,
-          el('details', { class: 'compare-url' }, el('summary', { text: 'or open one by URL' }), this.urlInput),
+          el(
+            'details',
+            { class: 'ann-url' },
+            el('summary', { text: 'or open one by URL' }),
+            el(
+              'div',
+              { class: 'ann-url-row' },
+              this.urlInput,
+              button('add', () => this.openUrl(), { class: 'btn' }),
+            ),
+          ),
         )
         return
       case 'loading':

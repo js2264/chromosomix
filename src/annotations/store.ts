@@ -159,11 +159,13 @@ export class AnnotationStore {
       status: 'loading',
       visible: true,
       // One edge and not both: two copies of one track is twice the ink for no
-      // more information. The **right** edge, because the bottom is where the
-      // coordinate axis, the block labels and the colourbar caption already are
-      // — a stack of tracks there pushes the map up the page and competes with
-      // the furniture, while the space beside it is empty in every view.
-      placement: options.placement ?? { bottom: false, right: true },
+      // more information. The **bottom** edge, because that is where a track is
+      // read: every genome browser ever built stacks them horizontally under a
+      // ruler, and a coverage profile turned on its side has to be read with
+      // your head tilted. The right edge is still there — the B and R boxes on
+      // the row move a track to either, and a file dropped on the right of the
+      // map lands there — it is simply not what "add a track" should mean.
+      placement: options.placement ?? { bottom: true, right: false },
       style: options.style ?? defaultStyle(options.kind, this.nextColour()),
     }
     this.items = [...this.items, entry]

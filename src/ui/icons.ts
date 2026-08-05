@@ -72,6 +72,32 @@ export function icon(name: IconName, options: { size?: number; class?: string } 
   return svg
 }
 
+/**
+ * A card's heading: one mark, then the word.
+ *
+ * Every card in the three panels carries one, and that is the point of it — a
+ * column of five headings set in the same small uppercase grey is read
+ * top-to-bottom every time you look for one of them, while five distinct marks
+ * are recognised at a glance and then used as the index. It is the same reason
+ * the tab strip has a favicon on it.
+ *
+ * 13 px, against a 12 px cap height: the mark is a label for the word, not a
+ * second thing beside it, and anything larger starts competing.
+ *
+ * @param extra Classes the heading needs *as well* — `controls-title` for the
+ * cards in the Aesthetics column, which are folded into the panel header in the
+ * inline layout and hide their titles there.
+ */
+export function cardTitle(text: string, name: IconName, extra?: string): HTMLElement {
+  const node = document.createElement('h3')
+  node.className = extra === undefined ? 'card-head' : `card-head ${extra}`
+  node.appendChild(icon(name, { size: 13 }))
+  const label = document.createElement('span')
+  label.textContent = text
+  node.appendChild(label)
+  return node
+}
+
 /** A button whose whole content is one icon. The title is the accessible name. */
 export function iconButton(
   name: IconName,

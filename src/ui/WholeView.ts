@@ -41,6 +41,7 @@ import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { MatrixPanel, axisRegion, poolingNote, type AnnotationContext } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { SearchBox } from './SearchBox'
 
 export interface WholeViewProps {
   client: ReaderClient
@@ -129,6 +130,8 @@ export class WholeView {
   readonly panel: MatrixPanel
   private readonly summary: HTMLElement
   private readonly problem: HTMLElement
+  /** Where a contig or a range is typed; the `/` key puts the caret here. */
+  private readonly search: SearchBox
   /** The ask-first screen, and the map it stands in front of. */
   private readonly gate: HTMLElement
   private readonly panelHost: HTMLElement
@@ -166,6 +169,13 @@ export class WholeView {
         : 1
     this.summary = el('p', { class: 'summary' })
     this.problem = el('p', { class: 'inline-error hidden' })
+    this.search = new SearchBox({
+      placeholder: `${props.noun}, or ${props.noun}:start-end`,
+      title: `Open one ${props.noun}, or a range within it. The same box the / key opens.`,
+      onSubmit: (text) => {
+        if (text !== '') props.onOpenRegion(text)
+      },
+    })
     this.gate = el('div', { class: 'gate hidden' })
     this.progressBar.max = 1
     this.progressBox = el(
@@ -230,7 +240,16 @@ export class WholeView {
       el(
         'header',
         { class: 'view-head' },
-        el('div', { class: 'title-bar' }, el('h2', { text: this.heading() })),
+        el(
+          'div',
+          { class: 'title-bar' },
+          el('h2', { text: this.heading() }),
+          // The box `/` reaches, and the only way to leave this picture by
+          // typing rather than by aiming: a whole-genome map of a mammal is
+          // three pixels per chromosome arm, so "go to MYC" is a question this
+          // view has to be able to answer without a click on a 3-pixel target.
+          this.search.el,
+        ),
         this.summary,
         this.problem,
       ),
@@ -257,6 +276,11 @@ export class WholeView {
    */
   applyScale(scale: ScaleState): void {
     this.panel.applyScale(scale)
+  }
+
+  /** The `/` key. */
+  focusSearch(): void {
+    this.search.focus()
   }
 
   destroy(): void {
