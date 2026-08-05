@@ -169,6 +169,24 @@ export function setPlotOption(key: PlotOptionKey, value: boolean): void {
   for (const listener of listeners) listener({ ...next })
 }
 
+/**
+ * Replace every option at once — what importing a session config does.
+ *
+ * Merged over the current values rather than assigned, so a config written by an
+ * older build, which knew nothing of an option added since, leaves that option
+ * alone instead of resetting it to `false` by omission.
+ */
+export function setPlotOptions(options: Partial<PlotOptions>): void {
+  const next = { ...getPlotOptions() }
+  for (const key of Object.keys(next) as PlotOptionKey[]) {
+    const value = options[key]
+    if (typeof value === 'boolean') next[key] = value
+  }
+  current = next
+  write(next)
+  for (const listener of listeners) listener({ ...next })
+}
+
 export function togglePlotOption(key: PlotOptionKey): boolean {
   const next = !getPlotOptions()[key]
   setPlotOption(key, next)

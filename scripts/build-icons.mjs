@@ -66,6 +66,7 @@ const LUCIDE = [
   'stretch-vertical',
   'download',
   'star',
+  'save',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

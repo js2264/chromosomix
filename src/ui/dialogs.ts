@@ -26,6 +26,31 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['0 or Home', 'Fit the block to the canvas'],
 ]
 
+/**
+ * `ui/BrowserView.ts` → `watchPointer` and `watchKeys`. Keep in step with them.
+ *
+ * The 1D browser's gestures are not the map's, and listing only the map's left
+ * every one of these undiscoverable: the drag that selects a span needs no
+ * modifier *on the ruler* and does need one over the tracks, which is exactly
+ * the kind of thing a reader finds by being told.
+ */
+const BROWSER_KEYS: Array<[string, string]> = [
+  ['drag', 'Pan along the genome'],
+  ['drag on the chromosome bar', 'Select a span, with both ends written out to the base'],
+  ['⌥ / Alt + drag', 'The same selection, over the tracks'],
+  ['drag a track’s lower edge', 'Make that track taller or shorter'],
+  ['drag a track up or down', 'Move it in the stack'],
+  ['double click', 'The whole genome'],
+  ['wheel', 'Zoom about the pointer'],
+  ['⌘ / Alt + wheel over a track', 'Raise or lower that track’s ceiling'],
+  ['click a chromosome’s name', 'Go to that chromosome'],
+  ['click a feature', 'Zoom to it'],
+  ['click a track’s range', 'Type a limit'],
+  ['← →', 'Pan by a fifth of the window'],
+  ['+ / −', 'Zoom about the centre'],
+  ['0', 'The whole genome'],
+]
+
 function keyRow(keys: string, description: string): HTMLElement {
   return el(
     'div',
@@ -62,8 +87,14 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
         el(
           'section',
           { class: 'shortcut-group' },
-          el('h3', { text: 'Heatmap' }),
+          el('h3', { text: 'On a contact map' }),
           ...CANVAS_KEYS.map(([keys, text]) => keyRow(keys, text)),
+        ),
+        el(
+          'section',
+          { class: 'shortcut-group' },
+          el('h3', { text: 'On the genome browser' }),
+          ...BROWSER_KEYS.map(([keys, text]) => keyRow(keys, text)),
         ),
       )
     },
