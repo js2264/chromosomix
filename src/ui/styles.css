@@ -1110,6 +1110,19 @@ p {
 /* The column's own heading. Quieter than a card's, because it names the column
    rather than anything in it — the cards under it carry the headings that say
    what each one takes. */
+/* The heading and the key that folds it. A shortcut written where the thing it
+   acts on is, rather than two gestures away in a dialog. */
+.panel-column-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.panel-column-key {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
 .panel-column-title {
   margin: 0;
   font-size: var(--step--1);

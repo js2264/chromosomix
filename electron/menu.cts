@@ -95,6 +95,10 @@ export function buildMenu(): Menu {
       // The one real accelerator. It returns to the picker, which is what
       // "open a different file" means in an app whose open *is* a drop target.
       { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => send('open-file') },
+      mirror('New session', 'new-session', 'O'),
+      // The session, not the figure: everything about this tab as a file that
+      // opens it again. The figure has its own button in the Plot card.
+      mirror('Save session…', 'save-session', 'CmdOrCtrl+S'),
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit' },
     ],

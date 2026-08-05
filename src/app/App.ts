@@ -38,6 +38,8 @@ import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, el } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
+import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { configFileName } from '../state/SessionConfig'
 import { fileLabel } from '../ui/labels'
 import { appMark } from '../ui/mark'
 import { PLOT_OPTION_LABELS, getPlotOptions, togglePlotOption } from '../ui/plotOptions'
@@ -169,8 +171,12 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-actions' },
-          // Theme, shortcuts, source, about. No "open a file" button: the
-          // title is the way back to the picker and says so on hover.
+          // Save the session, theme, shortcuts, source, about. No "open a
+          // file" button: the title is the way back to the picker and says so
+          // on hover.
+          iconButton('save', 'Save this session as a file, to open again later', () =>
+            this.exportSession(),
+          ),
           this.theme.el,
           iconButton('keyboard', 'Keyboard shortcuts', () => this.openShortcutsDialog()),
           source,
@@ -469,6 +475,30 @@ export class App implements SessionHost {
     this.modal = modal
   }
 
+  /**
+   * Write the active tab out as a file.
+   *
+   * Everything about it that is not the bytes of its data: the view, the window,
+   * the colour scale, every track with its own settings, the groups, the ticked
+   * sequences, the hand-placed marks. Dropping it back on the page brings the
+   * session up again — asking for the file itself, when that file is a local one
+   * no page can re-open by name.
+   */
+  private exportSession(): void {
+    const session = this.current
+    const config = session?.exportConfig() ?? null
+    if (session === undefined || config === null) {
+      this.warn('There is nothing open in this tab to save.')
+      return
+    }
+    const now = new Date()
+    const name = configFileName(exportBaseName(fileLabel(config.state.uri)), fileStamp(now))
+    downloadBlob(
+      new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }),
+      name,
+    )
+  }
+
   // -------------------------------------------------------------------------
   // The address bar
   // -------------------------------------------------------------------------
@@ -536,7 +566,7 @@ export class App implements SessionHost {
         id: 'open-file',
         group: 'File',
         title: 'Open a different file',
-        keys: 'o',
+        hint: 'Empty this tab and go back to the drop area.',
         run: () => session?.toPicker(),
       },
       {
@@ -544,9 +574,23 @@ export class App implements SessionHost {
         group: 'File',
         title: 'New session',
         hint: 'Another tab, with its own file, tracks and settings.',
-        keys: 'mod+t',
+        // `o`, not ⌘T: every browser claims ⌘T for a tab of its own and never
+        // lets the page see it, so the binding was one a reader could read in
+        // this dialog and never once perform.
+        keys: 'o',
         enabled: this.sessions.length < MAX_SESSIONS,
         run: () => this.newSession(),
+      },
+      {
+        id: 'save-session',
+        group: 'File',
+        title: 'Save this session',
+        hint:
+          'Everything about this tab as a file: the view, every track and its settings, the ' +
+          'groups, the marks. Drop it back on the page to open it again.',
+        keys: 'mod+s',
+        enabled: file,
+        run: () => this.exportSession(),
       },
       {
         id: 'close-session',
@@ -582,6 +626,8 @@ export class App implements SessionHost {
     const overlayKeys: Array<[keyof typeof PLOT_OPTION_LABELS, string]> = [
       ['text', 'n'],
       ['fills', 'f'],
+      ['baseline', 'r'],
+      ['gutter', 'u'],
       ['crosshair', 'x'],
       ['dividers', 'd'],
       ['breaks', 'e'],
@@ -640,7 +686,7 @@ export class App implements SessionHost {
         id: 'shortcuts',
         group: 'Help',
         title: 'Keyboard shortcuts',
-        keys: '?',
+        keys: 'mod+/',
         run: () => this.openShortcutsDialog(),
       },
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },

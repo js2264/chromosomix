@@ -591,7 +591,7 @@ export class BrowserView {
    * Bounded below by the lane minimum, so twenty tracks in a short window come
    * out scrollable rather than as twenty two-pixel lines.
    */
-  private fitTracks(): void {
+  fitTracks(): void {
     const lanes = this.lanes
     if (lanes.length === 0) return
     // Measured against the *host*, from the top of the stage down to the bottom
@@ -626,7 +626,7 @@ export class BrowserView {
    * through `groupRanges`, so the members of a group come back to one shared
    * pair rather than to their own — which is what belonging to a group means.
    */
-  private autoscaleAll(): void {
+  autoscaleAll(): void {
     for (const entry of this.props.store.entries) {
       if (entry.kind !== 'track' || entry.style.limits.auto) continue
       this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })

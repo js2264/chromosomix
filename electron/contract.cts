@@ -31,6 +31,8 @@ export const CHANNEL_COMMAND = 'metacooler:command'
  */
 export const MENU_COMMAND_IDS = Object.freeze([
   'open-file',
+  'new-session',
+  'save-session',
   'go-genomes',
   'go-contigs',
   'go-overview',

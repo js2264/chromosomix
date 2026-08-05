@@ -30,6 +30,7 @@
 
 import { icon, type IconName } from './icons'
 import { el } from './dom'
+import { keyLabel } from './commands'
 
 export interface SidePanelSpec {
   /** Stable storage key. Not the title: renaming a panel must not forget it. */
@@ -50,6 +51,15 @@ export interface SidePanelSpec {
   /** Shown while open (clicking folds) and while folded (clicking opens). */
   closeIcon: IconName
   openIcon: IconName
+  /**
+   * The key that folds this panel, shown beside its heading.
+   *
+   * A shortcut nobody can find is a shortcut nobody uses, and the dialog that
+   * lists them is two gestures away. This one is written where the thing it acts
+   * on already is — which is also where a reader is looking when the thought
+   * "get this out of the way" arrives.
+   */
+  keys: string
 }
 
 /** The file's attributes, its record card, the QC statistic and the metadata. */
@@ -68,6 +78,7 @@ export const GENERAL_PANEL: SidePanelSpec = {
   maxWidth: 560,
   closeIcon: 'panel-left-close',
   openIcon: 'panel-left-open',
+  keys: 'b',
 }
 
 /**
@@ -87,6 +98,7 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
   maxWidth: 560,
   closeIcon: 'layers',
   openIcon: 'layers',
+  keys: 'a',
 }
 
 /** Transform, colormap, clip, overlays and export — whatever the view offers. */
@@ -100,6 +112,7 @@ export const AESTHETICS_PANEL: SidePanelSpec = {
   maxWidth: 480,
   closeIcon: 'panel-right-close',
   openIcon: 'panel-right-open',
+  keys: 'm',
 }
 
 function readFlag(key: string): boolean {
@@ -176,7 +189,16 @@ export class SidePanel {
       // column — the narrow layout drops General and keeps the other two — with
       // a selector that says which, rather than with a positional guess.
       { class: `panel-column panel-column-${spec.side} panel-${spec.title.toLowerCase()}` },
-      el('h2', { class: 'panel-column-title', text: spec.title }),
+      el(
+        'div',
+        { class: 'panel-column-head' },
+        el('h2', { class: 'panel-column-title', text: spec.title }),
+        el('kbd', {
+          class: 'kbd panel-column-key',
+          text: keyLabel(spec.keys),
+          title: `Press ${keyLabel(spec.keys)} to fold or open this panel`,
+        }),
+      ),
       this.body,
       this.handle(),
     )

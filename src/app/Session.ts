@@ -38,6 +38,14 @@ import {
   type UnitSelection,
 } from '../state/ViewState'
 import { recall, remember } from '../state/UiMemory'
+import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import {
+  applyConfig,
+  buildConfig,
+  looksLikeConfig,
+  parseConfig,
+  type SessionConfig,
+} from '../state/SessionConfig'
 import type { Transform, ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
@@ -511,6 +519,15 @@ export class Session {
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
+  /**
+   * A config waiting for the file it describes.
+   *
+   * An exported session names its file; a local one cannot be re-opened from a
+   * name, so the config sits here while the picker asks for it and is applied to
+   * whatever is dropped next. Cleared when it is used, so a reader who ignores
+   * the note and opens something else entirely gets that file plain.
+   */
+  private pendingConfig: SessionConfig | null = null
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
@@ -530,7 +547,7 @@ export class Session {
   constructor(private readonly host: SessionHost, id?: string) {
     this.id = id ?? `s${nextSessionId++}`
     this.picker = new FilePicker({
-      onOpen: (uri, source) => void this.open(uri, source),
+      onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files),
       examples: demoExamples(),
     })
@@ -692,6 +709,22 @@ export class Session {
           hint: 'chrI:1,000-20,000, a sequence name, or a gene from the search box.',
           keys: 'l',
           run: () => this.browser?.focusLocus(),
+        },
+        {
+          id: 'browser-fit-tracks',
+          group: 'View',
+          title: 'Fit the tracks to the window',
+          hint: 'One height for all of them, and that height the one that fills the space.',
+          keys: 'h',
+          run: () => this.browser?.fitTracks(),
+        },
+        {
+          id: 'browser-autoscale',
+          group: 'View',
+          title: 'Autoscale every track',
+          hint: 'Hand every value axis back to what is in view; a group resolves as a group.',
+          keys: 's',
+          run: () => this.browser?.autoscaleAll(),
         },
         {
           id: 'browser-search',
@@ -887,6 +920,87 @@ export class Session {
    * in (spec §5.5).
    */
   /**
+   * This whole tab, as a file.
+   *
+   * Everything the session is: what is on screen, every loaded track with its
+   * colour, height, limits and group, the ticked sequences, the hand-placed
+   * marks, the table filters, and the overlay preferences the figure was read
+   * with. `null` when there is nothing open, which is the one case where a
+   * config would describe nothing.
+   */
+  exportConfig(): SessionConfig | null {
+    const state = this.store.state
+    if (state === null) return null
+    return buildConfig({
+      state,
+      memoryKey: this.memoryKey(state.uri),
+      plot: getPlotOptions(),
+      now: new Date(),
+    })
+  }
+
+  /**
+   * Take a config file back, in this tab.
+   *
+   * The workspace is written into memory *before* the file is opened, because
+   * that is where the view reads it from on its way up: the tracks arrive with
+   * the picture rather than a gesture later. A remote file opens outright; a
+   * local one cannot — no browser reads a file it was not handed — so the
+   * session comes up asking for it, and everything else waits in
+   * {@link pendingConfig} for the moment it arrives.
+   */
+  async openConfig(config: SessionConfig): Promise<void> {
+    setPlotOptions(config.plot)
+    const source = inferSource(config.state.uri)
+    if (source === null) {
+      this.pendingConfig = config
+      this.showContent(this.pickerWithConfig(config))
+      this.host.sessionChanged(this)
+      return
+    }
+    this.pendingConfig = config
+    await this.openWithConfig(config.state.uri, source)
+  }
+
+  /** Read a dropped file as a config, and say so if it is not one. */
+  private async openConfigFile(file: File): Promise<void> {
+    const config = parseConfig(await file.text())
+    if (config === null) {
+      this.showError(
+        new Error(
+          `${file.name} is a JSON file but not a saved session — it does not name itself as one. ` +
+            'A session is written by the export button in the top bar.',
+        ),
+      )
+      return
+    }
+    await this.openConfig(config)
+  }
+
+  /**
+   * Open a file *as* a config's session: its state, and its workspace.
+   *
+   * The URI is the one the file is actually opening under, which for a local
+   * file is whatever was dropped rather than what the config remembers — the
+   * same session under a renamed file is still that session.
+   */
+  private async openWithConfig(uri: string, source: SourceSpec): Promise<void> {
+    const config = this.pendingConfig
+    this.pendingConfig = null
+    if (config === null) {
+      await this.open(uri, source)
+      return
+    }
+    applyConfig(config, this.memoryKey(uri))
+    const state = { ...config.state, uri }
+    if (state.view === 'browser') {
+      await this.openGenome(uri, source, state.locus, true)
+      return
+    }
+    await this.open(uri, source, state)
+  }
+
+  /**
    * Open a set of files as one session.
    *
    * What a reader means by selecting five files and dropping them is one view
@@ -902,6 +1016,18 @@ export class Session {
    */
   async openFiles(files: readonly File[]): Promise<void> {
     if (files.length === 0) return
+    const config = files.find((file) => looksLikeConfig(file.name))
+    if (config !== undefined) {
+      // A config among the files decides everything, and the rest are what it
+      // was asking for: the session it describes, then its own file dropped
+      // alongside it, which is exactly the two-step the note asks for done in
+      // one gesture.
+      await this.openConfigFile(config)
+      for (const file of files) {
+        if (file !== config) this.dropped(file)
+      }
+      return
+    }
     if (files.length === 1) {
       await this.open(files[0].name, { kind: 'local', file: files[0] })
       return
@@ -1181,7 +1307,12 @@ export class Session {
       this.setUpBrowserAnnotations(assembly)
       // The file that named the genome is also its first track — unless it was a
       // `chrom.sizes`, which declares an assembly and draws nothing.
-      if (result.format !== 'sizes' && this.annotations !== null) {
+      // …unless it is already there. `setUpBrowserAnnotations` has just restored
+      // whatever this session remembered — a previous visit, or a config file
+      // being opened — and that set usually *includes* the file that named the
+      // genome. Adding it again gives the same track twice, under one name, with
+      // one of the two carrying the settings.
+      if (result.format !== 'sizes' && this.annotations !== null && !this.alreadyLoaded(source)) {
         if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
         else this.annotations.loader.addUrl(source.url)
       }
@@ -1200,6 +1331,18 @@ export class Session {
       this.opening = null
       this.host.sessionChanged(this)
     }
+  }
+
+  /** `true` when a row for this exact file is already in the store. */
+  private alreadyLoaded(source: SourceSpec): boolean {
+    const rows = this.annotations?.store.entries ?? []
+    return rows.some((entry) => {
+      if (entry.source.kind === 'remote') {
+        return source.kind === 'remote' && entry.source.url === source.url
+      }
+      const name = source.kind === 'local' ? source.file.name : source.url.split('/').pop()
+      return entry.source.name === name
+    })
   }
 
   /**
@@ -1328,6 +1471,12 @@ export class Session {
   }
 
   private dropped(file: File): void {
+    // A saved session, before anything else looks at it: it is not a track, it
+    // is the tab it was exported from.
+    if (looksLikeConfig(file.name)) {
+      void this.openConfigFile(file)
+      return
+    }
     if (this.routeOf(file.name) === 'map') {
       void this.open(file.name, { kind: 'local', file })
       return
@@ -2708,6 +2857,23 @@ export class Session {
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.
     this.setAesthetics(view?.sideEl === undefined ? [] : [view.sideEl])
+  }
+
+  /** The picker, asking for the file a config describes. */
+  private pickerWithConfig(config: SessionConfig): HTMLElement {
+    const tracks = config.tracks.length
+    return el(
+      'div',
+      { class: 'view' },
+      el('p', {
+        class: 'inline-error',
+        text:
+          `This session was saved from ${fileLabel(config.state.uri)}, which is a local file — no ` +
+          'page can re-open one by name. Drop it below and everything else comes back with it' +
+          (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
+      }),
+      this.picker.el,
+    )
   }
 
   private pickerWithNote(uri: string): HTMLElement {
