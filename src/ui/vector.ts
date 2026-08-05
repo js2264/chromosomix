@@ -639,7 +639,26 @@ export function escapeText(text: string): string {
     // 0x80–0x9f are control characters in Latin-1 and typography in WinAnsi, so
     // a raw one of those would be written as a glyph it is not.
     else if (code >= 0xa0 && code <= 0xff) out += `\\${code.toString(8).padStart(3, '0')}`
+    else if (SPACE_LIKE.has(code)) out += '\\240'
     else out += '?'
   }
   return out
 }
+
+/**
+ * The spaces WinAnsi has no byte for, folded onto its non-breaking one.
+ *
+ * Not a nicety. `fmt.int` formats through `Intl.NumberFormat` in the *viewer's*
+ * locale, and half of Europe groups digits with a space rather than a comma —
+ * `fr-FR` picks U+202F NARROW NO-BREAK SPACE, others U+00A0. The first has no
+ * WinAnsi byte, so a figure exported in French came out reading `7?071 in view`:
+ * every grouped number in the figure corrupted, by the app's own formatter, in
+ * the one place a reader would never think to look for a locale bug.
+ */
+const SPACE_LIKE = new Set([
+  0x2007, // figure space
+  0x2008, // punctuation space
+  0x2009, // thin space
+  0x200a, // hair space
+  0x202f, // narrow no-break space
+])

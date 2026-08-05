@@ -1091,8 +1091,22 @@ export class Session {
       new AnnotationCard({ card: 'linear', store, loader, context: 'browser' }).el,
       new AnnotationCard({ card: 'overlay', store, loader, context: 'browser' }).el,
     ])
-    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
+    this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
     loader.restore(AnnotationStore.stored(scope))
+  }
+
+  /**
+   * Send the mounted browser somewhere, from a card that is not the browser.
+   *
+   * The view first and the state after, rather than the state alone: a patch
+   * that serialises to what is already stored is dropped without notifying, so
+   * clicking a sequence the hash already names would do nothing at all — and
+   * the hash names it whenever the last thing to report was a click on that
+   * same row. `showLocus` reports on its own, so the address bar still follows.
+   */
+  private goToLocus(locus: string): void {
+    if (this.browser !== null) this.browser.showLocus(locus)
+    else this.store.patch({ locus })
   }
 
   private mountBrowser(state: ViewState): void {
@@ -1199,7 +1213,7 @@ export class Session {
         contigs: result.contigs,
         origin: 'sizes',
       })
-      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
+      this.setGeneral([genomeCard(this.assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
       const state = this.store.state
       if (state === null) return
       // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
@@ -1260,7 +1274,7 @@ export class Session {
         new AnnotationCard({ card: 'linear', store: held.store, loader: held.loader, context: 'browser' }).el,
         new AnnotationCard({ card: 'overlay', store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
-      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.store.patch({ locus }))])
+      this.setGeneral([genomeCard(assembly, () => this.host.openFileDialog(this), (locus) => this.goToLocus(locus))])
     }
     this.mounted = null
     const target: ViewState = { uri: file.uri, view: 'browser' }
