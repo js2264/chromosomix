@@ -1224,9 +1224,20 @@ export class BrowserView {
       ? entries.length
       : 1
     const block = (rows - 1) * NAME_LINE
-    const nameTop = inverted
-      ? Math.max(6, frame.thickness - NAME_TOP - DETAIL_DROP - block)
-      : NAME_TOP
+    // Under the names when the lane has room for a second line, beside them when
+    // it has not: a clipped lane should lose the *layout* rather than the fact.
+    const stacked = frame.thickness >= NAME_TOP + block + DETAIL_DROP + 6
+    const label = block + (stacked ? DETAIL_DROP : 0)
+    // In the column, centred on the lane — because there the label is beside its
+    // track rather than on top of it, and a caption in a column of them belongs
+    // level with the middle of the thing it names. Over the data it stays at the
+    // top, which is the one part of a coverage track that is usually empty; a
+    // name centred there would sit across the peaks it is labelling.
+    const nameTop = column
+      ? Math.max(6, Math.round((frame.thickness - label) / 2))
+      : inverted
+        ? Math.max(6, frame.thickness - NAME_TOP - DETAIL_DROP - block)
+        : NAME_TOP
 
     // One measured run per row, so both the right edge and the column's width
     // come from the same numbers.
@@ -1272,9 +1283,6 @@ export class BrowserView {
     ctx.font = RANGE_FONT
     ctx.fillStyle = palette.labelColor
     ctx.textAlign = 'left'
-    // Under the names when the lane has room for a second line, beside them when
-    // it has not: a clipped lane should lose the *layout* rather than the fact.
-    const stacked = frame.thickness >= NAME_TOP + block + DETAIL_DROP + 6
     const across = stacked ? nameTop + block + DETAIL_DROP : nameTop + block
     const along = stacked ? (column ? 2 : frame.alongFrom + 5) : this.lastNameEnd
 
@@ -1327,7 +1335,7 @@ export class BrowserView {
     // it hands back to the data. Recorded here for the same reason the limits
     // are — the button is placed against text this pass measured, and a second
     // measurement is a second opinion about the same font.
-    if (clear) this.autoSpots.push({ entries, x: x + 6, y: top })
+    if (clear) this.autoSpots.push({ entries, x: x + 5, y: top + HIT_HEIGHT / 2 })
     ctx.restore()
   }
 
@@ -1661,8 +1669,11 @@ export class BrowserView {
       const spot = this.autoSpots[i]
       const node = nodes[swatches + i]
       if (!(node instanceof HTMLElement)) continue
+      // Centred on the line the range is written on, not hung from its top: the
+      // button is a mark beside two numbers and has to sit on the same baseline
+      // as them, which is what "aligned with the range" means.
       node.style.left = `${spot.x}px`
-      node.style.top = `${spot.y - 1}px`
+      node.style.top = `${spot.y - AUTO_ICON / 2}px`
       // Lit when the axis on screen is the data's own, which is what the button
       // would otherwise give no way of knowing without pressing it.
       const auto = spot.entries.every(
@@ -1716,7 +1727,7 @@ export class BrowserView {
           this.props.store.restyle(entry.id, { limits: { ...current, auto: true } })
         }
       },
-      { class: 'btn btn-icon browser-auto', size: 12 },
+      { class: 'btn btn-icon browser-auto', size: AUTO_ICON },
     )
   }
 
@@ -1769,13 +1780,13 @@ export class BrowserView {
             'div',
             { class: 'group-row' },
             button(overlaid ? 'stack' : 'overlay', () => this.setMode(name, overlaid ? 'stacked' : 'overlay'), {
-              class: 'btn btn-quiet',
+              class: 'btn',
               title: overlaid
                 ? 'Give each of these a lane of its own again'
                 : 'Draw all of these into one lane, against one axis',
             }),
             button(shared ? 'scale each' : 'scale together', () => this.setScaling(name, shared ? 'each' : 'shared'), {
-              class: 'btn btn-quiet',
+              class: 'btn',
               title: shared
                 ? 'Let every track in this group find its own limits, as an ungrouped track does'
                 : 'Resolve one pair of limits over all of them, which is what makes them comparable',
@@ -1784,7 +1795,7 @@ export class BrowserView {
               const tallest = Math.max(...members.map((member) => member.style.size))
               for (const member of members) this.props.store.restyle(member.id, { size: tallest })
             }, {
-              class: 'btn btn-quiet',
+              class: 'btn',
               title: 'Give every track in this group the height of its tallest member',
             }),
           ),
@@ -2669,6 +2680,9 @@ const GUTTER_PAD = 8
 
 /** Room kept at the right of the column for a lane's autoscale button. */
 const AUTO_SLOT = 16
+
+/** The autoscale mark beside a lane's range: the glyph, and nothing else. */
+const AUTO_ICON = 13
 
 /**
  * Below this many bases per pixel, the readout names the base rather than
