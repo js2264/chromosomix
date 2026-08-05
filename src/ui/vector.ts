@@ -148,6 +148,10 @@ export type VectorTarget = Pick<
   | 'translate'
   | 'rotate'
   | 'setTransform'
+  | 'clearRect'
+  | 'strokeRect'
+  | 'drawImage'
+  | 'imageSmoothingEnabled'
   | 'fillStyle'
   | 'strokeStyle'
   | 'lineWidth'
@@ -176,6 +180,17 @@ export class VectorPage {
   /** Where the current subpath started, for `closePath` and for `arc`. */
   private current: { x: number; y: number } | null = null
   private readonly alphas = new Map<number, string>()
+  /**
+   * The rasters placed on this page, in the order they were drawn.
+   *
+   * A contact matrix is the one thing in this app that is honestly a raster —
+   * twelve thousand bins are pixels, and writing them as a million rectangles
+   * would be a larger, slower file of the same picture. So a page can hold
+   * both: the matrix as an image, and every axis, label, tick, divider, lane and
+   * legend around it as paths and text. That hybrid is what a journal wants and
+   * what neither a pure raster nor a pure vector page can be.
+   */
+  private readonly images: Array<{ width: number; height: number; rgb: Uint8Array }> = []
   private readonly ruler: CanvasRenderingContext2D | null
 
   constructor(
@@ -207,10 +222,33 @@ export class VectorPage {
   // Geometry
   // -------------------------------------------------------------------------
 
+  /**
+   * Where a sub-drawing is being placed, in page pixels.
+   *
+   * Canvas has no such thing, and it is the one concept this page needs that it
+   * does not borrow. The heatmap and its legend each draw *from the origin* and
+   * each call `setTransform` to do it, so composing them on one canvas means
+   * rendering to intermediate canvases and `drawImage`-ing those into place —
+   * which is exactly right for a raster and exactly wrong here, since it would
+   * turn every tick and label in the legend back into pixels. An offset the
+   * absolute transform is applied *inside* lets each of them be drawn where it
+   * belongs, as itself.
+   */
+  private originX = 0
+  private originY = 0
+
+  /** Place everything drawn from now on at this offset, in CSS pixels. */
+  setOrigin(x: number, y: number): void {
+    this.originX = x
+    this.originY = y
+  }
+
   /** Canvas point → page point. PDF's y runs up the page; canvas's runs down. */
   private point(x: number, y: number): [number, number] {
     const m = this.state.matrix
-    return [m.a * x + m.c * y + m.e, this.height - (m.b * x + m.d * y + m.f)]
+    const px = m.a * x + m.c * y + m.e + this.originX
+    const py = m.b * x + m.d * y + m.f + this.originY
+    return [px, this.height - py]
   }
 
   private emit(op: string): void {
@@ -435,8 +473,83 @@ export class VectorPage {
       setTransform: ((a: number, b: number, c: number, d: number, e: number, f: number) => {
         self.state.matrix = { a, b, c, d, e, f }
       }) as CanvasRenderingContext2D['setTransform'],
+      // A page starts empty and is drawn in order, so there is nothing to clear:
+      // whatever a caller is erasing has not been written yet. Accepted rather
+      // than omitted because the heatmap clears before it draws, and a missing
+      // member is a `TypeError` in the middle of an export.
+      clearRect: () => {},
+      strokeRect: (x: number, y: number, w: number, h: number) => {
+        target.beginPath()
+        target.rect(x, y, w, h)
+        target.stroke()
+      },
+      // Nearest-neighbour or bilinear is a question about *pixels*, and the
+      // answer on paper is whatever the reader's viewer does with the image.
+      set imageSmoothingEnabled(_value: boolean) {},
+      get imageSmoothingEnabled(): boolean {
+        return true
+      },
+      drawImage: ((
+        source: CanvasImageSource,
+        a?: number,
+        b?: number,
+        c?: number,
+        d?: number,
+        e?: number,
+        f?: number,
+        g?: number,
+        h?: number,
+      ) => {
+        self.image(source, [a, b, c, d, e, f, g, h])
+      }) as CanvasRenderingContext2D['drawImage'],
     }
     return target
+  }
+
+  /**
+   * Place a raster.
+   *
+   * The three call shapes canvas has, resolved to one: a source rectangle and a
+   * destination rectangle in the caller's own coordinates. The destination is
+   * then transformed like any other geometry, which is what lets a matrix drawn
+   * through a `setTransform` land in exactly the place the screen put it.
+   *
+   * Only axis-aligned placement is expressed, because that is the only kind this
+   * app performs on an image — a rotated matrix is not a thing the heatmap draws
+   * — and a `cm` for the general case would be a second coordinate story to keep
+   * true.
+   */
+  private image(source: CanvasImageSource, args: Array<number | undefined>): void {
+    const natural = sizeOf(source)
+    if (natural === null) return
+    const [a, b, c, d, e, f, g, h] = args
+    let crop = { x: 0, y: 0, width: natural.width, height: natural.height }
+    let dest: { x: number; y: number; width: number; height: number }
+    if (typeof e === 'number' && typeof f === 'number') {
+      crop = { x: a ?? 0, y: b ?? 0, width: c ?? natural.width, height: d ?? natural.height }
+      dest = { x: e, y: f, width: g ?? crop.width, height: h ?? crop.height }
+    } else {
+      dest = { x: a ?? 0, y: b ?? 0, width: c ?? natural.width, height: d ?? natural.height }
+    }
+    const rgb = pixelsOf(source, crop)
+    if (rgb === null) return
+
+    // The corners through the matrix, then the axis-aligned box they span.
+    const first = this.point(dest.x, dest.y)
+    const last = this.point(dest.x + dest.width, dest.y + dest.height)
+    const x0 = Math.min(first[0], last[0])
+    const y0 = Math.min(first[1], last[1])
+    const width = Math.abs(last[0] - first[0])
+    const height = Math.abs(last[1] - first[1])
+    if (!(width > 0) || !(height > 0)) return
+
+    this.images.push({ width: crop.width, height: crop.height, rgb })
+    const name = `Im${this.images.length - 1}`
+    this.alpha()
+    this.emit('q')
+    this.emit(`${round(width)} 0 0 ${round(height)} ${round(x0)} ${round(y0)} cm`)
+    this.emit(`/${name} Do`)
+    this.emit('Q')
   }
 
   /**
@@ -515,6 +628,13 @@ export class VectorPage {
       .map(([value, name]) => `/${name} << /Type /ExtGState /ca ${round(value)} /CA ${round(value)} >>`)
       .join(' ')
 
+    // The rasters, deflated. Numbered from 8, after the seven fixed objects, so
+    // the page's `/XObject` dictionary can be written before any of them exists.
+    const packed = await Promise.all(this.images.map((image) => deflateBytes(image.rgb)))
+    const xobjects = this.images
+      .map((_image, index) => `/Im${index} ${8 + index} 0 R`)
+      .join(' ')
+
     const chunks: Uint8Array[] = []
     const offsets: number[] = []
     let length = 0
@@ -537,7 +657,8 @@ export class VectorPage {
     push(
       `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${round(pageWidth)} ${round(pageHeight)}] ` +
         '/Resources << /Font << /F1 5 0 R /F2 6 0 R >> ' +
-        `/ExtGState << ${gs} >> >> /Contents 4 0 R >>\nendobj\n`,
+        `/ExtGState << ${gs} >>` +
+        `${xobjects === '' ? '' : ` /XObject << ${xobjects} >>`} >> /Contents 4 0 R >>\nendobj\n`,
     )
     startObject()
     push(
@@ -562,6 +683,20 @@ export class VectorPage {
         `/CreationDate (D:${pdfDate(created)}) >>\nendobj\n`,
     )
 
+    for (const [index, image] of this.images.entries()) {
+      const { data, filter: imageFilter } = packed[index]
+      startObject()
+      push(
+        `${8 + index} 0 obj\n<< /Type /XObject /Subtype /Image ` +
+          `/Width ${image.width} /Height ${image.height} ` +
+          `/ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+          `${imageFilter === null ? '' : `/Filter ${imageFilter} `}` +
+          `/Length ${data.length} >>\nstream\n`,
+      )
+      push(data)
+      push('\nendstream\nendobj\n')
+    }
+
     const xref = length
     let table = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`
     for (const offset of offsets) table += `${String(offset).padStart(10, '0')} 00000 n \n`
@@ -572,6 +707,56 @@ export class VectorPage {
 
     return new Blob(chunks as BlobPart[], { type: 'application/pdf' })
   }
+}
+
+/** The natural pixel size of anything canvas will draw, or `null`. */
+function sizeOf(source: CanvasImageSource): { width: number; height: number } | null {
+  const value = source as { width?: unknown; height?: unknown }
+  const width = typeof value.width === 'number' ? value.width : 0
+  const height = typeof value.height === 'number' ? value.height : 0
+  return width > 0 && height > 0 ? { width, height } : null
+}
+
+/**
+ * A source's pixels as packed RGB, alpha composited onto white.
+ *
+ * PDF has no alpha channel on an image without a soft mask, and the page under
+ * this one is white, so compositing here is the same picture in one object
+ * instead of two. Read through a scratch canvas rather than from the source
+ * directly, because `drawImage` is the only thing that takes every shape of
+ * `CanvasImageSource` and turns it into pixels.
+ */
+function pixelsOf(
+  source: CanvasImageSource,
+  crop: { x: number; y: number; width: number; height: number },
+): Uint8Array | null {
+  if (typeof document === 'undefined') return null
+  const scratch = document.createElement('canvas')
+  scratch.width = Math.max(1, Math.round(crop.width))
+  scratch.height = Math.max(1, Math.round(crop.height))
+  const ctx = scratch.getContext('2d', { willReadFrequently: true })
+  if (ctx === null) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, scratch.width, scratch.height)
+  ctx.drawImage(
+    source,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    scratch.width,
+    scratch.height,
+  )
+  const rgba = ctx.getImageData(0, 0, scratch.width, scratch.height).data
+  const rgb = new Uint8Array((rgba.length / 4) * 3)
+  for (let i = 0, o = 0; i < rgba.length; i += 4, o += 3) {
+    rgb[o] = rgba[i]
+    rgb[o + 1] = rgba[i + 1]
+    rgb[o + 2] = rgba[i + 2]
+  }
+  return rgb
 }
 
 /** `D:YYYYMMDDHHmmSS`, which is the only date format PDF has. */
@@ -640,6 +825,7 @@ export function escapeText(text: string): string {
     // a raw one of those would be written as a glyph it is not.
     else if (code >= 0xa0 && code <= 0xff) out += `\\${code.toString(8).padStart(3, '0')}`
     else if (SPACE_LIKE.has(code)) out += '\\240'
+    else if (SPELLED.has(code)) out += escapeText(SPELLED.get(code) as string)
     else out += '?'
   }
   return out
@@ -655,6 +841,24 @@ export function escapeText(text: string): string {
  * every grouped number in the figure corrupted, by the app's own formatter, in
  * the one place a reader would never think to look for a locale bug.
  */
+/**
+ * The symbols WinAnsi has no byte for, spelled out rather than dropped.
+ *
+ * `≤` is the one that matters: every colour bar this app draws ends with
+ * `≤ 0.000061` under its lowest stop, and in the exported figure that read
+ * `? 0.000061`. Two characters that say the same thing beat one that says
+ * nothing, and neither is a reason to embed a font.
+ */
+const SPELLED = new Map<number, string>([
+  [0x2264, '<='],
+  [0x2265, '>='],
+  [0x2260, '!='],
+  [0x2248, '~'],
+  [0x2212, '-'],
+  [0x2032, "'"],
+  [0x2033, '"'],
+])
+
 const SPACE_LIKE = new Set([
   0x2007, // figure space
   0x2008, // punctuation space

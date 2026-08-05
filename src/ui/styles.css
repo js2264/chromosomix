@@ -2628,6 +2628,15 @@ p {
   white-space: nowrap;
 }
 
+/* The lane the pointer is actually inside. Every track in the stack is read at
+   this position — that is what the readout is for — but one of them is the one
+   being pointed at, and finding it by counting rows against lanes is the work
+   the tooltip was supposed to save. */
+.cell-tip-row.is-here .cell-tip-key,
+.cell-tip-row.is-here .cell-tip-val {
+  font-weight: 700;
+}
+
 .cell-tip-val {
   flex: 0 0 auto;
   margin-left: auto;
@@ -2636,9 +2645,12 @@ p {
 /* The one lane the pointer is actually inside. The others are context; this is
    the one being pointed at, and without the distinction a stack of eight rows
    gives no clue which of them the pointer is on. */
-.cell-tip-here {
-  color: var(--text);
-  font-weight: 600;
+/* The lane the pointer is inside. `font-weight` only: the colour belongs to the
+   track and is already carrying which row is which. */
+.cell-tip-here,
+.cell-tip-here .cell-tip-key,
+.cell-tip-here .cell-tip-val {
+  font-weight: 700;
 }
 
 .panel-overlay {

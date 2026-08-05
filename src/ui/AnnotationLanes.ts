@@ -55,6 +55,8 @@ export interface LaneGeometry {
    * from beside it, and it is what the hairline is drawn through.
    */
   guide: { edge: LaneEdge; along: number } | null
+  /** The id of the lane whose far border is under the pointer, if any. */
+  grip: string | null
   palette: { guide: string; halo: string; crosshair: string }
 }
 
@@ -425,6 +427,27 @@ export class AnnotationLanes {
       // a track that does not respond.
       if (geometry.guide !== null && geometry.guide.edge === edge) {
         hairline(ctx, frame, geometry.guide.along, geometry.palette.crosshair, dpr)
+      }
+
+      // The resize grip, where the pointer is on this lane's far border. The
+      // cursor is the drawn arrowhead everywhere on these canvases — it is what
+      // points at a base pair — so an affordance that lived in the cursor would
+      // not exist. The same rule the 1D browser draws, for the same gesture.
+      if (geometry.grip === entry.id) {
+        ctx.save()
+        ctx.strokeStyle = geometry.palette.crosshair
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        const at = frame.acrossFrom + frame.thickness + 1
+        if (edge === 'bottom') {
+          ctx.moveTo(frame.alongFrom, at)
+          ctx.lineTo(frame.alongTo, at)
+        } else {
+          ctx.moveTo(at, frame.alongFrom)
+          ctx.lineTo(at, frame.alongTo)
+        }
+        ctx.stroke()
+        ctx.restore()
       }
 
       // The reader's hand-drawn lines, continued off the map. Only the ones

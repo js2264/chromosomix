@@ -727,6 +727,7 @@ export class BrowserView {
     this.rangeHits = []
     const groups = this.groupRanges()
     for (const lane of this.lanes) this.paintLane(ctx, lane, groups, palette)
+    this.paintGroupBars(ctx)
 
     // Under the shared preference, like everything else drawn over the data: a
     // reader who turned the crosshair off beside a map meant it off.
@@ -757,6 +758,62 @@ export class BrowserView {
       ctx.fillRect(from, 0, Math.max(1, to - from), height)
       ctx.restore()
     }
+  }
+
+  /**
+   * A bar down the left edge marking each autoscale group.
+   *
+   * A group is a claim that these tracks are comparable — one pair of limits
+   * over the union of what they show — and until now the only way to see which
+   * tracks were in one was to open each row's settings in turn and read the
+   * menu. It is a property of a *set* of lanes, so it is drawn as a set of
+   * lanes: one bar spanning them, in the colour of the first, with the name
+   * beside it where there is room. Stacked members that are not adjacent get a
+   * bar each, because a bar drawn across a lane that is not in the group would
+   * be saying something false.
+   */
+  private paintGroupBars(ctx: CanvasRenderingContext2D): void {
+    const runs: Array<{ group: string; colour: string; from: number; to: number }> = []
+    for (const lane of this.lanes) {
+      const target = lane.profiles[0]?.entry ?? lane.entry
+      const group = target.style.group
+      const top = lane.frame.acrossFrom
+      const bottom = top + lane.frame.thickness
+      if (group === '') continue
+      const open = runs[runs.length - 1]
+      if (open !== undefined && open.group === group && Math.abs(open.to - top) <= LANE_GAP + 1) {
+        open.to = bottom
+        continue
+      }
+      runs.push({ group, colour: target.style.colour, from: top, to: bottom })
+    }
+    if (runs.length === 0) return
+
+    ctx.save()
+    for (const run of runs) {
+      ctx.fillStyle = run.colour
+      ctx.globalAlpha = 0.85
+      ctx.beginPath()
+      ctx.roundRect?.(0, run.from, GROUP_BAR, run.to - run.from, GROUP_BAR / 2)
+      if (ctx.roundRect === undefined) ctx.rect(0, run.from, GROUP_BAR, run.to - run.from)
+      ctx.fill()
+      // The name, turned a quarter turn to run with the bar — the only
+      // orientation that fits a word beside a three-pixel rule.
+      const room = run.to - run.from
+      if (!this.text || room < 34) continue
+      ctx.save()
+      ctx.globalAlpha = 0.9
+      ctx.font = GROUP_FONT
+      ctx.fillStyle = run.colour
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.translate(GROUP_BAR + 2, (run.from + run.to) / 2)
+      ctx.rotate(-Math.PI / 2)
+      const text = ctx.measureText(run.group).width > room - 6 ? '' : run.group
+      ctx.fillText(text, 0, 0)
+      ctx.restore()
+    }
+    ctx.restore()
   }
 
   private paintLane(
@@ -2096,6 +2153,23 @@ export class BrowserView {
    * lane at a time means moving the pointer between lanes and remembering the
    * numbers. The same reasoning, and the same layout, as beside the map.
    */
+  /**
+   * Where the pointer is, at the precision the view can actually resolve.
+   *
+   * `fmt.bp` rounds to a readable unit — `477.6 kb` — which is the right answer
+   * across a whole genome, where one pixel is thirteen thousand bases and a
+   * figure to the base would be six digits of noise. Zoomed in it is the wrong
+   * answer twice over: the number stops changing as the pointer moves, and the
+   * position it names is not the one under the arrowhead. So once a pixel is
+   * worth a few bases, the readout says the base.
+   */
+  private describePosition(locus: { contig: string; bp: number }): string {
+    const perPixel = (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels)
+    return perPixel <= EXACT_BP_PER_PIXEL
+      ? `${locus.contig}:${fmt.int(Math.round(locus.bp) + 1)}`
+      : `${locus.contig}:${fmt.bp(locus.bp)}`
+  }
+
   private describe(x: number, y: number, clientX: number, clientY: number): void {
     const locus = this.axis.unitToLocus(this.scale.toUnit(x))
     if (locus === null) {
@@ -2103,20 +2177,35 @@ export class BrowserView {
       setReadout('')
       return
     }
-    const where = `${locus.contig}:${fmt.bp(locus.bp)}`
+    const where = this.describePosition(locus)
     const rows: HTMLElement[] = []
     const parts: string[] = []
+    // Which lane the pointer is actually inside. Every track is read at this
+    // position, because "what do all of these do here" is the question a stack
+    // is there to answer — but the one being pointed at is set in its own name's
+    // weight, so the answer to "and this one?" does not have to be counted out.
+    const inside = this.lanes.find(
+      (lane) => y >= lane.frame.acrossFrom && y <= lane.frame.acrossFrom + lane.frame.thickness,
+    )
     for (const lane of this.lanes) {
       for (const { entry, profile } of lane.profiles) {
         const slot = Math.round(x) - profile.from
         const value = slot >= 0 && slot < profile.mean.length ? profile.mean[slot] : Number.NaN
         const text = Number.isNaN(value) ? '—' : fmt.num(value)
+        const here = inside !== undefined && (inside.entry.id === entry.id ||
+          inside.overlaid.some((member) => member.id === entry.id))
         rows.push(
           el(
             'div',
-            { class: 'cell-tip-row' },
+            { class: `cell-tip-row${here ? ' is-here' : ''}` },
             el('span', { class: 'cell-tip-chip', style: { background: entry.style.colour } }),
-            el('span', { class: 'cell-tip-key', text: `${entry.label}:` }),
+            // The name in the track's own colour, which is the legend the
+            // picture already uses: the line is that colour and so is this.
+            el('span', {
+              class: 'cell-tip-key',
+              text: `${entry.label}:`,
+              style: { color: entry.style.colour },
+            }),
             el('span', { class: 'cell-tip-val', text }),
           ),
         )
@@ -2237,8 +2326,24 @@ const NAME_TOP = 9
 /** How far under the name the value range sits, when the lane is tall enough. */
 const DETAIL_DROP = 12
 
+/** How wide the group bar in the left gutter is, in CSS pixels. */
+const GROUP_BAR = 3
+const GROUP_FONT = '600 9px system-ui, sans-serif'
+
 /** How tall a limit's click target is: the text, plus a little either side. */
 const HIT_HEIGHT = 13
+
+/**
+ * Below this many bases per pixel, the readout names the base rather than
+ * rounding to a unit.
+ *
+ * Ten is where the two answers part company: at ten bases per pixel `fmt.bp`
+ * still writes kilobases, so moving the pointer a hundred pixels changes the
+ * number by one digit — while the base under the arrowhead has moved a thousand
+ * times. Above it the exact figure would be six digits of false precision about
+ * a pixel covering thirteen thousand bases.
+ */
+const EXACT_BP_PER_PIXEL = 10
 
 /**
  * How tall a lane's hover-control row is, for keeping it inside its lane.

@@ -85,6 +85,14 @@ describe('escapeText', () => {
     expect(escapeText('chrI‑α')).toBe('chrI??')
   })
 
+  // Every colour bar ends with `≤ 0.000061` under its lowest stop, and WinAnsi
+  // has no byte for that sign — so the exported legend read `? 0.000061`.
+  it('spells out the maths signs WinAnsi lacks', () => {
+    expect(escapeText('≤ 0.000061')).toBe('<= 0.000061')
+    expect(escapeText('≥ 1')).toBe('>= 1')
+    expect(escapeText('−3')).toBe('-3')
+  })
+
   // The one character in an ordinary figure that Latin-1 has no byte for: every
   // track writes its range as `0 – 130`.
   it('finds WinAnsi’s typography, en dash included', () => {
