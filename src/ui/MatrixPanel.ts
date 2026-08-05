@@ -69,7 +69,7 @@ import { inverseTransform, transformValue } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
-import { el, field, fmt } from './dom'
+import { dragHasFiles, el, field, fmt } from './dom'
 import {
   EXPORT_DPI_CHOICES,
   EXPORT_FORMATS,
@@ -870,7 +870,7 @@ export class MatrixPanel {
       }),
     )
     zone.addEventListener('dragover', (event) => {
-      if (!carriesFiles(event)) return
+      if (!dragHasFiles(event)) return
       // Both, and in this order: the default action for a dropped file is to
       // navigate the window to it, and the panel above is not the one that
       // decides where this file goes.
@@ -895,31 +895,39 @@ export class MatrixPanel {
   }
 
   /**
-   * Show the two zones while a file is being dragged over this panel, and only
+   * Show the two zones while a file is being dragged over the map, and only
    * then.
    *
-   * On the panel rather than on the zones themselves, because a zone that is
+   * On the grid rather than on the zones themselves, because a zone that is
    * invisible cannot be dragged *onto* — the reader has to see it appear while
    * the pointer is still over the middle of the map, which is where a drag from
    * the desktop arrives.
+   *
+   * The grid and not `this.el`, for two reasons, and the first one is not a
+   * matter of taste: this runs from the constructor, where `this.el` has not
+   * been built yet, and reading it there threw — which took the whole panel down
+   * for every file that *has* annotations, so a cooler rendered nothing and a
+   * metacool, which has none (§8.5), was fine. The grid is also the honest
+   * scope: it is the box holding the map, its lanes and these zones, while
+   * `this.el` reaches the colourbar and the header, where a drag means nothing.
    */
   private watchEdgeDrops(): void {
     const show = (event: DragEvent): void => {
-      if (!carriesFiles(event)) return
+      if (!dragHasFiles(event)) return
       this.grid.classList.add('is-dropping')
     }
     const hide = (event: DragEvent): void => {
-      // A drag crossing from the map onto a zone leaves the panel by the letter
+      // A drag crossing from the map onto a zone leaves the grid by the letter
       // of the event and not in fact; the related target is what tells the two
       // apart, and `null` (leaving the window) is a real departure.
       const to = event.relatedTarget
-      if (to instanceof Node && this.el.contains(to)) return
+      if (to instanceof Node && this.grid.contains(to)) return
       this.grid.classList.remove('is-dropping')
     }
-    this.el.addEventListener('dragenter', show)
-    this.el.addEventListener('dragover', show)
-    this.el.addEventListener('dragleave', hide)
-    this.el.addEventListener('drop', () => this.grid.classList.remove('is-dropping'))
+    this.grid.addEventListener('dragenter', show)
+    this.grid.addEventListener('dragover', show)
+    this.grid.addEventListener('dragleave', hide)
+    this.grid.addEventListener('drop', () => this.grid.classList.remove('is-dropping'))
   }
 
   /**
@@ -2470,18 +2478,6 @@ function captionLines(
 }
 
 /** The page colour an export is flattened onto — the theme in force. */
-/**
- * Whether a drag is carrying files, rather than text or a row from a card.
- *
- * The Tracks card's own rows are draggable — that is how a stack is reordered —
- * and one dragged over the map must not light up two rectangles offering to
- * load it. `types` is the only thing a browser exposes during a drag; the files
- * themselves are readable at `drop` and not before.
- */
-function carriesFiles(event: DragEvent): boolean {
-  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
-}
-
 function readPageBackground(): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
   return value === '' ? '#ffffff' : value
