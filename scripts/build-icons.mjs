@@ -60,6 +60,11 @@ const LUCIDE = [
   'separator-vertical',
   'tag',
   'ruler',
+  'rows-3',
+  'link',
+  'unlink',
+  'stretch-vertical',
+  'download',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

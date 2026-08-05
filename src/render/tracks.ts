@@ -278,7 +278,13 @@ export function drawTrack(
   const runs = pathRuns(profile)
   if (paint.mode === 'area' && paint.fills) {
     ctx.fillStyle = paint.colour
-    ctx.globalAlpha = paint.opacity * 0.5
+    // The track's own opacity, and nothing subtracted from it. The fill used to
+    // be drawn at half of it so the line stayed visible against its own area —
+    // but that made "no transparency" a setting the picture did not honour, and
+    // a reader who asks for a solid area is asking for one. Where several tracks
+    // share a lane the caller already dims them (that is what overlaying means);
+    // this is not the place to decide it for them.
+    ctx.globalAlpha = paint.opacity
     for (const [start, stop] of runs) {
       ctx.beginPath()
       tracePath(ctx, frame, profile, norm, start, stop)

@@ -896,22 +896,7 @@ p {
   border-top: 1px solid var(--border);
 }
 
-/* The two decisions about a group, and the one bulk action — as buttons, with
-   the box a button has. Quiet ones read as three lines of prose here: there is
-   no row of controls beside them to be quiet against, and each of the three is a
-   thing that happens when it is pressed. Wraps, because the Aesthetics column is
-   sixteen characters wide and three buttons are not. */
-.group-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  align-items: center;
-}
 
-.group-row > .btn {
-  padding: 0.2rem 0.45rem;
-  font-size: var(--step--2);
-}
 
 /* What is *in* the group — the part the card used to give as a count.
 
@@ -919,22 +904,25 @@ p {
    listed is one a reader has to reconstruct by opening every row in the panel
    beside it. Each chip carries the track's colour, which is how it is recognised
    in the picture, and the × that takes it back out. */
+/* One member per row, so the crosses line up as a column. Three pills wrapping
+   mid-name put every × at a different offset, and a list of things you can
+   remove wants one place to aim at rather than three. */
 .group-members {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 0.1rem;
   margin-top: 0.35rem;
 }
 
 .group-member {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.3rem;
   max-width: 100%;
-  padding: 0.05rem 0.1rem 0.05rem 0.25rem;
+  padding: 0 0 0 0.25rem;
   border-radius: 3px;
   background: var(--bg-sunken);
-  font-size: var(--step--2);
+  font-size: x-small;
   color: var(--text-dim);
 }
 
@@ -945,7 +933,10 @@ p {
   border-radius: 2px;
 }
 
+/* Takes the width, so the × after it is pushed to the right edge of every row
+   and the column of them is straight. */
 .group-member-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -953,18 +944,7 @@ p {
 }
 
 .group-member-out {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-faint);
-  line-height: 0;
-  cursor: pointer;
-}
-
-.group-member-out:hover {
-  color: var(--danger);
-  background: none;
+  padding: 0.1rem;
 }
 
 /* No file, no crumbs — and no empty bordered strip where they would be. */
@@ -2602,7 +2582,12 @@ p {
 /* A lane readout is one row per track on that edge, so the rows have to line up
    as a table: a name column that gives way, and a value column that does not.
    Reading four numbers off a ragged right edge is the thing this replaced. */
-.cell-tip-line:has(> .cell-tip-val) {
+/* A name on the left, its value on the right — a column of numbers a reader can
+   compare down the page rather than a column of names each with a number stuck
+   to the end of it, at a different offset on every row. `.cell-tip-row` is the
+   browser's, `.cell-tip-line` the map's; they are the same line. */
+.cell-tip-line:has(> .cell-tip-val),
+.cell-tip-row {
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
@@ -3822,10 +3807,6 @@ p {
   border-radius: 3px;
   padding: 0.05rem 0.2rem;
   font: inherit;
-  /* A file name is long and there are several of them stacked; at the panel's
-     own size two tracks from the same experiment differ only in the part that
-     scrolls out of view. Small enough to fit, bold enough to lead the row. */
-  font-size: x-small;
   font-weight: 600;
   color: var(--text);
   cursor: text;
