@@ -376,15 +376,10 @@ describe('the annotations published beside a demo map', () => {
     const found = demoAnnotationsFor(map)
     expect(found).toHaveLength(10)
     expect(found[0].url).toBe('https://example.org/demo/Yeast_annotations.gtf')
-    expect(found.filter((entry) => entry.card === 'overlay')).toHaveLength(1)
-  })
-
-  it('splits them across the cards that can draw them', () => {
-    const found = demoAnnotationsFor(map)
-    expect(found.filter((entry) => entry.zone === 'gtf')).toHaveLength(1)
-    expect(found.filter((entry) => entry.zone === 'track')).toHaveLength(6)
-    expect(found.filter((entry) => entry.zone === 'segments')).toHaveLength(2)
-    expect(found.filter((entry) => entry.zone === 'pairs')).toHaveLength(1)
+    // No card and no zone: where each of these is drawn comes from its own
+    // bytes, like every other file (`cardFor`), so the table names a file and a
+    // label and nothing it would have to be kept in step with.
+    expect(found.every((entry) => entry.label !== '')).toBe(true)
   })
 
   // A *local* file of the same name is somebody else's data under a familiar

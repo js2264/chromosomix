@@ -122,28 +122,22 @@ const DEMO_GENOMES: Array<{ file: string; label: string; note: string }> = [
  */
 interface DemoAnnotation {
   file: string
-  card: 'linear' | 'overlay'
-  zone: 'gtf' | 'track' | 'segments' | 'pairs'
+  /** A short name, since the file's own is a sentence about the experiment. */
   label: string
 }
 
 const DEMO_ANNOTATIONS: Record<string, DemoAnnotation[]> = {
   'Yeast_microC_G2M_1kb.cool': [
-    { file: 'Yeast_annotations.gtf', card: 'linear', zone: 'gtf', label: 'genes' },
-    { file: 'Yeast_MNase.bw', card: 'linear', zone: 'track', label: 'MNase' },
-    { file: 'Yeast_ATAC.bw', card: 'linear', zone: 'track', label: 'ATAC' },
-    { file: 'Yeast_ChIP_Pol2-vs-input.bw', card: 'linear', zone: 'track', label: 'Pol II / input' },
-    { file: 'Yeast_RNA_fwd.bw', card: 'linear', zone: 'track', label: 'RNA +' },
-    { file: 'Yeast_RNA_rev.bw', card: 'linear', zone: 'track', label: 'RNA −' },
-    { file: 'Yeast_Shotgun.bw', card: 'linear', zone: 'track', label: 'shotgun' },
-    { file: 'Yeast_ATAC.narrowPeak', card: 'linear', zone: 'segments', label: 'ATAC peaks' },
-    {
-      file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak',
-      card: 'linear',
-      zone: 'segments',
-      label: 'Pol II peaks',
-    },
-    { file: 'Yeast_microC_loops.tsv', card: 'overlay', zone: 'pairs', label: 'loops' },
+    { file: 'Yeast_annotations.gtf', label: 'genes' },
+    { file: 'Yeast_MNase.bw', label: 'MNase' },
+    { file: 'Yeast_ATAC.bw', label: 'ATAC' },
+    { file: 'Yeast_ChIP_Pol2-vs-input.bw', label: 'Pol II / input' },
+    { file: 'Yeast_RNA_fwd.bw', label: 'RNA +' },
+    { file: 'Yeast_RNA_rev.bw', label: 'RNA −' },
+    { file: 'Yeast_Shotgun.bw', label: 'shotgun' },
+    { file: 'Yeast_ATAC.narrowPeak', label: 'ATAC peaks' },
+    { file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak', label: 'Pol II peaks' },
+    { file: 'Yeast_microC_loops.tsv', label: 'loops' },
   ],
 }
 
