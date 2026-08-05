@@ -31,6 +31,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:pinned": "vite build --config vite.pinned.config.ts && node scripts/check-pinned-build.mjs",
     "build:desktop": "npm run typecheck && vite build --config vite.desktop.config.ts && tsc -p tsconfig.electron.json && node scripts/build-preload.mjs && node scripts/check-desktop-build.mjs",
     "start:desktop": "npm run build:desktop && electron .",
     "dist:desktop": "npm run build:desktop && electron-builder --config electron-builder.config.cjs --publish never && node scripts/check-package.mjs",
@@ -73,6 +74,7 @@
     "main": "The Electron entry point, and it points into a build directory rather than at a source file: `electron/main.cts` compiles to CommonJS because this package is `type: module` and Electron's main process cannot be ESM. Meaningless to the web build, which has no entry point of its own -- index.html is the entry point there.",
     "electron": "Pinned exactly, not caret-ranged. This is the browser the desktop user runs, so a floating range would silently change the rendering engine under a `npm ci`. Bumping it is a CHANGELOG `Changed` entry for the same reason. Track the latest three majors, which is the window Electron itself supports.",
     "engines": "The floor is Electron 43's now, not Vite's. The `^20.19.0` half had to go: it satisfies Vite and vitest, but cannot run the desktop toolchain, so leaving it in would have advertised a Node version on which half the scripts fail.",
+    "build:pinned": "The archived copy of one commit, built to be served from `<base>v/<commit>/` and published beside the site by .github/workflows/deploy.yml. Needs PINNED_BASE and refuses to build without it, because the base contains a commit hash and there is nothing to guess. Same source, no service worker, no manifest, no demo data and no source maps — about 5 MB, which is what makes keeping twenty of them affordable inside the 1 GB Pages budget. Then it asserts the shape of what came out, because every way that shape goes wrong is both silent and late: an archived build is what nobody opens for months.",
     "build:desktop": "A second invocation of the bundler, never a change to the first. `build` is the command line .github/workflows/deploy.yml runs and it must keep working byte-for-byte; this one reads the same source through vite.desktop.config.ts, compiles the main process, and then asserts the shape of what came out, because every way that shape goes wrong is silent.",
     "dist:desktop": "Builds the installers. Deliberately *not* part of `preversion`: `npm version patch` would otherwise download a 100 MB Electron binary and pack a .dmg to bump a number. In CI this is what .github/workflows/release.yml runs, once per platform, when a GitHub release is *created* — a tag alone does not mean 'ship binaries'."
   },

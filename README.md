@@ -264,10 +264,12 @@ of this code existed.
   port of Python's `_int_attr` rather than `Number()`.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
-- `docs/deploy.md` — how the site is built and published, how it works offline, and how a release
-  is cut.
+- `docs/deploy.md` — how the site is built and published, how it works offline, how past builds
+  stay reachable, and how a release is cut.
 - `CHANGELOG.md` — what changed between versions. The running build names itself in
-  **About → version**: version, commit and commit date.
+  **About → version**: version, commit and commit date — and the dropdown under it runs any of the
+  recent builds, or any version ever released, at `…/v/<commit>/`. Useful when a figure came out
+  differently last month; not available in the desktop app, which is versioned by being installed.
 
 ## Licence
 

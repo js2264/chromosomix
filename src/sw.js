@@ -37,6 +37,23 @@ const PRECACHE = __PRECACHE__
 const PRECACHED = new Set(PRECACHE)
 
 /**
+ * The archived builds this worker must keep its hands off.
+ *
+ * The site publishes a copy of every push under `<base>v/<commit>/`, and the
+ * whole point of that copy is that opening it runs *that* code. But this worker
+ * is registered at `<base>`, so those URLs are inside its scope, and the
+ * navigation branch below answers every navigation in scope with the cached
+ * shell of the build the worker belongs to. Without this prefix, clicking a
+ * pinned version would load the newest app at a pinned address: the right URL,
+ * the wrong code, and no symptom to notice it by.
+ *
+ * Read from `self.location` rather than substituted, because the worker is
+ * emitted beside the shell it serves and therefore already knows where it is.
+ * `new URL('./', …)` is the directory this file sits in, which is the scope.
+ */
+const PINNED_PREFIX = `${new URL('./', self.location.href).pathname}v/`
+
+/**
  * Fill the cache, then wait.
  *
  * No `skipWaiting()` here: a worker that takes over immediately swaps the
@@ -89,8 +106,12 @@ self.addEventListener('fetch', (event) => {
 
   // A reload, or a link into the app: answer with the cached shell, and fall
   // back to the network on a cold cache. Every view lives in the URL *hash*, so
-  // one entry serves every link the app publishes.
+  // one entry serves every link the app publishes — with one exception, which
+  // is a link to an archived build. That is a different document under the same
+  // scope and it has to come from the network, or the reader gets this build
+  // wearing that build's address.
   if (request.mode === 'navigate') {
+    if (new URL(request.url).pathname.startsWith(PINNED_PREFIX)) return
     event.respondWith(
       caches.match(PRECACHE[0]).then((cached) => cached ?? fetch(request)),
     )

@@ -22,57 +22,10 @@
  *   Windows runner, so the release job would silently build with base `/`.
  */
 
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig } from 'vite'
 
 import base from './vite.config'
-
-/**
- * Take the three installability tags out of the packaged `index.html`, and the
- * comment that introduces them.
- *
- * None of them means anything in a window that is already an application: a
- * manifest describes how a *site* would like to be installed, `theme-color`
- * tints browser chrome that is not there, and `apple-touch-icon` is an iOS home
- * screen. Left in, the manifest and the touch icon are worse than inert — they
- * are links to files this build does not emit (`publicDir: false`), so the
- * renderer opens with failed requests on the console of an app whose whole claim
- * is that it needs no network.
- *
- * The favicon stays, in every build. It is a data URI, so there is no file for
- * it to fail to find, and a packaged renderer resolves it exactly as the site
- * does — which is the reason it is a data URI and not a fourth thing in
- * `public/`.
- *
- * The comment goes with them, and that is not tidiness. It says the app is
- * installable and works offline after the first visit; in this build there is no
- * manifest and no service worker, so leaving it behind ships a paragraph that is
- * false about the artifact it is inside — read, eventually, by whoever is trying
- * to work out why there is no worker.
- *
- * Matched on the tags rather than on the comment's wording, with the comment
- * removed only as the block that precedes them: if `index.html` is reworded this
- * silently does less, and doing less here is caught by `indexHtmlProblems` —
- * both stripped links are root-absolute, which is the rule that catches them.
- *
- * `apply: 'build'` because `transformIndexHtml` also runs in dev, and dev is
- * still the browser.
- */
-function stripPwaTags(): Plugin {
-  return {
-    name: 'metacooler-strip-pwa-tags',
-    apply: 'build',
-    transformIndexHtml(html) {
-      return html
-        .replace(
-          /^[ \t]*<!--(?:(?!-->)[\s\S])*?`src\/pwa\.ts`(?:(?!-->)[\s\S])*?-->\r?\n?/m,
-          '    <!-- The manifest, touch-icon and theme-color tags are stripped for the desktop build. -->\n',
-        )
-        .replace(/^[ \t]*<link\s+rel="manifest"[^>]*>\r?\n?/gim, '')
-        .replace(/^[ \t]*<link\s+rel="apple-touch-icon"[^>]*>\r?\n?/gim, '')
-        .replace(/^[ \t]*<meta\s+name="theme-color"[^>]*>\r?\n?/gim, '')
-    },
-  }
-}
+import { stripPwaTags } from './scripts/pwa-tags.mjs'
 
 export default defineConfig({
   ...base,

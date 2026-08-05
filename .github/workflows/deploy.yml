@@ -3,26 +3,40 @@ name: Deploy to GitHub Pages
 # The viewer is a static bundle with no backend (SPECS C1), so publishing it is
 # just "build and upload the directory". Data files are never part of it: they
 # live on a bucket configured per docs/hosting.md.
+#
+# What is published is two things, not one: the site, at the root, and a copy of
+# this build under `v/<commit>/` beside the copies previous pushes left there.
+# That is what the version dropdown in the about dialog offers, and the whole of
+# how it works is in docs/deploy.md under "Every push stays reachable".
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 # Let a newer commit cancel an in-flight build, but never a deployment that has
-# already started — a half-published site is worse than a stale one.
+# already started — a half-published site is worse than a stale one. It is also
+# what keeps the archive branch to one writer: two jobs merging a manifest at
+# once would each publish a list missing the other's build.
 concurrency:
   group: pages
   cancel-in-progress: false
 
+# The branch the archived builds live on. It is storage and nothing else: Pages
+# is still deployed from the artifact this workflow uploads, so the repository's
+# Pages source stays "GitHub Actions" and there is no setting to change.
+env:
+  ARCHIVE_BRANCH: pages-archive
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Only this job writes, and it writes one branch. Previously both jobs held
+    # all three permissions; the deploy job now keeps only what it deploys with.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +64,15 @@ jobs:
           echo "path=$base" >> "$GITHUB_OUTPUT"
           echo "Building with base $base"
 
+      # `git rev-parse --short`, not `github.sha` and not its first seven
+      # characters: this string is a directory name *and* the value the bundle
+      # reports about itself, because vite.config.ts asks git the same question.
+      # Two spellings of one commit would publish a build the version picker
+      # cannot find itself in.
+      - name: Resolve this commit
+        id: commit
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - run: npm ci
 
       # `npm run build` typechecks first, so a type error fails the deploy
@@ -58,6 +81,66 @@ jobs:
         env:
           BASE_PATH: ${{ steps.base.outputs.path }}
 
+      # The same source again, for the copy that stays reachable after the next
+      # push. No typecheck: the build above already ran one over this tree, and
+      # a second would spend a minute answering a question already answered.
+      - name: Build this commit's archived copy
+        run: npm run build:pinned
+        env:
+          PINNED_BASE: ${{ steps.base.outputs.path }}v/${{ steps.commit.outputs.short }}/
+
+      # Shallow, because only the tip of the archive branch is of interest here,
+      # and because a full clone of a repository carrying 250 MB of demo data in
+      # its history is not a thing to do on every push. Pushing a commit from a
+      # shallow checkout is fine: its parent is the tip the remote already has.
+      - name: Fetch the archive of past builds
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$ARCHIVE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$ARCHIVE_BRANCH" "$remote" archive
+          else
+            echo "No $ARCHIVE_BRANCH branch yet — starting one."
+            mkdir archive
+            git -C archive init --quiet --initial-branch "$ARCHIVE_BRANCH"
+            git -C archive remote add origin "$remote"
+          fi
+
+      - name: Archive this build and prune what falls out of the window
+        run: node scripts/archive-versions.mjs archive dist-pinned
+
+      # Not fatal. A site that publishes correctly but fails to *remember* that
+      # it did is a better outcome than one that does not publish, and the next
+      # push re-adds this build from scratch — the script is idempotent per
+      # commit. What is uploaded below is this working tree either way, so the
+      # published site and its manifest agree even when this step does not run.
+      - name: Publish the archive
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cd archive
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --quiet --cached; then
+            echo "Nothing changed."
+          else
+            git commit --quiet -m 'archive ${{ steps.commit.outputs.short }}'
+            git push --quiet origin "HEAD:refs/heads/$ARCHIVE_BRANCH"
+          fi
+
+      # The published site is the site plus the archive. `versions.json` is
+      # copied from the same working tree the directories came from, so the two
+      # cannot disagree about what exists.
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          cp -R archive/v dist/v
+          cp archive/versions.json dist/versions.json
+          du -sh dist dist/v
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -65,6 +148,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

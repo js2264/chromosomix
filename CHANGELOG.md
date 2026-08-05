@@ -14,6 +14,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A dropdown that runs another commit.** The site is built from `main` on
+  every push and has only ever served the newest of those builds, which is fine
+  until a figure comes out different from one made last month. Every deploy now
+  also publishes a copy of itself at `…/v/<commit>/`, keeps the recent ones
+  beside it, and lists them in `versions.json`; **About → version** offers them
+  as a menu directly under the build stamp it continues.
+
+  Picking one is a navigation and not a swap — the two builds are different
+  documents, and pretending otherwise would mean shipping a loader whose job is
+  to run code from another commit. What travels is what is written down: the
+  query string, the hash and the `sessionStorage` tab strip, so a link and a
+  view survive the move. A file opened from local disk does not, for the reason
+  it does not survive a reload either, and the hint says so rather than letting
+  it be discovered. An archived build says what it is in a corner bar, with one
+  button back to the newest.
+
+  What is kept is the **last 20 pushes** — the debugging window; past fifty the
+  answer is a bisect rather than a menu — and the **newest build of every
+  version ever published**, which is the archive proper and the reason to cut a
+  release even though every push is already live. A released number is
+  something people cite in a methods section, and one that answers 404 two
+  months later is worse than never having offered it.
+
+  An archived copy leaves out the demo data, the source maps, the manifest and
+  the service worker (`vite.pinned.config.ts`), which is ~5 MB against a build's
+  19 MB and is what makes keeping twenty affordable inside a 1 GB Pages site.
+  Deliberately **not** installable: a dock icon must not open a version
+  somebody pinned once to check a figure. None of it exists in the desktop
+  build, where an installer is versioned by being an installer.
+
+  Each of those four properties is asserted after the build rather than trusted
+  (`scripts/check-pinned-build.mjs`), because each fails quietly and *late*: an
+  archived build is the artifact nobody opens for months, so a wrong base is a
+  blank page found in November, and a `publicDir` left on exhausts the site's
+  budget several deploys after the change that caused it.
+
 - **Tabs, and a real session behind each one.** Several files open at once, each
   with its own reader worker, its own annotation worker, its own stores and its
   own DOM. Switching a tab in re-parents that DOM rather than rebuilding it, so
@@ -502,6 +538,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   reading from where the drag started.
 
 ### Fixed
+
+- **The service worker would have answered a pinned URL with the newest build.**
+  It is registered at the site root, so every archived build's address is inside
+  its scope, and its navigation handler answered *everything* in scope from the
+  precached shell — the right URL, the wrong code, and no symptom to notice it
+  by. Navigations under `<scope>v/` now go to the network untouched.
+
+  A worker only updates when a page it controls is loaded, so the fix cannot
+  reach a reader who is already carrying an older one — and that reader is
+  exactly who follows a pinned link. `recoverPinnedNavigation()` catches the
+  case from the page itself: a document built for the site root, at an address
+  under the archive prefix, is a pair of facts that cannot both be true of a
+  correctly served page. It unregisters and reloads, once per tab, because the
+  second attempt at that would be a reload loop.
 
 - **A cooler rendered nothing.** `MatrixPanel`'s new edge-drop watcher read
   `this.el` from the constructor, where it does not exist yet, so the panel threw

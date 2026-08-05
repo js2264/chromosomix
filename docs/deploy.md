@@ -165,6 +165,114 @@ These are data by every rule in `scripts/sw-manifest.mjs`, so they are not preca
 `DEMO_FILES` — `test/unit/demo-examples.test.ts` opens what the picker offers, and offering a bigWig
 in a picker that returns a `MetaCooler` would be a broken choice, not a track.
 
+## Every push stays reachable
+
+Because the site is built from `main` on every push, "the viewer" is not one artifact but a stream of
+them, and the site only ever serves the newest. That is fine until a figure comes out different from
+one made last month, or a `.metacool` that opened in July does not open now — at which point the
+only useful question is *which build*, and the only useful answer is one you can go and run.
+
+So every deploy publishes **two** things:
+
+```
+https://<owner>.github.io/<repo>/                 the newest build
+https://<owner>.github.io/<repo>/v/<commit>/      a copy of it, and of the recent ones before it
+https://<owner>.github.io/<repo>/versions.json    what is published, newest first
+```
+
+**About → version** carries a dropdown of the builds in that manifest (`src/ui/VersionPicker.ts`).
+Picking one is a navigation, not a swap: the two builds are different documents, and the query
+string, the hash and the `sessionStorage` tab strip come along, so a link and a view survive the
+move. A file opened from local disk does not, for the reason it does not survive a reload either.
+An archived build says so in a corner bar, with one button back to the newest.
+
+Nothing about this is on the desktop build, and the archived copies are deliberately **not**
+installable — a dock icon must not open a version somebody pinned once to check a figure.
+
+### What is archived, and what it costs
+
+`npm run build:pinned` (`vite.pinned.config.ts`) is a third invocation of the bundler over the same
+source, spreading `vite.config.ts` exactly as the desktop config does. It differs in four ways, all
+of them consequences of being a *copy*:
+
+| | site build | archived copy |
+| --- | --- | --- |
+| base | `/<repo>/` | `/<repo>/v/<commit>/`, from `PINNED_BASE` |
+| service worker | emitted and registered | neither |
+| installable | yes | no — `stripPwaTags()`, shared with the desktop build |
+| `public/` | copied, 250 MB | not copied; `__DEMO_BASE__` points at the site's own `demo/` |
+| source maps | yes, ~13 MB | no |
+
+That leaves **~5 MB per commit**, against a Pages site limit of 1 GB of which the demo data already
+spends ~250 MB. Most of those 5 MB are the HDF5 build, whose chunk is content-hashed and identical
+between builds — so git stores one copy of it however many commits are kept, and the archive branch
+grows by a few hundred kilobytes per push rather than by five megabytes.
+
+Every one of those four rows is asserted after the build, by `scripts/check-pinned-build.mjs`,
+because every one of them fails quietly and late: an archived build is the artifact nobody opens
+for months, so a wrong base is a blank page a reader finds in November, and a `publicDir` left on
+exhausts the site's budget several deploys after the change that caused it. The rules are in
+`scripts/pinned-shape.mjs` and are held by `test/unit/pinned-shape.test.ts`, the same arrangement
+`check-desktop-build.mjs` uses and for the same reason.
+
+### Where the old builds live between deploys
+
+Pages replaces the whole site on every deployment, so the previous builds have to be kept somewhere
+and put back. They live on a **`pages-archive`** branch — its own history, sharing no commit with
+`main` — which is storage and nothing else: the repository's Pages source stays *GitHub Actions*,
+and there is no setting to change.
+
+1. the deploy job builds the site, then builds this commit's archived copy;
+2. it shallow-clones `pages-archive`, which holds `versions.json` and one directory per kept build;
+3. `scripts/archive-versions.mjs` adds this commit, applies the retention rules, deletes the
+   directories that fall out, and rewrites the manifest;
+4. it commits and pushes that branch — **non-fatally**: a site that publishes but fails to record
+   that it did is a better outcome than one that does not publish, and the script is idempotent per
+   commit, so the next push re-adds it;
+5. the archive is copied into `dist/` and the whole thing is uploaded as the Pages artifact.
+
+The build job therefore needs `contents: write`, which it did not before. It is the only job that
+has it: the deploy job was narrowed to `pages: write` and `id-token: write` in the same change.
+
+Two builds pushing that branch at once would each write a manifest missing the other's build. They
+cannot: the workflow's `concurrency: pages` group already serialises runs, which is what makes a
+plain push safe here rather than a merge.
+
+### What is kept
+
+Two rules, in `scripts/versions-manifest.mjs`, pinned by `test/unit/versions-manifest.test.ts`
+because this is the one thing the deploy does that pushing again cannot undo:
+
+- **the last 20 pushes**, which is the debugging window — "it worked on Tuesday" is a question about
+  a handful of commits, and by the time it is about fifty the answer is a bisect;
+- **the newest build of every `package.json` version ever published**, which is the archive proper.
+  A released version is something people cite in a methods section, and one that answers 404 two
+  months later is worse than never having offered it.
+
+The second rule is the reason to cut a release even though every push is published: the version
+number is what makes a build *keepable*. There is one such entry per release, so that set grows at
+the rate releases happen and not at the rate pushes do.
+
+To reset the archive, delete the `pages-archive` branch; the next deploy starts a new one holding
+that build alone. To change the window, change `KEEP_RECENT` — and read the arithmetic above first,
+because 20 builds is ~100 MB and the budget is what it is.
+
+### The service worker had to be taught about this
+
+The worker is registered at `/<repo>/`, so `/<repo>/v/<commit>/` is inside its scope, and its
+navigation handler answers **every** navigation in scope from the precached shell. Left alone it
+would serve the newest app at a pinned address: the right URL, the wrong code, and no symptom.
+`src/sw.js` now passes navigations under `<scope>v/` straight through.
+
+That fix only reaches a visitor once their worker updates, and a worker updates only when a page it
+controls is loaded — so a reader carrying an older one can still land on this exact bug.
+`recoverPinnedNavigation()` in `src/pwa.ts` detects it (a document built for the site root, at an
+address under the archive prefix — two things that cannot both be true of a correctly served page),
+unregisters and reloads, once per tab.
+
+**Deleting `pages-archive` is not enough to unpublish a build**, incidentally: whoever has the site
+cached has the copy they were served. The archive controls what is *offered*, not what has been.
+
 ## Why Pages works at all for this app
 
 Worth recording, because it is the usual reason a wasm app *cannot* be on Pages: GitHub Pages does
@@ -288,6 +396,10 @@ commit, and that commit's date (`src/version.ts`). They appear in **About → ve
 The commit *date* rather than the build date is deliberate: rebuilding identical source must not
 produce a bundle that claims to be newer than the one beside it. A build with no git repository —
 from a source tarball, say — reports the version alone rather than failing.
+
+That stamp is also the *anchor* for the version dropdown directly beneath it: the commit it names is
+how the picker knows which of the published builds is the one currently running. See
+[Every push stays reachable](#every-push-stays-reachable).
 
 ## What CI does not do
 

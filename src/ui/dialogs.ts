@@ -9,6 +9,7 @@
  */
 
 import { Modal } from './Modal'
+import { versionPicker } from './VersionPicker'
 import { el } from './dom'
 import { keyLabel, type Command } from './commands'
 import { buildLine } from '../version'
@@ -178,6 +179,12 @@ export function openAbout(
         // bug report about a page that has no server to interrogate, and the
         // last thing anyone reads for pleasure.
         el('p', { class: 'about-build', text: `version ${buildLine()}` }),
+        // Directly under the stamp, because it is the same question continued:
+        // the line above says which build this is, and this says which other
+        // ones are still published and lets the reader go and run one. `null`
+        // on the desktop target, where an installer is versioned by being an
+        // installer and there is no site to hold the other builds.
+        versionPicker(),
         // The runtime, read from `process.versions` at preload time rather than
         // written down anywhere: Electron's Chromium and Node move within a
         // major, and a number pinned in the repository would be wrong within a
