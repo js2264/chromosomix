@@ -73,7 +73,7 @@ import { RegionView } from '../ui/RegionView'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, type Command } from '../ui/commands'
-import { button, el, fmt } from '../ui/dom'
+import { button, dragHasFiles, el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
@@ -262,18 +262,23 @@ function mapCard(
       el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
     ),
   )
+  // The card takes the file anywhere on it and the *zone* is what lights up:
+  // the dashed box is the thing on screen that says "put it here", so it is the
+  // thing that has to react — a two-hundred-pixel card going blue around an
+  // inert target says the target is not the target.
   card.addEventListener('dragover', (event) => {
+    if (!dragHasFiles(event)) return
     event.preventDefault()
-    card.classList.add('over')
+    zone.classList.add('over')
   })
   card.addEventListener('dragleave', (event) => {
     if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return
-    card.classList.remove('over')
+    zone.classList.remove('over')
   })
   card.addEventListener('drop', (event) => {
     event.preventDefault()
     event.stopPropagation()
-    card.classList.remove('over')
+    zone.classList.remove('over')
     const file = event.dataTransfer?.files?.[0]
     if (file !== undefined) onOpenMap(file)
   })

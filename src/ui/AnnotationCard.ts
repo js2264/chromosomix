@@ -25,7 +25,7 @@
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
-import { button, el, fmt, trimNumber } from './dom'
+import { button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
 
 /**
@@ -89,17 +89,17 @@ export class AnnotationCard {
   private readonly ticked = new Set<string>()
 
   constructor(private readonly props: AnnotationCardProps) {
+    // Where a file goes in, above the list of what is already in. What was here
+    // instead was five labelled rectangles — one per format — which between
+    // them asked the reader to know, before dropping, an answer the application
+    // works out from the bytes a moment later, and which said "wrong rectangle"
+    // when they guessed. One zone, and the card around it takes a file too.
+    const load = loadZone(props.loader)
     this.el = el(
       'section',
       { class: 'card annotation-card' },
       cardTitle('Tracks', 'chart-area'),
-      // Where a file goes in, above the list of what is already in. What was
-      // here instead was five labelled rectangles — one per format — which
-      // between them asked the reader to know, before dropping, an answer the
-      // application works out from the bytes a moment later, and which said
-      // "wrong rectangle" when they guessed. One zone, and the card around it
-      // takes a file too.
-      ...loadZone(props.loader),
+      ...load.nodes,
       ...(props.demo === undefined
         ? []
         : [
@@ -110,7 +110,7 @@ export class AnnotationCard {
           ]),
       this.list,
     )
-    this.cardDrops(this.el)
+    this.cardDrops(this.el, load.zone)
 
     // Focus leaving the list is what releases a deferred rebuild. Deferred to a
     // task, because at `focusout` time the *new* focus owner is not set yet, so
@@ -135,28 +135,33 @@ export class AnnotationCard {
   // -------------------------------------------------------------------------
 
   /**
-   * Make an element take a dropped file.
+   * Make the card take a dropped file, and make the *zone* say so.
    *
-   * Shared with the "load a track" card below, because they are the same
-   * gesture landing in the same place; the only difference is that one of them
-   * is *only* that and says so with a dashed border.
+   * The card still accepts a file anywhere on it — a reader whose pointer is
+   * over the eighth row when they let go meant to load the file, and refusing
+   * on a technicality would be pedantry. What changed is what lights up: the
+   * whole card used to, which is a two-hundred-pixel rectangle going blue
+   * around a dashed box that is *already* the drawn target, so the one thing on
+   * screen saying "put it here" was the thing that did not react. Now the zone
+   * lights the moment a file crosses the card, wherever on it the pointer is.
    */
-  private cardDrops(host: HTMLElement): void {
+  private cardDrops(host: HTMLElement, zone: HTMLElement): void {
     host.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event)) return
       event.preventDefault()
-      host.classList.add('over')
+      zone.classList.add('over')
     })
     host.addEventListener('dragleave', (event) => {
       // Only when the pointer has actually left the card, not when it crosses
       // from the card onto a row inside it — `dragleave` fires for every child
       // boundary, and without this the highlight flickers all the way down.
       if (event.relatedTarget instanceof Node && host.contains(event.relatedTarget)) return
-      host.classList.remove('over')
+      zone.classList.remove('over')
     })
     host.addEventListener('drop', (event) => {
       event.preventDefault()
       event.stopPropagation()
-      host.classList.remove('over')
+      zone.classList.remove('over')
       const files = Array.from(event.dataTransfer?.files ?? [])
       if (files.length > 0) this.props.loader.addFiles(files)
     })
@@ -1071,7 +1076,7 @@ export function overlapWarning(overlap: ContigOverlap | undefined): string | nul
  * around it takes a dropped file as well, anywhere on it, which is why the hint
  * says so rather than leaving the reader to aim.
  */
-function loadZone(loader: AnnotationLoader): HTMLElement[] {
+function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLElement } {
   const input = el('input', { class: 'hidden-input', type: 'file' })
   input.multiple = true
   input.addEventListener('change', () => {
@@ -1100,10 +1105,10 @@ function loadZone(loader: AnnotationLoader): HTMLElement[] {
       input.click()
     }
   })
-  // No drop handling of its own: it sits inside a card that already takes a
-  // file anywhere on it, and a drop landing on the zone bubbles there. Two
-  // handlers would mean two highlights lighting up together — the card outlined
-  // and the zone filled — over one gesture that has one destination.
+  // No drop handling of its own: the card around it takes a file anywhere on
+  // it, a drop landing on the zone bubbles there, and the card lights *this*
+  // element while it happens — so the target the reader is looking at is the
+  // one that reacts, and one gesture still has one handler.
 
   const url = el('input', {
     class: 'input',
@@ -1120,15 +1125,18 @@ function loadZone(loader: AnnotationLoader): HTMLElement[] {
     if (event.key === 'Enter') submit()
   })
 
-  return [
+  return {
     zone,
-    el(
-      'details',
-      { class: 'ann-url' },
-      el('summary', { text: 'or open one by URL' }),
-      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
-    ),
-  ]
+    nodes: [
+      zone,
+      el(
+        'details',
+        { class: 'ann-url' },
+        el('summary', { text: 'or open one by URL' }),
+        el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+      ),
+    ],
+  }
 }
 
 /**

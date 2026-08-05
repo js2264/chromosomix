@@ -267,7 +267,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **A mark before every card title** in the three panels, so a column of five
   cards is recognised by shape before it is read.
 
+- **A height for every track, and the button that gives it to them**, in the
+  browser's Plot card beside the stretch mark. Stretching answers "use the space
+  I have"; this answers "I know what a track should look like" — ninety pixels
+  is where a yeast ATAC track starts showing the shape of a promoter — and it is
+  also the way *out* of a stretch, which on a tall screen with two tracks leaves
+  two four-hundred-pixel lanes and nothing to bring them down with. The box is a
+  number and nothing happens as it is typed; Enter and the button are the
+  instruction, so it keeps what you last applied and the next file is one press
+  away from it.
+
 ### Changed
+
+- **The drop zone is what lights up**, not the card around it. A card that asks
+  for a file still takes one anywhere on it — a reader whose pointer is over the
+  eighth row when they let go meant to load it — but what reacts is the dashed
+  box, which is the element already drawn as the target. The whole card going
+  blue around an inert rectangle said the rectangle was not the one. Tracks,
+  Compare and the browser's Contact map card all behave this way now, and a
+  *row* dragged within the Tracks card lights nothing, because a drag carrying
+  no files is a reorder.
+
+- **Plot before Groups** in the browser's Aesthetics column. Plot acts on this
+  picture and is there whatever the file is; Groups is empty until a reader has
+  made one, and a column that opens with an empty card reads as a column with
+  nothing in it. The browser's toolbar also gives up its autoscale button, which
+  was the sixth control in a row that then wrapped, orphaning one button on a
+  line of its own — it is in the Plot card, on `Y`, where the height box is.
 
 - **A track lands under the map, not beside it.** The bottom edge is where a
   track is read — under a ruler, left to right — and a coverage profile turned
@@ -345,6 +371,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   invisible, so reaching for it is one movement rather than a hunt.
 
 ### Fixed
+
+- **A cooler rendered nothing.** `MatrixPanel`'s new edge-drop watcher read
+  `this.el` from the constructor, where it does not exist yet, so the panel threw
+  on the way up — for every file that *has* annotations, which is every cooler,
+  while a `.metacool` (which has none, §8.5) was unaffected. Clicking a contig or
+  opening the whole-genome view produced no map at all. The listeners go on the
+  grid instead, which exists by then and is the honest scope anyway: it holds the
+  map, its lanes and the two zones, while `this.el` reaches the colourbar and the
+  header, where a drag means nothing.
+
+  It survived a type check, 697 unit tests and a code read, because none of them
+  run the constructor. What catches this class of defect is opening the app, so
+  the working file now gets opened: a genuine `.cool` built by the public cooler
+  API, served over range requests, driven through the contigs table, the
+  whole-genome view, a region, and a browser session with a track in it.
 
 - **The labels overlay could not be toggled in a genome browser session.** `L`
   was bound twice — the overlay, and "go to a locus" — and the command list is

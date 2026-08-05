@@ -94,6 +94,16 @@ const LANE_GRIP = 4
 const DRAG_SLACK = 3
 /** The smallest a lane may be dragged to; below this it is a line, not a track. */
 const LANE_MIN_SIZE = 14
+
+/**
+ * The height the `set` button offers before anyone has typed one.
+ *
+ * The same ninety `defaultStyle` gives a new bigWig, and for the reason written
+ * there: it is about where a yeast ATAC track starts showing the shape of a
+ * promoter. Written here rather than imported so the control's floor and its
+ * default read together; the two are checked against each other by a test.
+ */
+const DEFAULT_TRACK_HEIGHT = 90
 const LANE_FONT = '10px system-ui, sans-serif'
 /**
  * The value range under a track's name.
@@ -380,11 +390,11 @@ export class BrowserView {
             withKey('Stretch every track to fill the height, all to one height', KEYS.stretch),
             () => this.fitTracks(),
           ),
-          iconButton(
-            'chevrons-up-down',
-            withKey('Autoscale every track to what is in view', KEYS.autoscale),
-            () => this.autoscaleAll(),
-          ),
+          // Autoscale is not here. It is in the Plot card, beside the height
+          // box, with `Y` on it — and a sixth control in this row is what tips
+          // the bar into wrapping, which puts one orphaned button on a line of
+          // its own under the locus box. The two that stay are the two that are
+          // about *this window*: fit across, and fill down.
         ),
         el(
           'p',
@@ -402,16 +412,21 @@ export class BrowserView {
       this.stage,
     )
 
+    // Plot first, Groups under it. Plot is the card that acts on *this picture*
+    // — refit, stretch, autoscale, the overlays, the export — and it is there
+    // whatever the file is; Groups is empty until a reader has made one, and a
+    // column that opens with an empty card reads as a column with nothing in
+    // it.
     this.sideEl = el(
       'aside',
       { class: 'side' },
+      this.exportCard(),
       el(
         'div',
         { class: 'controls-card' },
         cardTitle('Groups', 'layers', 'controls-title'),
         this.groupsHost,
       ),
-      this.exportCard(),
     )
 
     this.cache = new SampleCache(props.client, () => this.schedule())
@@ -639,8 +654,27 @@ export class BrowserView {
       RULER_HEIGHT -
       LANE_GAP * (lanes.length + 1)
     if (!(room > 0)) return
-    const size = Math.max(LANE_MIN_SIZE, Math.floor(room / lanes.length))
-    for (const lane of lanes) {
+    this.setTrackHeight(Math.floor(room / lanes.length))
+  }
+
+  /**
+   * Give every lane one height, chosen rather than computed.
+   *
+   * The other half of the same thought. Stretching answers "use the space I
+   * have"; this answers "I know what a track should look like" — ninety pixels
+   * is where a yeast ATAC track starts showing the shape of a promoter, and a
+   * reader who has learned that number wants it back after every fit, on every
+   * file, without measuring a window. It is also the way *out* of a stretch: on
+   * a tall screen with two tracks, filling the space gives two four-hundred
+   * pixel lanes, and nothing else brings them back down together.
+   *
+   * A lane and not a track, so two tracks sharing one lane are set once between
+   * them rather than twice — which would be the same assignment written twice,
+   * and is what {@link fitTracks} means by its own loop.
+   */
+  setTrackHeight(px: number): void {
+    const size = Math.max(LANE_MIN_SIZE, Math.round(px))
+    for (const lane of this.lanes) {
       for (const member of [lane.entry, ...lane.overlaid]) {
         this.props.store.restyle(member.id, { size })
       }
@@ -1977,6 +2011,62 @@ export class BrowserView {
     return node
   }
 
+  /**
+   * A height to give every lane, and the button that gives it to them.
+   *
+   * Beside the stretch mark rather than under it, because the two are one
+   * decision taken two ways — *fill the window* or *this many pixels* — and a
+   * reader who has just stretched two tracks into two four-hundred-pixel lanes
+   * reaches for this one immediately afterwards.
+   *
+   * The box holds a number and nothing else happens when it changes: typing is
+   * not an instruction, and a store write per keystroke would restyle every
+   * track eight times on the way to `120`. Enter and the button are the
+   * instruction, which is also what makes the box a *remembered* number — it
+   * keeps what you last applied, so the second file of the session is one press
+   * away from the height you chose for the first.
+   */
+  private heightField(): HTMLElement {
+    const input = el('input', {
+      class: 'input input-num',
+      type: 'number',
+      value: String(DEFAULT_TRACK_HEIGHT),
+      title: `Height for every track, in pixels. ${LANE_MIN_SIZE} is the floor.`,
+    })
+    input.min = String(LANE_MIN_SIZE)
+    input.step = '10'
+    const apply = (): void => {
+      const typed = Number(input.value)
+      // An unreadable box is put back rather than obeyed: `Number('')` is 0, and
+      // silently setting every lane to the minimum is not what an empty field
+      // means.
+      if (!Number.isFinite(typed) || typed <= 0) {
+        input.value = String(DEFAULT_TRACK_HEIGHT)
+        return
+      }
+      const size = Math.max(LANE_MIN_SIZE, Math.round(typed))
+      input.value = String(size)
+      this.setTrackHeight(size)
+    }
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') apply()
+    })
+    return el(
+      'div',
+      { class: 'field field-block' },
+      el('span', { class: 'field-label', text: 'track height' }),
+      el(
+        'div',
+        { class: 'height-row' },
+        input,
+        button('set', apply, {
+          class: 'btn',
+          title: 'Give every track the height in the box, whatever the window is doing',
+        }),
+      ),
+    )
+  }
+
   private exportCard(): HTMLElement {
     const dpiSelect = el('select', {
       class: 'select select-dpi',
@@ -2044,6 +2134,7 @@ export class BrowserView {
             { class: 'btn btn-icon', size: 15 },
           ),
         ),
+        this.heightField(),
         el(
           'div',
           { class: 'field field-block' },

@@ -2289,6 +2289,18 @@ p {
   width: 100%;
 }
 
+/* A number and the button that applies it, on one line: the box takes the room
+   and the button keeps the width of its own word however narrow the column is
+   dragged. A grid rather than a flex row for the reason `.export-row` is one —
+   a `<input type=number>` asks for about twenty characters and would push the
+   button out of the card if it were allowed to. */
+.height-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem;
+  align-items: center;
+}
+
 /* A checkbox is the one control that must not stretch: `width: 100%` on it
    draws a 7rem square in some browsers and a lonely 13px box pinned to the far
    right in the rest. It sits at the head of its column, level with its label. */
@@ -3782,10 +3794,11 @@ p {
 
 .ann-drop:hover,
 .ann-drop:focus-visible,
-/* A file is being dragged over this particular zone. The Compare card and the
-   browser's Contact map card take their own drops — the Tracks card lets the
-   card around it take them and needs no state of its own — and both mark the
-   zone rather than the card, because the zone is what the pointer is on. */
+/* A file is on its way in. Set while the drag is anywhere over the card this
+   zone belongs to, not merely over the zone itself: the reader is aiming at a
+   card and should see where the file will land the moment they cross it. Every
+   card that asks for a file does this — Tracks, Compare, and the browser's
+   Contact map — and none of them light anything else. */
 .ann-drop.over {
   border-color: var(--accent, #1f5fa9);
   background: var(--bg-sunken);
@@ -3958,14 +3971,11 @@ p {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-/* The whole card is a target while a file is over it. No dashes at rest: it is
-   a card that also accepts a file, not a rectangle pretending to be a button. */
-.annotation-card.over,
-.map-card.over {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  background: var(--accent-soft);
-}
+/* A card that takes a file no longer lights *itself*. It still accepts one
+   anywhere on it — see `AnnotationCard.cardDrops` — but what goes blue is the
+   dashed zone inside it, because that is the element already drawn as the
+   target, and a card outlined around an inert rectangle says the rectangle is
+   not the one. See `.ann-drop.over`. */
 
 /* Which feature set the search reads. Filled for the one it does — a `fill` on
    the glyph, which beats the `fill="none"` the icon builder writes — and an

@@ -61,6 +61,19 @@ export function append(parent: Node, children: Child[]): void {
   }
 }
 
+/**
+ * Whether a drag is carrying files, rather than text or a row from a card.
+ *
+ * Asked before any drop target lights up, because the Tracks card's own rows
+ * are draggable — that is how a stack is reordered — and one dragged across the
+ * card must not offer to load itself. `types` is the only thing a browser
+ * exposes during a drag; the files themselves are readable at `drop` and not
+ * before, which is exactly the moment it is too late to have highlighted.
+ */
+export function dragHasFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
 /** Remove every child of a node. */
 export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild)
