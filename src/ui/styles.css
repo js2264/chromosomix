@@ -795,26 +795,32 @@ p {
   border: 0;
 }
 
-/* Autoscale, at the end of the range it resets. Small and quiet — it stands on
-   the track's own ink — and lit while the axis on screen is the data's own. */
-.browser-auto {
+/* Autoscale, at the end of the range it resets.
+
+   The glyph and nothing else: no box, no border, no ground. It sits on a lane
+   next to two numbers that are themselves drawn straight onto the canvas, and a
+   bordered button beside them read as a control bolted to the picture rather
+   than as part of the label. Lit while the axis on screen is the data's own. */
+/* `.btn.` on both, because `.btn` is declared a thousand lines further down and
+   a tie on specificity is broken by source order — which is how this button kept
+   the bordered box it is not supposed to have. */
+.btn.browser-auto {
   position: absolute;
-  padding: 1px;
+  padding: 0;
   border: 0;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  background: none;
   color: var(--text-dim);
   line-height: 0;
   cursor: pointer;
   pointer-events: auto;
 }
 
-.browser-auto:hover {
+.btn.browser-auto:hover {
   color: var(--accent);
-  background: var(--bg);
+  background: none;
 }
 
-.browser-auto.is-on {
+.btn.browser-auto.is-on {
   color: var(--accent);
 }
 
@@ -890,13 +896,21 @@ p {
   border-top: 1px solid var(--border);
 }
 
-/* The two decisions about a group, and the one bulk action. Wraps, because the
-   Aesthetics column is sixteen characters wide and three buttons are not. */
+/* The two decisions about a group, and the one bulk action — as buttons, with
+   the box a button has. Quiet ones read as three lines of prose here: there is
+   no row of controls beside them to be quiet against, and each of the three is a
+   thing that happens when it is pressed. Wraps, because the Aesthetics column is
+   sixteen characters wide and three buttons are not. */
 .group-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
   align-items: center;
+}
+
+.group-row > .btn {
+  padding: 0.2rem 0.45rem;
+  font-size: var(--step--2);
 }
 
 /* What is *in* the group — the part the card used to give as a count.
