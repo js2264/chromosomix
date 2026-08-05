@@ -74,6 +74,23 @@ export function dragHasFiles(event: DragEvent): boolean {
   return Array.from(event.dataTransfer?.types ?? []).includes('Files')
 }
 
+/**
+ * The type a dragged **track row** carries, so a target can tell it from a file
+ * while the drag is still in the air.
+ *
+ * A custom MIME type and not `text/plain`, which the same drag also sets: a
+ * plain string is what a text selection dragged out of any input carries too,
+ * and the map's edge rectangles must not offer to move a track because someone
+ * dragged a word across them. Lowercase, because a browser lowercases every
+ * type it stores and a comparison against a capital would never match.
+ */
+export const TRACK_DRAG_TYPE = 'application/x-metacooler-track'
+
+/** Whether a drag is carrying one of the Tracks card's rows. */
+export function dragHasTrack(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes(TRACK_DRAG_TYPE)
+}
+
 /** Remove every child of a node. */
 export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild)

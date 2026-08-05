@@ -49,8 +49,17 @@ export const KEYS = {
   whole: 'w',
   previous: '[',
   next: ']',
+  /**
+   * Save what is on screen as a figure — the mounted view's own export.
+   *
+   * `s` for save, and it is the *plot* rather than the session: `⌘S` writes the
+   * tab out as a config, this writes the picture out as a PDF or a PNG. The two
+   * being one letter apart is the point — they are the two things a reader
+   * means by "save this", and the modifier says which.
+   */
+  savePlot: 's',
   /** Every track the same height, and that height the one that fills the space. */
-  stretch: 's',
+  stretch: 'h',
   /** Every value axis back to what is in view. */
   autoscale: 'y',
 } as const

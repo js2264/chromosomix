@@ -43,7 +43,7 @@ import {
   type Command,
 } from '../ui/commands'
 import { openAbout, openShortcuts } from '../ui/dialogs'
-import { button, el } from '../ui/dom'
+import { button, dragHasFiles, el } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
@@ -251,6 +251,11 @@ export class App implements SessionHost {
     // should not have to go back to the picker for it. What each file means is
     // the session's decision, by name — see `Session.dropFiles`.
     this.content.addEventListener('dragover', (event) => {
+      // Files only. A track row dragged out of the Tracks card is also a drag
+      // across this area — it is on its way to the map's edge rectangles — and
+      // outlining the whole content area for it would say the content area is
+      // where it goes.
+      if (!dragHasFiles(event)) return
       event.preventDefault()
       this.content.classList.add('over')
     })

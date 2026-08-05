@@ -25,7 +25,7 @@
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
-import { button, dragHasFiles, el, fmt, trimNumber } from './dom'
+import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
 
 /**
@@ -259,10 +259,14 @@ export class AnnotationCard {
       el(
         'div',
         { class: 'ann-head' },
-        // A grip only where there is something to reorder: a list of one has no
-        // order, and a handle that does nothing is a control to be tried, then
-        // doubted.
-        ...(total > 1 ? [this.grip(entry, index, total)] : []),
+        // A grip wherever it does something. Reordering needs two rows — a list
+        // of one has no order, and a handle that does nothing is a control to be
+        // tried and then doubted — but beside a *map* it has a second job even
+        // for a single track: dragging it onto the bottom or right rectangle is
+        // what moves that track between the map's two edges.
+        ...(total > 1 || this.props.context !== 'browser'
+          ? [this.grip(entry, index, total)]
+          : []),
         ...(total > 1 ? [this.tick(entry)] : []),
         this.swatch(entry),
         this.name(entry),
@@ -429,7 +433,11 @@ export class AnnotationCard {
       'span',
       {
         class: 'ann-grip',
-        title: 'Drag, or press the arrow keys, to reorder this annotation',
+        title:
+          this.props.context === 'browser'
+            ? 'Drag, or press the arrow keys, to reorder this annotation'
+            : 'Drag to reorder — or onto the map’s bottom or right edge to draw it there. ' +
+              'Arrow keys reorder.',
         attrs: {
           draggable: 'true',
           tabindex: '0',
@@ -449,6 +457,11 @@ export class AnnotationCard {
         event.dataTransfer.effectAllowed = 'move'
         // Some browsers cancel a drag that carries nothing at all.
         event.dataTransfer.setData('text/plain', entry.id)
+        // And the same id under a type only this app writes, so a drop target
+        // outside this card — the map's two edge rectangles — can tell a track
+        // being moved from a file being loaded and from a dragged word, while
+        // the drag is still in the air and only `types` can be read.
+        event.dataTransfer.setData(TRACK_DRAG_TYPE, entry.id)
         // The row, not the handle: a 12-pixel ghost says nothing about what is
         // being moved.
         if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 12, 12)
