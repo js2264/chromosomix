@@ -241,6 +241,11 @@ export class RegionView {
         if (this.disposed) return
         this.title.textContent = this.props.region
         this.describeMatch(parsed, hi - lo)
+        // The reader may have planned a coarser grid than the file's bins — a
+        // whole chromosome at 10 kb is more cells than any picture holds — and
+        // every coordinate on screen is the bin size times a cell offset, so the
+        // panel is told before it is given the block.
+        this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
         this.panel.setData(result, this.props.region, second)
         return
       }
@@ -267,6 +272,11 @@ export class RegionView {
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
       this.describePair(parsed, other)
+      // The reader may have planned a coarser grid than the file's bins — a
+      // whole chromosome at 10 kb is more cells than any picture holds — and
+      // every coordinate on screen is the bin size times a cell offset, so the
+      // panel is told before it is given the block.
+      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the

@@ -15,7 +15,7 @@ import { ViewerError } from '../errors'
 import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
-import { POOLED_CELL_LIMIT } from '../metacooler/pooling'
+import { POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -213,8 +213,8 @@ async function handleMatrix(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const stride = Math.max(1, Math.trunc(request.binsPerCell ?? 1))
-  if (stride > 1) return pooledResult(mc, request, cols, stride)
+  const aim = fitPlan(mc, planOf(request.binsPerCell, request.contigsPerCell), request.rows, cols)
+  if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return pooledResult(mc, request, cols, aim)
   const dense = await mc.matrix(
     {
       rows: request.rows,
@@ -245,12 +245,12 @@ async function pooledResult(
   mc: MetaCooler,
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
   cols: Extent,
-  stride: number,
+  aim: PoolPlan,
 ): Promise<MatrixResult> {
   const id = request.id
   const pooled = await mc.pooledMatrix(
     { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
-    stride,
+    aim,
     scanHooks(id),
   )
   if (cancelled.has(id)) throw abortError()
@@ -278,7 +278,64 @@ async function pooledResult(
       : {}),
     level: 'bin',
     binsPerCell: pooled.binsPerCell,
-    poolSnapped: pooled.snapped,
+    contigsPerCell: pooled.contigsPerCell,
+    rowContigs: contigSpan(mc, request.rows),
+    colContigs: contigSpan(mc, cols),
+  }
+}
+
+/** How many sequences an extent covers, for a summary that counts assemblies. */
+function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
+  if (hi <= lo) return 0
+  return mc.coords.contigOfBin(hi - 1) - mc.coords.contigOfBin(lo) + 1
+}
+
+/**
+ * A request's two pooling numbers as a plan, defaulted and sanitised.
+ *
+ * The wire carries them separately because a request is JSON and a plan is not,
+ * and either may be absent — an unpooled read sends neither.
+ */
+/**
+ * The plan a block needs, whether or not the caller worked one out.
+ *
+ * A view that knows its size sends one; a view that asks for a bin range
+ * without looking — the genome view, whose genome may be four contigs or four
+ * thousand — sends nothing, and used to get a dense block of whatever size the
+ * range implied. Past the renderer's cap that block was pooled on arrival, flat
+ * and contig-blind, which is the straddling this module exists to prevent; and
+ * past two gigabytes it was refused outright, which is how a mammalian
+ * chromosome at 10 kb became an error message.
+ *
+ * So the reader plans it. It is the side that knows where the contigs fall, and
+ * the plan it used is in the response, which is where the view reads its
+ * resolution from.
+ *
+ * Only for a block that **begins on a contig boundary** — every whole-file,
+ * whole-genome and whole-contig read. A region starting mid-contig carries a
+ * `unitStart` the coarse grid has no cell for, so it is left dense and refused
+ * by size as before rather than drawn against an origin that has quietly moved.
+ */
+function fitPlan(mc: MetaCooler, aim: PoolPlan, rows: Extent, cols: Extent): PoolPlan {
+  if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return aim
+  const spans = [rows, cols]
+  if (spans.some(([lo]) => mc.coords.contigStartBin(mc.coords.contigOfBin(lo)) !== lo)) return aim
+  let plan = aim
+  for (const [lo, hi] of spans) {
+    const contigs = mc.coords.contigOfBin(hi - 1) - mc.coords.contigOfBin(lo) + 1
+    const axis = poolPlan(hi - lo, contigs, POOLED_CELL_CAP)
+    plan = {
+      binsPerCell: Math.max(plan.binsPerCell, axis.binsPerCell),
+      contigsPerCell: Math.max(plan.contigsPerCell, axis.contigsPerCell),
+    }
+  }
+  return plan
+}
+
+function planOf(binsPerCell?: number, contigsPerCell?: number): PoolPlan {
+  return {
+    binsPerCell: Math.max(1, Math.trunc(binsPerCell ?? 1)),
+    contigsPerCell: Math.max(1, Math.trunc(contigsPerCell ?? 1)),
   }
 }
 
@@ -361,25 +418,22 @@ async function handleSelection(
       { unit: request.unit, names: request.names },
     )
   }
-  const stride = Math.max(1, Math.trunc(request.binsPerCell ?? 1))
-  // The caller chooses the stride, because the caller labels the axis in the
-  // matching units — but it chooses it from a bin count it worked out itself,
-  // and a wrong one here is a matrix the size of its own square. Refused rather
-  // than clamped: clamping would draw a picture at a resolution the axis
-  // labels contradict, which is worse than not drawing one.
-  const cells = units.reduce(
-    (sum, unit) => sum + Math.ceil((unit.extent[1] - unit.extent[0]) / stride),
-    0,
-  )
-  if (cells > POOLED_CELL_LIMIT) {
-    throw new ViewerError(
-      'dense-too-large',
-      `This selection is ${cells} cells per axis at ${stride} bins each, past the ` +
-        `${POOLED_CELL_LIMIT} one picture holds. Select fewer sequences.`,
-      { cells, stride, limit: POOLED_CELL_LIMIT },
-    )
+  const aim = planOf(request.binsPerCell, request.contigsPerCell)
+  // The caller chooses the plan, because the caller labels the axis in the
+  // matching units — but it chooses it from counts it worked out itself, and a
+  // plan that is too fine is a matrix the size of its own square. Coarsened
+  // here rather than refused: the axis is named sequences either way, and a
+  // selection of six thousand contigs is a picture of six thousand contigs,
+  // three to a cell, rather than an error message. What was used is reported
+  // back, so the summary above the map cannot claim a resolution the picture
+  // does not have.
+  const bins = units.reduce((sum, unit) => sum + (unit.extent[1] - unit.extent[0]), 0)
+  const floor = poolPlan(bins, units.length, POOLED_CELL_CAP)
+  const plan: PoolPlan = {
+    binsPerCell: Math.max(aim.binsPerCell, floor.binsPerCell),
+    contigsPerCell: Math.max(aim.contigsPerCell, floor.contigsPerCell),
   }
-  const selected = await mc.selectionMatrix(units, stride, {
+  const selected = await mc.selectionMatrix(units, plan, {
     ...scanHooks(id),
     ...(request.balance === true ? { balance: true } : {}),
   })
@@ -411,7 +465,7 @@ async function handleSelection(
       : {}),
     level: 'bin',
     binsPerCell: selected.binsPerCell,
-    poolSnapped: true,
+    contigsPerCell: selected.contigsPerCell,
   }
 }
 

@@ -214,6 +214,11 @@ export class GenomeView {
               level: 'contig',
             })
       if (this.disposed) return
+      // The reader plans the grid for a genome, because it is the side that
+      // knows how many contigs are in one (`worker/reader.worker.ts`). A cell of
+      // six bins is a six-bin bin, and every coordinate on screen is that
+      // multiplication — so the panel is told before it is given the block.
+      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, this.props.genome)
       this.renderSummary(result, hi - lo)
       this.renderContigs(result)
@@ -229,12 +234,24 @@ export class GenomeView {
   }
 
   private renderSummary(result: MatrixResult, bins: number): void {
-    const contigs = result.level === 'bin' ? result.rowGroups.length : result.nrows
+    const contigs = result.rowContigs ?? result.rowGroups.length
     const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
+    const grouped = result.contigsPerCell ?? 1
+    const perCell = result.binsPerCell ?? 1
+    // What a cell is, said in the unit it actually is. Above one contig per cell
+    // there is no bin width to quote: the contigs in a cell have different
+    // lengths and the cell is their sum, not a window on one of them.
+    const grid =
+      grouped > 1
+        ? ` · ${grouped} contigs per cell, summed`
+        : perCell > 1
+        ? ` · ${perCell} bins per cell`
+        : ' · 1 bin is 1 pixel'
     this.summary.textContent =
       `${fmt.int(bins)} bins across ${fmt.int(contigs)} contigs · ` +
       `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells` +
-      (pooled === null ? ' · 1 bin is 1 pixel' : ` · ${pooled.phrase}`)
+      grid +
+      (pooled === null ? '' : ` · ${pooled.phrase}`)
   }
 
 

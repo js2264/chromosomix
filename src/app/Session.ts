@@ -2682,6 +2682,7 @@ export class Session {
           caption: this.captionFor(state),
           binsize: file.info.binsize ?? 1,
           nBins: file.info.nBins,
+          nContigs: file.info.nContigs,
           // The file's own count of stored pixels, which is what the read walks.
           // A cooler that does not declare it is not gated rather than gated on
           // a guess; the same number is in the File card, from the same place.
@@ -2747,11 +2748,13 @@ export class Session {
       if (this.destroyed || this.store.state !== state) return
     }
     const bins = this.binsOfSelection(selection)
+    const contigs = this.contigsOfSelection(selection)
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
+      nContigs: file.info.nContigs,
       nnz: numberOr(file.info.info['nnz']),
       level: 'bin',
       scale: this.scaleOf(state),
@@ -2766,7 +2769,7 @@ export class Session {
         : { annotations: this.annotationContext() }),
       ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
       namesGenomes: file.info.hasGenomes,
-      selection: { ...selection, bins },
+      selection: { ...selection, bins, contigs },
       onLevelChange: () => {},
       onBalanceChange: (next) => this.setBalance(next),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
@@ -2813,6 +2816,32 @@ export class Session {
       if (length !== undefined) bins += Math.ceil(length / binsize)
     }
     return bins
+  }
+
+  /**
+   * How many sequences a selection covers — the other half of what its grid is
+   * planned against.
+   *
+   * Every sequence starts a cell of its own, so the sequence count is the floor
+   * on the axis however coarse the bins are made, and a plan that ignores it
+   * asks for a picture larger than the one that can be drawn.
+   */
+  private contigsOfSelection(selection: UnitSelection): number {
+    const file = this.file
+    if (file === null) return 0
+    if (selection.kind === 'contig') {
+      const lengths = contigLengths(file.contigs)
+      return selection.names.filter((name) => lengths.has(name)).length
+    }
+    const names = file.genomes.table.data['name']
+    const counts = file.genomes.table.data['n_contigs']
+    if (!Array.isArray(names) || counts === undefined || Array.isArray(counts)) return 0
+    let contigs = 0
+    for (const name of selection.names) {
+      const row = (names as string[]).indexOf(name)
+      if (row >= 0) contigs += Number(counts[row])
+    }
+    return contigs
   }
 
   private mountGenome(state: ViewState): void {

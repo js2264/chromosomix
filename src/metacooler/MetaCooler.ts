@@ -41,7 +41,7 @@ import {
   type AggregationLevel,
 } from './aggregate'
 import { Coords } from './coords'
-import { poolBins, selectionPooling } from './pooling'
+import { poolBins, POOLED_CELL_CAP, selectionPooling, type PoolPlan } from './pooling'
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
@@ -735,32 +735,45 @@ export class MetaCooler {
   }
 
   /**
-   * A block read at a **coarser bin size** than the file stores: every `stride`
-   * consecutive bins of a contig summed into one cell.
+   * A block read at a **coarser grid** than the file stores: consecutive bins of
+   * one contig, or whole contigs, summed into one cell.
    *
    * The same pass as {@link aggregateSparse} over the same pixels, into a
    * different set of slots — see `metacooler/pooling.ts` for why the slots are
    * bins rather than contigs, and why that makes the result an ordinary block
-   * one bin size up rather than a new kind of object. `stride` of 1 is the
-   * identity and is not pooling; the caller reads such a block the direct way.
+   * one bin size up rather than a new kind of object. An identity plan is not
+   * pooling; the caller reads such a block the direct way.
    *
    * The output is bounded by construction: `cap` cells per axis, whatever the
    * file's bin count. That is what lets a whole-genome view of a large cooler
    * exist at all — the dense block it would otherwise ask for is refused by the
    * browser's 2 GiB ceiling on one array, and was refused *after* the user had
-   * been asked to wait for it.
+   * been asked to wait for it. The bound is on the cells the renderer will draw,
+   * not near them, so nothing downstream pools a second time.
+   *
+   * `aim` is the grid the caller has already labelled its axis with. It is a
+   * floor, never a target: the read may coarsen it where the sequences fall
+   * badly, and reports what it used.
    */
   async pooledMatrix(
     q: MatrixQuery,
-    stride: number,
+    aim: PoolPlan,
     options: SpanScanOptions = {},
-  ): Promise<Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; snapped: boolean }> {
+  ): Promise<
+    Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; contigsPerCell: number }
+  > {
     const rows = clampExtent(q.rows, this.nBins)
     const cols = clampExtent(q.cols ?? q.rows, this.nBins)
     const plan = planRead(rows, cols, this.storageMode)
     const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
-    const rowPool = poolBins(this.coords, rows[0], rows[1], stride)
-    const colPool = onDiagonal ? rowPool : poolBins(this.coords, cols[0], cols[1], stride)
+    // The contig → genome map goes in so that a cell of whole sequences is a
+    // cell of one genome's sequences (`pooling.ts`). Empty for a plain cooler,
+    // where there is no coarser structure and a chromosome is the only unit.
+    const groups = this.contigGenomeIds
+    const rowPool = poolBins(this.coords, rows[0], rows[1], aim, POOLED_CELL_CAP, groups)
+    const colPool = onDiagonal
+      ? rowPool
+      : poolBins(this.coords, cols[0], cols[1], aim, POOLED_CELL_CAP, groups)
     const acc = pixelAccumulator(
       rows,
       cols,
@@ -797,7 +810,7 @@ export class MetaCooler {
     return {
       ...acc.finish(),
       binsPerCell: rowPool.stride,
-      snapped: rowPool.snapped && colPool.snapped,
+      contigsPerCell: Math.max(rowPool.contigsPerCell, colPool.contigsPerCell),
     }
   }
 
@@ -819,10 +832,16 @@ export class MetaCooler {
    */
   async selectionMatrix(
     units: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
-    stride: number,
+    aim: PoolPlan,
     options: SpanScanOptions & { balance?: boolean } = {},
-  ): Promise<Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; ids: Int32Array }> {
-    const pooling = selectionPooling(this.nBins, units, stride)
+  ): Promise<
+    Omit<AggregatedMatrix, 'level'> & {
+      binsPerCell: number
+      contigsPerCell: number
+      ids: Int32Array
+    }
+  > {
+    const pooling = selectionPooling(this.nBins, units, aim)
     // On the diagonal by construction: one axis, used twice. `planRead` decides
     // what that means for the store rather than this function assuming it — a
     // `square` file holds both triangles and each stored pixel is its own cell,
@@ -855,7 +874,12 @@ export class MetaCooler {
       options,
     )
     const out = acc.finish()
-    return { ...out, binsPerCell: pooling.stride, ids: pooling.ids }
+    return {
+      ...out,
+      binsPerCell: pooling.stride,
+      contigsPerCell: pooling.contigsPerCell,
+      ids: pooling.ids,
+    }
   }
 
   /** The two bounded weight slices a balanced roll-up multiplies by. */

@@ -33,7 +33,7 @@
  */
 
 import { WHOLE_VIEW_GATE_PIXELS } from '../constants'
-import { POOLED_CELL_CAP, poolStride } from '../metacooler/pooling'
+import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
 import type { MatrixResult } from '../worker/protocol'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
@@ -63,7 +63,17 @@ export interface WholeViewProps {
    * selection changes which read is made and what the heading says, and nothing
    * else about the view knows.
    */
-  selection?: { kind: 'genome' | 'contig'; names: string[]; bins: number }
+  selection?: { kind: 'genome' | 'contig'; names: string[]; bins: number; contigs: number }
+  /**
+   * Total sequences — the second number the grid is planned against.
+   *
+   * A plan needs both: `n / cap` bins per cell is only achievable while the
+   * sequences are fewer than the cells, because every sequence starts a cell of
+   * its own (`metacooler/pooling.ts`). Planning from the bin count alone is what
+   * produced a block above the cap that the renderer then pooled a second time,
+   * contig-blind, two cells to a pixel.
+   */
+  nContigs: number
   level: 'bin' | 'contig'
   scale: ScaleState
   balance: boolean
@@ -149,7 +159,7 @@ export class WholeView {
    * with the matching bin size *before* the read returns — a cell of six 500 bp
    * bins is a 3 kb bin, and every coordinate on screen is that multiplication.
    */
-  private readonly stride: number
+  private readonly plan: PoolPlan
   /** The bar, the count and the cancel — the whole-metagenome scan's, verbatim. */
   private readonly progressBar = el('progress', { class: 'progress' })
   private readonly progressText = el('span', { class: 'progress-text' })
@@ -163,10 +173,14 @@ export class WholeView {
     // A selection is pooled against *its own* size: four MAGs are a small
     // picture however large the file they came out of is, and pooling them by
     // the file's stride would throw away the detail they were chosen for.
-    this.stride =
+    this.plan =
       props.level === 'bin'
-        ? poolStride(props.selection?.bins ?? props.nBins, POOLED_CELL_CAP)
-        : 1
+        ? poolPlan(
+            props.selection?.bins ?? props.nBins,
+            props.selection?.contigs ?? props.nContigs,
+            POOLED_CELL_CAP,
+          )
+        : IDENTITY_PLAN
     this.summary = el('p', { class: 'summary' })
     this.problem = el('p', { class: 'inline-error hidden' })
     this.search = new SearchBox({
@@ -190,7 +204,7 @@ export class WholeView {
     this.panel = new MatrixPanel({
       // The bin size of the grid actually on screen. Pooling is not a mode the
       // panel has to know about: a block of 3 kb cells is a block of 3 kb bins.
-      binsize: props.binsize * this.stride,
+      binsize: props.binsize * this.plan.binsPerCell,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(presentationOf(props.compare) === undefined
@@ -382,9 +396,23 @@ export class WholeView {
    * two agree, and the point of saying so from the result is that a picture and
    * the sentence over it can then never claim two different resolutions.
    */
-  private resolutionPhrase(stride = this.stride): string {
+  private resolutionPhrase(stride = this.plan.binsPerCell): string {
     const size = this.props.binsize * stride
     return stride === 1 ? `${fmt.bp(size)} cells` : `${fmt.bp(size)} cells (${stride} bins each)`
+  }
+
+  /**
+   * The plan on the wire, with the identity left off.
+   *
+   * Both numbers are optional in the protocol and absent means one, so an
+   * unpooled read carries nothing rather than two ones — which is also what
+   * keeps the request a caller can read.
+   */
+  private wire(): { binsPerCell?: number; contigsPerCell?: number } {
+    return {
+      ...(this.plan.binsPerCell > 1 ? { binsPerCell: this.plan.binsPerCell } : {}),
+      ...(this.plan.contigsPerCell > 1 ? { contigsPerCell: this.plan.contigsPerCell } : {}),
+    }
   }
 
   private async load(budgetBytes?: number): Promise<void> {
@@ -424,7 +452,7 @@ export class WholeView {
               unit: selection.kind,
               names: selection.names,
               balance,
-              binsPerCell: this.stride,
+              ...this.wire(),
             },
             onProgress,
           )
@@ -434,10 +462,10 @@ export class WholeView {
               kind: 'matrix',
               rows,
               balance,
-              // 1 asks for the ordinary dense read; above that the block comes
-              // back at a coarser bin size, which is the one the panel was
-              // built for.
-              binsPerCell: this.stride,
+              // An identity plan asks for the ordinary dense read; above that
+              // the block comes back on the coarser grid the panel was built
+              // for.
+              ...this.wire(),
               ...budget,
               ...genomes,
             },
@@ -462,14 +490,14 @@ export class WholeView {
               unit: selection.kind,
               names: selection.names,
               balance,
-              binsPerCell: this.stride,
+              ...this.wire(),
             })
           : this.level === 'bin'
           ? other.request<'matrix'>({
               kind: 'matrix',
               rows,
               balance,
-              binsPerCell: this.stride,
+              ...this.wire(),
               ...budget,
               ...genomes,
             })
@@ -483,6 +511,11 @@ export class WholeView {
             }),
       )
       if (this.disposed || this.running !== task) return
+      // The reader may have planned a coarser grid than the file's bins — a
+      // whole chromosome at 10 kb is more cells than any picture holds — and
+      // every coordinate on screen is the bin size times a cell offset, so the
+      // panel is told before it is given the block.
+      this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, 'Whole genome', second)
       this.summary.textContent = this.summarise(result)
     } catch (err) {
@@ -522,20 +555,33 @@ export class WholeView {
    * 4096 cells and, at this cap, never does.
    */
   private summarise(result: MatrixResult): string {
-    const { nBins, noun, balance, selection } = this.props
+    const { nBins, nContigs, noun, balance, selection } = this.props
     const raster = this.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     const bins = selection?.bins ?? nBins
+    // The file's own count, not `rowGroups.length`. A run is one *cell's* name,
+    // so where cells hold several sequences the runs count cells and saying
+    // "4,885 bins across 2,441 contigs" of a 4,882-contig file states the
+    // pooling as though it were the assembly.
+    const contigs = selection?.contigs ?? nContigs
+    const grouped = result.contigsPerCell ?? 1
     const parts = [
-      `${fmt.int(bins)} bins across ${fmt.int(result.rowGroups.length)} ${noun}s` +
+      `${fmt.int(bins)} bins across ${fmt.int(contigs)} ${noun}s` +
         (selection === undefined ? '' : ` of ${fmt.int(nBins)}`),
       `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells`,
     ]
-    if (this.level === 'bin') parts.push(this.resolutionPhrase(result.binsPerCell ?? 1))
+    // Above one sequence per cell the axis is not one of positions and a bp
+    // width would be a fiction: the sequences in a cell have different lengths
+    // and the cell is their sum, not a window. So the resolution is said in the
+    // unit the cells actually are.
+    if (this.level === 'bin') {
+      parts.push(
+        grouped > 1
+          ? `${grouped} ${noun}s per cell, summed`
+          : this.resolutionPhrase(result.binsPerCell ?? 1),
+      )
+    }
     if (raster !== null) parts.push(raster.phrase)
     if (balance) parts.push('balanced')
-    if (result.poolSnapped === false) {
-      parts.push('cells may span two sequences, so positions in them are approximate')
-    }
     return parts.join(' · ')
   }
 
