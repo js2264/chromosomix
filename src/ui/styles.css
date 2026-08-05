@@ -332,13 +332,21 @@ p {
     box-shadow 0.14s ease;
 }
 
+/* The shoulders. `width` exactly equal to the offset, and no more.
+
+   They were a twentieth of a rem wider than they were offset, so each one
+   overlapped the tab's own box by that much — and since the resting background
+   is `color-mix(… transparent)`, two translucent layers over one another are
+   darker than one. That is the whole of the "two weird darker grey areas": a
+   rounding error in the shape, rendered as a pair of vertical bars down the
+   sides of every inactive tab. */
 .tab::before,
 .tab::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 0.8rem;
+  width: 0.75rem;
   background: inherit;
   pointer-events: none;
 }
@@ -363,14 +371,15 @@ p {
 
 /* The active tab joins the page below it: same background, and its bottom edge
    sits *over* the strip's border rather than under it, so the join reads as one
-   surface rather than as a gap in a line. The accent is a bar along the top,
-   the edge furthest from the join — a line drawn at the bottom would be a line
-   drawn across the seam it is trying to remove. */
+   surface rather than as a gap in a line.
+
+   No accent bar. Being the page — white against the strip's grey, with the seam
+   between them removed — is what says *this is the one you are looking at*, and
+   it says it without a second mark. The blue line said it again, louder, in the
+   one place a tab strip has no room for emphasis. */
 .tab.is-active {
   background: var(--bg);
-  box-shadow:
-    inset 0 2px 0 var(--accent),
-    0 -1px 3px color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: 0 -1px 3px color-mix(in srgb, var(--text) 9%, transparent);
   margin-bottom: -1px;
   padding-bottom: 1px;
   z-index: 1;
@@ -380,7 +389,7 @@ p {
 .tab.is-active::after {
   background: var(--bg);
   bottom: -1px;
-  box-shadow: 0 -1px 3px color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: 0 -1px 3px color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .tab-label {
@@ -515,8 +524,7 @@ p {
      is a single class three thousand lines further down this file. Without it
      the override is dead and the swatch stays invisible on a touch screen —
      invisible and, since nothing there can hover, unreachable for ever. */
-  .btn.tab-close,
-  .ann-row .ann-swatch {
+  .btn.tab-close {
     opacity: 1;
     pointer-events: auto;
   }
@@ -1102,7 +1110,18 @@ p {
 .panel-column-body > .card,
 .panel-column-body > .qc,
 .panel-column-body > .meta,
-.panel-column-body > .meta-empty {
+.panel-column-body > .meta-empty,
+/* …and the same again one level down, because `>` walks the *DOM* and a
+   session's cards sit inside a `.panel-host`. That host is `display: contents`,
+   so as far as layout is concerned the cards are the body's flex items — but as
+   far as the selector above is concerned they are grandchildren, and they were
+   the one set of cards that never got the rule the comment describes. Which is
+   why the Annotations column, and only the Annotations column, scrolled card by
+   card instead of as a whole. */
+.panel-column-body > .panel-host > .card,
+.panel-column-body > .panel-host > .qc,
+.panel-column-body > .panel-host > .meta,
+.panel-column-body > .panel-host > .meta-empty {
   flex: 0 0 auto;
 }
 
@@ -1980,6 +1999,22 @@ p {
    this is the one thing it cannot say: "there is a caret behind this number". */
 .browser-canvas.is-text {
   cursor: text;
+}
+
+/* Over a sequence's name in the chromosome bar, which goes to that sequence.
+   The pointing hand is the one shape that says "this is a link" without a word
+   of explanation, and a name in a band is the only part of this canvas that is
+   one. */
+.browser-canvas.is-link {
+  cursor: pointer;
+}
+
+/* Over the rest of the chromosome bar, where a drag pulls out a region to zoom
+   into. The double-headed arrow is what a hand reads as "this drags sideways" —
+   the arrowhead below says "this points at a base pair", which is the other
+   thing entirely, and the band is the one strip where the two differ. */
+.browser-canvas.is-span {
+  cursor: ew-resize;
 }
 
 /* While a manual annotation is waiting for its coordinates, a click places a
@@ -3611,22 +3646,13 @@ p {
    in its row — the row is found by matching it to the lane, not by reading. It
    is the picker itself, stripped of the chrome a browser gives a colour input,
    so that clicking the colour opens the picker in one gesture. */
-/* Hidden until the row is under the pointer, like the grip beside it.
+/* Always drawn.
 
-   A column of coloured squares down the panel is a second legend for something
-   the picture already says in the only place it matters — the lane is drawn in
-   that colour, and where two share a lane so is each name. What is left in the
-   list is the names, which is what a list of tracks is read for. The square is
-   still exactly where it was, so reaching for it is one movement rather than a
-   hunt; it keeps its box while it is invisible for the same reason.
-
-   Opacity rather than `display: none` on purpose: the square keeps its box, so
-   reaching for it is one movement rather than a hunt. Inert while it is
-   invisible all the same, and revealed with no transition on the way *in* — the
-   pointer cannot reach the swatch without being on the row, but a fade means
-   there are 120 ms in which it is clickable and barely drawn, and a colour
-   picker opened by a click aimed at the name beside it is a surprise nobody
-   needs. It fades on the way out, where nothing is being aimed at. */
+   It was hidden until the row was pointed at, on the argument that the picture
+   already carries the colour. It does — and the panel is where a reader *looks
+   up* which colour belongs to which track, which is a different question from
+   the one the picture answers, and one that cannot be asked of a square that
+   is not there. */
 .ann-swatch {
   width: 0.85rem;
   height: 0.85rem;
@@ -3638,24 +3664,6 @@ p {
   flex: 0 0 auto;
   appearance: none;
   -webkit-appearance: none;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-
-.ann-row:hover .ann-swatch,
-.ann-row:focus-within .ann-swatch,
-.ann-swatch:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transition: opacity 0s;
-}
-
-/* …except in the batch bar, which is not a row and whose swatch is the control
-   the bar exists to offer. */
-.ann-batch .ann-swatch {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 /* The swatch's own well is inset by a few pixels in every engine, which at this
@@ -3672,6 +3680,39 @@ p {
 .ann-swatch::-moz-color-swatch {
   border: none;
   border-radius: 1px;
+}
+
+/* Where a track came from, last in its settings and quiet.
+
+   A path is looked up rather than read: it answers "which of the four files
+   called coverage is this one" and then goes back to being furniture. Wrapped
+   rather than clipped, because half a path answers nothing. */
+.ann-origin {
+  margin: 0.15rem 0 0;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* The two small toggles on a track's row: the eye, and the axis flip. Sized to
+   the fold arrow beside them, because a row of controls at three sizes reads as
+   three kinds of thing. */
+.ann-eye,
+.ann-flip {
+  flex: 0 0 auto;
+  padding: 0.2rem;
+}
+
+.ann-eye.is-off {
+  color: var(--text-faint);
+}
+
+.ann-flip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* The name reads as text and edits as a field: no border and no background

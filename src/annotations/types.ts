@@ -218,19 +218,39 @@ export interface AnnotationStyle {
   /** Radius of an off-diagonal pair circle, in CSS pixels. */
   radius: number
   opacity: number
+  /**
+   * Draw the value axis upside down, floor at the top.
+   *
+   * For the half of an experiment that is measured downwards. A stranded
+   * RNA-seq pair is the case that asks for it: the forward strand read up from
+   * a shared baseline and the reverse read *down* from it is one picture of one
+   * locus, and two tracks both growing upwards is two pictures the reader has to
+   * mirror in their head. It is a property of the track rather than of the group
+   * because only one member of the pair is flipped.
+   */
+  flip: boolean
 }
 
-/** The defaults a freshly dropped file starts with. */
+/**
+ * The defaults a freshly dropped file starts with.
+ *
+ * The lane height is what a track is *read* at rather than what fits the most
+ * of them on a screen: at 44 pixels a coverage profile is a smear with a
+ * skyline, and the peaks that matter are three pixels apart. Ninety is about
+ * where a yeast ATAC track starts showing the shape of a promoter, and a stack
+ * that then runs off the bottom is what "fit tracks into the space" is for.
+ */
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    size: kind === 'track' ? 44 : kind === 'gtf' ? 46 : 16,
+    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : 16,
     mode: 'area',
     limits: { auto: true, min: 0, max: 1 },
     group: '',
     shape: 'element',
     radius: 7,
     opacity: kind === 'pairs' ? 0.9 : 1,
+    flip: false,
   }
 }
 

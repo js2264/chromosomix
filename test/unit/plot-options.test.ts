@@ -102,6 +102,7 @@ describe('overlay toggles', () => {
     expect(view.plotOptions).toEqual({
       text: true,
       fills: true,
+      baseline: true,
       dividers: true,
       breaks: true,
       labels: true,
@@ -138,6 +139,7 @@ describe('overlay toggles', () => {
     expect(view.plotOptions).toEqual({
       text: true,
       fills: true,
+      baseline: true,
       dividers: true,
       breaks: true,
       labels: true,
@@ -148,6 +150,7 @@ describe('overlay toggles', () => {
     expect(view.plotOptions).toEqual({
       text: true,
       fills: true,
+      baseline: true,
       dividers: false,
       breaks: true,
       labels: true,

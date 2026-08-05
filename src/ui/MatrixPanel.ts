@@ -83,7 +83,9 @@ import {
 import { openMenu, type MenuItem } from './Menu'
 import { setReadout } from './readout'
 import {
+  MATRIX_OPTIONS,
   PLOT_OPTION_LABELS,
+  TRACK_OPTIONS,
   getPlotOptions,
   setPlotOption,
   subscribePlotOptions,
@@ -572,21 +574,22 @@ export class MatrixPanel {
       el(
         'div',
         { class: 'panel-controls' },
+        // Split by what each one draws on, because half of these do nothing to
+        // the matrix and half do nothing to the tracks — and an undifferentiated
+        // row of seven made a reader try each in turn to find out which. Stored
+        // together all the same: a crosshair turned off here is off in the 1D
+        // browser too, since it is the same preference about the same gesture.
         el(
           'div',
           { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'overlays' }),
-          el(
-            'div',
-            { class: 'plot-option-row' },
-            optionToggle('text'),
-            optionToggle('fills'),
-            optionToggle('crosshair'),
-            optionToggle('dividers'),
-            optionToggle('breaks'),
-            optionToggle('labels'),
-            optionToggle('ticks'),
-          ),
+          el('span', { class: 'field-label', text: 'tracks' }),
+          el('div', { class: 'plot-option-row' }, ...TRACK_OPTIONS.map(optionToggle)),
+        ),
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'matrix' }),
+          el('div', { class: 'plot-option-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
         ),
         button('fit to view', () => this.fit(), {
           class: 'btn btn-wide',

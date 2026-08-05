@@ -128,11 +128,12 @@ describe('per-pixel reduction', () => {
     expect(profile.high[0]).toBe(9)
   })
 
-  // A whole-genome pixel covers 13 kb, and its maximum is whatever single base
-  // was highest in it. Scaling to that flattens every track onto its baseline;
-  // scaling to the means alone leaves the envelope clipped over the whole lane.
-  // The ceiling is the 98th percentile of the maxima, raised to fit the means.
-  it('autoscales past a handful of outlier bases, not past the whole envelope', () => {
+  // The axis describes the ink. A whole-genome pixel covers 13 kb and its
+  // envelope reaches whatever single base was highest inside it — which is a
+  // fact about the data and, since the envelope stopped being drawn, not a fact
+  // about anything on screen. Scaling to it flattens the line onto its baseline
+  // for a band that is no longer there.
+  it('scales to the means, which are what is drawn, not to the envelope', () => {
     const intervals: Array<[number, number, number]> = []
     const band: Array<[number, number]> = []
     for (let i = 0; i < 100; i++) {
@@ -141,9 +142,11 @@ describe('per-pixel reduction', () => {
       band.push([0, i === 40 || i === 80 ? 1000 : 12])
     }
     const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples(intervals, band))
-    expect(profile.extent?.max).toBeGreaterThanOrEqual(12)
-    expect(profile.extent?.max).toBeLessThan(200)
+    expect(profile.extent?.max).toBe(5)
     expect(profile.extent?.min).toBe(0)
+    // …and the envelope is still recorded, because the readout can say what a
+    // pixel hid even though the axis no longer answers to it.
+    expect(profile.high[40]).toBe(1000)
   })
 
   // Whatever the envelope does, the *line* must fit: a lane whose drawn values

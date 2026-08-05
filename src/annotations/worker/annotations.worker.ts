@@ -230,6 +230,15 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
   // because it is about the *map*, which that request knew nothing about.
   const cached = recent
   if (cached !== null && cached.key === cacheKey(source) && cached.features !== null) {
+    // Spent by being handed over. `handle` posts this payload with
+    // `transfersFor`, which moves the typed arrays' buffers to the main thread
+    // and **detaches** them here — so the entry that answered this request is
+    // now a set of arrays with no memory behind them. Left in place, the next
+    // request for the same file hits it and `postMessage` refuses the whole
+    // message with "ArrayBuffer at index 0 is already detached": dropping a
+    // track and re-adding the same file drew nothing, while re-adding it under
+    // a different name worked, because the name is half the cache key.
+    recent = null
     return featureResult(cached.format, cached.features, mapContigs)
   }
 
@@ -250,7 +259,10 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
   }
 
   const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
-  recent = { key: cacheKey(source), format, features: data }
+  // Deliberately *not* cached. This branch is about to hand `data` to the main
+  // thread by transfer, so an entry made here would be detached before anything
+  // could read it — the cache exists for the other order, where a genome was
+  // identified from this file a moment ago and the parse can be reused.
   return featureResult(format, data, mapContigs)
 }
 

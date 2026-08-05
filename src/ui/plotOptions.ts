@@ -36,6 +36,7 @@ const KEY = 'metacooler-viewer:overlays'
 export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
+  baseline: true,
   crosshair: true,
   dividers: false,
   breaks: true,
@@ -45,17 +46,35 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
 
 export type PlotOptionKey = keyof PlotOptions
 
+/**
+ * Which picture each option is about.
+ *
+ * The store is one store on purpose — a reader who turns the crosshair off
+ * beside a map means it off, and finding it back on in the browser is the app
+ * disagreeing with itself — but a single undifferentiated row of eight toggles
+ * beside a map is a row in which half the entries do nothing to the thing being
+ * looked at. So they are stored together and *offered* apart.
+ */
+export const TRACK_OPTIONS: readonly PlotOptionKey[] = ['text', 'fills', 'baseline', 'crosshair']
+export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', 'labels', 'ticks']
+
 /** Label and one-line explanation, shared by the view card and the palette. */
 export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: string }> = {
   text: {
     label: 'track text',
     hint: 'Track names, their value ranges and feature names. Off leaves the ink only.',
   },
+  baseline: {
+    label: 'track floor',
+    hint:
+      'A rule along the bottom edge of every track lane. What tells four stacked ' +
+      'coverage tracks apart from one tall one.',
+  },
   fills: {
     label: 'track fill',
     hint:
-      'The shaded area under a track’s line: its envelope, and the fill an area track carries. ' +
-      'Off leaves the lines, which is what several tracks in one lane usually want.',
+      'The area under a track’s line, filled. Off leaves the line alone, which is what ' +
+      'several tracks in one lane usually want.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
@@ -86,6 +105,7 @@ function read(): PlotOptions {
     return {
       text: pick('text'),
       fills: pick('fills'),
+      baseline: pick('baseline'),
       crosshair: pick('crosshair'),
       dividers: pick('dividers'),
       breaks: pick('breaks'),
