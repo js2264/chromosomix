@@ -1006,6 +1006,11 @@ export class HeatmapView {
   private detachFns: Array<() => void> = []
   private drag: Drag | null = null
   private dragMoved = false
+  /**
+   * Where the pointer last was over the canvas, so a modifier pressed without
+   * moving it can be answered. `null` once the pointer has left.
+   */
+  private hoverPoint: { x: number; y: number } | null = null
   private lastX = 0
   private lastY = 0
 
@@ -2661,6 +2666,36 @@ export class HeatmapView {
       const bind = on ? dragHost.addEventListener : dragHost.removeEventListener
       bind.call(dragHost, 'mousemove', onMove as EventListener)
       bind.call(dragHost, 'mouseup', onUp as EventListener)
+      // Escape belongs to the gesture, so it is listened for exactly as long as
+      // the gesture lasts. Capturing, because a marquee is very often begun
+      // without the canvas ever taking the focus — the press that would have
+      // given it focus is the press that started the drag — and the key would
+      // otherwise be read by whatever the reader last clicked on.
+      bind.call(dragHost, 'keydown', onAbort as EventListener, true)
+    }
+
+    /**
+     * Escape abandons a drag in progress, leaving the view where it was.
+     *
+     * The way out of a gesture that has gone wrong. A marquee is committed on
+     * release and a release cannot be taken back, so without this the only way
+     * to undo a box drawn in the wrong place was to let it open the wrong region
+     * and then navigate back — and a pan half-way through a drag had no way out
+     * at all. The pan is *rewound* rather than simply stopped: a pan that ends
+     * where the reader changed their mind is not a cancellation, it is the pan
+     * happening anyway.
+     */
+    const onAbort = (e: KeyboardEvent): void => {
+      const drag = this.drag
+      if (e.key !== 'Escape' || drag === null) return
+      e.preventDefault()
+      e.stopPropagation()
+      this.drag = null
+      this.dragMoved = false
+      follow(false)
+      showCursor({ grabbing: false })
+      if (drag.mode === 'pan') this.panBy(drag.x0 - this.lastX, drag.y0 - this.lastY)
+      this.changed()
     }
 
     const onDown = (e: MouseEvent): void => {
@@ -2729,14 +2764,54 @@ export class HeatmapView {
         this.changed()
         return
       }
-      const cell = this.cellAt(x, y)
+      this.hoverPoint = { x, y }
+      hoverAt(x, y, e.shiftKey)
+    }
+
+    /**
+     * Report the cell under a point, snapping onto the diagonal while Shift is
+     * held.
+     *
+     * The same rule the Shift-locked marquee follows, applied to the pointer
+     * before a drag has begun — so the reading a reader gets is the reading the
+     * gesture would select from, and they can see *where on the diagonal* they
+     * are about to start before pressing the button. It answers the question a
+     * hand hovering over a contact map is usually asking anyway: contact at this
+     * locus with itself is the reference every off-diagonal cell is read
+     * against, and finding the diagonal by eye at a fitted whole-genome view is
+     * a two-pixel target on a 45° line.
+     *
+     * Only the *readout* moves, not the pointer: the arrowhead stays where the
+     * hand put it, and the crosshair — which is what says "this is the cell I am
+     * naming" — is drawn at the snapped position.
+     */
+    const hoverAt = (x: number, y: number, diagonal: boolean): void => {
+      const [hx, hy] = diagonal ? this.onDiagonal(x, y) : [x, y]
+      const cell = this.cellAt(hx, hy)
       this.setHover(cell)
-      // A label opens something, so it says so under the pointer.
+      canvas.classList.toggle('on-diagonal', diagonal && cell !== null)
+      // A label opens something, so it says so under the pointer. Measured at
+      // the *pointer*, never at the snapped point: a label is a thing being
+      // pointed at, and the diagonal never runs through the gutters.
       canvas.classList.toggle(
         'linking',
         cell === null && this.onLabelClick !== null && this.labelAt(x, y) !== null,
       )
-      this.onHover?.(cell, { x, y })
+      this.onHover?.(cell, { x: hx, y: hy })
+    }
+
+    /**
+     * Shift pressed or released with the pointer standing still.
+     *
+     * The snap belongs to the modifier rather than to the movement, so it has to
+     * happen the moment the key goes down — a reader who presses Shift while
+     * hovering and sees nothing move concludes the feature is not there. On the
+     * window, because hovering does not take the focus and the canvas would only
+     * hear this after a click.
+     */
+    const onShift = (e: KeyboardEvent): void => {
+      if (e.key !== 'Shift' || this.hoverPoint === null || this.drag !== null) return
+      hoverAt(this.hoverPoint.x, this.hoverPoint.y, e.type === 'keydown')
     }
     /**
      * The canvas's own move handler, which steps aside once `follow` is on: the
@@ -2796,8 +2871,10 @@ export class HeatmapView {
       // dragged past the edge stops at the edge instead of taking the whole
       // selection with it. Abandoning here is what made a marquee dragged to the
       // corner of the data — the commonest one there is — disappear.
+      this.hoverPoint = null
       this.setHover(null)
       this.onHover?.(null)
+      canvas.classList.remove('on-diagonal')
       if (this.drag === null) showCursor({ selecting: false, grabbing: false })
     }
     const onWheel = (e: WheelEvent): void => {
@@ -2946,9 +3023,15 @@ export class HeatmapView {
     const scrollHost: { addEventListener?: typeof window.addEventListener } | undefined =
       typeof window === 'undefined' ? undefined : window
     scrollHost?.addEventListener?.('scroll', onScroll, { capture: true, passive: true })
+    // Shift is watched on the window rather than on the canvas: hovering takes
+    // no focus, so the canvas hears no keys until something has been clicked.
+    scrollHost?.addEventListener?.('keydown', onShift as EventListener)
+    scrollHost?.addEventListener?.('keyup', onShift as EventListener)
 
     this.detachFns = [
       () => window?.removeEventListener?.('scroll', onScroll, { capture: true }),
+      () => window?.removeEventListener?.('keydown', onShift as EventListener),
+      () => window?.removeEventListener?.('keyup', onShift as EventListener),
       () => canvas.removeEventListener('mousedown', onDown),
       () => canvas.removeEventListener('mousemove', onCanvasMove),
       () => canvas.removeEventListener('mouseup', onUp),

@@ -163,7 +163,7 @@ export class GroupsCard {
             { class: 'btn btn-icon', size: 14 },
           ),
           iconButton(
-            'stretch-vertical',
+            'unfold-vertical',
             'Give every track in this group the height of its tallest member',
             () => {
               const tallest = laneSize(Math.max(...members.map((member) => member.style.size)))

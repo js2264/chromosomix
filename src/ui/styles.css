@@ -2260,6 +2260,15 @@ p {
   cursor: crosshair;
 }
 
+/* Shift held over the map: the reading has snapped onto the diagonal, and the
+   pointer says so. `cell` rather than `crosshair`, which is what the *selection*
+   modifier means a few lines up — this is a different claim about the same
+   pointer, and the reader is about to hold both at once. The mark itself is on
+   the canvas: the crosshair, if it is on, is drawn at the snapped cell. */
+.heatmap-canvas.on-diagonal {
+  cursor: cell;
+}
+
 .heatmap-canvas.grabbing,
 .lane-canvas.grabbing,
 .browser-canvas.grabbing {

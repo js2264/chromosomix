@@ -232,6 +232,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   cent for the transparency. Text size and transparency share a line, being one
   question asked twice.
 
+- **Shift over the map reads the diagonal.** Held while hovering, the readout
+  snaps onto the nearest bin *on* the diagonal — the same line the Shift-locked
+  marquee draws along — so a reader can see where on it they are before pressing
+  the button. It answers the question a hand over a contact map is usually
+  asking anyway: contact at this locus with itself is the reference every
+  off-diagonal cell is read against, and at a fitted whole-genome view finding
+  that line by eye is a two-pixel target.
+
+- **Escape abandons a drag**, on the map and in the browser. A marquee is
+  committed on release and a release cannot be taken back, so the only way out
+  of a box drawn in the wrong place used to be letting it open somewhere and
+  navigating back. A pan is rewound rather than merely stopped: a pan that ends
+  where the reader changed their mind is the pan happening anyway.
+
+- **The crosshair is offered in both Aesthetics rows.** It is the one preference
+  genuinely about both pictures — one pointer, guide lines through the matrix and
+  through every lane — so it is in **Map** and in **Tracks**, one key over one
+  store, and pressing either moves both.
+
+- **Stretch and shrink are a mirrored pair.** `unfold-vertical` against
+  `fold-vertical`, everywhere the two sit together: two arrows apart and two
+  arrows together, which is what the pair actually does. The old mark was a
+  different glyph that had to be read rather than seen.
+
 ### Fixed
 
 - **A marquee dragged off the map stays alive.** The gesture is followed on the

@@ -76,7 +76,28 @@ export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
   'baseline',
   'crosshair',
 ]
-export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', 'labels', 'ticks']
+/**
+ * The crosshair is in **both** lists, and that is the point rather than an
+ * oversight.
+ *
+ * It is the one preference that is genuinely about both pictures: the guide
+ * lines are drawn through the cell under the pointer on the matrix *and* through
+ * the position under it in every lane, because they are one pointer over one
+ * picture. Offering it only under `tracks` put it in the card about the lanes,
+ * where a reader looking at the matrix could not find the control for the lines
+ * drawn across the matrix — and moving it to `matrix` would have done the same
+ * thing to the reader in the 1D browser, which has no matrix card at all.
+ *
+ * Two buttons, one key, one store: pressing either moves both, because both read
+ * their lit state from {@link subscribePlotOptions} rather than holding it.
+ */
+export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
+  'dividers',
+  'breaks',
+  'labels',
+  'ticks',
+  'crosshair',
+]
 
 /**
  * The mark each option is drawn as, shared by both Tracks cards.
