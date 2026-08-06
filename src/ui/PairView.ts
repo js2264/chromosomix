@@ -17,10 +17,10 @@
 
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
-import { button, el, field, fmt } from './dom'
+import { button, el, field } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
-import { MatrixPanel, axisRegion } from './MatrixPanel'
+import { MatrixPanel, axisRegion, blockSummary } from './MatrixPanel'
 import { SearchBox } from './SearchBox'
 
 export interface PairViewProps {
@@ -228,22 +228,20 @@ export class PairView {
   }
 
   private renderSummary(result: MatrixResult): void {
-    let sum = 0
     let nonZero = 0
     for (let i = 0; i < result.values.length; i++) {
       const value = result.values[i]
       // A NaN cell is a dropped bin, not a contact: counting it would report a
       // pair as busy because its rows were filtered out.
-      if (value !== 0 && !Number.isNaN(value)) {
-        sum += value
-        nonZero++
-      }
+      if (value !== 0 && !Number.isNaN(value)) nonZero++
     }
-    const cells = result.nrows * result.ncols
-    this.summary.textContent =
-      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${result.level}s · ` +
-      `${fmt.int(nonZero)} non-zero cells (${fmt.pct(cells === 0 ? 0 : nonZero / cells)}) · ` +
-      `total signal ${fmt.num(sum)}` +
-      (nonZero === 0 ? ' — these two genomes share no contacts in this file.' : '')
+    // The same line every other map carries, plus the one thing a genome pair
+    // can say that they cannot: that the two never touch in this file. An empty
+    // square is otherwise indistinguishable from one that failed to load.
+    this.summary.replaceChildren(
+      ...blockSummary(this.props.binsize, result, 'contig'),
+      ...(nonZero === 0 ? [' — these two genomes share no contacts in this file.'] : []),
+    )
   }
+
 }

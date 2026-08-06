@@ -494,6 +494,9 @@ async function handleAggregate(
         }
       : {}),
     level: request.level,
+    contigsPerCell: aggregated.contigsPerCell,
+    rowContigs: contigSpan(mc, request.rows),
+    colContigs: contigSpan(mc, cols),
   }
 }
 

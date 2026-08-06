@@ -19,8 +19,21 @@
  * to show stay exact.
  */
 
-/** The most units either axis of the overview may have, whatever the budget. */
-export const OVERVIEW_HARD_CAP = 16_384
+/**
+ * The most units either axis of the overview may have, whatever the budget.
+ *
+ * `RASTER_MAX_DIM`, because the renderer draws no more than that per axis and
+ * anything above it is pooled a second time on the way to the screen — flat,
+ * four units to a pixel, with no idea where the genome boundaries are. That is
+ * the straddling `poolUnits` is here to prevent, undone one step later: the
+ * pointer resolves one genome and the pixel is the largest of the sixteen pairs
+ * under it. It used to be 16,384, which was a *memory* bound — a 16,384²
+ * `Float64Array` is 2 GB — and memory was never the binding constraint on a
+ * picture that is at most four thousand pixels wide.
+ */
+import { RASTER_MAX_DIM } from '../render/heatmap'
+
+export const OVERVIEW_HARD_CAP = RASTER_MAX_DIM
 
 /**
  * Bytes one unit of the accumulator costs, per unit of the other axis.

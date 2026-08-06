@@ -105,18 +105,28 @@ describe('apportion', () => {
 })
 
 describe('overviewUnitCap', () => {
-  it('rises with the budget instead of being a constant', () => {
-    const small = overviewUnitCap(1e9)
-    const large = overviewUnitCap(4e9)
+  it('rises with the budget while memory is what binds', () => {
+    // Below the raster's width memory is still the constraint, and the cap is
+    // still derived rather than fixed. Above it the picture binds first — a 1 GB
+    // budget already affords 10,798 units and no screen can show them — which is
+    // why the two budgets this used to compare, 1 GB and 4 GB, now give the same
+    // answer. That is the point of the change, not a regression: units past
+    // `RASTER_MAX_DIM` were pooled a second time on the way to the screen, flat
+    // and blind to the genome boundaries `poolUnits` had just snapped to.
+    const small = overviewUnitCap(1e8)
+    const large = overviewUnitCap(2e8)
     expect(large).toBeGreaterThan(small)
-    // The reference file's 4,395 genomes are drawn exactly on a 1 GB budget —
-    // the case the old fixed 2,048 cut in half.
-    expect(small).toBeGreaterThan(4_395)
+    expect(large).toBeLessThan(OVERVIEW_HARD_CAP)
   })
 
   it('never exceeds the hard cap, or falls below a drawable axis', () => {
     expect(overviewUnitCap(1e12)).toBe(OVERVIEW_HARD_CAP)
     expect(overviewUnitCap(1)).toBeGreaterThanOrEqual(256)
+    // The reference file's 4,395 genomes no longer each get a row: 4,096 is what
+    // the renderer draws, so `poolUnits` pools the last few hundred into
+    // neighbours *within their genomes* rather than letting the raster mix them
+    // across boundaries.
+    expect(overviewUnitCap(4e9)).toBe(OVERVIEW_HARD_CAP)
   })
 })
 

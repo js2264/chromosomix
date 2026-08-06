@@ -98,6 +98,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   line describing something twice its size. Above one sequence per cell there is
   no bin to speak of, and they are cells again.
 
+- **The metagenome's own views join the rest.** Three of them were reducing a
+  second time behind the reader:
+
+  - the **whole-metagenome overview** capped its axis at 16,384 units where the
+    renderer draws 4,096, so the last two steps were taken flat and blind to the
+    genome boundaries `poolUnits` had just snapped to — sixteen genome pairs to a
+    pixel, the pointer resolving one of them. The cap is the raster's width now.
+    It was a *memory* bound, and memory was never what binds a picture four
+    thousand pixels wide;
+  - the **contig-level roll-up** had no bound at all: one cell per contig, so a
+    genome of 4,882 contigs was a 190 MB accumulator for a 4,096-pixel picture,
+    pooled two contigs to a pixel on arrival. It is coarsened where it is built
+    now, by the same partition the bin grid uses, inside one genome;
+  - the **genome-pair view** stated no resolution at all, and can be pooled like
+    any other block.
+
+  All four metacool views — genomes, genome, genome pair, region — and the
+  overview now draw the same line, from the same function.
+
 ### Known
 
 - **A pooled balanced block is an approximation, and now says nothing about it.**

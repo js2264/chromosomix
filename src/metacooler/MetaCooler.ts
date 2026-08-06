@@ -693,7 +693,7 @@ export class MetaCooler {
     q: MatrixQuery,
     level: AggregationLevel,
     options: SpanScanOptions = {},
-  ): Promise<AggregatedMatrix> {
+  ): Promise<AggregatedMatrix & { contigsPerCell: number }> {
     const rows = clampExtent(q.rows, this.nBins)
     const cols = clampExtent(q.cols ?? q.rows, this.nBins)
     const plan = planRead(rows, cols, this.storageMode)
@@ -705,6 +705,10 @@ export class MetaCooler {
       level,
       plan.mode,
       this.storageMode === 'symmetric-upper',
+      // Bounded at what the renderer draws, for the same reason the bin grid is:
+      // an axis past it is pooled a second time on the way to the screen, flat
+      // and blind to the sequences it is collapsing.
+      POOLED_CELL_CAP,
     )
     // Weights are read once per axis for the bins on screen, exactly as the
     // dense path does — the one bounded read of `/bins` in the reader (§6.4).
@@ -731,7 +735,7 @@ export class MetaCooler {
       },
       options,
     )
-    return aggregator.finish()
+    return { ...aggregator.finish(), contigsPerCell: aggregator.perCell }
   }
 
   /**

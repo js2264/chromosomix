@@ -27,7 +27,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { aggregateDense } from '@/metacooler/aggregate'
+import { aggregateDense, coarsenGrouping } from '@/metacooler/aggregate'
 import {
   IDENTITY_PLAN,
   partitionAxis,
@@ -286,5 +286,55 @@ describe('a selection larger than the cap', () => {
     expect(pooling.slot[0]).toBe(0)
     expect(pooling.slot[1]).toBe(0)
     expect(pooling.slot[2]).toBe(1)
+  })
+})
+
+/**
+ * The contig-level roll-up, bounded by the same number as everything else.
+ *
+ * It used to have no bound at all: one cell per contig on each axis, so a genome
+ * of 4,882 contigs was a 190 MB accumulator for a picture 4,096 pixels wide, and
+ * the renderer then pooled it flat — two contigs to a pixel, blind to which was
+ * which. That is the straddling the bin path was fixed for, reached through the
+ * level toggle instead.
+ */
+describe('coarsening a roll-up', () => {
+  const grouping = (n: number): { slot: Int32Array; ids: Int32Array } => ({
+    slot: Int32Array.from({ length: n }, (_, i) => i),
+    ids: Int32Array.from({ length: n }, (_, i) => i),
+  })
+
+  it('leaves an axis that already fits exactly alone', () => {
+    const before = grouping(100)
+    const after = coarsenGrouping(before, 4096)
+    expect(after.perCell).toBe(1)
+    expect(after.grouping).toBe(before)
+  })
+
+  it('collapses whole contigs until the axis fits the picture', () => {
+    const after = coarsenGrouping(grouping(4882), 4096)
+    expect(after.perCell).toBe(2)
+    expect(after.grouping.ids.length).toBeLessThanOrEqual(4096)
+    // A cell is named after the first contig in it, so the axis keeps file order.
+    expect(after.grouping.ids[0]).toBe(0)
+    expect(after.grouping.ids[1]).toBe(2)
+    // Every contig lands somewhere; none is dropped.
+    expect(after.grouping.slot.length).toBe(4882)
+    expect(Math.max(...after.grouping.slot)).toBe(after.grouping.ids.length - 1)
+  })
+
+  it('keeps a cell inside one genome', () => {
+    // Genomes of 1, 3 and 2 contigs, into at most four cells.
+    const genome = [0, 1, 1, 1, 2, 2]
+    const after = coarsenGrouping(grouping(6), 4, (id) => genome[id])
+    expect(after.grouping.ids.length).toBeLessThanOrEqual(4)
+    const seen = new Map<number, Set<number>>()
+    for (let contig = 0; contig < 6; contig++) {
+      const cell = after.grouping.slot[contig]
+      const set = seen.get(cell) ?? new Set<number>()
+      set.add(genome[contig])
+      seen.set(cell, set)
+    }
+    for (const [cell, genomes] of seen) expect(genomes.size, `cell ${cell}`).toBe(1)
   })
 })

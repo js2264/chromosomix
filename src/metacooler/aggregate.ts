@@ -27,6 +27,7 @@
 
 import type { DenseMatrix, Extent } from '../types'
 import type { Coords } from './coords'
+import { IDENTITY_PLAN, partitionAxis } from './pooling'
 import type { PlacementMode } from './matrix'
 
 /** Aggregation level, matching `ops/aggregate.py`. */
@@ -208,6 +209,46 @@ export function genomeGrouping(
  * @param place Called once per stored pixel with its two bin ids and value;
  *   the caller drives the read, so this module still performs no I/O.
  */
+/**
+ * The same grouping, with its output slots collapsed until there are at most
+ * `cap` of them.
+ *
+ * A contig-level roll-up allocates one cell per contig on each axis and nothing
+ * bounded it: a genome of 4,882 contigs is a 190 MB accumulator for a picture
+ * 4,096 pixels wide, and the renderer then pooled it two cells to a pixel — flat,
+ * blind to which contig was which, so the pointer resolved one sequence and the
+ * pixel held the largest of the four pairs under it. That is the straddling the
+ * bin path was fixed for, reached through a different door.
+ *
+ * So the axis is coarsened where it is built, by the same {@link partitionAxis}
+ * the bin grid uses, over the *groups* rather than over the bins. A cell is then
+ * a run of whole contigs — kept inside one genome, since that is the distinction
+ * the picture exists to draw — and it is named after the first of them, which is
+ * what a run of them was already named after.
+ *
+ * @param groupOf Coarser structure over the groups, if there is one: the genome
+ *   each contig belongs to. Absent at genome level, where there is nothing above.
+ */
+export function coarsenGrouping(
+  grouping: AxisGrouping,
+  cap: number,
+  groupOf?: (id: number) => number,
+): { grouping: AxisGrouping; perCell: number } {
+  const n = grouping.ids.length
+  if (n <= cap) return { grouping, perCell: 1 }
+  const starts = Int32Array.from({ length: n }, (_, i) => i)
+  const groups = groupOf === undefined ? undefined : Int32Array.from(grouping.ids, groupOf)
+  const part = partitionAxis(n, starts, cap, IDENTITY_PLAN, groups)
+  const slot = new Int32Array(grouping.slot.length)
+  for (let i = 0; i < slot.length; i++) {
+    const was = grouping.slot[i]
+    slot[i] = was < 0 ? -1 : part.slot[was]
+  }
+  const ids = new Int32Array(part.cells)
+  for (let c = 0; c < part.cells; c++) ids[c] = grouping.ids[part.cellStart[c]]
+  return { grouping: { slot, ids }, perCell: part.plan.contigsPerCell }
+}
+
 export function sparseAggregator(
   rows: Extent,
   cols: Extent,
@@ -216,27 +257,37 @@ export function sparseAggregator(
   level: AggregationLevel,
   plan: PlacementMode,
   upperTriangular = true,
+  cap = Number.POSITIVE_INFINITY,
 ): {
   place(bin1: number, bin2: number, value: number): void
   finish(): AggregatedMatrix
+  perCell: number
 } {
   const build = (extent: Extent): AxisGrouping =>
     level === 'contig'
       ? contigGrouping(coords, extent[0], extent[1])
       : genomeGrouping(coords, contigGenomeIds, extent[0], extent[1])
   const onDiagonal = rows[0] === cols[0] && rows[1] === cols[1]
-  const rowGroups = build(rows)
+  // Only a contig axis has a coarser structure to stay inside; at genome level
+  // the group already *is* the genome.
+  const groupOf =
+    level === 'contig' && contigGenomeIds.length > 0
+      ? (id: number): number => contigGenomeIds[id] ?? -1
+      : undefined
+  const rowCoarse = coarsenGrouping(build(rows), cap, groupOf)
+  const colCoarse = onDiagonal ? rowCoarse : coarsenGrouping(build(cols), cap, groupOf)
   const acc = pixelAccumulator(
     rows,
     cols,
-    rowGroups,
-    onDiagonal ? rowGroups : build(cols),
+    rowCoarse.grouping,
+    colCoarse.grouping,
     plan,
     upperTriangular,
   )
   return {
     place: acc.place,
     finish: () => ({ ...acc.finish(), level }),
+    perCell: Math.max(rowCoarse.perCell, colCoarse.perCell),
   }
 }
 
