@@ -1,6 +1,13 @@
 {
-  "latest": "139b8ca",
+  "latest": "93daac1",
   "versions": [
+    {
+      "commit": "93daac1",
+      "version": "0.7.0",
+      "date": "2026-08-06T12:37:43+02:00",
+      "subject": "0.7.0",
+      "tag": "v0.7.0"
+    },
     {
       "commit": "139b8ca",
       "version": "0.6.1",
