@@ -89,7 +89,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   cannot drift. Where a cell holds whole sequences there is no width to quote,
   and it says that instead. The region line also drops its `matched chromosome
   XV ·` opening: the title above the map already names what was opened, and the
-  line under it is for what the picture is.
+  line under it is for what the picture is. The two-range block says the same
+  three things in the same order, drops its own `XV × XV ·` opening, counts the
+  bins that came back rather than the ones asked for, and calls them regions —
+  its two axes are as often two windows of one sequence as they are two
+  sequences.
 
 ### Known
 
