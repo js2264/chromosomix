@@ -2833,6 +2833,29 @@ export function poolingNote(
 }
 
 /**
+ * What one cell of the picture is worth, in the reader's units.
+ *
+ * The grid a block is read on is rarely the file's own — anything larger than a
+ * picture is summed into coarser cells on the way through — and "30 bins each"
+ * asks the reader to do the multiplication. The resolution is the number they
+ * would quote in a methods section, so it is the number said here, and the bin
+ * count is left to the summary that already gives it.
+ *
+ * Above one sequence per cell there is no resolution to quote: the sequences in
+ * a cell have different lengths and the cell is their sum, not a window of fixed
+ * width. That case names the unit it actually is instead.
+ */
+export function resolutionNote(
+  binsize: number,
+  result: { binsPerCell?: number; contigsPerCell?: number },
+  noun = 'sequence',
+): string {
+  const contigs = result.contigsPerCell ?? 1
+  if (contigs > 1) return `${fmt.int(contigs)} ${noun}s per cell, summed`
+  return `effective resolution: ${fmt.bp(binsize * (result.binsPerCell ?? 1))}`
+}
+
+/**
  * The same colours, measured in the second file's counts.
  *
  * A gain of `g` multiplies the second file's values before they are coloured, so

@@ -80,6 +80,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   origin has no cell in a coarse grid, and moving it silently is worse than
   refusing by size.
 
+### Changed
+
+- **The line under a map says the resolution, not the arithmetic.** "2 bins per
+  cell" asked the reader to do the multiplication; it now reads `effective
+  resolution: 200 bp` — the number that goes in a methods section — and one
+  function writes it for the whole-file, genome and region views so the three
+  cannot drift. Where a cell holds whole sequences there is no width to quote,
+  and it says that instead. The region line also drops its `matched chromosome
+  XV ·` opening: the title above the map already names what was opened, and the
+  line under it is for what the picture is.
+
 ### Known
 
 - **A pooled balanced block is an approximation, and now says nothing about it.**

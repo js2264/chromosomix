@@ -39,7 +39,13 @@ import { isCancellation, type Cancellable, type ReaderClient } from '../worker/c
 import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel, axisRegion, poolingNote, type AnnotationContext } from './MatrixPanel'
+import {
+  MatrixPanel,
+  axisRegion,
+  poolingNote,
+  resolutionNote,
+  type AnnotationContext,
+} from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { SearchBox } from './SearchBox'
 
@@ -389,16 +395,19 @@ export class WholeView {
   }
 
   /**
-   * `3.0 kb cells (6 bins each)`, or `500 bp cells` where nothing is summed.
+   * `3.0 kb cells`, or `cells of 2 contigs` where a cell is whole sequences.
    *
-   * Takes the stride rather than reading it, so the summary can state the one
-   * the read *reports* while the gate states the one it is about to ask for. The
-   * two agree, and the point of saying so from the result is that a picture and
-   * the sentence over it can then never claim two different resolutions.
+   * The gate's half of what the summary says once the read is done — a sentence
+   * fragment rather than the summary's phrase, because it is read inside "sums
+   * them into …". It works from the plan rather than from a result, being the
+   * thing said *before* anything has been read; the two agree because the read
+   * only ever coarsens a plan, and the summary states what actually happened.
    */
-  private resolutionPhrase(stride = this.plan.binsPerCell): string {
-    const size = this.props.binsize * stride
-    return stride === 1 ? `${fmt.bp(size)} cells` : `${fmt.bp(size)} cells (${stride} bins each)`
+  private resolutionPhrase(): string {
+    if (this.plan.contigsPerCell > 1) {
+      return `cells of ${fmt.int(this.plan.contigsPerCell)} ${this.props.noun}s`
+    }
+    return `${fmt.bp(this.props.binsize * this.plan.binsPerCell)} cells`
   }
 
   /**
@@ -563,7 +572,6 @@ export class WholeView {
     // "4,885 bins across 2,441 contigs" of a 4,882-contig file states the
     // pooling as though it were the assembly.
     const contigs = selection?.contigs ?? nContigs
-    const grouped = result.contigsPerCell ?? 1
     const parts = [
       `${fmt.int(bins)} bins across ${fmt.int(contigs)} ${noun}s` +
         (selection === undefined ? '' : ` of ${fmt.int(nBins)}`),
@@ -571,15 +579,9 @@ export class WholeView {
     ]
     // Above one sequence per cell the axis is not one of positions and a bp
     // width would be a fiction: the sequences in a cell have different lengths
-    // and the cell is their sum, not a window. So the resolution is said in the
-    // unit the cells actually are.
-    if (this.level === 'bin') {
-      parts.push(
-        grouped > 1
-          ? `${grouped} ${noun}s per cell, summed`
-          : this.resolutionPhrase(result.binsPerCell ?? 1),
-      )
-    }
+    // and the cell is their sum, not a window. `resolutionNote` says whichever
+    // of the two this is, in the same words the other views use.
+    if (this.level === 'bin') parts.push(resolutionNote(this.props.binsize, result, noun))
     if (raster !== null) parts.push(raster.phrase)
     if (balance) parts.push('balanced')
     return parts.join(' · ')
