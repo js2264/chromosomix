@@ -316,18 +316,20 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * `unitStart` the coarse grid has no cell for, so it is left dense and refused
  * by size as before rather than drawn against an origin that has quietly moved.
  *
- * And **never for a balanced read**, which is the sharper limit. Coarsening a
- * balanced matrix by summing is not balancing at a coarser resolution: a cell of
- * `k × k` bin pairs comes out about `k²` times a single balanced value, which is
- * why `cooler zoomify --balance` re-balances every level from raw counts instead
- * of summing the level below. The second cost is worse for being invisible —
- * balancing marks a filtered bin with a `NaN` weight, the dense path multiplies
- * it through so the whole row is drawn transparent (§6.4: "a blank row is an
- * unbalanced row"), and the pooled path drops `NaN` contributions rather than
- * propagating them, so that row comes back as an ordinary number and the
- * diagnostic is gone. Until a pooled read can balance at its own resolution, a
- * balanced block stays dense — and is refused by size where it must be, which is
- * the honest answer rather than a plausible wrong one.
+ * **A balanced block is planned like any other, and that is a known
+ * approximation.** Summing balanced values is not balancing at a coarser
+ * resolution: a cell of `k × k` bin pairs comes out about `k` times a single
+ * balanced value once the marginals are accounted for, which is why `cooler
+ * zoomify --balance` re-balances every level from raw counts rather than summing
+ * the level below. It also loses a diagnostic — a filtered bin carries a `NaN`
+ * weight, the dense path multiplies it through so the whole row draws
+ * transparent (§6.4: "a blank row is an unbalanced row"), and `pixelAccumulator`
+ * drops `NaN` contributions instead, so that row comes back as an ordinary
+ * number. Both are accepted rather than fixed here: the alternative was keeping
+ * balanced blocks dense, which refuses a mammalian chromosome outright and draws
+ * the rest through a contig-blind raster. Balancing at the read's own
+ * resolution, and taking a coarser rung of a laddered file where one exists, are
+ * the real answers and are not attempted.
  */
 function fitPlan(
   mc: MetaCooler,
@@ -336,7 +338,6 @@ function fitPlan(
 ): PoolPlan {
   const aim = planOf(request.binsPerCell, request.contigsPerCell)
   if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return aim
-  if (request.balance === true) return aim
   const spans = [request.rows, cols]
   if (spans.some(([lo]) => mc.coords.contigStartBin(mc.coords.contigOfBin(lo)) !== lo)) return aim
   let plan = aim
