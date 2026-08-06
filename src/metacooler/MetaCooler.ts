@@ -41,7 +41,13 @@ import {
   type AggregationLevel,
 } from './aggregate'
 import { Coords } from './coords'
-import { poolBins, POOLED_CELL_CAP, selectionPooling, type PoolPlan } from './pooling'
+import {
+  poolBins,
+  POOLED_CELL_CAP,
+  selectionPooling,
+  type BinPooling,
+  type PoolPlan,
+} from './pooling'
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
@@ -764,7 +770,12 @@ export class MetaCooler {
     aim: PoolPlan,
     options: SpanScanOptions = {},
   ): Promise<
-    Omit<AggregatedMatrix, 'level'> & { binsPerCell: number; contigsPerCell: number }
+    Omit<AggregatedMatrix, 'level'> & {
+      binsPerCell: number
+      contigsPerCell: number
+      rowMembers: BinPooling
+      colMembers: BinPooling
+    }
   > {
     const rows = clampExtent(q.rows, this.nBins)
     const cols = clampExtent(q.cols ?? q.rows, this.nBins)
@@ -815,6 +826,8 @@ export class MetaCooler {
       ...acc.finish(),
       binsPerCell: rowPool.stride,
       contigsPerCell: Math.max(rowPool.contigsPerCell, colPool.contigsPerCell),
+      rowMembers: rowPool,
+      colMembers: colPool,
     }
   }
 

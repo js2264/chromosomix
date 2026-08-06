@@ -15,7 +15,12 @@ import { ViewerError } from '../errors'
 import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
-import { POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
+import {
+  POOLED_CELL_CAP,
+  poolPlan,
+  type BinPooling,
+  type PoolPlan,
+} from '../metacooler/pooling'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -281,8 +286,8 @@ async function pooledResult(
     values: Float32Array.from(pooled.values),
     rowExtent: rows,
     colExtent: cols,
-    rowGroups: anchor(mc, runs(pooled.rowIds), rows, pooled.binsPerCell),
-    colGroups: anchor(mc, runs(pooled.colIds), cols, pooled.binsPerCell),
+    rowGroups: withMembers(mc, anchor(mc, runs(pooled.rowIds), rows, pooled.binsPerCell), pooled.rowMembers),
+    colGroups: withMembers(mc, anchor(mc, runs(pooled.colIds), cols, pooled.binsPerCell), pooled.colMembers),
     ...(withGenomes
       ? {
           rowGenomes: aggregatedGenomeRuns(mc, pooled.rowIds),
@@ -295,6 +300,29 @@ async function pooledResult(
     rowContigs: contigSpan(mc, rows),
     colContigs: contigSpan(mc, cols),
   }
+}
+
+/**
+ * Name every sequence in a group whose cells hold more than one.
+ *
+ * A group spans cells `[start, end)` and is *labelled* with the first sequence
+ * in it. Where the small ones shared a cell the rest have no label anywhere, and
+ * a reader looking at the pixel or scanning the sequence list beside the map
+ * would never learn they are there — the list appeared to hold every other
+ * contig, which is exactly what it was doing.
+ */
+function withMembers(mc: MetaCooler, groups: AxisGroup[], pooling: BinPooling): AxisGroup[] {
+  if (pooling.contigsPerCell <= 1) return groups
+  return groups.map((group) => {
+    const from = pooling.memberStart[group.start]
+    const to = pooling.memberStart[group.end]
+    if (to - from <= 1) return group
+    const names: string[] = []
+    for (let i = from; i < to; i++) {
+      names.push(mc.chromnames[pooling.members[i]] ?? String(pooling.members[i]))
+    }
+    return { ...group, merged: names }
+  })
 }
 
 /**

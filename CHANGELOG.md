@@ -98,6 +98,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   line describing something twice its size. Above one sequence per cell there is
   no bin to speak of, and they are cells again.
 
+- **A cell is a capacity of bins, not a count of sequences.** The first version
+  of this had two rules, and the second was wrong: past the point where an
+  assembly's sequences outnumbered the cells, *every* cell took a fixed number of
+  whole sequences — so a contig of four bins was crushed into half a cell beside
+  a contig of one, while the picture had room to draw all four. One rule now: a
+  cell holds at most `k` bins and never part of one sequence beside anything
+  else. A sequence longer than `k` keeps cells of its own, cut at its own start;
+  only the ones too small to fill a cell share. On a 6,174-contig genome at 10 kb
+  that is 3,100 cells of 20 kb, with the four-bin contig drawn as two cells and
+  the one-bin contigs two to a cell — where before it was one cell for both, and
+  the four-bin contig had lost its inside.
+
+- **A shared cell says what is in it.** It used to be labelled with the first
+  sequence and nothing else, so the readout named one of two and gave it a
+  coordinate inside a cell that is not only its (`Contig_184898`, `0 bp × 0 bp`),
+  and the sequence list beside the map listed one contig in two. The readout now
+  names them — `Contig_184898 + Contig_321167` — and the list is built from what
+  the cells *hold* rather than from what they are labelled with, so every
+  sequence is there and every one of them opens.
+
 - **The metagenome's own views join the rest.** Three of them were reducing a
   second time behind the reader:
 
