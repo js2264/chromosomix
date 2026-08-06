@@ -1,11 +1,11 @@
 {
   "kind": "metacooler.session",
   "version": 1,
-  "createdAt": "2026-08-06T00:00:00.000Z",
+  "createdAt": "2026-08-06T18:13:36.751Z",
   "state": {
     "uri": "Yeast_ATAC.bw",
     "view": "browser",
-    "locus": "IV:1,000,001-1,400,000"
+    "locus": "IV:1,246,215-1,295,987"
   },
   "tracks": [
     {
@@ -24,14 +24,17 @@
         "colour": "#5b6169",
         "size": 92,
         "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
+        "limits": {
+          "auto": true,
+          "min": 0,
+          "max": 1
+        },
         "group": "",
         "shape": "element",
         "radius": 7,
         "opacity": 1,
         "flip": false
-      },
-      "primary": true
+      }
     },
     {
       "id": "demo-mnase",
@@ -49,7 +52,11 @@
         "colour": "#0072b2",
         "size": 78,
         "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
+        "limits": {
+          "auto": false,
+          "min": 0,
+          "max": 10
+        },
         "group": "chromatin",
         "shape": "element",
         "radius": 7,
@@ -73,7 +80,11 @@
         "colour": "#d55e00",
         "size": 78,
         "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
+        "limits": {
+          "auto": false,
+          "min": 0,
+          "max": 50
+        },
         "group": "chromatin",
         "shape": "element",
         "radius": 7,
@@ -230,7 +241,7 @@
   "sequences": ["IV"],
   "groups": {
     "chromatin": "stacked",
-    "RNA": "overlay"
+    "RNA": "stacked"
   },
   "scaling": {
     "chromatin": "each",
@@ -242,7 +253,7 @@
     "text": true,
     "fills": true,
     "baseline": true,
-    "outline": false,
+    "outline": true,
     "gutter": true,
     "crosshair": true,
     "dividers": false,
