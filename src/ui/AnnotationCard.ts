@@ -27,6 +27,7 @@ import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
+import { subscribeReveal } from './revealTrack'
 
 /**
  * The `<option>` value that means "not one of these" in the group picker.
@@ -69,6 +70,7 @@ export class AnnotationCard {
   readonly el: HTMLElement
   private readonly list = el('div', { class: 'ann-list' })
   private readonly unsubscribe: () => void
+  private readonly unsubscribeReveal: () => void
   /** Rows the reader has opened, so a repaint does not fold them shut. */
   private readonly open = new Set<string>()
   /** A rebuild that arrived while a control was being edited. */
@@ -123,11 +125,34 @@ export class AnnotationCard {
     })
 
     this.unsubscribe = props.store.subscribe(() => this.render())
+    // A press on the lane itself asks for this row (`ui/revealTrack.ts`). The
+    // card is where the answer lives, so the card listens: it opens the fold,
+    // and brings the row into view — a card scrolled somewhere else would
+    // otherwise answer a click by changing something nobody can see.
+    this.unsubscribeReveal = subscribeReveal((id) => this.reveal(id))
     this.render()
   }
 
   destroy(): void {
     this.unsubscribe()
+    this.unsubscribeReveal()
+  }
+
+  /**
+   * Open one row's settings and scroll to it.
+   *
+   * Opens rather than toggles: the gesture is "show me this", and a second click
+   * on a lane a reader is already working on would otherwise shut the panel they
+   * are working in. Ignored for a row this card does not hold, because both
+   * cards in a session listen and only one of them has any given track.
+   */
+  private reveal(id: string): void {
+    if (this.props.store.byId(id) === undefined) return
+    const already = this.open.has(id)
+    this.open.add(id)
+    if (!already) this.render()
+    const row = this.list.querySelector<HTMLElement>(`[data-id="${cssEscape(id)}"]`)
+    row?.scrollIntoView({ block: 'nearest' })
   }
 
   // -------------------------------------------------------------------------

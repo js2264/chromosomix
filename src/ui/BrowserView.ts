@@ -140,6 +140,7 @@ import {
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { searchKey } from './SearchBox'
+import { revealTrack } from './revealTrack'
 import { type IconName, cardTitle, iconButton } from './icons'
 import {
   CROSSHAIR_COLOR,
@@ -2358,7 +2359,16 @@ export class BrowserView {
         return
       }
       const hit = this.featureAtPoint(x, y)
-      if (hit === null) return
+      if (hit === null) {
+        // Nothing under the pointer but the lane itself, and a press on a lane
+        // is the most direct way a reader has of saying *this track*. It opens
+        // that track's settings in the card that holds them — the alternative
+        // being to match a name against a list in a column that may be scrolled
+        // somewhere else entirely.
+        const lane = this.laneAt(y)
+        if (lane !== null && !lane.onBorder) revealTrack(lane.lane.entry.id)
+        return
+      }
       const { set, index } = hit
       const contig = set.contigs[set.contig[index]]
       const start = set.start[index]
