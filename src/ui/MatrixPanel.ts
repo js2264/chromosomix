@@ -80,11 +80,12 @@ import {
   LaneControls,
   colourInput,
 } from './LaneControls'
-import { LaneLimitEditor } from './LaneLimitEditor'
+import { LaneEditor } from './LaneEditor'
 import {
   heightThatFills,
   laneSize,
   setTrackHeight,
+  smallestLaneSize,
   trackHeightField,
 } from './trackControls'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt } from './dom'
@@ -443,7 +444,7 @@ export class MatrixPanel {
    */
   private readonly laneLayers = new Map<LaneEdge, HTMLElement>()
   private readonly laneControls = new Map<LaneEdge, LaneControls>()
-  private laneEditor: LaneLimitEditor | null = null
+  private laneEditor: LaneEditor | null = null
   /**
    * The lane whose ceiling is being dragged, and how far it has moved.
    *
@@ -729,6 +730,12 @@ export class MatrixPanel {
                   () => this.fitTracks(),
                   { class: 'btn btn-icon', size: 15 },
                 ),
+                iconButton(
+                  'fold-vertical',
+                  'Shrink every track to the height of the shortest of them',
+                  () => this.shrinkTracks(),
+                  { class: 'btn btn-icon', size: 15 },
+                ),
               ]),
         ),
         // The same box the browser's Plot card carries, applying the same rule
@@ -907,7 +914,7 @@ export class MatrixPanel {
       this.tooltip,
     )
     if (this.lanes !== null && annotations !== undefined) {
-      this.laneEditor = new LaneLimitEditor({
+      this.laneEditor = new LaneEditor({
         host: this.grid,
         store: annotations.store,
         shownLimits: (id) => this.lanes?.shownLimits(id) ?? null,
@@ -1217,6 +1224,25 @@ export class MatrixPanel {
       const room = (edge === 'bottom' ? box.height : box.width) / 2 - LANE_GAP * (slots + 1)
       const size = heightThatFills(room, slots)
       if (size === null) continue
+      setTrackHeight(store, lanes.lanesOn(edge), size)
+    }
+  }
+
+  /**
+   * The other way out of a stretch: every lane down to the shortest of them.
+   *
+   * Across both edges rather than each on its own, which is the same rule
+   * {@link setTrackHeight} follows and for the same reason: a bottom lane and a
+   * right-hand one meet at the corner of one figure, and two stacks shrunk to
+   * two different heights is the corner disagreeing with itself.
+   */
+  shrinkTracks(): void {
+    const lanes = this.lanes
+    const store = this.options.annotations?.store
+    if (lanes === null || store === undefined) return
+    const size = smallestLaneSize([...lanes.lanesOn('bottom'), ...lanes.lanesOn('right')])
+    if (size === null) return
+    for (const edge of ['bottom', 'right'] as const) {
       setTrackHeight(store, lanes.lanesOn(edge), size)
     }
   }
@@ -1936,7 +1962,7 @@ export class MatrixPanel {
       const limit = lanes.limitAt(edge, x, y)
       if (limit !== null && this.laneEditor !== null) {
         event.preventDefault()
-        this.laneEditor.open(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        this.laneEditor.openLimit(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
         return
       }
       // The handle next: it sits inside the lane's own rectangle, so the lane
@@ -1958,6 +1984,16 @@ export class MatrixPanel {
         // as the drag having failed.
         this.edgeZones.get(edge)?.classList.add('away')
         this.grid.classList.add('is-dropping')
+        return
+      }
+      // …and the name last of the three, for the reason the limit is first: it
+      // is text on a canvas that a reader changes. After the handle, because the
+      // two touch at the near end of a lane and the handle is the smaller target
+      // — a caret opening where a reorder was meant is the worse miss.
+      const named = lanes.nameAt(edge, x, y)
+      if (named !== null && this.laneEditor !== null) {
+        event.preventDefault()
+        this.laneEditor.openName(named, { left: canvas.offsetLeft, top: canvas.offsetTop })
         return
       }
       const hit = lanes.laneAt(edge, x, y)
@@ -1999,12 +2035,14 @@ export class MatrixPanel {
         // pixels of each other on a short lane, and a cursor promising one while
         // the press does the other is worse than either.
         const onRange = lanes.limitAt(edge, x, y) !== null
-        canvas.classList.toggle('is-text', onRange)
         // The handle is the one thing on these canvases the arrowhead cannot
         // speak for: it is not pointing at a base pair, it is something to take
         // hold of, and the open hand is what says so.
         const onHandle = !onRange && lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
         canvas.classList.toggle('is-grab', onHandle)
+        // The name is a caret too, and last in the same order the press reads.
+        const onLabel = !onRange && !onHandle && lanes.nameAt(edge, x, y) !== null
+        canvas.classList.toggle('is-text', onRange || onLabel)
         const handle = hit === null ? null : hit.entry.id
         if (border !== this.laneBorder || handle !== this.laneHandle) {
           this.laneBorder = border
@@ -2696,7 +2734,17 @@ export class MatrixPanel {
               ? 'NaN (unbalanced)'
               : fmt.num(this.second.data.values[slot])
           }`
-    const distance = separationOf(rowGroup, colGroup, cell, data.level, this.options.binsize)
+    // The genome each end belongs to, read before the distance because the
+    // distance needs them: two MAGs may each have a `contig_1`, and on a
+    // coarsened axis the name is most of what is left to tell them apart.
+    const rowGenome = groupAt(data.rowGenomes, cell.row)?.label
+    const colGenome = groupAt(data.colGenomes, cell.col)?.label
+    const distance = separationOf(
+      { group: rowGroup, offset: cell.row, blockStart: rowStart, genome: rowGenome },
+      { group: colGroup, offset: cell.col, blockStart: colStart, genome: colGenome },
+      data.level,
+      this.options.binsize,
+    )
 
     setReadout(
       `${rowLabel}  ×  ${colLabel}` +
@@ -2728,9 +2776,8 @@ export class MatrixPanel {
 
     // The genome line, on the same "written once when it is one name" rule as
     // the contigs above it. Absent entirely where the reader sent no genomes —
-    // a plain cooler, or any view that already is one genome.
-    const rowGenome = groupAt(data.rowGenomes, cell.row)?.label
-    const colGenome = groupAt(data.colGenomes, cell.col)?.label
+    // a plain cooler, or any view that already is one genome. Read above, where
+    // the separation needed them.
     const hasGenome = rowGenome !== undefined || colGenome !== undefined
     tip.genomes.classList.toggle('hidden', !hasGenome)
     if (hasGenome) {
@@ -2903,39 +2950,93 @@ function describeAxis(
 }
 
 /**
+ * One axis of the cell under the pointer, as {@link separationOf} needs it.
+ *
+ * The block's own origin is in it because a *coarsened* axis is measured in
+ * cells while its extent is measured in bins, and the only arithmetic that gets
+ * both right is {@link bpWithin}'s — which needs the origin. Subtracting the two
+ * absolute indices instead is exact on a dense block and wrong by the pooling
+ * factor on every other, which is how the line went quiet on the views that are
+ * always pooled: anything larger than the picture.
+ */
+export interface AxisSide {
+  group: AxisGroup | undefined
+  /** Block-local offset of the cell on this axis — `cell.row` or `cell.col`. */
+  offset: number
+  /** Where the block starts on this axis — `rowExtent[0]` or `colExtent[0]`. */
+  blockStart: number
+  /** The genome this sequence belongs to, where the axis names one. */
+  genome?: string | undefined
+}
+
+/**
  * How far apart the two ends of a cell are along the sequence, in base pairs.
  *
  * The genomic distance is what a cis contact *means* — a Hi-C map is read by
- * how the signal falls off with separation, and until now the tooltip made you
- * subtract two coordinates to get it. `null` where the question has no answer,
- * which is three cases and each is a refusal rather than a gap:
+ * how the signal falls off with separation, and without this the tooltip makes
+ * you subtract two coordinates to get it. `null` where the question has no
+ * answer, and each of those is a refusal rather than a gap:
  *
  * - **above bin level**, where a cell is a whole contig or genome and its two
  *   ends have no positions to subtract;
- * - **across two contigs**, where the contact is trans and a distance along the
- *   sequence does not exist — not a large one, none;
+ * - **across two sequences**, where the contact is trans and a distance along
+ *   the sequence does not exist — not a large one, none;
+ * - **on a cell several sequences share**, which has no position in any one of
+ *   them; the readout says so in words there and must not say it in numbers
+ *   here;
  * - **on the diagonal**, where it is zero and saying so is noise on the line
  *   that matters least.
  *
- * Same contig is decided by `unitStart`, not by name: it is the absolute bin
- * the contig itself begins at, so it distinguishes two blocks of one contig
- * (a rectangular region view of `contig × the same contig`, where the labels
- * agree and the arithmetic still has one origin) without trusting a string.
+ * The two positions come from {@link bpWithin}, the same function the tooltip's
+ * own coordinates come from, so the difference on screen and the difference
+ * quoted here cannot disagree — and both are right whether the block is the
+ * file's own grid or a coarsened one.
  */
 export function separationOf(
-  rowGroup: AxisGroup | undefined,
-  colGroup: AxisGroup | undefined,
-  cell: Cell,
+  row: AxisSide,
+  col: AxisSide,
   level: 'bin' | 'contig' | 'genome',
   binsize: number,
 ): number | null {
   if (level !== 'bin' || !(binsize > 0)) return null
+  const { group: rowGroup } = row
+  const { group: colGroup } = col
   if (rowGroup === undefined || colGroup === undefined) return null
-  if (rowGroup.unitStart === undefined || rowGroup.unitStart !== colGroup.unitStart) return null
-  // Straight from the absolute bin indices: the two `unitStart` terms are equal
-  // and cancel, so this is exact and needs neither axis's block origin.
-  const bins = Math.abs(cell.rowBin - cell.colBin)
-  return bins === 0 ? null : bins * binsize
+  if ((rowGroup.merged?.length ?? 1) > 1 || (colGroup.merged?.length ?? 1) > 1) return null
+  if (!sameSequence(row, col)) return null
+  const apart = Math.abs(
+    bpWithin(rowGroup, row.offset, row.blockStart, binsize) -
+      bpWithin(colGroup, col.offset, col.blockStart, binsize),
+  )
+  return apart === 0 ? null : apart
+}
+
+/**
+ * Whether two axis runs are the same sequence.
+ *
+ * `unitBin` first, because it is the only member that is an *identity*: the
+ * absolute bin the sequence itself begins at, the same number on both axes
+ * however each axis's block opens. It tells two windows of one contig apart
+ * from two contigs without trusting a string, which matters on a metagenome
+ * where two MAGs may each have a `contig_1`.
+ *
+ * `unitStart` is an arithmetic *origin* and only coincides with the identity on
+ * a dense block: a coarsened axis is anchored to the contig, so its origin
+ * depends on where that axis's own window starts, and `contig × the same contig`
+ * over two different windows gets two different numbers for one sequence. It is
+ * kept as the second test for a block that carries no identity — an older
+ * worker answering a newer page.
+ *
+ * The name, the length and the genome together are the last resort, and as
+ * close to identity as a run with neither number can get.
+ */
+function sameSequence(row: AxisSide, col: AxisSide): boolean {
+  const a = row.group
+  const b = col.group
+  if (a === undefined || b === undefined) return false
+  if (a.unitBin !== undefined && b.unitBin !== undefined) return a.unitBin === b.unitBin
+  if (a.unitStart !== undefined && b.unitStart !== undefined) return a.unitStart === b.unitStart
+  return a.label === b.label && a.unitLength === b.unitLength && row.genome === col.genome
 }
 
 /**

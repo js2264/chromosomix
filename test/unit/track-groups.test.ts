@@ -15,7 +15,13 @@ import { describe, expect, it } from 'vitest'
 import { planStack, resolveGroupExtents } from '@/annotations/groups'
 import { groupRuns, type LaneFrame } from '@/render/lane'
 import { ceilingFactor, nudgedLimits, resolveLimits, scaledTo } from '@/render/tracks'
-import { heightThatFills, laneSize, LANE_MAX_SIZE, LANE_MIN_SIZE } from '@/ui/trackControls'
+import {
+  heightThatFills,
+  laneSize,
+  smallestLaneSize,
+  LANE_MAX_SIZE,
+  LANE_MIN_SIZE,
+} from '@/ui/trackControls'
 
 /** A track, reduced to the three things a stack plan reads. */
 function track(id: string, group = '', size = 40): { id: string; group: string; size: number } {
@@ -239,5 +245,31 @@ describe('one height for every lane', () => {
     expect(laneSize(3)).toBe(LANE_MIN_SIZE)
     expect(laneSize(10_000)).toBe(LANE_MAX_SIZE)
     expect(laneSize(90.4)).toBe(90)
+  })
+
+  // The way out of a stretch: the shortest lane on screen, not the floor. Twelve
+  // pixels is a number this module chose; the shortest lane is a number the
+  // reader chose, and applying *that* to the rest is what shrink means.
+  it('shrinks to the shortest lane rather than to the floor', () => {
+    const lane = (...sizes: number[]): { members: Array<{ style: { size: number } }> } => ({
+      members: sizes.map((size) => ({ style: { size } })),
+    })
+    const lanes = [lane(90), lane(40), lane(120)] as never
+    expect(smallestLaneSize(lanes)).toBe(40)
+  })
+
+  // An overlaid lane is two tracks at one height, so it must not get two votes
+  // — and a stack with nothing in it is left alone rather than resized to zero.
+  it('reads every track in a lane, and answers nothing for an empty stack', () => {
+    const lanes = [{ members: [{ style: { size: 70 } }, { style: { size: 30 } }] }] as never
+    expect(smallestLaneSize(lanes)).toBe(30)
+    expect(smallestLaneSize([])).toBeNull()
+    expect(smallestLaneSize([{ members: [] }] as never)).toBeNull()
+  })
+
+  // Whatever is stored, what comes back is a height a lane may actually be: a
+  // row restored from an older build can carry anything.
+  it('clamps the answer like a typed height', () => {
+    expect(smallestLaneSize([{ members: [{ style: { size: 2 } }] }] as never)).toBe(LANE_MIN_SIZE)
   })
 })

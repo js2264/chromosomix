@@ -820,6 +820,21 @@ p {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+/* A name, with a caret in it.
+
+   The same box as the range's, with one thing different: the font is written on
+   the element by the editor, from what the paint measured — the two surfaces
+   write their names at different sizes (twelve and semibold in the 1D browser,
+   nine beside a map) and a caret that is not the size of the text it stands on
+   moves the figure the moment it opens, which is the one thing this whole
+   arrangement exists to prevent. Only the bounds are declared here: a name may
+   be one character or forty, and neither should give the box the width of the
+   other. */
+.input.lane-edit-name {
+  min-width: 5rem;
+  max-width: 22rem;
+}
+
 /* The two controls that sit *on* a lane.
 
    Positioned per frame against marks the canvas has already drawn — the colour

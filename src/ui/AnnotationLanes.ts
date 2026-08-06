@@ -45,6 +45,7 @@ import {
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
+  type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import type { Rect } from '../render/heatmap'
@@ -180,12 +181,14 @@ interface EdgeState {
   gripRows: Map<string, number>
   /** Every limit box on this edge, with the tracks it belongs to. */
   ranges: Array<{ entries: AnnotationEntry[]; hit: LimitBox }>
+  /** Every name box on this edge, with the one track each belongs to. */
+  names: Array<{ entry: AnnotationEntry; hit: NameBox }>
   /** The colour chips and autoscale buttons this edge wants over it. */
   marks: LaneMark[]
 }
 
 function emptyEdgeState(): EdgeState {
-  return { limits: new Map(), gripRows: new Map(), ranges: [], marks: [] }
+  return { limits: new Map(), gripRows: new Map(), ranges: [], names: [], marks: [] }
 }
 
 /**
@@ -425,6 +428,20 @@ export class AnnotationLanes {
     for (const range of this.state[edge].ranges) {
       const [bx, by, width, height] = range.hit.box
       if (x >= bx - 2 && x <= bx + width + 2 && y >= by - 2 && y <= by + height + 2) return range
+    }
+    return null
+  }
+
+  /**
+   * The track name under a point in a stack's canvas, if any.
+   *
+   * The twin of {@link limitAt}, from the same paint and with the same slack:
+   * both are text this lane drew, and both are things the reader changes.
+   */
+  nameAt(edge: LaneEdge, x: number, y: number): { entry: AnnotationEntry; hit: NameBox } | null {
+    for (const found of this.state[edge].names) {
+      const [bx, by, width, height] = found.hit.box
+      if (x >= bx - 2 && x <= bx + width + 2 && y >= by - 2 && y <= by + height + 2) return found
     }
     return null
   }
@@ -683,7 +700,13 @@ export class AnnotationLanes {
           }
         }
       } else if (entry.payload?.kind === 'features') {
-        const rows = entry.kind === 'gtf' ? rowsThatFit(frame.thickness, 13) : rowsThatFit(frame.thickness)
+        // The browser's row heights, and for the browser's reason: a name goes
+        // *under* its feature on both surfaces, and the band that holds it has
+        // to be asked for at the point the rows are counted. `labelBandOf`
+        // refuses the band on a row too short to hold both, so a lane dragged
+        // down to sixteen pixels still falls back to names inside the wide
+        // features — the rule is one rule, and the lane's height decides.
+        const rows = rowsThatFit(frame.thickness, entry.kind === 'gtf' ? 26 : 22)
         const layout = layoutFeatures(frame, axis, entry.payload.data, rows)
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const paint = {
@@ -693,6 +716,7 @@ export class AnnotationLanes {
           font: LANE_FONT,
           opacity: entry.style.opacity,
           labels: text,
+          labelsBelow: true,
         }
         if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
         else drawSegments(ctx, frame, entry.payload.data, layout, paint)
@@ -864,6 +888,12 @@ export class AnnotationLanes {
     // hit boxes either — a saved figure has nothing to be pointed at.
     if (!geometry.handles) return
     for (const hit of boxes.limits) state.ranges.push({ entries: label.entries, hit })
+    // One name, one track: a lane drawn as an overlay carries a name each, and
+    // the id the paint recorded is what keeps a rename on the one pointed at.
+    for (const hit of boxes.names) {
+      const owner = label.entries.find((entry) => entry.id === hit.id)
+      if (owner !== undefined) state.names.push({ entry: owner, hit })
+    }
     for (const swatch of boxes.swatches) {
       const owner = label.entries.find((entry) => entry.id === swatch.id)
       if (owner !== undefined) state.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })

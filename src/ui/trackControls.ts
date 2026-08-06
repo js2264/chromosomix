@@ -7,12 +7,13 @@
  * another. There is one number here now, and one place that says what "give
  * every track the same height" means.
  *
- * The two bulk actions are one thought taken two ways. *Stretch* answers "use
- * the space I have"; *set* answers "I know what a track should look like" —
- * ninety pixels is where a yeast ATAC track starts showing the shape of a
- * promoter, and a reader who has learned that number wants it back after every
- * fit, on every file, without measuring a window. Each is also the way out of
- * the other.
+ * The three bulk actions are one thought taken three ways. *Stretch* answers
+ * "use the space I have"; *shrink* answers "give it back, to the size I already
+ * chose for one of these"; *set* answers "I know what a track should look
+ * like" — ninety pixels is where a yeast ATAC track starts showing the shape of
+ * a promoter, and a reader who has learned that number wants it back after
+ * every fit, on every file, without measuring a window. Each is a way out of
+ * the other two.
  */
 
 import type { AnnotationStore } from '../annotations/store'
@@ -87,6 +88,36 @@ export function heightThatFills(room: number, count: number): number | null {
   if (count <= 0 || !(room > 0)) return null
   const each = Math.floor(room / count)
   return each < LANE_MIN_SIZE ? LANE_MIN_SIZE : Math.min(each, LANE_MAX_SIZE)
+}
+
+/**
+ * The height of the shortest lane in a stack — what "shrink" gives them all.
+ *
+ * The other way out of a stretch, and the reason it is *the shortest* rather
+ * than the floor: a reader who has dragged one lane down to the height a peak
+ * set wants has already said what "small" means here, and twelve pixels is a
+ * number this module chose. Shrinking to a lane on screen is therefore a
+ * decision the reader has made, applied to the rest; shrinking to the floor
+ * would be this module making it for them, and it would be the same picture
+ * whatever the stack.
+ *
+ * Measured over *lanes* for the same reason {@link setTrackHeight} writes over
+ * them: two tracks overlaid in one lane are one height, and counting the pair
+ * twice would let an overlay decide the answer by being two.
+ *
+ * `null` when there is nothing to measure, so a stack with no lanes is left
+ * alone rather than resized to nothing.
+ */
+export function smallestLaneSize(
+  lanes: ReadonlyArray<{ members: readonly AnnotationEntry[] }>,
+): number | null {
+  let smallest = Number.POSITIVE_INFINITY
+  for (const lane of lanes) {
+    for (const member of lane.members) {
+      if (member.style.size < smallest) smallest = member.style.size
+    }
+  }
+  return Number.isFinite(smallest) ? laneSize(smallest) : null
 }
 
 /**
