@@ -137,6 +137,65 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in a page is, so one directory of sessions works in all three. An exported
   session is untouched by it, and a file may mix the two.
 
+- **A track's name is edited where it is drawn.** The label pass measured every
+  name and forgot it, exactly as it once did the value range; it hands the boxes
+  back now, and a press on one opens a caret over it — in the 1D browser and
+  beside the map, one editor for both. A name commits to the one track it names,
+  unlike the range, which commits to every track in the lane because a lane draws
+  one axis.
+
+- **A map is a thing you can put down.** Compare becomes **Contact maps**, at the
+  top of the Annotations column, with one row per open map wearing the same
+  mark-name-eye-× head a track's row wears. The eye on the first map hides the
+  matrix — which *is* the 1D genome browser, the same tracks against the same
+  genome with the picture taken out — and the file stays open behind it, so the
+  trip back costs one press. The eye on the second takes the lower-left triangle
+  away without putting its reader down. `V` does the same from anywhere, as does
+  an icon-and-word button on the title line beside the search box. The window
+  comes across: hiding a map opens the browser where the map was looking, and
+  showing it again restores the parked view exactly, down to the colour clip.
+
+  The one-way door has left the File card, where it was the only way out of the
+  matrix: it is the × beside the name now, next to the eye it is not. A browser
+  started from a track gets the card too, with an empty slot to drop a map on.
+
+- **The box beside a map finds genes.** It only ever spoke coordinates, so typing
+  `GAL4` navigated to `region=GAL4` and came back with "unknown label" — on a
+  whole-genome map of a mammal, which is three pixels per chromosome arm and is
+  precisely where naming a gene is the only way to get anywhere. The scan is the
+  browser's, shared, and it returns *numbers*: the browser writes 1-based loci
+  and a map reads 0-based half-open regions.
+
+- **Coordinates on a 2D drag.** A marquee on the map drew a shaded square and
+  nothing else. It writes both ends and the width now, on both axes — a square in
+  pixels is two different spans in base pairs the moment the axes are two
+  sequences — each chip outside its own edge so it never covers what it measures.
+  On the diagonal the two axes say the same thing and it is said once. The chips
+  and the region that opens come from one derivation, so they cannot disagree.
+
+- **The line under a map says what window it is showing.** `3,786 × 3,786 bins ·
+  effective resolution: 600 bp` is two facts about the block and none about the
+  picture. It carries `Pf3D7_05_v3:1,001-24,600 · 23.6 kb` now, in the browser's
+  own words and grammar, updated in the same frame the map is drawn in.
+
+- **One text size for every picture.** A pair of presses in both Plot cards
+  scales every canvas font in the app together — track names, value ranges,
+  ruler coordinates, gene names, block labels, colourbar ticks, export captions —
+  and every line height, click box and label band that was measured against one.
+  A multiplier rather than a size, because the sixteen sizes written down across
+  the app were each chosen against the thing they sit on.
+
+- **Shrink, next to stretch.** Stretch answers "use the space I have"; shrink
+  answers "give it back, to the size I already chose for one of these" — the
+  shortest lane on screen rather than the floor. All tracks at once, and within a
+  group beside the button that levels a group to its tallest.
+
+- **A name column with a width of its own.** Its edge is draggable, and a double
+  click hands it back to the names. A name too long for a pinned column wraps to a
+  second line, breaking where the writer said a part ends, and is cut in the
+  middle — `Yeast_…-input` — when even two lines will not hold it, because the
+  ends of an experiment's name are where the information is.
+
 ### Fixed
 
 - **A session naming a collection at its root kept its workspace.** A workspace
@@ -150,6 +209,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   same picker with the same example list, and handed its answer to a different
   door — so an entry from the list arrived there as a file to open, and a
   published session was reported as a JSON file that is not a cooler.
+
+- **The genomic distance across a cell came back.** Anything larger than the
+  picture is read on a coarser grid, and a coarsened run carries no arithmetic
+  origin past its first — so the "N apart" line had gone quiet on exactly the
+  views that are always pooled. It is measured from the same function the two
+  coordinates above it come from. `AxisGroup` gains `unitBin`, an identity rather
+  than an origin, which is what a rectangular region view needs to know its two
+  axes are the same contig.
+
+- **Tracks no longer come back doubled after a reload.** Ids are minted from one
+  on every page load and a restore re-introduces the previous load's, so the first
+  file dropped afterwards was handed an id a restored row was already wearing —
+  and two rows under one id move and die together, which is why deleting one of
+  the twins deleted both. Ids handed in are reserved, a row begun twice replaces
+  itself in its own slot, a duplicate already in storage is dropped on the way
+  out, and a file dropped back onto a row this session put down re-attaches it
+  instead of starting a second one from the defaults.
+
+- **Feature names sit below their features beside the map**, as they already did
+  in the browser. `labelBandOf` still refuses the band on a row too short to hold
+  both, so a lane dragged down puts the names back inside the wide features.
 
 ## [0.8.0] - 2026-08-06
 

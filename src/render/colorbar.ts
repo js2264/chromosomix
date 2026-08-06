@@ -201,6 +201,9 @@ function detectDpr(): number {
  * would interpolate in sRGB between the stops the browser chooses, which is not
  * what `applyColormap` returns for a perceptually non-linear map like `magma`.
  */
+/** The size a colourbar writes its ticks and its caption at. */
+export const DEFAULT_COLORBAR_FONT = '10px system-ui, sans-serif'
+
 export class ColorbarView {
   private readonly canvas: HTMLCanvasElement
   /** Not `readonly`: {@link renderTo} borrows it for one draw, as the heatmap does. */
@@ -222,7 +225,7 @@ export class ColorbarView {
       caption: options.caption ?? 'contacts',
       prefix: options.prefix ?? '',
       showTransform: options.showTransform ?? true,
-      font: options.font ?? '10px system-ui, sans-serif',
+      font: options.font ?? DEFAULT_COLORBAR_FONT,
       textColor: options.textColor ?? '#333333',
       borderColor: options.borderColor === undefined ? '#999999' : options.borderColor,
       tickLength: options.tickLength ?? 4,
@@ -251,6 +254,11 @@ export class ColorbarView {
    */
   setCaption(caption: string): void {
     this.opts.caption = caption
+  }
+
+  /** Write the ticks and the caption at a different size. */
+  setFont(font: string): void {
+    this.opts.font = font
   }
 
   /** Set the mark before the caption; see {@link ColorbarOptions.prefix}. */
@@ -335,7 +343,8 @@ export class ColorbarView {
     const lut = applyColormap(this.scale.colormap)
     const ticks = this.ticks()
     const vertical = o.orientation === 'vertical'
-    const captionHeight = o.caption.length > 0 ? 14 : 0
+    // The caption's own line height, in the units it is written in.
+    const captionHeight = o.caption.length > 0 ? Math.round(sizeOf(o.font) * 1.4) : 0
 
     if (vertical) {
       const x = 1
@@ -448,4 +457,17 @@ export class ColorbarView {
       }
     }
   }
+}
+
+/**
+ * The pixel size in a CSS font shorthand, or ten.
+ *
+ * Six lines rather than an import, and deliberately: `src/render/**` reads
+ * nothing from `src/ui/**`, which is what keeps the renderers usable from a
+ * worker and from a test with no preferences at all. The size arrives *in the
+ * font*, and this is the only thing that has to read it back out.
+ */
+function sizeOf(font: string): number {
+  const match = /(\d+(?:\.\d+)?)px/.exec(font)
+  return match === null ? 10 : Number(match[1])
 }

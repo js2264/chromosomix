@@ -249,7 +249,7 @@ export function drawGrip(
 
 /** How wide the bar marking a run of grouped lanes is, in CSS pixels. */
 export const GROUP_BAR = 3
-const GROUP_FONT = '600 9px system-ui, sans-serif'
+export const GROUP_FONT = '600 9px system-ui, sans-serif'
 
 /** A run of adjacent lanes that share one value axis. */
 export interface GroupRun {
@@ -318,6 +318,8 @@ export function drawGroupBars(
      */
     labelAlong?: number
     text: boolean
+    /** The size a group's name is written at, or absent for this module's own. */
+    font?: string
   },
 ): void {
   if (runs.length === 0) return
@@ -349,7 +351,7 @@ export function drawGroupBars(
     if (!options.text || room < 34) continue
     ctx.save()
     ctx.globalAlpha = 0.9
-    ctx.font = GROUP_FONT
+    ctx.font = options.font ?? GROUP_FONT
     ctx.fillStyle = run.colour
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

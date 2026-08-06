@@ -28,7 +28,24 @@ import type { Scale } from './scale'
  * to click a name and go there — and at sixteen pixels it was a stripe of
  * shading with a caption, too thin to read as a control and too thin to aim at.
  */
-export const RULER_HEIGHT = 66
+export const BAND_HEIGHT = 48
+
+/** The coordinate row under the band: one line of ticks and their labels. */
+export const SCALE_ROW = 18
+
+/**
+ * How tall the ruler is at a given text scale.
+ *
+ * The band's height is a *target*: it is sized for a hand rather than for the
+ * name in it, and a name that outgrows it is dropped rather than clipped (see
+ * below). The scale row is nothing but its own line of text, so it grows with
+ * the text or the labels fall out of the bottom of it.
+ */
+export function rulerHeightFor(scale = 1): number {
+  return BAND_HEIGHT + Math.round(SCALE_ROW * scale)
+}
+
+export const RULER_HEIGHT = rulerHeightFor(1)
 
 export interface RulerPalette {
   text: string
@@ -52,6 +69,14 @@ export interface RulerFrame {
   domain: readonly [number, number]
   palette: RulerPalette
   dpr: number
+  /**
+   * The two sizes the ruler writes at, or absent for its own.
+   *
+   * Passed in rather than chosen here, exactly as `render/laneLabel.ts` takes
+   * its style: the app scales every canvas font together and this module has no
+   * business reading that preference, but it must be able to be told.
+   */
+  fonts?: { ruler: string; tick: string }
 }
 
 /** One sequence's stretch of the ruler, for hit-testing a click on its name. */
@@ -112,7 +137,7 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
   // band is dropped rather than clipped or shrunk: a row of half-names is
   // unreadable in a way an empty band is not, and the readout under the pointer
   // answers "which one is this" at any density.
-  ctx.font = RULER_FONT
+  ctx.font = frame.fonts?.ruler ?? RULER_FONT
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'center'
   ctx.fillStyle = palette.text
@@ -138,10 +163,8 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
   return bands
 }
 
-/** The band row's height; the scale row takes what is left. */
-const BAND_HEIGHT = 48
-const RULER_FONT = '600 13px system-ui, sans-serif'
-const TICK_FONT = '10px system-ui, sans-serif'
+export const RULER_FONT = '600 13px system-ui, sans-serif'
+export const TICK_FONT = '10px system-ui, sans-serif'
 
 /**
  * The coordinate row.
@@ -163,7 +186,7 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
   ctx.lineTo(x + width, snap(top, frame.dpr))
   ctx.stroke()
 
-  ctx.font = TICK_FONT
+  ctx.font = frame.fonts?.tick ?? TICK_FONT
   ctx.textBaseline = 'top'
   ctx.fillStyle = palette.faint
 

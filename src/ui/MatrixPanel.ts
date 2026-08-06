@@ -40,7 +40,7 @@ import { cardTitle, iconButton } from './icons'
 import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
-import { ColorbarView, formatCount } from '../render/colorbar'
+import { ColorbarView, DEFAULT_COLORBAR_FONT, formatCount } from '../render/colorbar'
 import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
 import { formatLocus } from '../genome/assembly'
 import {
@@ -59,6 +59,7 @@ import {
 } from '../render/colormaps'
 import {
   CROSSHAIR_COLOR,
+  DEFAULT_LABEL_FONT,
   HeatmapView,
   type AxisCoords,
   type Cell,
@@ -117,6 +118,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
 
@@ -358,6 +360,7 @@ export class MatrixPanel {
   private readonly overlay: HTMLElement
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
   private readonly unsubscribePlotOptions: () => void
+  private readonly unsubscribeTextScale: () => void
   private readonly themeWatchers: () => void
   private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
@@ -569,6 +572,7 @@ export class MatrixPanel {
       // to `NODE_7431_len_134871`, which no fixed margin fits, and a genome with
       // too many contigs to label should not reserve a gutter at all.
       autoMargin: true,
+      labelFont: scaleFont(DEFAULT_LABEL_FONT),
       onChange: () => this.schedule(),
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
@@ -592,9 +596,14 @@ export class MatrixPanel {
     // on the two File cards, both of which carry the same two marks.
     this.colorbar = new ColorbarView(this.barCanvas, {
       caption: 'count',
+      font: scaleFont(DEFAULT_COLORBAR_FONT),
       ...(options.compare === undefined ? {} : { prefix: '◥ ' }),
     })
-    this.colorbar2 = new ColorbarView(this.barCanvas2, { caption: 'count', prefix: '◣ ' })
+    this.colorbar2 = new ColorbarView(this.barCanvas2, {
+      caption: 'count',
+      prefix: '◣ ',
+      font: scaleFont(DEFAULT_COLORBAR_FONT),
+    })
 
     const transformSelect = el('select', { class: 'select' })
     this.transformSelect = transformSelect
@@ -774,6 +783,10 @@ export class MatrixPanel {
           el('span', { class: 'field-label', text: 'tracks' }),
           el('div', { class: 'plot-icon-row' }, ...TRACK_OPTIONS.map(optionToggle)),
         ),
+        // Beside the words rather than beside the export: this is a property of
+        // the writing on the pictures, and `track text` above it is the toggle
+        // that decides whether there is any.
+        textScaleField(),
         // The same control the browser's Plot card carries, writing the same
         // field of the same store: a reader who faded the tracks beside the map
         // and then closed it finds them faded in the browser, which is what
@@ -806,6 +819,18 @@ export class MatrixPanel {
       ),
     )
     this.paintPlotOptions(getPlotOptions())
+    // The matrix's own labels are the one thing a scale change does not simply
+    // redraw: the gutters they sit in are measured from the font, so the canvas
+    // has to be told rather than repainted. Both legends, because a compared map
+    // has two and updating one leaves the other at the old size.
+    this.unsubscribeTextScale = subscribeTextScale(() => {
+      this.heatmap.setLabelFont(scaleFont(DEFAULT_LABEL_FONT))
+      this.colorbar.setFont(scaleFont(DEFAULT_COLORBAR_FONT))
+      this.colorbar2.setFont(scaleFont(DEFAULT_COLORBAR_FONT))
+      this.colorbar.draw()
+      this.colorbar2.draw()
+      this.schedule()
+    })
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
@@ -1291,6 +1316,7 @@ export class MatrixPanel {
     // mode on leaves a button reading "Done" that nothing will ever answer.
     this.cancelPicking()
     this.unsubscribePlotOptions()
+    this.unsubscribeTextScale()
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -1450,10 +1476,10 @@ export class MatrixPanel {
       ctx.setTransform(scale, 0, 0, scale, 0, 0)
       ctx.textBaseline = 'alphabetic'
       ctx.textAlign = 'left'
-      let y = body + CAPTION_TOP
+      let y = body + scaleLength(CAPTION_TOP)
       for (const line of lines) {
-        const height = line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE
-        ctx.font = line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT
+        const height = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
+        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
         ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
         // Baseline a little above the line's foot, so the two lines read as one
         // block rather than as two evenly spaced rows.
@@ -1536,10 +1562,10 @@ export class MatrixPanel {
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.textBaseline = 'alphabetic'
       ctx.textAlign = 'left'
-      let y = body + CAPTION_TOP
+      let y = body + scaleLength(CAPTION_TOP)
       for (const line of lines) {
-        const step = line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE
-        ctx.font = line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT
+        const step = scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE)
+        ctx.font = scaleFont(line.strong ? CAPTION_TITLE_FONT : CAPTION_DETAIL_FONT)
         ctx.fillStyle = line.strong ? readPageText(this.canvas) : palette.labelColor
         ctx.fillText(line.text, left, y + step - 4)
         y += step
@@ -3215,8 +3241,11 @@ interface CaptionLine {
 function captionHeightOf(lines: CaptionLine[]): number {
   if (lines.length === 0) return 0
   return (
-    CAPTION_TOP +
-    lines.reduce((sum, line) => sum + (line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE), 0)
+    scaleLength(CAPTION_TOP) +
+    lines.reduce(
+      (sum, line) => sum + scaleLength(line.strong ? CAPTION_TITLE_LINE : CAPTION_DETAIL_LINE),
+      0,
+    )
   )
 }
 
@@ -3237,7 +3266,7 @@ function captionLines(
   if (caption.title !== '') lines.push({ text: caption.title, strong: true })
   if (caption.detail === '') return lines
 
-  ctx.font = CAPTION_DETAIL_FONT
+  ctx.font = scaleFont(CAPTION_DETAIL_FONT)
   const fits = (text: string): boolean => ctx.measureText(text).width <= width
   if (fits(caption.detail)) {
     lines.push({ text: caption.detail, strong: false })
