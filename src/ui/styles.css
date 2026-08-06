@@ -954,8 +954,13 @@ p {
   cursor: default;
 }
 
-.browser-zoom {
+.browser-zoom,
+/* The one part of a map's subtitle that moves, and the browser's own. Tabular
+   figures so a digit changing under a drag does not shuffle the rest of the
+   line sideways, and `nowrap` because a window is one phrase. */
+.view-span {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* A locus the parser could not read: the box flashes rather than throwing an

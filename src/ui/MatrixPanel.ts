@@ -41,7 +41,8 @@ import type { AnnotationEntry } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, formatCount } from '../render/colorbar'
-import { locusAxisFrom, type LocusAxis } from '../render/locus'
+import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
+import { formatLocus } from '../genome/assembly'
 import {
   drawArrowheads,
   drawDiagonalFeatures,
@@ -63,11 +64,12 @@ import {
   type Cell,
   type PlotOptions,
   type SelectionBox,
+  type SelectionText,
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
-import { inverseTransform, transformValue } from '../render/scale'
+import { inverseTransform, transformValue, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
@@ -310,6 +312,16 @@ export class MatrixPanel {
    * same plotting options everywhere".
    */
   readonly plotEl: HTMLElement
+  /**
+   * What the map currently *shows*, as opposed to what it holds.
+   *
+   * A panel-owned node the view mounts on its own subtitle line, because the
+   * number changes on every wheel click while the rest of that line is written
+   * once per read. The same arrangement the 1D browser's `.browser-zoom` has,
+   * for the same reason — and the same words, so `chrI · 23.6 kb` means the same
+   * thing whichever picture a reader is looking at.
+   */
+  readonly viewNote: HTMLElement = el('span', { class: 'view-span' })
   /**
    * The cards this panel contributes to whichever view's Aesthetics column.
    *
@@ -566,6 +578,11 @@ export class MatrixPanel {
       ...(options.onSelectRegion === undefined
         ? {}
         : { onSelect: (box: SelectionBox) => this.emitSelection(box) }),
+      // Wired whichever the drag does. The numbers are what makes a marquee
+      // aimable, and a box that zooms needs them exactly as much as one that
+      // opens a region — more, if anything, since a zoom leaves no address bar
+      // entry saying where it went.
+      selectionLabel: (box) => this.describeSelection(box),
     })
     this.heatmap.attach()
     this.watchContextMenu()
@@ -2383,6 +2400,9 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    // Blanked rather than left to the next frame: the outgoing block's window
+    // under the incoming block's bin count is a line describing two pictures.
+    this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
     this.second =
@@ -2430,13 +2450,21 @@ export class MatrixPanel {
     // The annotations' view of the same two axes. Rebuilt per block rather than
     // patched, so a stale mapping can never be drawn over fresh data — the same
     // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
+    // Built for *every* block, and no longer only where there are annotations to
+    // draw against it: the lanes were the first reader of §8.4's one coordinate
+    // model and the line under the map is the second, and a file with no tracks
+    // on it still knows what window it is showing.
     const context = this.options.annotations
+    const shared = {
+      level: data.level,
+      binsize: this.options.binsize,
+      contigLength: context?.contigLength ?? ((): number | undefined => undefined),
+    }
+    this.locusAxes = {
+      rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+      cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
+    }
     if (context !== undefined) {
-      const shared = { level: data.level, binsize: this.options.binsize, contigLength: context.contigLength }
-      this.locusAxes = {
-        rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
-        cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-      }
       this.lanes?.setAxes(this.locusAxes)
       // The caret was measured into a lane of the outgoing block, and the number
       // in it belongs to a picture that no longer exists.
@@ -2532,6 +2560,10 @@ export class MatrixPanel {
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
       this.lanes?.draw(this.laneGeometry())
+      // …and for the same reason: the scales the heatmap has just written are
+      // what this reads, and writing it before the draw would show the previous
+      // frame's window for one frame of every drag.
+      this.viewNote.textContent = this.viewPhrase()
       this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where
@@ -2642,6 +2674,50 @@ export class MatrixPanel {
    * corner therefore comes back naming both sequences, and the view opens their
    * intersection.
    */
+  /**
+   * The two spans a drag covers, as the chips on the box write them.
+   *
+   * Through the same `axisSelection` the *release* commits to, so what the
+   * numbers promise is what opens — including the clamp to the sequence's own
+   * length, which is what stops a box overrunning a short last bin and naming a
+   * coordinate the reader would refuse.
+   */
+  /**
+   * The window on screen, read off the scales the pan and the zoom write.
+   *
+   * Bin-aligned, because the cells are: what is reported is the window drawn
+   * rather than the fractional domain the transform happens to hold. Empty above
+   * bin level, where a cell is a whole sequence and a coordinate inside one
+   * would be an invention — and empty on an axis whose runs carry no length,
+   * which is the same refusal `axisCoordsFor` makes about its ticks.
+   */
+  private viewPhrase(): string {
+    const framed = (axis: LocusAxis | null, scale: Scale): LocusWindow[] => {
+      if (axis === null) return []
+      const [d0, d1] = scale.domain
+      const lo = Math.max(0, Math.floor(d0))
+      const hi = Math.min(axis.unitEnd, Math.ceil(d1))
+      return hi > lo ? axis.windows([lo, hi]) : []
+    }
+    return framedPhrase(
+      framed(this.locusAxes.rows, this.heatmap.scaleY),
+      framed(this.locusAxes.cols, this.heatmap.scaleX),
+    )
+  }
+
+  private describeSelection(box: SelectionBox): SelectionText | null {
+    const data = this.data
+    // Above bin level a cell *is* a contig or a genome, and the axis labels
+    // already name it: a base pair inside one would be an invention.
+    if (data === null || data.level !== 'bin') return null
+    const rowGroup = groupAt(data.rowGroups, box.anchor.row)
+    const colGroup = groupAt(data.colGroups, box.anchor.col)
+    const rows = rowGroup === undefined ? null : this.axisSelection(rowGroup, box.rows, data.rowExtent[0])
+    const cols = colGroup === undefined ? null : this.axisSelection(colGroup, box.cols, data.colExtent[0])
+    if (rows === null && cols === null) return null
+    return { rows: rows === null ? null : spanText(rows), cols: cols === null ? null : spanText(cols) }
+  }
+
   private emitSelection(box: SelectionBox): void {
     const emit = this.options.onSelectRegion
     const data = this.data
@@ -3268,6 +3344,71 @@ export function axisRegion(axis: SelectedAxis): string {
   if (axis.range === undefined) return axis.label
   const [start, end] = axis.range
   return `${axis.label}:${Math.round(start)}-${Math.round(end)}`
+}
+
+/**
+ * The window one axis currently shows, in the grammar the region box takes.
+ *
+ * `formatLocus` rather than a fourth hand-rolled `contig:start-end`: what the
+ * line shows has to be what the box would accept, or copying a coordinate out of
+ * the subtitle and into the box moves the picture by a base.
+ *
+ * A whole-genome axis is several sequences at once and naming sixteen of them is
+ * a paragraph, so past two they are counted instead — the same choice
+ * `BrowserView.zoomPhrase` makes with "4 of 16 sequences", and for the same
+ * reason: the line has to stay a line.
+ */
+export function windowPhrase(windows: readonly LocusWindow[]): string {
+  if (windows.length === 0) return ''
+  const span = windows.reduce((total, window) => total + (window.end - window.start), 0)
+  const where =
+    windows.length === 1
+      ? formatLocus(windows[0])
+      : windows.length === 2
+        ? `${formatLocus(windows[0])} + ${formatLocus(windows[1])}`
+        : `${fmt.int(windows.length)} sequences`
+  return `${where} · ${fmt.bp(span)}`
+}
+
+/**
+ * Both axes of what is on screen, said once when they agree.
+ *
+ * On the diagonal the two windows are one window, and printing it twice says the
+ * picture is of two things when it is of one. Off it — a genome pair, a
+ * `contig × contig` block, a region against a second region — they are genuinely
+ * different and both are named.
+ */
+export function framedPhrase(
+  rows: readonly LocusWindow[],
+  cols: readonly LocusWindow[],
+): string {
+  const rowText = windowPhrase(rows)
+  const colText = windowPhrase(cols)
+  if (rowText === '') return colText
+  if (colText === '' || rowText === colText) return rowText
+  return `${rowText} × ${colText}`
+}
+
+/**
+ * One axis of a dragged box, as the three numbers written *beside* it.
+ *
+ * Not {@link axisRegion}, and the difference is the audience: that one is a
+ * region string, half-open and separator-free because it is pasted back into a
+ * box; this one is read, so both ends are 1-based positions and the width is in
+ * the reader's units. The wording is the 1D browser's marquee, word for word —
+ * one gesture described in two dialects is two gestures as far as anybody can
+ * tell.
+ *
+ * Above bin level there is no range and the block's own name is the answer.
+ */
+export function spanText(axis: SelectedAxis): { start: string; end: string; span: string } {
+  if (axis.range === undefined) return { start: axis.label, end: axis.label, span: '' }
+  const [start, end] = axis.range
+  return {
+    start: `${axis.label}:${fmt.int(Math.round(start) + 1)}`,
+    end: `${axis.label}:${fmt.int(Math.round(end))}`,
+    span: fmt.bp(end - start),
+  }
 }
 
 /**

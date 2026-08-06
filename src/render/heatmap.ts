@@ -420,6 +420,19 @@ export interface Rect {
   height: number
 }
 
+/** One axis of a dragged box, as the three numbers written beside it. */
+export interface SelectionSpanText {
+  start: string
+  end: string
+  span: string
+}
+
+/** Both axes of a dragged box; `null` where an axis has no coordinates. */
+export interface SelectionText {
+  rows: SelectionSpanText | null
+  cols: SelectionSpanText | null
+}
+
 /**
  * A dragged selection, in the coordinates the caller thinks in.
  *
@@ -756,6 +769,16 @@ export interface HeatmapOptions {
    */
   onSelect?: (selection: SelectionBox) => void
   /**
+   * What the two spans of a drag say, per axis, already formatted.
+   *
+   * The renderer owns *where* the numbers go and the caller owns *what they
+   * are* (§8.4): a base pair is the block's arithmetic, and this module has no
+   * business knowing which contig a cell is in. `null` for an axis with nothing
+   * to say — above bin level a cell is a whole sequence, and a coordinate
+   * inside one would be an invention.
+   */
+  selectionLabel?: (selection: SelectionBox) => SelectionText | null
+  /**
    * Fired on a click in a label gutter, on the block that label names.
    *
    * A label is the name of a thing the app can open — a genome in the overview,
@@ -803,6 +826,7 @@ type ResolvedOptions = Required<
     | 'onCellClick'
     | 'onLabelClick'
     | 'onSelect'
+    | 'selectionLabel'
     | 'onHover'
     | 'plotOptions'
   >
@@ -828,6 +852,21 @@ function squareFrom(x0: number, y0: number, x: number, y: number): { x: number; 
     side,
   }
 }
+
+/**
+ * The coordinates written at the edges of a selection being dragged.
+ *
+ * Here rather than in either surface, because both surfaces draw the same mark
+ * for the same gesture: a marquee that zooms to itself is only as good as a
+ * reader's ability to put its edges where they mean to, and the shaded box says
+ * nothing at all about where they are.
+ */
+export const SELECTION_FONT = '600 11px system-ui, sans-serif'
+export const SELECTION_CHIP = 16
+export const SELECTION_PAD = 5
+
+/** Air between a chip and the edge it belongs to. */
+const SELECTION_GAP = 3
 
 /** Minimum on-screen gap between two drawn labels, in CSS pixels. */
 const LABEL_MIN_GAP = 11
@@ -890,6 +929,7 @@ export class HeatmapView {
   private readonly onCellClick: ((cell: Cell) => void) | null
   private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
   private readonly onSelect: ((selection: SelectionBox) => void) | null
+  private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
   private matrix: DenseMatrix | null = null
@@ -991,6 +1031,7 @@ export class HeatmapView {
     this.onCellClick = options.onCellClick ?? null
     this.onLabelClick = options.onLabelClick ?? null
     this.onSelect = options.onSelect ?? null
+    this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
 
     // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
@@ -1509,11 +1550,32 @@ export class HeatmapView {
       this.zoomToBox(x0, y0, x, y)
       return
     }
+    const found = this.boxFrom(x0, y0, x, y)
+    if (found !== null) emit(found.box)
+  }
+
+  /**
+   * The cells a drag covers, and the square it is drawn as.
+   *
+   * One derivation for the two things that must agree about a marquee: what the
+   * numbers written on it say, and what is opened when it is let go. They were
+   * one function and a promise before; a box whose chips describe a different
+   * region from the one that opens is the sort of disagreement nobody notices
+   * until they have written it down.
+   *
+   * `null` for a drag too small to be a selection, or one that misses the data.
+   */
+  private boxFrom(
+    x0: number,
+    y0: number,
+    x: number,
+    y: number,
+  ): { box: SelectionBox; rect: { x: number; y: number; side: number } } | null {
     const matrix = this.matrix
-    if (matrix === null) return
+    if (matrix === null) return null
     const plot = this.plotRect
-    const { x: bx, y: by, side } = squareFrom(x0, y0, x, y)
-    if (side < this.opts.minSelectPixels) return
+    const rect = squareFrom(x0, y0, x, y)
+    if (rect.side < this.opts.minSelectPixels) return null
 
     // The anchor is where the drag *began*, which is the cell that says what
     // the selection is of. Clamped into the plot first: a drag that started on
@@ -1522,12 +1584,12 @@ export class HeatmapView {
       clamp(x0, plot.x, plot.x + plot.width - 1),
       clamp(y0, plot.y, plot.y + plot.height - 1),
     )
-    if (anchor === null) return
+    if (anchor === null) return null
 
-    const cols = this.spanOf('cols', bx - plot.x, side, matrix.ncols)
-    const rows = this.spanOf('rows', by - plot.y, side, matrix.nrows)
-    if (cols === null || rows === null) return
-    emit({ rows, cols, anchor })
+    const cols = this.spanOf('cols', rect.x - plot.x, rect.side, matrix.ncols)
+    const rows = this.spanOf('rows', rect.y - plot.y, rect.side, matrix.nrows)
+    if (cols === null || rows === null) return null
+    return { box: { rows, cols, anchor }, rect }
   }
 
   /**
@@ -1811,6 +1873,116 @@ export class HeatmapView {
     ctx.strokeStyle = this.opts.selectionColor
     ctx.lineWidth = Math.max(1 / this.dpr, 1)
     ctx.strokeRect(this.snap(x), this.snap(y), Math.round(w), Math.round(h))
+    ctx.restore()
+
+    // After the clip is released, and that is not tidiness: a box dragged to the
+    // edge of the data is exactly the box whose numbers a reader most wants, and
+    // chips drawn inside the clip are the ones that would be taken away.
+    const label = this.selectionLabel
+    if (label === null) return
+    const found = this.boxFrom(drag.x0, drag.y0, drag.x, drag.y)
+    if (found === null) return
+    const text = label(found.box)
+    if (text !== null) this.drawSelectionMarks(found.rect, text)
+  }
+
+  /**
+   * The coordinates at the edges of the box being dragged.
+   *
+   * Both ends of both axes, written *outside* their own edge so the numbers
+   * never sit on the region they are measuring, and folded back inside at the
+   * canvas edges — a coordinate written off the side of the canvas is a
+   * coordinate nobody can read, and the edges are exactly where a selection is
+   * dragged to. The width goes in the middle of each side, where the eye
+   * already is, and is dropped when the box is too small to hold it.
+   *
+   * Both axes and not one, even though the marquee is square: a square in
+   * pixels is two different spans in base pairs the moment the axes are two
+   * different sequences, and against a short contig's clamped end they differ
+   * again.
+   */
+  private drawSelectionMarks(
+    rect: { x: number; y: number; side: number },
+    text: SelectionText,
+  ): void {
+    const ctx = this.ctx
+    const left = rect.x
+    const right = rect.x + rect.side
+    const top = rect.y
+    const bottom = rect.y + rect.side
+    ctx.save()
+    ctx.font = SELECTION_FONT
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'left'
+    const widthOf = (label: string): number => ctx.measureText(label).width + SELECTION_PAD * 2
+    /**
+     * A chip at `x, y`, folded back inside the canvas at its edges.
+     *
+     * A coordinate written off the side of the canvas is a coordinate nobody
+     * can read, and the edges are exactly where a selection gets dragged to.
+     */
+    const chip = (label: string, x: number, y: number): void => {
+      if (label === '') return
+      const width = widthOf(label)
+      const at = clamp(x, 0, Math.max(0, this.cssWidth - width))
+      const row = clamp(y, 0, Math.max(0, this.cssHeight - SELECTION_CHIP))
+      ctx.fillStyle = this.opts.labelHaloColor
+      ctx.strokeStyle = this.opts.crosshairColor
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      if (ctx.roundRect === undefined) ctx.rect(at, row, width, SELECTION_CHIP)
+      else ctx.roundRect(at, row, width, SELECTION_CHIP, 3)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = this.opts.crosshairColor
+      ctx.fillText(label, at + SELECTION_PAD, row + SELECTION_CHIP / 2)
+    }
+
+    // Each end written *outside* its own edge, which is the 1D browser's rule
+    // and the only placement that cannot self-overlap: a small box is exactly
+    // the case where two chips inside one would be drawn on top of each other,
+    // and it is also the case where the numbers matter most.
+    const cols = text.cols
+    if (cols !== null) {
+      const above = top - SELECTION_CHIP - SELECTION_GAP
+      const row = above >= 0 ? above : bottom + SELECTION_GAP
+      chip(cols.start, left - widthOf(cols.start) - SELECTION_GAP, row)
+      chip(cols.end, right + SELECTION_GAP, row)
+      // The width in the middle of what has been drawn, where the eye already
+      // is — and only where the box is wide enough to hold it, since a chip
+      // wider than the region it measures is a chip over the data.
+      const span = widthOf(cols.span)
+      if (rect.side > span + 8) {
+        const second = above >= 0 ? row - SELECTION_CHIP - SELECTION_GAP : row + SELECTION_CHIP + SELECTION_GAP
+        chip(cols.span, (left + right) / 2 - span / 2, second)
+      }
+    }
+
+    // On the diagonal the square covers the same window on both axes, and
+    // writing it twice says the picture is of two things when it is of one.
+    // Compared as *written*, not as computed: the marquee is square in pixels
+    // and the two axes sit at two different margins, so a cis box routinely
+    // rounds to ends one cell apart — a difference the line cannot show and the
+    // reader cannot act on. Two chips that would read the same are one chip.
+    const same =
+      cols !== null &&
+      text.rows !== null &&
+      text.rows.start === cols.start &&
+      text.rows.span === cols.span
+    const rows = same ? null : text.rows
+    if (rows !== null) {
+      const widest = Math.max(widthOf(rows.start), widthOf(rows.end), widthOf(rows.span))
+      const beside = left - widest - SELECTION_GAP
+      const column = beside >= 0 ? beside : right + SELECTION_GAP
+      // Level with the edge each names rather than outside it: the column is
+      // already clear of the data horizontally, and a chip *above* the top edge
+      // would land on the row the other axis is using.
+      chip(rows.start, column, top)
+      chip(rows.end, column, bottom - SELECTION_CHIP)
+      if (rect.side > SELECTION_CHIP * 2 + 8) {
+        chip(rows.span, column, (top + bottom) / 2 - SELECTION_CHIP / 2)
+      }
+    }
     ctx.restore()
   }
 
@@ -2414,6 +2586,13 @@ export class HeatmapView {
       this.lastX = x
       this.lastY = y
       showCursor({ grabbing: this.drag.mode === 'pan' })
+      // The readout is about where the pointer *was*: a drag stops feeding it,
+      // so left up it sits over a marquee naming a cell the picture no longer
+      // has under the pointer — and, on a selection, directly over the
+      // coordinates the drag is drawing. The 1D browser puts its tooltip away on
+      // every press for the same reason.
+      this.setHover(null)
+      this.onHover?.(null)
       // `preventScroll`, because focusing an element the scroll container has
       // only partly in view *scrolls it into view* — and the press that just
       // took the focus is measured again on release, against a canvas that has

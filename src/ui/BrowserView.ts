@@ -111,7 +111,12 @@ import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { searchKey } from './SearchBox'
 import { type IconName, cardTitle, iconButton } from './icons'
-import { CROSSHAIR_COLOR } from '../render/heatmap'
+import {
+  CROSSHAIR_COLOR,
+  SELECTION_CHIP,
+  SELECTION_FONT,
+  SELECTION_PAD,
+} from '../render/heatmap'
 import { transparencyField } from './AnnotationCard'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
@@ -2526,10 +2531,6 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   return tracks.length === 0 ? null : tracks
 }
 
-/** The coordinates written at the edges of a selection being dragged. */
-const SELECTION_FONT = '600 11px system-ui, sans-serif'
-const SELECTION_CHIP = 16
-const SELECTION_PAD = 5
 
 /**
  * The strip this view keeps at its left for the lane handles.

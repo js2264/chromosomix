@@ -237,6 +237,8 @@ export class GenomeView {
     this.summary.replaceChildren(
       ...blockSummary(this.props.binsize, result, 'contig'),
       ...(pooled === null ? [] : [` · ${pooled.phrase}`]),
+      ' · ',
+      this.panel.viewNote,
     )
   }
 
