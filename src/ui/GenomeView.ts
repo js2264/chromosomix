@@ -164,8 +164,7 @@ export class GenomeView {
     this.sideEl = el(
       'aside',
       { class: 'side' },
-      this.panel.controlsEl,
-      this.panel.plotEl,
+      ...this.panel.cards,
       this.contigBox,
     )
 

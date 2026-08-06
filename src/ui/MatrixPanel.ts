@@ -32,6 +32,7 @@ import {
   type ManualPoint,
   type ManualStore,
 } from '../annotations/manual'
+import type { GroupSettings } from '../annotations/groups'
 import type { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
@@ -48,7 +49,7 @@ import {
   drawPairs,
   type OverlayFrame,
 } from '../render/overlays'
-import { AnnotationLanes, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
+import { AnnotationLanes, LANE_GAP, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
 import { alignable, blendAcrossDiagonal, matchGain } from '../render/compare'
 import {
   COLORMAP_NAMES,
@@ -65,10 +66,27 @@ import {
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
+import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
+import { GroupsCard } from './GroupsCard'
+import {
+  CEILING_LABEL,
+  CEILING_MODIFIER,
+  CEILING_STEP,
+  DRAG_SLACK,
+  LaneControls,
+  colourInput,
+} from './LaneControls'
+import { LaneLimitEditor } from './LaneLimitEditor'
+import {
+  heightThatFills,
+  laneSize,
+  setTrackHeight,
+  trackHeightField,
+} from './trackControls'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt } from './dom'
 import {
   EXPORT_DPI_CHOICES,
@@ -246,6 +264,14 @@ export interface AnnotationContext {
   manual: ManualStore
   client: AnnotationClient
   /**
+   * How each group of tracks is drawn and scaled, for this file.
+   *
+   * The session's instance, the same one the 1D browser is handed: a group is a
+   * fact about the tracks, not about whichever surface happens to be showing
+   * them (`annotations/groups.ts`).
+   */
+  groups: GroupSettings
+  /**
    * A contig's length in base pairs, from the contigs table.
    *
    * Passed as a lookup rather than a table because an *aggregated* axis carries
@@ -283,6 +309,18 @@ export class MatrixPanel {
    * same plotting options everywhere".
    */
   readonly plotEl: HTMLElement
+  /**
+   * The cards this panel contributes to whichever view's Aesthetics column.
+   *
+   * A list rather than two named fields, because it is no longer two: a file
+   * that can carry annotations gets a Groups card as well, and every view that
+   * mounts a map spreads whatever is here. Naming each card at five call sites
+   * is how the fifth one ends up missing the card the other four have — which is
+   * exactly how the Groups card came to exist only in the 1D browser.
+   */
+  readonly cards: readonly HTMLElement[]
+
+  private readonly groupsCard: GroupsCard | null
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
@@ -393,6 +431,27 @@ export class MatrixPanel {
    * annotations and therefore no lanes.
    */
   private readonly edgeZones = new Map<LaneEdge, HTMLElement>()
+  /**
+   * The layer of controls over each lane stack, and the caret that opens in one.
+   *
+   * Positioned against {@link grid} rather than given a grid area of their own.
+   * `.panel-grid`'s tracks are sized from their content, so a sized child sharing
+   * a lane's cell would inflate that track and shrink the map; laid over the grid
+   * absolutely, and offset each frame by the canvas's own position in it, they
+   * take no space at all. It is the same conversion `placeTooltip` performs, for
+   * the same reason.
+   */
+  private readonly laneLayers = new Map<LaneEdge, HTMLElement>()
+  private readonly laneControls = new Map<LaneEdge, LaneControls>()
+  private laneEditor: LaneLimitEditor | null = null
+  /**
+   * The lane whose ceiling is being dragged, and how far it has moved.
+   *
+   * Held here rather than written to the store on every frame, and that is what
+   * makes the gesture readable: the store is what the *faded* copy is drawn
+   * from, so it has to stand still while the hand moves. One write, on release.
+   */
+  private laneScaling: { id: string; factor: number } | null = null
   /**
    * The two axes as annotations see them, rebuilt with every block.
    *
@@ -655,7 +714,31 @@ export class MatrixPanel {
             () => this.autoscaleTracks(),
             { class: 'btn btn-icon', size: 15 },
           ),
+          // Stretch, only where there are lanes to stretch. On a file that
+          // cannot carry annotations (§8.5) the row would be a control that
+          // never does anything, which is worse than a row of two.
+          ...(options.annotations === undefined
+            ? []
+            : [
+                iconButton(
+                  'stretch-vertical',
+                  withKey(
+                    'Stretch every track to fill the height there is, all of them to one height',
+                    KEYS.stretch,
+                  ),
+                  () => this.fitTracks(),
+                  { class: 'btn btn-icon', size: 15 },
+                ),
+              ]),
         ),
+        // The same box the browser's Plot card carries, applying the same rule
+        // to the same tracks: the two are one decision taken two ways — fill the
+        // window, or this many pixels — and a reader who has just stretched two
+        // lanes into two four-hundred-pixel strips reaches for this immediately
+        // afterwards.
+        ...(options.annotations === undefined
+          ? []
+          : [trackHeightField((px) => this.setTrackHeight(px))]),
         // Split by what each one draws on, because half of these do nothing to
         // the matrix and half do nothing to the tracks — and an undifferentiated
         // row of seven made a reader try each in turn to find out which. Stored
@@ -792,8 +875,25 @@ export class MatrixPanel {
             store: options.annotations.store,
             manual: options.annotations.manual,
             client: options.annotations.client,
+            groups: options.annotations.groups,
             onChange: () => this.schedule(),
           })
+
+    const annotations = options.annotations
+    if (this.lanes !== null && annotations !== undefined) {
+      for (const edge of ['bottom', 'right'] as const) {
+        const layer = el('div', { class: 'lane-overlays' })
+        this.laneLayers.set(edge, layer)
+        this.laneControls.set(
+          edge,
+          // A track added, removed or regrouped moves the lane a caret was
+          // measured into, and a box hanging over the wrong lane would commit
+          // its number to the right one. A pan changes no signature, which is
+          // why the caret survives one.
+          new LaneControls(layer, annotations.store, () => this.laneEditor?.close()),
+        )
+      }
+    }
 
     // The map and its lanes are one grid, so a lane canvas is the same width as
     // the map's canvas by construction rather than by arrangement — and the
@@ -803,9 +903,16 @@ export class MatrixPanel {
       { class: 'panel-grid' },
       wrap,
       ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
+      ...this.laneLayers.values(),
       this.tooltip,
     )
-    if (this.lanes !== null) {
+    if (this.lanes !== null && annotations !== undefined) {
+      this.laneEditor = new LaneLimitEditor({
+        host: this.grid,
+        store: annotations.store,
+        shownLimits: (id) => this.lanes?.shownLimits(id) ?? null,
+        onChange: () => this.schedule(),
+      })
       this.watchLane('bottom', this.lanes.bottomEl)
       this.watchLane('right', this.lanes.rightEl)
     }
@@ -836,6 +943,24 @@ export class MatrixPanel {
     // second panel competing with it.
     this.barSlot = el('div', { class: 'colorbar-slot' }, this.barCanvas, this.barCanvas2)
     const body = el('div', { class: 'panel-body' }, this.grid, this.barSlot)
+
+    // The same card the 1D browser's column has, built from the same class:
+    // beside a map a group could be *made* — from the row's own select, or the
+    // batch bar — and then never inspected, undone or drawn differently, which
+    // made the mode a decision with nowhere to take it back.
+    this.groupsCard =
+      annotations === undefined
+        ? null
+        : new GroupsCard({
+            store: annotations.store,
+            groups: annotations.groups,
+            onChange: () => this.schedule(),
+          })
+    this.cards = [
+      this.controlsEl,
+      this.plotEl,
+      ...(this.groupsCard === null ? [] : [this.groupsCard.el]),
+    ]
 
     this.el = el(
       'section',
@@ -1045,6 +1170,67 @@ export class MatrixPanel {
     }
   }
 
+  /**
+   * The end of a scaling drag: one store write for the whole gesture.
+   *
+   * From the range that was resolved when the drag began, which is the one the
+   * faded copy has been standing at all along — so the axis a reader let go on
+   * is the axis they get. Every track in the lane, because they share it.
+   */
+  private commitLaneScaling(edge: LaneEdge, members: readonly AnnotationEntry[]): void {
+    const held = this.laneScaling
+    this.laneScaling = null
+    this.schedule()
+    const store = this.options.annotations?.store
+    if (held === null || held.factor === 1 || store === undefined) return
+    const extent = this.lanes?.extentOf(edge, held.id) ?? null
+    for (const member of members) {
+      if (member.kind !== 'track') continue
+      const next = nudgedLimits(member.style.limits, extent, held.factor)
+      if (next !== null) store.restyle(member.id, { limits: next })
+    }
+  }
+
+  /**
+   * Share the height there is between the lanes on both edges, equally.
+   *
+   * The arithmetic is the browser's, out of `trackControls.ts`; what differs is
+   * the *measurement*, and it differs in a way that has to be stated. Beside a
+   * map the room is not a subtraction — the plot's own height is `100vh` minus
+   * its furniture minus `--lane-bottom`, and `--lane-bottom` is what this writes
+   * — so "fill the room left over" would divide by a number that depends on the
+   * answer, and could oscillate. The budget is therefore taken **once**, from
+   * what the grid currently occupies, and each edge is given its own share of
+   * it: the bottom stack's budget is a height and the right stack's is a width
+   * taken out of the map's own column.
+   */
+  fitTracks(): void {
+    const lanes = this.lanes
+    const store = this.options.annotations?.store
+    if (lanes === null || store === undefined) return
+    const box = this.grid.getBoundingClientRect()
+    for (const edge of ['bottom', 'right'] as const) {
+      const slots = lanes.boundariesOf(edge).length
+      if (slots === 0) continue
+      // Half the box on the axis this stack takes from, which is the most a
+      // stack may claim without the map ceasing to be the thing being looked at.
+      const room = (edge === 'bottom' ? box.height : box.width) / 2 - LANE_GAP * (slots + 1)
+      const size = heightThatFills(room, slots)
+      if (size === null) continue
+      setTrackHeight(store, lanes.lanesOn(edge), size)
+    }
+  }
+
+  /** Give every lane on both edges one height, chosen rather than computed. */
+  setTrackHeight(px: number): void {
+    const lanes = this.lanes
+    const store = this.options.annotations?.store
+    if (lanes === null || store === undefined) return
+    for (const edge of ['bottom', 'right'] as const) {
+      setTrackHeight(store, lanes.lanesOn(edge), px)
+    }
+  }
+
   /** Reflect the shared overlay state on the buttons. */
   private paintPlotOptions(options: PlotOptions): void {
     for (const [key, node] of this.optionButtons) {
@@ -1072,6 +1258,13 @@ export class MatrixPanel {
     // outlives this view, and a cache keyed on a view's own geometry would be
     // answering the next view's questions with the last one's data.
     this.lanes?.destroy()
+    // Through the editor's own close, not by detaching its node: removing a
+    // focused input *is* a blur, so a raw removal would hand the blur handler a
+    // live editor and commit a value on the way out — from here, that is a store
+    // write by a panel that no longer exists.
+    this.laneEditor?.close()
+    for (const controls of this.laneControls.values()) controls.destroy()
+    this.groupsCard?.destroy()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
   }
@@ -1618,6 +1811,7 @@ export class MatrixPanel {
       border: this.laneBorder,
       handles: true,
       grip: this.laneHandle,
+      scaling: this.laneScaling,
       palette: {
         guide: palette.labelColor,
         halo: palette.labelHaloColor,
@@ -1635,7 +1829,7 @@ export class MatrixPanel {
    * stays.
    */
   private figureGeometry(): LaneGeometry {
-    return { ...this.laneGeometry(), handles: false, grip: null }
+    return { ...this.laneGeometry(), handles: false, grip: null, scaling: null }
   }
 
   /**
@@ -1686,23 +1880,46 @@ export class MatrixPanel {
     let drag:
       | {
           id: string
-          kind: 'size' | 'pan' | 'grip'
+          kind: 'size' | 'pan' | 'grip' | 'press' | 'scale'
           from: number
           along: number
           size: number
+          /** Where the press landed, so an undecided drag can catch up. */
+          from0: number
+          along0: number
+          /** For a scaling drag: the across-offset inside the lane it began at. */
+          within: number
+          /** Every track in the lane, which for an overlay group is all of them. */
+          members: AnnotationEntry[]
           /** For a handle drag: the edge under the pointer, if it is on one. */
           to: LaneEdge | null
+          /** The slot last dropped into, so a reorder fires once per crossing. */
+          over: number
         }
       | null = null
 
-    const start = (id: string, kind: 'size' | 'pan' | 'grip', event: PointerEvent, size: number): void => {
+    const start = (
+      id: string,
+      kind: 'size' | 'grip' | 'press',
+      event: PointerEvent,
+      size: number,
+      within = 0,
+      members: AnnotationEntry[] = [],
+    ): void => {
+      const across = edge === 'bottom' ? event.clientY : event.clientX
+      const along = edge === 'bottom' ? event.clientX : event.clientY
       drag = {
         id,
         kind,
-        from: edge === 'bottom' ? event.clientY : event.clientX,
-        along: edge === 'bottom' ? event.clientX : event.clientY,
+        from: across,
+        along,
         size,
+        from0: across,
+        along0: along,
+        within,
+        members,
         to: null,
+        over: -1,
       }
       canvas.setPointerCapture(event.pointerId)
       event.preventDefault()
@@ -1713,7 +1930,16 @@ export class MatrixPanel {
       const box = canvas.getBoundingClientRect()
       const x = event.clientX - box.left
       const y = event.clientY - box.top
-      // The handle first: it sits inside the lane's own rectangle, so the lane
+      // A limit under a track's name is a text box that happens to be painted.
+      // Checked before the pointer is captured, so the press never becomes the
+      // start of a pan the reader did not ask for.
+      const limit = lanes.limitAt(edge, x, y)
+      if (limit !== null && this.laneEditor !== null) {
+        event.preventDefault()
+        this.laneEditor.open(limit, { left: canvas.offsetLeft, top: canvas.offsetTop })
+        return
+      }
+      // The handle next: it sits inside the lane's own rectangle, so the lane
       // hit below would otherwise take the press and read a direction out of it.
       const handle = lanes.gripAt(edge, x, y, this.laneGeometry())
       if (handle !== null) {
@@ -1736,7 +1962,19 @@ export class MatrixPanel {
       }
       const hit = lanes.laneAt(edge, x, y)
       if (hit === null) return
-      start(hit.entry.id, hit.onBorder ? 'size' : 'pan', event, hit.entry.style.size)
+      // A press in the body is not yet a gesture: which way it first travels
+      // says whether it is the pan a lane has always been or a drag on that
+      // lane's ceiling. The border needs no such reading — a border can be
+      // dragged for exactly one thing.
+      const within = (edge === 'bottom' ? y : x) - lanes.acrossOf(edge, hit.entry.id)
+      start(
+        hit.entry.id,
+        hit.onBorder ? 'size' : 'press',
+        event,
+        hit.entry.style.size,
+        within,
+        hit.members.filter((member) => member.kind === 'track'),
+      )
       if (!hit.onBorder) canvas.classList.add('grabbing')
     }
 
@@ -1755,10 +1993,17 @@ export class MatrixPanel {
         const hit = lanes.laneAt(edge, x, y)
         canvas.style.cursor = ''
         const border = hit?.onBorder === true ? hit.entry.id : null
+        // Over a limit the pointer *is* the affordance, because "this text is a
+        // text box" is a claim only a caret makes. Tested before the handle, in
+        // the order the press tests them: the two can come within a couple of
+        // pixels of each other on a short lane, and a cursor promising one while
+        // the press does the other is worse than either.
+        const onRange = lanes.limitAt(edge, x, y) !== null
+        canvas.classList.toggle('is-text', onRange)
         // The handle is the one thing on these canvases the arrowhead cannot
         // speak for: it is not pointing at a base pair, it is something to take
         // hold of, and the open hand is what says so.
-        const onHandle = lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
+        const onHandle = !onRange && lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
         canvas.classList.toggle('is-grab', onHandle)
         const handle = hit === null ? null : hit.entry.id
         if (border !== this.laneBorder || handle !== this.laneHandle) {
@@ -1770,6 +2015,45 @@ export class MatrixPanel {
       }
       const now = edge === 'bottom' ? event.clientY : event.clientX
       const alongNow = edge === 'bottom' ? event.clientX : event.clientY
+
+      if (drag.kind === 'press') {
+        const across = now - drag.from0
+        const along = alongNow - drag.along0
+        if (Math.abs(across) + Math.abs(along) < DRAG_SLACK) return
+        // Across the lane rather than along it, which is the one direction a
+        // drag on a track beside the map had no meaning in: a pan only ever
+        // forwards the shared axis, so a perpendicular drag moved nothing at
+        // all. Read once, at the slack, so a pan that wanders a few pixels off
+        // its axis stays the pan it started as.
+        drag.kind =
+          Math.abs(across) > Math.abs(along) && drag.members.length > 0 ? 'scale' : 'pan'
+        // `drag.along` is still where the press landed, so the pan below applies
+        // the whole travel in this one event: the gesture catches up rather than
+        // starting three pixels late, which on a canvas glued to the map is the
+        // difference a reader would feel.
+        if (drag.kind === 'scale') {
+          this.laneScaling = { id: drag.id, factor: 1 }
+          canvas.classList.remove('grabbing')
+        }
+      }
+
+      if (drag.kind === 'scale') {
+        const lanes = this.lanes
+        if (lanes === null) return
+        const frame = lanes.frameFor(edge, drag.id, this.laneGeometry())
+        if (frame === null) return
+        this.laneScaling = {
+          id: drag.id,
+          factor: ceilingFactor(
+            frame,
+            drag.within,
+            now - drag.from0 + drag.within,
+            drag.members[0]?.style.flip === true,
+          ),
+        }
+        this.schedule()
+        return
+      }
 
       if (drag.kind === 'grip') {
         // Over one of the rectangles, the drag is about which edge this track is
@@ -1791,7 +2075,13 @@ export class MatrixPanel {
         const bounds = lanes.boundariesOf(edge)
         let to = 0
         while (to + 1 < bounds.length && across >= bounds[to + 1]) to++
-        context.store.move(drag.id, to)
+        // Once per slot *crossed*, not once per pointer move. Without it an
+        // overlay group thrashes: moving its host past its own members only
+        // re-elects a host, the two orders draw identically, and the move fires
+        // again on every event — each one a `sessionStorage` write.
+        if (to === drag.over) return
+        drag.over = to
+        lanes.moveToSlot(edge, drag.id, to)
         return
       }
 
@@ -1808,21 +2098,32 @@ export class MatrixPanel {
 
       // Thickness grows *away* from the map on both edges, so the delta is the
       // pointer's own displacement in the across direction.
-      const next = Math.round(drag.size + (now - drag.from))
-      context.store.restyle(drag.id, { size: Math.max(LANE_MIN_SIZE, Math.min(400, next)) })
+      // Every track in the lane, because an overlay group shares one strip:
+      // resizing the host alone would leave its members claiming a height the
+      // stack no longer gives them.
+      const next = laneSize(drag.size + (now - drag.from))
+      for (const member of lanes.membersOf(edge, drag.id)) {
+        context.store.restyle(member.id, { size: next })
+      }
     }
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
+      if (drag.kind === 'scale') this.commitLaneScaling(edge, drag.members)
       // A handle let go over a rectangle draws the track on that edge instead.
       // A *move* and not a copy — the other edge is cleared — because that is
       // what dragging a thing from one place to another means; `location` in the
       // row's settings is the same field, for the reader who wants both.
       if (drag.kind === 'grip' && drag.to !== null) {
         const target = drag.to
-        context.store.update(drag.id, {
-          placement: { bottom: target === 'bottom', right: target === 'right' },
-        })
+        // Every member, because an overlay group is one lane on screen and would
+        // otherwise be split across the two edges by a single drag.
+        for (const member of lanes.membersOf(edge, drag.id)) {
+          context.store.place(member.id, {
+            bottom: target === 'bottom',
+            right: target === 'right',
+          })
+        }
       }
       if (drag.kind === 'grip') {
         this.grid.classList.remove('is-dropping')
@@ -1845,14 +2146,23 @@ export class MatrixPanel {
 
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
+    // A cancel means the gesture was taken *away*, not that it finished. Treated
+    // as a release it commits the one decision a drag holds back until then —
+    // which edge the track is drawn on — so a drag the system interrupts over a
+    // lit rectangle would move the track there anyway.
+    const onCancel = (event: PointerEvent): void => {
+      if (drag === null) return
+      drag.to = null
+      onUp(event)
+    }
     canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('contextmenu', onMenu)
     this.laneListeners.push(() => {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('contextmenu', onMenu)
     })
   }
@@ -1982,16 +2292,41 @@ export class MatrixPanel {
     }
 
     const onWheel = (event: WheelEvent): void => {
+      const box = canvas.getBoundingClientRect()
+      const x = event.clientX - box.left
+      const y = event.clientY - box.top
+      // ⌘-scroll over a lane raises or lowers *that lane's* ceiling — the
+      // adjustment a reader of a coverage track makes constantly, and the one
+      // gesture the 1D browser had that the map's own lanes did not. Never Ctrl:
+      // a trackpad pinch arrives as a wheel with `ctrlKey` set, so taking it here
+      // would swallow every pinch and run away with a ceiling instead of zooming.
+      const lanes = this.lanes
+      const store = this.options.annotations?.store
+      if (CEILING_MODIFIER(event) && lanes !== null && store !== undefined) {
+        const hit = lanes.laneAt(edge, x, y)
+        if (hit === null) return
+        event.preventDefault()
+        // From the range *resolved on screen*, group included, so the first notch
+        // on an autoscaled track starts from the axis the reader is looking at
+        // rather than from a stored `[0, 1]` nobody chose.
+        const extent = lanes.extentOf(edge, hit.entry.id)
+        const factor = event.deltaY < 0 ? 1 / CEILING_STEP : CEILING_STEP
+        for (const member of hit.members) {
+          if (member.kind !== 'track') continue
+          const next = nudgedLimits(member.style.limits, extent, factor)
+          if (next !== null) store.restyle(member.id, { limits: next })
+        }
+        return
+      }
       // The same two rules the map's own wheel handler follows: a sideways
       // two-finger scroll is the browser's back gesture and is left alone, and
       // the factor is exponential in the delta so a trackpad's many small events
       // and a wheel's few large ones compose to the same total zoom.
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
       event.preventDefault()
-      const box = canvas.getBoundingClientRect()
       const at = middle()
-      if (edge === 'bottom') at.x = event.clientX - box.left
-      else at.y = event.clientY - box.top
+      if (edge === 'bottom') at.x = x
+      else at.y = y
       this.heatmap.zoomAt(at.x, at.y, Math.exp(-event.deltaY * 0.002))
     }
 
@@ -2065,6 +2400,9 @@ export class MatrixPanel {
         cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
       }
       this.lanes?.setAxes(this.locusAxes)
+      // The caret was measured into a lane of the outgoing block, and the number
+      // in it belongs to a picture that no longer exists.
+      this.laneEditor?.close()
     }
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
@@ -2156,6 +2494,7 @@ export class MatrixPanel {
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
       this.lanes?.draw(this.laneGeometry())
+      this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where
       // the auto rule's numbers become visible — in the colourbar and, equally,
@@ -2216,6 +2555,26 @@ export class MatrixPanel {
     // the one forced layout in the draw path, and it happens only when a lane is
     // added, removed or resized.
     this.heatmap.resize()
+  }
+
+  /**
+   * Put each stack's controls where the paint says they go.
+   *
+   * The offset converts a lane canvas's own pixels into the grid's, which is what
+   * the layers are positioned against — `offsetLeft`/`offsetTop` carry the grid
+   * gap and the canvas's own margin with them, so nothing here has to know that
+   * `.lane-bottom` sits four pixels down.
+   */
+  private syncLaneControls(): void {
+    const lanes = this.lanes
+    for (const [edge, controls] of this.laneControls) {
+      const canvas = edge === 'bottom' ? lanes?.bottomEl : lanes?.rightEl
+      if (lanes === null || canvas === undefined || canvas.classList.contains('hidden')) {
+        controls.clear()
+        continue
+      }
+      controls.sync(lanes.marksOn(edge), { left: canvas.offsetLeft, top: canvas.offsetTop })
+    }
   }
 
   private emitClick(cell: Cell): void {
@@ -2951,9 +3310,6 @@ export function toDense(data: MatrixResult): DenseMatrix {
 }
 
 
-/** The smallest a lane may be dragged to; below this it is a line, not a track. */
-const LANE_MIN_SIZE = 12
-
 /**
  * The right-click menu on a lane: its colour, and what its value axis spans.
  *
@@ -2976,19 +3332,14 @@ export function openLaneMenu(
     {
       label: 'Colour…',
       hint: entry.style.colour,
-      // The browser's own picker, opened from a hidden input — the same control
-      // the side panel's swatch is, so the two cannot come to disagree about
-      // what a colour is. Built here rather than up front because a menu that is
-      // opened and dismissed should leave nothing behind, and taken away again
-      // on the commit *or* on the window coming back, which is what a cancelled
-      // picker looks like from this side.
+      // The same control the lane's own chip is and the side panel's swatch is,
+      // through one builder, so the three cannot come to disagree about what a
+      // colour is. Built here rather than up front because a menu that is opened
+      // and dismissed should leave nothing behind, and taken away again on the
+      // commit *or* on the window coming back, which is what a cancelled picker
+      // looks like from this side.
       run: () => {
-        const swatch = el('input', {
-          class: 'hidden-input',
-          type: 'color',
-          value: entry.style.colour,
-        })
-        swatch.addEventListener('input', () => store.restyle(entry.id, { colour: swatch.value }))
+        const swatch = colourInput(entry, store, { class: 'hidden-input' })
         const done = (): void => swatch.remove()
         swatch.addEventListener('change', done, { once: true })
         window.addEventListener('focus', done, { once: true })
@@ -3007,6 +3358,11 @@ export function openLaneMenu(
         disabled: limits.auto,
         run: () => store.restyle(entry.id, { limits: { ...limits, auto: true } }),
       },
+      // Not a step, and not a control: the two ways the range is moved *on the
+      // lane itself*, said once where a reader who opened this menu looking for
+      // them will find them. Both are gestures with nothing on screen to
+      // announce them, which is exactly what a menu is for.
+      { label: `${CEILING_LABEL} on the lane moves the ceiling; click a limit to type one` },
       ...[1, 5, 10, 50, 100].map((max) => ({
         label: `0 – ${max}`,
         disabled: !limits.auto && limits.min === 0 && limits.max === max,

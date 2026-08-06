@@ -638,9 +638,11 @@ export class AnnotationCard {
       node.setAttribute('aria-pressed', String(on))
       node.addEventListener('click', () => {
         if (last) return
-        this.props.store.update(entry.id, {
-          placement: { ...entry.placement, [edge]: !on },
-        })
+        // Through `place`, not `update`: moving between the two stacks turns the
+        // value axis round so it grows towards the map on either side, and that
+        // rule belongs to every path that moves a track rather than to the one
+        // that happens to be a button.
+        this.props.store.place(entry.id, { ...entry.placement, [edge]: !on })
       })
       return node
     }

@@ -38,6 +38,7 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
   baseline: true,
+  outline: false,
   gutter: false,
   crosshair: true,
   dividers: false,
@@ -57,7 +58,13 @@ export type PlotOptionKey = keyof PlotOptions
  * beside a map is a row in which half the entries do nothing to the thing being
  * looked at. So they are stored together and *offered* apart.
  */
-export const TRACK_OPTIONS: readonly PlotOptionKey[] = ['text', 'fills', 'baseline', 'crosshair']
+export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
+  'text',
+  'fills',
+  'outline',
+  'baseline',
+  'crosshair',
+]
 export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', 'labels', 'ticks']
 
 /**
@@ -72,6 +79,7 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', '
 export const PLOT_OPTION_ICONS: Record<PlotOptionKey, IconName> = {
   text: 'type',
   fills: 'chart-area',
+  outline: 'chart-spline',
   baseline: 'align-end-horizontal',
   gutter: 'align-right',
   crosshair: 'crosshair',
@@ -98,6 +106,12 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
     hint:
       'The area under a track’s line, filled. Off leaves the line alone, which is what ' +
       'several tracks in one lane usually want.',
+  },
+  outline: {
+    label: 'track outline',
+    hint:
+      'A dark rule along the top of every track, over its own colour. What makes four ' +
+      'stacked areas four legible shapes rather than four blocks of ink.',
   },
   gutter: {
     label: 'name column',
@@ -130,6 +144,7 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
 export const PLOT_OPTION_KEYS: Record<PlotOptionKey, string> = {
   text: 'n',
   fills: 'f',
+  outline: 'i',
   baseline: 'r',
   gutter: 'u',
   crosshair: 'x',
@@ -155,6 +170,7 @@ function read(): PlotOptions {
     return {
       text: pick('text'),
       fills: pick('fills'),
+      outline: pick('outline'),
       baseline: pick('baseline'),
       gutter: pick('gutter'),
       crosshair: pick('crosshair'),

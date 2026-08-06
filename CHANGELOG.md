@@ -10,6 +10,93 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The tracks beside a map are the tracks in the browser.** Everything the 1D
+  browser had grown and the heatmap's lanes had not, ported across — and ported
+  by *moving* the implementation rather than copying it, so there is now one of
+  each rather than two that agree today.
+
+  On the lane itself: a **colour chip** before every track name, which is a
+  click-to-recolour target on screen and a colour key in the exported figure —
+  four lanes used to carry four names in one neutral grey. The **value range is
+  editable where it is drawn**: a caret opens in the number itself, Enter
+  commits, Escape leaves it, an inverted pair is refused in place, and the
+  untouched end comes from the axis on screen rather than from the file's
+  whole-genome extent. An **autoscale button** sits after the range, lit while
+  the axis is the data's own. **⌘-scroll** (Alt elsewhere) over a lane moves that
+  lane's ceiling, stepping from the range currently resolved rather than from a
+  stored `[0, 1]` nobody chose.
+
+  In the Aesthetics column: the **Groups card**, which existed only in the
+  browser — beside a map a group could be *made* and then never inspected,
+  undone or drawn differently. It lists each group's members with their colours,
+  hides them together, takes one back out, levels them to their tallest, and
+  carries the two mode toggles. **Overlay** now works beside the map: a group can
+  collapse into one lane, its members blended, with a column of coloured names
+  and one range under them. So does **scale each** — the setting was stored,
+  honoured in the browser and silently ignored beside the map, which is the
+  stored value and the picture disagreeing. A **stretch** button and a **track
+  height** box join the Plot card, and `H` works in a map session.
+
+  And in the picture, a **bar marking each run of lanes that share an axis**.
+  A group was honoured numerically the moment it was made and drawn nowhere, so
+  two tracks on one axis and two that happen to agree looked identical.
+
+- **Drag a track's body to set its ceiling.** Press in a lane and move across it
+  — up and down below the map, left and right beside it — and the value axis
+  follows the hand. While the drag is under way the area **stays where it was**,
+  faded, as the record of the range being left behind; only the top line moves.
+  One trace lifting off its own shadow says what a number changing in a corner
+  could not. Nothing is written until you let go, which is what lets the shadow
+  stand still. Which screen direction means *more* is asked of the lane rather
+  than assumed: it is opposite on the two edges and reversed again by a flip.
+
+- **A track outline.** One toggle in either Plot card (`I`) draws a hairline
+  along the top of every track, in the plot's ink rather than in the track's own
+  colour. The boundary between an area's ink and the paper is the only part of
+  it carrying information, and in its own colour it is the one edge that does not
+  stand out — four stacked areas become four legible shapes.
+
+- **`Reds` in the colormap picker**, built from ColorBrewer's nine-class
+  sequential red, which is the control-point list matplotlib holds for that name.
+
+### Changed
+
+- **A track moved to the right of the map turns round.** Below the map a lane
+  grows *up*, towards the matrix; beside it the same track grew *away* from it,
+  so a figure with both stacks disagreed with itself about which way was more.
+  Moving a track between the two edges now flips its axis, and a file dropped on
+  the right edge arrives already turned. A **toggle**, not an assignment: a
+  reader who deliberately hung a bottom track from its ceiling gets that back
+  when it comes home.
+
+- **A right-hand lane's name is off its own ink.** The caption was pinned to the
+  edge nearest the map, which on that stack is where the signal grows from; it
+  now goes to whichever end of the lane the baseline is not at, which is the rule
+  the bottom stack always followed. A flipped track's name moves with it — and
+  keeps its caret, which it used to lose.
+
+### Fixed
+
+- **A lane dragged by its handle beside the map landed on the wrong slot.** The
+  drop position was a *drawn-lane* index handed to a reorder that indexes the
+  card's whole list, so with any track hidden, still loading, or on the other
+  edge the lane landed a slot early and the last slot could not be reached at
+  all. Every drag now resolves its target by identity, and fires once per slot
+  crossed rather than once per pointer move.
+
+- **A cancelled lane drag no longer commits it.** `pointercancel` was bound to
+  the same handler as a release, so a drag the system interrupted over a lit
+  edge rectangle still moved the track to that edge.
+
+- **One floor for a lane's height instead of three.** Fourteen pixels in the
+  browser, twelve in the panel and ten in the lane stack, so a lane dragged to
+  eleven was legal on one surface and rounded on another. Twelve everywhere; a
+  lane below it comes back a pixel or two taller on the next reload.
+
 ## [0.7.0] - 2026-08-06
 
 ### Fixed

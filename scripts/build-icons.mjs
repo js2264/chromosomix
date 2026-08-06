@@ -49,6 +49,7 @@ const LUCIDE = [
   'unfold-vertical',
   'type',
   'chart-area',
+  'chart-spline',
   'list',
   'align-end-horizontal',
   'chevrons-up-down',

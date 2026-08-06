@@ -780,10 +780,21 @@ p {
 /* The inline editors float over the canvas and must not swallow the gestures
    that belong to it — so the layer is inert and only the controls in it are
    not. */
-.browser-overlays {
+.browser-overlays,
+.lane-overlays {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+/* Beside a map the layer takes no grid area at all.
+   `.panel-grid`'s tracks are sized from their content, so a sized child sharing
+   a lane's cell would inflate that track and shrink the map — and giving it a
+   `grid-area` would make that cell its containing block, clipping every control
+   outside it. Absolute against the grid, exactly as the tooltip is, with each
+   control positioned from its own canvas's offset inside it. */
+.panel-grid > .lane-overlays {
+  z-index: 4;
 }
 
 /* One end of a value axis, with a caret in it.
@@ -798,7 +809,7 @@ p {
    are the whole of what makes this box the size of the number it stands on. The
    size is in pixels rather than in steps for the same reason: it is matching a
    number painted on a canvas at `10px`, and a canvas has no rem.  */
-.input.browser-edit {
+.input.lane-edit {
   position: absolute;
   z-index: 3;
   padding: 0 0.2rem;
@@ -825,7 +836,7 @@ p {
    bug (`opacity: 0` hides a control and does not stop it taking a press) and
    here the design: the thing being aimed at is drawn on the canvas a pixel
    below, and this is only what catches the click. */
-.browser-swatch {
+.lane-swatch {
   position: absolute;
   padding: 0;
   border: 0;
@@ -835,11 +846,11 @@ p {
   pointer-events: auto;
 }
 
-.browser-swatch::-webkit-color-swatch-wrapper {
+.lane-swatch::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 
-.browser-swatch::-webkit-color-swatch {
+.lane-swatch::-webkit-color-swatch {
   border: 0;
 }
 
@@ -852,7 +863,7 @@ p {
 /* `.btn.` on both, because `.btn` is declared a thousand lines further down and
    a tie on specificity is broken by source order — which is how this button kept
    the bordered box it is not supposed to have. */
-.btn.browser-auto {
+.btn.lane-auto {
   position: absolute;
   padding: 0;
   border: 0;
@@ -863,12 +874,12 @@ p {
   pointer-events: auto;
 }
 
-.btn.browser-auto:hover {
+.btn.lane-auto:hover {
   color: var(--accent);
   background: none;
 }
 
-.btn.browser-auto.is-on {
+.btn.lane-auto.is-on {
   color: var(--accent);
 }
 
@@ -2238,7 +2249,8 @@ p {
 /* Over one end of a lane's value axis, which is a text box that happens to be
    painted. The arrowhead is the affordance everywhere else on this canvas, and
    this is the one thing it cannot say: "there is a caret behind this number". */
-.browser-canvas.is-text {
+.browser-canvas.is-text,
+.lane-canvas.is-text {
   cursor: text;
 }
 

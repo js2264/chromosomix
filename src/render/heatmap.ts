@@ -500,6 +500,20 @@ export interface PlotOptions {
    */
   baseline: boolean
   /**
+   * A dark rule along the top of every track, over its own colour.
+   *
+   * What a filled area is missing when it is read as a *shape* rather than as a
+   * value at a position: the boundary between the ink and the paper is the only
+   * part of an area track carrying information, and drawn in the track's own
+   * colour it is the one edge of the fill that does not stand out from it. In
+   * the plot's ink it does, and four stacked areas become four legible outlines.
+   *
+   * Off by default, because it is a claim about how the figure is read rather
+   * than about the data, and a coloured area is the honest default for a track
+   * whose colour is its identity.
+   */
+  outline: boolean
+  /**
    * A column for the track names, with the tracks starting after it.
    *
    * A name drawn *over* a track is a name in the way of the data on every lane
@@ -548,6 +562,7 @@ export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
   baseline: true,
+  outline: false,
   // Off in a figure: `metacooler show` draws no name column, and a lane drawn
   // beside a matrix cannot have one at all.
   gutter: false,

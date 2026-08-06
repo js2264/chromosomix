@@ -150,6 +150,7 @@ export class AnnotationStore {
     placement?: { bottom: boolean; right: boolean }
     style?: AnnotationEntry['style']
   }): AnnotationEntry {
+    const placement = options.placement ?? { bottom: true, right: false }
     const entry: AnnotationEntry = {
       id: options.id ?? mintAnnotationId(),
       card: options.card,
@@ -165,8 +166,19 @@ export class AnnotationStore {
       // your head tilted. The right edge is still there — the B and R boxes on
       // the row move a track to either, and a file dropped on the right of the
       // map lands there — it is simply not what "add a track" should mean.
-      placement: options.placement ?? { bottom: true, right: false },
-      style: options.style ?? defaultStyle(options.kind, this.nextColour()),
+      placement,
+      // A file dropped on the right of the map arrives already turned round, for
+      // the reason {@link place} turns one that is moved there: on that stack a
+      // track grows *away* from the matrix unless it is flipped, and a reader
+      // who aimed at the right edge is asking for a lane to read beside the map,
+      // not one to read away from it. A style handed in wins — that is a
+      // restored row, which is carrying a decision already made.
+      style:
+        options.style ??
+        (() => {
+          const base = defaultStyle(options.kind, this.nextColour())
+          return sideOf(placement) === 'right' ? { ...base, flip: !base.flip } : base
+        })(),
     }
     this.items = [...this.items, entry]
     this.changed()
@@ -182,6 +194,39 @@ export class AnnotationStore {
       return { ...entry, ...patch }
     })
     if (hit) this.changed()
+  }
+
+  /**
+   * Draw one row on a different edge, and turn its axis to face the map.
+   *
+   * Which way a lane's values grow is not a preference on the right-hand stack —
+   * it is a reading direction. A bottom lane grows *up* from its floor, towards
+   * the map above it; the same track beside the map grows *outward*, away from
+   * it, so the two stacks meeting at the corner of one figure disagree about
+   * which way is more. Flipping a right-hand lane puts the growth back towards
+   * the matrix and makes the pair read as one picture.
+   *
+   * A **toggle** and not an assignment, which is the whole reason this is a
+   * method rather than a default. A reader who deliberately hung a bottom track
+   * from its ceiling has said something about that track; setting `flip` from
+   * the edge would throw that away on the way across and again on the way back.
+   * Toggling preserves it: a pre-flipped bottom track becomes an unflipped
+   * right-hand one, and moving it home restores exactly what was there.
+   *
+   * Only between the two edges. A track drawn on *both* has one `flip` and two
+   * readings, so there is no answer that is right for both stacks — it keeps
+   * whatever it had, and the reader decides.
+   */
+  place(id: string, placement: { bottom: boolean; right: boolean }): void {
+    const entry = this.byId(id)
+    if (entry === undefined) return
+    const was = sideOf(entry.placement)
+    const now = sideOf(placement)
+    const turned = (was === 'bottom' && now === 'right') || (was === 'right' && now === 'bottom')
+    this.update(id, {
+      placement,
+      ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
+    })
   }
 
   /** Merge a patch into one row's style. */
@@ -200,16 +245,21 @@ export class AnnotationStore {
   /**
    * Put one row at a new position in **its own card's** list.
    *
-   * The order is not decoration: {@link drawnOn} hands the lanes out in it, so
-   * dragging a row up the card moves that track up the stack beside the map.
-   * That is the whole reason the list is draggable — the alternative was
-   * removing three tracks and dropping them again in the order you wanted.
+   * `to` indexes the card's own list, and the other card's rows keep the
+   * absolute slots they had: the two are interleaved in `items` by load order,
+   * and a reorder of one is not an event in the other. Out-of-range indices
+   * clamp rather than throw — a drop past the last row means "last", which is
+   * what the gesture looked like.
    *
-   * `to` indexes the card's own list, which is what the reader is looking at,
-   * and the other card's rows keep the absolute slots they had: the two are
-   * interleaved in `items` by load order, and a reorder of one is not an event
-   * in the other. Out-of-range indices clamp rather than throw — a drop past the
-   * last row means "last", which is what the gesture looked like.
+   * **Nothing on screen reorders through this any more**, and that is worth
+   * stating rather than leaving to be rediscovered. Every drag — the card's rows,
+   * the browser's lanes, the map's lane stacks — resolves its target by
+   * *identity* and calls {@link moveTo}, because a position in what is being
+   * looked at is not a position in a card's list: a stack beside the map holds
+   * the tracks that are visible, ready and on that edge, so one hidden row made a
+   * card-local index land a slot early and put the last slot out of reach. This
+   * stays because a card-local reorder is a coherent thing for a store to offer;
+   * it is not the thing a lane drag wants.
    */
   move(id: string, to: number): void {
     const entry = this.byId(id)
@@ -228,12 +278,13 @@ export class AnnotationStore {
   /**
    * Put one row at a position in the **whole** list.
    *
-   * What the panel's own drag means now that it shows every loaded file in one
-   * list: the reader is looking at one order and moving a row within it. A
-   * global move also keeps the relative order of everything it steps over, so
-   * the per-edge lane stacks beside a map reorder exactly as they would have
-   * under the card-local {@link move} — which the map's own lane drag still
-   * uses, because there the reader is looking at one edge rather than at a list.
+   * What every drag in the application means: the reader is looking at one
+   * order and moving a row within it. A global move keeps the relative order of
+   * everything it steps over, so a per-edge lane stack beside the map reorders
+   * as its reader expects even though the index is over the whole list — which
+   * is why the lane drags resolve a slot to the *entry* in it and then ask for
+   * that entry's position here, rather than handing a slot number to
+   * {@link move}.
    */
   moveTo(id: string, to: number): void {
     const from = this.items.findIndex((row) => row.id === id)
@@ -336,6 +387,13 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   const kind = (source as Record<string, unknown>)['kind']
   if (kind !== 'local' && kind !== 'remote') return false
   return typeof row['style'] === 'object' && row['style'] !== null
+}
+
+/** Which stack a placement puts a track in, if it puts it in exactly one. */
+function sideOf(placement: { bottom: boolean; right: boolean }): 'bottom' | 'right' | 'neither' {
+  if (placement.bottom && !placement.right) return 'bottom'
+  if (placement.right && !placement.bottom) return 'right'
+  return 'neither'
 }
 
 /**
