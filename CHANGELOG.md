@@ -96,6 +96,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the read's own resolution, and taking a coarser rung of a laddered `.mcool`
   where one exists, are the real answers and are not attempted here.
 
+- **A coarse cell belongs to the sequence, not to the question.** The grid falls
+  at `contigStart + m·k` whatever range was asked for, and a request is widened to
+  those edges rather than starting its own grid at its own left edge. So a base
+  pair lands in the same cell, holding the same sum, in every view of it, and a
+  region of a chromosome now behaves exactly as the chromosome does: one
+  coordinate under one pixel, showing the sum beneath it. It also gives the first
+  cell a place in the contig's own coordinates — a block opening 320 kb in used to
+  call its first cell 0 bp — which is what let the restriction go that kept
+  mid-contig regions on the dense path. At most `k − 1` bins are added at each
+  end, and the range reported is the range drawn.
+
+- **The reader plans the grid exactly rather than from a bound.**
+  `poolPlan`'s `n / (cap − contigs)` is what a *caller* needs, having to name a
+  resolution before anything is read. The reader has the contig extents in hand,
+  so it searches for the smallest grid that fits — which at a bin count just over
+  a multiple of the cap is a whole step finer than the bound allows.
+
 - **Selections larger than the picture are drawn rather than refused.** "This
   selection is 6,000 cells per axis … Select fewer sequences" is a strange thing
   to say to someone who has just ticked *select all*. The axis is named sequences
