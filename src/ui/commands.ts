@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom'
+import { icon, type IconName } from './icons'
 
 /**
  * Every key a *view* answers, in one object.
@@ -62,6 +63,15 @@ export const KEYS = {
   stretch: 'h',
   /** Every value axis back to what is in view. */
   autoscale: 'y',
+  /**
+   * The two pictures of one genome: the matrix, and the tracks along it.
+   *
+   * `v` for view, and a *switch* rather than two commands — a reader who puts
+   * the map down to read a bigWig means to come back to it, and the same key
+   * bringing it back is what makes putting it down safe to do. Nothing is
+   * unloaded either way; see `Session.hideMap`.
+   */
+  mapToggle: 'v',
 } as const
 
 /** `'Autoscale every track'` + `'y'` → `'Autoscale every track (Y)'`. */
@@ -81,6 +91,36 @@ export function keyBadge(keys: string, options: { class?: string } = {}): HTMLEl
     class: options.class === undefined ? 'kbd' : `kbd ${options.class}`,
     text: keyLabel(keys),
   })
+}
+
+/**
+ * A text button that wears its key after the label, with a mark before it.
+ *
+ * The mark is a child for the same reason the badge is — see
+ * {@link keyedButton} — and it earns its place on a control whose *label*
+ * changes with the state: "contact map" and "1D browser" are two words for one
+ * button, and the shape beside them is what a reader recognises before reading
+ * either.
+ */
+export function keyedIconButton(
+  name: IconName,
+  label: string,
+  keys: string,
+  onClick: () => void,
+  options: { class?: string; title?: string } = {},
+): HTMLButtonElement {
+  const node = el('button', {
+    class: options.class ?? 'btn btn-keyed',
+    type: 'button',
+    title: options.title ?? withKey(label, keys),
+  })
+  node.append(
+    icon(name, { size: 14 }),
+    el('span', { text: label }),
+    keyBadge(keys, { class: 'kbd-inline' }),
+  )
+  node.addEventListener('click', onClick)
+  return node
 }
 
 /**

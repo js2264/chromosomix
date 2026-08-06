@@ -34,12 +34,20 @@ import {
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
-import { SearchBox } from './SearchBox'
+import { SearchBox, featureSuggestions } from './SearchBox'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
   client: ReaderClient
   binsize: number
+  /**
+   * A control the session puts on the title line, after the box.
+   *
+   * The 1D/2D switch, today. An element rather than a callback because what
+   * it says depends on which of the two pictures is on screen, and only the
+   * session knows that — see `Session.mapToggleButton`.
+   */
+  extraControl?: HTMLElement
   region: string
   /** Column-axis region; when set the block is rectangular, not square. */
   region2?: string
@@ -107,12 +115,23 @@ export class RegionView {
   private disposed = false
 
   constructor(private readonly props: RegionViewProps) {
+    const store = props.annotations?.store
     this.search = new SearchBox({
       inputClass: 'input-region',
       value: props.region,
-      placeholder: 'contig, contig:start-end, or a genome name',
-      title: 'What this view is of. Type a contig or a range and press Enter.',
+      placeholder:
+        store === undefined
+          ? 'contig, contig:start-end, or a genome name'
+          : 'contig, contig:start-end, a genome, or a gene',
+      title:
+        'What this view is of. Type a contig or a range and press Enter' +
+        (store === undefined ? '.' : ', or a gene name from the starred model.'),
       onSubmit: (text) => props.onChangeRegion(text),
+      // Only where there is something to search. A map with no gene model
+      // loaded would grow a list that never has anything in it.
+      ...(store === undefined
+        ? {}
+        : { suggest: (text: string) => featureSuggestions(store, text) }),
     })
     this.matched = el('span', { class: 'match-kind' })
     this.problem = el('p', { class: 'inline-error hidden' })
@@ -178,7 +197,11 @@ export class RegionView {
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
           this.search.el,
-          button('go', () => props.onChangeRegion(this.search.input.value.trim())),
+          // Through the box rather than around it: Enter and this button mean the
+          // same thing, and a hit list the button could not see would make them
+          // disagree about what "go" is.
+          button('go', () => this.search.submit()),
+          ...(props.extraControl === undefined ? [] : [props.extraControl]),
           // Back, beside the box that got you here. Every navigation is a
           // history entry (§5.5 puts the whole view state in the hash), so this
           // is the browser's own back — the same button the keyboard and the

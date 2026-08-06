@@ -20,6 +20,7 @@
  */
 
 import { BaseCache } from '../annotations/bases'
+import { findFeatures, paddedSpan } from '../annotations/search'
 import {
   OVERLAY_DIM,
   extentFor,
@@ -157,8 +158,6 @@ const NAME_FONT = '600 12px system-ui, sans-serif'
 const BASE_FONT = '600 11px system-ui, sans-serif'
 /** Milliseconds within which a second click is a double click. */
 const DOUBLE_CLICK_MS = 250
-/** A zoomed-to feature keeps this much of its own length as margin on each side. */
-const FEATURE_PAD = 0.25
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
 const MIN_SPAN = 40
 
@@ -174,6 +173,14 @@ export interface BrowserViewProps {
    * *visible*, and a copy on either side is a copy that can disagree.
    */
   selection: SequenceSelection
+  /**
+   * A control the session puts in the bar, after the box.
+   *
+   * The switch back to the contact map this browser is standing in front of.
+   * An element rather than a callback because whether there *is* one is the
+   * session's question — see `Session.mapToggleButton`.
+   */
+  extraControl?: HTMLElement
   /** The window to open at, from the view state. Absent means the whole genome. */
   locus?: string
   /** The view moved; the hash follows. `undefined` is the whole genome. */
@@ -416,6 +423,11 @@ export class BrowserView {
           // once, and after that it is furniture over the placeholder.
           el('div', { class: 'browser-search search-box' }, this.locusInput, searchKey(), this.searchList),
           button('go', () => this.submit()),
+          // The way back to the map, where the map's own way here is: beside the
+          // box, in the bar. Absent when there is no map behind this browser,
+          // which is most of the time — a genome browser opened on a bigWig has
+          // nothing to go back to.
+          ...(props.extraControl === undefined ? [] : [props.extraControl]),
           iconButton('zoom-out', 'Zoom out (−)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (+)', () => this.zoomBy(1.8)),
           // The same three marks the Plot card uses, because they are the same
@@ -2193,8 +2205,11 @@ export class BrowserView {
       const contig = set.contigs[set.contig[index]]
       const start = set.start[index]
       const end = set.end[index]
-      const pad = Math.max(50, Math.round((end - start) * FEATURE_PAD))
-      this.goTo(`${contig}:${Math.max(1, start + 1 - pad)}-${end + pad}`)
+      // The same margin a search hit gets, from the same function: finding a
+      // gene by name and double-clicking that gene are two gestures for one
+      // intention, and the picture must not shift between them.
+      const span = paddedSpan(start, end)
+      this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
     }, DOUBLE_CLICK_MS)
   }
 
@@ -2420,22 +2435,16 @@ export class BrowserView {
     const contig = findContig(this.props.assembly, query)
     if (contig !== null) hits.push({ label: `${contig.name} · whole sequence`, locus: contig.name })
 
-    // One feature set, the starred one. Searching every loaded annotation at
-    // once answers "GAL4" with the same gene four times over, differing only in
-    // which file it came from — and the four are usually the same coordinates.
-    // Which one is searched is a press on the star beside its name.
-    const source = this.props.store.searchSource()
-    if (source !== null && source.payload?.kind === 'features') {
-      const set = source.payload.data
-      for (let i = 0; i < set.length && hits.length < 10; i++) {
-        const name = set.name[i]
-        if (name === '' || !name.toLowerCase().startsWith(query)) continue
-        const pad = Math.max(50, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
-        hits.push({
-          label: `${name} · ${set.contigs[set.contig[i]]}:${fmt.int(set.start[i])} · ${source.label}`,
-          locus: `${set.contigs[set.contig[i]]}:${Math.max(1, set.start[i] + 1 - pad)}-${set.end[i] + pad}`,
-        })
-      }
+    // The scan is `annotations/search.ts`'s, and shared with the box beside a
+    // map. What stays here is the *base*: a locus in this view is 1-based
+    // inclusive (`genome/assembly.ts`) and a region on a map is 0-based
+    // half-open (`metacooler/range.ts`), so the one place the two surfaces must
+    // not share a line is the one that writes the string.
+    for (const hit of findFeatures(this.props.store, raw)) {
+      hits.push({
+        label: `${hit.name} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+        locus: `${hit.contig}:${Math.max(1, hit.start + 1)}-${hit.end}`,
+      })
     }
 
     if (hits.length === 0) {

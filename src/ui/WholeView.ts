@@ -48,11 +48,13 @@ import {
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
-import { SearchBox } from './SearchBox'
+import { SearchBox, featureSuggestions } from './SearchBox'
 
 export interface WholeViewProps {
   client: ReaderClient
   binsize: number
+  /** A control the session puts on the title line; see `RegionViewProps`. */
+  extraControl?: HTMLElement
   /** Total bins in the file, for the counts a selection is measured against. */
   nBins: number
   /**
@@ -199,12 +201,25 @@ export class WholeView {
         : IDENTITY_PLAN
     this.summary = el('p', { class: 'summary' })
     this.problem = el('p', { class: 'inline-error hidden' })
+    const store = props.annotations?.store
     this.search = new SearchBox({
-      placeholder: `${props.noun}, or ${props.noun}:start-end`,
-      title: `Open one ${props.noun}, or a range within it. The same box the / key opens.`,
+      placeholder:
+        store === undefined
+          ? `${props.noun}, or ${props.noun}:start-end`
+          : `${props.noun}, ${props.noun}:start-end, or a gene`,
+      title:
+        `Open one ${props.noun}, or a range within it` +
+        (store === undefined ? '. ' : ', or a gene from the starred model. ') +
+        'The same box the / key opens.',
       onSubmit: (text) => {
         if (text !== '') props.onOpenRegion(text)
       },
+      // What the comment on the title bar promises: a whole-genome map of a
+      // mammal is three pixels per chromosome arm, so "go to MYC" has to be
+      // answerable by typing.
+      ...(store === undefined
+        ? {}
+        : { suggest: (text: string) => featureSuggestions(store, text) }),
     })
     this.gate = el('div', { class: 'gate hidden' })
     this.progressBar.max = 1
@@ -279,6 +294,7 @@ export class WholeView {
           // three pixels per chromosome arm, so "go to MYC" is a question this
           // view has to be able to answer without a click on a 3-pixel target.
           this.search.el,
+          ...(props.extraControl === undefined ? [] : [props.extraControl]),
         ),
         this.summary,
         this.problem,

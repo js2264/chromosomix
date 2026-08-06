@@ -911,7 +911,8 @@ p {
   flex: 0 1 14rem;
 }
 
-.browser-hits {
+.browser-hits,
+.search-hits {
   position: absolute;
   z-index: 20;
   top: calc(100% + 2px);
@@ -925,7 +926,8 @@ p {
   box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
 }
 
-.browser-hit {
+.browser-hit,
+.search-hit {
   display: block;
   width: 100%;
   text-align: left;
@@ -941,11 +943,13 @@ p {
   text-overflow: ellipsis;
 }
 
-.browser-hit:hover {
+.browser-hit:hover,
+.search-hit:hover {
   background: var(--accent-soft);
 }
 
-.browser-hit.is-empty {
+.browser-hit.is-empty,
+.search-hit.is-empty {
   color: var(--text-faint);
   cursor: default;
 }
@@ -1426,6 +1430,21 @@ p {
   justify-content: center;
   line-height: 1;
   padding: 0.35rem;
+}
+
+/* A button carrying a mark, a word and its key.
+
+   `.btn` is not a flex box, and three children on one baseline is the whole
+   reason this exists. The gap is smaller before the word than the `.kbd-inline`
+   margin after it, because the mark is a label for the word and the key is a
+   footnote to it. `white-space: nowrap` because the label is two words at most
+   and a title bar that wraps one of them reads as a broken control. */
+.btn-keyed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* A fold button whose panel is folded. The two panel toggles need to say which
