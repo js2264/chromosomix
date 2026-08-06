@@ -2841,17 +2841,20 @@ export function poolingNote(
  * would quote in a methods section, so it is the number said here, and the bin
  * count is left to the summary that already gives it.
  *
- * Above one sequence per cell there is no resolution to quote: the sequences in
- * a cell have different lengths and the cell is their sum, not a window of fixed
- * width. That case names the unit it actually is instead.
+ * There are two ways for a cell to stop being a bin, and neither has a width to
+ * quote. Above one sequence per cell the sequences in it have different lengths
+ * and the cell is their sum. Above bin *level* a cell is a whole sequence by
+ * construction, and `1 contig per cell` is not news — the axis already says so.
+ * Both come back empty and the caller says nothing rather than something false.
  */
 export function resolutionNote(
   binsize: number,
-  result: { binsPerCell?: number; contigsPerCell?: number },
+  result: { binsPerCell?: number; contigsPerCell?: number; level?: MatrixResult['level'] },
   noun = 'sequence',
 ): string {
-  const contigs = result.contigsPerCell ?? 1
-  if (contigs > 1) return `${fmt.int(contigs)} ${noun}s per cell, summed`
+  const per = result.contigsPerCell ?? 1
+  if (per > 1) return `${fmt.int(per)} ${noun}s per cell, summed`
+  if ((result.level ?? 'bin') !== 'bin') return ''
   return `effective resolution: ${fmt.bp(binsize * (result.binsPerCell ?? 1))}`
 }
 
@@ -2878,14 +2881,24 @@ export function blockSummary(
   result: MatrixResult,
   noun = 'sequence',
 ): Array<string | HTMLElement> {
-  const unit = (result.contigsPerCell ?? 1) > 1 ? 'cells' : 'bins'
-  return [
-    `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit} · `,
+  const grouped = (result.contigsPerCell ?? 1) > 1
+  // What the cells *are*. At bin level and one sequence to a cell they are bins
+  // of the effective resolution, which is the pairing that multiplies out to
+  // what is on screen. Above either they are cells, or the unit the axis is
+  // already drawn in.
+  const unit = grouped ? 'cells' : result.level === 'bin' ? 'bins' : `${noun}s`
+  const resolution = resolutionNote(binsize, result, noun)
+  const parts: Array<string | HTMLElement> = [
+    `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit}`,
+  ]
+  if (resolution !== '') {
+    parts.push(' · ')
     // Bold because it is the one number here that changes what the picture
     // *means*: the same map at 200 bp and at 3 kb are different figures, and a
     // reader scanning the line is looking for that.
-    el('strong', { text: resolutionNote(binsize, result, noun) }),
-  ]
+    parts.push(el('strong', { text: resolution }))
+  }
+  return parts
 }
 
 /**

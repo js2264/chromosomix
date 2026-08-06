@@ -33,7 +33,7 @@ import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
-import { MatrixPanel } from './MatrixPanel'
+import { MatrixPanel, blockSummary } from './MatrixPanel'
 import { SearchBox } from './SearchBox'
 
 /**
@@ -477,12 +477,15 @@ export class Overview {
 
   private show(result: OverviewResult): void {
     this.axisGenomes = result.groups
-    const unit = result.level === 'genome' ? 'genomes' : 'contigs'
+    const unit = result.level === 'genome' ? 'genome' : 'contig'
     const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
-    const per = Math.round(result.unitsPerSlot)
-    this.summary.textContent = result.pooled
-      ? `${fmt.int(result.totalUnits)} ${unit} in ${fmt.int(result.n)} rows · ${provenance}`
-      : `${fmt.int(result.n)} ${unit} · ${provenance}`
+    // The shared line, and then the one thing this view has that no other does:
+    // where the numbers came from. A scan walked every stored pixel of the file;
+    // an edge list was handed them, and is somebody else's arithmetic.
+    this.summary.replaceChildren(
+      ...blockSummary(0, toMatrixResult(result), unit),
+      ` · ${provenance}`,
+    )
     this.unitNames = result.unitNames
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
@@ -497,9 +500,10 @@ export class Overview {
     // renderer pools any raster to 4096 px per axis and draws it — and the first
     // half was the clause that justified throwing away 98% of the contigs.
     // Nothing is thrown away now, so it says what the rows *are* instead.
+    const per = Math.round(result.unitsPerSlot)
     const restriction = result.pooled
-      ? `${fmt.int(result.totalUnits)} ${unit} are more than are readable at once, so each row sums ` +
-        `about ${per} consecutive ${per === 1 ? unit.replace(/s$/, '') : unit}` +
+      ? `${fmt.int(result.totalUnits)} ${unit}s are more than are readable at once, so each row ` +
+        `sums about ${per} consecutive ${per === 1 ? unit : `${unit}s`}` +
         `${result.level === 'contig' ? ', never across a genome boundary' : ''}. ` +
         'Every one is included.'
       : ''
@@ -570,6 +574,11 @@ function toMatrixResult(result: OverviewResult): MatrixResult {
       ? {}
       : { rowGenomes: genomes, colGenomes: genomes, genomeBoundaries: true }),
     level: 'genome',
+    // How many units a row holds, so the line under the map says it in the same
+    // words every other view uses. An average — `poolUnits` gives the larger
+    // genomes the larger shares — so it is rounded, and it is one when nothing
+    // was pooled.
+    ...(result.pooled ? { contigsPerCell: Math.max(2, Math.round(result.unitsPerSlot)) } : {}),
   }
 }
 
