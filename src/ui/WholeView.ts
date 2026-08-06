@@ -43,7 +43,7 @@ import {
   MatrixPanel,
   axisRegion,
   poolingNote,
-  resolutionNote,
+  blockSummary,
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
@@ -526,7 +526,7 @@ export class WholeView {
       // panel is told before it is given the block.
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, 'Whole genome', second)
-      this.summary.textContent = this.summarise(result)
+      this.summary.replaceChildren(...this.summarise(result))
     } catch (err) {
       // `disposed` covers the case the others need a guard for: closing the map
       // puts the reader down, which rejects this read after the browser has
@@ -563,29 +563,15 @@ export class WholeView {
    * reading. `poolingNote` still speaks for the raster, which pools again above
    * 4096 cells and, at this cap, never does.
    */
-  private summarise(result: MatrixResult): string {
-    const { nBins, nContigs, noun, balance, selection } = this.props
+  private summarise(result: MatrixResult): Array<string | HTMLElement> {
     const raster = this.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
-    const bins = selection?.bins ?? nBins
-    // The file's own count, not `rowGroups.length`. A run is one *cell's* name,
-    // so where cells hold several sequences the runs count cells and saying
-    // "4,885 bins across 2,441 contigs" of a 4,882-contig file states the
-    // pooling as though it were the assembly.
-    const contigs = selection?.contigs ?? nContigs
-    const parts = [
-      `${fmt.int(bins)} bins across ${fmt.int(contigs)} ${noun}s` +
-        (selection === undefined ? '' : ` of ${fmt.int(nBins)}`),
-      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells`,
+    return [
+      ...blockSummary(this.props.binsize, result, this.props.noun),
+      ...(raster === null ? [] : [` · ${raster.phrase}`]),
     ]
-    // Above one sequence per cell the axis is not one of positions and a bp
-    // width would be a fiction: the sequences in a cell have different lengths
-    // and the cell is their sum, not a window. `resolutionNote` says whichever
-    // of the two this is, in the same words the other views use.
-    if (this.level === 'bin') parts.push(resolutionNote(this.props.binsize, result, noun))
-    if (raster !== null) parts.push(raster.phrase)
-    if (balance) parts.push('balanced')
-    return parts.join(' · ')
   }
+
+
 
   /**
    * A refusal, said where the map would have been, with what to do instead.

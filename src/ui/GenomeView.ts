@@ -12,7 +12,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { cardTitle } from './icons'
-import { MatrixPanel, axisRegion, poolingNote, resolutionNote } from './MatrixPanel'
+import { MatrixPanel, axisRegion, blockSummary, poolingNote } from './MatrixPanel'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -220,7 +220,7 @@ export class GenomeView {
       // multiplication — so the panel is told before it is given the block.
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, this.props.genome)
-      this.renderSummary(result, hi - lo)
+      this.renderSummary(result)
       this.renderContigs(result)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the
@@ -233,15 +233,15 @@ export class GenomeView {
     }
   }
 
-  private renderSummary(result: MatrixResult, bins: number): void {
-    const contigs = result.rowContigs ?? result.rowGroups.length
+  private renderSummary(result: MatrixResult): void {
     const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
-    this.summary.textContent =
-      `${fmt.int(bins)} bins across ${fmt.int(contigs)} contigs · ` +
-      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells · ` +
-      resolutionNote(this.props.binsize, result, 'contig') +
-      (pooled === null ? '' : ` · ${pooled.phrase}`)
+    this.summary.replaceChildren(
+      ...blockSummary(this.props.binsize, result, 'contig'),
+      ...(pooled === null ? [] : [` · ${pooled.phrase}`]),
+    )
   }
+
+
 
 
   private renderContigs(result: MatrixResult): void {
