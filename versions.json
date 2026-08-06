@@ -1,6 +1,13 @@
 {
-  "latest": "4c7b3f7",
+  "latest": "428e526",
   "versions": [
+    {
+      "commit": "428e526",
+      "version": "0.8.0",
+      "date": "2026-08-06T22:13:46+02:00",
+      "subject": "feat(examples): draw the strain's own sequence in both yeast sessions",
+      "tag": ""
+    },
     {
       "commit": "4c7b3f7",
       "version": "0.8.0",
