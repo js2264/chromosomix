@@ -750,9 +750,20 @@ export class Session {
           id: 'browser-export',
           group: 'File',
           title: 'Save this plot as a figure',
-          hint: 'The Plot card decides the format and the resolution; this is its button.',
+          hint: 'The Export card decides the format and the resolution; this is its button.',
           keys: KEYS.savePlot,
           run: () => this.browser?.savePlot(),
+        },
+        {
+          id: 'browser-copy',
+          group: 'File',
+          title: 'Copy this plot to the clipboard',
+          hint:
+            'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
+            'selected the same key still copies the text.',
+          keys: KEYS.copyPlot,
+          yieldsToText: true,
+          run: () => this.browser?.copyPlot(),
         },
         {
           id: 'browser-autoscale',
@@ -829,10 +840,22 @@ export class Session {
         id: 'map-export',
         group: 'File',
         title: 'Save this plot as a figure',
-        hint: 'The Plot card decides the format and the resolution; this is its button.',
+        hint: 'The Export card decides the format and the resolution; this is its button.',
         keys: KEYS.savePlot,
         enabled: this.current?.panel !== undefined,
         run: () => this.current?.panel?.savePlot(),
+      },
+      {
+        id: 'map-copy',
+        group: 'File',
+        title: 'Copy this plot to the clipboard',
+        hint:
+          'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
+          'selected the same key still copies the text.',
+        keys: KEYS.copyPlot,
+        yieldsToText: true,
+        enabled: this.current?.panel !== undefined,
+        run: () => this.current?.panel?.copyPlot(),
       },
       {
         id: 'fit-tracks',

@@ -18,6 +18,7 @@ import { buildLine } from '../version'
 const CANVAS_KEYS: Array<[string, string]> = [
   ['drag', 'Pan'],
   ['⌥ / Alt + drag', 'Select a square and open it as a region'],
+  ['⇧ + ⌥ / Alt + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
   ['two fingers sideways', 'Back and forward, as anywhere else on the page'],
@@ -31,6 +32,8 @@ const CANVAS_KEYS: Array<[string, string]> = [
   ['drag a lane’s inner edge', 'Make that track thicker or thinner'],
   ['drag a lane’s grip', 'Reorder it, or drop it on either rectangle in the map to change edge'],
   ['drag a track’s row from the panel', 'The same, for the reader looking at the list'],
+  ['click a lane', 'Open that track’s settings'],
+  ['click a feature in a lane', 'Open its card — names, attributes, exons'],
   ['drop a file below or right of the map', 'Load it as a track on that edge'],
 ]
 
@@ -52,7 +55,7 @@ const BROWSER_KEYS: Array<[string, string]> = [
   ['wheel', 'Zoom about the pointer'],
   ['⌘ / Alt + wheel over a track', 'Raise or lower that track’s ceiling'],
   ['click a chromosome’s name', 'Go to that chromosome'],
-  ['click a feature', 'Zoom to it'],
+  ['click a feature', 'Open its card — names, attributes, exons, and a zoom'],
   ['click a track’s range', 'Type a limit'],
   ['drop a file on the tracks', 'Load it — a .cool opens the map on this genome'],
   ['← →', 'Pan by a fifth of the window'],

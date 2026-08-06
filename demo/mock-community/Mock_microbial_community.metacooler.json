@@ -28,7 +28,7 @@
     "text": true,
     "fills": true,
     "baseline": true,
-    "outline": false,
+    "outline": true,
     "gutter": false,
     "crosshair": true,
     "dividers": false,

@@ -37,7 +37,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
 import { cardTitle, iconButton } from './icons'
-import type { AnnotationEntry } from '../annotations/types'
+import type { AnnotationEntry, FeatureSet } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, DEFAULT_COLORBAR_FONT, formatCount } from '../render/colorbar'
@@ -75,6 +75,8 @@ import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
+import { Modal } from './Modal'
+import { openFeatureDialog } from './FeatureDialog'
 import {
   CEILING_LABEL,
   CEILING_MODIFIER,
@@ -85,6 +87,7 @@ import {
 } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
 import {
+  fieldPair,
   heightThatFills,
   laneSize,
   setTrackHeight,
@@ -98,6 +101,7 @@ import {
   type ExportFormat,
   canvasToPng,
   captionStamp,
+  copyPngToClipboard,
   downloadBlob,
   exportBaseName,
   fileStamp,
@@ -307,14 +311,22 @@ export class MatrixPanel {
    */
   readonly controlsEl: HTMLElement
   /**
-   * The plot card: overlays, the fit control and the export.
+   * The Tracks card: how the lanes are sized, scaled and drawn.
    *
    * Separate from the colour card because the two answer different questions —
-   * one is *what the numbers look like*, the other *what the figure does* — and
-   * because every view mounts this one identically, which is the whole of "the
-   * same plotting options everywhere".
+   * one is *what the matrix looks like*, the other *what the tracks beside it
+   * do* — and because every view mounts this one identically, which is the whole
+   * of "the same plotting options everywhere".
    */
   readonly plotEl: HTMLElement
+  /**
+   * The Export card: resolution, format, save, copy.
+   *
+   * Its own card and not a row at the foot of another one. Every other control
+   * this panel offers changes the picture; this one takes the picture away, and
+   * a reader arrives at it having finished with the rest.
+   */
+  readonly exportEl: HTMLElement
   /**
    * What the map currently *shows*, as opposed to what it holds.
    *
@@ -337,6 +349,8 @@ export class MatrixPanel {
   readonly cards: readonly HTMLElement[]
 
   private readonly groupsCard: GroupsCard | null
+  /** The open feature card, so a second click replaces it rather than stacking. */
+  private featureDialog: Modal | null = null
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
@@ -667,7 +681,7 @@ export class MatrixPanel {
      * subscription below, so a toggle flipped from the command palette lights
      * the same button up — the button never holds the state itself.
      */
-    // The same marks the 1D browser's Plot card uses, from the same table. A
+    // The same marks the 1D browser's Tracks card uses, from the same table. A
     // column of eight worded buttons is eight lines of prose where the browser
     // beside it has two rows of glyphs — and they are the same eight options.
     const optionToggle = (key: PlotOptionKey): HTMLElement => {
@@ -715,24 +729,65 @@ export class MatrixPanel {
 
     this.exportStatus = el('span', { class: 'clip-note export-note' })
 
-    this.plotEl = el(
+    // Its own card, and the first one, because saving the figure is not a
+    // property of the picture — it is the thing a reader does *after* every
+    // other control on this panel is where they want it. Buried at the foot of
+    // the Plot card it was three folds and a scroll away from the top of a
+    // column whose other two cards are settings; a reader who came to export
+    // had to walk past everything they had already decided.
+    this.exportEl = el(
       'div',
       { class: 'controls-card' },
-      cardTitle('Plot', 'palette', 'controls-title'),
+      cardTitle('Export', 'download', 'controls-title'),
       el(
         'div',
         { class: 'panel-controls' },
-        // Marks rather than sentences, and the same marks the 1D browser's Plot
-        // card uses: these are the same two actions, and a reader should not
+        el(
+          'div',
+          { class: 'export-row' },
+          dpiSelect,
+          formatSelect,
+          iconButton(
+            'download',
+            withKey(
+              'Save the figure, at the resolution and in the format chosen beside this',
+              KEYS.savePlot,
+            ),
+            () => this.savePlot(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+          // Beside the download rather than under it: they are the same figure
+          // going to two places. The clipboard takes a PNG whatever the format
+          // beside it says — see `KEYS.copyPlot`.
+          iconButton(
+            'clipboard-copy',
+            withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
+            () => this.copyPlot(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+        ),
+        this.exportStatus,
+      ),
+    )
+
+    this.plotEl = el(
+      'div',
+      { class: 'controls-card' },
+      // "Tracks", not "Plot": beside a contact map there are two pictures on
+      // screen, and everything left in this card draws on the lanes. The card
+      // that draws on the matrix is called Map, and between the two names there
+      // is no longer a control a reader has to find by trying it.
+      cardTitle('Tracks', 'palette', 'controls-title'),
+      el(
+        'div',
+        { class: 'panel-controls' },
+        // Marks rather than sentences, and the same marks the 1D browser's
+        // Tracks card uses: these are the same actions, and a reader should not
         // have to learn them twice because there happens to be a matrix above
         // the tracks this time. The words survive in the tooltips.
         el(
           'div',
           { class: 'plot-icon-row' },
-          iconButton('maximize', 'Undo every pan and zoom (0, or a double click on the plot)', () => this.fit(), {
-            class: 'btn btn-icon',
-            size: 15,
-          }),
           iconButton(
             'chevrons-up-down',
             withKey(
@@ -765,7 +820,7 @@ export class MatrixPanel {
                 ),
               ]),
         ),
-        // The same box the browser's Plot card carries, applying the same rule
+        // The same box the browser's Tracks card carries, applying the same rule
         // to the same tracks: the two are one decision taken two ways — fill the
         // window, or this many pixels — and a reader who has just stretched two
         // lanes into two four-hundred-pixel strips reaches for this immediately
@@ -773,50 +828,27 @@ export class MatrixPanel {
         ...(options.annotations === undefined
           ? []
           : [trackHeightField((px) => this.setTrackHeight(px))]),
-        // Split by what each one draws on, because half of these do nothing to
-        // the matrix and half do nothing to the tracks — and an undifferentiated
-        // row of seven made a reader try each in turn to find out which. Stored
-        // together all the same: a crosshair turned off here is off in the 1D
-        // browser too, since it is the same preference about the same gesture.
+        // The four that draw on the matrix used to sit under these, in the same
+        // card, separated by a label — and a label is not a card. They are in
+        // Map now, beside the transform and the colourmap they belong with;
+        // stored together all the same, so a crosshair turned off here is off in
+        // the 1D browser too, since it is the same preference about the same
+        // gesture.
         el(
           'div',
           { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'tracks' }),
+          el('span', { class: 'field-label', text: 'overlays' }),
           el('div', { class: 'plot-icon-row' }, ...TRACK_OPTIONS.map(optionToggle)),
         ),
-        // Beside the words rather than beside the export: this is a property of
-        // the writing on the pictures, and `track text` above it is the toggle
-        // that decides whether there is any.
-        textScaleField(),
-        // The same control the browser's Plot card carries, writing the same
+        // The two legibility numbers on one line, because they are one question
+        // asked twice — how easily can this picture be read — and the second is
+        // the same control the browser's Tracks card carries, writing the same
         // field of the same store: a reader who faded the tracks beside the map
         // and then closed it finds them faded in the browser, which is what
         // "these are the same tracks" has to mean.
-        ...(this.options.annotations === undefined
-          ? []
-          : [transparencyField(this.options.annotations.store)]),
-        el(
-          'div',
-          { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'matrix' }),
-          el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
-        ),
-        el(
-          'div',
-          { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'export' }),
-          el(
-            'div',
-            { class: 'export-row' },
-            dpiSelect,
-            formatSelect,
-            iconButton('download', withKey('Save the figure, at the resolution and in the format chosen beside this', KEYS.savePlot), () => this.savePlot(), {
-              class: 'btn btn-icon',
-              size: 15,
-            }),
-          ),
-        ),
-        this.exportStatus,
+        this.options.annotations === undefined
+          ? textScaleField()
+          : fieldPair(textScaleField(), transparencyField(this.options.annotations.store)),
       ),
     )
     this.paintPlotOptions(getPlotOptions())
@@ -888,10 +920,41 @@ export class MatrixPanel {
       controls.unshift(field('level', levelSelect, 'Summed from the loaded matrix — no further reads.'))
     }
 
+    // The four marks that draw on the matrix, in the card about the matrix.
+    // They spent a release at the bottom of the Tracks card under a label reading
+    // "matrix", two rows below four buttons that do nothing to it — which is a
+    // card apologising for holding the wrong things.
+    //
+    // Refit leads the row rather than sitting in a row of its own above it. Five
+    // marks fit across the column, and one mark alone under a heading of its own
+    // reads as a category with one member in it — the row was mostly the empty
+    // space beside the button. It goes first because it is the one that *acts*;
+    // the four after it are states.
+    controls.push(
+      el(
+        'div',
+        { class: 'field field-block' },
+        el('span', { class: 'field-label', text: 'overlays' }),
+        el(
+          'div',
+          { class: 'plot-icon-row' },
+          iconButton(
+            'maximize',
+            'Undo every pan and zoom (0, or a double click on the plot)',
+            () => this.fit(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+          ...MATRIX_OPTIONS.map(optionToggle),
+        ),
+      ),
+    )
+
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
-      cardTitle('View', 'sliders-horizontal', 'controls-title'),
+      // "Map", not "View": the card beside it is about the tracks, and both of
+      // them are views of something. This one is the matrix.
+      cardTitle('Map', 'sliders-horizontal', 'controls-title'),
       el('div', { class: 'panel-controls' }, ...controls),
     )
 
@@ -1007,6 +1070,7 @@ export class MatrixPanel {
             onChange: () => this.schedule(),
           })
     this.cards = [
+      this.exportEl,
       this.controlsEl,
       this.plotEl,
       ...(this.groupsCard === null ? [] : [this.groupsCard.el]),
@@ -1022,7 +1086,9 @@ export class MatrixPanel {
               'header',
               { class: 'panel-head' },
               ...(options.hideTitle === true ? [] : [this.titleNode]),
-              ...(options.detachedControls === true ? [] : [this.controlsEl, this.plotEl]),
+              ...(options.detachedControls === true
+                ? []
+                : [this.exportEl, this.controlsEl, this.plotEl]),
             ),
           ]),
       body,
@@ -1188,7 +1254,25 @@ export class MatrixPanel {
   }
 
   /**
-   * Save the map as a figure — the `S` key, and the button in the Plot card.
+   * Open the card for one feature, replacing any card already open.
+   *
+   * Held in a field rather than fired and forgotten because this panel is torn
+   * down under it on every navigation — a click on a contig name is a new view —
+   * and a card left behind would be describing a gene from a picture that is no
+   * longer on screen.
+   */
+  private openFeature(hit: { set: FeatureSet; index: number; source: string }): void {
+    this.featureDialog?.close()
+    this.featureDialog = openFeatureDialog({
+      ...hit,
+      onClose: () => {
+        this.featureDialog = null
+      },
+    })
+  }
+
+  /**
+   * Save the map as a figure — the `S` key, and the button in the Export card.
    *
    * In the format and at the resolution that card is set to, because a shortcut
    * that exported something other than the button beside it would be a second
@@ -1196,6 +1280,36 @@ export class MatrixPanel {
    */
   savePlot(): void {
     void this.save(this.exportFormat)
+  }
+
+  /**
+   * The same figure onto the clipboard — ⌘C, and the button beside the save.
+   *
+   * PNG whatever the format select says, because a clipboard holds an image: a
+   * PDF pasted into a slide arrives as a file attachment rather than a picture,
+   * which is the opposite of what the gesture asked for. The resolution *is*
+   * honoured — a figure pasted into a manuscript at 300 dpi is the point of
+   * having the control at all — and the pre-flight in {@link exportCanvas} still
+   * applies, so an impossible size fails the same way it fails on save.
+   */
+  copyPlot(): void {
+    void this.copy()
+  }
+
+  private async copy(): Promise<void> {
+    this.exportStatus.textContent = 'copying…'
+    try {
+      const now = new Date()
+      // The canvas is drawn *before* the clipboard item is built rather than
+      // inside the promise handed to it, because drawing is the part that can
+      // throw a message worth showing. What the item waits on is the encode.
+      const canvas = this.exportCanvas(this.exportDpi, now)
+      await copyPngToClipboard(canvasToPng(canvas))
+      this.exportStatus.textContent = `copied · ${canvas.width}×${canvas.height} px`
+    } catch (err) {
+      this.exportStatus.textContent =
+        err instanceof Error ? `copy failed: ${err.message}` : 'copy failed'
+    }
   }
 
   /**
@@ -1207,7 +1321,7 @@ export class MatrixPanel {
    * group's own range, so its members come back to one shared pair.
    *
    * Public because the key is a session command: the shortcut and the mark in
-   * the Plot card have to be the same action, or one of them is a second
+   * the Tracks card have to be the same action, or one of them is a second
    * implementation waiting to drift from the other.
    */
   autoscaleTracks(): void {
@@ -1310,6 +1424,8 @@ export class MatrixPanel {
   /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
     setReadout('')
+    this.featureDialog?.close()
+    this.featureDialog = null
     // A picking mode outlives nothing: the plot it was placing marks on is going
     // away. Ended here rather than left to be garbage-collected, because the
     // card that armed it is *not* going away — it lives in the shell — and it
@@ -2191,11 +2307,24 @@ export class MatrixPanel {
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
-      // A press that never became a gesture is a click, and a click on a lane is
-      // the most direct way a reader has of saying *this track*: it opens that
-      // track's settings in the card that holds them, rather than leaving them
-      // to match a name against a list in a column scrolled somewhere else.
-      if (drag.kind === 'press') revealTrack(drag.id)
+      // A press that never became a gesture is a click, and a click on a lane
+      // means one of two things depending on what is under it. On a *feature* it
+      // means "what is this" — answered by the card, the same card the 1D
+      // browser opens for the same gesture on the same gene. On the lane itself
+      // it means "this track", the most direct way a reader has of saying so:
+      // it opens that track's settings in the card that holds them, rather than
+      // leaving them to match a name against a list in a column scrolled
+      // somewhere else.
+      if (drag.kind === 'press') {
+        const box = canvas.getBoundingClientRect()
+        const hit = lanes.featureAt(edge, event.clientX - box.left, event.clientY - box.top)
+        // No `onGoTo` here, and that is deliberate: the 1D browser's zoom sets a
+        // locus on one axis, and this view's navigation is a region on two. A
+        // button that framed the gene on one of them would leave the other
+        // wherever it was, which is not what "zoom to it" would promise.
+        if (hit !== null) this.openFeature(hit)
+        else revealTrack(drag.id)
+      }
       if (drag.kind === 'scale') this.commitLaneScaling(edge, drag.members)
       // A handle let go over a rectangle draws the track on that edge instead.
       // A *move* and not a copy — the other edge is cleared — because that is

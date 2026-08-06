@@ -18,7 +18,8 @@
 
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
-import { button, el } from './dom'
+import { el } from './dom'
+import { iconButton } from './icons'
 
 /**
  * The smallest a lane may be dragged to; below this it is a line, not a track.
@@ -120,54 +121,165 @@ export function smallestLaneSize(
   return Number.isFinite(smallest) ? laneSize(smallest) : null
 }
 
+/** What {@link stepperField} needs to know about the number it is showing. */
+export interface StepperSpec {
+  /** The word above the row. */
+  label: string
+  /** On the box, and on each button after "smaller"/"larger". */
+  title: string
+  /** One press. */
+  step: number
+  min: number
+  max: number
+  /** What the box should read right now, or `null` to leave it alone. */
+  read(): number | null
+  /** What a press or a committed edit means. Already clamped and rounded. */
+  apply(value: number): void
+  /**
+   * Tell the box when the number changed behind its back, if it can.
+   *
+   * Optional, because not every number has anybody else who can move it. Where
+   * one does — the transparency lives in the annotation store, and a single
+   * row's own settings write the same field — a box that did not listen would
+   * show the value it last applied rather than the value in force.
+   */
+  subscribe?(onChange: () => void): () => void
+}
+
 /**
- * A height to give every lane, and the button that gives it to them.
+ * A number with a button either side of it: `−  90  +`.
  *
- * The box holds a number and nothing else happens when it changes: typing is not
- * an instruction, and a store write per keystroke would restyle every track
- * eight times on the way to `120`. Enter and the button are the instruction,
- * which is also what makes the box a *remembered* number — it keeps what you
- * last applied, so the second file of the session is one press away from the
- * height you chose for the first.
+ * The shape the text-size control already had, made shared. Two things about a
+ * picture — how tall the tracks are and how far through them you can see — are
+ * adjusted the same way: you look at the *picture*, not at the control, and you
+ * want it a bit more or a bit less, repeatedly, until it is right. A bare number
+ * box asks for a value nobody has in mind, and answers a press of the arrow keys
+ * with the browser's own spinner, which is four pixels tall and appears on
+ * hover.
+ *
+ * The box stays editable, which the text-size readout is not, because these two
+ * numbers *do* have values people have in mind — ninety pixels is where a yeast
+ * ATAC track starts showing the shape of a promoter — and typing one beats
+ * pressing a button nine times. Committed on `change`, which covers both Enter
+ * and leaving the field, so there is no third control to say "now do it".
+ *
+ * Nothing is written per keystroke: a store write on the way to `120` would
+ * restyle every track four times, at `1`, `12` and `120`.
  */
-export function trackHeightField(apply: (px: number) => void): HTMLElement {
+export function stepperField(spec: StepperSpec): HTMLElement {
   const input = el('input', {
-    class: 'input input-num',
+    class: 'input input-num input-step',
     type: 'number',
-    value: String(DEFAULT_TRACK_HEIGHT),
-    title: `Height for every track, in pixels. ${LANE_MIN_SIZE} is the floor.`,
+    title: spec.title,
   })
-  input.min = String(LANE_MIN_SIZE)
-  input.max = String(LANE_MAX_SIZE)
-  input.step = '10'
-  const run = (): void => {
+  input.min = String(spec.min)
+  input.max = String(spec.max)
+  input.step = String(spec.step)
+
+  const clamp = (value: number): number =>
+    Math.max(spec.min, Math.min(spec.max, Math.round(value)))
+
+  /** Put the current value in the box — unless the caret is in it. */
+  const sync = (): void => {
+    if (input === document.activeElement) return
+    const value = spec.read()
+    if (value !== null) input.value = String(clamp(value))
+  }
+
+  const commit = (): void => {
     const typed = Number(input.value)
     // An unreadable box is put back rather than obeyed: `Number('')` is 0, and
-    // silently setting every lane to the minimum is not what an empty field
-    // means.
-    if (!Number.isFinite(typed) || typed <= 0) {
-      input.value = String(DEFAULT_TRACK_HEIGHT)
+    // silently setting every lane to the floor is not what an empty field means.
+    if (!Number.isFinite(typed)) {
+      sync()
       return
     }
-    const size = laneSize(typed)
-    input.value = String(size)
-    apply(size)
+    const value = clamp(typed)
+    input.value = String(value)
+    spec.apply(value)
   }
+  input.addEventListener('change', commit)
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') run()
+    if (event.key === 'Enter') commit()
   })
-  return el(
+
+  // From the *box*, not from a remembered number: the two disagree the moment
+  // anything else moves the value — a stretch, a drag on a lane's border — and
+  // stepping from the stale one would undo that first.
+  const nudge = (delta: number): void => {
+    const now = spec.read() ?? Number(input.value)
+    const next = clamp((Number.isFinite(now) ? now : spec.min) + delta * spec.step)
+    input.value = String(next)
+    spec.apply(next)
+  }
+
+  const down = iconButton('chevron-down', `Less — ${spec.title}`, () => nudge(-1), {
+    class: 'btn btn-icon',
+    size: 15,
+  })
+  const up = iconButton('chevron-up', `More — ${spec.title}`, () => nudge(1), {
+    class: 'btn btn-icon',
+    size: 15,
+  })
+
+  sync()
+  const row = el(
     'div',
-    { class: 'field field-block' },
-    el('span', { class: 'field-label', text: 'track height' }),
-    el(
-      'div',
-      { class: 'height-row' },
-      input,
-      button('set', run, {
-        class: 'btn',
-        title: 'Give every track the height in the box, whatever the window is doing',
-      }),
-    ),
+    { class: 'field field-block field-stepper' },
+    el('span', { class: 'field-label', text: spec.label }),
+    el('div', { class: 'plot-icon-row' }, down, input, up),
   )
+  // The source outlives this control — a card is rebuilt on every navigation and
+  // nothing hands the outgoing one a teardown — so the listener retires itself
+  // the first time it is spoken to after leaving the document.
+  const off = spec.subscribe?.(() => {
+    if (!row.isConnected) {
+      off?.()
+      return
+    }
+    sync()
+  })
+  return row
+}
+
+/**
+ * Two fields side by side, where each is narrow enough to share a line.
+ *
+ * Not a general layout: it exists because text size and transparency are one
+ * question asked twice — how legible is this picture — and a column that put
+ * them on two lines separated by a track-height box read as three unrelated
+ * settings. Two is the limit; a third would give each of them a box four digits
+ * cannot fit in.
+ */
+export function fieldPair(left: HTMLElement, right: HTMLElement): HTMLElement {
+  return el('div', { class: 'field-pair' }, left, right)
+}
+
+/**
+ * A height to give every lane, as a stepper.
+ *
+ * A pixel a press. The old box stepped by ten with a `set` button beside it,
+ * which is the right granularity for *choosing* a height and the wrong one for
+ * *adjusting* the one you have: the last twenty pixels of fitting four tracks
+ * into a window are found one at a time, and ten was a jump straight past them.
+ * Typing still works, and typing is how ninety is reached in one gesture.
+ */
+export function trackHeightField(apply: (px: number) => void): HTMLElement {
+  // No `read`: this control is the only thing that writes the number, and a lane
+  // dragged by its border is *one* lane rather than the height every track would
+  // be given. It keeps what was last applied, so the second file of a session is
+  // one press away from the height chosen for the first.
+  let held = DEFAULT_TRACK_HEIGHT
+  return stepperField({
+    label: 'track height',
+    title: `Height for every track, in pixels. ${LANE_MIN_SIZE} is the floor.`,
+    step: 1,
+    min: LANE_MIN_SIZE,
+    max: LANE_MAX_SIZE,
+    read: () => held,
+    apply: (value) => {
+      held = laneSize(value)
+      apply(held)
+    },
+  })
 }

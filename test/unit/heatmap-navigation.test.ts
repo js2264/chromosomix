@@ -410,6 +410,74 @@ describe('a selection is a square, and it is handed over', () => {
     expect(boxes[0].rows[1]).toBeLessThanOrEqual(100)
     expect(boxes[0].cols[1]).toBeLessThanOrEqual(100)
   })
+
+  // A corner taken off the plot and *left* there — the gesture that used to end
+  // with nothing selected, because leaving the canvas abandoned the drag. The
+  // release is off the plot too, so the box has to come from where the marquee
+  // was drawn rather than from where the button came up.
+  it('survives a corner dragged off the plot and released outside it', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    fire('mousedown', { clientX: plot.x + 40, clientY: plot.y + 40, button: 0, altKey: true })
+    fire('mousemove', { clientX: plot.x + 300, clientY: plot.y + 300, button: 0, altKey: true })
+    fire('mousemove', { clientX: plot.x + 4000, clientY: plot.y + 4000, button: 0, altKey: true })
+    fire('mouseleave', {})
+    fire('mouseup', { clientX: plot.x + 4000, clientY: plot.y + 4000, button: 0, altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].cols[1]).toBeLessThanOrEqual(100)
+    expect(boxes[0].rows[1]).toBeLessThanOrEqual(100)
+  })
+})
+
+/**
+ * Shift, with the modifier that starts a selection, pins the box to the
+ * diagonal.
+ *
+ * The property worth asserting is not "the box is square" — every box is, since
+ * `squareFrom` sees to that — but that both of its corners name the *same* bin
+ * on the two axes. A drag nowhere near the diagonal must still produce one, from
+ * the nearest point on it, which is the whole of "fetch the nearest coordinate
+ * along the diagonal to initiate the box".
+ */
+describe('a diagonal selection', () => {
+  function selectable(): {
+    fire: (type: string, event: Record<string, unknown>) => void
+    boxes: SelectionBox[]
+    heatmap: HeatmapView
+  } {
+    const { canvas, fire } = harness(400)
+    const boxes: SelectionBox[] = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onSelect: (box) => boxes.push(box),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    return { fire, boxes, heatmap }
+  }
+
+  it('lands on the diagonal from a press that is nowhere near it', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    // Press at cell (row 40, col 20) — twenty cells off the diagonal — and
+    // release at (row 50, col 90), which is sixty off it in the other direction.
+    dragWith(
+      fire,
+      [plot.x + 80, plot.y + 160],
+      [plot.x + 360, plot.y + 200],
+      { altKey: true, shiftKey: true },
+    )
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].rows).toEqual(boxes[0].cols)
+  })
+
+  it('leaves a plain Option drag off the diagonal, where it was drawn', () => {
+    const { fire, boxes, heatmap } = selectable()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 200, plot.y + 280], { altKey: true })
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].rows).not.toEqual(boxes[0].cols)
+  })
 })
 
 describe('a sideways gesture belongs to the browser', () => {

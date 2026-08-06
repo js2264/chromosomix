@@ -34,15 +34,23 @@ export class GroupsCard {
   readonly el: HTMLElement
   private readonly host = el('div', { class: 'panel-controls' })
   /**
-   * Groups the reader has unfolded, so a repaint does not shut them.
+   * Groups the reader has *folded away*, so a repaint does not reopen them.
    *
    * A group is a row in a card, exactly as a track is one in the panel beside
    * it: a name, an eye, and everything else behind a chevron. Held here rather
-   * than in the store for the reason a card's own `open` set is held in the card
-   * — which of them is unfolded is a gesture in progress, not a property of the
+   * than in the store for the reason a card's own fold set is held in the card —
+   * which of them is folded is a gesture in progress, not a property of the
    * group.
+   *
+   * The set names the *closed* ones, which inverts the default: a group arrives
+   * open. A track row starts folded because there are usually many of them and
+   * the reader is looking for one; a group is the opposite — it exists because
+   * somebody deliberately made it, there are rarely more than two or three, and
+   * the three settings behind the chevron are the entire reason to have made
+   * one. Folded by default meant every group had to be opened before the card
+   * said anything a reader could act on.
    */
-  private readonly open = new Set<string>()
+  private readonly closed = new Set<string>()
   private readonly unsubscribes: Array<() => void> = []
 
   constructor(private readonly options: GroupsCardOptions) {
@@ -82,7 +90,7 @@ export class GroupsCard {
     for (const [name, members] of groups) {
       const overlaid = settings.modeOf(name) === 'overlay'
       const shared = settings.scalingOf(name) === 'shared'
-      const open = this.open.has(name)
+      const open = !this.closed.has(name)
       // A group is shown when any of its members is: hiding one member by hand
       // and then pressing the group's eye should hide the rest, not reveal the
       // one that was put away.
@@ -102,8 +110,8 @@ export class GroupsCard {
         open ? 'chevron-down' : 'chevron-right',
         open ? `Fold ${name}` : `What is in ${name}, and how it is drawn`,
         () => {
-          if (open) this.open.delete(name)
-          else this.open.add(name)
+          if (open) this.closed.add(name)
+          else this.closed.delete(name)
           this.paint()
         },
         // The row's own classes, not lookalikes: a group *is* a row, and two

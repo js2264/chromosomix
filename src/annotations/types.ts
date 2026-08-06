@@ -59,6 +59,17 @@ export interface Region {
 // ---------------------------------------------------------------------------
 
 /**
+ * What joins the attributes of one feature into its `detail` string.
+ *
+ * A shared constant because the string is written by two parsers and read back
+ * apart by the dialog that lists a feature's attributes one to a line. Spelled
+ * out at each of those three sites, the day one of them gained a space or lost
+ * one would be the day the dialog quietly stopped splitting — and it would still
+ * look like a working dialog, showing one long line where there were four.
+ */
+export const DETAIL_SEP = ' · '
+
+/**
  * One interval per row, sorted by `(contig, start)`.
  *
  * The sort is what makes a range query a binary search rather than a scan, and
@@ -87,7 +98,15 @@ export interface FeatureSet {
   score: Float32Array
   /** What to write on the feature; `''` when there is nothing to write. */
   name: string[]
-  /** Extra lines for the tooltip: the attributes worth showing, already joined. */
+  /**
+   * The attributes worth showing, joined with {@link DETAIL_SEP}.
+   *
+   * One string per feature rather than an array per feature, because there are
+   * millions of them and a million small arrays is a million allocations for
+   * text that is read one row at a time. Anything that wants the parts back
+   * splits on the separator — which is why the separator is a constant both
+   * sides import rather than a punctuation mark each side spells out.
+   */
   detail: string[]
   /** `exonAt[i] .. exonAt[i + 1]` indexes the two arrays below. Length `n + 1`. */
   exonAt: Int32Array

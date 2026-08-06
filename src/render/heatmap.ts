@@ -816,6 +816,17 @@ interface Drag {
   /** Where the pointer is now. */
   x: number
   y: number
+  /**
+   * Whether the box is locked to the diagonal — Shift with the modifier.
+   *
+   * A cis map is read *along* its diagonal, and the window a reader wants there
+   * is almost always symmetric: the same stretch of sequence on both axes. Free
+   * hand, that is a square whose corner has to be placed on a line the eye can
+   * see and the hand cannot hit, and every miss is a rectangle of two different
+   * windows. Locked, the press snaps onto the diagonal and the drag runs along
+   * it, so the box is the one thing it was ever going to be.
+   */
+  diagonal: boolean
 }
 
 type ResolvedOptions = Required<
@@ -1626,6 +1637,47 @@ export class HeatmapView {
     const lo = Math.max(0, Math.floor(scale.toUnit(from)))
     const hi = Math.min(n, Math.ceil(scale.toUnit(from + length)))
     return hi > lo ? [lo, hi] : null
+  }
+
+  /**
+   * The point on the map's diagonal nearest a pointer, in canvas pixels.
+   *
+   * The diagonal is where the two axes name the *same* bin, which is not the
+   * geometric 45° line through the corner unless the two blocks start together:
+   * on a chrII×chrI panel the row at matrix index 0 is a different bin from the
+   * column at matrix index 0, and the locus a reader means by "the diagonal" is
+   * offset by the difference. `offset` is that difference, so the line this
+   * projects onto is `col = row + offset` and an off-diagonal panel — where the
+   * diagonal is nowhere on screen — falls out as an interval with nothing in it.
+   *
+   * The projection is the perpendicular foot in *matrix* coordinates, which is
+   * the honest reading of "the nearest coordinate along the diagonal", and then
+   * the result is walked back along the line until both pixel coordinates are
+   * inside the plot. Clamping the pixels instead would be the obvious thing and
+   * the wrong one: an x pulled to the edge on its own is a point off the line,
+   * which is exactly what this exists to prevent.
+   */
+  private onDiagonal(x: number, y: number): [number, number] {
+    const matrix = this.matrix
+    if (matrix === null) return [x, y]
+    const plot = this.plotRect
+    const offset = matrix.rowExtent[0] - matrix.colExtent[0]
+    const col = this.colScale.toUnit(x - plot.x)
+    const row = this.rowScale.toUnit(y - plot.y)
+    // Perpendicular foot on `col = row + offset`, parametrised by the row.
+    let r = (row + col - offset) / 2
+
+    // The stretch of the line the plot can show, as an interval in `r`. Empty
+    // when the diagonal misses this panel altogether, and then left alone: a
+    // snapped point nobody can see beats a point that is not on the diagonal.
+    const lo = Math.max(this.rowScale.toUnit(0), this.colScale.toUnit(0) - offset)
+    const hi = Math.min(
+      this.rowScale.toUnit(plot.height),
+      this.colScale.toUnit(plot.width) - offset,
+    )
+    if (hi > lo) r = clamp(r, lo, hi)
+
+    return [plot.x + this.colScale.toPixel(r + offset), plot.y + this.rowScale.toPixel(r)]
   }
 
   // -- hit testing ---------------------------------------------------------
@@ -2588,6 +2640,29 @@ export class HeatmapView {
       clickTimer = null
     }
 
+    /**
+     * A gesture in progress is followed on the window, not on the canvas.
+     *
+     * The canvas stops hearing about a pointer the moment it leaves, and a
+     * marquee dragged into the corner of the data — the commonest one there is,
+     * because the corner of the data is usually near the corner of the plot —
+     * leaves. Listening on the window for the length of the drag is how every
+     * other drag on the page behaves; the positions are clamped into the plot on
+     * arrival, so following the pointer out does not follow the selection out.
+     *
+     * Attached only while the button is down. A permanent window listener would
+     * cost a measure-and-hit-test on every pointer move anywhere on the page.
+     */
+    const dragHost: Window | undefined = typeof window === 'undefined' ? undefined : window
+    let following = false
+    const follow = (on: boolean): void => {
+      if (on === following || dragHost === undefined) return
+      following = on
+      const bind = on ? dragHost.addEventListener : dragHost.removeEventListener
+      bind.call(dragHost, 'mousemove', onMove as EventListener)
+      bind.call(dragHost, 'mouseup', onUp as EventListener)
+    }
+
     const onDown = (e: MouseEvent): void => {
       // The primary button only. `mousedown` fires for every button, and a press
       // that is not answered by a matching `mouseup` guard becomes a *click* on
@@ -2599,9 +2674,13 @@ export class HeatmapView {
       if (e.button !== 0) return
       const [x, y] = local(e)
       this.dragMoved = false
-      this.drag = { mode: wantsSelect(e) ? 'select' : 'pan', x0: x, y0: y, x, y }
+      const mode = wantsSelect(e) ? 'select' : 'pan'
+      const diagonal = mode === 'select' && e.shiftKey
+      const [ax, ay] = diagonal ? this.onDiagonal(x, y) : [x, y]
+      this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal }
       this.lastX = x
       this.lastY = y
+      follow(true)
       showCursor({ grabbing: this.drag.mode === 'pan' })
       // The readout is about where the pointer *was*: a drag stops feeding it,
       // so left up it sits over a marquee naming a cell the picture no longer
@@ -2629,8 +2708,23 @@ export class HeatmapView {
           this.lastX = x
           this.lastY = y
         } else {
-          drag.x = x
-          drag.y = y
+          // Clamped into the plot rather than followed out of it. A corner
+          // dragged past the edge of the data is a corner nobody can act on, and
+          // abandoning the gesture there — which is what leaving the canvas used
+          // to do — throws away a selection whose *other* three sides were
+          // exactly where the reader put them.
+          const plot = this.plotRect
+          const [cx, cy] = [
+            clamp(x, plot.x, plot.x + plot.width),
+            clamp(y, plot.y, plot.y + plot.height),
+          ]
+          // Both corners on the diagonal, not just the anchor. The two axes
+          // share a zoom — `syncScales` gives each `pixelsPerUnit === zoom` —
+          // so two points on the line are already an equal-sided box, and
+          // `squareFrom` has nothing left to square.
+          const [nx, ny] = drag.diagonal ? this.onDiagonal(cx, cy) : [cx, cy]
+          drag.x = nx
+          drag.y = ny
         }
         this.changed()
         return
@@ -2644,10 +2738,27 @@ export class HeatmapView {
       )
       this.onHover?.(cell, { x, y })
     }
+    /**
+     * The canvas's own move handler, which steps aside once `follow` is on: the
+     * event bubbles from the canvas to the window, so the two would otherwise
+     * both answer a move made over the plot and repaint the frame twice.
+     *
+     * `following` rather than "is a drag in progress", and the difference is not
+     * pedantic: where there is no `window` to listen on — a headless test, an
+     * embedding without one — nothing is following, and a handler that stood
+     * aside for a listener that was never attached would make the canvas deaf
+     * for the whole of every drag.
+     */
+    const onCanvasMove = (e: MouseEvent): void => {
+      if (!following) onMove(e)
+    }
     const onUp = (e: MouseEvent): void => {
       const drag = this.drag
       this.drag = null
+      follow(false)
       showCursor({ grabbing: false })
+      // Runs twice for a release over the canvas — once at the target, once on
+      // the window the event bubbles to — and the second call finds no drag.
       if (drag === null) return
       const [x, y] = local(e)
       // A press that did not travel is a click, in either mode: §5.5's
@@ -2664,7 +2775,10 @@ export class HeatmapView {
         }, DOUBLE_CLICK_MS)
         return
       }
-      if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, x, y)
+      // `drag.x/y`, not the release position: the corner the reader saw is the
+      // clamped, diagonal-locked one the marquee was drawn to, and a release
+      // outside the canvas has no meaningful position at all.
+      if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, drag.x, drag.y)
       this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {
@@ -2676,14 +2790,15 @@ export class HeatmapView {
       this.changed()
     }
     const onLeave = (): void => {
-      // Abandon the drag rather than finish it blind: a selection whose second
-      // corner is off-canvas is not the selection anyone meant.
-      const wasDragging = this.drag !== null
-      this.drag = null
-      showCursor({ selecting: false, grabbing: false })
+      // The *hover* leaves; the drag does not. A gesture in progress belongs to
+      // the hand that started it, and it is followed on the window until the
+      // button comes up — with every position clamped into the plot, so a corner
+      // dragged past the edge stops at the edge instead of taking the whole
+      // selection with it. Abandoning here is what made a marquee dragged to the
+      // corner of the data — the commonest one there is — disappear.
       this.setHover(null)
       this.onHover?.(null)
-      if (wasDragging) this.changed()
+      if (this.drag === null) showCursor({ selecting: false, grabbing: false })
     }
     const onWheel = (e: WheelEvent): void => {
       // A sideways two-finger scroll is the browser's back/forward gesture, and
@@ -2810,7 +2925,7 @@ export class HeatmapView {
     }
 
     canvas.addEventListener('mousedown', onDown)
-    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('mousemove', onCanvasMove)
     canvas.addEventListener('mouseup', onUp)
     canvas.addEventListener('dblclick', onDoubleClick)
     canvas.addEventListener('mouseleave', onLeave)
@@ -2835,10 +2950,12 @@ export class HeatmapView {
     this.detachFns = [
       () => window?.removeEventListener?.('scroll', onScroll, { capture: true }),
       () => canvas.removeEventListener('mousedown', onDown),
-      () => canvas.removeEventListener('mousemove', onMove),
+      () => canvas.removeEventListener('mousemove', onCanvasMove),
       () => canvas.removeEventListener('mouseup', onUp),
       () => canvas.removeEventListener('dblclick', onDoubleClick),
       () => cancelPendingClick(),
+      // A view torn down mid-drag would otherwise leave the window listening.
+      () => follow(false),
       () => canvas.removeEventListener('mouseleave', onLeave),
       () => canvas.removeEventListener('wheel', onWheel),
       () => canvas.removeEventListener('keydown', onKey),

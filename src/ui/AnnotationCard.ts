@@ -28,6 +28,7 @@ import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
 import { subscribeReveal } from './revealTrack'
+import { stepperField } from './trackControls'
 
 /**
  * The `<option>` value that means "not one of these" in the group picker.
@@ -1228,62 +1229,30 @@ const MAX_TRANSPARENCY = 90
  * the sixth visit would be to undo the first.
  *
  * Lives here, beside the per-track controls, because it writes the same field of
- * the same store; the two Plot cards each mount one.
+ * the same store; the two Tracks cards each mount one.
  */
 export function transparencyField(store: AnnotationStore): HTMLElement {
-  const input = el('input', {
-    class: 'input input-num',
-    type: 'number',
+  return stepperField({
+    label: 'transparency',
     title:
       `Transparency of every track, as a percentage — 0 is opaque, ${MAX_TRANSPARENCY} is ` +
       'nearly gone. Applies to all of them at once.',
+    // Five, because one per cent of transparency is not a visible change and a
+    // reader pressing this is watching the picture, not counting.
+    step: 5,
+    min: 0,
+    max: MAX_TRANSPARENCY,
+    // Read from the *store*, so the box shows what the tracks actually are: a
+    // config loaded with faded tracks, or a single row's own opacity changed
+    // from its settings, both land here.
+    read: () => {
+      const first = store.entries[0]
+      return first === undefined ? null : Math.round((1 - first.style.opacity) * 100)
+    },
+    apply: (percent) => {
+      const opacity = 1 - percent / 100
+      for (const entry of store.entries) store.restyle(entry.id, { opacity })
+    },
+    subscribe: (onChange) => store.subscribe(onChange),
   })
-  input.min = '0'
-  input.max = String(MAX_TRANSPARENCY)
-  input.step = '5'
-
-  const sync = (): void => {
-    // Never into a box being typed in: the store notifies on the first
-    // keystroke's commit, and rewriting the field under the caret would fight
-    // the reader for it.
-    if (input === document.activeElement) return
-    const first = store.entries[0]
-    input.value = String(first === undefined ? 0 : Math.round((1 - first.style.opacity) * 100))
-  }
-
-  const commit = (): void => {
-    const typed = Math.round(Number(input.value))
-    if (!Number.isFinite(typed)) {
-      sync()
-      return
-    }
-    const clamped = Math.max(0, Math.min(MAX_TRANSPARENCY, typed))
-    input.value = String(clamped)
-    const opacity = 1 - clamped / 100
-    for (const entry of store.entries) store.restyle(entry.id, { opacity })
-  }
-
-  input.addEventListener('change', commit)
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') commit()
-  })
-  sync()
-  // The store outlives this control — a card is rebuilt when the assembly's
-  // lengths are replaced, and nothing hands the outgoing one a teardown — so the
-  // listener retires itself the first time it is spoken to after leaving the
-  // document.
-  const off = store.subscribe(() => {
-    if (!input.isConnected) {
-      off()
-      return
-    }
-    sync()
-  })
-
-  return el(
-    'label',
-    { class: 'field field-block' },
-    el('span', { class: 'field-label', text: 'transparency' }),
-    input,
-  )
 }

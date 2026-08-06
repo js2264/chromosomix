@@ -34,7 +34,22 @@ const KEY = 'metacooler-viewer:text-scale'
  */
 export const TEXT_SCALE_STEPS = [0.8, 0.9, 1, 1.15, 1.35, 1.6] as const
 
-export const DEFAULT_TEXT_SCALE = 1
+/**
+ * The rung a reader who has never touched the control lands on.
+ *
+ * Two rungs above the identity, and deliberately not the identity. The sizes in
+ * this app were picked against the *geometry* — the nine pixels that fits a
+ * sixteen-pixel lane — and geometry does not care how far away the screen is.
+ * Read at a desk on a large display, which is where a contact map is read, the
+ * unscaled marks are legible in the sense that they can be made out rather than
+ * in the sense that they can be read, and the first thing anybody did on opening
+ * a map was reach for this control. So the control's job is to take a reader
+ * back down to the drawn sizes, not to get them up to a usable one.
+ *
+ * The identity is still a rung, and everything measured in this suite is still
+ * measured there: 1.0 is the number the golden renders are written against.
+ */
+export const DEFAULT_TEXT_SCALE = 1.35
 
 let current: number | null = null
 const listeners = new Set<(scale: number) => void>()
@@ -59,9 +74,32 @@ function read(): number {
   }
 }
 
+/**
+ * Publish the scale as a CSS variable, for the boxes that hold canvas text.
+ *
+ * Almost nothing needs this: DOM text is sized by the type scale and moves with
+ * the page, and a canvas that fills its container simply redraws larger. The
+ * exception is a canvas whose *box* is fixed in CSS and whose contents are
+ * mostly words — the colourbar, which is a strip of colour and a column of
+ * numbers in a box five and a half rems wide. Grown text there does not reflow,
+ * it is clipped, and a legend reading `≤ 0.00006` as `≤ 0.0000` is a legend that
+ * lies. So the one number both sides need lives in one place and CSS multiplies
+ * by it.
+ *
+ * Guarded on `document` rather than on `window`: this module is loaded under
+ * Node with a stubbed `window` and no DOM at all.
+ */
+function publish(scale: number): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.style.setProperty('--text-scale', String(scale))
+}
+
 /** The scale in force. */
 export function getTextScale(): number {
-  current ??= read()
+  if (current === null) {
+    current = read()
+    publish(current)
+  }
   return current
 }
 
@@ -71,6 +109,7 @@ export function setTextScale(scale: number): void {
   if (next === current) return
   current = next
   cache.clear()
+  publish(next)
   try {
     window.localStorage.setItem(KEY, String(next))
   } catch {
@@ -148,7 +187,7 @@ function round(px: number): number {
 }
 
 /**
- * The control both Plot cards carry: smaller, what it is now, larger.
+ * The control both Tracks cards carry: smaller, what it is now, larger.
  *
  * A pair of presses and a percentage rather than a slider or a number box, for
  * the reason the steps are coarse: a reader adjusting this is looking at the
