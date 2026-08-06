@@ -150,6 +150,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   All four metacool views — genomes, genome, genome pair, region — and the
   overview now draw the same line, from the same function.
 
+- **The overview says it once.** Under the map it used to add "7,748 contigs are
+  more than are readable at once, so each row sums about 2 consecutive contigs,
+  never across a genome boundary. Every one is included." — which is the summary's
+  `2 contigs per cell, summed` at length, and dates from when the same view threw
+  98% of the contigs away and had to promise it no longer did. The line says it;
+  the paragraph is gone. So is `· full scan`: where the numbers came from is not
+  a property of the picture, and the gate above asked before the scan ran.
+
 ### Known
 
 - **A pooled balanced block is an approximation, and now says nothing about it.**

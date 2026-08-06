@@ -104,7 +104,6 @@ export class Overview {
   private readonly progressBox: HTMLElement
   private readonly panelHost: HTMLElement
   private readonly summary: HTMLElement
-  private readonly note: HTMLElement
   /** Where a genome is named; the `/` key puts the caret here. */
   private readonly search: SearchBox
   private readonly levelSelect = el('select', { class: 'select' })
@@ -156,7 +155,6 @@ export class Overview {
     )
     this.panelHost = el('div', { class: 'overview-host hidden' })
     this.summary = el('p', { class: 'summary' })
-    this.note = el('p', { class: 'note hidden' })
     this.search = new SearchBox({
       placeholder: 'a genome, or a contig',
       title:
@@ -223,7 +221,6 @@ export class Overview {
           this.search.el,
         ),
         this.summary,
-        this.note,
       ),
       el('div', { class: 'overview-main' }, this.gate, this.progressBox, this.panelHost),
     )
@@ -477,40 +474,19 @@ export class Overview {
 
   private show(result: OverviewResult): void {
     this.axisGenomes = result.groups
-    const unit = result.level === 'genome' ? 'genome' : 'contig'
-    const provenance = result.source === 'scan' ? 'full scan' : 'edge list'
-    // The shared line, and then the one thing this view has that no other does:
-    // where the numbers came from. A scan walked every stored pixel of the file;
-    // an edge list was handed them, and is somebody else's arithmetic.
+    // The same two facts every other map carries, and nothing else. What the
+    // rows hold is `2 contigs per cell, summed`, which the line already says;
+    // saying it again underneath in a sentence was the note repeating the
+    // summary at length. Where the numbers came from is not a property of the
+    // picture — the gate above asked before the scan ran, and a sidecar edge
+    // list is offered by name — so it is not a caption either.
     this.summary.replaceChildren(
-      ...blockSummary(0, toMatrixResult(result), unit),
-      ` · ${provenance}`,
+      ...blockSummary(0, toMatrixResult(result), result.level === 'genome' ? 'genome' : 'contig'),
     )
     this.unitNames = result.unitNames
     this.panelHost.classList.remove('hidden')
     this.gate.classList.add('hidden')
     this.panel.setData(toMatrixResult(result), 'Whole metagenome')
-
-    // Three separate statements, composed rather than nested: the caveat used
-    // to *replace* the click instruction, so the files most likely to carry one
-    // — the big real ones — were the ones never told what a click does.
-    //
-    // The caveat itself no longer says a picture this size is "neither
-    // renderable nor readable". Only the second half was ever true — the
-    // renderer pools any raster to 4096 px per axis and draws it — and the first
-    // half was the clause that justified throwing away 98% of the contigs.
-    // Nothing is thrown away now, so it says what the rows *are* instead.
-    const per = Math.round(result.unitsPerSlot)
-    const restriction = result.pooled
-      ? `${fmt.int(result.totalUnits)} ${unit}s are more than are readable at once, so each row ` +
-        `sums about ${per} consecutive ${per === 1 ? unit : `${unit}s`}` +
-        `${result.level === 'contig' ? ', never across a genome boundary' : ''}. ` +
-        'Every one is included.'
-      : ''
-    this.note.classList.remove('hidden')
-    this.note.replaceChildren(
-      el('span', { text: [restriction].filter((part) => part !== '').join(' ') }),
-    )
   }
 }
 
