@@ -2683,6 +2683,7 @@ export class Session {
           binsize: file.info.binsize ?? 1,
           nBins: file.info.nBins,
           nContigs: file.info.nContigs,
+          displayExtent: file.info.displayExtent,
           // The file's own count of stored pixels, which is what the read walks.
           // A cooler that does not declare it is not gated rather than gated on
           // a guess; the same number is in the File card, from the same place.
@@ -2755,6 +2756,7 @@ export class Session {
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
+      displayExtent: file.info.displayExtent,
       nnz: numberOr(file.info.info['nnz']),
       level: 'bin',
       scale: this.scaleOf(state),

@@ -15,12 +15,7 @@ import { ViewerError } from '../errors'
 import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
-import {
-  POOLED_CELL_CAP,
-  poolPlan,
-  type BinPooling,
-  type PoolPlan,
-} from '../metacooler/pooling'
+import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -145,6 +140,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     nContigs: mc.nContigs,
     nBins: mc.nBins,
     unassigned: mc.unassignedStats(),
+    displayExtent: mc.displayBinExtent(),
     entries: mc.entries,
     entryGroup: mc.entryGroup,
     hasGenomes: mc.hasGenomes,
@@ -575,11 +571,17 @@ async function handleSelection(
   // three to a cell, rather than an error message. What was used is reported
   // back, so the summary above the map cannot claim a resolution the picture
   // does not have.
-  const bins = units.reduce((sum, unit) => sum + (unit.extent[1] - unit.extent[0]), 0)
-  const floor = poolPlan(bins, units.length, POOLED_CELL_CAP)
+  // The caller's plan is a floor and nothing more. It works from a bin count it
+  // worked out itself and cannot know how the chosen sequences fall, so the read
+  // finds the capacity that fits — the same search a range gets — and reports
+  // what it used. It used to be a refusal ("Select fewer sequences"), which is a
+  // strange answer to someone who has just ticked *select all*, and then briefly
+  // a coarsening that could not coarsen: one cell per selected sequence is a
+  // floor no capacity clears, so a selection past the cap went back to being
+  // pooled a second time by the renderer, contig-blind, with nothing said.
   const plan: PoolPlan = {
-    binsPerCell: Math.max(aim.binsPerCell, floor.binsPerCell),
-    contigsPerCell: Math.max(aim.contigsPerCell, floor.contigsPerCell),
+    binsPerCell: Math.max(1, aim.binsPerCell),
+    contigsPerCell: 1,
   }
   const selected = await mc.selectionMatrix(units, plan, {
     ...scanHooks(id),
@@ -594,6 +596,7 @@ async function handleSelection(
     (contig) => mc.coords.contigLengths[contig],
   )
   const withGenomes = mc.hasGenomes
+  const named = withMembers(mc, runs, selected.pooling)
   return {
     nrows: selected.nrows,
     ncols: selected.ncols,
@@ -603,8 +606,8 @@ async function handleSelection(
     // coordinate arithmetic falls back to the group's own start, which is right.
     rowExtent: [0, selected.nrows],
     colExtent: [0, selected.ncols],
-    rowGroups: runs,
-    colGroups: runs,
+    rowGroups: named,
+    colGroups: named,
     ...(withGenomes
       ? {
           rowGenomes: aggregatedGenomeRuns(mc, selected.ids),
@@ -614,6 +617,8 @@ async function handleSelection(
     level: 'bin',
     binsPerCell: selected.binsPerCell,
     contigsPerCell: selected.contigsPerCell,
+    rowContigs: units.length,
+    colContigs: units.length,
   }
 }
 

@@ -403,6 +403,52 @@ export async function forEachPixelSpanAsync(
 }
 
 /**
+ * Stored pixels' worth of gap that is cheaper to read across than to seek over.
+ *
+ * The byte sources read in 1 MiB chunks, and a stored pixel is 16 bytes on the
+ * wire, so anything under about 65,000 pixels is inside a chunk that is being
+ * fetched regardless. Merging below it turns a thousand small bands into a few
+ * large ones without reading a byte more than the source already would.
+ */
+export const PIXEL_BAND_GAP = 65_536
+
+/**
+ * The same walk over **several** pixel ranges, as one operation.
+ *
+ * A selection of four MAGs out of two thousand used to cost the whole file: the
+ * pixels it wants are scattered, so the read walked `[0, nBins)` and threw away
+ * everything that was not on either axis. But the pixels are sorted by `bin1`,
+ * so every pixel a selection wants is inside the *row band* of one of its own
+ * sequences — a pair with both ends selected is stored under the lower of them,
+ * which is selected — and `bin1_offset` says where each band is in two lookups.
+ *
+ * So the caller hands in the bands, already merged, and this walks them in
+ * order with one progress count across the lot. Cancellation is checked between
+ * windows exactly as it is for a single range, because it is the same loop.
+ */
+export async function forEachPixelRangesAsync(
+  h: Hdf5Handle,
+  ranges: ReadonlyArray<Extent>,
+  onChunk: (chunk: PixelChunk) => void,
+  options: SpanScanOptions = {},
+): Promise<boolean> {
+  const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
+  const total = ranges.reduce((sum, [p0, p1]) => sum + Math.max(0, p1 - p0), 0)
+  let done = 0
+  for (const [p0, p1] of ranges) {
+    for (let at = p0; at < p1; at += width) {
+      if (options.cancelled?.() === true) return false
+      const end = Math.min(at + width, p1)
+      onChunk(readPixelWindow(h, at, end))
+      done += end - at
+      options.onProgress?.(done, total)
+      await yieldToEventLoop()
+    }
+  }
+  return true
+}
+
+/**
  * Where each stored pixel lands in the output block.
  *
  * - `direct` — `(bin1 → row, bin2 → col)` only.

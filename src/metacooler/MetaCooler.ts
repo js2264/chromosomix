@@ -52,7 +52,9 @@ import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from '
 import {
   DEFAULT_WEIGHT_COLUMN,
   DENSE_HINTS,
+  forEachPixelRangesAsync,
   forEachPixelSpanAsync,
+  PIXEL_BAND_GAP,
   type SpanScanOptions,
   planRead,
   readDenseMatrix,
@@ -556,6 +558,32 @@ export class MetaCooler {
    * and it is read straight off the `/genomes` row, so no code path reaches
    * `__unbinned__` through it.
    */
+  /**
+   * The bins a picture of "the whole file" is allowed to draw.
+   *
+   * `__unbinned__` is not a genome and is never displayed (§7.4) — it is absent
+   * from the genomes table, unselectable, and excluded from the overview. The
+   * whole-file map read `[0, nBins)` and drew it anyway, which on a real
+   * metagenome is the largest thing in the picture: on one 1.9 M-bin file it is
+   * 56% of the bins, so it dominated a band *and*, being in the drawn pixels, set
+   * the auto `vmax` for everything else (§7.1).
+   *
+   * Under `genome-then-length` every genome is one contiguous bin range and
+   * `__unbinned__` holds genome index 0, so leaving it out is a range and not a
+   * gap. Where it is not at either end — which no file this app accepts can
+   * produce — the whole range is kept rather than a wrong half of it.
+   */
+  displayBinExtent(): Extent {
+    const whole: Extent = [0, this.nBins]
+    const gid = this.genomeIds.get(UNBINNED_NAME)
+    if (gid === undefined) return whole
+    const [lo, hi] = this.genomeExtent(gid)
+    if (hi <= lo) return whole
+    if (lo === 0) return [hi, this.nBins]
+    if (hi === this.nBins) return [0, lo]
+    return whole
+  }
+
   unassignedStats(): UnassignedStats | null {
     const totalContigs = this.nContigs
     const totalBins = this.nBins
@@ -856,6 +884,7 @@ export class MetaCooler {
       binsPerCell: number
       contigsPerCell: number
       ids: Int32Array
+      pooling: BinPooling
     }
   > {
     const pooling = selectionPooling(this.nBins, units, aim)
@@ -873,10 +902,9 @@ export class MetaCooler {
       this.storageMode === 'symmetric-upper',
     )
     const weights = options.balance === true ? this.weightSlices(whole, whole) : null
-    await forEachPixelSpanAsync(
+    await forEachPixelRangesAsync(
       this.handle,
-      0,
-      this.nBins,
+      this.pixelBandsOf(units.map(({ extent }) => extent)),
       (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           const b1 = chunk.bin1[i]
@@ -896,7 +924,42 @@ export class MetaCooler {
       binsPerCell: pooling.stride,
       contigsPerCell: pooling.contigsPerCell,
       ids: pooling.ids,
+      pooling,
     }
+  }
+
+  /**
+   * The stored-pixel bands a set of bin ranges occupies, merged.
+   *
+   * `bin1_offset` is one entry per bin and already in memory ({@link binOffsets}),
+   * so a band costs two array reads and no I/O at all. Bands that touch — or that
+   * are separated by less than a window's worth of pixels — become one, because
+   * the source reads in 1 MiB chunks and seeking over a gap smaller than that
+   * costs more than reading across it.
+   *
+   * Sorted, because the ranges arrive in display order and the file is in file
+   * order; a selection that puts MAG_9 before MAG_2 must still be read forwards.
+   */
+  private pixelBandsOf(extents: ReadonlyArray<readonly [number, number]>): Extent[] {
+    const offsets = this.binOffsets()
+    const bands: Extent[] = []
+    for (const [lo, hi] of extents) {
+      if (hi <= lo) continue
+      const p0 = offsets[Math.max(0, lo)]
+      const p1 = offsets[Math.min(this.nBins, hi)]
+      if (p1 > p0) bands.push([p0, p1])
+    }
+    bands.sort((a, b) => a[0] - b[0])
+    const merged: Extent[] = []
+    for (const band of bands) {
+      const last = merged[merged.length - 1]
+      if (last !== undefined && band[0] <= last[1] + PIXEL_BAND_GAP) {
+        last[1] = Math.max(last[1], band[1])
+      } else {
+        merged.push([band[0], band[1]])
+      }
+    }
+    return merged
   }
 
   /** The two bounded weight slices a balanced roll-up multiplies by. */

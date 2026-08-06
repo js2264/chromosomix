@@ -397,3 +397,49 @@ describe('coarsening a roll-up', () => {
     for (const [cell, genomes] of seen) expect(genomes.size, `cell ${cell}`).toBe(1)
   })
 })
+
+/**
+ * A selection is the same axis, scattered.
+ *
+ * It is the one path that kept the old rule after everything else moved to a
+ * capacity — cells opened at every selected sequence, so the axis could not fall
+ * below the number of them however coarse the bins were made. Past the cap that
+ * meant the renderer pooled what arrived, flat and blind to the sequences, which
+ * is the defect this whole branch exists to remove; and far past it, an
+ * accumulator of `cells²` that the machine simply refused. The rule is the
+ * range's now.
+ */
+describe('a selection past the cap', () => {
+  const units = (count: number, bins = 1): Array<{ id: number; extent: [number, number] }> =>
+    Array.from({ length: count }, (_, id) => ({
+      id,
+      extent: [id * bins, id * bins + bins] as [number, number],
+    }))
+
+  it('fits the picture however many sequences are ticked', () => {
+    const chosen = units(20_000)
+    const pooling = selectionPooling(20_000, chosen, IDENTITY_PLAN)
+    expect(pooling.ids.length).toBeLessThanOrEqual(POOLED_CELL_CAP)
+    expect(pooling.contigsPerCell).toBeGreaterThan(1)
+    // Every ticked sequence is in the picture, and in the order it was given.
+    expect(pooling.members.length).toBe(20_000)
+    expect(pooling.slot[0]).toBe(0)
+    expect(pooling.slot[19_999]).toBe(pooling.ids.length - 1)
+  })
+
+  it('gives a large sequence its own cells among small ones', () => {
+    // One sequence of 40 bins, then two thousand of one: the large one must not
+    // be crushed into a cell beside a neighbour a fortieth its size.
+    const chosen: Array<{ id: number; extent: [number, number] }> = [{ id: 0, extent: [0, 40] }]
+    for (let id = 1; id <= 2000; id++) chosen.push({ id, extent: [39 + id, 40 + id] })
+    const pooling = selectionPooling(2100, chosen, IDENTITY_PLAN, 512)
+    expect(pooling.ids.length).toBeLessThanOrEqual(512)
+    // Its bins land in cells that hold nothing else.
+    const own = new Set<number>()
+    for (let bin = 0; bin < 40; bin++) own.add(pooling.slot[bin])
+    expect(own.size).toBeGreaterThan(1)
+    for (const cell of own) {
+      expect(pooling.memberStart[cell + 1] - pooling.memberStart[cell], `cell ${cell}`).toBe(1)
+    }
+  })
+})

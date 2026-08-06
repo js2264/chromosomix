@@ -162,6 +162,7 @@ function opened(over: Partial<OpenResult> = {}): OpenResult {
     nContigs: 2,
     nBins: 10,
     unassigned: null,
+    displayExtent: [0, 100] as [number, number],
     entries: [],
     entryGroup: '',
     hasGenomes: false,

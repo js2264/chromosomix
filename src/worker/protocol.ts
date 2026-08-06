@@ -151,6 +151,15 @@ export interface OpenResult {
   nBins: number
   unassigned: UnassignedStats | null
   /**
+   * The bins a whole-file picture may draw: everything but `__unbinned__`.
+   *
+   * `[0, nBins]` for a cooler and for a metacool written with
+   * `drop_unassigned`. Elsewhere it is the range with the unassigned contigs
+   * left out — they are not a genome, are shown nowhere else (§7.4), and on a
+   * real metagenome are the largest thing in the picture.
+   */
+  displayExtent: Extent
+  /**
    * Sibling names of the enclosing collection; `[]` for a plain file. The other
    * maps of an mmetacool (§3.4), or the other resolutions of an mcool (§9).
    */
