@@ -100,7 +100,9 @@ function fakeCanvas(cssWidth: number, cssHeight: number): {
     tabIndex: 0,
     getContext: () => ctx,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: cssWidth, height: cssHeight }),
-    classList: { toggle: () => {} },
+    // `remove` as well as `toggle`: the view clears its own state classes on
+    // the way out, and a stub that only knows how to toggle throws there.
+    classList: { toggle: () => {}, add: () => {}, remove: () => {} },
     addEventListener: (type: string, fn: (event: unknown) => void) => listeners.set(type, fn),
     removeEventListener: (type: string) => listeners.delete(type),
     focus: () => {},

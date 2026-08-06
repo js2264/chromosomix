@@ -361,7 +361,9 @@ export class BrowserView {
   private readonly controls: LaneControls
   private readonly editor: LaneEditor
   private drag:
-    | { mode: 'pan'; x: number }
+    // `from` is the domain start at the press, so Escape can put the view back
+    // where the pan began: a pan abandoned half-way is not a shorter pan.
+    | { mode: 'pan'; x: number; from: number }
     | { mode: 'select'; x0: number; x: number }
     | { mode: 'column'; x0: number; from: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
@@ -523,7 +525,7 @@ export class BrowserView {
           // three actions and a reader should not have to learn them twice.
           iconButton('unfold-horizontal', 'The whole genome (0, or a double click)', () => this.fit()),
           iconButton(
-            'stretch-vertical',
+            'unfold-vertical',
             withKey('Stretch every track to fill the height, all to one height', KEYS.stretch),
             () => this.fitTracks(),
           ),
@@ -1839,7 +1841,7 @@ export class BrowserView {
             size: 15,
           }),
           iconButton(
-            'stretch-vertical',
+            'unfold-vertical',
             withKey(
               'Stretch every track to fill the height there is, all of them to one height',
               KEYS.stretch,
@@ -2164,7 +2166,7 @@ export class BrowserView {
           }
           this.scaling = { id: lane.entry.id, factor: 1 }
         } else {
-          this.drag = { mode: 'pan', x: drag.x0 }
+          this.drag = { mode: 'pan', x: drag.x0, from: this.scale.domain[0] }
         }
         return
       }
@@ -2370,6 +2372,36 @@ export class BrowserView {
       canvas.classList.remove('grabbing')
       this.schedule()
     }
+
+    /**
+     * Escape abandons the gesture in progress, leaving the view where it was.
+     *
+     * The way out of a drag that has gone wrong, and the same key doing the same
+     * thing on the contact map. A span is committed on release and a release
+     * cannot be taken back, so without this the only way to undo a marquee drawn
+     * in the wrong place was to let it zoom somewhere and navigate back.
+     *
+     * A pan is *rewound* rather than merely stopped: a pan that ends where the
+     * reader changed their mind is the pan happening anyway. The other modes —
+     * resizing a lane, dragging one up the stack, dragging the name column's
+     * edge — write on release, so dropping the drag is already the whole of
+     * undoing them.
+     *
+     * On the window and capturing, because a drag is very often begun without
+     * the canvas ever taking the focus, and the key would otherwise be read by
+     * whatever the reader last clicked on.
+     */
+    const onAbort = (event: KeyboardEvent): void => {
+      const drag = this.drag
+      if (event.key !== 'Escape' || drag === null) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (drag.mode === 'pan') {
+        this.scale.setDomain([drag.from, drag.from + this.scale.span])
+      }
+      onCancel()
+    }
+    window.addEventListener('keydown', onAbort, true)
     canvas.addEventListener('pointerup', onUp)
     canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('pointerleave', onLeave)
@@ -2382,6 +2414,7 @@ export class BrowserView {
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onAbort, true)
       canvas.removeEventListener('pointerleave', onLeave)
       this.overlays.removeEventListener('pointerleave', onOverlayLeave)
       canvas.removeEventListener('wheel', onWheel)

@@ -373,7 +373,13 @@ export class MatrixPanel {
   private readonly transformSelect: HTMLSelectElement
   private readonly colormapSelect: HTMLSelectElement
   private readonly overlay: HTMLElement
-  private readonly optionButtons = new Map<PlotOptionKey, HTMLElement>()
+  /**
+   * Every button that lights up for a given option — plural, because one of them
+   * is offered twice. The crosshair sits in both the Map row and the Tracks row
+   * (see `MATRIX_OPTIONS`), and a map keyed one-to-one silently kept only the
+   * second: pressing either would work, but the first would never light.
+   */
+  private readonly optionButtons = new Map<PlotOptionKey, HTMLElement[]>()
   private readonly unsubscribePlotOptions: () => void
   private readonly unsubscribeTextScale: () => void
   private readonly themeWatchers: () => void
@@ -692,7 +698,9 @@ export class MatrixPanel {
         () => setPlotOption(key, !getPlotOptions()[key]),
         { class: 'btn btn-icon btn-toggle', size: 15 },
       )
-      this.optionButtons.set(key, node)
+      const known = this.optionButtons.get(key)
+      if (known === undefined) this.optionButtons.set(key, [node])
+      else known.push(node)
       return node
     }
 
@@ -804,7 +812,7 @@ export class MatrixPanel {
             ? []
             : [
                 iconButton(
-                  'stretch-vertical',
+                  'unfold-vertical',
                   withKey(
                     'Stretch every track to fill the height there is, all of them to one height',
                     KEYS.stretch,
@@ -851,7 +859,6 @@ export class MatrixPanel {
           : fieldPair(textScaleField(), transparencyField(this.options.annotations.store)),
       ),
     )
-    this.paintPlotOptions(getPlotOptions())
     // The matrix's own labels are the one thing a scale change does not simply
     // redraw: the gutters they sit in are measured from the font, so the canvas
     // has to be told rather than repainted. Both legends, because a compared map
@@ -957,6 +964,11 @@ export class MatrixPanel {
       cardTitle('Map', 'sliders-horizontal', 'controls-title'),
       el('div', { class: 'panel-controls' }, ...controls),
     )
+    // After *both* rows exist, not after the first. The Map card is built well
+    // below the Tracks card, so painting where the Tracks card ends left every
+    // toggle in this one unlit until the next time somebody changed one — which
+    // for the crosshair, offered in both rows, meant the two disagreed on sight.
+    this.paintPlotOptions(getPlotOptions())
 
     // The two edge rectangles live **inside the map**, not over the grid that
     // holds the map and its lanes. Over the grid they covered a quarter of the
@@ -1416,8 +1428,8 @@ export class MatrixPanel {
 
   /** Reflect the shared overlay state on the buttons. */
   private paintPlotOptions(options: PlotOptions): void {
-    for (const [key, node] of this.optionButtons) {
-      node.setAttribute('aria-pressed', String(options[key]))
+    for (const [key, nodes] of this.optionButtons) {
+      for (const node of nodes) node.setAttribute('aria-pressed', String(options[key]))
     }
   }
 
