@@ -276,7 +276,7 @@ export class RegionView {
       )
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
-      this.describePair(parsed, other)
+      this.describePair(result)
       // The reader may have planned a coarser grid than the file's bins — a
       // whole chromosome at 10 kb is more cells than any picture holds — and
       // every coordinate on screen is the bin size times a cell offset, so the
@@ -314,14 +314,28 @@ export class RegionView {
     }
   }
 
-  /** The readout for a rectangular two-contig block. */
-  private describePair(row: ParsedRange, col: ParsedRange): void {
-    const rowBins = row.extent[1] - row.extent[0]
-    const colBins = col.extent[1] - col.extent[0]
+  /**
+   * The readout for a rectangular block between two ranges.
+   *
+   * The same three things the single-range line says, in the same order and the
+   * same words: how much is on screen, what one cell of it is worth, and what
+   * the block is. It drops the `XV × XV ·` opening for the reason that one drops
+   * `matched chromosome XV ·` — the title above the map is already both names —
+   * and it counts the bins of the block that came back rather than of the two
+   * ranges that were asked for, since a coarse grid is read on the sequence's
+   * own cell edges and can open and close a cell either side of them.
+   *
+   * "Regions" rather than "contigs": the two axes are as often two windows of
+   * one sequence as they are two sequences, and this line is drawn for both.
+   */
+  private describePair(result: MatrixResult): void {
+    const rowBins = result.rowExtent[1] - result.rowExtent[0]
+    const colBins = result.colExtent[1] - result.colExtent[0]
     this.matched.classList.remove('is-genome')
     this.matched.replaceChildren(
-      `${row.label} × ${col.label} · ${fmt.int(rowBins)} × ${fmt.int(colBins)} bins · ` +
-        'contacts between the two contigs',
+      `${fmt.int(rowBins)} × ${fmt.int(colBins)} bins · ` +
+        `${resolutionNote(this.props.binsize, result)} · ` +
+        'contacts between the two regions',
     )
   }
 
