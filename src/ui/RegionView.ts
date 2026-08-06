@@ -21,7 +21,7 @@
  * transpose when the column range precedes the row range in bin space (§5.3).
  */
 
-import type { ParsedRange } from '../types'
+import type { Extent, ParsedRange } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
@@ -240,7 +240,7 @@ export class RegionView {
         )
         if (this.disposed) return
         this.title.textContent = this.props.region
-        this.describeMatch(parsed, hi - lo, result.binsPerCell ?? 1)
+        this.describeMatch(parsed, result.rowExtent, result.binsPerCell ?? 1)
         // The reader may have planned a coarser grid than the file's bins — a
         // whole chromosome at 10 kb is more cells than any picture holds — and
         // every coordinate on screen is the bin size times a cell offset, so the
@@ -320,13 +320,15 @@ export class RegionView {
     )
   }
 
-  private describeMatch(parsed: ParsedRange, bins: number, perCell = 1): void {
+  private describeMatch(parsed: ParsedRange, drawn: Extent, perCell = 1): void {
     const kind = parsed.kind === 'genome' ? 'genome' : this.props.noun
-    // What a cell is, whenever it is not one bin. The reader decides that for a
-    // block larger than the picture, so the sentence is written from what came
-    // back rather than from what was asked for.
+    // What a cell is, and what was drawn — both from the result rather than from
+    // the request. A block coarser than one bin per cell is read on the
+    // sequence's own cell edges, so it can open and close up to a cell either
+    // side of what was typed, and the range named here is the range on screen.
     const grid = perCell > 1 ? ` · ${perCell} bins per cell` : ''
-    this.matched.textContent = `matched ${kind} ${parsed.label} · ${fmt.int(bins)} bins${grid} · bins ${fmt.int(parsed.extent[0])}–${fmt.int(parsed.extent[1] - 1)}`
+    const bins = drawn[1] - drawn[0]
+    this.matched.textContent = `matched ${kind} ${parsed.label} · ${fmt.int(bins)} bins${grid} · bins ${fmt.int(drawn[0])}–${fmt.int(drawn[1] - 1)}`
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
     if (parsed.kind === 'genome') {
       const open = button('open genome view →', () => this.props.onOpenGenome(parsed.label), {

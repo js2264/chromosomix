@@ -213,8 +213,20 @@ async function handleMatrix(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const aim = fitPlan(mc, request, cols)
-  if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return pooledResult(mc, request, cols, aim)
+  const asked = planOf(request.binsPerCell, request.contigsPerCell)
+  if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
+    return pooledResult(mc, request, request.rows, cols, asked)
+  }
+  const planned = fitPlan(mc, request.rows, cols)
+  if (planned !== null) {
+    return pooledResult(
+      mc,
+      request,
+      snapToGrid(mc, request.rows, planned),
+      snapToGrid(mc, cols, planned),
+      planned,
+    )
+  }
   const dense = await mc.matrix(
     {
       rows: request.rows,
@@ -244,12 +256,13 @@ async function handleMatrix(
 async function pooledResult(
   mc: MetaCooler,
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
+  rows: Extent,
   cols: Extent,
   aim: PoolPlan,
 ): Promise<MatrixResult> {
   const id = request.id
   const pooled = await mc.pooledMatrix(
-    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    { rows, cols, ...(request.balance === true ? { balance: true } : {}) },
     aim,
     scanHooks(id),
   )
@@ -266,10 +279,10 @@ async function pooledResult(
     nrows: pooled.nrows,
     ncols: pooled.ncols,
     values: Float32Array.from(pooled.values),
-    rowExtent: request.rows,
+    rowExtent: rows,
     colExtent: cols,
-    rowGroups: runs(pooled.rowIds),
-    colGroups: runs(pooled.colIds),
+    rowGroups: anchor(mc, runs(pooled.rowIds), rows, pooled.binsPerCell),
+    colGroups: anchor(mc, runs(pooled.colIds), cols, pooled.binsPerCell),
     ...(withGenomes
       ? {
           rowGenomes: aggregatedGenomeRuns(mc, pooled.rowIds),
@@ -279,9 +292,31 @@ async function pooledResult(
     level: 'bin',
     binsPerCell: pooled.binsPerCell,
     contigsPerCell: pooled.contigsPerCell,
-    rowContigs: contigSpan(mc, request.rows),
+    rowContigs: contigSpan(mc, rows),
     colContigs: contigSpan(mc, cols),
   }
+}
+
+/**
+ * Where the axis's first sequence begins, when the block does not begin with it.
+ *
+ * A pooled axis is measured in cells, and `bpWithin` reads a position as
+ * `(blockStart + offset − unitStart) × cellSize`. With the grid anchored to the
+ * contig ({@link snapToGrid}) the block may open partway along one, and the cells
+ * of it that fall before the block are exactly what `unitStart` has to discount —
+ * otherwise a region opened at 320 kb calls its first cell 0 bp, which is the
+ * `unitStart` failure the dense path already avoids by carrying the contig's own
+ * start bin.
+ *
+ * Only the first run can need it: every later sequence begins where its own cells
+ * do, and there the default — the run's block-local start — is already right.
+ */
+function anchor(mc: MetaCooler, runs: AxisGroup[], [lo]: Extent, k: number): AxisGroup[] {
+  if (runs.length === 0 || k <= 1) return runs
+  const [start] = mc.coords.contigBinExtent(mc.coords.contigOfBin(lo))
+  const before = Math.floor((lo - start) / k)
+  if (before <= 0) return runs
+  return [{ ...runs[0], unitStart: lo + runs[0].start - before }, ...runs.slice(1)]
 }
 
 /** How many sequences an extent covers, for a summary that counts assemblies. */
@@ -331,25 +366,78 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * resolution, and taking a coarser rung of a laddered file where one exists, are
  * the real answers and are not attempted.
  */
-function fitPlan(
-  mc: MetaCooler,
-  request: Extract<WorkerRequest, { kind: 'matrix' }>,
-  cols: Extent,
-): PoolPlan {
-  const aim = planOf(request.binsPerCell, request.contigsPerCell)
-  if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return aim
-  const spans = [request.rows, cols]
-  if (spans.some(([lo]) => mc.coords.contigStartBin(mc.coords.contigOfBin(lo)) !== lo)) return aim
-  let plan = aim
+function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
+  const spans = rows[0] === cols[0] && rows[1] === cols[1] ? [rows] : [rows, cols]
+  if (spans.every((span) => fits(mc, span, 1))) return null
+  // The smallest grid that fits, shared by both axes because the panel has one
+  // bin size: the finer axis is coarsened to the other's cell rather than given
+  // a resolution the labels down the side contradict. Exact rather than
+  // `poolPlan`'s bound, since the contig extents are right here — the bound is
+  // for a caller that has to name the resolution before anything is read.
   for (const [lo, hi] of spans) {
     const contigs = mc.coords.contigOfBin(hi - 1) - mc.coords.contigOfBin(lo) + 1
-    const axis = poolPlan(hi - lo, contigs, POOLED_CELL_CAP)
-    plan = {
-      binsPerCell: Math.max(plan.binsPerCell, axis.binsPerCell),
-      contigsPerCell: Math.max(plan.contigsPerCell, axis.contigsPerCell),
+    if (contigs > POOLED_CELL_CAP) {
+      return { binsPerCell: 1, contigsPerCell: Math.ceil(contigs / POOLED_CELL_CAP) }
     }
   }
-  return plan
+  let low = 2
+  let high = 2
+  const ok = (k: number): boolean =>
+    spans.every((span) => fits(mc, snapToGrid(mc, span, { binsPerCell: k, contigsPerCell: 1 }), k))
+  while (!ok(high)) high *= 2
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (ok(mid)) high = mid
+    else low = mid + 1
+  }
+  return { binsPerCell: low, contigsPerCell: 1 }
+}
+
+/** Whether an extent comes to at most a picture's worth of cells at `k`. */
+function fits(mc: MetaCooler, [lo, hi]: Extent, k: number): boolean {
+  return cellsIn(mc, [lo, hi], k) <= POOLED_CELL_CAP
+}
+
+/** Cells an extent needs, from the contig extents — no per-bin array. */
+function cellsIn(mc: MetaCooler, [lo, hi]: Extent, k: number): number {
+  if (hi <= lo) return 0
+  let cells = 0
+  const last = mc.coords.contigOfBin(hi - 1)
+  for (let c = mc.coords.contigOfBin(lo); c <= last; c++) {
+    const [cs, ce] = mc.coords.contigBinExtent(c)
+    cells += Math.ceil((Math.min(hi, ce) - Math.max(lo, cs)) / k)
+  }
+  return cells
+}
+
+/**
+ * An extent widened to the **contig's own** cell edges.
+ *
+ * The grid is a property of the sequence, not of the question: cells fall at
+ * `contigStart + m·k` whatever range was asked for. That is what makes a region
+ * behave like the chromosome it is cut from — the same base pair lands in the
+ * same cell, holding the same sum, in every view of it — and it is what gives
+ * the first cell a place in the contig's coordinates, which is the thing a block
+ * anchored at its own left edge does not have.
+ *
+ * Widening rather than trimming, because a cell that holds only the part of
+ * itself inside the request is a cell whose value moves when you pan. At most
+ * `k − 1` bins are added at each end, and the extent that comes back is the one
+ * reported, so the summary names what was drawn.
+ */
+function snapToGrid(mc: MetaCooler, [lo, hi]: Extent, plan: PoolPlan): Extent {
+  if (hi <= lo) return [lo, hi]
+  const [firstStart] = mc.coords.contigBinExtent(mc.coords.contigOfBin(lo))
+  const [lastStart, lastEnd] = mc.coords.contigBinExtent(mc.coords.contigOfBin(hi - 1))
+  // A cell of whole sequences snaps to whole sequences; there is no finer edge
+  // for it to land on.
+  if (plan.contigsPerCell > 1) return [firstStart, lastEnd]
+  const k = plan.binsPerCell
+  if (k <= 1) return [lo, hi]
+  return [
+    firstStart + Math.floor((lo - firstStart) / k) * k,
+    Math.min(lastEnd, lastStart + Math.ceil((hi - lastStart) / k) * k),
+  ]
 }
 
 function planOf(binsPerCell?: number, contigsPerCell?: number): PoolPlan {
