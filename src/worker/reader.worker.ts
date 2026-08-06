@@ -213,7 +213,7 @@ async function handleMatrix(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
-  const aim = fitPlan(mc, planOf(request.binsPerCell, request.contigsPerCell), request.rows, cols)
+  const aim = fitPlan(mc, request, cols)
   if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return pooledResult(mc, request, cols, aim)
   const dense = await mc.matrix(
     {
@@ -315,10 +315,29 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * whole-genome and whole-contig read. A region starting mid-contig carries a
  * `unitStart` the coarse grid has no cell for, so it is left dense and refused
  * by size as before rather than drawn against an origin that has quietly moved.
+ *
+ * And **never for a balanced read**, which is the sharper limit. Coarsening a
+ * balanced matrix by summing is not balancing at a coarser resolution: a cell of
+ * `k × k` bin pairs comes out about `k²` times a single balanced value, which is
+ * why `cooler zoomify --balance` re-balances every level from raw counts instead
+ * of summing the level below. The second cost is worse for being invisible —
+ * balancing marks a filtered bin with a `NaN` weight, the dense path multiplies
+ * it through so the whole row is drawn transparent (§6.4: "a blank row is an
+ * unbalanced row"), and the pooled path drops `NaN` contributions rather than
+ * propagating them, so that row comes back as an ordinary number and the
+ * diagnostic is gone. Until a pooled read can balance at its own resolution, a
+ * balanced block stays dense — and is refused by size where it must be, which is
+ * the honest answer rather than a plausible wrong one.
  */
-function fitPlan(mc: MetaCooler, aim: PoolPlan, rows: Extent, cols: Extent): PoolPlan {
+function fitPlan(
+  mc: MetaCooler,
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+  cols: Extent,
+): PoolPlan {
+  const aim = planOf(request.binsPerCell, request.contigsPerCell)
   if (aim.binsPerCell > 1 || aim.contigsPerCell > 1) return aim
-  const spans = [rows, cols]
+  if (request.balance === true) return aim
+  const spans = [request.rows, cols]
   if (spans.some(([lo]) => mc.coords.contigStartBin(mc.coords.contigOfBin(lo)) !== lo)) return aim
   let plan = aim
   for (const [lo, hi] of spans) {
