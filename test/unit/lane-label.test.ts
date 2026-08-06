@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { drawLaneLabel, labelEndFor, type LaneLabelStyle } from '@/render/laneLabel'
+import { NAME_CUT, drawLaneLabel, fitName, labelEndFor, type LaneLabelStyle } from '@/render/laneLabel'
 import type { LaneFrame } from '@/render/lane'
 
 /** Every glyph this ruler knows is this wide. */
@@ -261,5 +261,110 @@ describe('which end of a lane the caption belongs at', () => {
     expect(boxes.limits).toHaveLength(2)
     // …and it really is at the other end of the lane.
     expect(boxes.nameAcross).toBeGreaterThan(30)
+  })
+})
+
+/**
+ * A name too long for the column it is in.
+ *
+ * The column is measured from the names, so this only happens once a reader has
+ * *pinned* it — which they do because one long name was making a column three
+ * others did not need. Wrapping and cutting are what that press has to buy, or
+ * the name simply runs out over the data it belongs to.
+ *
+ * The ruler is six pixels a character, so every width here is arithmetic.
+ */
+describe('fitting a name into a column', () => {
+  const measure = (text: string): number => text.length * CHAR
+
+  it('leaves a name that fits alone', () => {
+    expect(fitName(measure, 'cov', 10 * CHAR, 2)).toEqual(['cov'])
+  })
+
+  // At a word, not at the last character that fits: a name split as
+  // `Yeast_ChIP_Pol2-vs-` / `input` is one line of name and one of remainder.
+  it('breaks at the separator nearest the middle, and drops it', () => {
+    expect(fitName(measure, 'Yeast_input', 8 * CHAR, 2)).toEqual(['Yeast', 'input'])
+  })
+
+  it('breaks at a camel-case seam when there is no punctuation', () => {
+    expect(fitName(measure, 'YeastChIPInput', 8 * CHAR, 2)).toEqual(['YeastCh', 'IPInput'])
+  })
+
+  // …but never in preference to one. A separator is where the writer said a part
+  // ends; a case change is this module guessing at one.
+  it('prefers a separator to a case change nearer the middle', () => {
+    expect(fitName(measure, 'Yeast_ChIP_input', 10 * CHAR, 2)).toEqual(['Yeast', 'ChIP_input'])
+  })
+
+  // A name with no seam at all still has to become two lines rather than one
+  // line and an overflow.
+  it('splits between characters when there is nowhere better', () => {
+    const lines = fitName(measure, 'AAAAAAAAAAAA', 8 * CHAR, 2)
+    expect(lines).toHaveLength(2)
+    expect(lines.join('')).toBe('AAAAAAAAAAAA')
+    for (const line of lines) expect(measure(line)).toBeLessThanOrEqual(8 * CHAR)
+  })
+
+  // The ends are where the information is: a run of tracks from one experiment
+  // share their beginnings, and a truncation from the right leaves eight
+  // identical rows.
+  it('cuts the middle when even two lines will not hold it', () => {
+    const [line] = fitName(measure, 'Yeast_ChIP_Pol2_vs_input_rep1', 6 * CHAR, 1)
+    expect(line).toContain(NAME_CUT)
+    expect(line.startsWith('Y')).toBe(true)
+    expect(line.endsWith('1')).toBe(true)
+    expect(measure(line)).toBeLessThanOrEqual(6 * CHAR)
+  })
+
+  it('never gives back an empty line', () => {
+    for (const line of fitName(measure, 'Yeast_ChIP_input', 2 * CHAR, 2)) {
+      expect(line.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('a long name in a narrow column', () => {
+  const column = { start: 40, end: 40 + 14 * CHAR, pad: 8, nameLines: 2 }
+  const long = 'Yeast_ChIP_input'
+  const wrapped = (thickness: number, nameLines = 2): ReturnType<typeof drawLaneLabel> =>
+    label(frameOf('bottom', thickness), {
+      names: [{ id: 'a', text: long, colour: '#f00' }],
+      column: { ...column, nameLines },
+    })
+
+  it('writes it on two lines and reports one box per line', () => {
+    const boxes = wrapped(60)
+    expect(boxes.names.length).toBe(2)
+    // Both boxes belong to the same track, and both carry the *whole* name —
+    // a caret over a cut name has to open on the name, not on the cut.
+    expect(boxes.names.every((name) => name.id === 'a' && name.text === long)).toBe(true)
+    // …on two different lines, one `nameLine` apart.
+    expect(boxes.names[1].box[1] - boxes.names[0].box[1]).toBe(STYLE.nameLine)
+  })
+
+  // The anti-oscillation rule, and the reason it is asserted rather than
+  // commented: `wantGutter` is measured last frame and applied this one, so a
+  // wrapped width fed back would shrink the column, un-wrap the name, grow the
+  // column, and wrap it again — every frame, for ever.
+  it('still reports the width the unwrapped name would want', () => {
+    const natural = STYLE.swatch + 5 + long.length * CHAR + column.pad
+    expect(wrapped(60).wanted).toBe(natural)
+  })
+
+  // A lane dragged short has no room for a second line, so it loses the
+  // *layout* rather than the fact: one line, cut in the middle.
+  it('falls back to one cut line on a lane too short for two', () => {
+    const boxes = wrapped(22)
+    expect(boxes.names).toHaveLength(1)
+  })
+
+  // The map's lane stacks pass no column at all, and nothing about them moves.
+  it('leaves a lane with no column exactly as it was', () => {
+    const boxes = label(frameOf('bottom', 60), {
+      names: [{ id: 'a', text: long, colour: '#f00' }],
+    })
+    expect(boxes.names).toHaveLength(1)
+    expect(boxes.names[0].along).toBe(long.length * CHAR)
   })
 })

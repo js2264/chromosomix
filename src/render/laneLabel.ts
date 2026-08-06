@@ -73,6 +73,124 @@ export interface LaneLabelStyle {
   grip: number
 }
 
+/** The ellipsis a cut name is joined with; `ui/vector.ts` can draw it into a PDF. */
+export const NAME_CUT = '…'
+
+/** Where a name is allowed to break: the punctuation experiments are named with. */
+const BREAKS = /[ _.:/-]/
+
+/**
+ * How a case-change break is marked and ranked, in one number.
+ *
+ * Larger than any name anybody types, so `at + CASE_PENALTY` both tags the
+ * candidate and sorts it after every punctuation break — and `at % CASE_PENALTY`
+ * gets the index back. One array, one sort, and no parallel list of flags.
+ */
+const CASE_PENALTY = 100_000
+
+/**
+ * A name written into `width`, in at most `lines` lines.
+ *
+ * Three answers in order of preference, and the order is the whole design. A
+ * name that fits is left alone. One that does not is **broken** — at the
+ * separator nearest its middle whose two halves both fit, because
+ * `Yeast_ChIP_Pol2-vs-input` breaks at a word and `YeastChIPPol2vsinput` has no
+ * word to break at. One that will not fit even broken is **cut in the middle**,
+ * `Yeast_…-input`, because the ends of an experiment's name are where the
+ * information is: a run of tracks from one experiment share their beginnings,
+ * and a truncation from the right leaves eight identical rows.
+ *
+ * `measure` is injected rather than a `ctx`, so the arithmetic is testable
+ * without a canvas — and so the caller can subtract whatever the colour chip
+ * takes from the first line's budget.
+ */
+export function fitName(
+  measure: (text: string) => number,
+  text: string,
+  width: number,
+  lines: number,
+): string[] {
+  if (text === '' || !(width > 0)) return [text]
+  if (measure(text) <= width) return [text]
+
+  if (lines >= 2) {
+    const broken = breakInTwo(measure, text, width)
+    if (broken !== null) return broken
+  }
+  return [cutMiddle(measure, text, width * lines)]
+}
+
+/**
+ * Two lines that both fit, or `null`.
+ *
+ * The break nearest the middle rather than the last one that fits, because a
+ * name split as `Yeast_ChIP_Pol2-vs-` / `input` is one line of name and one of
+ * remainder; the reader is looking for two halves. A hard split between
+ * characters is the fallback for a name with no separator in it at all.
+ */
+function breakInTwo(
+  measure: (text: string) => number,
+  text: string,
+  width: number,
+): [string, string] | null {
+  const middle = text.length / 2
+  // Punctuation before case, and only then nearest the middle. A separator is
+  // where the *writer* said one part ends; a case change is this module's guess
+  // at one, and `Yeast_Ch` / `IP_input` is what happens when the guess is
+  // allowed to outrank the fact for being two characters better placed.
+  const points: number[] = []
+  for (let i = 1; i < text.length; i++) {
+    if (BREAKS.test(text[i - 1])) points.push(i)
+    else if (isLower(text[i - 1]) && isUpper(text[i])) points.push(i + CASE_PENALTY)
+  }
+  const rank = (at: number): number =>
+    Math.abs((at % CASE_PENALTY) - middle) + (at >= CASE_PENALTY ? CASE_PENALTY : 0)
+  points.sort((a, b) => rank(a) - rank(b))
+  for (const point of points) {
+    const at = point % CASE_PENALTY
+    // The separator goes with the line it ends, not onto the next one, and it is
+    // dropped rather than drawn: `Yeast_` over `ChIP_input` reads as a name that
+    // was cut, which is what the ellipsis is for and this is not.
+    const head = text.slice(0, at).replace(/[\s_.:/-]+$/, '')
+    const tail = text.slice(at).trimStart()
+    if (head === '' || tail === '') continue
+    if (measure(head) <= width && measure(tail) <= width) return [head, tail]
+  }
+  // No separator worth breaking at. Split between characters, as far along as
+  // the first line will take, and only where the remainder fits as well —
+  // otherwise this is a name for the middle cut rather than for two lines.
+  let at = 0
+  while (at < text.length && measure(text.slice(0, at + 1)) <= width) at++
+  if (at === 0 || at === text.length) return null
+  const tail = text.slice(at)
+  return measure(tail) <= width ? [text.slice(0, at), tail] : null
+}
+
+/**
+ * `beginni…end` — as much of both ends as `width` will take.
+ *
+ * Grown from the two ends alternately so neither is favoured, and the head goes
+ * first so an odd pixel lands at the beginning, which is where the eye starts.
+ */
+function cutMiddle(measure: (text: string) => number, text: string, width: number): string {
+  let head = 0
+  let tail = 0
+  for (;;) {
+    const grewHead = head + tail < text.length &&
+      measure(`${text.slice(0, head + 1)}${NAME_CUT}${text.slice(text.length - tail)}`) <= width
+    if (grewHead) head++
+    const grewTail = head + tail < text.length &&
+      measure(`${text.slice(0, head)}${NAME_CUT}${text.slice(text.length - tail - 1)}`) <= width
+    if (grewTail) tail++
+    if (!grewHead && !grewTail) break
+  }
+  if (head + tail >= text.length) return text
+  return `${text.slice(0, head)}${NAME_CUT}${text.slice(text.length - tail)}`
+}
+
+const isLower = (ch: string): boolean => ch >= 'a' && ch <= 'z'
+const isUpper = (ch: string): boolean => ch >= 'A' && ch <= 'Z'
+
 /**
  * A column to right-align the block in, when the surface has one.
  *
@@ -88,6 +206,14 @@ export interface LaneLabelColumn {
   end: number
   /** What to add to a measured width when reporting what the column wants. */
   pad: number
+  /**
+   * How many lines one name may be written on. Absent keeps the single line.
+   *
+   * Only a column can afford a second line, which is why it lives here: over the
+   * data a name is one line beside its own signal, and wrapping it there would
+   * write the second line across the track.
+   */
+  nameLines?: number
 }
 
 export interface LaneLabelSpec {
@@ -239,10 +365,48 @@ export function drawLaneLabel(
   // widest of them, and two names side by side would make it as wide as both.
   // Only where the lane has the height for it; a short overlay lane keeps the
   // single row it has always had, and the column simply widens to fit.
-  const rows =
+  const perName =
     column !== null && frame.thickness >= style.nameTop + names.length * style.nameLine + 6
-      ? names.length
-      : 1
+
+  const widthOf = (name: LaneLabelName): number =>
+    swatchRoom(style) + ctx.measureText(name.text).width
+  const runs: Array<readonly LaneLabelName[]> =
+    perName ? names.map((name) => [name]) : [names]
+  const runWidth = (run: readonly LaneLabelName[]): number =>
+    run.reduce((total, name) => total + widthOf(name), 0) + (run.length - 1) * NAME_GAP
+
+  /**
+   * The lines each run is written on, once the column has had its say.
+   *
+   * A name too long for the column is broken or cut rather than run out over the
+   * data — but only in a *column*, and only when one name has a row to itself:
+   * with two names sharing a row there is no line to continue onto, and over the
+   * data the block simply starts at the lane's near end as it always has.
+   *
+   * How many lines are affordable is a question about the lane's height, and it
+   * is asked twice: a name is offered two lines, and if the block that produces
+   * would not fit the lane it is re-fitted onto one. A lane dragged short loses
+   * the *layout* rather than the fact, which is the rule the range below already
+   * follows.
+   */
+  const fitRun = (run: readonly LaneLabelName[], lines: number): string[] =>
+    column === null || !perName || run.length !== 1
+      ? [run.map((name) => name.text).join('')]
+      : fitName(
+          (text) => ctx.measureText(text).width,
+          run[0].text,
+          column.end - column.start - swatchRoom(style),
+          lines,
+        )
+  const maxLines = column?.nameLines ?? 1
+  let plan = runs.map((run) => (maxLines > 1 ? fitRun(run, maxLines) : [null]))
+  const linesIn = (rows: Array<Array<string | null>>): number =>
+    rows.reduce((total, row) => total + row.length, 0)
+  if (frame.thickness < style.nameTop + linesIn(plan) * style.nameLine + 6) {
+    plan = runs.map((run) => (maxLines > 1 ? fitRun(run, 1) : [null]))
+  }
+
+  const rows = linesIn(plan)
   const block = (rows - 1) * style.nameLine
   // Under the names when the lane has room for a second line, beside them when
   // it has not: a clipped lane should lose the *layout* rather than the fact.
@@ -268,67 +432,82 @@ export function drawLaneLabel(
         : style.nameTop
   out.nameAcross = nameTop
 
-  const widthOf = (name: LaneLabelName): number =>
-    swatchRoom(style) + ctx.measureText(name.text).width
-  const runs: Array<readonly LaneLabelName[]> =
-    rows === 1 ? [names] : names.map((name) => [name])
-  const runWidth = (run: readonly LaneLabelName[]): number =>
-    run.reduce((total, name) => total + widthOf(name), 0) + (run.length - 1) * NAME_GAP
-
   let lastEnd = near
-  for (const [row, run] of runs.entries()) {
-    const across = nameTop + row * style.nameLine
-    const total = runWidth(run)
-    want(total + (column?.pad ?? 0))
-    let at = column === null ? near : Math.max(column.start, column.end - total)
-    for (const name of run) {
-      // The colour, immediately before the name it belongs to. Drawn on the
-      // canvas rather than laid over it, so it is a legend rather than a
-      // control: it survives into the exported figure, where a reader who never
-      // saw the screen needs to know which line is which. What makes it
-      // *clickable* is a transparent colour input positioned over it, from the
-      // box handed back here.
-      if (style.swatch > 0) {
-        const low = across - style.swatch / 2
-        const box = laneRect(frame, at, at + dir * style.swatch, low, low + style.swatch)
-        ctx.save()
-        ctx.strokeStyle = palette.halo
-        ctx.lineWidth = 2
-        ctx.strokeRect(...box)
-        ctx.fillStyle = name.colour
-        ctx.fillRect(...box)
-        ctx.restore()
-        out.swatches.push({ id: name.id, box })
-        at += dir * swatchRoom(style)
+  let line = 0
+  for (const [index, run] of runs.entries()) {
+    const cut = plan[index]
+    // The *natural* width, unwrapped, whatever was drawn. This is what makes the
+    // column's measure-then-apply loop safe: `BrowserView.wantGutter` is a frame
+    // behind, and its only proof against oscillating is that a name's width does
+    // not depend on where the name is drawn. Reporting a wrapped width would
+    // shrink the column, un-wrap the name, grow the column, wrap it again.
+    want(runWidth(run) + (column?.pad ?? 0))
+    for (const [part, text] of cut.entries()) {
+      const across = nameTop + line * style.nameLine
+      line++
+      // Only the first line of a name carries its chip; a continuation is the
+      // same name, and a second chip would read as a second track.
+      const first = part === 0
+      const drawn: Array<{ name: LaneLabelName; text: string }> =
+        text === null ? run.map((name) => ({ name, text: name.text })) : [{ name: run[0], text }]
+      const total =
+        drawn.reduce((sum, item) => sum + ctx.measureText(item.text).width, 0) +
+        (first ? drawn.length * swatchRoom(style) : 0) +
+        (drawn.length - 1) * NAME_GAP
+      let at = column === null ? near : Math.max(column.start, column.end - total)
+      for (const item of drawn) {
+        // The colour, immediately before the name it belongs to. Drawn on the
+        // canvas rather than laid over it, so it is a legend rather than a
+        // control: it survives into the exported figure, where a reader who never
+        // saw the screen needs to know which line is which. What makes it
+        // *clickable* is a transparent colour input positioned over it, from the
+        // box handed back here.
+        if (style.swatch > 0 && first) {
+          const low = across - style.swatch / 2
+          const box = laneRect(frame, at, at + dir * style.swatch, low, low + style.swatch)
+          ctx.save()
+          ctx.strokeStyle = palette.halo
+          ctx.lineWidth = 2
+          ctx.strokeRect(...box)
+          ctx.fillStyle = item.name.colour
+          ctx.fillRect(...box)
+          ctx.restore()
+          out.swatches.push({ id: item.name.id, box })
+          at += dir * swatchRoom(style)
+        }
+        // Each name in its own track's colour, which is the whole legend an
+        // overlaid lane needs: the line is that colour and so is its name.
+        ctx.fillStyle = names.length > 1 ? item.name.colour : palette.text
+        laneText(ctx, frame, item.text, at, across, { halo: palette.halo })
+        const width = ctx.measureText(item.text).width
+        // Measured in the pass that drew it, for the reason the limits are: a name
+        // is the other thing on a lane a reader changes, and it should be changed
+        // where it is read. One box per name and not one per lane — an overlaid
+        // lane draws several, each its own track's, which is what keeps a rename
+        // on the track that was pointed at.
+        //
+        // The box carries the *whole* name however little of it was drawn: a
+        // caret over `Yeast_…-input` opens on the name, not on the cut, or the
+        // first Enter would commit the ellipsis.
+        if (clearOfGrip(across)) {
+          out.names.push({
+            id: item.name.id,
+            text: item.name.text,
+            along: Math.max(...cut.map((part2) => ctx.measureText(part2 ?? item.text).width)),
+            font: style.nameFont,
+            box: laneRect(
+              frame,
+              at,
+              at + dir * width,
+              across - style.hitHeight / 2,
+              across + style.hitHeight / 2,
+            ),
+          })
+        }
+        at += dir * (width + NAME_GAP)
       }
-      // Each name in its own track's colour, which is the whole legend an
-      // overlaid lane needs: the line is that colour and so is its name.
-      ctx.fillStyle = names.length > 1 ? name.colour : palette.text
-      laneText(ctx, frame, name.text, at, across, { halo: palette.halo })
-      const width = ctx.measureText(name.text).width
-      // Measured in the pass that drew it, for the reason the limits are: a name
-      // is the other thing on a lane a reader changes, and it should be changed
-      // where it is read. One box per name and not one per lane — an overlaid
-      // lane draws several, each its own track's, which is what keeps a rename
-      // on the track that was pointed at.
-      if (clearOfGrip(across)) {
-        out.names.push({
-          id: name.id,
-          text: name.text,
-          along: width,
-          font: style.nameFont,
-          box: laneRect(
-            frame,
-            at,
-            at + dir * width,
-            across - style.hitHeight / 2,
-            across + style.hitHeight / 2,
-          ),
-        })
-      }
-      at += dir * (width + NAME_GAP)
+      if (index === runs.length - 1 && part === cut.length - 1) lastEnd = at - dir * NAME_GAP
     }
-    if (row === runs.length - 1) lastEnd = at - dir * NAME_GAP
   }
 
   if (spec.detail === null) {

@@ -2311,6 +2311,15 @@ p {
   cursor: text;
 }
 
+/* Over the name column's own right edge, which is dragged to widen it and
+   double-clicked to give it back to the names. `col-resize` and not the I-beam
+   above: this really is the edge of something about to move sideways, which is
+   the one reading `ew-resize` would have been right for on the bar and is wrong
+   for a span. */
+.browser-canvas.is-col {
+  cursor: col-resize;
+}
+
 /* While a manual annotation is waiting for its coordinates, a click places a
    mark rather than opening what it lands on. The cursor is the only warning the
    plot itself can give that the same gesture now means something else. */

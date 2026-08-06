@@ -117,7 +117,9 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
     label: 'name column',
     hint:
       'Start the tracks after the widest track name, with the names right-aligned in the ' +
-      'column that leaves. Off, a name is drawn over the data it belongs to.',
+      'column that leaves. Drag its edge to set a width of your own — a name too long for it ' +
+      'wraps, then is cut in the middle — and double-click the edge to hand it back to the ' +
+      'names. Off, a name is drawn over the data it belongs to.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
