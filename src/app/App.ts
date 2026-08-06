@@ -39,6 +39,7 @@ import {
   isTypingTarget,
   keyLabel,
   matchesKeys,
+  wantsTextCopy,
   withKey,
   type Command,
 } from '../ui/commands'
@@ -656,7 +657,7 @@ export class App implements SessionHost {
     ]
 
     // The bindings come from `plotOptions.ts`, beside the labels and the marks,
-    // because the two Plot cards print them in their tooltips: a list of pairs
+    // because the two Tracks cards print them in their tooltips: a list of pairs
     // here and a lookup there is the same table written twice, and the copy
     // that goes stale is the one nothing tests.
     for (const key of Object.keys(PLOT_OPTION_KEYS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
@@ -753,6 +754,8 @@ export class App implements SessionHost {
     for (const command of this.commands()) {
       if (command.keys === undefined || command.enabled === false) continue
       if (typing && !command.keys.startsWith('mod+')) continue
+      // ⌘C is the browser's before it is ours whenever there is text under it.
+      if (command.yieldsToText === true && wantsTextCopy(event.target)) continue
 
       if (!matchesKeys(event, command.keys)) continue
       event.preventDefault()

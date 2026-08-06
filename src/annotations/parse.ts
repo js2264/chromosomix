@@ -15,7 +15,7 @@
  */
 
 import { FeatureBuilder, PairBuilder } from './featureset'
-import type { FeatureSet, PairSet } from './types'
+import { DETAIL_SEP, type FeatureSet, type PairSet } from './types'
 
 /** What the sniffer concluded a file is. */
 export type TextFormat = 'gtf' | 'bed' | 'bedpe'
@@ -313,7 +313,7 @@ function bedDetail(columns: string[], peak: 'narrow' | 'broad' | null): string {
   if (peak === 'narrow' && columns[9] !== undefined && columns[9] !== '-1') {
     parts.push(`summit +${columns[9]}`)
   }
-  return parts.join(' · ')
+  return parts.join(DETAIL_SEP)
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +454,7 @@ export function parseGtf(text: string): FeatureSet {
       draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
     ]
       .filter((part) => part !== '')
-      .join(' · ')
+      .join(DETAIL_SEP)
     builder.add(draft.contig, draft.start, draft.end, {
       strand: draft.strand,
       name,

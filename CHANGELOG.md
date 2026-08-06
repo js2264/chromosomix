@@ -196,7 +196,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   middle — `Yeast_…-input` — when even two lines will not hold it, because the
   ends of an experiment's name are where the information is.
 
+- **The Aesthetics column is four cards, named after what they draw on.** *View*
+  is **Map** and holds everything that touches the matrix — the transform, the
+  colourmap, the clip, the refit, and the four overlays that spent a release
+  under a label at the foot of a card about the tracks. *Plot* is **Tracks** and
+  holds the lanes and nothing else. **Export** is its own card at the top of the
+  column, because saving a figure is not a property of the picture: it is what a
+  reader does once everything else is where they want it.
+
+- **⌘C copies the plot.** The figure as a PNG on the clipboard, at the Export
+  card's resolution, from the system copy chord or from the button beside the
+  save — in the browser and beside a map. It stands down when the keystroke is
+  really about text: with a selection live or the caret in a box, ⌘C is still the
+  browser's.
+
+- **Shift with the zoom modifier pins the marquee to the diagonal.** The press
+  snaps to the nearest bin *on* the diagonal and the far corner stays on it, so
+  the box a reader draws over a domain is square about the diagonal by
+  construction rather than by a steady hand. The diagonal is where the two axes
+  name the same bin, so an off-diagonal panel gets no false one.
+
+- **Clicking a feature opens its card.** Names, position, length, strand, score,
+  the GTF attributes the parser kept — gene id, biotype, source — the coding span
+  and the exons, in a panel that stays open and can be copied out of. The same
+  card in the browser and in a map's lanes, for the same gesture on the same
+  gene. Zooming to the feature is still there, as a button inside it.
+
+- **The text on every picture starts at 135%**, and the track outline starts on.
+  Both are the sizes and marks the renderers were written against, moved to what
+  a contact map read at a desk actually needs; both are one press from where they
+  were, and the identity is still a rung on the ladder.
+
+- **Track height and transparency are steppers**, the shape text size already
+  had: a box between two chevrons, a pixel a press for the height and five per
+  cent for the transparency. Text size and transparency share a line, being one
+  question asked twice.
+
 ### Fixed
+
+- **A marquee dragged off the map stays alive.** The gesture is followed on the
+  window until the button comes up, with every position clamped into the plot, so
+  a corner taken past the edge of the data stops at the edge instead of taking
+  the whole selection with it — and what is opened on release is the box that was
+  drawn rather than wherever the pointer happened to be.
+
+- **The browser's tooltip stays on screen.** It was clamped to the *stage*, which
+  on a stack of a dozen tracks is several screens tall, so a value read near the
+  foot of the window went under the edge of it. It is flipped and clamped against
+  the window now, and its size is measured once a frame rather than on every
+  pointer move.
 
 - **A session naming a collection at its root kept its workspace.** A workspace
   is stored under the *file's* key, and an `.mmetacool` or `.mcool` addressed at

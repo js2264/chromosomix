@@ -114,6 +114,8 @@ import {
   type LaneMark,
 } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
+import { Modal } from './Modal'
+import { openFeatureDialog } from './FeatureDialog'
 import {
   NAME_COLUMN_DEFAULT,
   clampNameColumn,
@@ -122,6 +124,7 @@ import {
 } from './nameColumn'
 import {
   LANE_MIN_SIZE,
+  fieldPair,
   heightThatFills,
   setTrackHeight,
   smallestLaneSize,
@@ -131,6 +134,7 @@ import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
   captionStamp,
+  copyPngToClipboard,
   downloadBlob,
   exportBaseName,
   fileStamp,
@@ -274,6 +278,26 @@ export class BrowserView {
   private readonly stage: HTMLElement
   private readonly overlays = el('div', { class: 'browser-overlays' })
   private readonly tooltip = el('div', { class: 'cell-tip hidden' })
+  /**
+   * Where the tooltip is pointing and how large it turned out to be.
+   *
+   * Two facts kept apart because they arrive at different times: the pointer is
+   * known the instant it moves, the size only after the card has been laid out.
+   * Placing on the first and correcting on the second is what lets the box be
+   * *flipped* away from an edge without reading layout on every pointer move —
+   * the same arrangement `MatrixPanel.placeTooltip` uses, for the same reason.
+   */
+  private tipAt: { x: number; y: number } | null = null
+  private tipSize = { width: 0, height: 0 }
+  private tipFrame = 0
+  /**
+   * The open feature card, so a second click replaces it rather than stacking.
+   *
+   * Held rather than fired and forgotten because this view can be torn down
+   * under it — a tab closed, a map dropped on the tracks — and a dialog whose
+   * opener has gone is a panel with a zoom button that navigates nothing.
+   */
+  private featureDialog: Modal | null = null
   /** The one box: a locus, a sequence name or a feature name, all three. */
   private readonly locusInput: HTMLInputElement
   private readonly searchList = el('div', { class: 'browser-hits hidden' })
@@ -495,7 +519,7 @@ export class BrowserView {
           ...(props.extraControl === undefined ? [] : [props.extraControl]),
           iconButton('zoom-out', 'Zoom out (−)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (+)', () => this.zoomBy(1.8)),
-          // The same three marks the Plot card uses, because they are the same
+          // The same three marks the Tracks card uses, because they are the same
           // three actions and a reader should not have to learn them twice.
           iconButton('unfold-horizontal', 'The whole genome (0, or a double click)', () => this.fit()),
           iconButton(
@@ -508,7 +532,7 @@ export class BrowserView {
             'Shrink every track to the height of the shortest of them',
             () => this.shrinkTracks(),
           ),
-          // Autoscale is not here. It is in the Plot card, beside the height
+          // Autoscale is not here. It is in the Tracks card, beside the height
           // box, with `Y` on it — and a sixth control in this row is what tips
           // the bar into wrapping, which puts one orphaned button on a line of
           // its own under the locus box. The two that stay are the two that are
@@ -540,7 +564,13 @@ export class BrowserView {
       groups: props.groups,
       onChange: () => this.schedule(),
     })
-    this.sideEl = el('aside', { class: 'side' }, this.exportCard(), this.groupsCard.el)
+    this.sideEl = el(
+      'aside',
+      { class: 'side' },
+      this.exportCard(),
+      this.tracksCard(),
+      this.groupsCard.el,
+    )
 
     // The two layers over the canvas. Both are handed the stage rather than
     // built into it, because beside a map the same two classes are given a layer
@@ -584,10 +614,13 @@ export class BrowserView {
 
   destroy(): void {
     this.disposed = true
+    this.featureDialog?.close()
+    this.featureDialog = null
     this.editor.close()
     this.controls.destroy()
     this.groupsCard.destroy()
     if (this.frameHandle !== 0) cancelAnimationFrame(this.frameHandle)
+    if (this.tipFrame !== 0) cancelAnimationFrame(this.tipFrame)
     if (this.clickTimer !== null) clearTimeout(this.clickTimer)
     if (this.reportTimer !== null) clearTimeout(this.reportTimer)
     for (const off of this.unsubscribes) off()
@@ -598,7 +631,7 @@ export class BrowserView {
   }
 
   /**
-   * Save this view as a figure — the `S` key, and the button in the Plot card.
+   * Save this view as a figure — the `S` key, and the button in the Export card.
    *
    * The same call either way, in the format and at the resolution the card is
    * set to: a shortcut that exported something *else* than the button beside it
@@ -606,6 +639,40 @@ export class BrowserView {
    */
   savePlot(): void {
     void this.save()
+  }
+
+  /**
+   * The same figure onto the clipboard — ⌘C, and the button beside the save.
+   *
+   * PNG whatever the format select says, for the reason the map's copy is one:
+   * a clipboard holds an image, and a vector PDF pasted into a slide arrives as
+   * a file attachment rather than a picture. The chosen resolution still counts,
+   * and so does the caption — this is the figure, not a screenshot of it.
+   */
+  copyPlot(): void {
+    void this.copy()
+  }
+
+  private async copy(): Promise<void> {
+    this.exportStatus.textContent = 'copying…'
+    const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
+    const height = this.heightOf(this.lanes)
+    const now = new Date()
+    const caption = `${this.props.assembly.name} · ${this.zoomPhrase()} · ${captionStamp(now)}`
+    const ink = readCanvasPalette(this.canvas).labelColor
+    try {
+      // Drawn first, so a resolution this figure cannot reach reports itself
+      // through `rasterFigure`'s own message rather than as a clipboard failure.
+      const png = await this.rasterFigure(width, height, caption, ink)
+      // An empty blob is `rasterFigure` refusing a size it has already explained
+      // in the status line; overwriting that with "copied" would hide the reason.
+      if (png.size === 0) return
+      await copyPngToClipboard(Promise.resolve(png))
+      this.exportStatus.textContent = 'copied'
+    } catch (err) {
+      this.exportStatus.textContent =
+        err instanceof Error ? `copy failed: ${err.message}` : 'copy failed'
+    }
   }
 
   /**
@@ -768,7 +835,7 @@ export class BrowserView {
    * Share the available height between the tracks, **equally**.
    *
    * The arithmetic is `heightThatFills`'s, in `trackControls.ts`, so the map's
-   * Plot card can ask the same question; what stays here is the *measurement* —
+   * Tracks card can ask the same question; what stays here is the *measurement* —
    * how much room this view has, which only this view can answer.
    *
    * Measured against the **host**, from the top of the stage down to the bottom
@@ -1678,6 +1745,14 @@ export class BrowserView {
     return node
   }
 
+  /**
+   * The Export card: resolution, format, save, copy.
+   *
+   * Its own card and the first one in the column, matching the map's. Every
+   * other control here changes the picture; this one takes the picture away, and
+   * a reader arrives at it having finished with the rest — so it had no business
+   * being a row at the foot of the card that holds the rest.
+   */
   private exportCard(): HTMLElement {
     const dpiSelect = el('select', {
       class: 'select select-dpi',
@@ -1710,7 +1785,44 @@ export class BrowserView {
     return el(
       'div',
       { class: 'controls-card' },
-      cardTitle('Plot', 'palette', 'controls-title'),
+      cardTitle('Export', 'download', 'controls-title'),
+      el(
+        'div',
+        { class: 'panel-controls' },
+        el(
+          'div',
+          { class: 'export-row export-row-flex' },
+          dpiSelect,
+          formatSelect,
+          iconButton(
+            'download',
+            withKey('Save the figure, in the format chosen beside this', KEYS.savePlot),
+            () => this.savePlot(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+          // Beside the download rather than under it: they are the same figure
+          // going to two places. The clipboard takes a PNG whatever the format
+          // beside it says — see `KEYS.copyPlot`.
+          iconButton(
+            'clipboard-copy',
+            withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
+            () => this.copyPlot(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+        ),
+        this.exportStatus,
+      ),
+    )
+  }
+
+  /** The Tracks card: how the stack is sized, scaled and drawn. */
+  private tracksCard(): HTMLElement {
+    return el(
+      'div',
+      { class: 'controls-card' },
+      // "Tracks", not "Plot": the same card beside a contact map is one of two,
+      // and the other is called Map. One name for one thing in both views.
+      cardTitle('Tracks', 'palette', 'controls-title'),
       el(
         'div',
         { class: 'panel-controls' },
@@ -1767,27 +1879,11 @@ export class BrowserView {
             this.optionToggle('crosshair', 'crosshair'),
           ),
         ),
-        // Beside the overlays rather than beside the export: this is a property
-        // of the writing on the picture, and `track text` above it is the toggle
-        // that decides whether there is any.
-        textScaleField(),
-        transparencyField(this.props.store),
-        el(
-          'div',
-          { class: 'field field-block' },
-          el('span', { class: 'field-label', text: 'export' }),
-          el(
-            'div',
-            { class: 'export-row export-row-flex' },
-            dpiSelect,
-            formatSelect,
-            iconButton('download', withKey('Save the figure, in the format chosen beside this', KEYS.savePlot), () => this.savePlot(), {
-              class: 'btn btn-icon',
-              size: 15,
-            }),
-          ),
-        ),
-        this.exportStatus,
+        // The two legibility numbers on one line, under the overlays rather than
+        // beside the export: both are properties of how readable the picture is,
+        // and `track text` above them is the toggle that decides whether there
+        // is any writing on it at all.
+        fieldPair(textScaleField(), transparencyField(this.props.store)),
       ),
     )
   }
@@ -2369,25 +2465,47 @@ export class BrowserView {
         if (lane !== null && !lane.onBorder) revealTrack(lane.lane.entry.id)
         return
       }
-      const { set, index } = hit
+      const { set, index, source } = hit
       const contig = set.contigs[set.contig[index]]
       const start = set.start[index]
       const end = set.end[index]
-      // The same margin a search hit gets, from the same function: finding a
-      // gene by name and double-clicking that gene are two gestures for one
-      // intention, and the picture must not shift between them.
-      const span = paddedSpan(start, end)
-      this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
+      // The card, not the zoom. A gene that has been clicked is already on
+      // screen, so "go there" answers a question the reader did not have; what
+      // they want is the systematic name, the biotype and the exons, in
+      // something that stays open long enough to be read and copied out of.
+      // Zooming is still one press away, inside it.
+      this.featureDialog?.close()
+      this.featureDialog = openFeatureDialog({
+        set,
+        index,
+        source,
+        onGoTo: () => {
+          // The same margin a search hit gets, from the same function: finding a
+          // gene by name and framing the gene you clicked are two gestures for
+          // one intention, and the picture must not shift between them.
+          const span = paddedSpan(start, end)
+          this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`)
+        },
+        onClose: () => {
+          this.featureDialog = null
+        },
+      })
     }, DOUBLE_CLICK_MS)
   }
 
-  private featureAtPoint(x: number, y: number): { set: FeatureSet; index: number } | null {
+  private featureAtPoint(
+    x: number,
+    y: number,
+  ): { set: FeatureSet; index: number; source: string } | null {
     for (const lane of this.lanes) {
       const cached = this.layouts.get(lane.entry.id)
       const set = lane.entry.payload?.kind === 'features' ? lane.entry.payload.data : null
       if (cached === undefined || set === null) continue
       const hit = featureAt(cached.frame, cached.layout, x, y)
-      if (hit !== null) return { set, index: hit.index }
+      // The lane's own label comes back with the hit: the card names the track
+      // the feature was read from, and asking the store for it afterwards would
+      // mean matching an id against a list this loop is already standing in.
+      if (hit !== null) return { set, index: hit.index, source: lane.entry.label }
     }
     return null
   }
@@ -2545,11 +2663,70 @@ export class BrowserView {
       el('div', { class: 'cell-tip-block' }, el('div', { class: 'cell-tip-pos', text: where }), ...rows),
     )
     this.tooltip.classList.remove('hidden')
+    this.placeTip(clientX, clientY)
+  }
+
+  /**
+   * Put the tooltip beside the pointer, and inside the window.
+   *
+   * The size is measured once per frame rather than on every move: reading
+   * `offsetHeight` straight after writing the card's contents forces a
+   * synchronous layout of the whole document, at whatever rate the device
+   * reports pointer moves. So the box is placed immediately from the last known
+   * size and corrected on the next frame if it changed — which for a tooltip
+   * whose shape is the same three rows almost every time is almost never.
+   */
+  private placeTip(clientX: number, clientY: number): void {
+    this.tipAt = { x: clientX, y: clientY }
+    this.positionTip()
+    if (this.tipFrame !== 0) return
+    this.tipFrame = requestAnimationFrame(() => {
+      this.tipFrame = 0
+      const width = this.tooltip.offsetWidth
+      const height = this.tooltip.offsetHeight
+      if (width === this.tipSize.width && height === this.tipSize.height) return
+      this.tipSize = { width, height }
+      this.positionTip()
+    })
+  }
+
+  /**
+   * Flip and clamp against the **window**, not against the stage.
+   *
+   * This is the whole fix. The stage is as tall as the stack of tracks, which on
+   * a session with a dozen of them is several screens — so a box clamped to the
+   * stage is inside a box that mostly is not on screen, and a value read near
+   * the foot of the window went under the edge of it every time. The bounds are
+   * the intersection of the two, and the offset flips to the other side of the
+   * pointer when the box will not fit on the near side.
+   *
+   * The stage rectangle has to be re-read here rather than cached: the page
+   * scrolls, and the whole point of this arithmetic is where the stage is
+   * relative to the viewport *now*.
+   */
+  private positionTip(): void {
+    const at = this.tipAt
+    if (at === null) return
+    const pad = 14
+    const gap = 4
+    const { width, height } = this.tipSize
     const rect = this.stage.getBoundingClientRect()
-    const left = clientX - rect.left
-    const top = clientY - rect.top
-    this.tooltip.style.left = `${Math.min(left + 14, rect.width - 240)}px`
-    this.tooltip.style.top = `${top + 16}px`
+    const minX = Math.max(rect.left, 0) + gap
+    const maxX = Math.min(rect.right, window.innerWidth) - gap
+    const minY = Math.max(rect.top, 0) + gap
+    const maxY = Math.min(rect.bottom, window.innerHeight) - gap
+
+    let x = at.x + pad
+    if (x + width > maxX) x = at.x - pad - width
+    let y = at.y + pad
+    if (y + height > maxY) y = at.y - pad - height
+    // `Math.max(minX, …)` on the upper bound as well, so a box wider than the
+    // room left for it is pinned to the near edge rather than to a negative one.
+    x = Math.min(Math.max(x, minX), Math.max(minX, maxX - width))
+    y = Math.min(Math.max(y, minY), Math.max(minY, maxY - height))
+
+    this.tooltip.style.left = `${x - rect.left}px`
+    this.tooltip.style.top = `${y - rect.top}px`
   }
 
   // -------------------------------------------------------------------------

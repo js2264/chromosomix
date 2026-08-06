@@ -54,13 +54,23 @@ const FONTS = [
 ]
 
 describe('the text scale', () => {
-  beforeEach(() => setTextScale(DEFAULT_TEXT_SCALE))
+  // The identity, not the default: the default is a reading size and every
+  // other suite here measures against the sizes as drawn.
+  beforeEach(() => setTextScale(1))
 
   // The assertion that keeps every other test in this suite meaningful.
   it('is the identity at 1.0, for every font the app writes', () => {
     for (const font of FONTS) expect(scaleFont(font)).toBe(font)
     expect(scaleLength(11)).toBe(11)
     expect(scaleLength(18)).toBe(18)
+  })
+
+  // A reader who has never opened Aesthetics gets larger text than the numbers
+  // written in the renderers, and 1.0 has to stay reachable from the ladder.
+  it('starts two rungs above the identity, with the identity still a rung', () => {
+    expect(DEFAULT_TEXT_SCALE).toBe(1.35)
+    expect(TEXT_SCALE_STEPS).toContain(1)
+    expect(TEXT_SCALE_STEPS).toContain(DEFAULT_TEXT_SCALE)
   })
 
   // The weight and the family are what the mark *is*: a 600-weight name that

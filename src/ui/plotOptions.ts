@@ -22,8 +22,12 @@ import type { IconName } from './icons'
  * have kept the old overlays and concluded the change did not land. Renaming
  * the key hands the new defaults to everybody exactly once, and costs a user
  * who had customised them one re-toggle.
+ *
+ * Bumped a second time when `outline` came on. The trade is the same one, made
+ * the same way: a default that only reaches people who have never opened the app
+ * is not a default, it is a decision about new users.
  */
-const KEY = 'metacooler-viewer:overlays'
+const KEY = 'metacooler-viewer:overlays2'
 
 /**
  * The app's defaults, deliberately not the renderer's.
@@ -33,12 +37,19 @@ const KEY = 'metacooler-viewer:overlays'
  * what answers "which contig is this", continuously and without a click, while
  * dividers and labels on a 20 k-contig map are ink over data. Both defaults are
  * right for their own caller; neither is a copy of the other.
+ *
+ * `outline` is on. A filled track with no rule over it is a silhouette, and a
+ * silhouette read against another silhouette in the lane below is two blocks of
+ * ink with a boundary somewhere in the middle; the hairline is what makes each
+ * of them a *shape* — it is where the values actually are, and the fill under it
+ * is only shading. It was off because it is one more mark, which is the wrong
+ * trade for the one mark that carries the data.
  */
 export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
   baseline: true,
-  outline: false,
+  outline: true,
   gutter: false,
   crosshair: true,
   dividers: false,
@@ -68,7 +79,7 @@ export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
 export const MATRIX_OPTIONS: readonly PlotOptionKey[] = ['dividers', 'breaks', 'labels', 'ticks']
 
 /**
- * The mark each option is drawn as, shared by both Plot cards.
+ * The mark each option is drawn as, shared by both Tracks cards.
  *
  * One table rather than one per card: these are the same eight preferences
  * about the same two pictures, and a toggle that is a word beside a map and a

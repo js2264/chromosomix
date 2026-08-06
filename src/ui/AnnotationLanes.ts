@@ -68,7 +68,7 @@ import {
 } from '../render/tracks'
 import type { ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
-import type { AnnotationEntry, TrackSampleSet } from '../annotations/types'
+import type { AnnotationEntry, FeatureSet, TrackSampleSet } from '../annotations/types'
 import { el, fmt } from './dom'
 import type { LaneMark } from './LaneControls'
 import { LANE_MIN_SIZE } from './trackControls'
@@ -1025,6 +1025,34 @@ export class AnnotationLanes {
       if (withinGrip(gripBox(frame, across), x, y)) {
         return { entry: slots[index].entry, index }
       }
+    }
+    return null
+  }
+
+  /**
+   * The feature under a point in a stack's canvas, and which track drew it.
+   *
+   * Measured against the layout the last paint recorded, exactly as
+   * {@link readout} does a few lines below — a feature's box on screen is the
+   * *packed* box, decided by how many of its neighbours were in view when the
+   * lane was drawn, and recomputing it here would be re-deriving a fact that has
+   * already been written down once this frame.
+   *
+   * Public because a press on a lane has to tell two gestures apart: a feature
+   * opens its own card, everything else opens the track's settings. Both live in
+   * `MatrixPanel`, which owns the pointer; only the geometry lives here.
+   */
+  featureAt(
+    edge: LaneEdge,
+    x: number,
+    y: number,
+  ): { set: FeatureSet; index: number; source: string } | null {
+    for (const slot of this.slotsFor(edge)) {
+      const cached = this.layouts.get(`${slot.entry.id}:${edge}`)
+      const set = slot.entry.payload?.kind === 'features' ? slot.entry.payload.data : null
+      if (cached === undefined || set === null) continue
+      const hit = featureAt(cached.frame, cached.layout, x, y)
+      if (hit !== null) return { set, index: hit.index, source: slot.entry.label }
     }
     return null
   }

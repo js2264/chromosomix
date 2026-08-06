@@ -59,6 +59,20 @@ export const KEYS = {
    * means by "save this", and the modifier says which.
    */
   savePlot: 's',
+  /**
+   * The picture on the clipboard, ready to paste.
+   *
+   * The system copy chord, because that is the gesture: somebody looking at a
+   * figure they want in a slide or a message presses ⌘C, and every other
+   * application on their machine has taught them it works. It is the only
+   * binding here that has to *give way* — with text selected, or the caret in a
+   * box, ⌘C belongs to the browser and this yields (see `Command.yieldsToText`).
+   *
+   * A PNG, not the chosen export format: a clipboard holds an image, and a PDF
+   * pasted into a slide is a file attachment rather than a figure. The Export
+   * card's format still decides what the *download* beside it writes.
+   */
+  copyPlot: 'mod+c',
   /** Every track the same height, and that height the one that fills the space. */
   stretch: 'h',
   /** Every value axis back to what is in view. */
@@ -161,7 +175,31 @@ export interface Command {
    * cannot be learned.
    */
   enabled?: boolean
+  /**
+   * Stand down when the keystroke is really about text.
+   *
+   * For the one binding that collides with something the browser already does:
+   * ⌘C copies the figure, *unless* there is a selection to copy or a caret in a
+   * box — and then it copies that, because taking a chord away from a reader
+   * mid-word is a worse bug than not having the shortcut. Not `enabled`, which
+   * would grey the entry out in a palette whose own filter box holds the focus
+   * every time it is read; this is about the keystroke, not about the command.
+   */
+  yieldsToText?: boolean
   run(): void
+}
+
+/**
+ * Whether ⌘C at this moment means "copy this text" rather than anything else.
+ *
+ * Two ways it can: the caret is in a field, or something on the page is
+ * selected. `toString()` as well as `isCollapsed`, because a click on a canvas
+ * can leave a range that spans no characters and is not collapsed either.
+ */
+export function wantsTextCopy(target: EventTarget | null): boolean {
+  if (isTypingTarget(target)) return true
+  const selection = typeof window === 'undefined' ? null : window.getSelection()
+  return selection !== null && !selection.isCollapsed && selection.toString() !== ''
 }
 
 /** `true` on a platform where `mod` means ⌘. */

@@ -719,7 +719,7 @@ p {
 }
 
 .colorbar-slot.is-compare .colorbar-canvas {
-  width: 7rem;
+  width: calc(7rem * var(--text-scale, 1));
 }
 
 /* --- the 1D genome browser ---------------------------------------------- */
@@ -2336,9 +2336,15 @@ p {
   padding-top: 0.25rem;
 }
 
+/* Multiplied by the canvas text scale, because everything in this box except
+   the strip of colour itself is *words* — the caption above it and the value at
+   each tick — and unlike every other canvas in the app this one has a fixed CSS
+   box rather than one it fills. Grown text does not reflow here, it is clipped,
+   which turns `≤ 0.00006` into `≤ 0.0000`: a legend off by a factor of ten. See
+   `ui/textScale.ts` -> publish for where the variable comes from. */
 .colorbar-canvas {
   display: block;
-  width: 5.5rem;
+  width: calc(5.5rem * var(--text-scale, 1));
   height: 11rem;
 }
 
@@ -2404,6 +2410,12 @@ p {
   width: 100%;
 }
 
+/* …except in a stepper, where the width is whatever the two buttons leave and
+   `100%` would push them out of the row they are in. */
+.controls-card .input-step {
+  width: auto;
+}
+
 /* A number and the button that applies it, on one line: the box takes the room
    and the button keeps the width of its own word however narrow the column is
    dragged. A grid rather than a flex row for the reason `.export-row` is one —
@@ -2414,6 +2426,41 @@ p {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.3rem;
   align-items: center;
+}
+
+/* Two fields on one line, each half the column. Equal `1fr` tracks and not
+   `auto`: the two are read as a pair, and a pair whose halves are different
+   widths because one label is a longer word reads as one field with something
+   stuck on the end of it. */
+.field-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.3rem 0.5rem;
+  align-items: start;
+}
+
+/* The box between two chevrons. It takes whatever the buttons leave, and the
+   native spinner goes: the buttons *are* the spinner here, twice the size and
+   visible without hovering, and two sets of arrows on one control is one set
+   too many. */
+.input-step {
+  flex: 1 1 auto;
+  min-width: 2.5rem;
+  text-align: center;
+  padding-inline: 0.2rem;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.input-step::-webkit-outer-spin-button,
+.input-step::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* A stepper inside a pair has no room for the padding a lone one can afford. */
+.field-pair .plot-icon-row > .btn-icon {
+  padding: 0.3rem 0.15rem;
 }
 
 /* A checkbox is the one control that must not stretch: `width: 100%` on it
@@ -2454,19 +2501,31 @@ p {
 }
 
 
-/* Resolution, format, and the button that acts on both, in that reading order.
-   A grid rather than a flex row, for the reason `.clip-boxes` is one: the two
-   selects are bounded by their tracks instead of by the width a `<select>` would
-   like to be, and the button keeps the width of its own label however narrow the
-   column is dragged. */
+/* Resolution, format, and the two buttons that act on both — save, and copy —
+   in that reading order.
+
+   A wrapping flex row rather than a grid of fixed tracks, which is what it was
+   while there were three of them. Four controls do not fit across a panel column
+   a reader has narrowed, and a grid answers that by squeezing the tracks: the
+   selects went to `300(` and `PDI`, which is a resolution and a format nobody
+   can read. Wrapping answers it by moving the pair that can move. The selects
+   grow, so they take the whole of whatever row they are on and the buttons come
+   down together underneath them rather than one at a time. */
 .export-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   /* Stretched, not centred: a `<select>` and a `<button>` disagree about their
-     padding by half a pixel, and three controls that are read as one row should
-     share their top and bottom edges rather than only their centre line. */
+     padding by half a pixel, and controls that are read as one row should share
+     their top and bottom edges rather than only their centre line. */
   align-items: stretch;
   gap: 0.3rem;
+}
+
+/* Bounded below by something a resolution fits into, and free to grow: the
+   `1fr` tracks of the old grid, said in the units a wrap needs. */
+.export-row > .select {
+  flex: 1 1 5rem;
+  min-width: 0;
 }
 
 /* In the panel header there is no column to divide, so the row is just a row. */
@@ -2654,6 +2713,71 @@ p {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
+}
+
+/* --- one feature's card ------------------------------------------------ */
+
+.feature-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.feature-rows {
+  overflow: auto;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* A two-column grid rather than a flex row, so every value in the card starts
+   at the same x however long its key is — the thing that makes a stack of
+   attributes scannable rather than ragged. The key column is sized to the
+   longest key in the *card*, not to a number picked here, which is what
+   `max-content` buys over a fixed width. */
+.feature-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 0.2rem 0.8rem;
+  align-items: baseline;
+  font-size: var(--step--1);
+}
+
+.feature-key {
+  color: var(--text-faint);
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+/* Selectable and wrapping: half the reason this dialog exists is copying a
+   systematic name out of it, and a name clipped to the panel width cannot be
+   read let alone selected. Monospace so two coordinates line up digit by
+   digit. */
+.feature-val {
+  grid-column: 2;
+  font-family: var(--mono);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* A row with no key — an attribute this code cannot name — spans both columns
+   rather than leaving an empty gutter beside itself. */
+.feature-key:empty + .feature-val {
+  grid-column: 1 / -1;
+}
+
+.feature-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.feature-foot:empty {
+  display: none;
 }
 
 .palette-body {

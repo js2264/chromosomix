@@ -101,6 +101,35 @@ export function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
+/**
+ * Put a PNG on the system clipboard.
+ *
+ * Takes the *promise*, not the blob, and that is not a convenience. Safari
+ * requires the `ClipboardItem` to be constructed while the user gesture that
+ * asked for it is still on the stack, and re-drawing a figure at export
+ * resolution takes long enough to lose it — so the item is built first, holding
+ * a promise the browser waits on itself. Chrome and Firefox accept the same
+ * shape, so there is one path rather than a fork on the user agent.
+ *
+ * A rejected render surfaces as a rejection here, which is what the caller's
+ * status line is for.
+ */
+export async function copyPngToClipboard(png: Promise<Blob>): Promise<void> {
+  const scope = globalThis as {
+    ClipboardItem?: typeof ClipboardItem
+    navigator?: { clipboard?: { write?: (items: ClipboardItem[]) => Promise<void> } }
+  }
+  const Item = scope.ClipboardItem
+  const write = scope.navigator?.clipboard?.write
+  if (Item === undefined || write === undefined) {
+    // Awaited first, so a figure that could not be drawn says so rather than
+    // being reported as a clipboard the browser does not have.
+    await png
+    throw new Error('This browser will not let a page put an image on the clipboard.')
+  }
+  await write.call(scope.navigator!.clipboard, [new Item({ 'image/png': png })])
+}
+
 /** The canvas as a PNG blob. */
 export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
