@@ -75,7 +75,7 @@ import { RegionView } from '../ui/RegionView'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
-import { button, dragHasFiles, el, fmt } from '../ui/dom'
+import { button, el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
@@ -158,21 +158,8 @@ function toWire(source: SourceSpec): WireSource {
  */
 function genomeCard(
   assembly: Assembly,
-  onOpenFile: () => void,
   onGoTo: (locus: string) => void,
   selection: SequenceSelection,
-  onOpenMap: (file: File) => void,
-  onOpenUrl: (url: string) => void,
-  /**
-   * Whether this browser already has a map behind it.
-   *
-   * With one, the load card is a lie: there *is* a contact map on this genome,
-   * it is simply not drawn, and the place that says so — with the eye that
-   * brings it back — is the Contact maps card in the Annotations column. Two
-   * cards about maps in two columns, one of them offering to load what is
-   * already loaded, is the state to avoid.
-   */
-  hasMap = false,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -208,95 +195,12 @@ function genomeCard(
           ]),
     ),
     sequenceCard(assembly, onGoTo, selection),
-    ...(hasMap ? [] : [mapCard(onOpenFile, onOpenMap, onOpenUrl)]),
+    // No card about contact maps here. There is one in the Annotations column,
+    // it lists the maps this session holds however many that is, and each of
+    // them wears the eye that decides whether it is drawn — which is a column
+    // about *what is on screen* rather than about what the file is. Two cards
+    // offering to load a map, in two columns, is the state this replaced.
   )
-}
-
-/**
- * Where a contact map is opened from, and dropped on.
- *
- * A card that says "drop a map somewhere else" is a card telling a reader to
- * aim at a rectangle it is not — so it takes one itself, as well as offering
- * the dialog. Everywhere else in the session still works: this is the place a
- * reader looks when the thought is "and now the map", and the thought arrives
- * while they are reading this card.
- */
-function mapCard(
-  onOpenFile: () => void,
-  onOpenMap: (file: File) => void,
-  onOpenUrl: (url: string) => void,
-): HTMLElement {
-  // The Tracks card's shape, and the Compare card's: a thin unshaded box with a
-  // bold line and a quiet one, then the URL behind a fold. All three ask the
-  // same thing of the reader — *put a file here* — and until they looked alike,
-  // the column read as three cards written by three people.
-  const zone = el(
-    'div',
-    { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
-    el('span', { class: 'ann-drop-label', text: 'Load a contact map' }),
-    el('span', {
-      class: 'ann-drop-hint',
-      text:
-        '.cool or .mcool. Click to choose, or drop one here — or anywhere on the tracks — to ' +
-        'switch this session to its map. The tracks come with it.',
-    }),
-  )
-  zone.addEventListener('click', onOpenFile)
-  zone.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onOpenFile()
-    }
-  })
-
-  const url = el('input', {
-    class: 'input',
-    type: 'url',
-    placeholder: 'https://bucket.example.org/map.mcool',
-  })
-  const submit = (): void => {
-    const value = url.value.trim()
-    if (value === '') return
-    onOpenUrl(value)
-    url.value = ''
-  }
-  url.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submit()
-  })
-
-  const card = el(
-    'div',
-    { class: 'card map-card' },
-    cardTitle('Contact map', 'grid-2x2'),
-    zone,
-    el(
-      'details',
-      { class: 'ann-url' },
-      el('summary', { text: 'or open one by URL' }),
-      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
-    ),
-  )
-  // The card takes the file anywhere on it and the *zone* is what lights up:
-  // the dashed box is the thing on screen that says "put it here", so it is the
-  // thing that has to react — a two-hundred-pixel card going blue around an
-  // inert target says the target is not the target.
-  card.addEventListener('dragover', (event) => {
-    if (!dragHasFiles(event)) return
-    event.preventDefault()
-    zone.classList.add('over')
-  })
-  card.addEventListener('dragleave', (event) => {
-    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return
-    zone.classList.remove('over')
-  })
-  card.addEventListener('drop', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    zone.classList.remove('over')
-    const file = event.dataTransfer?.files?.[0]
-    if (file !== undefined) onOpenMap(file)
-  })
-  return card
 }
 
 /**
@@ -1716,7 +1620,11 @@ export class Session {
       contigLength: (name) => lengths.get(name),
     }
 
-    this.setAnnotations([new AnnotationCard({ store, loader, context: 'browser' }).el])
+    this.compareCard = this.newCompareCard(assembly.uri)
+    this.setAnnotations([
+      this.compareCard.el,
+      new AnnotationCard({ store, loader, context: 'browser' }).el,
+    ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
     // …and what this session was already holding, exactly as the map path does
@@ -1847,20 +1755,6 @@ export class Session {
   }
 
   /**
-   * Open a map named by URL, from the Contact map card.
-   *
-   * The same call the picker's own URL box makes, and it has to be: a remote
-   * `.mcool` addressed here must land on the same entry, with the same config
-   * handling, as one addressed from the landing page. `splitUri` is what keeps
-   * an `::/resolutions/1000` suffix out of the fetch while leaving it in the URI
-   * the view state records.
-   */
-  private openRemoteMap(url: string): void {
-    const { path } = splitUri(url)
-    void this.openWithConfig(url, { kind: 'remote', url: path })
-  }
-
-  /**
    * Take this browser's sequence lengths from a `chrom.sizes` instead.
    *
    * The case it exists for is a browser opened on a BED or a GTF, whose
@@ -1974,8 +1868,19 @@ export class Session {
     // either way.
     this.setGeneral([this.genomeCardFor(assembly)])
     this.syncCompareCard()
+    // Where the map was looking, carried across as a locus. Read *before* the
+    // view is torn down, and read from the panel rather than from the state,
+    // because the state names the block that was read and the panel knows the
+    // window inside it that a pan and a zoom have since moved to. Absent where
+    // the map was on several sequences at once, and then the browser opens on
+    // the whole genome — which is that picture's own analogue of a whole map.
+    const locus = this.current?.panel?.framedLocus()
     this.mounted = null
-    const target: ViewState = { uri: file.uri, view: 'browser' }
+    const target: ViewState = {
+      uri: file.uri,
+      view: 'browser',
+      ...(locus === undefined ? {} : { locus }),
+    }
     const willNotify = !viewStateEquals(target, this.store.state)
     this.store.set(target)
     if (!willNotify) void this.render(target)
@@ -2027,6 +1932,52 @@ export class Session {
     })
   }
 
+  /**
+   * The Contact maps card, for either shape of session.
+   *
+   * One factory and not two, because the card is the same card: it lists the
+   * maps this session holds, and a browser started from a bigWig holds none —
+   * which is a count rather than a different card. What every callback here
+   * reads is the *session*, so the one built for a genome and the one built for
+   * a map answer the same questions and answer them from the same place.
+   */
+  private newCompareCard(uri: string): CompareCard {
+    return new CompareCard({
+      primaryLabel: () => fileLabel(this.file?.uri ?? uri),
+      hasPrimary: () => this.file !== null,
+      onOpen: (source) => {
+        const spec: SourceSpec =
+          source.kind === 'local'
+            ? { kind: 'local', file: source.file }
+            : { kind: 'remote', url: splitUri(source.url).path }
+        const name = source.kind === 'local' ? source.file.name : source.url
+        // With a map already open this is the *second* file, which is a
+        // comparison. With none it is the first, which is this session becoming
+        // a map — and the tracks come across live, because a genome browser that
+        // opens a map of its own genome has not changed the subject.
+        if (this.file === null) void this.open(name, spec)
+        else void this.openCompare(name, spec)
+      },
+      // With one map open the × is the way out of the matrix altogether — the
+      // door `closeMap` opens, which the File card used to carry. With two it
+      // means what it has always meant: put this one down and keep the other.
+      onClose: (which) => {
+        if (which === 1 && this.compare === null) this.closeMap()
+        else this.closeCompare(which)
+      },
+      onToggleShown: (which) => {
+        if (which === 1) this.toggleMap()
+        else {
+          this.compareHidden = !this.compareHidden
+          this.syncCompareCard()
+          this.remount()
+        }
+      },
+      isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
+      onSwap: () => void this.swapCompare(),
+    })
+  }
+
   /** Redraw the Contact maps card's eyes from what this session is showing. */
   private syncCompareCard(): void {
     this.compareCard?.sync()
@@ -2040,15 +1991,7 @@ export class Session {
 
   /** The Sequences card a browser steers its axis from. */
   private genomeCardFor(assembly: Assembly): HTMLElement {
-    return genomeCard(
-      assembly,
-      () => this.host.openFileDialog(this),
-      (locus) => this.goToLocus(locus),
-      this.selectionFor(assembly),
-      (file) => this.dropped(file),
-      (url) => this.openRemoteMap(url),
-      this.file !== null,
-    )
+    return genomeCard(assembly, (locus) => this.goToLocus(locus), this.selectionFor(assembly))
   }
 
   /**
@@ -2090,7 +2033,9 @@ export class Session {
     this.assembly = assembly
     if (held === null) this.setUpBrowserAnnotations(assembly)
     else {
+      this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
+        this.compareCard.el,
         new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
@@ -2196,33 +2141,7 @@ export class Session {
     }
     this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
 
-    this.compareCard = new CompareCard({
-      primaryLabel: () => fileLabel(this.file?.uri ?? uri),
-      onOpen: (source) =>
-        void this.openCompare(
-          source.kind === 'local' ? source.file.name : source.url,
-          source.kind === 'local'
-            ? { kind: 'local', file: source.file }
-            : { kind: 'remote', url: splitUri(source.url).path },
-        ),
-      // With one map open the × is the way out of the matrix altogether — the
-      // door `closeMap` opens, which the File card used to carry. With two it
-      // means what it has always meant: put this one down and keep the other.
-      onClose: (which) => {
-        if (which === 1 && this.compare === null) this.closeMap()
-        else this.closeCompare(which)
-      },
-      onToggleShown: (which) => {
-        if (which === 1) this.toggleMap()
-        else {
-          this.compareHidden = !this.compareHidden
-          this.syncCompareCard()
-          this.remount()
-        }
-      },
-      isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
-      onSwap: () => void this.swapCompare(),
-    })
+    this.compareCard = this.newCompareCard(uri)
 
     // The demo map ships ten annotation files on its own assembly. Offering
     // them as one click is the difference between a viewer that demonstrably
