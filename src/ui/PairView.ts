@@ -242,6 +242,8 @@ export class PairView {
     // square is otherwise indistinguishable from one that failed to load.
     this.summary.replaceChildren(
       ...blockSummary(this.props.binsize, result, 'contig'),
+      ' · ',
+      this.panel.viewNote,
       ...(nonZero === 0 ? [' — these two genomes share no contacts in this file.'] : []),
     )
   }

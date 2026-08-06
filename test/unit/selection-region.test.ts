@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { axisRegion, bpWithin, onDiagonal, type SelectedAxis } from '@/ui/MatrixPanel'
+import { axisRegion, bpWithin, onDiagonal, spanText, type SelectedAxis } from '@/ui/MatrixPanel'
 import type { Cell } from '@/render/heatmap'
 import type { AxisGroup } from '@/worker/protocol'
 
@@ -139,5 +139,51 @@ describe('on the diagonal, or not', () => {
 
   it('is not the diagonal for a box that merely overlaps it', () => {
     expect(onDiagonal(box([100, 200], [150, 250]))).toBe(false)
+  })
+})
+
+/**
+ * The numbers written beside a box while it is being dragged.
+ *
+ * A marquee that zooms to itself is only as good as a reader's ability to put
+ * its edges where they mean to, and the shaded square says nothing at all about
+ * where they are. What is pinned here is that the chips speak the *reader's*
+ * dialect — 1-based positions and a width — while `axisRegion` beside them keeps
+ * speaking the region box's, half-open and separator-free.
+ */
+describe('the chips on a dragged box', () => {
+  it('writes both ends as positions, and the width between them', () => {
+    const axis = resolve(II, [150, 200])
+    expect(axis).not.toBeNull()
+    expect(spanText(axis!)).toEqual({
+      start: 'II:50,001',
+      end: 'II:100,000',
+      span: '50.0 kb',
+    })
+  })
+
+  // The same axis, the other dialect: what a reader reads is not what the box
+  // takes, and the two are deliberately a base apart.
+  it('is not the region string, and the difference is the base', () => {
+    const axis = resolve(II, [150, 200])!
+    expect(axisRegion(axis)).toBe('II:50000-100000')
+    expect(spanText(axis).start).toBe('II:50,001')
+  })
+
+  // The last bin of a contig is usually short, so the bin arithmetic overruns
+  // the sequence. The chip has to say the clamped end, or a reader aims at a
+  // coordinate the reader itself would refuse.
+  it('reports the clamped end at a contig boundary', () => {
+    // 546 bins of 1 kb is 546,000 bp against a chromosome of 545,500: the last
+    // bin is a short one, and the region built from the raw arithmetic is out
+    // of bounds for the very reader that would open it.
+    const short: AxisGroup = { label: 'VII', start: 0, end: 546, unitStart: 0, unitLength: 545_500 }
+    const axis = resolve(short, [500, 546])!
+    expect(spanText(axis).end).toBe('VII:545,500')
+  })
+
+  // Above bin level a cell *is* the block, and there is no position inside one.
+  it('falls back to the block name where there is no range', () => {
+    expect(spanText({ label: 'MAG_1' })).toEqual({ start: 'MAG_1', end: 'MAG_1', span: '' })
   })
 })

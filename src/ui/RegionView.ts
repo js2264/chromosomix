@@ -340,12 +340,15 @@ export class RegionView {
   /** The readout for a rectangular block between two ranges. */
   private describePair(result: MatrixResult): void {
     this.matched.classList.remove('is-genome')
-    this.matched.replaceChildren(...blockSummary(this.props.binsize, result))
+    this.matched.replaceChildren(...blockSummary(this.props.binsize, result), ' · ', this.panel.viewNote)
   }
 
   private describeMatch(parsed: ParsedRange, result: MatrixResult): void {
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
     const parts = blockSummary(this.props.binsize, result)
+    // The one part of the line that moves, and last, so a pan changes only the
+    // tail of it — see `MatrixPanel.viewNote`.
+    parts.push(' · ', this.panel.viewNote)
     if (parsed.kind === 'genome') {
       parts.push(
         button('open genome view →', () => this.props.onOpenGenome(parsed.label), {

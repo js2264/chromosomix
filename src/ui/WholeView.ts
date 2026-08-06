@@ -594,6 +594,8 @@ export class WholeView {
     return [
       ...blockSummary(this.props.binsize, result, this.props.noun),
       ...(raster === null ? [] : [` · ${raster.phrase}`]),
+      ' · ',
+      this.panel.viewNote,
     ]
   }
 
