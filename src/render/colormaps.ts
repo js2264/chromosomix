@@ -56,21 +56,26 @@ const DEFAULT_STOPS = [
 ]
 
 /**
- * matplotlib's `Reds`: near-white through pink and scarlet to a dark maroon.
+ * `Reds`: **paper white**, then ColorBrewer's sequential red to a dark maroon.
  *
- * ColorBrewer's nine-class sequential red, which is exactly the control-point
- * list matplotlib holds for this name — so it is built here from the stops
- * rather than dumped into {@link ./luts}, and the table it produces matches
- * matplotlib's to within a rounding step. The same list handed to
- * `LinearSegmentedColormap.from_list` gives the same ramp, which is the parity
- * §7.1 asks for.
+ * The eight stops after the first are ColorBrewer's nine-class red — the
+ * control-point list matplotlib holds for this name — minus its lowest, which is
+ * `#FFF5F0`: a pale pink, not white. On a contact map that is the wrong colour
+ * for the commonest value in the picture. Most of a Hi-C matrix is empty, so a
+ * map drawn on matplotlib's ramp is a sheet of faint pink with the data on it,
+ * and the eye reads the tint as signal until it works out that it is everywhere.
+ * An empty cell should be the paper.
  *
- * Named as matplotlib names it, capital and all, because `metacooler show
- * --cmap Reds` is where a reader will have met it.
+ * So the bottom of the ramp is `#FFFFFF` and the rest is the classic one. This
+ * is therefore the viewer's ramp under matplotlib's name, and the difference is
+ * worth stating: `metacooler show --cmap Reds` draws the same map with a
+ * slightly warmer floor. It is a floor rather than a hue — the two agree from a
+ * ninth of the way up — but §7.1's parity claim covers the tables dumped in
+ * {@link ./luts}, and this is not one of them.
  */
 const REDS_STOPS = [
-  '#FFF5F0', '#FEE0D2', '#FCBBA1', '#FC9272', '#FB6A4A', '#EF3B2C', '#CB181D',
-  '#A50F15', '#67000D',
+  '#FFFFFF', '#FFF5F0', '#FEE0D2', '#FCBBA1', '#FC9272', '#FB6A4A', '#EF3B2C',
+  '#CB181D', '#A50F15', '#67000D',
 ]
 
 /** Interpolate hex stops to a flat `size * 3` RGB table, as the tables are. */

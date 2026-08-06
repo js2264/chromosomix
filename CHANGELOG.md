@@ -60,8 +60,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it carrying information, and in its own colour it is the one edge that does not
   stand out — four stacked areas become four legible shapes.
 
-- **`Reds` in the colormap picker**, built from ColorBrewer's nine-class
-  sequential red, which is the control-point list matplotlib holds for that name.
+- **`Reds` in the colormap picker** — ColorBrewer's sequential red, anchored at
+  paper white rather than at its own lowest stop. That stop is `#FFF5F0`, a pale
+  pink, and most of a Hi-C matrix is empty: on matplotlib's ramp the map is a
+  sheet of faint pink with the data on it, and the eye reads the tint as signal
+  until it works out that it is everywhere. The two agree from a ninth of the way
+  up, so what differs from `metacooler show --cmap Reds` is the floor rather than
+  the hue.
 
 ### Changed
 
