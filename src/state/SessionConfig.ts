@@ -23,6 +23,7 @@
  */
 
 import { recall, remember } from './UiMemory'
+import { formatUri, parseUri } from '../uri'
 import type { StoredEntry } from '../annotations/types'
 import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
@@ -209,6 +210,54 @@ export function parseConfig(text: string): SessionConfig | null {
 /** `true` when a file name is worth reading as a config before anything else. */
 export function looksLikeConfig(name: string): boolean {
   return /\.json$/i.test(name)
+}
+
+/**
+ * Point a config's file names at wherever the config itself was found.
+ *
+ * An *exported* session names absolute URLs, because that is what the tab it
+ * came from was reading. A config **published beside its data** cannot: the app
+ * is served from `/` in dev and `/<repo>/` on Pages, the desktop build reads the
+ * same files over the network from a third place, and a session file that had to
+ * name one of them would be right in exactly one of the three. So a relative
+ * name here means *the file next to this config*, resolved against the config's
+ * own URL — the same rule an `<img src>` in a page follows, and the reason
+ * `public/demo/`'s own sessions are a directory anyone can copy anywhere.
+ *
+ * Absolute URIs are left exactly as they are, so an exported session is
+ * untouched by this and a config may mix the two: a published session naming a
+ * bucket alongside the tracks beside it is a reasonable thing to write.
+ *
+ * The `::entries/rep1` half of a URI is not part of the resolution — it names a
+ * group *inside* the file — so it is split off, and put back on, by the reader's
+ * own parser rather than by a second one written here.
+ */
+export function resolveConfig(config: SessionConfig, base: string): SessionConfig {
+  const at = (uri: string): string => {
+    let parsed
+    try {
+      parsed = parseUri(uri)
+    } catch {
+      // A URI with no file half is not one this can repair; `parseConfig`
+      // already refused an empty `state.uri`, so this is a track naming nothing.
+      return uri
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return uri
+    return formatUri(new URL(parsed.path, base).href, parsed.group)
+  }
+  return {
+    ...config,
+    state: {
+      ...config.state,
+      uri: at(config.state.uri),
+      ...(config.state.uri2 === undefined ? {} : { uri2: at(config.state.uri2) }),
+    },
+    tracks: config.tracks.map((track) =>
+      track.source.kind !== 'remote' || track.source.url === undefined
+        ? track
+        : { ...track, source: { ...track.source, url: at(track.source.url) } },
+    ),
+  }
 }
 
 /** What one is called on the way out. */

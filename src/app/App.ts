@@ -490,7 +490,9 @@ export class App implements SessionHost {
         new FilePicker({
           onOpen: (uri, source) => {
             modal.close()
-            void session.open(uri, source)
+            // The landing picker's own door, not `open`: the example list is
+            // the same list, and every entry on it is a published *session*.
+            void session.openPicked(uri, source)
           },
           onOpenFiles: (files) => {
             modal.close()

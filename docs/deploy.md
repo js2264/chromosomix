@@ -109,16 +109,44 @@ Two things to keep in mind:
   It is a fixed cost, not a per-release one — keep it that way. New or larger datasets belong on a
   bucket and in the catalog, not here.
 
-They are offered in the example dropdown on the picker (`ui/examples.ts`), with URLs built from
-`BASE_URL` and made absolute against the page: the base differs between dev and Pages, and a
-*relative* URI in a shared link would not re-open, because `inferSource` follows a link only when
-its path is `http(s)://`.
+None of them is in the example dropdown. What the dropdown offers is the sessions below, and those
+name these.
+
+## The published sessions
+
+The picker's list (`ui/examples.ts`) is **three session files and nothing else**:
+
+| file | opens |
+| --- | --- |
+| `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
+| `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six tracks placed on both edges and the loop calls drawn on the map |
+| `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: nine tracks over chromosome IV, in two groups, one of them overlaid |
+
+They are ordinary `metacooler.session` files — the exact format the export button in the top bar
+writes (`state/SessionConfig.ts`) — so choosing one from the list and dropping one somebody sent you
+are the same gesture, through the same code. A `.json` on a URL is fetched, parsed and applied;
+everything it names is then opened by the ordinary paths.
+
+The reason to publish sessions rather than the data files themselves is that a `.cool` in a dropdown
+can only ever offer what dropping that `.cool` offers — a map at its landing view, with nothing
+beside it. A first-time reader should meet the application doing its job: a window worth looking at,
+tracks on both edges, two strands sharing a lane. All of that is already writable as a file, so it is
+written as one.
+
+**Names inside a session are relative, and must stay that way.** The URL of the session itself is
+built from `BASE_URL` and made absolute against the page, because a *relative* URI in a shared link
+would not re-open — `inferSource` follows a link only when its path is `http(s)://`. But the files a
+published session names are resolved against the session's own URL (`resolveConfig`), which is what
+lets one directory work in dev (`/demo/`), on Pages (`/<repo>/demo/`) and in the desktop build (a
+third origin entirely). An *exported* session names absolute URLs and is left untouched by that step,
+so the two kinds can be mixed in one file.
 
 ## The track resources
 
-`public/demo/` also carries ten files that are **not maps and are not in the picker**. They are what
-the annotation cards (SPECS §8) draw: a real signal beside a real map rather than a fixture. Every
-one of them is aligned to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it.
+`public/demo/` also carries ten files that are **not maps**. They are what the annotation cards
+(SPECS §8) draw: a real signal beside a real map rather than a fixture. Every one of them is aligned
+to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it. Six of the ten are named by the two
+yeast sessions above, placed, coloured and grouped; this section is about all ten.
 
 Opening that map offers all ten as one click, from the Linear annotations card. The pairing lives in
 `ui/examples.ts` beside the picker's own catalogue, and is keyed on the map's **file name** rather
@@ -162,8 +190,11 @@ its neutral value is **1, not 0**, and a renderer that baselines at zero will dr
 positive; and `Yeast_microC_loops.tsv` is cis-only, so there is nothing to draw off the diagonal.
 
 These are data by every rule in `scripts/sw-manifest.mjs`, so they are not precached and not in
-`DEMO_FILES` — `test/unit/demo-examples.test.ts` opens what the picker offers, and offering a bigWig
-in a picker that returns a `MetaCooler` would be a broken choice, not a track.
+`DEMO_FILES`, which now holds the three session files. `test/unit/demo-examples.test.ts` reads each
+of them with the app's own parser, resolves it as the app resolves it, checks that **every file it
+names is in this directory**, and opens the map ones. That is the check that matters here: renaming a
+bigWig no longer breaks a dropdown entry, it breaks a session that opens to a map with six error rows
+beside it, and nothing else in the suite would notice.
 
 ## Every push stays reachable
 

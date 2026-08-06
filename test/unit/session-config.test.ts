@@ -16,6 +16,7 @@ import {
   configFileName,
   looksLikeConfig,
   parseConfig,
+  resolveConfig,
 } from '@/state/SessionConfig'
 import { recall, remember } from '@/state/UiMemory'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
@@ -152,6 +153,71 @@ describe('parseConfig', () => {
       JSON.stringify({ kind: CONFIG_KIND, state: STATE, sequences: ['IV', 7, null] }),
     )
     expect(read?.sequences).toEqual(['IV'])
+  })
+})
+
+/**
+ * A session published beside its data, rather than exported from a tab.
+ *
+ * The asymmetry that makes this necessary: an exported session names the URLs
+ * the tab it came from was reading, and those are absolute by construction. A
+ * session that ships *with* the files it names cannot be — the same directory
+ * is served from `/` in dev, `/<repo>/` on Pages and a third origin in the
+ * desktop build — so it names them relatively and this is where they are made
+ * real again.
+ */
+describe('resolveConfig', () => {
+  const base = 'https://example.org/app/demo/session.metacooler.json'
+  const relative = parseConfig(
+    JSON.stringify({
+      kind: CONFIG_KIND,
+      state: { uri: 'yeast.cool', view: 'region', region: 'IV' },
+      tracks: [
+        { ...TRACK, source: { kind: 'remote', name: 'ATAC.bw', url: 'ATAC.bw' } },
+        { ...TRACK, id: 'a2', source: { kind: 'local', name: 'dropped.bw' } },
+      ],
+    }),
+  )
+
+  it('resolves what a config names against where the config is', () => {
+    const config = resolveConfig(relative as NonNullable<typeof relative>, base)
+    expect(config.state.uri).toBe('https://example.org/app/demo/yeast.cool')
+    expect(config.tracks[0].source.url).toBe('https://example.org/app/demo/ATAC.bw')
+    // A local track has no URL to resolve and must not grow one.
+    expect(config.tracks[1].source).toEqual({ kind: 'local', name: 'dropped.bw' })
+  })
+
+  it('leaves an exported session exactly as it was', () => {
+    const exported = parseConfig(
+      JSON.stringify({ kind: CONFIG_KIND, state: STATE, tracks: [TRACK] }),
+    )
+    const config = resolveConfig(exported as NonNullable<typeof exported>, base)
+    expect(config.state.uri).toBe(STATE.uri)
+    expect(config.tracks[0].source.url).toBe(TRACK.source.url)
+  })
+
+  it('resolves the file half of a `file::group` URI and keeps the group', () => {
+    const collection = parseConfig(
+      JSON.stringify({
+        kind: CONFIG_KIND,
+        state: { uri: 'mock.mmetacool::entries/1000', view: 'genomes' },
+      }),
+    )
+    expect(resolveConfig(collection as NonNullable<typeof collection>, base).state.uri).toBe(
+      'https://example.org/app/demo/mock.mmetacool::/entries/1000',
+    )
+  })
+
+  it('resolves the compared file too', () => {
+    const pair = parseConfig(
+      JSON.stringify({
+        kind: CONFIG_KIND,
+        state: { uri: 'a.cool', uri2: 'b.cool', view: 'region' },
+      }),
+    )
+    expect(resolveConfig(pair as NonNullable<typeof pair>, base).state.uri2).toBe(
+      'https://example.org/app/demo/b.cool',
+    )
   })
 })
 
