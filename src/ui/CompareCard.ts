@@ -56,12 +56,24 @@ export interface CompareCardProps {
   onSwap(): void
   /** The name of the file already open, for the labels. */
   primaryLabel(): string
+  /**
+   * Whether there is a map open at all.
+   *
+   * `false` is a 1D browser that was started from a track, where this card is
+   * the *first* slot rather than the second — no rows, and a drop area that
+   * asks for a contact map rather than for one to compare against. It is here
+   * for the same reason it is here with a map open: the column that lists what
+   * is drawn over this genome is where a reader goes to add something to it.
+   */
+  hasPrimary(): boolean
 }
 
 export class CompareCard {
   readonly el: HTMLElement
   private readonly body = el('div', { class: 'compare-body' })
   private readonly drop: HTMLElement
+  private readonly dropLabel = el('span', { class: 'ann-drop-label' })
+  private readonly dropHint = el('span', { class: 'ann-drop-hint' })
   private readonly urlInput: HTMLInputElement
   private state: CompareState = { kind: 'empty' }
 
@@ -77,14 +89,8 @@ export class CompareCard {
     this.drop = el(
       'div',
       { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
-      el('span', { class: 'ann-drop-label', text: 'Load a second map' }),
-      el('span', {
-        class: 'ann-drop-hint',
-        text:
-          'A cooler with the same chromosomes and the same bin size. Click to choose, or drop ' +
-          'one here — it fills the lower-left triangle, so the square stops being symmetric and ' +
-          'the two are read against each other in one picture.',
-      }),
+      this.dropLabel,
+      this.dropHint,
     )
     const fileInput = el('input', { class: 'hidden-input', type: 'file' })
     fileInput.addEventListener('change', () => {
@@ -149,26 +155,38 @@ export class CompareCard {
   }
 
   private render(): void {
+    // The drop area asks for whichever map is missing. Written here rather than
+    // built twice: it is one rectangle, and which slot it fills is a fact about
+    // the session that changes under it.
+    const second = this.props.hasPrimary()
+    this.dropLabel.textContent = second ? 'Load a second map' : 'Load a contact map'
+    this.dropHint.textContent = second
+      ? 'A cooler with the same chromosomes and the same bin size. Click to choose, or drop ' +
+        'one here — it fills the lower-left triangle, so the square stops being symmetric and ' +
+        'the two are read against each other in one picture.'
+      : 'A .cool or .mcool on this genome. Click to choose, or drop one here — the tracks come ' +
+        'with it, drawn beside the map instead of along the axis.'
     switch (this.state.kind) {
       case 'loading':
         this.body.replaceChildren(
-          this.mapRow(1, this.props.primaryLabel(), false),
+          ...(second ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
           el('p', { class: 'compare-line', text: `Opening ${this.state.label}…` }),
         )
         return
       case 'error':
         this.body.replaceChildren(
-          this.mapRow(1, this.props.primaryLabel(), false),
+          ...(second ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
           el('p', { class: 'inline-error', text: this.state.message }),
           button('try another file', () => this.set({ kind: 'empty' }), { class: 'btn btn-quiet' }),
         )
         return
       case 'empty':
-        // One map, and the slot the second would go in. The row is drawn even
-        // with nothing to compare against, because the row is where the eye is
-        // and the eye is how a reader leaves the matrix for the tracks.
+        // One map, and the slot the second would go in — or no map at all, and
+        // the slot the first goes in. The row is drawn whenever there is a map,
+        // even with nothing to compare it against, because the row is where the
+        // eye is and the eye is how a reader leaves the matrix for the tracks.
         this.body.replaceChildren(
-          this.mapRow(1, this.props.primaryLabel(), false),
+          ...(this.props.hasPrimary() ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
           this.drop,
           el(
             'details',

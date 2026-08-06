@@ -2683,6 +2683,31 @@ export class MatrixPanel {
    * coordinate the reader would refuse.
    */
   /**
+   * The window on screen as a locus, for a surface that has one axis.
+   *
+   * What the 1D browser opens at when the map is put down: the row axis, since
+   * on the diagonal it is also the column axis and off it the rows are the ones
+   * the reader's eye follows down the page. `undefined` where the answer would
+   * be a lie — several sequences at once, or a level at which a cell is a whole
+   * sequence — and there the browser opens on the whole genome, which is that
+   * picture's own analogue of a whole-file map.
+   */
+  framedLocus(): string | undefined {
+    const windows = this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY)
+    const only = windows.length === 1 ? windows[0] : undefined
+    return only === undefined ? undefined : formatLocus(only)
+  }
+
+  /** The stretches of sequence one axis currently shows. */
+  private framedWindows(axis: LocusAxis | null, scale: Scale): LocusWindow[] {
+    if (axis === null) return []
+    const [d0, d1] = scale.domain
+    const lo = Math.max(0, Math.floor(d0))
+    const hi = Math.min(axis.unitEnd, Math.ceil(d1))
+    return hi > lo ? axis.windows([lo, hi]) : []
+  }
+
+  /**
    * The window on screen, read off the scales the pan and the zoom write.
    *
    * Bin-aligned, because the cells are: what is reported is the window drawn
@@ -2692,16 +2717,9 @@ export class MatrixPanel {
    * which is the same refusal `axisCoordsFor` makes about its ticks.
    */
   private viewPhrase(): string {
-    const framed = (axis: LocusAxis | null, scale: Scale): LocusWindow[] => {
-      if (axis === null) return []
-      const [d0, d1] = scale.domain
-      const lo = Math.max(0, Math.floor(d0))
-      const hi = Math.min(axis.unitEnd, Math.ceil(d1))
-      return hi > lo ? axis.windows([lo, hi]) : []
-    }
     return framedPhrase(
-      framed(this.locusAxes.rows, this.heatmap.scaleY),
-      framed(this.locusAxes.cols, this.heatmap.scaleX),
+      this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY),
+      this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX),
     )
   }
 
