@@ -168,6 +168,125 @@ export function resolveLimits(
 }
 
 /**
+ * Move a track's ceiling by a factor, from wherever its axis is *resolved to*.
+ *
+ * Resolved rather than stored, and that is the whole of it: an autoscaled track
+ * has no stored pair, so a naive multiply would start from a `[0, 1]` nobody
+ * chose and the first notch would jump the picture instead of adjusting it. From
+ * the range on screen, one notch is one notch.
+ *
+ * `null` for a step that would produce an axis nobody can read — a non-finite
+ * ceiling, or one that has fallen through the floor. Beside `resolveLimits`
+ * because it is the same question asked in the other direction, and because two
+ * surfaces reach for it: the browser's ⌘-scroll and the map's.
+ */
+export function nudgedLimits(
+  limits: Limits,
+  extent: { min: number; max: number } | null,
+  factor: number,
+): { auto: false; min: number; max: number } | null {
+  const resolved = resolveLimits(limits, extent)
+  const max = resolved.max * factor
+  if (!Number.isFinite(max) || max <= resolved.min) return null
+  return { auto: false, min: resolved.min, max }
+}
+
+/**
+ * How much of a ceiling a drag across the whole lane is worth: three doublings.
+ *
+ * Exponential rather than proportional, because a value axis is read
+ * logarithmically: from a ceiling of 5 the useful next steps are 2.5 and 10, not
+ * 4 and 6. Three octaves over a lane's own height is what makes a short flick
+ * useful on a ninety-pixel lane and a full sweep enough to go from a saturated
+ * track to an empty one without letting go.
+ */
+const CEILING_OCTAVES = 3
+
+/** No single gesture may move a ceiling further than this, either way. */
+const CEILING_REACH = 64
+
+/**
+ * What a drag across a lane does to its ceiling.
+ *
+ * Direct manipulation, in the one sense that survives both edges and the flip:
+ * dragging **towards the signal's own growing direction** makes the signal
+ * taller, which is the ceiling coming *down*. Which screen direction that is
+ * cannot be written down here — it is `valueAcross`'s answer, and it is opposite
+ * on the two edges and reversed again by `flip` — so it is asked rather than
+ * assumed, exactly as {@link labelEndFor} asks it about the baseline.
+ *
+ * `from` and `to` are across-offsets inside the lane, in CSS pixels.
+ */
+export function ceilingFactor(
+  frame: LaneFrame,
+  from: number,
+  to: number,
+  flip: boolean,
+): number {
+  const height = Math.max(1, frame.thickness)
+  // Which way across the lane a *larger value* is drawn: negative below the map,
+  // where a track grows up from its floor, positive beside it, where it grows
+  // outward — and the other way round again on a flipped track.
+  const grows = Math.sign(valueAcross(frame, 1) - valueAcross(frame, 0)) * (flip ? -1 : 1)
+  const travel = ((to - from) / height) * grows
+  const factor = 2 ** (-travel * CEILING_OCTAVES)
+  return Math.min(CEILING_REACH, Math.max(1 / CEILING_REACH, factor))
+}
+
+/**
+ * A track whose ceiling is being dragged: where it was, and where it is going.
+ *
+ * Two passes rather than one moving picture, and that is the whole design. The
+ * first draws the track exactly as it stood when the gesture began, faded — so
+ * the area **does not move**, and stays on screen as the record of the range
+ * being left behind. The second draws only the line, at the axis the hand is
+ * now asking for, solid. What a reader sees is one trace lifting off its own
+ * shadow, which says what a number changing in a corner could not.
+ *
+ * Nothing is written to the store until the drag ends, which is what lets the
+ * first pass stand still: a live restyle would repaint the shadow at the new
+ * axis on every frame, and there would be nothing to compare against.
+ */
+export function drawTrackScaling(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  profile: PixelProfile,
+  paint: TrackPaint,
+  moved: { min: number; max: number },
+): void {
+  drawTrack(ctx, frame, profile, { ...paint, opacity: paint.opacity * SCALING_GHOST })
+  // No fill and no floor on the second pass: the fill is what is standing still,
+  // and a rule drawn twice is a rule drawn at double strength.
+  drawTrack(ctx, frame, profile, {
+    ...paint,
+    limits: moved,
+    fills: false,
+    baseline: false,
+  })
+}
+
+/**
+ * How wide the outline rule is: a hairline, the floor rule's own width.
+ *
+ * Sub-pixel deliberately. The outline is describing the edge of a shape that is
+ * already there rather than adding a mark of its own, and at a full pixel over a
+ * saturated area it reads as a border drawn round the track — which is a second
+ * thing on the lane, not a clearer view of the first.
+ */
+const OUTLINE_WIDTH = 0.75
+
+/** How much of itself the standing-still copy keeps while a ceiling is dragged. */
+const SCALING_GHOST = 0.28
+
+/** The axis a drag of `factor` is asking for: the floor holds, the ceiling moves. */
+export function scaledTo(
+  limits: { min: number; max: number },
+  factor: number,
+): { min: number; max: number } {
+  return { min: limits.min, max: limits.min + (limits.max - limits.min) * factor }
+}
+
+/**
  * A value's position in the lane, in `[0, 1]`.
  *
  * Linear, and only linear. A `log2` option lived here for the ratio tracks, on
@@ -212,6 +331,18 @@ export interface TrackPaint {
    * unaffected: a bar is the mark itself, not a shade under one.
    */
   fills: boolean
+  /**
+   * Stroke the track's own line in the plot's ink rather than in its colour.
+   *
+   * The boundary between an area's ink and the paper is the only part of it
+   * carrying information, and in the area's own colour it is the one edge of the
+   * fill that does not stand out from it. Drawn dark it does — which is what
+   * turns four stacked areas into four legible shapes.
+   *
+   * The *colour* is `guideColour`, the same ink every other rule on the lane is
+   * drawn in, rather than a literal black: the plot has one ink and this is it.
+   */
+  outline: boolean
   /** Draw the value axis upside down — see `AnnotationStyle.flip`. */
   flip: boolean
   /**
@@ -266,6 +397,11 @@ export function drawTrack(
       ctx.rect(x, y, width, height)
     }
     ctx.fill()
+    if (paint.outline) {
+      ctx.strokeStyle = paint.guideColour
+      ctx.lineWidth = OUTLINE_WIDTH
+      ctx.stroke()
+    }
     drawZeroLine(ctx, frame, baseAcross, paint)
     drawFloor(ctx, frame, paint)
     ctx.restore()
@@ -298,8 +434,12 @@ export function drawTrack(
     ctx.globalAlpha = paint.opacity
   }
 
-  ctx.strokeStyle = paint.colour
-  ctx.lineWidth = paint.mode === 'line' ? 1.25 : 1
+  ctx.strokeStyle = paint.outline ? paint.guideColour : paint.colour
+  // A hairline when it is an outline, and the same one the floor rule uses: it
+  // is describing the *edge* of a shape rather than being a mark of its own, and
+  // anything heavier reads as a border drawn round the track instead of as the
+  // boundary the fill already has.
+  ctx.lineWidth = paint.outline ? OUTLINE_WIDTH : paint.mode === 'line' ? 1.25 : 1
   ctx.lineJoin = 'round'
   for (const [start, stop] of runs) {
     ctx.beginPath()

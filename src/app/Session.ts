@@ -23,6 +23,7 @@
 
 import { AnnotationLoader } from '../annotations/loader'
 import { ManualStore } from '../annotations/manual'
+import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
 import { UNBINNED_NAME } from '../constants'
@@ -55,7 +56,7 @@ import { SequenceSelection } from '../genome/selection'
 import type { AnnotationEntry, Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
-import { BrowserView, type GroupMode, type GroupScaling } from '../ui/BrowserView'
+import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
@@ -464,6 +465,15 @@ interface FileAnnotations {
   manual: ManualStore
   client: AnnotationClient
   loader: AnnotationLoader
+  /**
+   * How each group of tracks is drawn and scaled, for this file.
+   *
+   * One instance handed to every surface rather than one per view: a group is a
+   * fact about the tracks, so overlaying two of them in the 1D browser and then
+   * dropping a `.cool` on it must find the same two still overlaid beside the
+   * map (`annotations/groups.ts`).
+   */
+  groups: GroupSettings
   contigLength(name: string): number | undefined
 }
 
@@ -762,7 +772,7 @@ export class Session {
           run: () => this.store.patch({ locus: undefined }),
         },
         {
-          id: 'browser-fit-tracks',
+          id: 'fit-tracks',
           group: 'View',
           title: 'Stretch the tracks to fill the height',
           hint: 'One height for all of them, and that height the one that fills the space.',
@@ -838,6 +848,19 @@ export class Session {
         keys: KEYS.savePlot,
         enabled: this.current?.panel !== undefined,
         run: () => this.current?.panel?.savePlot(),
+      },
+      {
+        id: 'fit-tracks',
+        group: 'View',
+        title: 'Stretch the tracks to fill the height',
+        // The same key as in the browser, and for the same reason the autoscale
+        // below it shares one: the lanes beside a map and the stack under a
+        // browser are one set of tracks, and a key that stopped working the
+        // moment a `.cool` was dropped would be saying otherwise.
+        hint: 'One height for every lane on both edges, sharing the room the map leaves.',
+        keys: KEYS.stretch,
+        enabled: this.current?.panel !== undefined && this.annotations !== null,
+        run: () => this.current?.panel?.fitTracks(),
       },
       {
         id: 'map-autoscale',
@@ -1486,7 +1509,14 @@ export class Session {
     const names = assembly.contigs.map((contig) => contig.name)
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
     const loader = new AnnotationLoader(store, client, names)
-    this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
+    this.annotations = {
+      store,
+      manual,
+      client,
+      loader,
+      groups: new GroupSettings(scope),
+      contigLength: (name) => lengths.get(name),
+    }
 
     this.setAnnotations([new AnnotationCard({ store, loader, context: 'browser' }).el])
     this.setGeneral([
@@ -1548,7 +1578,6 @@ export class Session {
     const assembly = this.assembly
     const held = this.annotations
     if (assembly === null || held === null) return
-    const key = this.memoryKey(assembly.uri)
     const view = new BrowserView({
       assembly,
       store: held.store,
@@ -1556,12 +1585,7 @@ export class Session {
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
-      memory: {
-        groups: recall<Record<string, GroupMode>>(key, 'browser:groups') ?? {},
-        scaling: recall<Record<string, GroupScaling>>(key, 'browser:scaling') ?? {},
-        save: (groups) => remember(key, 'browser:groups', groups),
-        saveScaling: (scaling) => remember(key, 'browser:scaling', scaling),
-      },
+      groups: held.groups,
     })
     this.browser = view
     this.showContent(view.el, {
@@ -1826,7 +1850,14 @@ export class Session {
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const loader = new AnnotationLoader(store, client, names)
-    this.annotations = { store, manual, client, loader, contigLength: (name) => lengths.get(name) }
+    this.annotations = {
+      store,
+      manual,
+      client,
+      loader,
+      groups: new GroupSettings(scope),
+      contigLength: (name) => lengths.get(name),
+    }
 
     const picker: MapPicker = {
       available: () => this.current?.panel !== undefined,
@@ -2186,6 +2217,7 @@ export class Session {
           store: held.store,
           manual: held.manual,
           client: held.client,
+          groups: held.groups,
           contigLength: held.contigLength,
           // Dropped on the map itself, on the edge the reader aimed at. A
           // `.cool` still opens as a map and a `chrom.sizes` still replaces the

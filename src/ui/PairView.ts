@@ -142,8 +142,7 @@ export class PairView {
     this.sideEl = el(
       'aside',
       { class: 'side' },
-      this.panel.controlsEl,
-      this.panel.plotEl,
+      ...this.panel.cards,
       el(
         'section',
         { class: 'card' },

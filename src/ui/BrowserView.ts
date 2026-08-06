@@ -20,6 +20,13 @@
  */
 
 import { BaseCache } from '../annotations/bases'
+import {
+  OVERLAY_DIM,
+  extentFor,
+  planStack,
+  resolveGroupExtents,
+  type GroupSettings,
+} from '../annotations/groups'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
@@ -40,21 +47,53 @@ import { RULER_HEIGHT, drawArcs, drawBoundaries, drawGuide, drawRuler, type Rule
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit } from '../render/features'
 import {
   GRIP_ROOM,
+  GROUP_BAR,
   clipLane,
   drawGrip,
+  drawGroupBars,
   gripAcross,
   gripBox,
-  laneRect,
-  laneText,
+  groupRuns,
   snapTo,
   withinGrip,
   type LaneFrame,
 } from '../render/lane'
+import {
+  drawLaneLabel,
+  labelEndFor,
+  type LaneLabelSpec,
+  type LaneLabelStyle,
+  type LimitBox,
+} from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
 import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
-import { drawTrack, formatLimit, profileOf, resolveLimits, type PixelProfile } from '../render/tracks'
+import {
+  ceilingFactor,
+  drawTrack,
+  drawTrackScaling,
+  nudgedLimits,
+  profileOf,
+  resolveLimits,
+  scaledTo,
+  type PixelProfile,
+} from '../render/tracks'
 import { button, el, fmt } from './dom'
+import { GroupsCard } from './GroupsCard'
+import {
+  CEILING_MODIFIER,
+  CEILING_STEP,
+  DRAG_SLACK,
+  LaneControls,
+  type LaneMark,
+} from './LaneControls'
+import { LaneLimitEditor } from './LaneLimitEditor'
+import {
+  LANE_MIN_SIZE,
+  heightThatFills,
+  setTrackHeight,
+  trackHeightField,
+} from './trackControls'
 import {
   EXPORT_DPI_CHOICES,
   canvasToPng,
@@ -66,7 +105,7 @@ import {
   scaleForDpi,
 } from './export'
 import { VectorPage } from './vector'
-import { KEYS, isMac, withKey } from './commands'
+import { KEYS, withKey } from './commands'
 import { searchKey } from './SearchBox'
 import { type IconName, cardTitle, iconButton } from './icons'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
@@ -82,39 +121,10 @@ import {
 } from './plotOptions'
 import { setReadout } from './readout'
 
-/** How a group of tracks shares the picture. */
-export type GroupMode = 'stacked' | 'overlay'
-
-/**
- * How a group resolves its value axis.
- *
- * `shared` is what a group is *for* — one pair of limits over the union of what
- * its members show, which is the only way two tracks can be compared by eye —
- * and it is the default. `each` keeps the grouping (the members still move,
- * stack and overlay together) and gives every track its own axis back, for the
- * case where a group is a way of handling several tracks at once rather than a
- * claim that they are measured in the same units.
- */
-export type GroupScaling = 'shared' | 'each'
-
 /** Gap between two stacked lanes, in CSS pixels. Same as beside the map. */
 const LANE_GAP = 4
 /** How close to a lane's lower border counts as being on it. */
 const LANE_GRIP = 4
-/** How far a press must travel before it is a drag with a direction. */
-const DRAG_SLACK = 3
-/** The smallest a lane may be dragged to; below this it is a line, not a track. */
-const LANE_MIN_SIZE = 14
-
-/**
- * The height the `set` button offers before anyone has typed one.
- *
- * The same ninety `defaultStyle` gives a new bigWig, and for the reason written
- * there: it is about where a yeast ATAC track starts showing the shape of a
- * promoter. Written here rather than imported so the control's floor and its
- * default read together; the two are checked against each other by a test.
- */
-const DEFAULT_TRACK_HEIGHT = 90
 const LANE_FONT = '10px system-ui, sans-serif'
 /**
  * The value range under a track's name.
@@ -166,14 +176,14 @@ export interface BrowserViewProps {
   locus?: string
   /** The view moved; the hash follows. `undefined` is the whole genome. */
   onLocusChange(locus: string | undefined): void
-  /** Per-session memory for the things the URL does not carry. */
-  memory: {
-    groups: Record<string, GroupMode>
-    /** Whether each group resolves one pair of limits; `'shared'` by default. */
-    scaling: Record<string, GroupScaling>
-    save(groups: Record<string, GroupMode>): void
-    saveScaling(scaling: Record<string, GroupScaling>): void
-  }
+  /**
+   * How each group is drawn and scaled, for this file.
+   *
+   * The session's, not this view's: a group made here is the same group beside
+   * the map, so the two surfaces are handed one object rather than a copy each
+   * (`annotations/groups.ts`).
+   */
+  groups: GroupSettings
 }
 
 /** One lane, resolved for a frame: where it goes and what goes in it. */
@@ -216,7 +226,7 @@ export class BrowserView {
   private readonly locusInput: HTMLInputElement
   private readonly searchList = el('div', { class: 'browser-hits hidden' })
   private readonly zoomNote = el('span', { class: 'browser-zoom' })
-  private readonly groupsHost = el('div', { class: 'panel-controls' })
+  private readonly groupsCard: GroupsCard
   private readonly exportStatus = el('span', { class: 'clip-note export-note' })
   private readonly cache: SampleCache
   private readonly bases: BaseCache
@@ -237,6 +247,8 @@ export class BrowserView {
   private text = true
   /** Whether the shaded areas are drawn — the shared `fills` plot option. */
   private fills = true
+  /** Whether each track's line is drawn in ink — the shared `outline` option. */
+  private outline = false
   /** Whether each lane gets a rule along its floor — the `baseline` option. */
   private baseline = true
   /** Whether a guide line follows the pointer — the shared `crosshair` option. */
@@ -244,57 +256,44 @@ export class BrowserView {
   /**
    * Where each lane's two limits were drawn, from the last frame.
    *
-   * Recorded by {@link labelLane} rather than recomputed, because the box a
-   * reader is pointing at is the box the text was measured into: any second
-   * measurement is a second opinion about the same font, and the difference
-   * between the two is exactly the pixel the click misses by.
+   * Recorded by the label pass rather than recomputed, because the box a reader
+   * is pointing at is the box the text was measured into: any second measurement
+   * is a second opinion about the same font, and the difference between the two
+   * is exactly the pixel the click misses by.
    */
   private rangeHits: RangeHit[] = []
-  /** Where each name's colour chip was drawn, so a picker can sit on it. */
-  private swatchHits: SwatchHit[] = []
-  /** Where each lane's autoscale button goes: just past its range. */
-  private autoSpots: Array<{ entries: AnnotationEntry[]; x: number; y: number }> = []
+  /** This frame's on-lane controls, in the order the layer holds them. */
+  private marks: LaneMark[] = []
   /**
    * The line each lane's handle sits on, by entry, from the labels being drawn.
    *
    * The handle is level with the track's *name*, and where a name sits is a
-   * layout question this view answers per lane — a column or the data, a flipped
-   * track hanging from the ceiling, one line or one per overlaid name. So the
-   * pass that places the name says where the handle goes, exactly as it already
-   * does for the limits and the swatches.
+   * layout question the label pass answers per lane — a column or the data, a
+   * flipped track hanging from the ceiling, one line or one per overlaid name. So
+   * the pass that places the name says where the handle goes, exactly as it
+   * already does for the limits and the swatches.
    */
   private gripRows = new Map<string, number>()
-  /**
-   * The limit being typed into, while one is, and the two ways it can end.
-   *
-   * `cancel` for the cases where the number has nowhere to go — the view is
-   * being torn down, or the lane it was measured into has moved — and `commit`
-   * for the case where the reader simply moved the caret somewhere else.
-   */
-  private editor:
-    | { input: HTMLInputElement; cancel: () => void; commit: () => void }
-    | null = null
+  private readonly controls: LaneControls
+  private readonly editor: LaneLimitEditor
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
     | { mode: 'reorder'; entry: AnnotationEntry; over: number }
+    | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
     | null = null
-  /** What {@link paintOverlayControls} last built, so a pan does not rebuild it. */
-  private controlSignature = ''
+  /**
+   * The lane whose ceiling is being dragged, and how far it has moved.
+   *
+   * Held here rather than written to the store on every frame, and that is what
+   * makes the gesture readable: the store is what the *faded* copy is drawn
+   * from, so it has to stand still while the hand moves. One write, on release.
+   */
+  private scaling: { id: string; factor: number } | null = null
   /** Set while a navigation is ticking a sequence on its way — see {@link ensureOnAxis}. */
   private adopting = false
-  /**
-   * Groups the reader has unfolded, so a repaint does not shut them.
-   *
-   * A group is a row in a card, exactly as a track is one in the panel beside
-   * it: a name, an eye, and everything else behind a chevron. Held here rather
-   * than in the store for the reason a card's own `open` set is held in the
-   * card — which of them is unfolded is a gesture in progress, not a property of
-   * the group.
-   */
-  private readonly openGroups = new Set<string>()
   /**
    * Width of the column the track names are drawn in; 0 when they are not.
    *
@@ -324,8 +323,6 @@ export class BrowserView {
   private wantGutter = DEFAULT_GUTTER
   /** The widest label this paint has drawn so far; becomes {@link wantGutter}. */
   private measuredGutter = 0
-  /** Where the last name run ended, for a lane too short to stack under it. */
-  private lastNameEnd = 0
   /** The canvas width the last frame was drawn at, which the export saves. */
   private canvasWidth = 0
   private exportDpi = 300
@@ -446,26 +443,29 @@ export class BrowserView {
     // whatever the file is; Groups is empty until a reader has made one, and a
     // column that opens with an empty card reads as a column with nothing in
     // it.
-    this.sideEl = el(
-      'aside',
-      { class: 'side' },
-      this.exportCard(),
-      el(
-        'div',
-        { class: 'controls-card' },
-        cardTitle('Groups', 'layers', 'controls-title'),
-        this.groupsHost,
-      ),
-    )
+    this.groupsCard = new GroupsCard({
+      store: props.store,
+      groups: props.groups,
+      onChange: () => this.schedule(),
+    })
+    this.sideEl = el('aside', { class: 'side' }, this.exportCard(), this.groupsCard.el)
+
+    // The two layers over the canvas. Both are handed the stage rather than
+    // built into it, because beside a map the same two classes are given a layer
+    // positioned against a grid — which is the whole reason they are not methods
+    // of this view.
+    this.controls = new LaneControls(this.overlays, props.store, () => this.editor.close())
+    this.editor = new LaneLimitEditor({
+      host: this.stage,
+      store: props.store,
+      shownLimits: (id) => this.shownLimits(id),
+      onChange: () => this.schedule(),
+    })
 
     this.cache = new SampleCache(props.client, () => this.schedule())
     this.bases = new BaseCache(props.client, () => this.schedule())
-    this.unsubscribes.push(
-      props.store.subscribe(() => {
-        this.paintGroups()
-        this.schedule()
-      }),
-    )
+    this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
+    this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
     this.unsubscribes.push(subscribePlotOptions(() => this.schedule()))
     this.unsubscribes.push(props.selection.subscribe(() => this.applySelection()))
     this.watchPointer()
@@ -478,13 +478,14 @@ export class BrowserView {
     this.observer?.observe(this.stage)
 
     this.applyLocus(props.locus)
-    this.paintGroups()
     requestAnimationFrame(() => this.remeasure())
   }
 
   destroy(): void {
     this.disposed = true
-    this.closeRangeEditor()
+    this.editor.close()
+    this.controls.destroy()
+    this.groupsCard.destroy()
     if (this.frameHandle !== 0) cancelAnimationFrame(this.frameHandle)
     if (this.clickTimer !== null) clearTimeout(this.clickTimer)
     if (this.reportTimer !== null) clearTimeout(this.reportTimer)
@@ -606,7 +607,7 @@ export class BrowserView {
     if (units !== null) this.scale.setDomain(units)
     // The caret was measured into a lane of the outgoing axis, and the number in
     // it belongs to a view that no longer exists.
-    this.closeRangeEditor()
+    this.editor.close()
     if (this.adopting) {
       this.clamp()
       this.schedule()
@@ -665,25 +666,19 @@ export class BrowserView {
   /**
    * Share the available height between the tracks, **equally**.
    *
-   * One button doing both halves of what a reader means by "tidy this up": every
-   * lane the same height, and that height the one that fills the window. It used
-   * to keep whatever proportions the stack was already in, on the reasoning that
-   * a reader who made the gene model three times taller meant it — but a stack
-   * that has been dragged about for ten minutes has no proportions worth
-   * preserving, and preserving them meant the button could not answer the
-   * question actually being asked, which is "make these the same".
+   * The arithmetic is `heightThatFills`'s, in `trackControls.ts`, so the map's
+   * Plot card can ask the same question; what stays here is the *measurement* —
+   * how much room this view has, which only this view can answer.
    *
-   * Bounded below by the lane minimum, so twenty tracks in a short window come
-   * out scrollable rather than as twenty two-pixel lines.
+   * Measured against the **host**, from the top of the stage down to the bottom
+   * of the column this view was mounted in. Not against `this.el`, which is
+   * sized by its own content: asking that how much room there is compares the
+   * tracks against themselves and fits them to the height they already have,
+   * which is a button that appears to do nothing.
    */
   fitTracks(): void {
     const lanes = this.lanes
     if (lanes.length === 0) return
-    // Measured against the *host*, from the top of the stage down to the bottom
-    // of the column this view was mounted in. Not against `this.el`, which is
-    // sized by its own content: asking that how much room there is compares the
-    // tracks against themselves and fits them to the height they already have,
-    // which is a button that appears to do nothing.
     const host = this.roomHost()
     if (host === null) return
     const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
@@ -693,32 +688,17 @@ export class BrowserView {
       this.stage.getBoundingClientRect().top -
       RULER_HEIGHT -
       LANE_GAP * (lanes.length + 1)
-    if (!(room > 0)) return
-    this.setTrackHeight(Math.floor(room / lanes.length))
+    const size = heightThatFills(room, lanes.length)
+    if (size !== null) this.setTrackHeight(size)
   }
 
-  /**
-   * Give every lane one height, chosen rather than computed.
-   *
-   * The other half of the same thought. Stretching answers "use the space I
-   * have"; this answers "I know what a track should look like" — ninety pixels
-   * is where a yeast ATAC track starts showing the shape of a promoter, and a
-   * reader who has learned that number wants it back after every fit, on every
-   * file, without measuring a window. It is also the way *out* of a stretch: on
-   * a tall screen with two tracks, filling the space gives two four-hundred
-   * pixel lanes, and nothing else brings them back down together.
-   *
-   * A lane and not a track, so two tracks sharing one lane are set once between
-   * them rather than twice — which would be the same assignment written twice,
-   * and is what {@link fitTracks} means by its own loop.
-   */
+  /** Give every lane one height, chosen rather than computed. */
   setTrackHeight(px: number): void {
-    const size = Math.max(LANE_MIN_SIZE, Math.round(px))
-    for (const lane of this.lanes) {
-      for (const member of [lane.entry, ...lane.overlaid]) {
-        this.props.store.restyle(member.id, { size })
-      }
-    }
+    setTrackHeight(
+      this.props.store,
+      this.lanes.map((lane) => ({ members: [lane.entry, ...lane.overlaid] })),
+      px,
+    )
   }
 
   /**
@@ -880,30 +860,20 @@ export class BrowserView {
     const entries = this.props.store.entries.filter(
       (entry) => entry.visible && entry.status === 'ready',
     )
-    const drawn: Lane[] = []
-    const claimed = new Map<string, Lane>()
-    let across = RULER_HEIGHT + LANE_GAP
-    for (const entry of entries) {
-      const group = entry.style.group
-      const overlaid = group !== '' && this.modeOf(group) === 'overlay'
-      const host = overlaid ? claimed.get(group) : undefined
-      if (host !== undefined) {
-        host.overlaid.push(entry)
-        continue
-      }
-      const thickness = Math.max(LANE_MIN_SIZE, Math.round(entry.style.size))
-      const lane: Lane = {
-        entry,
-        overlaid: [],
-        frame: this.frameAt(across, thickness),
-        profiles: [],
-        residues: [],
-      }
-      drawn.push(lane)
-      if (overlaid) claimed.set(group, lane)
-      across += thickness + LANE_GAP
-    }
-    return drawn
+    return planStack(entries, {
+      groupOf: (entry) => entry.style.group,
+      modeOf: (group) => this.props.groups.modeOf(group),
+      sizeOf: (entry) => entry.style.size,
+      gap: LANE_GAP,
+      from: RULER_HEIGHT + LANE_GAP,
+      minimum: LANE_MIN_SIZE,
+    }).map((slot) => ({
+      entry: slot.host,
+      overlaid: slot.overlaid,
+      frame: this.frameAt(slot.acrossFrom, slot.thickness),
+      profiles: [],
+      residues: [],
+    }))
   }
 
   private frameAt(acrossFrom: number, thickness: number): LaneFrame {
@@ -925,10 +895,6 @@ export class BrowserView {
   /** A canvas x as a position on the axis, through the name column. */
   private atUnit(x: number): number {
     return this.scale.toUnit(x - this.gutter)
-  }
-
-  private modeOf(group: string): GroupMode {
-    return this.props.memory.groups[group] ?? 'stacked'
   }
 
   /** Total canvas height: the ruler, every lane, and the gaps between them. */
@@ -993,7 +959,10 @@ export class BrowserView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     ctx.clearRect(0, 0, width, height)
     this.paint(ctx, width, height)
-    this.paintLaneControls()
+    // The stage and the canvas share an origin here, so the layer needs no
+    // offset — beside a map the same call is given one, because the stacks are
+    // grid items and the layer is positioned against the grid.
+    this.controls.sync(this.marks, NO_OFFSET)
     this.zoomNote.textContent = this.zoomPhrase()
   }
 
@@ -1015,6 +984,7 @@ export class BrowserView {
     const options = getPlotOptions()
     this.text = options.text
     this.fills = options.fills
+    this.outline = options.outline
     this.baseline = options.baseline
     this.crosshair = options.crosshair
     const palette = readCanvasPalette(this.canvas)
@@ -1044,8 +1014,7 @@ export class BrowserView {
 
     this.layouts.clear()
     this.rangeHits = []
-    this.swatchHits = []
-    this.autoSpots = []
+    this.marks = []
     this.gripRows.clear()
     this.measuredGutter = 0
     const groups = this.groupRanges()
@@ -1054,7 +1023,22 @@ export class BrowserView {
     // which is the only order available: the width depends on the text and the
     // text is measured by drawing it.
     this.wantGutter = Math.max(40, this.measuredGutter)
-    this.paintGroupBars(ctx)
+    // The bar for each run of grouped lanes, at the left of the strip this view
+    // keeps for its handles — the one place a mark about a lane can go without
+    // being ink on somebody's data.
+    drawGroupBars(
+      ctx,
+      groupRuns(
+        this.lanes.map((lane) => ({
+          group: (lane.profiles[0]?.entry ?? lane.entry).style.group,
+          colour: (lane.profiles[0]?.entry ?? lane.entry).style.colour,
+          acrossFrom: lane.frame.acrossFrom,
+          thickness: lane.frame.thickness,
+        })),
+        LANE_GAP,
+      ),
+      { orientation: 'bottom', along: 0, labelAlong: GRIP_MARGIN + 2, text: this.text },
+    )
 
     // Under the shared preference, like everything else drawn over the data: a
     // reader who turned the crosshair off beside a map meant it off.
@@ -1179,64 +1163,6 @@ export class BrowserView {
     ctx.restore()
   }
 
-  /**
-   * A bar down the left edge marking each autoscale group.
-   *
-   * A group is a claim that these tracks are comparable — one pair of limits
-   * over the union of what they show — and until now the only way to see which
-   * tracks were in one was to open each row's settings in turn and read the
-   * menu. It is a property of a *set* of lanes, so it is drawn as a set of
-   * lanes: one bar spanning them, in the colour of the first, with the name
-   * beside it where there is room. Stacked members that are not adjacent get a
-   * bar each, because a bar drawn across a lane that is not in the group would
-   * be saying something false.
-   */
-  private paintGroupBars(ctx: CanvasRenderingContext2D): void {
-    const runs: Array<{ group: string; colour: string; from: number; to: number }> = []
-    for (const lane of this.lanes) {
-      const target = lane.profiles[0]?.entry ?? lane.entry
-      const group = target.style.group
-      const top = lane.frame.acrossFrom
-      const bottom = top + lane.frame.thickness
-      if (group === '') continue
-      const open = runs[runs.length - 1]
-      if (open !== undefined && open.group === group && Math.abs(open.to - top) <= LANE_GAP + 1) {
-        open.to = bottom
-        continue
-      }
-      runs.push({ group, colour: target.style.colour, from: top, to: bottom })
-    }
-    if (runs.length === 0) return
-
-    ctx.save()
-    for (const run of runs) {
-      ctx.fillStyle = run.colour
-      ctx.globalAlpha = 0.85
-      ctx.beginPath()
-      ctx.roundRect?.(0, run.from, GROUP_BAR, run.to - run.from, GROUP_BAR / 2)
-      if (ctx.roundRect === undefined) ctx.rect(0, run.from, GROUP_BAR, run.to - run.from)
-      ctx.fill()
-      // The name, turned a quarter turn to run with the bar — the only
-      // orientation that fits a word beside a three-pixel rule. Past the
-      // handles' margin rather than immediately beside the bar: with no name
-      // column those nine pixels are exactly where the handles hang.
-      const room = run.to - run.from
-      if (!this.text || room < 34) continue
-      ctx.save()
-      ctx.globalAlpha = 0.9
-      ctx.font = GROUP_FONT
-      ctx.fillStyle = run.colour
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
-      ctx.translate(GRIP_MARGIN + 2, (run.from + run.to) / 2)
-      ctx.rotate(-Math.PI / 2)
-      const text = ctx.measureText(run.group).width > room - 6 ? '' : run.group
-      ctx.fillText(text, 0, 0)
-      ctx.restore()
-    }
-    ctx.restore()
-  }
-
   private paintLane(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
@@ -1247,7 +1173,11 @@ export class BrowserView {
     // What to write on the lane, decided by the branch that drew it and written
     // *after* the clip is released: with a name column the label sits outside
     // the lane's own rectangle, and a clip to the data would take it away.
-    let label: { entries: AnnotationEntry[]; detail: string | { limits: { min: number; max: number } } } | null = null
+    let label: {
+      entries: AnnotationEntry[]
+      detail: LaneLabelSpec['detail']
+      at: 'near' | 'far'
+    } | null = null
     clipLane(ctx, frame)
     if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
@@ -1260,15 +1190,17 @@ export class BrowserView {
       // The name alone. A second line saying how many bases are on screen is
       // what the ruler above it already says, and it would say it *through* the
       // letters — the one thing on this lane that is there to be read.
-      if (this.text) label = { entries: lane.residues.map((row) => row.entry), detail: '' }
+      if (this.text) {
+        label = { entries: lane.residues.map((row) => row.entry), detail: null, at: 'near' }
+      }
     } else if (lane.profiles.length > 0) {
+      // While a ceiling is being dragged this lane is drawn twice: once as it
+      // stood, faded and still, and once as the hand is asking for it.
+      const dragged = this.scaling?.id === lane.entry.id ? this.scaling.factor : null
       for (const { entry: member, profile } of lane.profiles) {
-        const extent =
-          member.style.group === ''
-            ? profile.extent
-            : (groups.get(member.style.group) ?? profile.extent)
+        const extent = extentFor(member, profile.extent, groups)
         const limits = resolveLimits(member.style.limits, extent)
-        drawTrack(ctx, frame, profile, {
+        const paint = {
           colour: member.style.colour,
           mode: member.style.mode,
           limits,
@@ -1276,20 +1208,29 @@ export class BrowserView {
           haloColour: palette.labelHaloColor,
           font: LANE_FONT,
           fills: this.fills,
+          outline: this.outline,
           baseline: this.baseline,
           flip: member.style.flip,
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
           // what overlaying them was for.
-          opacity: lane.profiles.length > 1 ? member.style.opacity * 0.65 : member.style.opacity,
-        })
+          opacity:
+            lane.profiles.length > 1
+              ? member.style.opacity * OVERLAY_DIM
+              : member.style.opacity,
+        }
+        if (dragged === null || member.kind !== 'track') drawTrack(ctx, frame, profile, paint)
+        else drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
       }
       const first = lane.profiles[0]
-      const extent =
-        first.entry.style.group === ''
-          ? first.profile.extent
-          : (groups.get(first.entry.style.group) ?? first.profile.extent)
-      const limits = resolveLimits(first.entry.style.limits, extent)
+      const resolved = resolveLimits(
+        first.entry.style.limits,
+        extentFor(first.entry, first.profile.extent, groups),
+      )
+      // Mid-drag the range says where the hand is going, not where it came from:
+      // the faded copy behind it is already saying that, and the number a reader
+      // is watching is the one they are setting.
+      const limits = dragged === null ? resolved : scaledTo(resolved, dragged)
       if (this.text) {
         label = {
           // A sequence drawn as a value track is drawn as its GC content, and
@@ -1301,7 +1242,8 @@ export class BrowserView {
               ? { ...row.entry, label: `${row.entry.label} · GC` }
               : row.entry,
           ),
-          detail: { limits },
+          detail: { kind: 'limits', ...limits },
+          at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
     } else if (entry.payload?.kind === 'pairs') {
@@ -1309,7 +1251,13 @@ export class BrowserView {
         colour: entry.style.colour,
         opacity: entry.style.opacity,
       })
-      if (this.text) label = { entries: [entry], detail: `${fmt.int(drawn)} in view` }
+      if (this.text) {
+        label = {
+          entries: [entry],
+          detail: { kind: 'text', text: `${fmt.int(drawn)} in view` },
+          at: 'near',
+        }
+      }
     } else if (entry.payload?.kind === 'features') {
       // Taller rows than beside a map, because each one carries a name under
       // its features. Below that height the band is refused and the names go
@@ -1329,15 +1277,25 @@ export class BrowserView {
       if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
       else drawSegments(ctx, frame, entry.payload.data, layout, paint)
       if (this.text) {
-        label = { entries: [entry], detail: layout.dense ? `${fmt.int(layout.total)} in view` : '' }
+        label = {
+          entries: [entry],
+          detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+          at: 'near',
+        }
       }
     }
     ctx.restore()
-    if (label !== null) this.labelLane(ctx, lane, palette, label.entries, label.detail)
+    if (label !== null) this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at)
   }
 
   /**
    * The lane's name — or names, overlaid — and what its value axis spans.
+   *
+   * The drawing is `render/laneLabel.ts`'s, and shared with the stacks beside
+   * the map; what stays here is this view's own geometry — the name column it
+   * has and they do not, and the strip it keeps for its handles — plus the three
+   * things the pass hands back. The range's boxes and the autoscale spot become
+   * controls; the name's line becomes the handle's row.
    *
    * The range goes **under** the name rather than across the lane at its far
    * right. Two reasons, and the second is the one that matters. A number at the
@@ -1345,162 +1303,52 @@ export class BrowserView {
    * eye every time, and with four tracks stacked that is four crossings of the
    * window. And a number that is *under its name* is a number you can put a
    * caret in: the range is the one thing on a lane a reader edits, and it should
-   * be edited where it is read (see {@link openRangeEditor}).
-   *
-   * On a lane too short for a second line the range goes back beside the name,
-   * because a clipped lane should lose the *layout* rather than the fact.
+   * be edited where it is read.
    */
   private labelLane(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
     palette: ReturnType<typeof readCanvasPalette>,
     entries: AnnotationEntry[],
-    detail: string | { limits: { min: number; max: number } },
+    detail: LaneLabelSpec['detail'],
+    at: 'near' | 'far',
   ): void {
-    const frame = lane.frame
-    ctx.save()
-    ctx.font = NAME_FONT
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
-    // A flipped track hangs from the ceiling, so its name and its range move to
-    // the floor: at the top they would sit inside the ink they are labelling,
-    // which is the one place a caption must not be.
-    const inverted = entries.some((entry) => entry.style.flip)
     const column = this.nameColumn > 0
-    // In the column, one name per line — because the column is as wide as the
-    // widest of them, and two names side by side would make it as wide as both.
-    // Only where the lane has the height for it; a short overlay lane keeps the
-    // single row it has always had, and the column simply widens to fit.
-    const rows = column && frame.thickness >= NAME_TOP + entries.length * NAME_LINE + 6
-      ? entries.length
-      : 1
-    const block = (rows - 1) * NAME_LINE
-    // Under the names when the lane has room for a second line, beside them when
-    // it has not: a clipped lane should lose the *layout* rather than the fact.
-    const stacked = frame.thickness >= NAME_TOP + block + DETAIL_DROP + 6
-    const label = block + (stacked ? DETAIL_DROP : 0)
-    // In the column, centred on the lane — because there the label is beside its
-    // track rather than on top of it, and a caption in a column of them belongs
-    // level with the middle of the thing it names. Over the data it stays at the
-    // top, which is the one part of a coverage track that is usually empty; a
-    // name centred there would sit across the peaks it is labelling.
-    const nameTop = column
-      ? Math.max(6, Math.round((frame.thickness - label) / 2))
-      : inverted
-        ? Math.max(6, frame.thickness - NAME_TOP - DETAIL_DROP - block)
-        : NAME_TOP
-
-    // One measured run per row, so both the right edge and the column's width
-    // come from the same numbers.
-    const widthOf = (entry: AnnotationEntry): number =>
-      SWATCH + 5 + ctx.measureText(entry.label).width
-    const runs: AnnotationEntry[][] =
-      rows === 1 ? [entries] : entries.map((entry) => [entry])
-    const runWidth = (run: AnnotationEntry[]): number =>
-      run.reduce((total, entry) => total + widthOf(entry), 0) + (run.length - 1) * 12
-
+    const boxes = drawLaneLabel(ctx, lane.frame, {
+      names: entries.map((entry) => ({
+        id: entry.id,
+        text: entry.label,
+        colour: entry.style.colour,
+      })),
+      detail,
+      labelAt: at,
+      // Where a right-aligned label block ends: clear of the data, and clear of
+      // the handle hanging in front of it. Without the handle's room the name ran
+      // straight into the dots, which is exactly what a label and a control must
+      // not do — the eye reads them as one mark.
+      column: column
+        ? {
+            start: GRIP_MARGIN,
+            end: this.gutter - GUTTER_PAD - GRIP_ROOM,
+            pad: GUTTER_PAD + GRIP_ROOM,
+          }
+        : null,
+      style: BROWSER_LABEL_STYLE,
+      palette: { text: palette.labelColor, halo: palette.labelHaloColor },
+    })
+    this.wanted(boxes.wanted)
     // The handle goes on the first name's line, whatever that line turned out to
     // be: in the column it is centred on the lane, over the data it is at the
-    // top, and on a flipped track it is down at the floor with the name.
-    this.gripRows.set(lane.entry.id, nameTop)
-
-    // Where a right-aligned label block ends: clear of the data, and clear of
-    // the handle hanging in front of it. Without the handle's room the name ran
-    // straight into the dots, which is exactly what a label and a control must
-    // not do — the eye reads them as one mark.
-    const labelEnd = this.gutter - GUTTER_PAD - GRIP_ROOM
-
-    for (const [row, run] of runs.entries()) {
-      const across = nameTop + row * NAME_LINE
-      const total = runWidth(run)
-      this.wanted(total + GUTTER_PAD + GRIP_ROOM)
-      let at = column ? Math.max(GRIP_MARGIN, labelEnd - total) : frame.alongFrom + 5
-      for (const entry of run) {
-        // The colour, immediately before the name it belongs to. Drawn on the
-        // canvas rather than laid over it, so it is a legend rather than a
-        // control: it survives into the exported figure, where a reader who
-        // never saw the screen needs to know which line is which. What makes it
-        // *clickable* is a transparent colour input positioned over it — see
-        // {@link paintLaneControls} — which is the one part of it that is chrome.
-        const low = across - SWATCH / 2
-        const [sx, sy, sw, sh] = laneRect(frame, at, at + SWATCH, low, low + SWATCH)
-        ctx.save()
-        ctx.strokeStyle = palette.labelHaloColor
-        ctx.lineWidth = 2
-        ctx.strokeRect(sx, sy, sw, sh)
-        ctx.fillStyle = entry.style.colour
-        ctx.fillRect(sx, sy, sw, sh)
-        ctx.restore()
-        this.swatchHits.push({ entry, x: sx, y: sy, size: SWATCH })
-        at += SWATCH + 5
-        // Each name in its own track's colour, which is the whole legend an
-        // overlaid lane needs: the line is that colour and so is its name.
-        ctx.fillStyle = entries.length > 1 ? entry.style.colour : palette.labelColor
-        laneText(ctx, frame, entry.label, at, across, { halo: palette.labelHaloColor })
-        at += ctx.measureText(entry.label).width + 12
-      }
-      if (row === runs.length - 1) this.lastNameEnd = at - 12
+    // end the signal is not growing from.
+    this.gripRows.set(lane.entry.id, boxes.nameAcross)
+    for (const hit of boxes.limits) this.rangeHits.push({ entries, hit })
+    for (const swatch of boxes.swatches) {
+      const owner = entries.find((entry) => entry.id === swatch.id)
+      if (owner !== undefined) this.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
     }
-
-    ctx.font = RANGE_FONT
-    ctx.fillStyle = palette.labelColor
-    ctx.textAlign = 'left'
-    const across = stacked ? nameTop + block + DETAIL_DROP : nameTop + block
-    // The same slot the names gave up, so the range stays under the name it
-    // belongs to rather than starting a handle's width to the left of it.
-    const along = stacked ? (column ? GRIP_MARGIN : frame.alongFrom + 5) : this.lastNameEnd
-
-    if (typeof detail === 'string') {
-      if (detail !== '') {
-        const width = ctx.measureText(detail).width
-        const at = column && stacked ? Math.max(GRIP_MARGIN, labelEnd - width) : along
-        if (column && stacked) this.wanted(width + GUTTER_PAD + GRIP_ROOM)
-        laneText(ctx, frame, detail, at, across, { halo: palette.labelHaloColor })
-      }
-      ctx.restore()
-      return
+    if (boxes.auto !== null && entries.some((entry) => entry.kind === 'track')) {
+      this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
-
-    // Each end written separately, so each end has a box of its own to point at.
-    const min = formatLimit(detail.limits.min)
-    const max = formatLimit(detail.limits.max)
-    const top = frame.acrossFrom + across - HIT_HEIGHT / 2
-    // The range goes wherever its names went, so the two stay one label — and in
-    // the column it is right-aligned like them, with the lane's autoscale button
-    // kept inside the column rather than pushed onto the data.
-    const range = ctx.measureText(`${min} – ${max}`).width
-    const from = column && stacked
-      ? Math.max(GRIP_MARGIN, labelEnd - AUTO_SLOT - range)
-      : along
-    if (column && stacked) this.wanted(range + AUTO_SLOT + GUTTER_PAD + GRIP_ROOM)
-    // …but only where the box is clear of the lane's own lower border, which is
-    // the resize grip. On a short lane the two overlap, and an overlap is worse
-    // than either alone: the canvas draws the resize hairline, promising a drag,
-    // and the press opens a text box instead. A lane too short to hold both
-    // keeps the gesture and gives up the caret — the range is still drawn, and
-    // it is still editable the moment the lane is dragged taller.
-    const clear = top + HIT_HEIGHT <= frame.acrossFrom + frame.thickness - LANE_GRIP
-    let x = from
-    for (const part of ['min', 'max'] as const) {
-      const value = part === 'min' ? min : max
-      const width = ctx.measureText(value).width
-      laneText(ctx, frame, value, x, across, { halo: palette.labelHaloColor })
-      if (clear) {
-        this.rangeHits.push({ entries, part, value, x, y: top, width, height: HIT_HEIGHT })
-      }
-      x += width
-      if (part === 'min') {
-        const dash = ' – '
-        laneText(ctx, frame, dash, x, across, { halo: palette.labelHaloColor })
-        x += ctx.measureText(dash).width
-      }
-    }
-    // Where the lane's own autoscale button goes: immediately after the number
-    // it hands back to the data. Recorded here for the same reason the limits
-    // are — the button is placed against text this pass measured, and a second
-    // measurement is a second opinion about the same font.
-    if (clear) this.autoSpots.push({ entries, x: x + 5, y: top + HIT_HEIGHT / 2 })
-    ctx.restore()
   }
 
   /**
@@ -1548,143 +1396,10 @@ export class BrowserView {
   /** The min or max box under a track's name at this point, if any. */
   private rangeAt(x: number, y: number): RangeHit | null {
     for (const hit of this.rangeHits) {
-      if (x >= hit.x - 2 && x <= hit.x + hit.width + 2 && y >= hit.y && y <= hit.y + hit.height) {
-        return hit
-      }
+      const [bx, by, width, height] = hit.hit.box
+      if (x >= bx - 2 && x <= bx + width + 2 && y >= by && y <= by + height) return hit
     }
     return null
-  }
-
-  /**
-   * Put a caret in a limit, exactly where the limit is drawn.
-   *
-   * An `<input>` laid over the canvas at the box the text was measured into, so
-   * the number does not move when it becomes editable — which is the whole
-   * claim being made by drawing a text cursor over it. Committing sets the pair
-   * explicitly and turns autoscale off, because typing a bound *is* the decision
-   * that this track's axis is not the data's any more.
-   */
-  private openRangeEditor(hit: RangeHit): void {
-    // The one that is open is *finished*, not abandoned. `onDown` runs on
-    // `pointerdown` and calls `preventDefault`, so the press that lands on a
-    // second limit never produces the focus change that would have committed the
-    // first — and cancelling here would make the natural gesture for setting the
-    // same bound on two tracks in a row the one gesture that silently throws the
-    // first number away. Clicking anywhere *else* on the canvas already commits
-    // it; these two have to agree.
-    this.editor?.commit()
-    this.closeRangeEditor()
-    const named = hit.entries.map((entry) => entry.label).join(', ')
-    const input = el('input', {
-      class: 'input browser-edit',
-      type: 'text',
-      value: hit.value,
-      title:
-        `${hit.part === 'min' ? 'Bottom' : 'Top'} of ${named}’s value axis. ` +
-        'Enter commits, Escape leaves it alone.',
-    })
-    input.style.left = `${Math.max(0, hit.x - 3)}px`
-    input.style.top = `${hit.y - 2}px`
-    input.style.width = `${Math.max(44, hit.width + 22)}px`
-
-    let closed = false
-    const close = (): void => {
-      if (closed) return
-      closed = true
-      input.remove()
-      if (this.editor?.input === input) this.editor = null
-      this.schedule()
-    }
-    /** Say no without closing, so the reader can correct what they typed. */
-    const refuse = (): void => {
-      input.classList.add('is-bad')
-      window.setTimeout(() => input.classList.remove('is-bad'), 700)
-      input.focus()
-      input.select()
-    }
-    const commit = (typing: boolean): void => {
-      // Escape closes by removing the node, and removing a focused node is a
-      // blur — so without this guard the blur handler would commit the value
-      // the reader had just cancelled, which is the opposite of what Escape is.
-      if (closed) return
-      const text = input.value.trim()
-      // Opening a limit and not changing it is not a decision, and must not be
-      // recorded as one. Without this, clicking a limit on an autoscaled track
-      // and clicking away again takes it off autoscale for ever — at the
-      // *rounded* number the label showed, which is not even the ceiling it had.
-      // An emptied box is the same thing said differently: `input.select()` puts
-      // the whole number under the first keystroke, so Backspace is how an edit
-      // begun by accident is abandoned — and `Number('')` is `0`, which would
-      // otherwise store a floor nobody typed.
-      if (text === hit.value || text === '') {
-        close()
-        return
-      }
-      const typed = Number(text)
-      const first = this.props.store.byId(hit.entries[0]?.id ?? '')?.style.limits
-      if (!Number.isFinite(typed) || first === undefined) {
-        if (typing) refuse()
-        else close()
-        return
-      }
-      // Resolved rather than stored: an autoscaled track has no *stored* pair to
-      // amend, so the other end has to come from the axis on screen — which is
-      // the one the reader was looking at when they typed. (The side panel's own
-      // boxes seed from the file's whole-genome extent instead, because a panel
-      // is not a view and must not show a number that changes when you pan.)
-      const shown = this.shownLimits(hit.entries[0]?.id ?? '') ?? {
-        min: first.min,
-        max: first.max,
-      }
-      const next =
-        hit.part === 'min' ? { min: typed, max: shown.max } : { min: shown.min, max: typed }
-      // An inverted pair is refused rather than swallowed. `resolveLimits` would
-      // answer it with `{0, 1}`, which is a lane redrawn against an axis nobody
-      // asked for — and the reader would be left looking for the number they
-      // typed. Refused *in place*, with the caret still in it.
-      if (!(next.max > next.min)) {
-        if (typing) refuse()
-        else close()
-        return
-      }
-      close()
-      // Every track in the lane, not just the one whose numbers were written
-      // down: a lane draws one range under however many names it holds.
-      for (const entry of hit.entries) {
-        this.props.store.restyle(entry.id, { limits: { auto: false, ...next } })
-      }
-    }
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        commit(true)
-      } else if (event.key === 'Escape') {
-        event.preventDefault()
-        close()
-      }
-    })
-    // A blur is not a keystroke: whatever it carries is either good or gone.
-    // Refusing in place would fight for a focus the reader has already moved on
-    // from — and the box is closed by then anyway.
-    input.addEventListener('blur', () => commit(false))
-    this.stage.appendChild(input)
-    this.editor = { input, cancel: close, commit: () => commit(false) }
-    input.focus()
-    input.select()
-    this.schedule()
-  }
-
-  /**
-   * Take the caret away without taking the value.
-   *
-   * Through the editor's own `close`, not by detaching the node: removing a
-   * focused input *is* a blur, so a raw `remove()` would hand the blur handler a
-   * live editor and commit a value on the way out — from `destroy()`, that is a
-   * store write by a view that no longer exists.
-   */
-  private closeRangeEditor(): void {
-    this.editor?.cancel()
-    this.editor = null
   }
 
   /** The pair a track's axis is drawn with right now, group included. */
@@ -1693,11 +1408,7 @@ export class BrowserView {
     for (const lane of this.lanes) {
       const row = lane.profiles.find((profile) => profile.entry.id === id)
       if (row === undefined) continue
-      const extent =
-        row.entry.style.group === ''
-          ? row.profile.extent
-          : (groups.get(row.entry.style.group) ?? row.profile.extent)
-      return resolveLimits(row.entry.style.limits, extent)
+      return resolveLimits(row.entry.style.limits, extentFor(row.entry, row.profile.extent, groups))
     }
     return null
   }
@@ -1741,28 +1452,15 @@ export class BrowserView {
    * lines at two scales drawn on top of each other.
    */
   private groupRanges(): Map<string, { min: number; max: number }> {
-    const groups = new Map<string, { min: number; max: number }>()
-    for (const lane of this.lanes) {
-      for (const { entry, profile } of lane.profiles) {
-        const group = entry.style.group
-        // A group set to scale each of its members separately contributes
-        // nothing here, and that is the whole of what the setting does: with no
-        // entry in this map every lookup falls back to the track's own extent,
-        // which is what an ungrouped track uses.
-        if (group === '' || profile.extent === null || this.scalingOf(group) === 'each') continue
-        const seen = groups.get(group)
-        groups.set(
-          group,
-          seen === undefined
-            ? { ...profile.extent }
-            : {
-                min: Math.min(seen.min, profile.extent.min),
-                max: Math.max(seen.max, profile.extent.max),
-              },
-        )
-      }
-    }
-    return groups
+    return resolveGroupExtents(
+      this.lanes.flatMap((lane) =>
+        lane.profiles.map(({ entry, profile }) => ({
+          group: entry.style.group,
+          extent: profile.extent,
+        })),
+      ),
+      (group) => this.props.groups.scalingOf(group),
+    )
   }
 
   private zoomPhrase(): string {
@@ -1796,301 +1494,6 @@ export class BrowserView {
   // -------------------------------------------------------------------------
 
   /**
-   * The two controls that live *on* a lane: its colour, and its autoscale.
-   *
-   * What used to be here was a row of six — a swatch, two limit boxes, `auto`, a
-   * ceiling slider and a group menu — revealed by pointing at a lane. It was a
-   * settings panel that appeared under the hand while a reader was trying to
-   * read a track, it covered the busiest part of a coverage profile, and every
-   * one of its controls exists in the annotations card as well. What is left is
-   * the two things that are *about the picture at this moment*: which colour
-   * this line is, and give me back the data's own axis.
-   *
-   * Both are placed against marks the canvas has already drawn — the colour chip
-   * before the name, the button just past the range — so the geometry is decided
-   * once, by the paint, and these are click targets rather than a second layout.
-   */
-  private paintLaneControls(): void {
-    // Rebuilt only when the *set* of marks changes; a pan moves them, and moving
-    // an element is not replacing it. Replacing one under a pointer mid-drag
-    // would cancel the drag, and this runs on every frame of one.
-    const signature = [
-      ...this.swatchHits.map((hit) => `s${hit.entry.id}`),
-      ...this.autoSpots.map((spot) => `a${spot.entries.map((entry) => entry.id).join('+')}`),
-    ].join('|')
-    if (signature !== this.controlSignature) {
-      // The same signature an open limit editor is anchored to: a track added,
-      // removed or regrouped moves the lane the caret was measured into, and a
-      // box hanging over the wrong lane would commit its number to the right
-      // one. A pan is not in the signature, which is why the caret survives one.
-      if (this.controlSignature !== '') this.closeRangeEditor()
-      this.controlSignature = signature
-      this.overlays.replaceChildren(
-        ...this.swatchHits.map((hit) => this.swatchControl(hit.entry)),
-        ...this.autoSpots.map((spot) => this.autoControl(spot.entries)),
-      )
-    }
-
-    const nodes = this.overlays.children
-    const swatches = this.swatchHits.length
-    for (let i = 0; i < this.swatchHits.length; i++) {
-      const hit = this.swatchHits[i]
-      const node = nodes[i]
-      if (!(node instanceof HTMLElement)) continue
-      node.style.left = `${hit.x}px`
-      node.style.top = `${hit.y}px`
-      node.style.width = `${hit.size}px`
-      node.style.height = `${hit.size}px`
-      if (node instanceof HTMLInputElement && node !== document.activeElement) {
-        node.value = hit.entry.style.colour
-      }
-    }
-    for (let i = 0; i < this.autoSpots.length; i++) {
-      const spot = this.autoSpots[i]
-      const node = nodes[swatches + i]
-      if (!(node instanceof HTMLElement)) continue
-      // Centred on the line the range is written on, not hung from its top: the
-      // button is a mark beside two numbers and has to sit on the same baseline
-      // as them, which is what "aligned with the range" means.
-      node.style.left = `${spot.x}px`
-      node.style.top = `${spot.y - AUTO_ICON / 2}px`
-      // Lit when the axis on screen is the data's own, which is what the button
-      // would otherwise give no way of knowing without pressing it.
-      const auto = spot.entries.every(
-        (entry) => this.props.store.byId(entry.id)?.style.limits.auto === true,
-      )
-      node.classList.toggle('is-on', auto)
-      node.setAttribute('aria-pressed', String(auto))
-    }
-  }
-
-  /**
-   * A colour picker, transparent, over the chip the canvas drew.
-   *
-   * Invisible and clickable, which is normally the bug rather than the design —
-   * but here the thing being pointed at *is* drawn, a centimetre under the
-   * pointer, and this is only the hit target for it. An `<input type=color>`
-   * rather than a button that opens one, because `showPicker` is not offered
-   * everywhere and the input is the platform's own control.
-   */
-  private swatchControl(entry: AnnotationEntry): HTMLElement {
-    const input = el('input', {
-      class: 'browser-swatch',
-      type: 'color',
-      value: entry.style.colour,
-      title: `Colour for ${entry.label}`,
-    })
-    input.addEventListener('input', () =>
-      this.props.store.restyle(entry.id, { colour: input.value }),
-    )
-    return input
-  }
-
-  /**
-   * Hand this lane's value axis back to the data.
-   *
-   * The same mark as the Plot card's "autoscale everything", because it is the
-   * same action at a different scope, and a reader who has learnt one should not
-   * have to learn the other. It applies to every track in the lane: a lane draws
-   * one range under however many names it holds, so handing back half of it
-   * would leave two lines at two scales under one label.
-   */
-  private autoControl(entries: AnnotationEntry[]): HTMLElement {
-    const named = entries.map((entry) => entry.label).join(', ')
-    return iconButton(
-      'chevrons-up-down',
-      `Scale ${named} to what is in view, and follow it as the view moves. ` +
-        `Typing a limit turns it off; ${CEILING_LABEL} over the lane moves the ceiling.`,
-      () => {
-        for (const entry of entries) {
-          const current = this.props.store.byId(entry.id)?.style.limits ?? entry.style.limits
-          this.props.store.restyle(entry.id, { limits: { ...current, auto: true } })
-        }
-      },
-      { class: 'btn btn-icon browser-auto', size: AUTO_ICON },
-    )
-  }
-
-  /**
-   * The Groups card: what is in each group, and the two decisions about it.
-   *
-   * A group is a claim that these tracks are comparable, and until now the card
-   * showed only a count of them — so the claim could be made, and then not
-   * checked, from the one place in the application that exists to show it. Each
-   * group now lists its members by name and colour, and each name carries the ×
-   * that takes it back out.
-   *
-   * The two decisions are buttons rather than menus because each has exactly two
-   * states, and a two-item dropdown is a click, a read and a second click for
-   * something a button says outright. Both are labelled with **what pressing
-   * does**, not with what is currently true: the current state is visible in the
-   * picture, and a control that names its own state leaves a reader guessing
-   * whether they are reading a label or an action.
-   */
-  private paintGroups(): void {
-    const groups = this.props.store.scaleGroups()
-    if (groups.size === 0) {
-      this.groupsHost.replaceChildren(
-        el('p', {
-          class: 'hint',
-          text:
-            'Put two tracks in one group — from the settings on each row, or by ticking several ' +
-            'and choosing one below them — and they resolve to one pair of limits, which is the ' +
-            'only way two tracks can be compared by eye. A group can then be stacked or drawn in ' +
-            'a single lane.',
-        }),
-      )
-      return
-    }
-    const rows: HTMLElement[] = []
-    for (const [name, members] of groups) {
-      const overlaid = this.modeOf(name) === 'overlay'
-      const shared = this.scalingOf(name) === 'shared'
-      const open = this.openGroups.has(name)
-      // A group is shown when any of its members is: hiding one member by hand
-      // and then pressing the group's eye should hide the rest, not reveal the
-      // one that was put away.
-      const shown = members.some((member) => member.visible)
-
-      const eye = iconButton(
-        shown ? 'eye' : 'eye-off',
-        shown ? `Hide every track in ${name}` : `Show ${name} again`,
-        () => {
-          for (const member of members) this.props.store.update(member.id, { visible: !shown })
-        },
-        { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
-      )
-      eye.setAttribute('aria-pressed', String(shown))
-
-      const fold = iconButton(
-        open ? 'chevron-down' : 'chevron-right',
-        open ? `Fold ${name}` : `What is in ${name}, and how it is drawn`,
-        () => {
-          if (open) this.openGroups.delete(name)
-          else this.openGroups.add(name)
-          this.paintGroups()
-        },
-        // The row's own classes, not lookalikes: a group *is* a row, and two
-        // sets of rules for the same control is how the two drift apart.
-        { class: 'btn btn-icon ann-more', size: 14 },
-      )
-      fold.setAttribute('aria-expanded', String(open))
-
-      const head = el(
-        'div',
-        { class: 'group-head' },
-        el('span', { class: 'group-title', text: name, title: name }),
-        el('span', { class: 'hint group-count', text: `${members.length}` }),
-        eye,
-        fold,
-      )
-
-      const body = el(
-        'div',
-        { class: 'group-body' },
-        el(
-          'div',
-          { class: 'plot-icon-row' },
-          // Each of the three is a state the group is *in*, so each is one mark
-          // that changes to the other — `layers` for one lane, rows for several;
-          // a link for one shared axis, a broken one for each track's own. A word
-          // would say the same thing in a column sixteen characters wide that has
-          // four other things to fit in it.
-          iconButton(
-            overlaid ? 'rows-3' : 'layers',
-            overlaid
-              ? 'Stacked: give each of these a lane of its own again'
-              : 'Overlay: draw all of these into one lane, against one axis',
-            () => this.setMode(name, overlaid ? 'stacked' : 'overlay'),
-            { class: 'btn btn-icon', size: 14 },
-          ),
-          iconButton(
-            shared ? 'unlink' : 'link',
-            shared
-              ? 'Scale each: let every track here find its own limits, as an ungrouped one does'
-              : 'Scale together: one pair of limits over all of them, which is what makes them comparable',
-            () => this.setScaling(name, shared ? 'each' : 'shared'),
-            { class: 'btn btn-icon', size: 14 },
-          ),
-          iconButton(
-            'stretch-vertical',
-            'Give every track in this group the height of its tallest member',
-            () => {
-              const tallest = Math.max(...members.map((member) => member.style.size))
-              for (const member of members) this.props.store.restyle(member.id, { size: tallest })
-            },
-            { class: 'btn btn-icon', size: 14 },
-          ),
-        ),
-        el(
-          'div',
-          { class: 'group-members' },
-          // One member per row, name left and × right, so the crosses line up as
-          // a column: pills wrapping mid-name put every × at a different offset,
-          // and a list of things you can remove wants one place to aim at.
-          ...members.map((member) =>
-            el(
-              'div',
-              { class: 'group-member', title: member.label },
-              el('span', {
-                class: 'group-member-chip',
-                style: { background: member.style.colour },
-              }),
-              el('span', { class: 'group-member-name', text: member.label }),
-              // The same × the annotations card puts on a row, at the same size:
-              // this one takes a track out of a group rather than out of the
-              // session, and the two should not be two different marks.
-              iconButton('x', `Take ${member.label} out of ${name}`, () =>
-                this.props.store.restyle(member.id, { group: '' }),
-              { class: 'btn-close group-member-out', size: 14 }),
-            ),
-          ),
-        ),
-      )
-
-      rows.push(
-        el(
-          'div',
-          { class: `group-card${shown ? '' : ' is-hidden'}` },
-          head,
-          ...(open ? [body] : []),
-        ),
-      )
-    }
-    this.groupsHost.replaceChildren(...rows)
-  }
-
-  private setMode(group: string, mode: GroupMode): void {
-    const next = { ...this.props.memory.groups, [group]: mode }
-    this.props.memory.groups = next
-    this.props.memory.save(next)
-    this.paintGroups()
-    this.schedule()
-  }
-
-  /**
-   * Whether this group resolves one pair of limits or lets its members find
-   * their own.
-   *
-   * Redundant with nothing: grouping is *two* claims bundled together — these
-   * belong side by side, and these share an axis — and they are not always made
-   * at the same time. Two strands of one experiment want the shared axis; four
-   * tracks a reader has grouped to move and scale as a unit may each want their
-   * own, because one of them is coverage and the rest are ratios.
-   */
-  private setScaling(group: string, scaling: GroupScaling): void {
-    const next = { ...this.props.memory.scaling, [group]: scaling }
-    this.props.memory.scaling = next
-    this.props.memory.saveScaling(next)
-    this.paintGroups()
-    this.schedule()
-  }
-
-  private scalingOf(group: string): GroupScaling {
-    return this.props.memory.scaling[group] ?? 'shared'
-  }
-
-  /**
    * One of the two shared overlay preferences, as a pressed-in icon.
    *
    * It *writes* to the shared store and *reads* from the subscription, so the
@@ -2113,62 +1516,6 @@ export class BrowserView {
     sync()
     this.unsubscribes.push(subscribePlotOptions(sync))
     return node
-  }
-
-  /**
-   * A height to give every lane, and the button that gives it to them.
-   *
-   * Beside the stretch mark rather than under it, because the two are one
-   * decision taken two ways — *fill the window* or *this many pixels* — and a
-   * reader who has just stretched two tracks into two four-hundred-pixel lanes
-   * reaches for this one immediately afterwards.
-   *
-   * The box holds a number and nothing else happens when it changes: typing is
-   * not an instruction, and a store write per keystroke would restyle every
-   * track eight times on the way to `120`. Enter and the button are the
-   * instruction, which is also what makes the box a *remembered* number — it
-   * keeps what you last applied, so the second file of the session is one press
-   * away from the height you chose for the first.
-   */
-  private heightField(): HTMLElement {
-    const input = el('input', {
-      class: 'input input-num',
-      type: 'number',
-      value: String(DEFAULT_TRACK_HEIGHT),
-      title: `Height for every track, in pixels. ${LANE_MIN_SIZE} is the floor.`,
-    })
-    input.min = String(LANE_MIN_SIZE)
-    input.step = '10'
-    const apply = (): void => {
-      const typed = Number(input.value)
-      // An unreadable box is put back rather than obeyed: `Number('')` is 0, and
-      // silently setting every lane to the minimum is not what an empty field
-      // means.
-      if (!Number.isFinite(typed) || typed <= 0) {
-        input.value = String(DEFAULT_TRACK_HEIGHT)
-        return
-      }
-      const size = Math.max(LANE_MIN_SIZE, Math.round(typed))
-      input.value = String(size)
-      this.setTrackHeight(size)
-    }
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') apply()
-    })
-    return el(
-      'div',
-      { class: 'field field-block' },
-      el('span', { class: 'field-label', text: 'track height' }),
-      el(
-        'div',
-        { class: 'height-row' },
-        input,
-        button('set', apply, {
-          class: 'btn',
-          title: 'Give every track the height in the box, whatever the window is doing',
-        }),
-      ),
-    )
   }
 
   private exportCard(): HTMLElement {
@@ -2238,7 +1585,7 @@ export class BrowserView {
             { class: 'btn btn-icon', size: 15 },
           ),
         ),
-        this.heightField(),
+        trackHeightField((px) => this.setTrackHeight(px)),
         el(
           'div',
           { class: 'field field-block' },
@@ -2248,6 +1595,7 @@ export class BrowserView {
             { class: 'plot-icon-row' },
             this.optionToggle('text', 'type'),
             this.optionToggle('fills', 'chart-area'),
+            this.optionToggle('outline', 'chart-spline'),
             this.optionToggle('baseline', 'align-end-horizontal'),
             this.optionToggle('gutter', 'align-right'),
             this.optionToggle('crosshair', 'crosshair'),
@@ -2405,7 +1753,7 @@ export class BrowserView {
       const limit = this.rangeAt(x, y)
       if (limit !== null) {
         event.preventDefault()
-        this.openRangeEditor(limit)
+        this.editor.open(limit, NO_OFFSET)
         return
       }
       // The handle, before anything reads a direction out of the press: it is
@@ -2484,9 +1832,36 @@ export class BrowserView {
           this.drag = { mode: 'resize', entry: drag.lane.entry, y0: drag.y0, size: drag.lane.entry.style.size }
         } else if (event.altKey) {
           this.drag = { mode: 'select', x0: drag.x0, x }
+        } else if (Math.abs(dy) > Math.abs(dx) && scalableLane(drag.lane) !== null) {
+          // Across the lane rather than along it, which is the one direction a
+          // drag on a track had no meaning in: a pan reads the axis and a
+          // vertical drag moved the view by nothing at all. The direction is read
+          // once, at the slack, so a pan that wanders a few pixels off the
+          // horizontal stays the pan it started as.
+          const lane = drag.lane as Lane
+          this.drag = {
+            mode: 'scale',
+            lane,
+            members: scalableLane(lane) ?? [],
+            from: drag.y0 - lane.frame.acrossFrom,
+          }
+          this.scaling = { id: lane.entry.id, factor: 1 }
         } else {
           this.drag = { mode: 'pan', x: drag.x0 }
         }
+        return
+      }
+      if (drag.mode === 'scale') {
+        this.scaling = {
+          id: drag.lane.entry.id,
+          factor: ceilingFactor(
+            drag.lane.frame,
+            drag.from,
+            y - drag.lane.frame.acrossFrom,
+            drag.members[0]?.style.flip === true,
+          ),
+        }
+        this.schedule()
         return
       }
       if (drag.mode === 'pan') {
@@ -2540,6 +1915,10 @@ export class BrowserView {
       const { x, y } = at(event)
       if (drag.mode === 'press') {
         this.clickAt(x, y)
+        return
+      }
+      if (drag.mode === 'scale') {
+        this.commitScaling(drag.members)
         return
       }
       if (drag.mode === 'select') {
@@ -2613,7 +1992,7 @@ export class BrowserView {
         const hit = this.laneAt(y)
         if (hit === null) return
         event.preventDefault()
-        this.nudgeCeiling(hit.lane, event.deltaY < 0 ? 1 / 1.25 : 1.25)
+        this.nudgeCeiling(hit.lane, event.deltaY < 0 ? 1 / CEILING_STEP : CEILING_STEP)
         return
       }
       // A sideways scroll pans, which is what a trackpad's two fingers mean in
@@ -2657,6 +2036,7 @@ export class BrowserView {
     // asked for — or commits a half-drawn zoom selection.
     const onCancel = (): void => {
       this.drag = null
+      this.scaling = null
       canvas.classList.remove('grabbing')
       this.schedule()
     }
@@ -2687,14 +2067,41 @@ export class BrowserView {
    * first ⌘-scroll on an auto-scaled track starts from the range on screen
    * instead of jumping to a stored `[0, 1]` nobody chose.
    */
+  /**
+   * The end of a scaling drag: one store write for the whole gesture.
+   *
+   * From the range that was resolved when the drag began, which is the one the
+   * faded copy has been standing at all along — so the axis a reader let go on
+   * is the axis they get. Every track in the lane, because they share it.
+   */
+  private commitScaling(members: readonly AnnotationEntry[]): void {
+    const held = this.scaling
+    this.scaling = null
+    this.schedule()
+    if (held === null || held.factor === 1) return
+    for (const member of members) {
+      if (member.kind !== 'track') continue
+      const next = nudgedLimits(member.style.limits, this.extentOf(member.id), held.factor)
+      if (next !== null) this.props.store.restyle(member.id, { limits: next })
+    }
+  }
+
+  /** The extent one track's data covers on screen, its group included. */
+  private extentOf(id: string): { min: number; max: number } | null {
+    const groups = this.groupRanges()
+    for (const lane of this.lanes) {
+      const row = lane.profiles.find((profile) => profile.entry.id === id)
+      if (row !== undefined) return extentFor(row.entry, row.profile.extent, groups)
+    }
+    return null
+  }
+
   private nudgeCeiling(lane: Lane, factor: number): void {
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
     const target = row?.entry ?? lane.entry
     if (target.kind !== 'track') return
-    const limits = resolveLimits(target.style.limits, row?.profile.extent ?? null)
-    const max = limits.max * factor
-    if (!Number.isFinite(max) || max <= limits.min) return
-    this.props.store.restyle(target.id, { limits: { auto: false, min: limits.min, max } })
+    const next = nudgedLimits(target.style.limits, row?.profile.extent ?? null, factor)
+    if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }
 
   /**
@@ -3006,20 +2413,51 @@ export class BrowserView {
 /** Where the track name sits inside its lane, from the lane's top edge. */
 const NAME_TOP = 9
 
-/** How far under the name the value range sits, when the lane is tall enough. */
-const DETAIL_DROP = 14
+/**
+ * The sizes this view writes its small print at.
+ *
+ * Bigger than beside a map, in every field, and that is the difference between
+ * the two surfaces rather than an accident: a lane here is ninety pixels and its
+ * name is what identifies the row, while a lane beside a map can be sixteen and
+ * its text has to fit in one. The block itself is drawn by
+ * `render/laneLabel.ts`, which takes these rather than choosing them.
+ */
+const BROWSER_LABEL_STYLE: LaneLabelStyle = {
+  nameFont: NAME_FONT,
+  rangeFont: RANGE_FONT,
+  swatch: 9,
+  nameTop: NAME_TOP,
+  nameLine: 13,
+  detailDrop: 14,
+  inset: 5,
+  hitHeight: 15,
+  autoSlot: 16,
+  grip: LANE_GRIP,
+}
 
-/** Line height for a column of names, one per overlaid track. */
-const NAME_LINE = 13
+/** The layer and the canvas share an origin here, so nothing is offset. */
+const NO_OFFSET = { left: 0, top: 0 }
+
+/**
+ * The value tracks in a lane, or `null` where there is no axis to drag.
+ *
+ * A gene model and a peak set have no ceiling, so a drag across one has nothing
+ * to mean and falls through to the pan it has always been. A sequence lane is
+ * excluded for a reason of its own: GC content is a fraction, and an axis that
+ * is not `[0, 1]` is not a fraction any more.
+ */
+function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
+  if (lane === null) return null
+  const tracks = lane.profiles
+    .map((row) => row.entry)
+    .filter((entry) => entry.kind === 'track')
+  return tracks.length === 0 ? null : tracks
+}
 
 /** The coordinates written at the edges of a selection being dragged. */
 const SELECTION_FONT = '600 11px system-ui, sans-serif'
 const SELECTION_CHIP = 16
 const SELECTION_PAD = 5
-
-/** How wide the group bar in the left gutter is, in CSS pixels. */
-const GROUP_BAR = 3
-const GROUP_FONT = '600 9px system-ui, sans-serif'
 
 /**
  * The strip this view keeps at its left for the lane handles.
@@ -3045,12 +2483,6 @@ const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
  */
 const GRIP_IDLE = 0.45
 
-/** How tall a limit's click target is: the text, plus a little either side. */
-const HIT_HEIGHT = 15
-
-/** The colour chip before a track's name, in CSS pixels. */
-const SWATCH = 9
-
 /**
  * The width the name column starts at, before anything has been measured.
  *
@@ -3061,12 +2493,6 @@ const DEFAULT_GUTTER = 110
 
 /** Clear space between the end of a name and the start of the data. */
 const GUTTER_PAD = 8
-
-/** Room kept at the right of the column for a lane's autoscale button. */
-const AUTO_SLOT = 16
-
-/** The autoscale mark beside a lane's range: the glyph, and nothing else. */
-const AUTO_ICON = 13
 
 /**
  * Below this many bases per pixel, the readout names the base rather than
@@ -3080,35 +2506,18 @@ const AUTO_ICON = 13
  */
 const EXACT_BP_PER_PIXEL = 10
 
-/** A track's colour chip, and the square it was drawn in. */
-interface SwatchHit {
-  entry: AnnotationEntry
-  /** Canvas pixels, in the browser's own coordinates. */
-  x: number
-  y: number
-  size: number
-}
-
-/** One end of a lane's value axis, and the box it was drawn in. */
+/**
+ * One end of a lane's value axis, the box it was drawn in, and whose it is.
+ *
+ * The tracks are every track the range belongs to — which for an overlay group
+ * is all of them, not the one whose limits happened to be written down. A lane
+ * draws one range under however many names it holds, and that single pair is a
+ * claim about the *lane*: the whole point of overlaying two tracks is that they
+ * are drawn against one axis.
+ */
 interface RangeHit {
-  /**
-   * Every track the range belongs to — which for an overlay group is all of
-   * them, not the one whose limits happened to be written down.
-   *
-   * A lane draws one range under however many names it holds, and that single
-   * pair is a claim about the *lane*: the whole point of overlaying two tracks
-   * is that they are drawn against one axis. Committing to only the first would
-   * leave two lines at two scales in one lane with one label, which is the exact
-   * picture the group exists to prevent.
-   */
   entries: AnnotationEntry[]
-  part: 'min' | 'max'
-  value: string
-  /** Canvas pixels, in the browser's own coordinates. */
-  x: number
-  y: number
-  width: number
-  height: number
+  hit: LimitBox
 }
 
 /** Room under the figure for the one-line caption the export adds. */
@@ -3130,10 +2539,3 @@ type BrowserExportFormat = (typeof BROWSER_EXPORT_FORMATS)[number]['value']
 
 /** How long a continuous gesture must rest before the locus reaches the URL. */
 const REPORT_DELAY = 220
-
-/** Which modifier means "move this track's ceiling" — see the wheel handler. */
-const CEILING_MODIFIER = (event: WheelEvent): boolean =>
-  isMac() ? event.metaKey && !event.ctrlKey : event.altKey
-
-/** What to call it in a tooltip, on this platform. */
-const CEILING_LABEL = isMac() ? '⌘-scroll' : 'Alt-scroll'

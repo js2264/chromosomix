@@ -17,27 +17,52 @@
  * lands, so a lane never blinks.
  */
 
+import {
+  OVERLAY_DIM,
+  extentFor,
+  planStack,
+  resolveGroupExtents,
+  type GroupSettings,
+} from '../annotations/groups'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit, type FeatureLayout } from '../render/features'
 import {
   GRIP_ROOM,
+  GROUP_BAR,
   clipLane,
   drawGrip,
+  drawGroupBars,
   gripAcross,
   gripBox,
-  laneText,
+  groupRuns,
   withinGrip,
   type LaneFrame,
 } from '../render/lane'
+import {
+  drawLaneLabel,
+  labelEndFor,
+  type LaneLabelSpec,
+  type LaneLabelStyle,
+  type LimitBox,
+} from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
-import { drawTrack, formatLimit, profileOf, resolveLimits, type PixelProfile } from '../render/tracks'
+import {
+  drawTrack,
+  drawTrackScaling,
+  profileOf,
+  resolveLimits,
+  scaledTo,
+  type PixelProfile,
+} from '../render/tracks'
 import type { ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, TrackSampleSet } from '../annotations/types'
 import { el, fmt } from './dom'
+import type { LaneMark } from './LaneControls'
+import { LANE_MIN_SIZE } from './trackControls'
 import { getPlotOptions } from './plotOptions'
 
 /** Which edge a lane stack is on. `bottom` follows columns, `right` follows rows. */
@@ -76,6 +101,14 @@ export interface LaneGeometry {
   handles: boolean
   /** The id of the lane under the pointer, whose handle is drawn full strength. */
   grip: string | null
+  /**
+   * A lane whose ceiling is being dragged, and how far it has moved.
+   *
+   * `null` in a figure: a gesture in progress is not something a saved plot has
+   * any use for, and the faded copy is only there to be compared against by the
+   * hand making it.
+   */
+  scaling: { id: string; factor: number } | null
   palette: { guide: string; halo: string; crosshair: string }
 }
 
@@ -111,11 +144,13 @@ export interface LaneReadout {
 }
 
 /** Gap between two stacked lanes, in CSS pixels. */
-const LANE_GAP = 4
+export const LANE_GAP = 4
 
 /** A lane's position in its stack, resolved per frame. */
 interface Slot {
   entry: AnnotationEntry
+  /** Tracks drawn *into* this lane, when its group is in overlay mode. */
+  overlaid: AnnotationEntry[]
   acrossFrom: number
   thickness: number
 }
@@ -123,9 +158,34 @@ interface Slot {
 /** One lane, ready to paint: where it goes, and what it is a picture of. */
 interface Lane {
   entry: AnnotationEntry
+  overlaid: AnnotationEntry[]
   frame: LaneFrame
-  /** Present for a value track; `null` for the feature kinds. */
-  profile: PixelProfile | null
+  /** One per value track in the lane; empty for the feature kinds. */
+  profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
+}
+
+/**
+ * What one frame's paint left behind, per edge, for the pointer to use.
+ *
+ * The lanes used to draw their label and forget it, which is what made the two
+ * numbers under a track's name inert beside the map: a range you cannot find
+ * again is a range you cannot put a caret in. Kept exactly as {@link layouts}
+ * already keeps the feature layouts, and for the same reason — the box a reader
+ * points at must be the box the text was measured into (§8.4).
+ */
+interface EdgeState {
+  /** The value axis each lane was drawn against, by the lane's own entry id. */
+  limits: Map<string, { min: number; max: number }>
+  /** The line each lane's handle sits on, by the lane's own entry id. */
+  gripRows: Map<string, number>
+  /** Every limit box on this edge, with the tracks it belongs to. */
+  ranges: Array<{ entries: AnnotationEntry[]; hit: LimitBox }>
+  /** The colour chips and autoscale buttons this edge wants over it. */
+  marks: LaneMark[]
+}
+
+function emptyEdgeState(): EdgeState {
+  return { limits: new Map(), gripRows: new Map(), ranges: [], marks: [] }
 }
 
 /**
@@ -149,6 +209,11 @@ export class AnnotationLanes {
   private readonly cache: SampleCache
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: FeatureLayout }>()
+  /** What each stack's last *screen* paint measured; the export records nothing. */
+  private readonly state: Record<LaneEdge, EdgeState> = {
+    bottom: emptyEdgeState(),
+    right: emptyEdgeState(),
+  }
   private dpr = 1
 
   constructor(
@@ -161,6 +226,14 @@ export class AnnotationLanes {
        */
       manual: ManualStore
       client: AnnotationClient
+      /**
+       * How each group is drawn and scaled, for this file.
+       *
+       * The session's instance, shared with the 1D browser: a group overlaid
+       * there is overlaid here, because it is the same group of the same tracks
+       * (`annotations/groups.ts`).
+       */
+      groups: GroupSettings
       /** Ask for a repaint; the panel coalesces it into its own frame. */
       onChange(): void
     },
@@ -187,18 +260,31 @@ export class AnnotationLanes {
     this.layouts.clear()
   }
 
-  /** The lanes on one edge, in load order, nearest the map first. */
+  /**
+   * The lanes on one edge, in load order, nearest the map first.
+   *
+   * A group in **overlay** mode collapses to one lane, exactly as it does in the
+   * 1D browser and through the same `planStack`: the first of its members on
+   * this edge keeps its slot and the rest are drawn into it. That is what makes
+   * two strands of an RNA-seq experiment one picture rather than two stacked
+   * ones a reader has to hold against each other — and because a group already
+   * shares one pair of limits, the two are directly comparable by construction.
+   */
   private slotsFor(edge: LaneEdge): Slot[] {
     const axis = edge === 'bottom' ? this.axes.cols : this.axes.rows
     if (axis === null) return []
-    const out: Slot[] = []
-    let across = 0
-    for (const entry of this.options.store.drawnOn(edge)) {
-      const thickness = Math.max(10, Math.round(entry.style.size))
-      out.push({ entry, acrossFrom: across, thickness })
-      across += thickness + LANE_GAP
-    }
-    return out
+    return planStack(this.options.store.drawnOn(edge), {
+      groupOf: (entry) => entry.style.group,
+      modeOf: (group) => this.options.groups.modeOf(group),
+      sizeOf: (entry) => entry.style.size,
+      gap: LANE_GAP,
+      minimum: LANE_MIN_SIZE,
+    }).map((slot) => ({
+      entry: slot.host,
+      overlaid: slot.overlaid,
+      acrossFrom: slot.acrossFrom,
+      thickness: slot.thickness,
+    }))
   }
 
   /**
@@ -237,6 +323,36 @@ export class AnnotationLanes {
     return this.options.manual.arrowheads.length > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
   }
 
+  /** The runs of adjacent lanes on one edge that share a value axis. */
+  private runsOn(edge: LaneEdge): ReturnType<typeof groupRuns> {
+    return groupRuns(
+      this.slotsFor(edge).map((slot) => ({
+        group: slot.entry.style.group,
+        colour: slot.entry.style.colour,
+        acrossFrom: slot.acrossFrom,
+        thickness: slot.thickness,
+      })),
+      LANE_GAP,
+    )
+  }
+
+  /**
+   * Where along the axis a stack's group bars go: the end the handles are not on.
+   *
+   * A bar marks a *run of lanes*, so it spans the stacking direction and is
+   * three pixels thick along the genomic one — which means it has to sit in one
+   * of the two margins the plot leaves at the ends of that axis, and the plot
+   * leaves exactly {@link EDGE_PAD}-worth of each. The handles have already
+   * claimed one: they hang before a bottom lane and after a right-hand one
+   * ({@link gripFrom}). The bar takes the other, which is the far end below the
+   * map and the near end beside it — and neither ever touches data.
+   */
+  private barAlong(frame: LaneFrame): number {
+    return frame.orientation === 'bottom'
+      ? frame.alongTo + GROUP_GAP
+      : frame.alongFrom - GROUP_GAP - GROUP_BAR
+  }
+
   /** Total thickness one edge needs, or `0` when it has no lanes. */
   thicknessOf(edge: LaneEdge): number {
     const slots = this.slotsFor(edge)
@@ -261,6 +377,7 @@ export class AnnotationLanes {
     for (const edge of EDGES) {
       const canvas = edge === 'bottom' ? this.bottomEl : this.rightEl
       const lanes = built[edge]
+      this.state[edge] = emptyEdgeState()
       canvas.classList.toggle('hidden', lanes.length === 0)
       if (lanes.length === 0) continue
 
@@ -284,8 +401,82 @@ export class AnnotationLanes {
       if (ctx === null) continue
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
       ctx.clearRect(0, 0, cssWidth, cssHeight)
-      this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
+      this.state[edge] = this.paintEdge(ctx, edge, geometry, lanes, built.groups, this.dpr)
     }
+  }
+
+  /** The colour chips and autoscale buttons one stack wants laid over it. */
+  marksOn(edge: LaneEdge): readonly LaneMark[] {
+    return this.state[edge].marks
+  }
+
+  /**
+   * The limit box under a point in a stack's canvas, if any.
+   *
+   * From the boxes the paint measured, not from a second measurement of the same
+   * text: any second opinion about the same font differs from the first by
+   * exactly the pixel the click misses by.
+   */
+  limitAt(
+    edge: LaneEdge,
+    x: number,
+    y: number,
+  ): { entries: AnnotationEntry[]; hit: LimitBox } | null {
+    for (const range of this.state[edge].ranges) {
+      const [bx, by, width, height] = range.hit.box
+      if (x >= bx - 2 && x <= bx + width + 2 && y >= by - 2 && y <= by + height + 2) return range
+    }
+    return null
+  }
+
+  /**
+   * The pair a track's axis was last drawn with, group included.
+   *
+   * The twin of the browser's own `shownLimits`, and what the limit editor seeds
+   * the *untouched* end from: an autoscaled track has no stored pair to amend,
+   * so the other end has to come from the axis on screen — which is the one the
+   * reader was looking at when they typed.
+   */
+  shownLimits(id: string): { min: number; max: number } | null {
+    for (const edge of EDGES) {
+      const found = this.state[edge].limits.get(id)
+      if (found !== undefined) return found
+    }
+    return null
+  }
+
+  /**
+   * The extent one lane's data covers on screen, for a relative ceiling step.
+   *
+   * The *lane's*, group included, so ⌘-scrolling a member of a shared-axis group
+   * moves the axis all of them are drawn against rather than one track's own.
+   */
+  extentOf(edge: LaneEdge, id: string): { min: number; max: number } | null {
+    return this.state[edge].limits.get(id) ?? null
+  }
+
+  /** Every track drawn in the lane hosted by `id`, overlaid members included. */
+  membersOf(edge: LaneEdge, id: string): AnnotationEntry[] {
+    const slot = this.slotsFor(edge).find((each) => each.entry.id === id)
+    return slot === undefined ? [] : [slot.entry, ...slot.overlaid]
+  }
+
+  /** Where one lane starts across its stack, in that stack's canvas pixels. */
+  acrossOf(edge: LaneEdge, id: string): number {
+    return this.slotsFor(edge).find((slot) => slot.entry.id === id)?.acrossFrom ?? 0
+  }
+
+  /**
+   * One lane's frame, for a gesture that has to reason in its coordinates.
+   *
+   * Rebuilt rather than retained, because a frame is cheap and a *stale* one is
+   * a gesture answering about a window that has since moved. The drag that wants
+   * it is asking one question — which way across this lane is more — and
+   * `valueAcross` needs the whole frame to answer it.
+   */
+  frameFor(edge: LaneEdge, id: string, geometry: LaneGeometry): LaneFrame | null {
+    const slot = this.slotsFor(edge).find((each) => each.entry.id === id)
+    return slot === undefined ? null : this.frameOf(edge, slot, geometry)
   }
 
   /**
@@ -324,22 +515,19 @@ export class AnnotationLanes {
 
     // The group ranges, over every lane on both edges: a group is a claim that
     // these tracks are comparable, and comparing them on two different scales
-    // because they happen to be on different edges would defeat it.
-    const groups = new Map<string, { min: number; max: number }>()
-    for (const lane of [...bottom, ...right]) {
-      const group = lane.entry.style.group
-      if (group === '' || lane.profile === null || lane.profile.extent === null) continue
-      const seen = groups.get(group)
-      groups.set(
-        group,
-        seen === undefined
-          ? { ...lane.profile.extent }
-          : {
-              min: Math.min(seen.min, lane.profile.extent.min),
-              max: Math.max(seen.max, lane.profile.extent.max),
-            },
-      )
-    }
+    // because they happen to be on different edges would defeat it. Through the
+    // shared resolver, so a group set to scale each of its members separately is
+    // honoured here exactly as it is in the browser — which it was not while
+    // this file unioned every group unconditionally.
+    const groups = resolveGroupExtents(
+      [...bottom, ...right].flatMap((lane) =>
+        lane.profiles.map(({ entry, profile }) => ({
+          group: entry.style.group,
+          extent: profile.extent,
+        })),
+      ),
+      (group) => this.options.groups.scalingOf(group),
+    )
     return { bottom, right, groups }
   }
 
@@ -348,14 +536,18 @@ export class AnnotationLanes {
     if (axis === null) return []
     return this.slotsFor(edge).map((slot) => {
       const frame = this.frameOf(edge, slot, geometry)
-      // A sequence is a value track from here: beside a map, where a pixel is a
-      // whole bin, a FASTA can only ever be its GC content — the residues need
-      // a base per pixel and a bin is a thousand of them.
-      const profile =
-        slot.entry.kind === 'track' || slot.entry.kind === 'sequence'
-          ? profileOf(frame, axis, this.samplesFor(slot.entry, edge, axis, frame))
-          : null
-      return { entry: slot.entry, frame, profile }
+      const profiles: Lane['profiles'] = []
+      for (const member of [slot.entry, ...slot.overlaid]) {
+        // A sequence is a value track from here: beside a map, where a pixel is
+        // a whole bin, a FASTA can only ever be its GC content — the residues
+        // need a base per pixel and a bin is a thousand of them.
+        if (member.kind !== 'track' && member.kind !== 'sequence') continue
+        profiles.push({
+          entry: member,
+          profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
+        })
+      }
+      return { entry: slot.entry, overlaid: slot.overlaid, frame, profiles }
     })
   }
 
@@ -418,42 +610,77 @@ export class AnnotationLanes {
     lanes: Lane[],
     groups: Map<string, { min: number; max: number }>,
     dpr: number,
-  ): void {
+  ): EdgeState {
+    const state = emptyEdgeState()
     const axis = edge === 'bottom' ? this.axes.cols : this.axes.rows
-    if (axis === null) return
+    if (axis === null) return state
     // One read for the whole stack: every lane asks the same question and the
     // store behind it is a module-level one.
-    const { text, fills, baseline } = getPlotOptions()
+    const { text, fills, outline, baseline } = getPlotOptions()
 
     for (const lane of lanes) {
-      const { entry, frame, profile } = lane
+      const { entry, frame, profiles } = lane
+      // What to write on the lane, decided by the branch that drew it and
+      // written *after* the clip is released, exactly as the browser does it.
+      let label: {
+        entries: AnnotationEntry[]
+        detail: LaneLabelSpec['detail']
+        at: 'near' | 'far'
+      } | null = null
       clipLane(ctx, frame)
-      if ((entry.kind === 'track' || entry.kind === 'sequence') && profile !== null) {
-        const extent =
-          entry.style.group === ''
-            ? profile.extent
-            : (groups.get(entry.style.group) ?? profile.extent)
-        const limits = resolveLimits(entry.style.limits, extent)
-        drawTrack(ctx, frame, profile, {
-          colour: entry.style.colour,
-          mode: entry.style.mode,
-          limits,
-          guideColour: geometry.palette.guide,
-          haloColour: geometry.palette.halo,
-          font: LANE_FONT,
-          opacity: entry.style.opacity,
-          fills,
-          baseline,
-          flip: entry.style.flip,
-        })
-        if (text) {
-          this.labelLane(
-            ctx,
-            frame,
-            geometry,
-            entry.kind === 'sequence' ? `${entry.label} · GC` : entry.label,
-            `${formatLimit(limits.min)} – ${formatLimit(limits.max)}`,
+      if (profiles.length > 0) {
+        // While a ceiling is being dragged this lane is drawn twice: once as it
+        // stood, faded and still, and once as the hand is asking for it.
+        const dragged = geometry.scaling?.id === entry.id ? geometry.scaling.factor : null
+        for (const { entry: member, profile } of profiles) {
+          const limits = resolveLimits(
+            member.style.limits,
+            extentFor(member, profile.extent, groups),
           )
+          const paint = {
+            colour: member.style.colour,
+            mode: member.style.mode,
+            limits,
+            guideColour: geometry.palette.guide,
+            haloColour: geometry.palette.halo,
+            font: LANE_FONT,
+            // Overlaid tracks are translucent by necessity: two opaque areas in
+            // one lane means the second hides the first, which is the opposite
+            // of what overlaying them was for.
+            opacity:
+              profiles.length > 1 ? member.style.opacity * OVERLAY_DIM : member.style.opacity,
+            fills,
+            outline,
+            baseline,
+            flip: member.style.flip,
+          }
+          if (dragged === null || member.kind !== 'track') drawTrack(ctx, frame, profile, paint)
+          else drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
+        }
+        const first = profiles[0]
+        const limits = resolveLimits(
+          first.entry.style.limits,
+          extentFor(first.entry, first.profile.extent, groups),
+        )
+        // Every member's axis is the lane's, so one entry per member: the
+        // ceiling gesture and the limit editor both act on the lane. The
+        // *committed* pair, never the one under a drag — this is what the next
+        // gesture starts from, and a half-finished one is not a decision.
+        for (const { entry: member } of profiles) state.limits.set(member.id, limits)
+        if (text) {
+          // Mid-drag the range says where the hand is going, not where it came
+          // from: the faded copy behind it is already saying that, and the
+          // number a reader is watching is the one they are setting.
+          const shown = dragged === null ? limits : scaledTo(limits, dragged)
+          label = {
+            entries: profiles.map(({ entry: member }) =>
+              member.kind === 'sequence'
+                ? { ...member, label: `${member.label} · GC` }
+                : member,
+            ),
+            detail: { kind: 'limits', ...shown },
+            at: labelEndFor(frame, shown, first.entry.style.flip),
+          }
         }
       } else if (entry.payload?.kind === 'features') {
         const rows = entry.kind === 'gtf' ? rowsThatFit(frame.thickness, 13) : rowsThatFit(frame.thickness)
@@ -470,21 +697,24 @@ export class AnnotationLanes {
         if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
         else drawSegments(ctx, frame, entry.payload.data, layout, paint)
         if (text) {
-          this.labelLane(
-            ctx,
-            frame,
-            geometry,
-            entry.label,
-            layout.dense ? `${fmt.int(layout.total)} in view` : '',
-          )
+          label = {
+            entries: [entry],
+            detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+            at: 'near',
+          }
         }
       }
       ctx.restore()
+      if (label !== null) this.labelLane(ctx, lane, geometry, label, state)
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
       // under. Every lane has one at all times — it costs the picture nothing
       // out there — and the one under the pointer is drawn at full strength.
+      //
+      // Level with the lane's *name*, wherever the label pass put it: on a
+      // flipped track that is the other end of the lane, and a handle left at a
+      // constant offset would then belong to nothing in particular.
       //
       // Not under the `text` option: that option is about what the figure
       // carries, and this is a control.
@@ -492,7 +722,7 @@ export class AnnotationLanes {
         drawGrip(
           ctx,
           frame,
-          gripAcross(frame, NAME_ACROSS),
+          gripAcross(frame, state.gripRows.get(entry.id) ?? NAME_ACROSS),
           geometry.palette.guide,
           geometry.grip === entry.id ? 1 : GRIP_IDLE,
         )
@@ -571,49 +801,76 @@ export class AnnotationLanes {
           anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
         }
       }
+
+      // The bar for each run of lanes that share a value axis. Beside the map a
+      // group has always been honoured *numerically* — its members resolve to
+      // one pair of limits — and drawn nowhere, so two tracks on one axis and two
+      // that happen to agree looked identical, on screen and in the figure.
+      //
+      // Without the group's **name**, which the browser writes beside its own
+      // bar. There the margin is thirteen pixels and can be more; here it is the
+      // plot's six, and six pixels cannot hold nine-pixel type. The colour ties a
+      // bar to its members, and the Groups card is where the name is read.
+      drawGroupBars(ctx, this.runsOn(edge), {
+        orientation: edge === 'bottom' ? 'bottom' : 'right',
+        along: this.barAlong(last.frame),
+        text: false,
+      })
     }
+    return state
   }
 
   /**
-   * The lane's name, and what its value axis spans.
+   * The lane's name, its colour chip, and what its value axis spans.
    *
    * Inside the lane rather than in a gutter beside it. The gutters belong to the
    * heatmap's block labels and collapse to six pixels when those are off — which
    * is this app's default — so a name outside would have to reopen a band the
    * reader closed. A halo is what keeps it readable over the track's own ink.
    *
-   * The range goes **under** the name, as it does in the 1D browser, whenever
-   * the lane is tall enough for two lines. A number at the opposite end of a
-   * six-hundred-pixel lane from the name it belongs to has to be paired up by
-   * eye every time; on a lane too short for the second line it goes back beside
-   * the name, which is the same fallback and the same threshold the browser
-   * uses. Two implementations of one layout is the drift §5.8 exists to prevent.
+   * The drawing is `render/laneLabel.ts`'s, and it is the same call the 1D
+   * browser makes: two implementations of one layout is the drift §5.8 exists to
+   * prevent, and it is what left these two numbers inert here while the same two
+   * were editable there. What the pass hands back is the point of it — the box
+   * each end was measured into, the spot for the autoscale button, and the line
+   * the name landed on, which is where this lane's handle goes.
+   *
+   * No name column. `column: null`, always, and not an oversight: the strip
+   * before a bottom lane is the heatmap's own left margin, a canvas cannot grow
+   * backwards to make one of its own, and a lane that started somewhere else
+   * would no longer be under the column it describes.
    */
   private labelLane(
     ctx: CanvasRenderingContext2D,
-    frame: LaneFrame,
+    lane: Lane,
     geometry: LaneGeometry,
-    name: string,
-    detail: string,
+    label: { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' },
+    state: EdgeState,
   ): void {
-    ctx.save()
-    ctx.font = LANE_FONT
-    ctx.fillStyle = geometry.palette.guide
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
-    // Against the start of the data, as it has always been: the handle hangs in
-    // the margin outside the lane and takes nothing off the front of the label.
-    const dir = frame.orientation === 'bottom' ? 1 : -1
-    const near = labelNear(frame)
-    laneText(ctx, frame, name, near, NAME_ACROSS, { halo: geometry.palette.halo })
-    if (detail !== '') {
-      const stacked = frame.thickness >= NAME_ACROSS + DETAIL_DROP + 6
-      const along = stacked ? near : near + dir * (ctx.measureText(name).width + 10)
-      laneText(ctx, frame, detail, along, stacked ? NAME_ACROSS + DETAIL_DROP : NAME_ACROSS, {
-        halo: geometry.palette.halo,
-      })
+    const boxes = drawLaneLabel(ctx, lane.frame, {
+      names: label.entries.map((entry) => ({
+        id: entry.id,
+        text: entry.label,
+        colour: entry.style.colour,
+      })),
+      detail: label.detail,
+      labelAt: label.at,
+      column: null,
+      style: LANE_LABEL_STYLE,
+      palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
+    })
+    state.gripRows.set(lane.entry.id, boxes.nameAcross)
+    // Chrome, not picture: the export asks for no handles, and it must get no
+    // hit boxes either — a saved figure has nothing to be pointed at.
+    if (!geometry.handles) return
+    for (const hit of boxes.limits) state.ranges.push({ entries: label.entries, hit })
+    for (const swatch of boxes.swatches) {
+      const owner = label.entries.find((entry) => entry.id === swatch.id)
+      if (owner !== undefined) state.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
     }
-    ctx.restore()
+    if (boxes.auto !== null && label.entries.some((entry) => entry.kind === 'track')) {
+      state.marks.push({ kind: 'auto', entries: label.entries, at: boxes.auto })
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -646,7 +903,7 @@ export class AnnotationLanes {
     edge: LaneEdge,
     x: number,
     y: number,
-  ): { entry: AnnotationEntry; index: number; onBorder: boolean } | null {
+  ): { entry: AnnotationEntry; members: AnnotationEntry[]; index: number; onBorder: boolean } | null {
     const across = edge === 'bottom' ? y : x
     const slots = this.slotsFor(edge)
     for (let index = 0; index < slots.length; index++) {
@@ -655,6 +912,7 @@ export class AnnotationLanes {
       if (offset < -LANE_GRIP || offset > slot.thickness + LANE_GRIP) continue
       return {
         entry: slot.entry,
+        members: [slot.entry, ...slot.overlaid],
         index,
         onBorder: offset > slot.thickness - LANE_GRIP,
       }
@@ -668,12 +926,50 @@ export class AnnotationLanes {
   }
 
   /**
+   * The lanes on one edge, as the tracks each of them draws.
+   *
+   * What a bulk height write acts on: a *lane* and not a track, so an overlay
+   * group sharing one strip is set once between its members rather than once
+   * each — which would be the same assignment written three times.
+   */
+  lanesOn(edge: LaneEdge): Array<{ members: AnnotationEntry[] }> {
+    return this.slotsFor(edge).map((slot) => ({ members: [slot.entry, ...slot.overlaid] }))
+  }
+
+  /**
+   * Move a lane to the slot the pointer is over, by **identity**.
+   *
+   * A slot index is not a store index, and treating one as the other is what the
+   * lane drag used to do: `boundariesOf` counts the lanes actually *drawn* on
+   * this edge — visible, ready, not overlaid into somebody else's slot — while
+   * the store's order is every linear entry there is. With one track hidden the
+   * drop landed a slot early, and the last slot could not be reached at all. So
+   * the slot names a lane, the lane names an entry, and the entry's position in
+   * the store is looked up — which is what the 1D browser has always done.
+   *
+   * The whole lane moves, which for a group drawn in overlay mode is every
+   * member of it: they share one slot on screen, and splitting them would put
+   * half a group somewhere else.
+   */
+  moveToSlot(edge: LaneEdge, id: string, slot: number): void {
+    const slots = this.slotsFor(edge)
+    const target = slots[slot]
+    if (target === undefined || target.entry.id === id) return
+    const to = this.options.store.entries.findIndex((row) => row.id === target.entry.id)
+    if (to < 0) return
+    const moving = slots.find((each) => each.entry.id === id)
+    if (moving === undefined) return
+    const members = [moving.entry, ...moving.overlaid]
+    members.forEach((member, offset) => this.options.store.moveTo(member.id, to + offset))
+  }
+
+  /**
    * The lane whose handle is under a point in a stack's canvas.
    *
-   * Recomputed rather than recorded, unlike the browser's limits and swatches:
-   * the handle is placed against the frame and not against measured text, so
-   * there is no second opinion to be had — the same numbers that put it on
-   * screen put the box here.
+   * Against the row the last paint put the name on, because that is where the
+   * handle was drawn: on a flipped track the label — and the handle with it —
+   * moves to the other end of the lane, and a hit test at a constant offset
+   * would be testing a rectangle nothing is in.
    */
   gripAt(
     edge: LaneEdge,
@@ -682,9 +978,11 @@ export class AnnotationLanes {
     geometry: LaneGeometry,
   ): { entry: AnnotationEntry; index: number } | null {
     const slots = this.slotsFor(edge)
+    const rows = this.state[edge].gripRows
     for (let index = 0; index < slots.length; index++) {
       const frame = this.frameOf(edge, slots[index], geometry)
-      if (withinGrip(gripBox(frame, gripAcross(frame, NAME_ACROSS)), x, y)) {
+      const across = gripAcross(frame, rows.get(slots[index].entry.id) ?? NAME_ACROSS)
+      if (withinGrip(gripBox(frame, across), x, y)) {
         return { entry: slots[index].entry, index }
       }
     }
@@ -709,15 +1007,23 @@ export class AnnotationLanes {
       const here = offset >= 0 && offset <= frame.thickness
       if (here) onALane = true
 
-      if (slot.entry.kind === 'track' || slot.entry.kind === 'sequence') {
-        const cached = this.cache.peek(slot.entry.id, edge)
-        const value = cached === null ? null : valueAtPixel(cached, axis, frame, along)
-        rows.push({
-          label: slot.entry.kind === 'sequence' ? `${slot.entry.label} GC` : slot.entry.label,
-          colour: slot.entry.style.colour,
-          value: value === null ? '—' : fmt.num(value),
-          here,
-        })
+      // Every track in the lane, not only the one that hosts it: an overlay
+      // group draws several into one strip, and a readout that named the host
+      // alone would answer for one of the lines a reader is looking at.
+      const values = [slot.entry, ...slot.overlaid].filter(
+        (member) => member.kind === 'track' || member.kind === 'sequence',
+      )
+      if (values.length > 0) {
+        for (const member of values) {
+          const cached = this.cache.peek(member.id, edge)
+          const value = cached === null ? null : valueAtPixel(cached, axis, frame, along)
+          rows.push({
+            label: member.kind === 'sequence' ? `${member.label} GC` : member.label,
+            colour: member.style.colour,
+            value: value === null ? '—' : fmt.num(value),
+            here,
+          })
+        }
         continue
       }
 
@@ -837,22 +1143,38 @@ const LANE_FONT = '9px system-ui, sans-serif'
  */
 const GRIP_IDLE = 0.45
 
-/** Where the name sits in the lane, from its outer edge. */
+/** Where the name sits in the lane, from the end its label block starts at. */
 const NAME_ACROSS = 8
 
-/**
- * Where a lane's label block starts, before the handle's slot is taken off it.
- *
- * One function because two things are placed against it — the handle and the
- * name after it — and a lane where those two disagreed would have a name
- * written over its own grip.
- */
-function labelNear(frame: LaneFrame): number {
-  return frame.orientation === 'bottom' ? frame.alongFrom + 4 : frame.alongTo - 4
-}
+/** Air between a group bar and the end of the data it is beside. */
+const GROUP_GAP = 2
 
-/** How far under the name the range sits, when the lane is tall enough. */
-const DETAIL_DROP = 11
+/**
+ * The sizes a lane beside the map writes its small print at.
+ *
+ * Smaller than the browser's in every field, and passed to the shared label
+ * block rather than chosen by it: a lane here can be sixteen pixels tall and its
+ * text has to fit in one, while a lane in the browser is ninety and its name is
+ * what identifies the row. One module draws both; neither set of numbers is the
+ * other's default.
+ *
+ * `swatch` is the one addition. A stack of four lanes used to carry four names
+ * in one neutral grey, so an exported figure had no key at all tying a name to
+ * the line it belongs to — and recolouring a track meant leaving the picture for
+ * a menu. Nine pixels of chip is what buys both.
+ */
+const LANE_LABEL_STYLE: LaneLabelStyle = {
+  nameFont: LANE_FONT,
+  rangeFont: LANE_FONT,
+  swatch: 9,
+  nameTop: NAME_ACROSS,
+  nameLine: 11,
+  detailDrop: 11,
+  inset: 4,
+  hitHeight: 12,
+  autoSlot: 13,
+  grip: LANE_GRIP,
+}
 
 /** `I:412,000` — the same phrasing the matrix readout uses. */
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {

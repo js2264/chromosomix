@@ -288,7 +288,7 @@ export class WholeView {
       this.panelHost,
     )
 
-    this.sideEl = el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)
+    this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards)
 
     // There is no longer a size that defeats this view, so there are two
     // answers rather than three: this is worth asking about first, or it opens.

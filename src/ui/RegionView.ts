@@ -196,7 +196,7 @@ export class RegionView {
       this.panel.el,
     )
 
-    this.sideEl = el('aside', { class: 'side' }, this.panel.controlsEl, this.panel.plotEl)
+    this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards)
 
     void this.load()
   }

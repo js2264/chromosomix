@@ -691,6 +691,34 @@ anyway. Feeding bbi's rows back through the BED parser rather than decoding them
 makes a bigBed12 draw its exons exactly as the text file does: one parser, one set of rules, one
 place where BED's quirks live. A file past a million intervals is cut off, and says so.
 
+### 8.8 One lane, two surfaces
+
+There are two places a track is drawn — the stacks on the map's bottom and right edges, and the
+map-less 1D browser (§5.8) — and they are *one surface*, not two that are kept in step. §8.4 states
+that as a coordinate rule; this states it for everything above the coordinates.
+
+A lane's **label block** is drawn once (`render/laneLabel.ts`) and, crucially, hands back the boxes
+it measured: the chip before each name, one box per end of the range, the spot for the autoscale
+button, the row the handle sits on. A block that only *draws* can never be pointed at, and that is
+precisely how the same two numbers came to be editable in the browser and inert beside the map. The
+two surfaces differ only in the constants they pass — a lane beside a map can be sixteen pixels tall
+and its text nine; a lane in the browser is ninety and its name is what identifies the row.
+
+The rest follows the same shape. **Groups** are a fact about the tracks rather than about a view
+(`annotations/groups.ts`), so one `GroupSettings` per open file is handed to both surfaces, one
+`planStack` decides which lanes exist, and one `resolveGroupExtents` decides what they are drawn
+against — which is what makes *scale each* mean the same thing in both places, having previously been
+stored by one and ignored by the other. The **controls over the canvas** (`ui/LaneControls.ts`,
+`ui/LaneLimitEditor.ts`) are parameterised by a host element, because that is the only thing that
+differs: in the browser the layer and the canvas share an origin, and beside the map the layer is
+positioned against the grid and offset per frame.
+
+Two constraints are permanent and are why this is a shared module rather than a shared file. Every
+mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarter turn is
+`render/lane.ts`'s business and nothing else's. And anything a lane *draws* lands in the exported
+figure, so it must stay inside `VectorPage`'s op list, while anything that is a *control* must stay
+in the DOM layer, which the figure geometry does not build.
+
 ---
 
 ## 9. cool and mcool

@@ -70,6 +70,12 @@
 - [x] The colour swatch beside a track name only while the row is pointed at.
 - [x] A shared toggle for the shading under a track's line, in the browser and beside the map.
 
+- [x] Everything the 1D browser had grown that the heatmap's lanes had not, ported by *moving* the implementation rather than copying it: the colour chip before a name, the range you can put a caret in, the autoscale button beside it, ⌘-scroll for a ceiling, the Groups card with its overlay and scale-each toggles, overlay lanes, a stretch button and a height box, and a bar marking each run of lanes that share an axis.
+- [x] A drag across a lane's body sets its ceiling. The area stays where it was, faded, as the record of the range being left behind; only the top line follows the hand, and nothing is written until you let go.
+- [x] One toggle for a hairline along the top of every track, in the plot's ink rather than the track's own colour.
+- [x] `Reds` in the colormap picker.
+- [x] A track moved to the right of the map turns round, so both stacks grow towards the matrix. A toggle, so a deliberately flipped track gets its own orientation back on the way home.
+
 ## FOR NOW
 
 

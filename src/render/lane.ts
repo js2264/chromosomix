@@ -247,6 +247,122 @@ export function drawGrip(
   ctx.restore()
 }
 
+/** How wide the bar marking a run of grouped lanes is, in CSS pixels. */
+export const GROUP_BAR = 3
+const GROUP_FONT = '600 9px system-ui, sans-serif'
+
+/** A run of adjacent lanes that share one value axis. */
+export interface GroupRun {
+  group: string
+  colour: string
+  /** Across-offsets of the run's two ends, in the stack's own coordinates. */
+  from: number
+  to: number
+}
+
+/**
+ * Coalesce a stack's lanes into the runs a group bar is drawn for.
+ *
+ * Adjacent members only: two lanes of one group with a third track between them
+ * are two runs, because a single bar spanning all three would say the middle one
+ * shares their axis, which is false. `gap` is the stack's own lane gap, plus a
+ * pixel of tolerance for the rounding a fractional height leaves behind.
+ */
+export function groupRuns(
+  lanes: ReadonlyArray<{ group: string; colour: string; acrossFrom: number; thickness: number }>,
+  gap: number,
+): GroupRun[] {
+  const runs: GroupRun[] = []
+  for (const lane of lanes) {
+    if (lane.group === '') continue
+    const top = lane.acrossFrom
+    const bottom = top + lane.thickness
+    const open = runs[runs.length - 1]
+    if (open !== undefined && open.group === lane.group && Math.abs(open.to - top) <= gap + 1) {
+      open.to = bottom
+      continue
+    }
+    runs.push({ group: lane.group, colour: lane.colour, from: top, to: bottom })
+  }
+  return runs
+}
+
+/**
+ * The bar that says which lanes share a value axis, and its name beside it.
+ *
+ * A group is honoured *numerically* the moment it is made — its members resolve
+ * to one pair of limits — and until this is drawn that is a fact with no
+ * picture: two tracks on the same axis and two tracks that happen to agree look
+ * identical, on screen and in the exported figure. The bar is the claim made
+ * visible.
+ *
+ * `along` is where the bar sits on the genomic axis; the caller decides, because
+ * the two surfaces have different room. The browser keeps a margin at the start
+ * of every lane; a stack beside a map has none at the start — that margin
+ * belongs to the heatmap's own block labels — so its bar goes past the last
+ * lane, where the loop anchors already live.
+ */
+export function drawGroupBars(
+  ctx: CanvasRenderingContext2D,
+  runs: readonly GroupRun[],
+  options: {
+    orientation: 'bottom' | 'right'
+    along: number
+    /**
+     * Where the group's *name* goes, when it is not simply beside its bar.
+     *
+     * The browser puts it past the whole handle margin rather than two pixels
+     * from the rule: with no name column those nine pixels are exactly where the
+     * handles hang, and a word written through a column of grips is a word
+     * nobody reads.
+     */
+    labelAlong?: number
+    text: boolean
+  },
+): void {
+  if (runs.length === 0) return
+  const bottom = options.orientation === 'bottom'
+  ctx.save()
+  for (const run of runs) {
+    // The bar spans the lanes it groups, so it is long *across* the stack and
+    // thin *along* it — the opposite way round from everything else in this
+    // module, which is why it is written out rather than put through `laneRect`.
+    const room = run.to - run.from
+    const x = bottom ? options.along : run.from
+    const y = bottom ? run.from : options.along
+    const width = bottom ? GROUP_BAR : room
+    const height = bottom ? room : GROUP_BAR
+    ctx.fillStyle = run.colour
+    ctx.globalAlpha = 0.85
+    ctx.beginPath()
+    // `roundRect` where the context has it, a plain rectangle where it does not:
+    // the export replays this through `VectorPage`, whose op list has no rounded
+    // rectangle, and a bar that vanished from the PDF would be worse than a
+    // square-cornered one.
+    if (ctx.roundRect === undefined) ctx.rect(x, y, width, height)
+    else ctx.roundRect(x, y, width, height, GROUP_BAR / 2)
+    ctx.fill()
+
+    // The name runs *with* the bar — the only orientation that fits a word
+    // beside a three-pixel rule. Dropped rather than clipped when the run is too
+    // short to hold it: half a group's name is a different group's name.
+    if (!options.text || room < 34) continue
+    ctx.save()
+    ctx.globalAlpha = 0.9
+    ctx.font = GROUP_FONT
+    ctx.fillStyle = run.colour
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    const mid = (run.from + run.to) / 2
+    const past = options.labelAlong ?? options.along + GROUP_BAR + 2
+    ctx.translate(bottom ? past : mid, bottom ? mid : past)
+    if (bottom) ctx.rotate(-Math.PI / 2)
+    if (ctx.measureText(run.group).width <= room - 6) ctx.fillText(run.group, 0, 0)
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
 /**
  * Draw `text` so it reads correctly on either edge.
  *

@@ -55,6 +55,24 @@ const DEFAULT_STOPS = [
   '#F15C34', '#ED3024', '#D42027', '#B01F29', '#7A1128', '#1A0A10',
 ]
 
+/**
+ * matplotlib's `Reds`: near-white through pink and scarlet to a dark maroon.
+ *
+ * ColorBrewer's nine-class sequential red, which is exactly the control-point
+ * list matplotlib holds for this name — so it is built here from the stops
+ * rather than dumped into {@link ./luts}, and the table it produces matches
+ * matplotlib's to within a rounding step. The same list handed to
+ * `LinearSegmentedColormap.from_list` gives the same ramp, which is the parity
+ * §7.1 asks for.
+ *
+ * Named as matplotlib names it, capital and all, because `metacooler show
+ * --cmap Reds` is where a reader will have met it.
+ */
+const REDS_STOPS = [
+  '#FFF5F0', '#FEE0D2', '#FCBBA1', '#FC9272', '#FB6A4A', '#EF3B2C', '#CB181D',
+  '#A50F15', '#67000D',
+]
+
 /** Interpolate hex stops to a flat `size * 3` RGB table, as the tables are. */
 function rampFromStops(stops: readonly string[], size: number): number[] {
   const points = stops.map((hex) => [
@@ -84,6 +102,7 @@ const RGB_TABLES: Record<string, readonly number[]> = {
   default: rampFromStops(DEFAULT_STOPS, COLORMAP_SIZE),
   afmhot_r: AFMHOT_R_RGB,
   afmhot: AFMHOT_RGB,
+  Reds: rampFromStops(REDS_STOPS, COLORMAP_SIZE),
   cividis: CIVIDIS_RGB,
   viridis: VIRIDIS_RGB,
   magma: MAGMA_RGB,

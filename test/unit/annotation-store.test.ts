@@ -404,6 +404,65 @@ describe('the annotations published beside a demo map', () => {
   })
 })
 
+/**
+ * Which way a lane's values grow is a reading direction rather than a
+ * preference: a bottom lane grows up towards the map, and the same track beside
+ * the map grows *away* from it unless it is turned round. So moving a track
+ * between the two stacks turns it, and the turn is a toggle — a reader who
+ * deliberately hung a bottom track from its ceiling has said something about it,
+ * and setting `flip` from the edge would throw that away on the way across.
+ */
+describe('the edge a track is drawn on, and which way it grows', () => {
+  const track = (store: AnnotationStore, placement?: { bottom: boolean; right: boolean }) =>
+    store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'a.bw' },
+      ...(placement === undefined ? {} : { placement }),
+    })
+
+  it('turns a track round on the way to the right edge, and back again', () => {
+    const store = freshStore(`flip-${Math.random()}.cool`)
+    const entry = track(store)
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+    store.place(entry.id, { bottom: false, right: true })
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+    store.place(entry.id, { bottom: true, right: false })
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+  })
+
+  // A toggle, not an assignment: the reader's own decision survives the round
+  // trip rather than being overwritten by whichever edge it passed through.
+  it('preserves a deliberate flip across the round trip', () => {
+    const store = freshStore(`flip2-${Math.random()}.cool`)
+    const entry = track(store)
+    store.restyle(entry.id, { flip: true })
+    store.place(entry.id, { bottom: false, right: true })
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+    store.place(entry.id, { bottom: true, right: false })
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+  })
+
+  // A track drawn on both edges has one `flip` and two readings, so there is no
+  // answer that is right for both stacks: it keeps what it had.
+  it('leaves a track drawn on both edges alone', () => {
+    const store = freshStore(`flip3-${Math.random()}.cool`)
+    const entry = track(store)
+    store.place(entry.id, { bottom: true, right: true })
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+    store.place(entry.id, { bottom: false, right: true })
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+  })
+
+  // A file dropped on the right of the map arrives already turned round, for
+  // the same reason: the reader aimed at that edge, not at that orientation.
+  it('starts a track dropped on the right edge already turned round', () => {
+    const store = freshStore(`flip4-${Math.random()}.cool`)
+    expect(track(store, { bottom: false, right: true }).style.flip).toBe(true)
+    expect(track(store, { bottom: true, right: false }).style.flip).toBe(false)
+  })
+})
+
 describe('style defaults', () => {
   it('gives a lane a thickness its kind can use', () => {
     expect(defaultStyle('track', '#000').size).toBeGreaterThan(defaultStyle('segments', '#000').size)
