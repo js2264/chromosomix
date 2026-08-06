@@ -276,6 +276,33 @@ export class AnnotationStore {
     this.update(id, { style: { ...entry.style, ...patch } })
   }
 
+  /**
+   * Turn every right-hand track's axis round — what the 1D browser needs.
+   *
+   * A lane beside the map's right edge grows *outward*, away from the matrix, so
+   * it is drawn flipped: that is what makes the two stacks meeting at the corner
+   * of one figure agree about which way is more ({@link place}). The browser has
+   * no corner and no map — every lane there is a bottom lane — so a track that
+   * came from the right edge arrives hanging from its ceiling, which is not what
+   * anybody chose.
+   *
+   * A *toggle*, and therefore its own inverse: the same call puts the picture
+   * back on the way to the map, and a track deliberately hung from its ceiling
+   * keeps that decision through both trips. The set it acts on is the tracks
+   * drawn on the right edge and nowhere else — a track on both has one `flip`
+   * and two readings, so there is no answer that is right for both stacks and it
+   * is left alone, exactly as {@link place} leaves it.
+   */
+  turnRightHandAxes(): void {
+    let hit = false
+    this.items = this.items.map((entry) => {
+      if (sideOf(entry.placement) !== 'right') return entry
+      hit = true
+      return { ...entry, style: { ...entry.style, flip: !entry.style.flip } }
+    })
+    if (hit) this.changed()
+  }
+
   remove(id: string): void {
     const before = this.items.length
     this.items = this.items.filter((entry) => entry.id !== id)

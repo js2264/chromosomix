@@ -70,64 +70,31 @@ export interface CompareCardProps {
 
 export class CompareCard {
   readonly el: HTMLElement
-  private readonly body = el('div', { class: 'compare-body' })
-  private readonly drop: HTMLElement
-  private readonly dropLabel = el('span', { class: 'ann-drop-label' })
-  private readonly dropHint = el('span', { class: 'ann-drop-hint' })
-  private readonly urlInput: HTMLInputElement
+  private readonly body = el('div', { class: 'ann-list compare-body' })
+  private readonly slots: [DropSlot, DropSlot]
   private state: CompareState = { kind: 'empty' }
 
   constructor(private readonly props: CompareCardProps) {
-    // Redrawn on demand rather than watched: the state that decides an eye —
-    // which map is on screen — is the session's, and the session is what calls
-    // `set`/`sync` when it changes.
-    // The Tracks card's load zone, to the class: a thin unshaded box with a bold
-    // line and a quiet one under it, and the URL behind a fold below. The two
-    // cards ask the same thing — *put a file here* — and they sat one above the
-    // other in the same column looking like two different applications, one with
-    // a shaded panel and a centred title, one with a hairline rectangle.
-    this.drop = el(
-      'div',
-      { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } },
-      this.dropLabel,
-      this.dropHint,
-    )
-    const fileInput = el('input', { class: 'hidden-input', type: 'file' })
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0]
-      if (file) this.props.onOpen({ kind: 'local', file })
-    })
-    this.drop.addEventListener('click', () => fileInput.click())
-    this.drop.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') fileInput.click()
-    })
-    this.drop.addEventListener('dragover', (event) => {
-      event.preventDefault()
-      this.drop.classList.add('over')
-    })
-    this.drop.addEventListener('dragleave', () => this.drop.classList.remove('over'))
-    this.drop.addEventListener('drop', (event) => {
-      event.preventDefault()
-      this.drop.classList.remove('over')
-      const file = event.dataTransfer?.files?.[0]
-      if (file) this.props.onOpen({ kind: 'local', file })
-    })
-
-    this.urlInput = el('input', {
-      class: 'input',
-      type: 'url',
-      placeholder: 'https://bucket.example.org/other.cool',
-    })
-    this.urlInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') this.openUrl()
-    })
-
+    // One zone per slot, built once and reworded per render: which map a
+    // rectangle asks for is a fact about the session that changes under it, and
+    // rebuilding the element per frame would drop a drag in progress.
+    this.slots = [this.dropSlot(), this.dropSlot()]
     this.el = el(
       'div',
       { class: 'card compare-card' },
       cardTitle('Contact maps', 'grid-2x2'),
       this.body,
-      fileInput,
+      el(
+        'details',
+        { class: 'ann-url' },
+        el('summary', { text: 'or open one by URL' }),
+        el(
+          'div',
+          { class: 'ann-url-row' },
+          this.urlInput,
+          button('add', () => this.openUrl(), { class: 'btn' }),
+        ),
+      ),
     )
     this.render()
   }
@@ -149,83 +116,53 @@ export class CompareCard {
     this.render()
   }
 
+  private readonly urlInput = el('input', {
+    class: 'input',
+    type: 'url',
+    placeholder: 'https://bucket.example.org/other.cool',
+  })
+
   private openUrl(): void {
     const url = this.urlInput.value.trim()
     if (url !== '') this.props.onOpen({ kind: 'remote', url })
   }
 
+  /**
+   * Two slots, each either a map or a rectangle to put one on.
+   *
+   * The Tracks card's shape, to the class: a list of `.ann-row`s over a
+   * `.ann-drop`, with the URL behind a fold underneath. The two cards ask the
+   * same thing of a reader — *put a file here*, then *here is what is in* — and
+   * a card that answered it in its own vocabulary was a second application in
+   * the same column. It is also what makes the controls on a row look like the
+   * controls on a track's row, since the rules that take the borders off them
+   * are written against `.ann-row.ann-ready`.
+   */
   private render(): void {
-    // The drop area asks for whichever map is missing. Written here rather than
-    // built twice: it is one rectangle, and which slot it fills is a fact about
-    // the session that changes under it.
-    const second = this.props.hasPrimary()
-    this.dropLabel.textContent = second ? 'Load a second map' : 'Load a contact map'
-    this.dropHint.textContent = second
-      ? 'A cooler with the same chromosomes and the same bin size. Click to choose, or drop ' +
-        'one here — it fills the lower-left triangle, so the square stops being symmetric and ' +
-        'the two are read against each other in one picture.'
-      : 'A .cool or .mcool on this genome. Click to choose, or drop one here — the tracks come ' +
-        'with it, drawn beside the map instead of along the axis.'
-    switch (this.state.kind) {
-      case 'loading':
-        this.body.replaceChildren(
-          ...(second ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
-          el('p', { class: 'compare-line', text: `Opening ${this.state.label}…` }),
-        )
-        return
-      case 'error':
-        this.body.replaceChildren(
-          ...(second ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
-          el('p', { class: 'inline-error', text: this.state.message }),
-          button('try another file', () => this.set({ kind: 'empty' }), { class: 'btn btn-quiet' }),
-        )
-        return
-      case 'empty':
-        // One map, and the slot the second would go in — or no map at all, and
-        // the slot the first goes in. The row is drawn whenever there is a map,
-        // even with nothing to compare it against, because the row is where the
-        // eye is and the eye is how a reader leaves the matrix for the tracks.
-        this.body.replaceChildren(
-          ...(this.props.hasPrimary() ? [this.mapRow(1, this.props.primaryLabel(), false)] : []),
-          this.drop,
-          el(
-            'details',
-            { class: 'ann-url' },
-            el('summary', { text: 'or open one by URL' }),
-            el(
-              'div',
-              { class: 'ann-url-row' },
-              this.urlInput,
-              button('add', () => this.openUrl(), { class: 'btn' }),
-            ),
-          ),
-        )
-        return
-      case 'open': {
-        const info = this.state.info
-        this.body.replaceChildren(
-          el(
-            'div',
-            { class: 'compare-open' },
-            this.mapRow(1, this.props.primaryLabel(), true),
-            this.mapRow(2, this.state.label, true),
-          ),
-          el('p', {
-            class: 'hint',
-            text:
-              `${fmt.int(info.nContigs)} chromosomes · ${fmt.int(info.binsize ?? 0)} bp bins · ` +
-              `${fmt.bytes(info.sourceBytes)}`,
-          }),
-          button('swap sides', () => this.props.onSwap(), {
-            class: 'btn btn-quiet btn-wide',
-            title:
-              'Put the other file above the diagonal. The comparison is the same; which map the ' +
-              'eye reads first is not.',
-          }),
-        )
-        return
-      }
-    }
+    const paired = this.state.kind === 'open'
+    const first = this.props.hasPrimary()
+    this.slots[0].label.textContent = 'Load a contact map'
+    this.slots[0].hint.textContent =
+      'A .cool or .mcool on this genome. Click to choose, or drop one here — the tracks come ' +
+      'with it, drawn beside the map instead of along the axis.'
+    this.slots[1].label.textContent = 'Load a second map'
+    this.slots[1].hint.textContent =
+      'A cooler with the same chromosomes and the same bin size. Click to choose, or drop one ' +
+      'here — it fills the lower-left triangle, so the square stops being symmetric and the two ' +
+      'are read against each other in one picture.'
+
+    const top = first
+      ? this.mapRow(1, this.props.primaryLabel(), paired)
+      : this.slots[0].zone
+    const bottom =
+      this.state.kind === 'open'
+        ? this.mapRow(2, this.state.label, true)
+        : this.state.kind === 'loading'
+          ? this.pendingRow('loading', `Opening ${this.state.label}…`)
+          : this.state.kind === 'error'
+            ? this.pendingRow('error', this.state.message)
+            : this.slots[1].zone
+    this.body.replaceChildren(top, bottom)
   }
 
   /**
@@ -257,34 +194,113 @@ export class CompareCard {
     eye.setAttribute('aria-pressed', String(shown))
     return el(
       'div',
-      { class: 'compare-row' },
-      ...(paired
+      { class: 'ann-row ann-ready compare-row' },
+      el(
+        'div',
+        { class: 'ann-head' },
+        ...(paired
+          ? [
+              el('span', {
+                class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
+                text: which === 1 ? '◥' : '◣',
+              }),
+            ]
+          : []),
+        el('span', {
+          class: 'ann-name ann-name-static',
+          text: label,
+          title: paired ? (which === 1 ? 'Upper-right triangle' : 'Lower-left triangle') : label,
+        }),
+        eye,
+        iconButton(
+          'x',
+          paired
+            ? which === 1
+              ? `Close ${label} and keep the other map on its own`
+              : `Close ${label} and go back to one map`
+            : `Close ${label} and keep browsing its genome as tracks`,
+          () => this.props.onClose(which),
+          { class: 'btn-close', size: 14 },
+        ),
+      ),
+      ...(paired && which === 2 && this.state.kind === 'open'
         ? [
-            el('span', {
-              class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
-              text: which === 1 ? '◥' : '◣',
+            el('p', {
+              class: 'ann-note',
+              text:
+                `${fmt.int(this.state.info.nContigs)} chromosomes · ` +
+                `${fmt.int(this.state.info.binsize ?? 0)} bp bins · ` +
+                `${fmt.bytes(this.state.info.sourceBytes)}`,
+            }),
+            button('swap sides', () => this.props.onSwap(), {
+              class: 'btn btn-quiet btn-wide',
+              title:
+                'Put the other file above the diagonal. The comparison is the same; which map ' +
+                'the eye reads first is not.',
             }),
           ]
         : []),
-      el('span', {
-        class: 'compare-name',
-        text: label,
-        title: paired ? (which === 1 ? 'Upper-right triangle' : 'Lower-left triangle') : label,
-      }),
-      eye,
-      iconButton(
-        'x',
-        paired
-          ? which === 1
-            ? `Close ${label} and keep the other map on its own`
-            : `Close ${label} and go back to one map`
-          : `Close ${label} and keep browsing its genome as tracks`,
-        () => this.props.onClose(which),
-        { class: 'btn-close', size: 14 },
-      ),
     )
   }
+
+  /** The second slot while its file is being read, or after it was refused. */
+  private pendingRow(kind: 'loading' | 'error', message: string): HTMLElement {
+    return el(
+      'div',
+      { class: `ann-row ann-${kind}` },
+      el('p', {
+        class: kind === 'error' ? 'inline-error ann-note' : 'ann-note',
+        text: message,
+      }),
+      ...(kind === 'error'
+        ? [
+            button('try another file', () => this.set({ kind: 'empty' }), {
+              class: 'btn btn-quiet',
+            }),
+          ]
+        : []),
+    )
+  }
+
+  /** A rectangle a map is dropped on, with its own file input. */
+  private dropSlot(): DropSlot {
+    const label = el('span', { class: 'ann-drop-label' })
+    const hint = el('span', { class: 'ann-drop-hint' })
+    const zone = el('div', { class: 'ann-drop', attrs: { tabindex: '0', role: 'button' } }, label, hint)
+    const fileInput = el('input', { class: 'hidden-input', type: 'file' })
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0]
+      if (file) this.props.onOpen({ kind: 'local', file })
+    })
+    zone.appendChild(fileInput)
+    zone.addEventListener('click', (event) => {
+      if (event.target !== fileInput) fileInput.click()
+    })
+    zone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') fileInput.click()
+    })
+    zone.addEventListener('dragover', (event) => {
+      event.preventDefault()
+      zone.classList.add('over')
+    })
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'))
+    zone.addEventListener('drop', (event) => {
+      event.preventDefault()
+      zone.classList.remove('over')
+      const file = event.dataTransfer?.files?.[0]
+      if (file) this.props.onOpen({ kind: 'local', file })
+    })
+    return { zone, label, hint }
+  }
 }
+
+/** A drop rectangle and the two lines written in it. */
+interface DropSlot {
+  zone: HTMLElement
+  label: HTMLElement
+  hint: HTMLElement
+}
+
 
 /**
  * Why these two files cannot be drawn in one square, or `null` when they can.

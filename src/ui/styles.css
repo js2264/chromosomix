@@ -671,27 +671,22 @@ p {
   color: var(--text-dim);
 }
 
-.compare-open {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin-bottom: 0.4rem;
-}
+/* A map's row is a track's row — `.ann-row` from the Tracks card, so the two
+   lists are packed the same way and every rule that takes the borders off a
+   ready row's controls reaches these too. Nothing is left to say about the row
+   itself; what is still this card's own is the pair of triangle marks. */
 
-.compare-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.compare-name {
-  flex: 1 1 auto;
-  min-width: 0;
+/* A name that is *not* a text box, unlike a track's. A map is named by the file
+   it came from and renaming it would name nothing — so the caret and the hover
+   frame that invite an edit are taken back off. */
+.ann-name-static {
+  cursor: default;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--step--1);
+}
+
+.ann-name-static:hover {
+  border-color: transparent;
 }
 
 /* The File cards' headings, which gain a mark and a close button when there are
@@ -717,11 +712,6 @@ p {
    below — whichever card it is: the second map, the map under a browser's
    tracks, and the tracks themselves are one gesture asked three times, and
    three shaded variations of it in one column read as three applications. */
-
-.compare-line {
-  font-size: var(--step--1);
-  color: var(--text-dim);
-}
 
 /* Two legends stand side by side, which is what the export does too. */
 .colorbar-slot {
@@ -4143,6 +4133,23 @@ p {
 
 .ann-row.ann-ready .btn:hover:not(:disabled),
 .group-head .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* …and two of them are borderless *wherever* they appear, not only on a row
+   that has finished loading. The eye and the fold arrow are the same control
+   with the same meaning in the Tracks card, in Groups and in Contact maps, and
+   scoping their appearance to one container is what let a frame come back on
+   the copies in the other two — and on a row that was still reading, where the
+   eye is drawn the same and framed differently for no reason a reader could
+   name. Written against the control rather than against where it is standing. */
+.btn.ann-eye,
+.btn.ann-more {
+  border-color: transparent;
+}
+
+.btn.ann-eye:hover:not(:disabled),
+.btn.ann-more:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 

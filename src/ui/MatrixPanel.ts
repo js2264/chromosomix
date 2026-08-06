@@ -107,6 +107,7 @@ import {
 import { openMenu, type MenuItem } from './Menu'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
+import { revealTrack } from './revealTrack'
 import {
   MATRIX_OPTIONS,
   PLOT_OPTION_ICONS,
@@ -2190,6 +2191,11 @@ export class MatrixPanel {
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
+      // A press that never became a gesture is a click, and a click on a lane is
+      // the most direct way a reader has of saying *this track*: it opens that
+      // track's settings in the card that holds them, rather than leaving them
+      // to match a name against a list in a column scrolled somewhere else.
+      if (drag.kind === 'press') revealTrack(drag.id)
       if (drag.kind === 'scale') this.commitLaneScaling(edge, drag.members)
       // A handle let go over a rectangle draws the track on that edge instead.
       // A *move* and not a copy — the other edge is cleared — because that is

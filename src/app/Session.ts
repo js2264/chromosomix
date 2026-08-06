@@ -1866,6 +1866,9 @@ export class Session {
     // the Annotations column is untouched, because every card in it — the
     // tracks, the hand-drawn marks, the maps themselves — is about this genome
     // either way.
+    // The right-hand stack's tracks are drawn flipped so they grow towards the
+    // map; the browser has no map to grow towards, so they are turned back.
+    this.annotations?.store.turnRightHandAxes()
     this.setGeneral([this.genomeCardFor(assembly)])
     this.syncCompareCard()
     // Where the map was looking, carried across as a locus. Read *before* the
@@ -1894,6 +1897,10 @@ export class Session {
     this.parkedMap = null
     this.assembly = null
     this.browser = null
+    // …and turned again on the way back, by the same call: it is a toggle, so
+    // the round trip is the identity and a track hung deliberately from its
+    // ceiling keeps that decision through both halves of it.
+    this.annotations?.store.turnRightHandAxes()
     this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
     this.syncCompareCard()
     this.mounted = null
@@ -2681,6 +2688,7 @@ export class Session {
       this.parkedMap = null
       this.assembly = null
       this.browser = null
+      this.annotations?.store.turnRightHandAxes()
       this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
       this.syncCompareCard()
       this.mounted = null
