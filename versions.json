@@ -1,6 +1,13 @@
 {
-  "latest": "48afb37",
+  "latest": "139b8ca",
   "versions": [
+    {
+      "commit": "139b8ca",
+      "version": "0.6.1",
+      "date": "2026-08-06T12:36:04+02:00",
+      "subject": "fix: the selection axis, its read, and __unbinned__",
+      "tag": ""
+    },
     {
       "commit": "e98eaf7",
       "version": "0.6.1",
