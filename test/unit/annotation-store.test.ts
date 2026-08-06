@@ -49,6 +49,35 @@ describe('the annotation store', () => {
     expect(store.forCard('overlay')).toHaveLength(0)
   })
 
+  /**
+   * An id is the handle everything holds a row by, so two rows may never share
+   * one. A reload followed by re-opening the same map used to put every track on
+   * the card twice — restored out of storage and taken over from the outgoing
+   * file, both carrying the id they were saved under — and deleting either of
+   * the twins deleted both, because `remove` is by id and there was only ever
+   * one track to delete.
+   */
+  it('re-begins a row it already holds instead of twinning it', () => {
+    const first = store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a7' })
+    store.update('a7', { status: 'ready', label: 'renamed' })
+    store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a7' })
+    expect(store.entries).toHaveLength(1)
+    expect(first.id).toBe('a7')
+    store.remove('a7')
+    expect(store.entries).toHaveLength(0)
+  })
+
+  // …and in the slot it already had. A row taken over from the file that was
+  // open before is the same row, and a row that jumped to the bottom of the
+  // stack on the way across would have been reordered by the transition.
+  it('keeps a re-begun row where it was', () => {
+    store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a1' })
+    store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a2' })
+    store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a3' })
+    store.begin({ card: 'linear', kind: 'track', source: localSource, id: 'a1' })
+    expect(store.entries.map((entry) => entry.id)).toEqual(['a1', 'a2', 'a3'])
+  })
+
   // One edge and not both: two copies of one track is twice the ink for no more
   // information. The *bottom* edge, because that is the orientation a track is
   // read in — under a ruler, left to right — and the right-hand stack is the

@@ -55,6 +55,14 @@ export class AnnotationLoader {
    * question the application is about to answer anyway, and to be told off when
    * they guessed wrong.
    *
+   * A file whose name matches a row this session **put down** is that row. A
+   * reload leaves every local track detached with a "re-open this file" button
+   * beside it, and a reader who drops the same files back in is answering that
+   * question with the gesture they use for everything else — so it is taken as
+   * the answer. A second row would leave the colours, the limits and the
+   * placement on the dead one and start the live one from the defaults, which
+   * is the reload having lost the workspace it went to the trouble of keeping.
+   *
    * @param placement Which of the map's two edges a lane is drawn on, when the
    * drop said so. Not the same kind of claim: it does not decide what the file
    * is, only where a track ends up if that is what it turns out to be, and a
@@ -62,6 +70,13 @@ export class AnnotationLoader {
    */
   addFiles(files: readonly File[], placement?: Placement): void {
     for (const file of files) {
+      const held = this.store.entries.find(
+        (entry) => entry.status === 'detached' && entry.source.name === file.name,
+      )
+      if (held !== undefined) {
+        this.reattach(held.id, file)
+        continue
+      }
       this.begin({ kind: 'local', file, name: file.name }, undefined, undefined, placement)
     }
   }

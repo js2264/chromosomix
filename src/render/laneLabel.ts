@@ -15,6 +15,9 @@
  * coordinates from the same pass that measured the text into them, because any
  * second measurement is a second opinion about the same font — and the
  * difference between the two opinions is exactly the pixel the click misses by.
+ * Both halves of the block are reported, for the same reason: the range is what
+ * a reader reads the values against, and the **name** is what tells this lane
+ * from the one under it. Neither should have to be corrected somewhere else.
  *
  * Orientation-agnostic, like everything else in this directory: every mark is
  * placed through {@link laneRect} and {@link laneText}, so a right-hand lane's
@@ -126,6 +129,36 @@ export interface LimitBox {
   /** Exactly the text on screen, so an editor opens on what a reader sees. */
   value: string
   box: LabelBox
+  /** How far the text ran *along* the lane — see {@link NameBox.along}. */
+  along: number
+}
+
+/** One track's name on a lane, and the box it was drawn in. */
+export interface NameBox {
+  /** The entry the name belongs to, so a rename lands on the track it names. */
+  id: string
+  /** Exactly the text on screen, so an editor opens on what a reader sees. */
+  text: string
+  box: LabelBox
+  /**
+   * How far the text ran *along* the lane.
+   *
+   * Not `box[2]`: on a right-hand lane the text reads upward, so the box's width
+   * is the hit height and its *height* is the text — and a caret sized from the
+   * rectangle would be twelve pixels wide over a twelve-character name. The
+   * extent in reading order is the one an input has to be as wide as, on either
+   * edge, which is why it is reported rather than derived.
+   */
+  along: number
+  /**
+   * The font it was measured in.
+   *
+   * The two surfaces write their names at different sizes — twelve and semibold
+   * in the browser, nine beside a map — and a caret that is not the size of the
+   * text it stands on moves the figure the moment it opens, which is the one
+   * thing measuring here rather than in the caller exists to prevent.
+   */
+  font: string
 }
 
 export interface LaneLabelBoxes {
@@ -137,6 +170,14 @@ export interface LaneLabelBoxes {
    * comes back the moment the lane is dragged taller.
    */
   limits: LimitBox[]
+  /**
+   * Every name drawn, with the box it was measured into.
+   *
+   * Given up on a short lane for exactly the reason {@link limits} is: the name
+   * is still drawn, only the caret is withheld, and it comes back the moment the
+   * lane is dragged clear of its own resize border.
+   */
+  names: NameBox[]
   /** Centre of the lane's autoscale button, in canvas pixels. */
   auto: { x: number; y: number } | null
   /** Where across the lane the first name's line fell: the handle's row. */
@@ -161,6 +202,7 @@ export function drawLaneLabel(
   const out: LaneLabelBoxes = {
     swatches: [],
     limits: [],
+    names: [],
     auto: null,
     nameAcross: style.nameTop,
     wanted: 0,
@@ -177,6 +219,16 @@ export function drawLaneLabel(
   const want = (width: number): void => {
     if (width > out.wanted) out.wanted = width
   }
+  /**
+   * Whether a click target on this line would clear the lane's resize border.
+   *
+   * The one rule both the names and the limits answer to, written once: an
+   * overlap is worse than either mark alone, because the canvas draws the resize
+   * hairline — promising a drag — and the press opens a text box instead. A lane
+   * too short for both keeps the gesture and gives up the caret.
+   */
+  const clearOfGrip = (across: number): boolean =>
+    across + style.hitHeight / 2 <= frame.thickness - style.grip
 
   ctx.save()
   ctx.font = style.nameFont
@@ -253,7 +305,28 @@ export function drawLaneLabel(
       // overlaid lane needs: the line is that colour and so is its name.
       ctx.fillStyle = names.length > 1 ? name.colour : palette.text
       laneText(ctx, frame, name.text, at, across, { halo: palette.halo })
-      at += dir * (ctx.measureText(name.text).width + NAME_GAP)
+      const width = ctx.measureText(name.text).width
+      // Measured in the pass that drew it, for the reason the limits are: a name
+      // is the other thing on a lane a reader changes, and it should be changed
+      // where it is read. One box per name and not one per lane — an overlaid
+      // lane draws several, each its own track's, which is what keeps a rename
+      // on the track that was pointed at.
+      if (clearOfGrip(across)) {
+        out.names.push({
+          id: name.id,
+          text: name.text,
+          along: width,
+          font: style.nameFont,
+          box: laneRect(
+            frame,
+            at,
+            at + dir * width,
+            across - style.hitHeight / 2,
+            across + style.hitHeight / 2,
+          ),
+        })
+      }
+      at += dir * (width + NAME_GAP)
     }
     if (row === runs.length - 1) lastEnd = at - dir * NAME_GAP
   }
@@ -296,13 +369,9 @@ export function drawLaneLabel(
       : along
   if (column !== null && stacked) want(range + style.autoSlot + column.pad)
   // …but the click targets are recorded only where the box is clear of the
-  // lane's own far border, which is the resize grip. On a short lane the two
-  // overlap, and an overlap is worse than either alone: the canvas draws the
-  // resize hairline, promising a drag, and the press opens a text box instead.
-  // A lane too short to hold both keeps the gesture and gives up the caret — the
-  // range is still drawn, and it is editable again the moment the lane is
-  // dragged taller.
-  const clear = across + style.hitHeight / 2 <= frame.thickness - style.grip
+  // lane's own far border, which is the resize grip — see `clearOfGrip`, which
+  // the names answer to as well.
+  const clear = clearOfGrip(across)
   let at = from
   for (const part of ['min', 'max'] as const) {
     const value = part === 'min' ? min : max
@@ -312,6 +381,7 @@ export function drawLaneLabel(
       out.limits.push({
         part,
         value,
+        along: width,
         box: laneRect(
           frame,
           at,

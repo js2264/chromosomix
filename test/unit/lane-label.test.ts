@@ -164,6 +164,70 @@ describe('the boxes a lane label hands back', () => {
   })
 })
 
+/**
+ * The name is the other thing on a lane a reader changes, so it is measured and
+ * reported exactly as the range is. Everything asserted here is the arithmetic
+ * that decides where the caret lands when the name is clicked.
+ */
+describe('the name boxes a lane label hands back', () => {
+  it('measures the name into a box that starts past its colour chip', () => {
+    const boxes = label(frameOf('bottom', 60))
+    expect(boxes.names).toHaveLength(1)
+    expect(boxes.names[0].id).toBe('a')
+    expect(boxes.names[0].text).toBe('cov')
+    // The ruler's: three characters. `swatchRoom` is the chip plus five.
+    expect(boxes.names[0].box[2]).toBe(3 * CHAR)
+    expect(boxes.names[0].box[3]).toBe(STYLE.hitHeight)
+    expect(boxes.names[0].box[0]).toBe(40 + STYLE.inset + STYLE.swatch + 5)
+    expect(boxes.names[0].box[1]).toBe(100 + STYLE.nameTop - STYLE.hitHeight / 2)
+  })
+
+  // A caret sized by a second opinion about the font is a caret that moves the
+  // text it opens over, which is the one thing the whole arrangement prevents.
+  it('carries the font the name was measured in', () => {
+    expect(label(frameOf('bottom', 60)).names[0].font).toBe(STYLE.nameFont)
+  })
+
+  // An overlaid lane is several tracks under one axis, so the range belongs to
+  // the lane and the names belong to the tracks. One box each is what keeps a
+  // rename on the one that was pointed at.
+  it('reports one box per name in an overlaid lane', () => {
+    const boxes = label(frameOf('bottom', 60), {
+      names: [
+        { id: 'a', text: 'fwd', colour: '#f00' },
+        { id: 'b', text: 'rev', colour: '#00f' },
+      ],
+    })
+    expect(boxes.names.map((name) => name.id)).toEqual(['a', 'b'])
+    // The second starts past the first, its gap, and its own chip.
+    expect(boxes.names[1].box[0]).toBe(
+      boxes.names[0].box[0] + boxes.names[0].box[2] + 12 + STYLE.swatch + 5,
+    )
+  })
+
+  // The quarter turn falls out of `laneRect`, as it does for the limits — and
+  // `along` is what stays in reading order on both edges, which is the reason it
+  // is reported at all: an input's width is a width whichever way the lane runs.
+  it('turns a quarter turn on a right-hand lane, but keeps its reading length', () => {
+    const bottom = label(frameOf('bottom', 60)).names[0]
+    const right = label(frameOf('right', 60)).names[0]
+    expect(bottom.box[2]).toBe(3 * CHAR)
+    expect(bottom.box[3]).toBe(STYLE.hitHeight)
+    expect(right.box[2]).toBe(STYLE.hitHeight)
+    expect(right.box[3]).toBe(3 * CHAR)
+    expect(bottom.along).toBe(3 * CHAR)
+    expect(right.along).toBe(3 * CHAR)
+  })
+
+  // The twin of the limits' rule, and the same trade: a lane too short to hold a
+  // click target clear of its resize border keeps the drag and gives up the
+  // caret. The name is still drawn.
+  it('gives up the caret rather than overlap the resize border', () => {
+    expect(label(frameOf('bottom', 60)).names).toHaveLength(1)
+    expect(label(frameOf('bottom', 10)).names).toHaveLength(0)
+  })
+})
+
 describe('which end of a lane the caption belongs at', () => {
   // The rule is one rule — the end farthest from the baseline — and the four
   // answers it gives are not two pairs: a bottom lane's zero is at its floor

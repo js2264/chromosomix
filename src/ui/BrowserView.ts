@@ -64,6 +64,7 @@ import {
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
+  type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -87,11 +88,12 @@ import {
   LaneControls,
   type LaneMark,
 } from './LaneControls'
-import { LaneLimitEditor } from './LaneLimitEditor'
+import { LaneEditor } from './LaneEditor'
 import {
   LANE_MIN_SIZE,
   heightThatFills,
   setTrackHeight,
+  smallestLaneSize,
   trackHeightField,
 } from './trackControls'
 import {
@@ -262,6 +264,14 @@ export class BrowserView {
    * is exactly the pixel the click misses by.
    */
   private rangeHits: RangeHit[] = []
+  /**
+   * Where each track's name was drawn, from the last frame.
+   *
+   * The same bargain the ranges make, for the same reason: a name that is only
+   * drawn is a name a reader has to go and correct somewhere else, and the box
+   * they point at has to be the box the text was measured into.
+   */
+  private nameHits: NameHit[] = []
   /** This frame's on-lane controls, in the order the layer holds them. */
   private marks: LaneMark[] = []
   /**
@@ -275,7 +285,7 @@ export class BrowserView {
    */
   private gripRows = new Map<string, number>()
   private readonly controls: LaneControls
-  private readonly editor: LaneLimitEditor
+  private readonly editor: LaneEditor
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
@@ -416,6 +426,11 @@ export class BrowserView {
             withKey('Stretch every track to fill the height, all to one height', KEYS.stretch),
             () => this.fitTracks(),
           ),
+          iconButton(
+            'fold-vertical',
+            'Shrink every track to the height of the shortest of them',
+            () => this.shrinkTracks(),
+          ),
           // Autoscale is not here. It is in the Plot card, beside the height
           // box, with `Y` on it — and a sixth control in this row is what tips
           // the bar into wrapping, which puts one orphaned button on a line of
@@ -455,7 +470,7 @@ export class BrowserView {
     // positioned against a grid — which is the whole reason they are not methods
     // of this view.
     this.controls = new LaneControls(this.overlays, props.store, () => this.editor.close())
-    this.editor = new LaneLimitEditor({
+    this.editor = new LaneEditor({
       host: this.stage,
       store: props.store,
       shownLimits: (id) => this.shownLimits(id),
@@ -692,13 +707,27 @@ export class BrowserView {
     if (size !== null) this.setTrackHeight(size)
   }
 
+  /**
+   * The other way out of a stretch: every lane down to the shortest of them.
+   *
+   * No measurement at all, which is what makes it the inverse of the button
+   * beside it rather than a second opinion about the window. Stretch asks how
+   * much room there is; this asks what the reader has already decided a small
+   * lane is, and gives that answer to the rest — see `smallestLaneSize`.
+   */
+  shrinkTracks(): void {
+    const size = smallestLaneSize(this.laneMembers())
+    if (size !== null) this.setTrackHeight(size)
+  }
+
   /** Give every lane one height, chosen rather than computed. */
   setTrackHeight(px: number): void {
-    setTrackHeight(
-      this.props.store,
-      this.lanes.map((lane) => ({ members: [lane.entry, ...lane.overlaid] })),
-      px,
-    )
+    setTrackHeight(this.props.store, this.laneMembers(), px)
+  }
+
+  /** The lanes this view is drawing, as the bulk height actions want them. */
+  private laneMembers(): Array<{ members: AnnotationEntry[] }> {
+    return this.lanes.map((lane) => ({ members: [lane.entry, ...lane.overlaid] }))
   }
 
   /**
@@ -1014,6 +1043,7 @@ export class BrowserView {
 
     this.layouts.clear()
     this.rangeHits = []
+    this.nameHits = []
     this.marks = []
     this.gripRows.clear()
     this.measuredGutter = 0
@@ -1342,6 +1372,12 @@ export class BrowserView {
     // end the signal is not growing from.
     this.gripRows.set(lane.entry.id, boxes.nameAcross)
     for (const hit of boxes.limits) this.rangeHits.push({ entries, hit })
+    // One name, one track: an overlaid lane draws a name each, and the id the
+    // paint recorded is what keeps a rename on the one that was pointed at.
+    for (const hit of boxes.names) {
+      const owner = entries.find((entry) => entry.id === hit.id)
+      if (owner !== undefined) this.nameHits.push({ entry: owner, hit })
+    }
     for (const swatch of boxes.swatches) {
       const owner = entries.find((entry) => entry.id === swatch.id)
       if (owner !== undefined) this.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
@@ -1396,6 +1432,15 @@ export class BrowserView {
   /** The min or max box under a track's name at this point, if any. */
   private rangeAt(x: number, y: number): RangeHit | null {
     for (const hit of this.rangeHits) {
+      const [bx, by, width, height] = hit.hit.box
+      if (x >= bx - 2 && x <= bx + width + 2 && y >= by && y <= by + height) return hit
+    }
+    return null
+  }
+
+  /** The track name at this point, if any. */
+  private nameAt(x: number, y: number): NameHit | null {
+    for (const hit of this.nameHits) {
       const [bx, by, width, height] = hit.hit.box
       if (x >= bx - 2 && x <= bx + width + 2 && y >= by && y <= by + height) return hit
     }
@@ -1576,6 +1621,12 @@ export class BrowserView {
             { class: 'btn btn-icon', size: 15 },
           ),
           iconButton(
+            'fold-vertical',
+            'Shrink every track to the height of the shortest of them',
+            () => this.shrinkTracks(),
+            { class: 'btn btn-icon', size: 15 },
+          ),
+          iconButton(
             'chevrons-up-down',
             withKey(
               'Autoscale every track to what is in view — a group resolves as a group',
@@ -1753,7 +1804,7 @@ export class BrowserView {
       const limit = this.rangeAt(x, y)
       if (limit !== null) {
         event.preventDefault()
-        this.editor.open(limit, NO_OFFSET)
+        this.editor.openLimit(limit, NO_OFFSET)
         return
       }
       // The handle, before anything reads a direction out of the press: it is
@@ -1766,6 +1817,17 @@ export class BrowserView {
         this.tooltip.classList.add('hidden')
         this.drag = { mode: 'reorder', entry: held.entry, over: this.lanes.indexOf(held) }
         event.preventDefault()
+        return
+      }
+      // …and the name last of the three, for the reason the limit is first: it is
+      // text on a canvas that a reader changes. *After* the handle, because the
+      // two come within a few pixels of each other at the end of the name column
+      // and the handle is the smaller target — a caret opening where a reorder
+      // was meant is the worse miss of the two.
+      const named = this.nameAt(x, y)
+      if (named !== null) {
+        event.preventDefault()
+        this.editor.openName(named, NO_OFFSET)
         return
       }
       canvas.setPointerCapture(event.pointerId)
@@ -1811,14 +1873,15 @@ export class BrowserView {
         // …and over a handle, where the open hand is the one shape that says
         // "take hold of this". The arrowhead points *at* a base pair, which is
         // the one thing the handle is not.
-        // In this order, because the press is tested in this order: a limit and a
-        // handle can come within a couple of pixels of each other on a lane
-        // whose name column is narrower than its range, and a cursor promising
-        // one while the press does the other is worse than either.
+        // In this order, because the press is tested in this order: a limit, a
+        // handle and a name can all come within a couple of pixels of each other
+        // on a lane whose name column is narrower than its range, and a cursor
+        // promising one while the press does another is worse than either.
         const onRange = !onRuler && this.rangeAt(x, y) !== null
         const onGrip = !onRuler && !onRange && this.gripAt(x, y) !== null
+        const onLabel = !onRuler && !onRange && !onGrip && this.nameAt(x, y) !== null
         canvas.classList.toggle('is-grab', onGrip)
-        canvas.classList.toggle('is-text', onRange)
+        canvas.classList.toggle('is-text', onRange || onLabel)
         canvas.classList.toggle('is-link', onName)
         canvas.classList.toggle('is-span', onRuler && !onName)
         this.schedule()
@@ -2518,6 +2581,18 @@ const EXACT_BP_PER_PIXEL = 10
 interface RangeHit {
   entries: AnnotationEntry[]
   hit: LimitBox
+}
+
+/**
+ * One track's name, the box it was drawn in, and whose it is.
+ *
+ * One entry rather than the lane's list, which is the whole difference from
+ * {@link RangeHit}: a lane's range is a claim about the lane, and its names are
+ * claims about the tracks in it.
+ */
+interface NameHit {
+  entry: AnnotationEntry
+  hit: NameBox
 }
 
 /** Room under the figure for the one-line caption the export adds. */

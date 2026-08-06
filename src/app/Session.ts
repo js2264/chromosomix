@@ -799,6 +799,16 @@ export class Session {
           run: () => this.browser?.fitTracks(),
         },
         {
+          id: 'shrink-tracks',
+          group: 'View',
+          title: 'Shrink the tracks to the shortest of them',
+          // No key of its own. Stretch is the one a reader reaches for several
+          // times a session; this is its way back, and a second letter for it
+          // would be a letter spent on the rarer half of a pair.
+          hint: 'One height for all of them, and that height the smallest one on screen.',
+          run: () => this.browser?.shrinkTracks(),
+        },
+        {
           id: 'browser-export',
           group: 'File',
           title: 'Save this plot as a figure',
@@ -875,6 +885,14 @@ export class Session {
         keys: KEYS.stretch,
         enabled: this.current?.panel !== undefined && this.annotations !== null,
         run: () => this.current?.panel?.fitTracks(),
+      },
+      {
+        id: 'shrink-tracks',
+        group: 'View',
+        title: 'Shrink the tracks to the shortest of them',
+        hint: 'One height for every lane on both edges, and that height the smallest on screen.',
+        enabled: this.current?.panel !== undefined && this.annotations !== null,
+        run: () => this.current?.panel?.shrinkTracks(),
       },
       {
         id: 'map-autoscale',
@@ -1607,7 +1625,9 @@ export class Session {
    * contigs table — which is the only difference, and it is one lookup: the
    * §8.2 overlap report and the per-contig lengths both come from the assembly's
    * own list. A track therefore behaves identically in both, and a session that
-   * later opens a map keeps nothing from here, because the map has its own.
+   * later opens a map keeps nothing from here, because the map has its own —
+   * except the rows themselves, which cross live rather than through storage
+   * (see {@link adoptCarried}).
    */
   private setUpBrowserAnnotations(assembly: Assembly): void {
     const scope = this.memoryKey(assembly.uri)
@@ -1638,6 +1658,12 @@ export class Session {
       ),
     ])
     loader.restore(AnnotationStore.stored(scope))
+    // …and what this session was already holding, exactly as the map path does
+    // it. Not only for symmetry: `carry` runs before every tear-down and only
+    // an adoption clears it, so a browser that ignored the rows would leave
+    // them on the session to be adopted by whatever opened *next* — a set of
+    // tracks arriving beside a file they were never loaded against.
+    this.adoptCarried(loader)
   }
 
   /**

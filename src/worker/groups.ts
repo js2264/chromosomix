@@ -22,12 +22,18 @@ import type { AxisGroup } from './protocol'
  * is what lets the UI turn a cell offset back into a base-pair position even
  * when the block starts partway into a contig (see {@link AxisGroup.unitStart}).
  * Omitted where there is no such thing — an aggregated axis, an overview.
+ *
+ * `binOf` answers the other question a run is asked — which sequence is this —
+ * and is separate for the reason {@link AxisGroup.unitBin} gives: a coarsened
+ * axis has an origin that depends on its own block and an identity that does
+ * not, so one number cannot be both.
  */
 export function idRuns(
   ids: Int32Array,
   labelOf: (id: number) => string,
   startOf?: (id: number) => number,
   lengthOf?: (id: number) => number,
+  binOf?: (id: number) => number,
 ): AxisGroup[] {
   const runs: AxisGroup[] = []
   if (ids.length === 0) return runs
@@ -41,6 +47,7 @@ export function idRuns(
         end: i,
         ...(startOf === undefined ? {} : { unitStart: startOf(id) }),
         ...(lengthOf === undefined ? {} : { unitLength: lengthOf(id) }),
+        ...(binOf === undefined ? {} : { unitBin: binOf(id) }),
       })
       start = i
     }
@@ -56,6 +63,7 @@ export function contigRuns(mc: MetaCooler, extent: Extent): AxisGroup[] {
     (id) => mc.chromnames[id] ?? String(id),
     (id) => mc.coords.contigStartBin(id),
     (id) => mc.coords.contigLengths[id],
+    (id) => mc.coords.contigStartBin(id),
   )
 }
 

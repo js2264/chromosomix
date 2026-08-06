@@ -16,7 +16,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { bpWithin, separationOf, separatorsFor } from '@/ui/MatrixPanel'
-import type { Cell } from '@/render/heatmap'
 import { idRuns } from '@/worker/groups'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
@@ -160,32 +159,37 @@ describe('separatorsFor', () => {
  * the sequence does not exist at all, and on the diagonal it is zero.
  */
 describe('separationOf', () => {
-  const cell = (row: number, col: number, rowBin = row, colBin = col): Cell => ({
-    row,
-    col,
-    rowBin,
-    colBin,
-    value: 1,
+  /** One axis of a cell: its run, where it sits, and where its block starts. */
+  const side = (
+    group: AxisGroup | undefined,
+    offset: number,
+    blockStart = 0,
+    genome?: string,
+  ): Parameters<typeof separationOf>[0] => ({
+    group,
+    offset,
+    blockStart,
+    ...(genome === undefined ? {} : { genome }),
   })
   /** One whole contig on both axes: a chromosome view, or a cool of one. */
   const ONE: AxisGroup = { label: 'I', start: 0, end: 100, unitStart: 0 }
 
   it('is the base pairs between the two ends of an off-diagonal cell', () => {
-    expect(separationOf(ONE, ONE, cell(10, 40), 'bin', BIN)).toBe(30_000)
+    expect(separationOf(side(ONE, 10), side(ONE, 40), 'bin', BIN)).toBe(30_000)
     // Symmetric: the upper and lower triangle are the same contact.
-    expect(separationOf(ONE, ONE, cell(40, 10), 'bin', BIN)).toBe(30_000)
+    expect(separationOf(side(ONE, 40), side(ONE, 10), 'bin', BIN)).toBe(30_000)
   })
 
   it('says nothing on the diagonal, where the answer is zero', () => {
-    expect(separationOf(ONE, ONE, cell(17, 17), 'bin', BIN)).toBeNull()
+    expect(separationOf(side(ONE, 17), side(ONE, 17), 'bin', BIN)).toBeNull()
   })
 
   it('says nothing across two contigs, where there is no distance to give', () => {
     // Not a large separation — none. A trans contact has no position along one
-    // sequence, and reporting `|rowBin - colBin| * binsize` here would invent a
+    // sequence, and reporting a difference of block offsets here would invent a
     // number out of where the two contigs happen to sit in the file.
     const other: AxisGroup = { label: 'II', start: 0, end: 100, unitStart: 100 }
-    expect(separationOf(ONE, other, cell(5, 5, 5, 105), 'bin', BIN)).toBeNull()
+    expect(separationOf(side(ONE, 5), side(other, 5), 'bin', BIN)).toBeNull()
   })
 
   it('answers within one contig of a multi-contig axis, and not across them', () => {
@@ -193,27 +197,83 @@ describe('separationOf', () => {
     // separation.
     const c1: AxisGroup = { label: 'c1', start: 0, end: 30, unitStart: 0 }
     const c2: AxisGroup = { label: 'c2', start: 30, end: 100, unitStart: 30 }
-    expect(separationOf(c1, c1, cell(2, 20), 'bin', BIN)).toBe(18_000)
-    expect(separationOf(c2, c2, cell(40, 90), 'bin', BIN)).toBe(50_000)
-    expect(separationOf(c1, c2, cell(2, 90), 'bin', BIN)).toBeNull()
+    expect(separationOf(side(c1, 2), side(c1, 20), 'bin', BIN)).toBe(18_000)
+    expect(separationOf(side(c2, 40), side(c2, 90), 'bin', BIN)).toBe(50_000)
+    expect(separationOf(side(c1, 2), side(c2, 90), 'bin', BIN)).toBeNull()
   })
 
   it('holds across a rectangular block of one contig against itself', () => {
     // `contig × the same contig` over two different windows: the two axes have
-    // different block origins and one contig, so the absolute bins are what the
-    // arithmetic must use — `unitStart` is equal and cancels.
+    // different block origins and one contig, so each end is measured from the
+    // contig and the difference is what is left.
     const rows: AxisGroup = { label: 'I', start: 0, end: 50, unitStart: 0 }
     const cols: AxisGroup = { label: 'I', start: 0, end: 50, unitStart: 0 }
-    expect(separationOf(rows, cols, cell(0, 0, 100, 400), 'bin', BIN)).toBe(300_000)
+    expect(separationOf(side(rows, 0, 100), side(cols, 0, 400), 'bin', BIN)).toBe(300_000)
+  })
+
+  // The regression this arithmetic exists to prevent. Anything larger than the
+  // picture is read on a coarser grid, and a coarsened run carries no
+  // `unitStart` at all past its first — so the line went quiet on exactly the
+  // views that are always pooled, which is most of them.
+  it('answers on a coarsened axis, where the runs carry no absolute origin', () => {
+    // Three cells of a pooled grid, the second run beginning at cell 40. The
+    // caller passes the *effective* cell size, which is what `setResolution`
+    // hands the panel after every read.
+    const c1: AxisGroup = { label: 'c1', start: 0, end: 40, unitLength: 900 }
+    const c2: AxisGroup = { label: 'c2', start: 40, end: 90, unitLength: 700 }
+    expect(separationOf(side(c1, 2), side(c1, 20), 'bin', 3 * BIN)).toBe(54_000)
+    expect(separationOf(side(c2, 45), side(c2, 60), 'bin', 3 * BIN)).toBe(45_000)
+    expect(separationOf(side(c1, 2), side(c2, 60), 'bin', 3 * BIN)).toBeNull()
+  })
+
+  // A coarsened axis is anchored to the contig, so its arithmetic origin depends
+  // on where that axis's own window opens: two windows of one sequence get two
+  // different `unitStart`s. The identity does not move, which is why it is a
+  // second number rather than a second use of the first.
+  it('joins two windows of one sequence whose origins differ', () => {
+    // Both windows are of contig II, which begins at absolute bin 512. Each
+    // axis's own origin is where *its* window opens on the coarse grid, so the
+    // two differ; the identity does not.
+    const rows: AxisGroup = { label: 'II', start: 0, end: 50, unitStart: 700, unitBin: 512 }
+    const cols: AxisGroup = { label: 'II', start: 0, end: 50, unitStart: 1000, unitBin: 512 }
+    expect(separationOf(side(rows, 0, 700), side(cols, 0, 1300), 'bin', BIN)).toBe(300_000)
+    // …and a different sequence is still a different sequence.
+    const other: AxisGroup = { label: 'III', start: 0, end: 50, unitStart: 700, unitBin: 2048 }
+    expect(separationOf(side(rows, 0, 700), side(other, 4, 700), 'bin', BIN)).toBeNull()
+  })
+
+  // Two MAGs may each have a `contig_1`, and with no absolute origin to compare
+  // the name is most of what is left — so the genome has to be part of it.
+  it('does not join two same-named sequences from different genomes', () => {
+    const a: AxisGroup = { label: 'contig_1', start: 0, end: 40, unitLength: 900 }
+    const b: AxisGroup = { label: 'contig_1', start: 40, end: 90, unitLength: 900 }
+    expect(separationOf(side(a, 2, 0, 'MAG_1'), side(b, 60, 0, 'MAG_2'), 'bin', BIN)).toBeNull()
+    expect(separationOf(side(a, 2, 0, 'MAG_1'), side(a, 20, 0, 'MAG_1'), 'bin', BIN)).toBe(18_000)
+  })
+
+  // A cell several short sequences share has no position in any one of them, so
+  // it can have no distance either: the readout names what it holds instead.
+  it('says nothing on a cell that holds more than one sequence', () => {
+    const shared: AxisGroup = {
+      label: 'c1',
+      start: 0,
+      end: 1,
+      unitStart: 0,
+      merged: [
+        { label: 'c1', unitLength: 300 },
+        { label: 'c2', unitLength: 200 },
+      ],
+    }
+    expect(separationOf(side(shared, 0), side(ONE, 40), 'bin', BIN)).toBeNull()
   })
 
   it('says nothing above bin level, where a cell is a whole sequence', () => {
     const c1: AxisGroup = { label: 'c1', start: 0, end: 1 }
     const c2: AxisGroup = { label: 'c2', start: 1, end: 2 }
-    expect(separationOf(c1, c2, cell(0, 1), 'contig', BIN)).toBeNull()
+    expect(separationOf(side(c1, 0), side(c2, 1), 'contig', BIN)).toBeNull()
   })
 
   it('says nothing without a bin size, which a variable-bin file has none of', () => {
-    expect(separationOf(ONE, ONE, cell(10, 40), 'bin', 0)).toBeNull()
+    expect(separationOf(side(ONE, 10), side(ONE, 40), 'bin', 0)).toBeNull()
   })
 })

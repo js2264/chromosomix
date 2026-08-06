@@ -163,6 +163,19 @@ export class GroupsCard {
             },
             { class: 'btn btn-icon', size: 14 },
           ),
+          // The same levelling from the other end. A group is a set of tracks
+          // read against one axis, so one height for all of them is the whole
+          // point — and which height that is depends entirely on whether the
+          // reader is making room or using it.
+          iconButton(
+            'fold-vertical',
+            'Give every track in this group the height of its shortest member',
+            () => {
+              const shortest = laneSize(Math.min(...members.map((member) => member.style.size)))
+              for (const member of members) store.restyle(member.id, { size: shortest })
+            },
+            { class: 'btn btn-icon', size: 14 },
+          ),
         ),
         el(
           'div',

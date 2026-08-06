@@ -56,6 +56,23 @@ export function mintAnnotationId(): string {
   return `a${nextId++}`
 }
 
+/**
+ * Reserve an id that came back from somewhere, so nothing new is minted onto it.
+ *
+ * The counter starts at one on every page load, and a restore hands back the
+ * ids the *previous* load minted — so without this the first track dropped
+ * after a reload is given `a1`, which the first restored row is already
+ * wearing. Two rows under one id is not two tracks: `update` patches every
+ * match and `remove` deletes every match, so the pair moves and dies together
+ * and neither can be taken away. `app/sessions.ts` reserves tab ids on the way
+ * out of storage for the same reason, and `annotations/manual.ts` reserves mark
+ * ids.
+ */
+function reserveAnnotationId(id: string): void {
+  const number = Number(id.slice(1))
+  if (Number.isFinite(number) && number >= nextId) nextId = number + 1
+}
+
 export class AnnotationStore {
   private items: AnnotationEntry[] = []
   private readonly listeners = new Set<AnnotationListener>()
@@ -140,6 +157,19 @@ export class AnnotationStore {
    * Loading a remote bigWig is a few round trips and parsing a 9.5 MB GTF is a
    * third of a second; a card that stays empty for either is one the user drops
    * the file onto twice.
+   *
+   * **An id that is already here is the same row being begun again**, and it
+   * replaces that row *in place* rather than joining it. An id is the handle
+   * everything else in the application holds a row by — `remove`, `restyle`,
+   * `place`, every hit box the lanes hand back — so two rows sharing one is not
+   * two tracks: it is one track listed twice, where deleting either deletes
+   * both. Two callers hand an id in ({@link AnnotationLoader.restore} from
+   * session storage, {@link AnnotationLoader.carry} from the file that was open
+   * before), and nothing stops the same rows arriving down both roads — a
+   * reload followed by re-opening the same map did exactly that, and put every
+   * track on the card twice, each one saying its file had been put down.
+   * Replacing keeps the row's *slot* as well, so a carried row does not jump to
+   * the bottom of the list on the way through.
    */
   begin(options: {
     card: AnnotationCard
@@ -151,8 +181,12 @@ export class AnnotationStore {
     style?: AnnotationEntry['style']
   }): AnnotationEntry {
     const placement = options.placement ?? { bottom: true, right: false }
+    // An id handed in is reserved before anything is minted, so a row restored
+    // out of storage cannot have its id handed to the next file dropped.
+    const wanted = options.id
+    if (wanted !== undefined) reserveAnnotationId(wanted)
     const entry: AnnotationEntry = {
-      id: options.id ?? mintAnnotationId(),
+      id: wanted ?? mintAnnotationId(),
       card: options.card,
       kind: options.kind,
       label: options.label ?? cleanLabel(options.source.name),
@@ -180,7 +214,13 @@ export class AnnotationStore {
           return sideOf(placement) === 'right' ? { ...base, flip: !base.flip } : base
         })(),
     }
-    this.items = [...this.items, entry]
+    // Only a *handed-in* id can already be here — a minted one is reserved past
+    // everything this session has seen — and one that is, is this row arriving a
+    // second time down a second road.
+    const held = wanted !== undefined && this.items.some((row) => row.id === wanted)
+    this.items = held
+      ? this.items.map((row) => (row.id === entry.id ? entry : row))
+      : [...this.items, entry]
     this.changed()
     return entry
   }
@@ -345,7 +385,19 @@ export class AnnotationStore {
   static stored(uri: string): StoredEntry[] {
     const raw = recall<unknown>(uri, STORE_SCOPE)
     if (!Array.isArray(raw)) return []
-    return raw.filter(isStoredEntry)
+    // Two rows under one id is corruption rather than two tracks — see
+    // {@link AnnotationStore.begin} — and a session written by a build that
+    // could produce it is still in a reader's `sessionStorage`. Dropping the
+    // twin on the way out is what lets a reload recover instead of coming back
+    // doubled for ever.
+    const seen = new Set<string>()
+    const rows: StoredEntry[] = []
+    for (const value of raw) {
+      if (!isStoredEntry(value) || seen.has(value.id)) continue
+      seen.add(value.id)
+      rows.push(value)
+    }
+    return rows
   }
 }
 

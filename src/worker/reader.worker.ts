@@ -272,8 +272,13 @@ async function pooledResult(
     idRuns(
       ids,
       (id) => mc.chromnames[id] ?? String(id),
+      // No `unitStart`: a coarse cell measures from the run's own start, and
+      // `anchor` below supplies the one correction that needs. The *identity*
+      // is carried all the same — it is a fact about the sequence rather than
+      // about this block, and the two answer different questions.
       undefined,
       (id) => mc.coords.contigLengths[id],
+      (id) => mc.coords.contigStartBin(id),
     )
   const withGenomes = request.genomes === true && mc.hasGenomes
   return {

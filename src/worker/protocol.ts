@@ -251,6 +251,22 @@ export interface AxisGroup {
    */
   unitStart?: number
   /**
+   * The absolute bin this group's contig begins at, as an **identity**.
+   *
+   * Distinct from {@link unitStart}, which is an arithmetic *origin*, and the
+   * two are only the same number on a dense block. A coarsened axis is measured
+   * in cells anchored to the contig, so its origin depends on where that axis's
+   * own block opens — which makes it useless for the one other question an
+   * axis run is asked, "is the other axis the same sequence as this one".
+   * `contig × the same contig` over two different windows gets two different
+   * origins and one `unitBin`, and the genomic distance across such a cell is
+   * exactly what needs to tell them apart (`MatrixPanel.separationOf`).
+   *
+   * A number rather than the name because a metagenome may hold two `contig_1`s
+   * in two MAGs. Absent above bin level, where a cell is a whole sequence.
+   */
+  unitBin?: number
+  /**
    * Length of this group's contig in base pairs, where it is a contig.
    *
    * Only the reader knows it, and only it can answer the question a selection
