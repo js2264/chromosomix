@@ -91,6 +91,12 @@ import {
 } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
 import {
+  NAME_COLUMN_DEFAULT,
+  clampNameColumn,
+  readNameColumn,
+  writeNameColumn,
+} from './nameColumn'
+import {
   LANE_MIN_SIZE,
   heightThatFills,
   setTrackHeight,
@@ -133,6 +139,13 @@ import { setReadout } from './readout'
 const LANE_GAP = 4
 /** How close to a lane's lower border counts as being on it. */
 const LANE_GRIP = 4
+/**
+ * How close to the name column's edge counts as being on it.
+ *
+ * The same four pixels a lane's border takes, and for the same reason: a border
+ * is a line, and a line is not something a hand can be asked to hit.
+ */
+const COLUMN_GRIP = 4
 const LANE_FONT = '10px system-ui, sans-serif'
 /**
  * The value range under a track's name.
@@ -301,6 +314,7 @@ export class BrowserView {
   private drag:
     | { mode: 'pan'; x: number }
     | { mode: 'select'; x0: number; x: number }
+    | { mode: 'column'; x0: number; from: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
     | { mode: 'reorder'; entry: AnnotationEntry; over: number }
     | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
@@ -334,6 +348,18 @@ export class BrowserView {
    */
   private nameColumn = 0
   /**
+   * The width a reader dragged the column to; `null` leaves it to the names.
+   *
+   * The difference between the two is the difference between a measurement and
+   * a decision. Measured, the column is as wide as the widest name and no
+   * wider — right until one long name makes a column three others do not need.
+   * Pinned, it is what the reader said, and a name that no longer fits wraps or
+   * is cut rather than running out over the data.
+   */
+  private pinnedColumn: number | null = readNameColumn()
+  /** Whether the pointer is on the column's own edge, which resizes it. */
+  private onColumn = false
+  /**
    * What the gutter *wants* to be, measured from the labels last drawn.
    *
    * A frame behind, and unavoidably so: the width depends on the text, the text
@@ -342,7 +368,7 @@ export class BrowserView {
    * a change settles on the next frame, which is the same frame the change
    * itself lands on.
    */
-  private wantGutter = DEFAULT_GUTTER
+  private wantGutter = NAME_COLUMN_DEFAULT
   /** The widest label this paint has drawn so far; becomes {@link wantGutter}. */
   private measuredGutter = 0
   /** The canvas width the last frame was drawn at, which the export saves. */
@@ -977,7 +1003,7 @@ export class BrowserView {
     const options = getPlotOptions()
     this.nameColumn =
       options.gutter && options.text
-        ? Math.min(Math.round(this.wantGutter), Math.floor(width / 3))
+        ? clampNameColumn(this.pinnedColumn ?? Math.round(this.wantGutter), width)
         : 0
     // …and the handles' own margin before it, which is there whether or not the
     // names have a column: a handle hangs outside its lane, and outside the
@@ -1104,6 +1130,21 @@ export class BrowserView {
       const edge = border.frame.acrossFrom + border.frame.thickness + 1
       ctx.moveTo(0, edge)
       ctx.lineTo(width, edge)
+      ctx.stroke()
+      ctx.restore()
+    }
+    // The column's own edge, on the same terms: drawn where the pointer is on it
+    // or while it is being dragged, and never on a figure. A column has no
+    // visible boundary at rest — the names' right edge *is* the boundary — so
+    // this is the whole of what says the boundary can be moved.
+    if (chrome && this.nameColumn > 0 && (this.onColumn || this.drag?.mode === 'column')) {
+      ctx.save()
+      ctx.strokeStyle = CROSSHAIR_COLOR
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      const edge = snapTo(this.gutter, this.dpr)
+      ctx.moveTo(edge, RULER_HEIGHT)
+      ctx.lineTo(edge, height)
       ctx.stroke()
       ctx.restore()
     }
@@ -1378,6 +1419,10 @@ export class BrowserView {
             start: GRIP_MARGIN,
             end: this.gutter - GUTTER_PAD - GRIP_ROOM,
             pad: GUTTER_PAD + GRIP_ROOM,
+            // A second line, and only here: a column is the one place a name has
+            // somewhere to continue onto. Over the data the second line would be
+            // written across the track it names.
+            nameLines: 2,
           }
         : null,
       style: BROWSER_LABEL_STYLE,
@@ -1796,6 +1841,17 @@ export class BrowserView {
     return this.lanes.find((lane) => lane.entry.id === entry.id)
   }
 
+  /**
+   * Whether a point is on the name column's own right edge, which resizes it.
+   *
+   * Below the ruler only: the band above is a range selection, and a reader
+   * dragging out a window should not have the first few pixels of it taken by a
+   * column they were not aiming at.
+   */
+  private onColumnEdge(x: number, y: number): boolean {
+    return this.nameColumn > 0 && y >= RULER_HEIGHT && Math.abs(x - this.gutter) <= COLUMN_GRIP
+  }
+
   private laneAt(y: number): { lane: Lane; onBorder: boolean } | null {
     for (const lane of this.lanes) {
       const offset = y - lane.frame.acrossFrom
@@ -1834,6 +1890,23 @@ export class BrowserView {
         this.tooltip.classList.add('hidden')
         this.drag = { mode: 'reorder', entry: held.entry, over: this.lanes.indexOf(held) }
         event.preventDefault()
+        return
+      }
+      // The column's edge, after the handles and before the names: a lane's
+      // handle hangs in the last few pixels of the column and is the smaller
+      // target, and a drag that widened the column when a reorder was meant is
+      // the worse miss. A double click gives the column back to the names.
+      if (this.onColumnEdge(x, y)) {
+        event.preventDefault()
+        if (event.detail === 2) {
+          this.pinnedColumn = null
+          writeNameColumn(null)
+          this.schedule()
+          return
+        }
+        canvas.setPointerCapture(event.pointerId)
+        this.tooltip.classList.add('hidden')
+        this.drag = { mode: 'column', x0: x, from: this.nameColumn }
         return
       }
       // …and the name last of the three, for the reason the limit is first: it is
@@ -1896,9 +1969,15 @@ export class BrowserView {
         // promising one while the press does another is worse than either.
         const onRange = !onRuler && this.rangeAt(x, y) !== null
         const onGrip = !onRuler && !onRange && this.gripAt(x, y) !== null
-        const onLabel = !onRuler && !onRange && !onGrip && this.nameAt(x, y) !== null
+        const onEdge = !onRuler && !onRange && !onGrip && this.onColumnEdge(x, y)
+        const onLabel = !onRuler && !onRange && !onGrip && !onEdge && this.nameAt(x, y) !== null
         canvas.classList.toggle('is-grab', onGrip)
         canvas.classList.toggle('is-text', onRange || onLabel)
+        // The one place this canvas shows a *system* cursor: the divider is a
+        // hairline, and `col-resize` is the shape every application uses to say
+        // a vertical rule can be dragged sideways.
+        canvas.classList.toggle('is-col', onEdge)
+        if (onEdge !== this.onColumn) this.onColumn = onEdge
         canvas.classList.toggle('is-link', onName)
         canvas.classList.toggle('is-span', onRuler && !onName)
         this.schedule()
@@ -1941,6 +2020,13 @@ export class BrowserView {
             drag.members[0]?.style.flip === true,
           ),
         }
+        this.schedule()
+        return
+      }
+      if (drag.mode === 'column') {
+        // Held in the field and written once on release, as the ceiling drag is:
+        // a store write per frame of a drag is a hundred writes for one decision.
+        this.pinnedColumn = clampNameColumn(drag.from + (x - drag.x0), this.canvasWidth)
         this.schedule()
         return
       }
@@ -2001,6 +2087,11 @@ export class BrowserView {
         this.commitScaling(drag.members)
         return
       }
+      if (drag.mode === 'column') {
+        writeNameColumn(this.pinnedColumn)
+        this.schedule()
+        return
+      }
       if (drag.mode === 'select') {
         const from = this.atUnit(Math.min(drag.x0, x))
         const to = this.atUnit(Math.max(drag.x0, x))
@@ -2026,7 +2117,8 @@ export class BrowserView {
     const forget = (): void => {
       this.hover = null
       this.gripping = null
-      canvas.classList.remove('is-text', 'is-link', 'is-span', 'is-grab')
+      this.onColumn = false
+      canvas.classList.remove('is-text', 'is-link', 'is-span', 'is-grab', 'is-col')
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()
@@ -2556,13 +2648,6 @@ const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
  */
 const GRIP_IDLE = 0.45
 
-/**
- * The width the name column starts at, before anything has been measured.
- *
- * Only ever seen on the first frame after the option is switched on, and chosen
- * to be about right for a track name so that frame does not visibly jump.
- */
-const DEFAULT_GUTTER = 110
 
 /** Clear space between the end of a name and the start of the data. */
 const GUTTER_PAD = 8
