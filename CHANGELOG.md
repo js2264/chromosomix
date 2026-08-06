@@ -110,6 +110,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the one-bin contigs two to a cell — where before it was one cell for both, and
   the four-bin contig had lost its inside.
 
+- **A group is one sequence, however many cells it spans.** The first cut of the
+  membership list walked a group's cells and named the sequence in each, so a
+  contig longer than the capacity — which has several cells of its own — was
+  listed once per cell: its name appeared twice in the sequence list, its cell
+  described itself as holding two sequences, and the bin count was suppressed
+  because the cell looked shared. Members are the *distinct* sequences now.
+
+- **The sequence list counts a sequence's own bins.** It was showing
+  `end - start`, which counts the **cells** a sequence is drawn in — so a contig
+  of two bins read "1 bins" the moment the capacity reached two. It comes from
+  the sequence's own length now, which is the number that does not move when the
+  picture is coarsened.
+
 - **A shared cell says what is in it.** It used to be labelled with the first
   sequence and nothing else, so the readout named one of two and gave it a
   coordinate inside a cell that is not only its (`Contig_184898`, `0 bp × 0 bp`),

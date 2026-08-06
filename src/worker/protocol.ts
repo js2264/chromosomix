@@ -197,10 +197,13 @@ export interface AxisGroup {
    * anything else — but sequences too small to fill a cell do share, and then
    * the axis is labelled with the first of them and the rest are invisible. This
    * is where they are: the readout names them, and the sequence list beside the
-   * map offers all of them rather than every other one. Absent for the ordinary
-   * cell, which holds one.
+   * map offers all of them rather than every other one.
+   *
+   * Absent for the ordinary group, which is one sequence however many cells it
+   * spans. A sequence longer than the capacity has several, and listing it once
+   * per cell is how it came to appear twice in a list of names.
    */
-  merged?: string[]
+  merged?: Array<{ label: string; unitLength: number }>
   label: string
   /** First row/column of the group within the block. */
   start: number

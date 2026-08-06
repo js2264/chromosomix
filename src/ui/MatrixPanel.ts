@@ -2536,8 +2536,8 @@ function describeAxis(
   if (group.merged !== undefined && group.merged.length > 1) {
     const [first, ...rest] = group.merged
     return rest.length === 1
-      ? `${first} + ${rest[0]}`
-      : `${first} + ${fmt.int(rest.length)} more`
+      ? `${first.label} + ${rest[0].label}`
+      : `${first.label} + ${fmt.int(rest.length)} more`
   }
   if (level !== 'bin') return group.label
   return `${group.label}:${fmt.bp(bpWithin(group, offset, blockStart, binsize))}`

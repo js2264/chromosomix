@@ -316,12 +316,21 @@ function withMembers(mc: MetaCooler, groups: AxisGroup[], pooling: BinPooling): 
   return groups.map((group) => {
     const from = pooling.memberStart[group.start]
     const to = pooling.memberStart[group.end]
-    if (to - from <= 1) return group
-    const names: string[] = []
+    // Distinct sequences, not one entry per cell. A group is *one* sequence
+    // however many cells it spans — a contig longer than the capacity has
+    // several — and walking the cells listed it once each, which is how a name
+    // came to appear twice in a list of names and how a cell holding one
+    // sequence came to describe itself as holding two.
+    const members: Array<{ label: string; unitLength: number }> = []
     for (let i = from; i < to; i++) {
-      names.push(mc.chromnames[pooling.members[i]] ?? String(pooling.members[i]))
+      const id = pooling.members[i]
+      if (i > from && id === pooling.members[i - 1]) continue
+      members.push({
+        label: mc.chromnames[id] ?? String(id),
+        unitLength: mc.coords.contigLengths[id] ?? 0,
+      })
     }
-    return { ...group, merged: names }
+    return members.length > 1 ? { ...group, merged: members } : group
   })
 }
 
