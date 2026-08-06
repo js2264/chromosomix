@@ -12,7 +12,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { cardTitle } from './icons'
-import { MatrixPanel, axisRegion, poolingNote } from './MatrixPanel'
+import { MatrixPanel, axisRegion, poolingNote, resolutionNote } from './MatrixPanel'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -236,21 +236,10 @@ export class GenomeView {
   private renderSummary(result: MatrixResult, bins: number): void {
     const contigs = result.rowContigs ?? result.rowGroups.length
     const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
-    const grouped = result.contigsPerCell ?? 1
-    const perCell = result.binsPerCell ?? 1
-    // What a cell is, said in the unit it actually is. Above one contig per cell
-    // there is no bin width to quote: the contigs in a cell have different
-    // lengths and the cell is their sum, not a window on one of them.
-    const grid =
-      grouped > 1
-        ? ` · ${grouped} contigs per cell, summed`
-        : perCell > 1
-        ? ` · ${perCell} bins per cell`
-        : ' · 1 bin is 1 pixel'
     this.summary.textContent =
       `${fmt.int(bins)} bins across ${fmt.int(contigs)} contigs · ` +
-      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells` +
-      grid +
+      `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} cells · ` +
+      resolutionNote(this.props.binsize, result, 'contig') +
       (pooled === null ? '' : ` · ${pooled.phrase}`)
   }
 

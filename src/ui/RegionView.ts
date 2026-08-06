@@ -27,7 +27,12 @@ import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
-import { MatrixPanel, axisRegion, type AnnotationContext } from './MatrixPanel'
+import {
+  MatrixPanel,
+  axisRegion,
+  resolutionNote,
+  type AnnotationContext,
+} from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
@@ -321,14 +326,16 @@ export class RegionView {
   }
 
   private describeMatch(parsed: ParsedRange, drawn: Extent, perCell = 1): void {
-    const kind = parsed.kind === 'genome' ? 'genome' : this.props.noun
-    // What a cell is, and what was drawn — both from the result rather than from
-    // the request. A block coarser than one bin per cell is read on the
-    // sequence's own cell edges, so it can open and close up to a cell either
-    // side of what was typed, and the range named here is the range on screen.
-    const grid = perCell > 1 ? ` · ${perCell} bins per cell` : ''
+    // No "matched chromosome XV ·": the title above the map already names what
+    // was opened, and the line under it is for what the picture *is*. What was
+    // drawn, not what was asked for — a block coarser than one bin per cell is
+    // read on the sequence's own cell edges, so it can open and close up to a
+    // cell either side of what was typed.
     const bins = drawn[1] - drawn[0]
-    this.matched.textContent = `matched ${kind} ${parsed.label} · ${fmt.int(bins)} bins${grid} · bins ${fmt.int(drawn[0])}–${fmt.int(drawn[1] - 1)}`
+    const resolution = resolutionNote(this.props.binsize, { binsPerCell: perCell })
+    this.matched.textContent =
+      `${fmt.int(bins)} bins · ${resolution} · ` +
+      `bins ${fmt.int(drawn[0])}–${fmt.int(drawn[1] - 1)}`
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
     if (parsed.kind === 'genome') {
       const open = button('open genome view →', () => this.props.onOpenGenome(parsed.label), {
