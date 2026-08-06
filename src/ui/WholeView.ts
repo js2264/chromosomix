@@ -35,6 +35,7 @@
 import { WHOLE_VIEW_GATE_PIXELS } from '../constants'
 import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
 import type { MatrixResult } from '../worker/protocol'
+import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
@@ -52,8 +53,17 @@ import { SearchBox } from './SearchBox'
 export interface WholeViewProps {
   client: ReaderClient
   binsize: number
-  /** Total bins — the whole matrix is `[0, nBins)` on both axes. */
+  /** Total bins in the file, for the counts a selection is measured against. */
   nBins: number
+  /**
+   * The bins this view draws: everything but `__unbinned__` (§7.4).
+   *
+   * Not `[0, nBins)`. The unassigned contigs are not a genome, are absent from
+   * every table and every other view, and on a real metagenome are the largest
+   * thing in the file — drawing them here put a band across the picture and,
+   * being among the drawn pixels, set the colour scale for everything else.
+   */
+  displayExtent: Extent
   /**
    * Stored pixels in the file, when it says. The read walks all of them, so
    * this is what it costs and what the gate asks about; `null` where the file
@@ -182,7 +192,7 @@ export class WholeView {
     this.plan =
       props.level === 'bin'
         ? poolPlan(
-            props.selection?.bins ?? props.nBins,
+            props.selection?.bins ?? props.displayExtent[1] - props.displayExtent[0],
             props.selection?.contigs ?? props.nContigs,
             POOLED_CELL_CAP,
           )
@@ -425,8 +435,8 @@ export class WholeView {
   }
 
   private async load(budgetBytes?: number): Promise<void> {
-    const { client, nBins, balance, namesGenomes } = this.props
-    const rows: [number, number] = [0, nBins]
+    const { client, balance, namesGenomes } = this.props
+    const rows: Extent = this.props.displayExtent
     const budget = budgetBytes === undefined ? {} : { budgetBytes }
     const genomes = namesGenomes ? { genomes: true } : {}
     // Whatever stood in front of the map — the gate, or a refusal that has just

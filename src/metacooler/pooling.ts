@@ -88,17 +88,6 @@ export const IDENTITY_PLAN: PoolPlan = { binsPerCell: 1, contigsPerCell: 1 }
  * A bound, not the answer. The exact capacity depends on how the sequences fall
  * — which of them are small enough to share a cell — and only the reader knows
  * that, so it searches ({@link partitionAxis}) and reports what it used. This is
- * for the view that has to name a resolution *before* the read returns: at a
- * capacity of `ceil(n / cap)` the cells cannot outnumber the cap by more than the
- * sequences too small to fill one, and the reader only ever coarsens from here.
- */
-/**
- * The coarsest axis that still fits in `cap` cells, from the one number a caller
- * has before it has read anything.
- *
- * A bound, not the answer. The exact capacity depends on how the sequences fall
- * — which of them are small enough to share a cell — and only the reader knows
- * that, so it searches ({@link partitionAxis}) and reports what it used. This is
  * for the view that has to name a resolution *before* the read returns, and the
  * reader only ever coarsens from here.
  *
@@ -152,6 +141,8 @@ export interface BinPooling extends AxisGrouping {
   members: Int32Array
   /** Where each cell's sequences begin in {@link members}, `cells + 1` long. */
   memberStart: Int32Array
+  /** Bins the axis covers, where it is a selection rather than a range. */
+  bins?: number
 }
 
 /**
@@ -442,39 +433,74 @@ export function selectionPooling(
   nBins: number,
   extents: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
   plan: PoolPlan,
+  cap = POOLED_CELL_CAP,
 ): BinPooling {
+  const lengths = extents.map(({ extent }) => Math.max(0, extent[1] - extent[0]))
+  const total = lengths.reduce((sum, length) => sum + length, 0)
+  const capacity = Math.max(
+    plan.binsPerCell,
+    smallestCapacity(lengths.length, (i) => lengths[i], Math.max(1, Math.trunc(cap))),
+  )
+
   const slot = new Int32Array(nBins).fill(-1)
   const ids: number[] = []
   const cellStart: number[] = []
-  const step = Math.max(1, Math.trunc(plan.binsPerCell))
-  const group = Math.max(1, Math.trunc(plan.contigsPerCell))
+  const members: number[] = []
+  const memberStart: number[] = []
   let placed = 0
+  let open = 0
+  let widest = 1
+  let held = 0
   for (let u = 0; u < extents.length; u++) {
     const { id, extent } = extents[u]
     const [lo, hi] = extent
+    const length = lengths[u]
+    if (length === 0) continue
+    // The range's rule, applied to a scattered set: a sequence longer than the
+    // capacity keeps cells of its own, cut at its own start; one too small to
+    // fill a cell joins the one before it. A selection is exactly the axis a
+    // uniform *count* of sequences per cell got wrong — tick two thousand of
+    // them and the large ones would be crushed beside the small.
+    const ownCells = length >= capacity
     for (let bin = lo; bin < hi; bin++) {
-      // A fresh cell at each group of sequences, or at each sequence and every
-      // `step` bins after it — the same two regimes as a range, applied per
-      // selected piece.
-      const opens = group > 1 ? u % group === 0 && bin === lo : (bin - lo) % step === 0
+      const offset = bin - lo
+      const opens = ownCells
+        ? offset % capacity === 0
+        : offset === 0 && (open === 0 || open + length > capacity)
       if (opens) {
         ids.push(id)
         cellStart.push(placed)
+        memberStart.push(members.length)
+        members.push(id)
+        open = 0
+        held = 0
+      } else if (offset === 0) {
+        // Joined the open cell: it is a second sequence in it, not a second cell.
+        members.push(id)
       }
       slot[bin] = ids.length - 1
       placed++
     }
+    if (ownCells) {
+      open = 0
+      held = 0
+    } else {
+      open += length
+      held++
+      widest = Math.max(widest, held)
+    }
   }
   cellStart.push(placed)
-  const flat = Int32Array.from(ids)
+  memberStart.push(members.length)
   return {
     slot,
-    ids: flat,
-    stride: step,
-    contigsPerCell: group,
+    ids: Int32Array.from(ids),
+    stride: capacity,
+    contigsPerCell: widest,
     cellStart: Int32Array.from(cellStart),
-    members: flat,
-    memberStart: Int32Array.from({ length: flat.length + 1 }, (_, i) => i),
+    members: Int32Array.from(members),
+    memberStart: Int32Array.from(memberStart),
+    bins: total,
   }
 }
 

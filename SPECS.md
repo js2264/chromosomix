@@ -480,6 +480,27 @@ the legend on its side beneath it. Every control revealed by *pointing* — a ta
 where there is no hover; and every one of them is inert while it is invisible, so a tap or a click
 that lands where one is hidden reaches what is behind it rather than firing a button nobody saw.
 
+**One grid, and one place it is decided.** A block larger than the picture is
+coarsened **once, in the reader**, into cells that hold at most a capacity of bins
+and never part of one sequence beside anything else: a sequence longer than the
+capacity keeps cells of its own, cut at its own start, and only the ones too small
+to fill a cell share. The capacity is searched for against `RASTER_MAX_DIM`, so the
+grid the reader builds is the grid the renderer draws and nothing pools a second
+time — the raster's own pooling is reached only by a block that already fits. The
+grid is anchored to the *sequence*, not to the request, so the same base pair falls
+in the same cell holding the same sum in every view of it, and a range is widened to
+those cell edges rather than starting a grid of its own.
+
+**What is accepted, and stated rather than fixed:** the raster is at most 4,096 px
+per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
+minifies, and its filter averages across cell — and therefore sequence —
+boundaries. Every stage before it is exact; this one blends neighbours that are
+not neighbours, by up to a few pixels at a boundary. Removing it means performing
+the reduction to display size in the app, sequence-aware, which measured 40–66 ms
+per frame on the main thread and therefore belongs in a worker. It is a known
+limitation of the drawing, not of the data: the numbers behind every pixel, the
+readout, the axes and the export are all taken from the reader's grid.
+
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
 and `fills` takes the shading out from under their lines, which is the envelope and an area track's

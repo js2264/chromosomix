@@ -158,6 +158,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the paragraph is gone. So is `· full scan`: where the numbers came from is not
   a property of the picture, and the gate above asked before the scan ran.
 
+- **A selection is the same axis, scattered.** It was the last path on the old
+  rule: a cell opened at every ticked sequence, so the axis could not fall below
+  the number of them however coarse the bins were made. Past the cap the renderer
+  pooled what arrived, flat and blind to the sequences — and far past it, `select
+  all` on a large metagenome asked for an accumulator of `cells²` that the machine
+  refused, where the previous release had at least said "Select fewer sequences".
+  It takes the range's capacity now, so a large sequence keeps its own cells among
+  small ones, shared cells name what they hold, and ticking twenty thousand
+  contigs is a picture.
+
+- **A selection reads only the sequences it asked for.** Pixels are sorted by
+  `bin1`, so every pixel a selection wants lies in the row band of one of its own
+  sequences, and `bin1_offset` — already in memory — says where each band is in
+  two lookups. Bands are merged where the gap is smaller than the byte source's
+  own chunk and walked as one operation, with one progress count. Four MAGs out
+  of two thousand used to cost a pass over every stored pixel in the file.
+
+- **`__unbinned__` is out of the whole-file view.** It is not a genome and is
+  shown nowhere else (§7.4) — absent from the tables, unselectable, excluded from
+  the overview — but the whole-file map read `[0, nBins)` and drew it. On a
+  1.9 M-bin metagenome that is 56% of the bins: a band across the picture, and,
+  being among the drawn pixels, the thing setting the auto `vmax` for everything
+  else. Under `genome-then-length` it is one contiguous range at index 0, so
+  leaving it out is a range rather than a gap.
+
 ### Known
 
 - **A pooled balanced block is an approximation, and now says nothing about it.**
