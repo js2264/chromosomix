@@ -1946,17 +1946,26 @@ export class Session {
       primaryLabel: () => fileLabel(this.file?.uri ?? uri),
       hasPrimary: () => this.file !== null,
       onOpen: (source) => {
-        const spec: SourceSpec =
-          source.kind === 'local'
-            ? { kind: 'local', file: source.file }
-            : { kind: 'remote', url: splitUri(source.url).path }
-        const name = source.kind === 'local' ? source.file.name : source.url
         // With a map already open this is the *second* file, which is a
-        // comparison. With none it is the first, which is this session becoming
-        // a map — and the tracks come across live, because a genome browser that
-        // opens a map of its own genome has not changed the subject.
-        if (this.file === null) void this.open(name, spec)
-        else void this.openCompare(name, spec)
+        // comparison.
+        if (this.file !== null) {
+          void this.openCompare(
+            source.kind === 'local' ? source.file.name : source.url,
+            source.kind === 'local'
+              ? { kind: 'local', file: source.file }
+              : { kind: 'remote', url: splitUri(source.url).path },
+          )
+          return
+        }
+        // With none it is the first, which is this session becoming a map — and
+        // the tracks come across live, because a genome browser that opens a map
+        // of its own genome has not changed the subject. Through the doors every
+        // other drop takes, rather than straight at `open`: what a file *is* is
+        // decided in one place, so a saved session dropped on this rectangle is
+        // still a saved session and a `chrom.sizes` is still an answer about
+        // lengths.
+        if (source.kind === 'local') this.dropped(source.file)
+        else void this.openWithConfig(source.url, { kind: 'remote', url: splitUri(source.url).path })
       },
       // With one map open the × is the way out of the matrix altogether — the
       // door `closeMap` opens, which the File card used to carry. With two it
