@@ -10,6 +10,54 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **The example list is a shelf of sessions.** Every entry in the landing
+  page's dropdown is now a `.metacooler.json` published beside the data it
+  names, and nothing else — three of them, in `public/demo/`. A `.cool` in a
+  dropdown can only ever offer what dropping that `.cool` offers: a map at its
+  landing view, with nothing beside it. What a first-time reader should meet is
+  the application doing its job, and that has been writable as a file since the
+  export button shipped, so it is written as one.
+
+  **Mock microbial community** opens the 1/2/4 kb ladder at its finest level,
+  on the genomes table with the largest MAG first. **Yeast micro-C** opens the
+  balanced 1 kb map at `IV:1.0–1.4 Mb` with the gene model along *both* edges,
+  ATAC and its peak calls under the map, Pol II over input and its peaks beside
+  it, and 1,506 loop calls drawn on it. **Yeast chromatin and transcription**
+  opens the same assembly with no contact map at all: nine lanes over chromosome
+  IV, MNase and ATAC in one group, the two RNA strands overlaid in a single lane
+  with the reverse strand read downwards.
+
+- **A session can be opened by URL.** A `.json` in the picker's URL box, or in
+  the list, is fetched, parsed and applied — the published counterpart of
+  dropping one, and the same code after the first line. Which is what makes a
+  session something you can *link to* rather than only send.
+
+- **A published session names its files relatively.** An exported session names
+  the absolute URLs the tab it came from was reading; one that ships *with* its
+  data cannot, because the same directory is served from `/` in dev, `/<repo>/`
+  on Pages and a third origin in the desktop build. Relative names are now
+  resolved against the session's own URL on the way in, the way an `<img src>`
+  in a page is, so one directory of sessions works in all three. An exported
+  session is untouched by it, and a file may mix the two.
+
+### Fixed
+
+- **A session naming a collection at its root kept its workspace.** A workspace
+  is stored under the *file's* key, and an `.mmetacool` or `.mcool` addressed at
+  its root does not stay under the URI it was asked for — it redirects onto one
+  of its entries (§3.4). The tracks, groups and ticked sequences were written
+  under the root's key and read back under the entry's, so the map arrived
+  correctly and alone.
+
+- **The Open-a-file dialog opens what the landing page opens.** It mounts the
+  same picker with the same example list, and handed its answer to a different
+  door — so an entry from the list arrived there as a file to open, and a
+  published session was reported as a JSON file that is not a cooler.
+
 ## [0.8.0] - 2026-08-06
 
 ### Added

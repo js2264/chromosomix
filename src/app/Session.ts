@@ -45,6 +45,7 @@ import {
   buildConfig,
   looksLikeConfig,
   parseConfig,
+  resolveConfig,
   type SessionConfig,
 } from '../state/SessionConfig'
 import type { Transform, ViewState } from '../types'
@@ -597,6 +598,17 @@ export class Session {
    * the note and opens something else entirely gets that file plain.
    */
   private pendingConfig: SessionConfig | null = null
+  /**
+   * The config being applied, for the length of one open.
+   *
+   * A workspace is written under the *file's* memory key, and a collection
+   * addressed at its root does not stay under the URI it was asked for: it
+   * redirects onto one of its entries (§3.4). Without this the tracks, groups
+   * and ticked sequences of a published session naming an `.mmetacool` or an
+   * `.mcool` were written under the root's key and read back under the entry's,
+   * so the map arrived correctly and alone.
+   */
+  private redirectedConfig: SessionConfig | null = null
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
@@ -1125,6 +1137,59 @@ export class Session {
   }
 
   /**
+   * Fetch a session named by URL and open it.
+   *
+   * The published counterpart of dropping one: the same file, read over the
+   * network instead of off a disk, which is what makes a session something you
+   * can *link to* rather than only send. It is one plain `GET` — a config is a
+   * few kilobytes and there is nothing to range over — and every file it names
+   * is then opened by the ordinary paths, so a published session and a dropped
+   * one differ in nothing after this line.
+   *
+   * Relative names inside are resolved against this URL ({@link resolveConfig}),
+   * which is what lets `public/demo/`'s own sessions ship in the repository and
+   * still open on Pages, in `vite dev`, and in the desktop build.
+   */
+  private async openConfigUrl(url: string): Promise<void> {
+    this.showContent(loading(`Reading ${fileLabel(url)}`))
+    this.host.sessionChanged(this)
+    try {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(
+          `${fileLabel(url)} could not be read: the host answered ${response.status} ` +
+            `${response.statusText}.`,
+        )
+      }
+      const config = parseConfig(await response.text())
+      if (config === null) {
+        throw new Error(
+          `${fileLabel(url)} is a JSON file but not a saved session — it does not name itself ` +
+            'as one. A session is written by the export button in the top bar.',
+        )
+      }
+      if (this.destroyed) return
+      await this.openConfig(resolveConfig(config, url))
+    } catch (err) {
+      if (!this.destroyed) this.showError(err)
+    } finally {
+      this.host.sessionChanged(this)
+    }
+  }
+
+  /**
+   * What the picker opens, wherever it is mounted.
+   *
+   * The landing page and the Open-a-file dialog hand back the same two things,
+   * so they go through the same door: a URL naming a *session* is fetched and
+   * applied, anything else is a file. Routing one of them past this was how the
+   * dialog came to answer an example from the list with "this is not a cooler".
+   */
+  async openPicked(uri: string, source: SourceSpec): Promise<void> {
+    await this.openWithConfig(uri, source)
+  }
+
+  /**
    * Open a file *as* a config's session: its state, and its workspace.
    *
    * The URI is the one the file is actually opening under, which for a local
@@ -1132,6 +1197,20 @@ export class Session {
    * same session under a renamed file is still that session.
    */
   private async openWithConfig(uri: string, source: SourceSpec): Promise<void> {
+    // A `.json` on a URL is a session, not a file to open: it is the one thing
+    // the picker's box and its example list can be handed that names a whole
+    // tab rather than a byte source. Checked before the pending config is
+    // consumed, since this *produces* one — and only when there is none, so a
+    // session that somehow named another session is refused as a file rather
+    // than followed with the first one's workspace silently dropped.
+    if (
+      this.pendingConfig === null &&
+      source.kind === 'remote' &&
+      looksLikeConfig(splitUri(uri).path)
+    ) {
+      await this.openConfigUrl(splitUri(uri).path)
+      return
+    }
     const config = this.pendingConfig
     this.pendingConfig = null
     if (config === null) {
@@ -1139,12 +1218,20 @@ export class Session {
       return
     }
     applyConfig(config, this.memoryKey(uri))
+    // Kept for the one hop `open` can make on its own: a collection addressed
+    // at its root lands on one of its entries, under a URI this config has
+    // never seen, and the workspace was just written under the root's key.
+    this.redirectedConfig = config
     const state = { ...config.state, uri }
-    if (state.view === 'browser') {
-      await this.openGenome(uri, source, state.locus, true)
-      return
+    try {
+      if (state.view === 'browser') {
+        await this.openGenome(uri, source, state.locus, true)
+        return
+      }
+      await this.open(uri, source, state)
+    } finally {
+      this.redirectedConfig = null
     }
-    await this.open(uri, source, state)
   }
 
   /**
@@ -1320,6 +1407,13 @@ export class Session {
       const landing = firstEntry(err)
       if (landing !== null) {
         const entryUri = `${splitUri(uri).path}::${landing.group}/${landing.entry}`
+        // A config being applied has to make the same hop, and it cannot ride
+        // along in the state: a workspace is keyed on the *file*, and it was
+        // written under the root's key a moment ago. Written again rather than
+        // moved, since the root's copy is what a second visit here would read.
+        if (this.redirectedConfig !== null) {
+          applyConfig(this.redirectedConfig, this.memoryKey(entryUri))
+        }
         // The request was made against the collection's root URI; the file that
         // answers it is one of its entries. Rewriting the URI is the whole of
         // the translation — a region, a colour clip and a level all mean the
