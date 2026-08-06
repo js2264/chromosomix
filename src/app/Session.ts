@@ -74,7 +74,7 @@ import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/
 import { RegionView } from '../ui/RegionView'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import { KEYS, type Command } from '../ui/commands'
+import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, dragHasFiles, el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
@@ -163,6 +163,16 @@ function genomeCard(
   selection: SequenceSelection,
   onOpenMap: (file: File) => void,
   onOpenUrl: (url: string) => void,
+  /**
+   * Whether this browser already has a map behind it.
+   *
+   * With one, the load card is a lie: there *is* a contact map on this genome,
+   * it is simply not drawn, and the place that says so — with the eye that
+   * brings it back — is the Contact maps card in the Annotations column. Two
+   * cards about maps in two columns, one of them offering to load what is
+   * already loaded, is the state to avoid.
+   */
+  hasMap = false,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -198,7 +208,7 @@ function genomeCard(
           ]),
     ),
     sequenceCard(assembly, onGoTo, selection),
-    mapCard(onOpenFile, onOpenMap, onOpenUrl),
+    ...(hasMap ? [] : [mapCard(onOpenFile, onOpenMap, onOpenUrl)]),
   )
 }
 
@@ -575,6 +585,15 @@ export class Session {
    * are, what the tracks are drawn against, and what the breadcrumb says.
    */
   private compare: OpenCompare | null = null
+  /**
+   * The second map is open and *not drawn* — its eye is shut.
+   *
+   * Distinct from having no second map at all: the reader stays alive and the
+   * card keeps its row, so the lower-left triangle comes back on the next press
+   * rather than on another read of another file. The same distinction the first
+   * map's {@link parkedMap} makes, and the same one a track's `visible` makes.
+   */
+  private compareHidden = false
   private compareCard: CompareCard | null = null
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
@@ -583,11 +602,26 @@ export class Session {
    *
    * A session is in one of two shapes and this is the discriminant: with a
    * {@link file} it is a map browser with tracks beside the map, with an
-   * assembly it is a 1D genome browser with the same tracks and no map. Both at
-   * once never happens — opening a map from a browser replaces the assembly with
-   * the map's own chromosomes, and closing a map falls back to exactly that.
+   * assembly it is a 1D genome browser with the same tracks and no map.
+   *
+   * A file *and* an assembly is the third state, and the only one: the map is
+   * **hidden** rather than closed, and {@link parkedMap} says so. What is on
+   * screen is still decided by the assembly — this is the 1D browser — but the
+   * reader worker is alive, the file is open, and the picture comes back from
+   * where it was left. Opening a map from a browser still replaces the assembly
+   * outright, and closing one still falls back to it.
    */
   private assembly: Assembly | null = null
+  /**
+   * Where the map goes back to while the browser is on screen.
+   *
+   * Non-null is the whole of "there is a map behind this": {@link file} and the
+   * reader are untouched, and this is the view state to return to. The eye
+   * beside the file's name in the Contact maps card is what sets and clears it,
+   * which is the same control a track's own row carries — a map is a thing laid
+   * over this genome too, and the largest of them.
+   */
+  private parkedMap: ViewState | null = null
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
@@ -841,9 +875,21 @@ export class Session {
           run: () => this.browser?.focusSearch(),
         },
         {
+          id: 'show-map',
+          group: 'View',
+          title: 'Back to the contact map',
+          hint: 'The map was never unloaded — this is the same picture, where it was left.',
+          keys: KEYS.mapToggle,
+          enabled: this.canShowMap,
+          run: () => this.showMap(),
+        },
+        {
           id: 'browser-map',
           group: 'File',
           title: 'Open a contact map on this genome',
+          // Still here, and not the same command as the one above it: this
+          // browser may have no map behind it at all, in which case opening one
+          // is the only way to get one.
           hint: 'Or drop a .cool anywhere on the tracks; the tracks come with it.',
           run: () => this.host.openFileDialog(this),
         },
@@ -863,6 +909,17 @@ export class Session {
         keys: KEYS.find,
         enabled: this.current?.focusSearch !== undefined,
         run: () => this.current?.focusSearch?.(),
+      },
+      {
+        id: 'hide-map',
+        group: 'View',
+        title: 'Read this genome as tracks',
+        hint:
+          'Takes the matrix out of the picture and lays its chromosomes end to end. The map ' +
+          'stays open, and the same key brings it back.',
+        keys: KEYS.mapToggle,
+        enabled: this.canHideMap,
+        run: () => this.hideMap(),
       },
       {
         id: 'map-export',
@@ -979,9 +1036,19 @@ export class Session {
   private searchNoun(): string {
     const view = this.store.state?.view
     if (view === 'genomes' || view === 'contigs') return 'The filter above the table.'
-    if (view === 'region') return 'The region box, which is also this view’s title.'
+    // A gene model beside the map makes the box a *third* thing, and one worth
+    // saying: a whole-genome view is three pixels per chromosome arm, so
+    // "go to MYC" is a question only typing can ask there.
+    const genes = this.annotations?.store.searchSource() !== null && this.annotations !== null
+    if (view === 'region') {
+      return genes
+        ? 'The region box, which is also this view’s title — a contig, a range, or a gene name.'
+        : 'The region box, which is also this view’s title.'
+    }
     if (view === 'overview') return 'Name a genome of this file, or one of its contigs.'
-    return 'Name a contig, or a range within one, and open it.'
+    return genes
+      ? 'Name a contig, a range within one, or a gene from the starred model.'
+      : 'Name a contig, or a range within one, and open it.'
   }
 
   // -------------------------------------------------------------------------
@@ -1348,6 +1415,9 @@ export class Session {
       // `.cool` dropped on the browser is a map from here on, and leaving the
       // assembly set would keep the browser's command list and its panels.
       this.assembly = null
+      // A different file, so whatever was parked belongs to a map that is being
+      // let go of. `hideMap` is about *this* file and nothing else.
+      this.parkedMap = null
       this.file = {
         uri,
         info,
@@ -1395,10 +1465,6 @@ export class Session {
       this.infoPanel = new InfoPanel({
         info,
         onCloseFile: (which) => this.closeCompare(which),
-        // With one file open there is nothing to close it *for* — except the
-        // genome underneath it, which a cooler carries and which the tracks
-        // beside the map are already drawn against.
-        onCloseMap: () => this.closeMap(),
       })
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
@@ -1549,14 +1615,18 @@ export class Session {
         // Named a genome, turned out to be a contact map. Hand it to the reader
         // rather than refusing: what the user did was drop a file, and this is
         // the same file either way — unless a browser was asked for by name, in
-        // which case the map is opened for its `/chroms` and immediately closed,
-        // which is exactly the fallback the File card's close button performs.
+        // which case the map is opened for its `/chroms` and immediately *put
+        // down*. Hidden rather than closed, because `view=browser` on a cooler
+        // is a link to the tracks and not an instruction to throw the matrix
+        // away: the eye in the Contact maps card brings it straight back.
         client.destroy()
         this.opening = null
         await this.open(uri, source)
         if (insist && !this.destroyed && this.file !== null) {
           await this.contigs().catch(() => null)
-          if (!this.destroyed) this.closeMap()
+          if (this.destroyed) return
+          if (this.canHideMap) this.hideMap()
+          else this.closeMap()
         }
         return
       }
@@ -1647,16 +1717,7 @@ export class Session {
     }
 
     this.setAnnotations([new AnnotationCard({ store, loader, context: 'browser' }).el])
-    this.setGeneral([
-      genomeCard(
-        assembly,
-        () => this.host.openFileDialog(this),
-        (locus) => this.goToLocus(locus),
-        this.selectionFor(assembly),
-        (file) => this.dropped(file),
-        (url) => this.openRemoteMap(url),
-      ),
-    ])
+    this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
     // …and what this session was already holding, exactly as the map path does
     // it. Not only for symmetry: `carry` runs before every tear-down and only
@@ -1712,12 +1773,14 @@ export class Session {
     const assembly = this.assembly
     const held = this.annotations
     if (assembly === null || held === null) return
+    const toggle = this.mapToggleButton()
     const view = new BrowserView({
       assembly,
       store: held.store,
       client: held.client,
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
+      ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       groups: held.groups,
     })
@@ -1829,16 +1892,7 @@ export class Session {
         contigs: result.contigs,
         origin: 'sizes',
       })
-      this.setGeneral([
-        genomeCard(
-          this.assembly,
-          () => this.host.openFileDialog(this),
-          (locus) => this.goToLocus(locus),
-          this.selectionFor(this.assembly),
-          (file) => this.dropped(file),
-          (url) => this.openRemoteMap(url),
-        ),
-      ])
+      this.setGeneral([this.genomeCardFor(this.assembly)])
       const state = this.store.state
       if (state === null) return
       // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
@@ -1852,28 +1906,169 @@ export class Session {
     }
   }
 
+  /** Whether the map behind this browser can be brought back. */
+  get canShowMap(): boolean {
+    return this.parkedMap !== null && this.file !== null
+  }
+
   /**
-   * Close the contact map and keep browsing its genome.
+   * Whether the map on screen can be put down without being unloaded.
    *
-   * A cooler carries a chromosome list, which is an assembly; there is no reason
-   * for closing the map to also throw away the tracks that were drawn beside it.
-   * So it does not — the same store, the same rows, the same colours, now along
-   * a genome instead of along an axis of bins.
+   * Three conditions, and each is a way the browser would come up empty rather
+   * than a preference. A metacool has no annotation machinery at all (§8.5), so
+   * there is no 1D browser to fall back to; a file whose contigs have not been
+   * read yet has no assembly to build; and a session that is already browsing
+   * has nothing to put down.
    */
-  private closeMap(): void {
-    const file = this.file
-    if (file === null) return
+  get canHideMap(): boolean {
+    return (
+      this.file !== null &&
+      this.assembly === null &&
+      this.annotations !== null &&
+      contigPairs(this.file.contigs).length > 0
+    )
+  }
+
+  /**
+   * The assembly a cooler's own chromosome list makes.
+   *
+   * One derivation, used by both doors out of a map: `closeMap` builds the
+   * genome it falls back to, and {@link hideMap} builds the same one. Two copies
+   * would be two answers to "what genome is this file of".
+   */
+  private assemblyOfFile(file: OpenFile): Assembly | null {
     const contigs = contigPairs(file.contigs)
-    if (contigs.length === 0) {
-      this.toPicker()
-      return
-    }
-    const assembly = assemblyOf({
+    if (contigs.length === 0) return null
+    return assemblyOf({
       uri: file.uri,
       name: fileLabel(file.uri),
       contigs: contigs.map(([name, length]) => ({ name, length })),
       origin: 'cooler',
     })
+  }
+
+  /**
+   * Put the map down without letting go of it.
+   *
+   * The reversible door, and the one the eye in the Contact maps card opens.
+   * Everything {@link closeMap} tears down stays: the worker keeps the file
+   * open, the breadcrumb and the File card keep their DOM, a comparison keeps
+   * its second reader. Only what is *mounted* changes, and the tracks do not
+   * even notice — they are the same store drawn against the same genome, which
+   * is the whole reason a map and a browser were ever one session.
+   *
+   * A map is a thing laid over a genome, like the tracks beside it; hiding one
+   * should cost no more than hiding the other.
+   */
+  private hideMap(): void {
+    const file = this.file
+    const state = this.store.state
+    if (file === null || state === null || !this.canHideMap) return
+    const assembly = this.assemblyOfFile(file)
+    if (assembly === null) return
+    this.parkedMap = state
+    this.assembly = assembly
+    // The browser steers its axis from the Sequences card, which is General's;
+    // the Annotations column is untouched, because every card in it — the
+    // tracks, the hand-drawn marks, the maps themselves — is about this genome
+    // either way.
+    this.setGeneral([this.genomeCardFor(assembly)])
+    this.syncCompareCard()
+    this.mounted = null
+    const target: ViewState = { uri: file.uri, view: 'browser' }
+    const willNotify = !viewStateEquals(target, this.store.state)
+    this.store.set(target)
+    if (!willNotify) void this.render(target)
+    this.host.sessionChanged(this)
+  }
+
+  /** Bring the parked map back, exactly where it was left. */
+  private showMap(): void {
+    const target = this.parkedMap
+    if (target === null || this.file === null) return
+    this.parkedMap = null
+    this.assembly = null
+    this.browser = null
+    this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
+    this.syncCompareCard()
+    this.mounted = null
+    const willNotify = !viewStateEquals(target, this.store.state)
+    this.store.set(target)
+    if (!willNotify) void this.render(target)
+    this.host.sessionChanged(this)
+  }
+
+  /**
+   * The control that swaps the map for the tracks, and back.
+   *
+   * Built here rather than in the six views that show it, because what it says
+   * depends on which of the two is on screen and only the session knows that.
+   * `undefined` where the swap is impossible — a browser with no map behind it,
+   * a metacool, a file whose contigs have not been read — so a view that gets
+   * nothing draws nothing rather than a button that does nothing.
+   *
+   * The same act as the eye in the Contact maps card, and deliberately two
+   * controls: the card is where a reader decides *what is drawn*, and this is
+   * where their hand already is when they decide they would rather be reading
+   * the other picture.
+   */
+  private mapToggleButton(): HTMLElement | undefined {
+    if (this.canShowMap) {
+      return keyedIconButton('grid-2x2', 'contact map', KEYS.mapToggle, () => this.showMap(), {
+        title: withKey('Back to the contact map — it was never unloaded', KEYS.mapToggle),
+      })
+    }
+    if (!this.canHideMap) return undefined
+    return keyedIconButton('chart-line', 'tracks', KEYS.mapToggle, () => this.hideMap(), {
+      title: withKey(
+        'Read this genome as tracks. The map stays open — the same key brings it back',
+        KEYS.mapToggle,
+      ),
+    })
+  }
+
+  /** Redraw the Contact maps card's eyes from what this session is showing. */
+  private syncCompareCard(): void {
+    this.compareCard?.sync()
+  }
+
+  /** The map's eye, in the card that lists it: hide it, or bring it back. */
+  private toggleMap(): void {
+    if (this.canShowMap) this.showMap()
+    else this.hideMap()
+  }
+
+  /** The Sequences card a browser steers its axis from. */
+  private genomeCardFor(assembly: Assembly): HTMLElement {
+    return genomeCard(
+      assembly,
+      () => this.host.openFileDialog(this),
+      (locus) => this.goToLocus(locus),
+      this.selectionFor(assembly),
+      (file) => this.dropped(file),
+      (url) => this.openRemoteMap(url),
+      this.file !== null,
+    )
+  }
+
+  /**
+   * Close the contact map and keep browsing its genome.
+   *
+   * The one-way door, beside {@link hideMap}'s reversible one: the worker is put
+   * down and the file is let go of. A cooler carries a chromosome list, which is
+   * an assembly; there is no reason for closing the map to also throw away the
+   * tracks that were drawn beside it. So it does not — the same store, the same
+   * rows, the same colours, now along a genome instead of along an axis of bins.
+   */
+  private closeMap(): void {
+    const file = this.file
+    if (file === null) return
+    this.parkedMap = null
+    const assembly = this.assemblyOfFile(file)
+    if (assembly === null) {
+      this.toPicker()
+      return
+    }
     // The annotations survive: they are keyed on this session and this URI, and
     // both are exactly what they were. Only the *map* is being closed.
     const held = this.annotations
@@ -1898,16 +2093,7 @@ export class Session {
       this.setAnnotations([
         new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
-      this.setGeneral([
-      genomeCard(
-        assembly,
-        () => this.host.openFileDialog(this),
-        (locus) => this.goToLocus(locus),
-        this.selectionFor(assembly),
-        (file) => this.dropped(file),
-        (url) => this.openRemoteMap(url),
-      ),
-    ])
+      this.setGeneral([this.genomeCardFor(assembly)])
     }
     this.mounted = null
     const target: ViewState = { uri: file.uri, view: 'browser' }
@@ -1921,6 +2107,7 @@ export class Session {
 
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
+    this.parkedMap = null
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
@@ -2018,7 +2205,22 @@ export class Session {
             ? { kind: 'local', file: source.file }
             : { kind: 'remote', url: splitUri(source.url).path },
         ),
-      onClose: (which) => this.closeCompare(which),
+      // With one map open the × is the way out of the matrix altogether — the
+      // door `closeMap` opens, which the File card used to carry. With two it
+      // means what it has always meant: put this one down and keep the other.
+      onClose: (which) => {
+        if (which === 1 && this.compare === null) this.closeMap()
+        else this.closeCompare(which)
+      },
+      onToggleShown: (which) => {
+        if (which === 1) this.toggleMap()
+        else {
+          this.compareHidden = !this.compareHidden
+          this.syncCompareCard()
+          this.remount()
+        }
+      },
+      isShown: (which) => (which === 1 ? this.parkedMap === null : !this.compareHidden),
       onSwap: () => void this.swapCompare(),
     })
 
@@ -2026,7 +2228,14 @@ export class Session {
     // them as one click is the difference between a viewer that demonstrably
     // works and one a reader has to assemble a test case for.
     const published = demoAnnotationsFor(uri)
+    // Contact maps first, and that is the change of mind this card's eyes made
+    // necessary: while it was only "load a second file to compare against" it
+    // belonged under the tracks, as the rarest thing in the column. It is now
+    // where a reader goes to *leave* the matrix, which is not a rare thing at
+    // all — and a control that turns the whole picture into a genome browser
+    // does not belong under eight track rows and a list of hand-drawn marks.
     this.setAnnotations([
+      this.compareCard.el,
       new AnnotationCard({
         store,
         loader,
@@ -2047,7 +2256,6 @@ export class Session {
             }),
       }).el,
       this.manualCard.el,
-      this.compareCard.el,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
@@ -2285,6 +2493,7 @@ export class Session {
   private dropCompare(): void {
     this.compare?.client.terminate()
     this.compare = null
+    this.compareHidden = false
     this.compareCard?.set({ kind: 'empty' })
     this.infoPanel?.setCompare(null)
   }
@@ -2305,7 +2514,7 @@ export class Session {
   private compareContext(): CompareRead | undefined {
     const held = this.compare
     const file = this.file
-    if (held === null || file === null) return undefined
+    if (held === null || file === null || this.compareHidden) return undefined
     return {
       client: held.client,
       labels: [fileLabel(file.uri), fileLabel(held.uri)],
@@ -2517,6 +2726,15 @@ export class Session {
         this.host.activity(this)
         return
       }
+      // The map this session is already holding, asked for as tracks. The Back
+      // button reaches this — hiding the map pushes a `view=browser` entry, so
+      // going forward to it again arrives here — and so does a shared link. Put
+      // the map down rather than closing and re-opening the file, which is both
+      // slower and lossy.
+      if (this.file?.uri === state.uri && this.canHideMap) {
+        this.hideMap()
+        return
+      }
       if (this.opening !== null) return
       const source = inferSource(state.uri)
       if (source === null) {
@@ -2525,6 +2743,20 @@ export class Session {
       }
       await this.openGenome(state.uri, source, state.locus, true)
       return
+    }
+
+    // …and the way back. A parked map has an assembly *and* a file, so any
+    // state that is not the browser's is the map being asked for again — by the
+    // Back button, or by a card that navigated. Unpark before anything below
+    // reads `assembly` and concludes this is still a browser.
+    if (this.parkedMap !== null && this.file?.uri === state.uri) {
+      this.parkedMap = null
+      this.assembly = null
+      this.browser = null
+      this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
+      this.syncCompareCard()
+      this.mounted = null
+      this.host.sessionChanged(this)
     }
 
     if (this.file === null || this.file.uri !== state.uri) {
@@ -2842,10 +3074,12 @@ export class Session {
     this.mountWholeFile(
       state,
       `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
-      () =>
-        new WholeView({
+      () => {
+        const mapSwitch = this.mapToggleButton()
+        return new WholeView({
           client: this.clientOf(),
           caption: this.captionFor(state),
+          ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
           binsize: file.info.binsize ?? 1,
           nBins: file.info.nBins,
           nContigs: file.info.nContigs,
@@ -2884,7 +3118,8 @@ export class Session {
               ...(region2 === undefined ? {} : { region2 }),
             }),
           onError: (err) => this.showError(err),
-        }),
+        })
+      },
     )
   }
 
@@ -2916,9 +3151,11 @@ export class Session {
     }
     const bins = this.binsOfSelection(selection)
     const contigs = this.contigsOfSelection(selection)
+    const mapSwitch = this.mapToggleButton()
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
+      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
@@ -3047,9 +3284,11 @@ export class Session {
       this.store.set({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
+    const mapSwitch = this.mapToggleButton()
     const view = new PairView({
       client: this.clientOf(),
       caption: this.captionFor(state),
+      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       genomeNames: file.displayNames,
       balance: this.balanceOf(state),
@@ -3085,9 +3324,11 @@ export class Session {
     // nothing afterwards.
     if (this.file?.contigs == null) await this.contigs().catch(() => null)
     if (this.destroyed || this.store.state !== state) return
+    const mapSwitch = this.mapToggleButton()
     const view = new RegionView({
       client: this.clientOf(),
       caption: this.captionFor(state),
+      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: this.file?.info.binsize ?? 1,
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',

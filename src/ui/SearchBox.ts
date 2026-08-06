@@ -15,8 +15,17 @@
  * from that moment the reader is typing rather than looking for the way in.
  */
 
-import { el } from './dom'
+import { button, el } from './dom'
 import { KEYS, keyLabel } from './commands'
+import { findFeatures } from '../annotations/search'
+import type { AnnotationStore } from '../annotations/store'
+import { fmt } from './dom'
+
+/** One offered answer: what it reads as, and what it puts in the box. */
+export interface Suggestion {
+  label: string
+  value: string
+}
 
 export interface SearchBoxOptions {
   placeholder: string
@@ -30,14 +39,24 @@ export interface SearchBoxOptions {
   onSubmit(text: string): void
   /** Every keystroke, for a box that answers as you type. */
   onInput?(text: string): void
+  /**
+   * What this box can offer for what has been typed so far.
+   *
+   * Absent for a box with nothing to offer — a table filter answers as you type
+   * and has no second list to drop. Given, the box grows a hit list under
+   * itself and Enter takes the first hit when the text is not something the
+   * view could already act on.
+   */
+  suggest?(text: string): Suggestion[]
 }
 
 export class SearchBox {
   /** The wrapper: the badge is positioned against it, so it goes in the DOM. */
   readonly el: HTMLElement
   readonly input: HTMLInputElement
+  private readonly hits = el('div', { class: 'search-hits hidden' })
 
-  constructor(options: SearchBoxOptions) {
+  constructor(private readonly options: SearchBoxOptions) {
     this.input = el('input', {
       class: `input search-input${options.inputClass === undefined ? '' : ` ${options.inputClass}`}`,
       type: 'text',
@@ -46,13 +65,89 @@ export class SearchBox {
       ...(options.value === undefined ? {} : { value: options.value }),
     })
     this.input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') options.onSubmit(this.input.value.trim())
+      if (event.key === 'Enter') this.submit()
+      else if (event.key === 'Escape') this.close()
     })
-    if (options.onInput !== undefined) {
-      const onInput = options.onInput
-      this.input.addEventListener('input', () => onInput(this.input.value))
+    this.input.addEventListener('input', () => {
+      options.onInput?.(this.input.value)
+      this.offer()
+    })
+    // A press on a hit is a `mousedown` before it is a `click`, and the
+    // `mousedown` blurs the box — so closing on blur immediately would take the
+    // list away before the click landed on anything.
+    this.input.addEventListener('blur', () => window.setTimeout(() => this.close(), 150))
+    this.el = el(
+      'div',
+      { class: 'search-box' },
+      this.input,
+      searchKey(),
+      ...(options.suggest === undefined ? [] : [this.hits]),
+    )
+  }
+
+  /**
+   * Act on what is in the box: the first hit, or the text itself.
+   *
+   * The text wins whenever the box has nothing to offer for it, which is what
+   * makes coordinates beat names without either being special-cased —
+   * `findFeatures` returns nothing for a string with a colon in it, so
+   * `chrI:1-2000` is never intercepted by a gene whose name it happens to
+   * prefix. Public because the `go` button beside the box means the same thing
+   * as Enter, and two spellings of that is how the two come to disagree.
+   */
+  submit(): void {
+    const first = this.offered[0]
+    if (first !== undefined) {
+      this.input.value = first.value
+      this.close()
+      this.options.onSubmit(first.value)
+      return
     }
-    this.el = el('div', { class: 'search-box' }, this.input, searchKey())
+    this.close()
+    this.options.onSubmit(this.input.value.trim())
+  }
+
+  /** What the box is offering right now, in the order it is showing them. */
+  private offered: Suggestion[] = []
+
+  private offer(): void {
+    const suggest = this.options.suggest
+    if (suggest === undefined) return
+    this.offered = suggest(this.input.value)
+    if (this.offered.length === 0) {
+      // Nothing rather than "no match": below two characters and for anything
+      // that looks like coordinates the box is not searching at all, and a card
+      // saying it failed would be reporting on a search nobody ran.
+      this.close()
+      return
+    }
+    this.hits.replaceChildren(
+      ...this.offered.map((hit) =>
+        button(
+          hit.label,
+          () => {
+            this.input.value = hit.value
+            this.close()
+            this.options.onSubmit(hit.value)
+          },
+          { class: 'search-hit' },
+        ),
+      ),
+    )
+    this.hits.classList.remove('hidden')
+  }
+
+  /**
+   * Put the list away, and *empty* it.
+   *
+   * Hiding alone leaves the buttons live and `offered` populated, so Enter would
+   * jump to a hit nobody could see — which makes Escape look like a cancel and
+   * behave like a deferred navigation.
+   */
+  private close(): void {
+    this.offered = []
+    this.hits.classList.add('hidden')
+    this.hits.replaceChildren()
   }
 
   /**
@@ -73,6 +168,22 @@ export class SearchBox {
     if (this.input === document.activeElement) return
     this.input.value = text
   }
+}
+
+/**
+ * Feature hits as this box's suggestions, in a **contact map's** coordinates.
+ *
+ * The base is the whole reason this is written here rather than shared with the
+ * browser's list: `metacooler/range.ts` reads a region as 0-based half-open,
+ * exactly as `FeatureHit` carries it, while `genome/assembly.ts` reads the
+ * browser's loci as 1-based inclusive. One string for both would be off by a
+ * base on one of the two, silently and for ever.
+ */
+export function featureSuggestions(store: AnnotationStore, text: string): Suggestion[] {
+  return findFeatures(store, text).map((hit) => ({
+    label: `${hit.name} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+    value: `${hit.contig}:${hit.start}-${hit.end}`,
+  }))
 }
 
 /**

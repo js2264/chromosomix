@@ -1,15 +1,21 @@
 /**
- * The second file: a drop area, and the state of what landed on it.
+ * The contact maps this session is holding: one, or two, or none on screen.
  *
- * It lives in the Annotations column rather than in General, and the placement
- * is the argument: everything in that column is *something else laid over this
- * map*, and a second contact matrix is the largest thing anyone can lay over
- * one. General describes the file; this is a thing you do to it.
+ * It lives at the top of the Annotations column rather than in General, and the
+ * placement is the argument: everything in that column is *something laid over
+ * this genome*, and a contact matrix is the largest thing anyone can lay over
+ * one. General describes the file; this is a thing you do with it.
  *
- * The card is the whole of the comparison's interface. What it refuses, it
+ * Which is also why each map wears the same **eye** a track's row wears. Hiding
+ * the first one is what the 1D genome browser *is* — the same tracks, the same
+ * store, the same window, with the matrix taken out of the picture — and the
+ * map stays open behind it, so the trip back costs nothing but the eye again.
+ * Two controls for two different acts, on the same row: the eye puts a map down
+ * and the × lets go of it.
+ *
+ * The card is also the whole of the comparison's interface. What it refuses, it
  * refuses here with the reason — same contigs, same bin size, cooler only — and
- * what it accepts it reports in one line, beside a button that takes it away
- * again. The map does the rest.
+ * what it accepts it reports in one line. The map does the rest.
  */
 
 import { button, el, fmt } from './dom'
@@ -27,6 +33,16 @@ export type CompareState =
 export interface CompareCardProps {
   /** A file was dropped or a URL typed. */
   onOpen(source: { kind: 'local'; file: File } | { kind: 'remote'; url: string }): void
+  /**
+   * Take the matrix out of the picture, or put it back — the eye on a row.
+   *
+   * `1` is this session's own map, and hiding it *is* the 1D browser; `2` is the
+   * second file, whose eye takes the lower-left triangle away and leaves the
+   * upper one, which is the same map on its own.
+   */
+  onToggleShown(which: 1 | 2): void
+  /** Whether each map is currently drawn. */
+  isShown(which: 1 | 2): boolean
   /**
    * Put one of the two down and go back to a single map.
    *
@@ -50,6 +66,9 @@ export class CompareCard {
   private state: CompareState = { kind: 'empty' }
 
   constructor(private readonly props: CompareCardProps) {
+    // Redrawn on demand rather than watched: the state that decides an eye —
+    // which map is on screen — is the session's, and the session is what calls
+    // `set`/`sync` when it changes.
     // The Tracks card's load zone, to the class: a thin unshaded box with a bold
     // line and a quiet one under it, and the URL behind a fold below. The two
     // cards ask the same thing — *put a file here* — and they sat one above the
@@ -100,7 +119,7 @@ export class CompareCard {
     this.el = el(
       'div',
       { class: 'card compare-card' },
-      cardTitle('Compare', 'git-compare'),
+      cardTitle('Contact maps', 'grid-2x2'),
       this.body,
       fileInput,
     )
@@ -112,6 +131,18 @@ export class CompareCard {
     this.render()
   }
 
+  /**
+   * Redraw from what the session says now, without changing what is loaded.
+   *
+   * The eyes read the session rather than this card — which map is on screen is
+   * a fact about the session and about nothing else — so the card has to be told
+   * when that changes. `set` is for the *second file*'s own state and would
+   * throw the loading and error phases away if it were used for this.
+   */
+  sync(): void {
+    this.render()
+  }
+
   private openUrl(): void {
     const url = this.urlInput.value.trim()
     if (url !== '') this.props.onOpen({ kind: 'remote', url })
@@ -119,8 +150,25 @@ export class CompareCard {
 
   private render(): void {
     switch (this.state.kind) {
-      case 'empty':
+      case 'loading':
         this.body.replaceChildren(
+          this.mapRow(1, this.props.primaryLabel(), false),
+          el('p', { class: 'compare-line', text: `Opening ${this.state.label}…` }),
+        )
+        return
+      case 'error':
+        this.body.replaceChildren(
+          this.mapRow(1, this.props.primaryLabel(), false),
+          el('p', { class: 'inline-error', text: this.state.message }),
+          button('try another file', () => this.set({ kind: 'empty' }), { class: 'btn btn-quiet' }),
+        )
+        return
+      case 'empty':
+        // One map, and the slot the second would go in. The row is drawn even
+        // with nothing to compare against, because the row is where the eye is
+        // and the eye is how a reader leaves the matrix for the tracks.
+        this.body.replaceChildren(
+          this.mapRow(1, this.props.primaryLabel(), false),
           this.drop,
           el(
             'details',
@@ -135,55 +183,14 @@ export class CompareCard {
           ),
         )
         return
-      case 'loading':
-        this.body.replaceChildren(
-          el('p', { class: 'compare-line', text: `Opening ${this.state.label}…` }),
-        )
-        return
-      case 'error':
-        this.body.replaceChildren(
-          el('p', { class: 'inline-error', text: this.state.message }),
-          button('try another file', () => this.set({ kind: 'empty' }), { class: 'btn btn-quiet' }),
-        )
-        return
       case 'open': {
         const info = this.state.info
         this.body.replaceChildren(
           el(
             'div',
             { class: 'compare-open' },
-            el(
-              'div',
-              { class: 'compare-row' },
-              el('span', { class: 'compare-mark compare-upper', text: '◥' }),
-              el('span', {
-                class: 'compare-name',
-                text: this.props.primaryLabel(),
-                title: 'Upper-right triangle',
-              }),
-              iconButton(
-                'x',
-                `Close ${this.props.primaryLabel()} and keep ${this.state.label} on its own`,
-                () => this.props.onClose(1),
-                { class: 'btn-close', size: 14 },
-              ),
-            ),
-            el(
-              'div',
-              { class: 'compare-row' },
-              el('span', { class: 'compare-mark compare-lower', text: '◣' }),
-              el('span', {
-                class: 'compare-name',
-                text: this.state.label,
-                title: 'Lower-left triangle',
-              }),
-              iconButton(
-                'x',
-                `Close ${this.state.label} and go back to one map`,
-                () => this.props.onClose(2),
-                { class: 'btn-close', size: 14 },
-              ),
-            ),
+            this.mapRow(1, this.props.primaryLabel(), true),
+            this.mapRow(2, this.state.label, true),
           ),
           el('p', {
             class: 'hint',
@@ -201,6 +208,63 @@ export class CompareCard {
         return
       }
     }
+  }
+
+  /**
+   * One map: which triangle it is in, what it is called, and the two things a
+   * reader does to it.
+   *
+   * The same three-part head a track's row has, in the same order — a mark, a
+   * name, then the eye and the ×. That is not imitation for its own sake: a map
+   * and a track are both things drawn over this genome, and a reader who has
+   * learned that the eye takes one out of the picture has learned it for both.
+   *
+   * The triangle marks appear only when there are two files, because with one
+   * there is no diagonal to be on a side of.
+   */
+  private mapRow(which: 1 | 2, label: string, paired: boolean): HTMLElement {
+    const shown = this.props.isShown(which)
+    const eye = iconButton(
+      shown ? 'eye' : 'eye-off',
+      which === 1
+        ? shown
+          ? 'Hide the map and read this genome as tracks. It stays open — the eye brings it back.'
+          : 'Draw the map again, where it was left'
+        : shown
+          ? 'Take the lower-left triangle out of the picture, keeping the file open'
+          : 'Draw the second map again',
+      () => this.props.onToggleShown(which),
+      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+    )
+    eye.setAttribute('aria-pressed', String(shown))
+    return el(
+      'div',
+      { class: 'compare-row' },
+      ...(paired
+        ? [
+            el('span', {
+              class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
+              text: which === 1 ? '◥' : '◣',
+            }),
+          ]
+        : []),
+      el('span', {
+        class: 'compare-name',
+        text: label,
+        title: paired ? (which === 1 ? 'Upper-right triangle' : 'Lower-left triangle') : label,
+      }),
+      eye,
+      iconButton(
+        'x',
+        paired
+          ? which === 1
+            ? `Close ${label} and keep the other map on its own`
+            : `Close ${label} and go back to one map`
+          : `Close ${label} and keep browsing its genome as tracks`,
+        () => this.props.onClose(which),
+        { class: 'btn-close', size: 14 },
+      ),
+    )
   }
 }
 

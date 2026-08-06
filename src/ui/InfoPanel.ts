@@ -50,16 +50,20 @@ export interface InfoPanelProps {
    * perfectly ordinary one-file map.
    */
   onCloseFile?(which: 1 | 2): void
-  /**
-   * Close the contact map and keep browsing the genome under it.
-   *
-   * Offered on the *single* File card, where there is no second file to fall
-   * back to and there is something better than nothing to fall back to: a
-   * cooler carries a chromosome list, the tracks beside the map are already
-   * drawn against it, and closing the matrix need not throw either away.
-   */
-  onCloseMap?(): void
 }
+
+/**
+ * There is deliberately no "close the map" button here any more.
+ *
+ * It used to sit on the single File card, and it was the only way out of the
+ * matrix — a one-way door, in the panel that *describes* the file rather than
+ * the one that lists what is drawn. Both maps now have a row of their own in
+ * the Annotations column's Contact maps card, each with the same eye a track
+ * carries and an × beside it, so putting the matrix down and letting go of it
+ * are two visibly different acts in the place a reader already goes to decide
+ * what is on screen. General says what the file *is*; it does not decide
+ * whether it is drawn.
+ */
 
 export class InfoPanel {
   readonly el: HTMLElement
@@ -112,7 +116,6 @@ export class InfoPanel {
 
   private paintFiles(): void {
     if (this.compare === null) {
-      const close = this.props.onCloseMap
       this.fileHost.replaceChildren(
         el(
           'div',
@@ -122,16 +125,6 @@ export class InfoPanel {
             { class: 'file-head card-head' },
             icon('file', { size: 13 }),
             el('span', { class: 'file-name', text: 'File' }),
-            ...(close === undefined
-              ? []
-              : [
-                  iconButton(
-                    'x',
-                    'Close the map and keep browsing this genome as tracks',
-                    close,
-                    { class: 'btn btn-icon btn-close', size: 13 },
-                  ),
-                ]),
           ),
           this.fileTable(this.props.info),
         ),
