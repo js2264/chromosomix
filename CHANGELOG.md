@@ -28,8 +28,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   ATAC and its peak calls under the map, Pol II over input and its peaks beside
   it, and 1,506 loop calls drawn on it. **Yeast chromatin and transcription**
   opens the same assembly with no contact map at all: nine lanes over chromosome
-  IV, MNase and ATAC in one group, the two RNA strands overlaid in a single lane
-  with the reverse strand read downwards.
+  IV, MNase and ATAC in one group on pinned axes, the two RNA strands sharing
+  one axis with the reverse strand read downwards, and the strain's own sequence
+  as GC content above them all.
+
+  The sequence is published with them: `S288c_syn40-XIII.fa`, the map's sixteen
+  sequences residue for residue — `III` at 315,525 and `XIII-syn40` at 964,431,
+  no `Mito` — so the lane is the genome the map is of rather than the reference
+  it was lifted from. Both yeast sessions draw it, on both edges beside the map.
+  It is deliberately *not* in the "load the tracks published with this map"
+  button: a FASTA is read whole and held whole, and twelve megabytes of residues
+  arriving from a button labelled that way would be a surprise.
 
 - **A session can be opened by URL.** A `.json` in the picker's URL box, or in
   the list, is fetched, parsed and applied — the published counterpart of

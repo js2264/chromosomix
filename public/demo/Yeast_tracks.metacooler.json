@@ -9,6 +9,34 @@
   },
   "tracks": [
     {
+      "id": "demo-sequence",
+      "card": "linear",
+      "kind": "sequence",
+      "label": "sequence",
+      "source": {
+        "kind": "remote",
+        "name": "S288c_syn40-XIII.fa",
+        "url": "S288c_syn40-XIII.fa"
+      },
+      "visible": true,
+      "placement": { "bottom": true, "right": false },
+      "style": {
+        "colour": "#8c6d31",
+        "size": 46,
+        "mode": "line",
+        "limits": {
+          "auto": false,
+          "min": 0,
+          "max": 1
+        },
+        "group": "",
+        "shape": "element",
+        "radius": 7,
+        "opacity": 1,
+        "flip": false
+      }
+    },
+    {
       "id": "demo-genes",
       "card": "linear",
       "kind": "gtf",

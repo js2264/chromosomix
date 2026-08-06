@@ -119,8 +119,8 @@ The picker's list (`ui/examples.ts`) is **three session files and nothing else**
 | file | opens |
 | --- | --- |
 | `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
-| `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six tracks placed on both edges and the loop calls drawn on the map |
-| `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: nine tracks over chromosome IV, in two groups, one of them overlaid |
+| `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
+| `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
 
 They are ordinary `metacooler.session` files — the exact format the export button in the top bar
 writes (`state/SessionConfig.ts`) — so choosing one from the list and dropping one somebody sent you
@@ -143,20 +143,27 @@ so the two kinds can be mixed in one file.
 
 ## The track resources
 
-`public/demo/` also carries ten files that are **not maps**. They are what the annotation cards
+`public/demo/` also carries eleven files that are **not maps**. They are what the annotation cards
 (SPECS §8) draw: a real signal beside a real map rather than a fixture. Every one of them is aligned
-to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it. Six of the ten are named by the two
-yeast sessions above, placed, coloured and grouped; this section is about all ten.
+to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it. Ten of the eleven are named by the
+two yeast sessions above, placed, coloured and grouped — `Yeast_Shotgun.bw` is the one neither uses,
+because a flat control track is what you reach for to check another one, not what a composed figure
+opens with. This section is about all eleven.
 
-Opening that map offers all ten as one click, from the Linear annotations card. The pairing lives in
-`ui/examples.ts` beside the picker's own catalogue, and is keyed on the map's **file name** rather
-than its URL, so it survives the base path differing between dev and Pages. It is offered only when
-the map itself came from a URL: a *local* file that happens to be called
-`Yeast_microC_G2M_1kb.cool` is somebody else's data under a familiar name, and drawing ten yeast
-tracks on it would be a serious mistake rather than a convenience.
+Opening that map offers **ten** of them as one click, from the Linear annotations card — the
+sequence is the exception, and deliberately: a FASTA is not an annotation of a genome, it *is* the
+genome, it is read whole and held whole, and adding twelve megabytes of residues to a button labelled
+"load the tracks" would be a surprise rather than a convenience. The two yeast sessions name it
+explicitly, which is where a reader who wants it asks for it. The pairing lives in `ui/examples.ts`
+beside the picker's own catalogue, and is keyed on the map's **file name** rather than its URL, so it
+survives the base path differing between dev and Pages. It is offered only when the map itself came
+from a URL: a *local* file that happens to be called `Yeast_microC_G2M_1kb.cool` is somebody else's
+data under a familiar name, and drawing ten yeast tracks on it would be a serious mistake rather than
+a convenience.
 
 | file | data |
 | --- | --- |
+| `S288c_syn40-XIII.fa` (12 MB) | the map's own 16 sequences — drawn as GC content zoomed out, as residues zoomed in |
 | `Yeast_Shotgun.bw` (18 MB) | shotgun DNA-seq coverage — the flat-ish control track |
 | `Yeast_MNase.bw` (23 MB) | MNase-seq coverage; nucleosome positioning |
 | `Yeast_ATAC.bw` (15 MB), `Yeast_ATAC.narrowPeak` (500 KB) | ATAC-seq accessibility, and 5,105 called peaks |
@@ -173,6 +180,10 @@ with it, and as published:
 - all six bigWigs declare the map's **16 contig names with byte-identical lengths** — no `Mito`, and
   `XIII-syn40` at 964,431. So the intersection SPECS §8.2 asks for is 16 of 16, and the overlap
   report the card shows has nothing to complain about.
+- the FASTA holds those same 16 at those same lengths, residue for residue: `III` at 315,525 and
+  `XIII-syn40` at 964,431, no `Mito`. It is the strongest of these claims and the easiest to check —
+  `awk '/^>/{...}'` over the file against the map's own contig table — because unlike a bigWig header
+  the lengths are not declared, they are the count of what is there.
 - the GTF, both `.narrowPeak`s and the loops table name the same 16 and hold **no coordinate past the
   end of its contig**. The GTF earned that: an earlier copy carried `YCR108C` at 315,997–316,188 on
   `III`, entirely beyond the map's 315,525, because it was R64 annotation relabelled rather than

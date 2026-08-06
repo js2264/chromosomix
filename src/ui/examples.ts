@@ -81,9 +81,9 @@ const DEMO: Array<{ file: string; label: string; note: string; kind: 'map' | 'ge
     kind: 'map',
     note:
       'A mitotic micro-C map of synthetic yeast at 1 kb (XIII carries a 40 kb insertion, hence ' +
-      'XIII-syn40), balanced, opened at IV:1.0–1.4 Mb. The gene model runs along both edges; ' +
-      'ATAC and its peak calls sit under the map, Pol II over input and its peaks beside it, and ' +
-      '1,506 loop calls are drawn on it. ' +
+      'XIII-syn40), balanced, opened at IV:1.0–1.4 Mb. The sequence and the gene model run along ' +
+      'both edges; ATAC and its peak calls sit under the map, Pol II over input and its peaks ' +
+      'beside it, and 1,506 loop calls are drawn on it. ' +
       '(DOI: 10.1126/science.adm9466)',
   },
   {
@@ -91,10 +91,10 @@ const DEMO: Array<{ file: string; label: string; note: string; kind: 'map' | 'ge
     label: 'Yeast chromatin and transcription — a genome browser, no map (bigWig)',
     kind: 'genome',
     note:
-      'The same assembly with no contact map at all: nine lanes over chromosome IV — genes, ' +
-      'MNase and ATAC grouped, both peak call sets, the two RNA strands overlaid in one lane on ' +
-      'a shared axis with the reverse strand read downwards, and the loop calls as arcs. Drop a ' +
-      '.cool on it to turn the same session into a map.',
+      'The same assembly with no contact map at all: ten lanes over 50 kb of chromosome IV — the ' +
+      'sequence as GC content, the gene model, MNase and ATAC grouped on pinned axes, both peak ' +
+      'call sets, the two RNA strands on one shared axis with the reverse read downwards, and ' +
+      'the loop calls as arcs. Drop a .cool on it to turn the same session into a map.',
   },
 ]
 
