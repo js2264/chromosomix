@@ -246,37 +246,40 @@ export class GenomeView {
 
   private renderContigs(result: MatrixResult): void {
     this.contigList.replaceChildren()
+    const binsize = Math.max(1, this.props.binsize)
     for (const group of result.rowGroups) {
       // Every sequence, not every cell. Where the small ones share a cell the
       // axis is labelled with the first of them, and listing the labels listed
       // one contig in two — so the list is built from what the cells *hold*.
-      // Only the first of a shared cell can say how many bins it is: the others
-      // are inside it and the count would be the cell's, not theirs.
-      const names = group.merged ?? [group.label]
-      for (const [index, name] of names.entries()) {
-        const size =
-          result.level === 'bin' && index === 0 && names.length === 1
-            ? `${fmt.int(group.end - group.start)} bins`
-            : ''
+      const members =
+        group.merged ?? [{ label: group.label, unitLength: group.unitLength ?? 0 }]
+      for (const { label, unitLength } of members) {
+        // The sequence's own bins, from its own length — not `end - start`,
+        // which counts the *cells* it is drawn in and reads "1 bins" for a
+        // contig of two the moment two of them share a pixel.
+        const bins = unitLength > 0 ? Math.max(1, Math.ceil(unitLength / binsize)) : 0
         const item = el(
           'button',
           {
-            class: names.length > 1 ? 'contig-item is-shared' : 'contig-item',
+            class: members.length > 1 ? 'contig-item is-shared' : 'contig-item',
             type: 'button',
             title:
-              names.length > 1
-                ? `${name} — drawn in a cell it shares with ${fmt.int(names.length - 1)} other ${
-                    names.length === 2 ? 'sequence' : 'sequences'
-                  }`
-                : name,
+              members.length > 1
+                ? `${label} — drawn in a cell it shares with ${fmt.int(members.length - 1)} other ` +
+                  `${members.length === 2 ? 'sequence' : 'sequences'}`
+                : label,
           },
-          el('span', { class: 'contig-name', text: name }),
-          el('span', { class: 'contig-size', text: size }),
+          el('span', { class: 'contig-name', text: label }),
+          el('span', {
+            class: 'contig-size',
+            text: result.level === 'bin' && bins > 0 ? `${fmt.int(bins)} bins` : '',
+          }),
         )
-        item.addEventListener('click', () => this.props.onOpenRegion(name))
+        item.addEventListener('click', () => this.props.onOpenRegion(label))
         this.contigList.appendChild(item)
       }
     }
   }
+
 
 }
