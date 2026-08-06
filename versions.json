@@ -1,6 +1,13 @@
 {
-  "latest": "93daac1",
+  "latest": "af9c613",
   "versions": [
+    {
+      "commit": "af9c613",
+      "version": "0.7.0",
+      "date": "2026-08-06T14:01:46+02:00",
+      "subject": "fix(colormaps): Reds starts at paper, not at pink",
+      "tag": ""
+    },
     {
       "commit": "93daac1",
       "version": "0.7.0",
