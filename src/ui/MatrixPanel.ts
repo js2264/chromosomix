@@ -2529,6 +2529,16 @@ function describeAxis(
   blockStart: number,
 ): string {
   if (group === undefined) return '—'
+  // A cell that several small sequences share has no position inside any one of
+  // them, so it is named by what it holds rather than by a coordinate. Saying
+  // `Contig_184898:0 bp` there names one of two sequences and invents a
+  // coordinate for it; the pixel is both, and the readout says so.
+  if (group.merged !== undefined && group.merged.length > 1) {
+    const [first, ...rest] = group.merged
+    return rest.length === 1
+      ? `${first} + ${rest[0]}`
+      : `${first} + ${fmt.int(rest.length)} more`
+  }
   if (level !== 'bin') return group.label
   return `${group.label}:${fmt.bp(bpWithin(group, offset, blockStart, binsize))}`
 }
@@ -2852,9 +2862,14 @@ export function resolutionNote(
   result: { binsPerCell?: number; contigsPerCell?: number; level?: MatrixResult['level'] },
   noun = 'sequence',
 ): string {
-  const per = result.contigsPerCell ?? 1
-  if (per > 1) return `${fmt.int(per)} ${noun}s per cell, summed`
-  if ((result.level ?? 'bin') !== 'bin') return ''
+  if ((result.level ?? 'bin') !== 'bin') {
+    const per = result.contigsPerCell ?? 1
+    return per > 1 ? `${fmt.int(per)} ${noun}s per cell, summed` : ''
+  }
+  // A cell is a capacity of bins, so it has a width even where several small
+  // sequences share it — the cell spans that many base pairs of sequence, in
+  // more than one piece. Which sequences those are is the readout's to say, and
+  // the list beside the map's; it is not a second resolution.
   return `effective resolution: ${fmt.bp(binsize * (result.binsPerCell ?? 1))}`
 }
 
@@ -2881,12 +2896,16 @@ export function blockSummary(
   result: MatrixResult,
   noun = 'sequence',
 ): Array<string | HTMLElement> {
-  const grouped = (result.contigsPerCell ?? 1) > 1
-  // What the cells *are*. At bin level and one sequence to a cell they are bins
-  // of the effective resolution, which is the pairing that multiplies out to
-  // what is on screen. Above either they are cells, or the unit the axis is
-  // already drawn in.
-  const unit = grouped ? 'cells' : result.level === 'bin' ? 'bins' : `${noun}s`
+  // What the cells *are*. At bin level they are bins of the effective
+  // resolution, which is the pairing that multiplies out to what is on screen.
+  // Above it they are the unit the axis is already drawn in, and a roll-up that
+  // had to merge them is cells.
+  const unit =
+    result.level === 'bin'
+      ? 'bins'
+      : (result.contigsPerCell ?? 1) > 1
+      ? 'cells'
+      : `${noun}s`
   const resolution = resolutionNote(binsize, result, noun)
   const parts: Array<string | HTMLElement> = [
     `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit}`,

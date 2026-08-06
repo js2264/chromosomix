@@ -51,22 +51,29 @@ export const POOLED_CELL_CAP = RASTER_MAX_DIM
 /**
  * How a coarser axis is built out of a finer one.
  *
- * Two numbers rather than one because there are two regimes and they are not the
- * same kind of coarsening. Below the cap a cell is `binsPerCell` bins of one
- * sequence and the axis is still an axis of positions — a coarser *bin* grid, the
- * relationship an `.mcool`'s 5 kb level has to its 1 kb level. Above it, where
- * the sequences alone outnumber the cells the screen has, no bin grid exists that
- * gives each sequence a cell, so a cell becomes `contigsPerCell` whole sequences
- * and the axis is an axis of *names*. The second regime is not a degraded first
- * one: it is the contig-level roll-up the file already has a word for, applied
- * because the picture asked for it rather than because a menu did.
+ * **A cell holds at most `binsPerCell` bins, and never part of one sequence
+ * beside anything else.** One rule, and everything follows from it: a sequence
+ * longer than the capacity keeps cells of its own, cut at its own start, so the
+ * axis is still an axis of positions and a coarser *bin* grid — the relationship
+ * an `.mcool`'s 5 kb level has to its 1 kb level. A sequence too small to fill a
+ * cell shares one with its neighbours, because an assembly of six thousand
+ * contigs cannot give each of them a pixel that does not exist.
+ *
+ * It used to be two rules, and the second was wrong: past the point where the
+ * sequences outnumbered the cells, *every* cell took a fixed number of whole
+ * sequences — so a contig of four bins was crushed into half a cell beside a
+ * contig of one, while the picture had room to draw all four. Capacity gives the
+ * large ones their cells back and merges only what has to merge.
  */
 export interface PoolPlan {
-  /** Bins of one sequence summed into one cell. `1` is the identity. */
+  /** The most bins one cell holds. `1` is the identity. */
   binsPerCell: number
   /**
-   * Whole sequences summed into one cell. `1` is every case with room for one
-   * cell per sequence, which is every cooler and most assemblies.
+   * The most whole sequences any one cell ended up holding; `1` when none share.
+   *
+   * A property of the answer rather than of the question — which sequences are
+   * small enough to share depends on where they fall — so it is reported by the
+   * read and never asked for.
    */
   contigsPerCell: number
 }
@@ -75,35 +82,53 @@ export interface PoolPlan {
 export const IDENTITY_PLAN: PoolPlan = { binsPerCell: 1, contigsPerCell: 1 }
 
 /**
- * The coarsest axis that still fits in `cap` cells, from the two numbers a
- * caller has before it has read anything.
+ * The coarsest axis that still fits in `cap` cells, from the one number a caller
+ * has before it has read anything.
  *
- * It has to be computable twice and agree: once by the view, which labels the
- * axis in the matching units, and once by the read, which sums into them. Bin
- * count and sequence count are what both sides hold after `open`, so the plan is
- * a function of those and the cap, and the *exact* cell count — which depends on
- * where the sequences fall — is reported back by the read rather than predicted.
- *
- * The bound that makes it safe: an axis of `k` sequences and `n` bins at
- * `binsPerCell = u` comes to `Σ ceil(lengthᵢ / u)` cells, which is at most
- * `n/u + k`. Asking for that to be at most `cap` gives `u ≥ n / (cap − k)`, and
- * so a plan that fits *whatever* the sequence lengths are. Where `k` alone
- * reaches the cap there is no such `u` — the sum can never fall below `k` — and
- * the axis switches to whole sequences per cell.
+ * A bound, not the answer. The exact capacity depends on how the sequences fall
+ * — which of them are small enough to share a cell — and only the reader knows
+ * that, so it searches ({@link partitionAxis}) and reports what it used. This is
+ * for the view that has to name a resolution *before* the read returns: at a
+ * capacity of `ceil(n / cap)` the cells cannot outnumber the cap by more than the
+ * sequences too small to fill one, and the reader only ever coarsens from here.
  */
-export function poolPlan(nBins: number, nContigs: number, cap = POOLED_CELL_CAP): PoolPlan {
+/**
+ * The coarsest axis that still fits in `cap` cells, from the one number a caller
+ * has before it has read anything.
+ *
+ * A bound, not the answer. The exact capacity depends on how the sequences fall
+ * — which of them are small enough to share a cell — and only the reader knows
+ * that, so it searches ({@link partitionAxis}) and reports what it used. This is
+ * for the view that has to name a resolution *before* the read returns, and the
+ * reader only ever coarsens from here.
+ *
+ * The sequence count is taken and not used. It was the second half of a bound
+ * over the old two-regime rule, where every sequence started a cell of its own
+ * and the leftovers had to be budgeted for; under a capacity they do not, and
+ * the parameter stays only because every caller passes it and dropping it from
+ * four call sites would say less than this paragraph does.
+ */
+export function poolPlan(nBins: number, _nContigs: number, cap = POOLED_CELL_CAP): PoolPlan {
   const bins = Math.max(0, Math.trunc(nBins))
-  const contigs = Math.max(1, Math.trunc(nContigs))
   if (cap <= 0 || bins <= cap) return IDENTITY_PLAN
-  if (contigs >= cap) {
-    return { binsPerCell: 1, contigsPerCell: Math.max(2, Math.ceil(contigs / cap)) }
-  }
-  return { binsPerCell: Math.max(2, Math.ceil(bins / (cap - contigs))), contigsPerCell: 1 }
+  return { binsPerCell: Math.max(2, Math.ceil(bins / cap)), contigsPerCell: 1 }
 }
 
-/** Whether a plan groups whole sequences rather than bins within one. */
+/** Whether any cell of a plan ended up holding more than one whole sequence. */
 export function groupsContigs(plan: PoolPlan): boolean {
   return plan.contigsPerCell > 1
+}
+
+/** A partition of an axis into cells that never split a sequence. */
+export interface AxisPartition {
+  /** Output cell of every input index. */
+  slot: Int32Array
+  /** First input index of every cell, `cells + 1` long. */
+  cellStart: Int32Array
+  /** How many whole sequences each cell holds; `1` unless small ones shared it. */
+  cellSegments: Int32Array
+  cells: number
+  plan: PoolPlan
 }
 
 /** One axis of a pooled read: which cell each bin falls into, and what it is. */
@@ -112,10 +137,21 @@ export interface BinPooling extends AxisGrouping {
   ids: Int32Array
   /** Bins summed into one cell. `1` is the identity, and is not pooling. */
   stride: number
-  /** Whole sequences summed into one cell. `1` is the ordinary case. */
+  /** The most whole sequences any one cell holds; `1` when none share. */
   contigsPerCell: number
   /** First input index of every cell, `cells + 1` long. */
   cellStart: Int32Array
+  /**
+   * Every sequence in every cell, flat, indexed by {@link memberStart}.
+   *
+   * A cell that holds one is the ordinary case and the list repeats {@link ids}.
+   * A cell that holds several is the reason this exists: the axis is labelled
+   * with the first of them, and the readout, the sequence list and anything else
+   * that asks "what is under this pixel" needs the rest.
+   */
+  members: Int32Array
+  /** Where each cell's sequences begin in {@link members}, `cells + 1` long. */
+  memberStart: Int32Array
 }
 
 /**
@@ -152,153 +188,162 @@ export function partitionAxis(
   cap: number,
   floor: PoolPlan = IDENTITY_PLAN,
   segmentGroup?: ArrayLike<number>,
-): { slot: Int32Array; cellStart: Int32Array; cells: number; plan: PoolPlan } {
+): AxisPartition {
   const count = Math.max(0, Math.trunc(n))
   if (count === 0) {
-    return { slot: new Int32Array(0), cellStart: new Int32Array(1), cells: 0, plan: IDENTITY_PLAN }
+    return {
+      slot: new Int32Array(0),
+      cellStart: new Int32Array(1),
+      cellSegments: new Int32Array(0),
+      cells: 0,
+      plan: IDENTITY_PLAN,
+    }
   }
   const segments = starts.length > 0 ? starts.length : 1
   const limit = Math.max(1, Math.trunc(cap))
   const at = (i: number): number => (starts.length > 0 ? starts[i] : 0)
   const lengthOf = (i: number): number => (i + 1 < segments ? at(i + 1) : count) - at(i)
+  const capacity = Math.max(
+    floor.binsPerCell,
+    smallestCapacity(segments, lengthOf, limit, segmentGroup),
+  )
+  return build(count, segments, at, lengthOf, capacity, segmentGroup)
+}
 
-  // No stride gives every segment a cell — a sum of `ceil`s can never fall below
-  // the number of segments — so past the cap a cell holds whole segments. The
-  // caller may already have said so, in which case its number is the floor.
-  if (floor.contigsPerCell > 1 || segments > limit) {
-    const group = Math.max(
-      floor.contigsPerCell,
-      smallestGroup(segments, limit, segmentGroup),
-    )
-    if (group > 1) return build(count, segments, at, lengthOf, 1, group, segmentGroup)
+/** Cells a capacity comes to, without laying them out. */
+function packCount(
+  segments: number,
+  lengthOf: (i: number) => number,
+  capacity: number,
+  groupOf?: ArrayLike<number>,
+): number {
+  let cells = 0
+  let open = 0
+  let openGroup = -1
+  for (let s = 0; s < segments; s++) {
+    const length = lengthOf(s)
+    if (length >= capacity) {
+      cells += Math.ceil(length / capacity)
+      open = 0
+      openGroup = -1
+      continue
+    }
+    const group = groupOf === undefined ? 0 : groupOf[s]
+    if (open === 0 || open + length > capacity || group !== openGroup) {
+      cells++
+      open = length
+      openGroup = group
+    } else {
+      open += length
+    }
   }
-  const stride = Math.max(floor.binsPerCell, smallestStride(segments, lengthOf, limit))
-  return build(count, segments, at, lengthOf, stride, 1)
+  return cells
 }
 
 /**
- * The smallest `u` for which `Σ ceil(lengthᵢ / u)` fits the cap.
+ * The smallest capacity that fits the cap, and whether the genomes survive it.
  *
- * {@link poolPlan}'s closed form is an upper bound over *any* set of lengths, and
- * a bound is what a caller who has not read the file needs. Here the lengths are
- * in hand, so the exact minimum is one binary search away — a dozen passes over
- * at most `cap` segments — and taking it is worth the twenty lines: rounding a
- * stride of 7 up to 8 throws away an eighth of the resolution the screen was
- * going to show, for nothing.
+ * A cell may not span two genomes while there is room for that; where the
+ * genomes themselves outnumber the cells there is no capacity at which it can
+ * hold, and the constraint is dropped rather than the picture refused. Same
+ * escape `worker/overview.ts` takes, for the same reason.
  */
-function smallestStride(
+function smallestCapacity(
   segments: number,
   lengthOf: (i: number) => number,
   cap: number,
+  groupOf?: ArrayLike<number>,
 ): number {
-  const cells = (stride: number): number => {
-    let sum = 0
-    for (let i = 0; i < segments; i++) sum += Math.ceil(lengthOf(i) / stride)
-    return sum
+  let groups = groupOf
+  const fits = (capacity: number): boolean => packCount(segments, lengthOf, capacity, groups) <= cap
+  let high = 1
+  while (!fits(high)) {
+    if (high >= Number.MAX_SAFE_INTEGER / 2) {
+      if (groups === undefined) return high
+      // Even one cell per genome is more than the picture holds. Give the
+      // boundaries up rather than the picture.
+      groups = undefined
+      high = 1
+    } else {
+      high *= 2
+    }
   }
   let low = 1
-  let high = 1
-  // Double until it fits. It always does: at a stride of `n` every segment is
-  // one cell, and `segments < cap` is the branch that got here.
-  while (cells(high) > cap) high *= 2
   while (low < high) {
     const mid = (low + high) >> 1
-    if (cells(mid) <= cap) high = mid
+    if (fits(mid)) high = mid
     else low = mid + 1
   }
   return low
 }
 
 /**
- * The smallest number of whole segments per cell that fits the cap.
+ * Lay the cells out: at most `capacity` bins each, and never part of one
+ * sequence beside anything else.
  *
- * With no coarser structure it is `ceil(segments / cap)` and nothing more. With
- * one, a cell also ends wherever the group does, so a group with an awkward
- * remainder costs a cell — and the sum of those remainders is what the search is
- * for. `segments` itself is always a valid answer *provided* the groups
- * themselves fit; where they do not, snapping is impossible and the caller is
- * told by getting an unsnapped answer rather than an impossible one.
+ * One rule where there used to be two, and the second one was wrong. A cell used
+ * to hold either `k` bins of one sequence *or* a fixed number of whole ones, and
+ * an axis with more sequences than cells took the second — uniformly, so a
+ * sequence of four bins was crushed into half a cell beside a sequence of one
+ * while the picture had room to draw it. Capacity says it once: a sequence longer
+ * than the capacity keeps cells of its own, cut at its own start, and only the
+ * ones too small to fill a cell share.
  */
-function smallestGroup(
-  segments: number,
-  cap: number,
-  segmentGroup?: ArrayLike<number>,
-): number {
-  const flat = Math.max(1, Math.ceil(segments / cap))
-  if (segmentGroup === undefined) return flat
-  const cells = (group: number): number => {
-    let count = 0
-    let taken = 0
-    for (let s = 0; s < segments; s++) {
-      if (s === 0 || segmentGroup[s] !== segmentGroup[s - 1] || taken >= group) {
-        count++
-        taken = 0
-      }
-      taken++
-    }
-    return count
-  }
-  if (cells(segments) > cap) return flat
-  let low = flat
-  let high = segments
-  while (low < high) {
-    const mid = (low + high) >> 1
-    if (cells(mid) <= cap) high = mid
-    else low = mid + 1
-  }
-  return low
-}
-
-/** Lay the cells out, given the regime chosen above. */
 function build(
   n: number,
   segments: number,
   at: (i: number) => number,
   lengthOf: (i: number) => number,
-  binsPerCell: number,
-  contigsPerCell: number,
-  segmentGroup?: ArrayLike<number>,
-): { slot: Int32Array; cellStart: Int32Array; cells: number; plan: PoolPlan } {
+  capacity: number,
+  groupOf?: ArrayLike<number>,
+): AxisPartition {
   const slot = new Int32Array(n)
   const cellStart: number[] = []
+  const cellSegments: number[] = []
   let cells = 0
-  if (contigsPerCell > 1) {
-    let taken = 0
-    for (let s = 0; s < segments; s++) {
-      const breaks =
-        s === 0 ||
-        taken >= contigsPerCell ||
-        (segmentGroup !== undefined && segmentGroup[s] !== segmentGroup[s - 1])
-      if (breaks) {
-        cellStart.push(at(s))
-        cells++
-        taken = 0
-      }
-      taken++
-      const end = at(s) + lengthOf(s)
-      for (let i = at(s); i < end; i++) slot[i] = cells - 1
-    }
-  } else {
-    for (let s = 0; s < segments; s++) {
-      const from = at(s)
-      const end = from + lengthOf(s)
+  let open = 0
+  let openGroup = -1
+  for (let s = 0; s < segments; s++) {
+    const from = at(s)
+    const length = lengthOf(s)
+    const end = from + length
+    if (length >= capacity) {
+      // Its own cells, cut from its own start, so the grid is anchored to the
+      // sequence exactly as it is when nothing shares.
+      open = 0
+      openGroup = -1
       for (let i = from; i < end; i++) {
-        // A new segment, or `binsPerCell` in: either way the next index opens a
-        // cell. The first index of a segment always does.
-        if ((i - from) % binsPerCell === 0) {
+        if ((i - from) % capacity === 0) {
           cellStart.push(i)
+          cellSegments.push(1)
           cells++
         }
         slot[i] = cells - 1
       }
+      continue
     }
+    const group = groupOf === undefined ? 0 : groupOf[s]
+    if (open === 0 || open + length > capacity || group !== openGroup) {
+      cellStart.push(from)
+      cellSegments.push(1)
+      cells++
+      open = length
+      openGroup = group
+    } else {
+      open += length
+      cellSegments[cells - 1]++
+    }
+    for (let i = from; i < end; i++) slot[i] = cells - 1
   }
   cellStart.push(n)
+  let widest = 1
+  for (const held of cellSegments) widest = Math.max(widest, held)
   return {
     slot,
     cellStart: Int32Array.from(cellStart),
+    cellSegments: Int32Array.from(cellSegments),
     cells,
-    plan: { binsPerCell, contigsPerCell },
+    plan: { binsPerCell: capacity, contigsPerCell: widest },
   }
 }
 
@@ -338,6 +383,8 @@ export function poolBins(
       stride: 1,
       contigsPerCell: 1,
       cellStart: new Int32Array(1),
+      members: new Int32Array(0),
+      memberStart: new Int32Array(1),
     }
   }
   const contigs = coords.contigsOfBins(lo, hi)
@@ -348,13 +395,26 @@ export function poolBins(
       : Int32Array.from(starts, (start) => contigGenomeIds[contigs[start]] ?? -1)
   const part = partitionAxis(count, starts, cap, aim, genomes)
   const ids = new Int32Array(part.cells)
-  for (let c = 0; c < part.cells; c++) ids[c] = contigs[part.cellStart[c]]
+  const members: number[] = []
+  const memberStart = new Int32Array(part.cells + 1)
+  for (let c = 0; c < part.cells; c++) {
+    memberStart[c] = members.length
+    const from = part.cellStart[c]
+    const to = part.cellStart[c + 1]
+    ids[c] = contigs[from]
+    for (let i = from; i < to; i++) {
+      if (i === from || contigs[i] !== contigs[i - 1]) members.push(contigs[i])
+    }
+  }
+  memberStart[part.cells] = members.length
   return {
     slot: part.slot,
     ids,
     stride: part.plan.binsPerCell,
     contigsPerCell: part.plan.contigsPerCell,
     cellStart: part.cellStart,
+    members: Int32Array.from(members),
+    memberStart,
   }
 }
 
@@ -406,12 +466,15 @@ export function selectionPooling(
     }
   }
   cellStart.push(placed)
+  const flat = Int32Array.from(ids)
   return {
     slot,
-    ids: Int32Array.from(ids),
+    ids: flat,
     stride: step,
     contigsPerCell: group,
     cellStart: Int32Array.from(cellStart),
+    members: flat,
+    memberStart: Int32Array.from({ length: flat.length + 1 }, (_, i) => i),
   }
 }
 

@@ -189,6 +189,18 @@ export interface ContigsResult {
 
 /** One labelled run along an axis of a rendered block, in block-local offsets. */
 export interface AxisGroup {
+  /**
+   * Every sequence in this stretch of the axis, where a cell holds more than
+   * one.
+   *
+   * A cell is at most a capacity of bins and never part of one sequence beside
+   * anything else — but sequences too small to fill a cell do share, and then
+   * the axis is labelled with the first of them and the rest are invisible. This
+   * is where they are: the readout names them, and the sequence list beside the
+   * map offers all of them rather than every other one. Absent for the ordinary
+   * cell, which holds one.
+   */
+  merged?: string[]
   label: string
   /** First row/column of the group within the block. */
   start: number

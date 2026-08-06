@@ -47,20 +47,21 @@ describe('poolPlan', () => {
     expect(poolPlan(4096, 24, 4096)).toEqual(IDENTITY_PLAN)
   })
 
-  it('leaves room for the cell every sequence starts', () => {
-    // A cooler: 24 chromosomes, so the cap is 4,096 − 24 and the stride is one
-    // step coarser than the bin count alone would suggest. That step is the
-    // whole point — 4,096 was the aim before, and the overshoot was pooled again
-    // by the renderer.
-    expect(poolPlan(24_228, 24, 4096).binsPerCell).toBe(Math.ceil(24_228 / (4096 - 24)))
-    expect(poolPlan(8192, 1, 4096).binsPerCell).toBe(3)
+  it('is a capacity, and only a bound on the answer', () => {
+    // What a caller can work out before anything is read: at `ceil(n / cap)`
+    // bins to a cell the picture fits, whatever the sequences turn out to be.
+    // Whether the sequences let it be finer is the reader's to find (see
+    // `partitionAxis`), and it reports back.
+    expect(poolPlan(24_228, 24, 4096).binsPerCell).toBe(6)
+    expect(poolPlan(8192, 1, 4096).binsPerCell).toBe(2)
+    expect(poolPlan(4885, 4882, 4096).binsPerCell).toBe(2)
   })
 
-  it('switches to whole sequences per cell once they outnumber the cells', () => {
-    // The reported file: 4,885 bins across 4,882 contigs. No stride gives every
-    // contig a cell, because every contig starts one.
-    expect(poolPlan(4885, 4882, 4096)).toEqual({ binsPerCell: 1, contigsPerCell: 2 })
-    expect(poolPlan(2_000_000, 500_000, 4096).contigsPerCell).toBe(123)
+  it('never claims sequences share a cell — that is the read to say', () => {
+    // The count of shared cells is a property of where the sequences fall, so a
+    // caller working from totals cannot know it and does not guess.
+    expect(poolPlan(4885, 4882, 4096).contigsPerCell).toBe(1)
+    expect(poolPlan(2_000_000, 500_000, 4096).contigsPerCell).toBe(1)
   })
 })
 
@@ -126,6 +127,64 @@ describe('partitionAxis', () => {
       const genomes = new Set<number>()
       for (let i = from; i < to; i++) genomes.add(genome[contig[i]])
       expect(genomes.size, `cell ${c}`).toBe(1)
+    }
+  })
+})
+
+describe('capacity, not a count of sequences', () => {
+  /** Contig lengths in bins, as a partition of an axis. */
+  const axis = (
+    sizes: number[],
+  ): { n: number; starts: Int32Array } => {
+    const starts: number[] = []
+    let at = 0
+    for (const size of sizes) {
+      starts.push(at)
+      at += size
+    }
+    return { n: at, starts: Int32Array.from(starts) }
+  }
+
+  it('gives a sequence longer than the capacity its own cells', () => {
+    // The reported genome's shape: one contig of four bins among thousands of
+    // one. Under the old rule every cell took a fixed *number* of sequences, so
+    // the four-bin contig was crushed into half a cell beside a one-bin
+    // neighbour — while the picture had room to draw all four.
+    const sizes = [4, ...Array<number>(5000).fill(1)]
+    const { n, starts } = axis(sizes)
+    const part = partitionAxis(n, starts, 4096)
+    expect(part.plan.binsPerCell).toBe(2)
+    expect(part.cells).toBeLessThanOrEqual(4096)
+    // Two cells of two bins, cut at its own start, and neither shared.
+    expect(Array.from(part.cellStart.slice(0, 3))).toEqual([0, 2, 4])
+    expect(part.cellSegments[0]).toBe(1)
+    expect(part.cellSegments[1]).toBe(1)
+    // The small ones behind it share, two to a cell — which is why the axis fits.
+    expect(part.cellSegments[2]).toBe(2)
+    expect(part.plan.contigsPerCell).toBe(2)
+  })
+
+  it('never puts part of a sequence beside another one', () => {
+    const sizes = [7, 1, 1, 3, 1, 1, 1, 5, 1]
+    const { n, starts } = axis(sizes)
+    for (let cap = 2; cap <= 12; cap++) {
+      const part = partitionAxis(n, starts, cap)
+      expect(part.cells, `cap ${cap}`).toBeLessThanOrEqual(cap)
+      for (let c = 0; c < part.cells; c++) {
+        const from = part.cellStart[c]
+        const to = part.cellStart[c + 1]
+        // Which sequences this cell touches, and whether it holds all of each.
+        let index = 0
+        let at = 0
+        for (const size of sizes) {
+          const overlap = Math.min(to, at + size) - Math.max(from, at)
+          if (overlap > 0 && part.cellSegments[c] > 1) {
+            expect(overlap, `cap ${cap} cell ${c} sequence ${index}`).toBe(size)
+          }
+          at += size
+          index++
+        }
+      }
     }
   })
 })

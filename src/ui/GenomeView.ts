@@ -247,15 +247,36 @@ export class GenomeView {
   private renderContigs(result: MatrixResult): void {
     this.contigList.replaceChildren()
     for (const group of result.rowGroups) {
-      const size = result.level === 'bin' ? `${fmt.int(group.end - group.start)} bins` : ''
-      const item = el(
-        'button',
-        { class: 'contig-item', type: 'button', title: group.label },
-        el('span', { class: 'contig-name', text: group.label }),
-        el('span', { class: 'contig-size', text: size }),
-      )
-      item.addEventListener('click', () => this.props.onOpenRegion(group.label))
-      this.contigList.appendChild(item)
+      // Every sequence, not every cell. Where the small ones share a cell the
+      // axis is labelled with the first of them, and listing the labels listed
+      // one contig in two — so the list is built from what the cells *hold*.
+      // Only the first of a shared cell can say how many bins it is: the others
+      // are inside it and the count would be the cell's, not theirs.
+      const names = group.merged ?? [group.label]
+      for (const [index, name] of names.entries()) {
+        const size =
+          result.level === 'bin' && index === 0 && names.length === 1
+            ? `${fmt.int(group.end - group.start)} bins`
+            : ''
+        const item = el(
+          'button',
+          {
+            class: names.length > 1 ? 'contig-item is-shared' : 'contig-item',
+            type: 'button',
+            title:
+              names.length > 1
+                ? `${name} — drawn in a cell it shares with ${fmt.int(names.length - 1)} other ${
+                    names.length === 2 ? 'sequence' : 'sequences'
+                  }`
+                : name,
+          },
+          el('span', { class: 'contig-name', text: name }),
+          el('span', { class: 'contig-size', text: size }),
+        )
+        item.addEventListener('click', () => this.props.onOpenRegion(name))
+        this.contigList.appendChild(item)
+      }
     }
   }
+
 }
