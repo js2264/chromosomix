@@ -80,17 +80,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   origin has no cell in a coarse grid, and moving it silently is worse than
   refusing by size.
 
-- **A balanced block is never coarsened.** Summing balanced values is not
-  balancing at a coarser resolution — a cell of `k × k` bin pairs comes out about
-  `k²` times a single balanced value, which is why `cooler zoomify --balance`
-  re-balances each level from raw counts rather than summing the level below. The
-  second cost is worse for being invisible: a filtered bin carries a `NaN` weight,
-  the dense read multiplies it through so the row is drawn transparent (§6.4, "a
+### Known
+
+- **A pooled balanced block is an approximation, and now says nothing about it.**
+  Summing balanced values is not balancing at a coarser resolution — the marginals
+  of a `k`-bin cell are `k` times a fine bin's, which is why `cooler zoomify
+  --balance` re-balances every level from raw counts rather than summing the level
+  below. A second cost is quieter: a filtered bin carries a `NaN` weight, the
+  dense read multiplies it through so the whole row draws transparent (§6.4, "a
   blank row is an unbalanced row"), and a pooled read drops `NaN` contributions
-  instead, so the row comes back as an ordinary number and the diagnostic is gone.
-  Balanced blocks therefore stay dense, and are refused by size where they must
-  be. The whole-file view has pooled balanced blocks since pooling was added and
-  still does; that one is a bug of its own, not something to extend.
+  instead, so that row returns as an ordinary number. The whole-file view has done
+  this since pooling was added; the views above now do it too, because the
+  alternative — keeping balanced blocks dense — refuses a mammalian chromosome
+  outright and draws everything else through a contig-blind raster. Balancing at
+  the read's own resolution, and taking a coarser rung of a laddered `.mcool`
+  where one exists, are the real answers and are not attempted here.
 
 - **Selections larger than the picture are drawn rather than refused.** "This
   selection is 6,000 cells per axis … Select fewer sequences" is a strange thing
