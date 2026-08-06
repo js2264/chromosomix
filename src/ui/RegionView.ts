@@ -21,16 +21,16 @@
  * transpose when the column range precedes the row range in bin space (§5.3).
  */
 
-import type { Extent, ParsedRange } from '../types'
+import type { ParsedRange } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
-import { button, el, fmt } from './dom'
+import { button, el } from './dom'
 import type { ScaleState } from './GenomeView'
 import {
   MatrixPanel,
   axisRegion,
-  resolutionNote,
+  blockSummary,
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
@@ -245,7 +245,7 @@ export class RegionView {
         )
         if (this.disposed) return
         this.title.textContent = this.props.region
-        this.describeMatch(parsed, result.rowExtent, result.binsPerCell ?? 1)
+        this.describeMatch(parsed, result)
         // The reader may have planned a coarser grid than the file's bins — a
         // whole chromosome at 10 kb is more cells than any picture holds — and
         // every coordinate on screen is the bin size times a cell offset, so the
@@ -314,48 +314,23 @@ export class RegionView {
     }
   }
 
-  /**
-   * The readout for a rectangular block between two ranges.
-   *
-   * The same three things the single-range line says, in the same order and the
-   * same words: how much is on screen, what one cell of it is worth, and what
-   * the block is. It drops the `XV × XV ·` opening for the reason that one drops
-   * `matched chromosome XV ·` — the title above the map is already both names —
-   * and it counts the bins of the block that came back rather than of the two
-   * ranges that were asked for, since a coarse grid is read on the sequence's
-   * own cell edges and can open and close a cell either side of them.
-   *
-   * "Regions" rather than "contigs": the two axes are as often two windows of
-   * one sequence as they are two sequences, and this line is drawn for both.
-   */
+  /** The readout for a rectangular block between two ranges. */
   private describePair(result: MatrixResult): void {
-    const rowBins = result.rowExtent[1] - result.rowExtent[0]
-    const colBins = result.colExtent[1] - result.colExtent[0]
     this.matched.classList.remove('is-genome')
-    this.matched.replaceChildren(
-      `${fmt.int(rowBins)} × ${fmt.int(colBins)} bins · ` +
-        `${resolutionNote(this.props.binsize, result)} · ` +
-        'contacts between the two regions',
-    )
+    this.matched.replaceChildren(...blockSummary(this.props.binsize, result))
   }
 
-  private describeMatch(parsed: ParsedRange, drawn: Extent, perCell = 1): void {
-    // No "matched chromosome XV ·": the title above the map already names what
-    // was opened, and the line under it is for what the picture *is*. What was
-    // drawn, not what was asked for — a block coarser than one bin per cell is
-    // read on the sequence's own cell edges, so it can open and close up to a
-    // cell either side of what was typed.
-    const bins = drawn[1] - drawn[0]
-    const resolution = resolutionNote(this.props.binsize, { binsPerCell: perCell })
-    this.matched.textContent =
-      `${fmt.int(bins)} bins · ${resolution} · ` +
-      `bins ${fmt.int(drawn[0])}–${fmt.int(drawn[1] - 1)}`
+  private describeMatch(parsed: ParsedRange, result: MatrixResult): void {
     this.matched.classList.toggle('is-genome', parsed.kind === 'genome')
+    const parts = blockSummary(this.props.binsize, result)
     if (parsed.kind === 'genome') {
-      const open = button('open genome view →', () => this.props.onOpenGenome(parsed.label), {
-        class: 'btn btn-quiet',
-      })
-      this.matched.replaceChildren(this.matched.textContent ?? '', open)
+      parts.push(
+        button('open genome view →', () => this.props.onOpenGenome(parsed.label), {
+          class: 'btn btn-quiet',
+        }),
+      )
     }
+    this.matched.replaceChildren(...parts)
   }
+
 }

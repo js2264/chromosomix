@@ -2856,6 +2856,39 @@ export function resolutionNote(
 }
 
 /**
+ * The line under a map: how large the picture is, and what one cell of it is
+ * worth.
+ *
+ * Two facts and no third, in one place, because four views draw this line and
+ * four wordings of one fact is how they drift. Which sequences are on the axes
+ * is the title's job; whether the values are balanced is the colourbar's, which
+ * is titled in the units it is drawn in and sits beside the numbers it applies
+ * to.
+ *
+ * **The count is the cells, and they are called bins.** That is the honest
+ * pairing: a cell of the picture *is* a bin of the effective resolution, so
+ * `4,046 × 4,046 bins` at `3.0 kb` multiplies out to the 12.1 Mb that is on
+ * screen. Counting the file's own bins instead would put `5,769 bins` beside
+ * `200 bp` for a 577 kb chromosome, and the two numbers on one line would
+ * describe something twice its size. Above one sequence per cell there is no bin
+ * to speak of and they are cells again.
+ */
+export function blockSummary(
+  binsize: number,
+  result: MatrixResult,
+  noun = 'sequence',
+): Array<string | HTMLElement> {
+  const unit = (result.contigsPerCell ?? 1) > 1 ? 'cells' : 'bins'
+  return [
+    `${fmt.int(result.nrows)} × ${fmt.int(result.ncols)} ${unit} · `,
+    // Bold because it is the one number here that changes what the picture
+    // *means*: the same map at 200 bp and at 3 kb are different figures, and a
+    // reader scanning the line is looking for that.
+    el('strong', { text: resolutionNote(binsize, result, noun) }),
+  ]
+}
+
+/**
  * The same colours, measured in the second file's counts.
  *
  * A gain of `g` multiplies the second file's values before they are coloured, so

@@ -82,18 +82,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **The line under a map says the resolution, not the arithmetic.** "2 bins per
-  cell" asked the reader to do the multiplication; it now reads `effective
-  resolution: 200 bp` — the number that goes in a methods section — and one
-  function writes it for the whole-file, genome and region views so the three
-  cannot drift. Where a cell holds whole sequences there is no width to quote,
-  and it says that instead. The region line also drops its `matched chromosome
-  XV ·` opening: the title above the map already names what was opened, and the
-  line under it is for what the picture is. The two-range block says the same
-  three things in the same order, drops its own `XV × XV ·` opening, counts the
-  bins that came back rather than the ones asked for, and calls them regions —
-  its two axes are as often two windows of one sequence as they are two
-  sequences.
+- **The line under a map says two things and stops.** How large the picture is
+  and what one cell of it is worth — `4,046 × 4,046 bins · **effective
+  resolution: 3.0 kb**` — from one function all four views share, so they cannot
+  drift apart on the same fact. Gone from it: `matched chromosome XV ·` and
+  `XV × XV ·`, which the title above already says; `bins 28,911–34,679` and
+  `contacts between the two regions`, which nobody reads; and `· balanced`,
+  which is the colourbar's to say, in the units it is drawn in, beside the
+  numbers it applies to.
+
+  The count is the **cells**, and they are called bins, because a cell of the
+  picture *is* a bin of the effective resolution: `4,046 × 4,046` at `3.0 kb`
+  multiplies out to the 12.1 Mb on screen. Counting the file's own bins would
+  put `5,769 bins` beside `200 bp` for a 577 kb chromosome — two numbers on one
+  line describing something twice its size. Above one sequence per cell there is
+  no bin to speak of, and they are cells again.
 
 ### Known
 
