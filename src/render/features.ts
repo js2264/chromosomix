@@ -147,6 +147,14 @@ export interface FeaturePaint {
    * the point; a name inside is only ever legible on the wide ones.
    */
   labelsBelow?: boolean
+  /**
+   * How tall the band under a feature is, or absent for this module's own.
+   *
+   * Passed in because it is measured in the same units as {@link font}: the app
+   * scales every canvas font together, and a band that stayed eleven pixels
+   * while the name in it grew would clip the name it exists to hold.
+   */
+  labelBand?: number
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -204,7 +212,10 @@ export function drawSegments(
  * which is a line rather than a glyph.
  */
 export function labelBandOf(paint: FeaturePaint, rowHeight: number): number {
-  return paint.labelsBelow === true && paint.labels && rowHeight >= 20 ? LABEL_BAND : 0
+  const band = paint.labelBand ?? LABEL_BAND
+  // Room for the band *and* a glyph above it, in the band's own units — a row
+  // that gave half of its height to text would have a line left for the gene.
+  return paint.labelsBelow === true && paint.labels && rowHeight >= band + 9 ? band : 0
 }
 
 /**

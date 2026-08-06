@@ -862,6 +862,9 @@ function squareFrom(x0: number, y0: number, x: number, y: number): { x: number; 
  * nothing at all about where they are.
  */
 export const SELECTION_FONT = '600 11px system-ui, sans-serif'
+
+/** The size the block labels and the base-pair ticks are written at. */
+export const DEFAULT_LABEL_FONT = '10px system-ui, sans-serif'
 export const SELECTION_CHIP = 16
 export const SELECTION_PAD = 5
 
@@ -1012,7 +1015,7 @@ export class HeatmapView {
       groupSeparatorWidth: options.groupSeparatorWidth ?? 1,
       labelColor: options.labelColor ?? '#333333',
       labelHaloColor: options.labelHaloColor ?? 'rgba(255, 255, 255, 0.85)',
-      labelFont: options.labelFont ?? '10px system-ui, sans-serif',
+      labelFont: options.labelFont ?? DEFAULT_LABEL_FONT,
       maxLabels: options.maxLabels ?? MAX_CATEGORICAL_TICKS,
       labelMinSpan: options.labelMinSpan ?? 0,
       crosshairColor: options.crosshairColor ?? CROSSHAIR_COLOR,
@@ -1251,6 +1254,20 @@ export class HeatmapView {
    * is a bin at all, and an aggregated cell — one contig, one genome — has a
    * span of exactly one whatever its size, so the rule has nothing to read.
    */
+  /**
+   * Write the block labels and the axis ticks at a different size.
+   *
+   * `remeasure` and not a repaint: the gutters this canvas keeps for its labels
+   * are *measured* from this font (`measureMargin`), so changing it without
+   * re-measuring clips every label above 1.0 and leaves dead space below it.
+   */
+  setLabelFont(font: string): void {
+    if (font === this.opts.labelFont) return
+    this.opts.labelFont = font
+    this.remeasure()
+    this.changed()
+  }
+
   setLabelMinSpan(cells: number): void {
     const next = cells > 0 ? cells : 0
     if (next === this.opts.labelMinSpan) return

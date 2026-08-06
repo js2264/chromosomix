@@ -26,7 +26,15 @@ import {
 } from '../annotations/groups'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit, type FeatureLayout } from '../render/features'
+import {
+  LABEL_BAND,
+  featureAt,
+  drawGenes,
+  drawSegments,
+  layoutFeatures,
+  rowsThatFit,
+  type FeatureLayout,
+} from '../render/features'
 import {
   GRIP_ROOM,
   GROUP_BAR,
@@ -65,6 +73,7 @@ import { el, fmt } from './dom'
 import type { LaneMark } from './LaneControls'
 import { LANE_MIN_SIZE } from './trackControls'
 import { getPlotOptions } from './plotOptions'
+import { scaleFont, scaleLength } from './textScale'
 
 /** Which edge a lane stack is on. `bottom` follows columns, `right` follows rows. */
 export type LaneEdge = 'bottom' | 'right'
@@ -660,7 +669,7 @@ export class AnnotationLanes {
             limits,
             guideColour: geometry.palette.guide,
             haloColour: geometry.palette.halo,
-            font: LANE_FONT,
+            font: scaleFont(LANE_FONT),
             // Overlaid tracks are translucent by necessity: two opaque areas in
             // one lane means the second hides the first, which is the opposite
             // of what overlaying them was for.
@@ -706,17 +715,18 @@ export class AnnotationLanes {
         // refuses the band on a row too short to hold both, so a lane dragged
         // down to sixteen pixels still falls back to names inside the wide
         // features — the rule is one rule, and the lane's height decides.
-        const rows = rowsThatFit(frame.thickness, entry.kind === 'gtf' ? 26 : 22)
+        const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
         const layout = layoutFeatures(frame, axis, entry.payload.data, rows)
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const paint = {
           colour: entry.style.colour,
           guideColour: geometry.palette.guide,
           haloColour: geometry.palette.halo,
-          font: LANE_FONT,
+          font: scaleFont(LANE_FONT),
           opacity: entry.style.opacity,
           labels: text,
           labelsBelow: true,
+          labelBand: scaleLength(LABEL_BAND),
         }
         if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
         else drawSegments(ctx, frame, entry.payload.data, layout, paint)
@@ -880,7 +890,7 @@ export class AnnotationLanes {
       detail: label.detail,
       labelAt: label.at,
       column: null,
-      style: LANE_LABEL_STYLE,
+      style: laneLabelStyle(),
       palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
     })
     state.gripRows.set(lane.entry.id, boxes.nameAcross)
@@ -1193,17 +1203,22 @@ const GROUP_GAP = 2
  * the line it belongs to — and recolouring a track meant leaving the picture for
  * a menu. Nine pixels of chip is what buys both.
  */
-const LANE_LABEL_STYLE: LaneLabelStyle = {
-  nameFont: LANE_FONT,
-  rangeFont: LANE_FONT,
-  swatch: 9,
-  nameTop: NAME_ACROSS,
-  nameLine: 11,
-  detailDrop: 11,
-  inset: 4,
-  hitHeight: 12,
-  autoSlot: 13,
-  grip: LANE_GRIP,
+function laneLabelStyle(): LaneLabelStyle {
+  return {
+    nameFont: scaleFont(LANE_FONT),
+    rangeFont: scaleFont(LANE_FONT),
+    // Every length here but the grip is in the same units as the text it is
+    // spacing — see the browser's own style factory for why, and why the grip
+    // is not: a border does not get easier to hit because the writing grew.
+    swatch: scaleLength(9),
+    nameTop: scaleLength(NAME_ACROSS),
+    nameLine: scaleLength(11),
+    detailDrop: scaleLength(11),
+    inset: scaleLength(4),
+    hitHeight: scaleLength(12),
+    autoSlot: scaleLength(13),
+    grip: LANE_GRIP,
+  }
 }
 
 /** `I:412,000` — the same phrasing the matrix readout uses. */

@@ -44,11 +44,35 @@ import {
   type LocusRange,
 } from '../genome/assembly'
 import type { SequenceSelection } from '../genome/selection'
-import { RULER_HEIGHT, drawArcs, drawBoundaries, drawGuide, drawRuler, type RulerBand } from '../render/browser'
-import { featureAt, drawGenes, drawSegments, layoutFeatures, rowsThatFit } from '../render/features'
+import {
+  RULER_FONT,
+  TICK_FONT,
+  drawArcs,
+  drawBoundaries,
+  drawGuide,
+  drawRuler,
+  rulerHeightFor,
+  type RulerBand,
+} from '../render/browser'
+import {
+  getTextScale,
+  scaleFont,
+  scaleLength,
+  subscribeTextScale,
+  textScaleField,
+} from './textScale'
+import {
+  LABEL_BAND,
+  featureAt,
+  drawGenes,
+  drawSegments,
+  layoutFeatures,
+  rowsThatFit,
+} from '../render/features'
 import {
   GRIP_ROOM,
   GROUP_BAR,
+  GROUP_FONT,
   clipLane,
   drawGrip,
   drawGroupBars,
@@ -357,6 +381,15 @@ export class BrowserView {
    * is cut rather than running out over the data.
    */
   private pinnedColumn: number | null = readNameColumn()
+  /**
+   * How tall the ruler is, at the text scale in force.
+   *
+   * A field and not a constant, because it is *both* a layout and a hit test:
+   * everything below it starts at this number and a press above it is a range
+   * selection. Two numbers there and clicking a chromosome's name silently
+   * stops navigating.
+   */
+  private rulerHeight = rulerHeightFor(getTextScale())
   /** Whether the pointer is on the column's own edge, which resizes it. */
   private onColumn = false
   /**
@@ -525,6 +558,15 @@ export class BrowserView {
     this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
     this.unsubscribes.push(subscribePlotOptions(() => this.schedule()))
+    // The ruler's height is the one thing a scale change moves that is not
+    // simply redrawn: everything below it starts at that number, and a press
+    // above it means something else.
+    this.unsubscribes.push(
+      subscribeTextScale((scale) => {
+        this.rulerHeight = rulerHeightFor(scale)
+        this.schedule()
+      }),
+    )
     this.unsubscribes.push(props.selection.subscribe(() => this.applySelection()))
     this.watchPointer()
     this.watchKeys()
@@ -744,7 +786,7 @@ export class BrowserView {
       host.getBoundingClientRect().bottom -
       (Number.isFinite(padding) ? padding : 0) -
       this.stage.getBoundingClientRect().top -
-      RULER_HEIGHT -
+      this.rulerHeight -
       LANE_GAP * (lanes.length + 1)
     const size = heightThatFills(room, lanes.length)
     if (size !== null) this.setTrackHeight(size)
@@ -937,7 +979,7 @@ export class BrowserView {
       modeOf: (group) => this.props.groups.modeOf(group),
       sizeOf: (entry) => entry.style.size,
       gap: LANE_GAP,
-      from: RULER_HEIGHT + LANE_GAP,
+      from: this.rulerHeight + LANE_GAP,
       minimum: LANE_MIN_SIZE,
     }).map((slot) => ({
       entry: slot.host,
@@ -973,7 +1015,7 @@ export class BrowserView {
   private heightOf(lanes: Lane[]): number {
     const last = lanes[lanes.length - 1]
     return last === undefined
-      ? RULER_HEIGHT + LANE_GAP
+      ? this.rulerHeight + LANE_GAP
       : last.frame.acrossFrom + last.frame.thickness + LANE_GAP
   }
 
@@ -1080,9 +1122,10 @@ export class BrowserView {
         halo: palette.labelHaloColor,
       },
       dpr: this.dpr,
+      fonts: { ruler: scaleFont(RULER_FONT), tick: scaleFont(TICK_FONT) },
     }
     this.bands = drawRuler(ctx, ruler)
-    drawBoundaries(ctx, ruler, RULER_HEIGHT, height)
+    drawBoundaries(ctx, ruler, this.rulerHeight, height)
 
     this.layouts.clear()
     this.rangeHits = []
@@ -1110,7 +1153,13 @@ export class BrowserView {
         })),
         LANE_GAP,
       ),
-      { orientation: 'bottom', along: 0, labelAlong: GRIP_MARGIN + 2, text: this.text },
+      {
+        orientation: 'bottom',
+        along: 0,
+        labelAlong: GRIP_MARGIN + 2,
+        text: this.text,
+        font: scaleFont(GROUP_FONT),
+      },
     )
 
     // Under the shared preference, like everything else drawn over the data: a
@@ -1143,7 +1192,7 @@ export class BrowserView {
       ctx.lineWidth = 2
       ctx.beginPath()
       const edge = snapTo(this.gutter, this.dpr)
-      ctx.moveTo(edge, RULER_HEIGHT)
+      ctx.moveTo(edge, this.rulerHeight)
       ctx.lineTo(edge, height)
       ctx.stroke()
       ctx.restore()
@@ -1203,8 +1252,10 @@ export class BrowserView {
     if (start === null || end === null) return
     const span = Math.abs(this.atUnit(moving) - this.atUnit(anchor))
 
+    const chipHeight = scaleLength(SELECTION_CHIP)
+    const chipPad = scaleLength(SELECTION_PAD)
     ctx.save()
-    ctx.font = SELECTION_FONT
+    ctx.font = scaleFont(SELECTION_FONT)
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
     // Both edges as hairlines, so the numbers have something exact to belong to.
@@ -1212,13 +1263,13 @@ export class BrowserView {
     ctx.lineWidth = 1
     for (const x of [anchor, moving]) {
       ctx.beginPath()
-      ctx.moveTo(snapTo(x, this.dpr), RULER_HEIGHT)
+      ctx.moveTo(snapTo(x, this.dpr), this.rulerHeight)
       ctx.lineTo(snapTo(x, this.dpr), height)
       ctx.stroke()
     }
 
     const chip = (text: string, x: number, side: 'left' | 'right', top: number): void => {
-      const width = ctx.measureText(text).width + SELECTION_PAD * 2
+      const width = ctx.measureText(text).width + chipPad * 2
       // Outside its own edge, and folded back inside at the window's own edges —
       // a coordinate written off the side of the canvas is a coordinate nobody
       // can read, and the edges are exactly where a selection is dragged to.
@@ -1229,24 +1280,24 @@ export class BrowserView {
       ctx.strokeStyle = CROSSHAIR_COLOR
       ctx.lineWidth = 1
       ctx.beginPath()
-      if (ctx.roundRect === undefined) ctx.rect(left, top, width, SELECTION_CHIP)
-      else ctx.roundRect(left, top, width, SELECTION_CHIP, 3)
+      if (ctx.roundRect === undefined) ctx.rect(left, top, width, chipHeight)
+      else ctx.roundRect(left, top, width, chipHeight, 3)
       ctx.fill()
       ctx.stroke()
       ctx.fillStyle = CROSSHAIR_COLOR
-      ctx.fillText(text, left + SELECTION_PAD, top + SELECTION_CHIP / 2)
+      ctx.fillText(text, left + chipPad, top + chipHeight / 2)
     }
 
-    const top = RULER_HEIGHT + 4
+    const top = this.rulerHeight + 4
     const backwards = moving < anchor
     chip(start, anchor, backwards ? 'right' : 'left', top)
     chip(end, moving, backwards ? 'left' : 'right', top)
     // The span, in the middle of what has been drawn, where the eye already is.
     const middle = (anchor + moving) / 2
     const text = fmt.bp(span)
-    const width = ctx.measureText(text).width + SELECTION_PAD * 2
+    const width = ctx.measureText(text).width + chipPad * 2
     if (Math.abs(moving - anchor) > width + 8) {
-      chip(text, middle - width / 2 - 3, 'right', top + SELECTION_CHIP + 3)
+      chip(text, middle - width / 2 - 3, 'right', top + chipHeight + 3)
     }
     ctx.restore()
   }
@@ -1270,7 +1321,7 @@ export class BrowserView {
     if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
         drawSequence(ctx, frame, this.axis, regions, {
-          font: BASE_FONT,
+          font: scaleFont(BASE_FONT),
           opacity: member.style.opacity,
           letters: this.text,
         })
@@ -1294,7 +1345,7 @@ export class BrowserView {
           limits,
           guideColour: palette.labelColor,
           haloColour: palette.labelHaloColor,
-          font: LANE_FONT,
+          font: scaleFont(LANE_FONT),
           fills: this.fills,
           outline: this.outline,
           baseline: this.baseline,
@@ -1350,17 +1401,18 @@ export class BrowserView {
       // Taller rows than beside a map, because each one carries a name under
       // its features. Below that height the band is refused and the names go
       // back inside, which is what a lane dragged very short should do.
-      const rows = rowsThatFit(frame.thickness, entry.kind === 'gtf' ? 26 : 22)
+      const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
       const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows)
       this.layouts.set(entry.id, { frame, layout })
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
         haloColour: palette.labelHaloColor,
-        font: LANE_FONT,
+        font: scaleFont(LANE_FONT),
         opacity: entry.style.opacity,
         labels: this.text,
         labelsBelow: true,
+        labelBand: scaleLength(LABEL_BAND),
       }
       if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
       else drawSegments(ctx, frame, entry.payload.data, layout, paint)
@@ -1425,7 +1477,7 @@ export class BrowserView {
             nameLines: 2,
           }
         : null,
-      style: BROWSER_LABEL_STYLE,
+      style: browserLabelStyle(),
       palette: { text: palette.labelColor, halo: palette.labelHaloColor },
     })
     this.wanted(boxes.wanted)
@@ -1714,6 +1766,10 @@ export class BrowserView {
             this.optionToggle('crosshair', 'crosshair'),
           ),
         ),
+        // Beside the overlays rather than beside the export: this is a property
+        // of the writing on the picture, and `track text` above it is the toggle
+        // that decides whether there is any.
+        textScaleField(),
         transparencyField(this.props.store),
         el(
           'div',
@@ -1773,6 +1829,11 @@ export class BrowserView {
     this.exportStatus.textContent = ''
   }
 
+  /** Room under the figure for the caption, at the size it is written in. */
+  private get captionHeight(): number {
+    return scaleLength(CAPTION_HEIGHT)
+  }
+
   /** The figure as paths and text, at no resolution at all. */
   private async vectorFigure(
     width: number,
@@ -1780,20 +1841,20 @@ export class BrowserView {
     caption: string,
     ink: string,
   ): Promise<Blob> {
-    const page = new VectorPage(width, height + CAPTION_HEIGHT)
+    const page = new VectorPage(width, height + this.captionHeight)
     const ctx = page.ctx
     // The page under the drawing. The raster path composites this underneath at
     // the end; here it has to be the first thing painted, since a PDF is drawn
     // in order and has no `destination-over`.
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, width, height + CAPTION_HEIGHT)
+    ctx.fillRect(0, 0, width, height + this.captionHeight)
     this.paint(ctx, width, height, false)
-    ctx.font = '11px Helvetica, sans-serif'
+    ctx.font = scaleFont('11px Helvetica, sans-serif')
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
     ctx.fillStyle = ink
     ctx.globalAlpha = 1
-    ctx.fillText(caption, 2, height + CAPTION_HEIGHT - 5)
+    ctx.fillText(caption, 2, height + this.captionHeight - 5)
     return page.toBlob({ title: this.props.assembly.name })
   }
 
@@ -1805,25 +1866,25 @@ export class BrowserView {
     ink: string,
   ): Promise<Blob> {
     const scale = scaleForDpi(this.exportDpi)
-    const fits = largestDpiThatFits(width, height + CAPTION_HEIGHT)
+    const fits = largestDpiThatFits(width, height + this.captionHeight)
     if (fits !== null && fits < this.exportDpi) {
       this.exportStatus.textContent = `${fits} dpi is the largest that fits this figure.`
       return new Blob([])
     }
     const out = document.createElement('canvas')
     out.width = Math.max(1, Math.round(width * scale))
-    out.height = Math.max(1, Math.round((height + CAPTION_HEIGHT) * scale))
+    out.height = Math.max(1, Math.round((height + this.captionHeight) * scale))
     const ctx = out.getContext('2d')
     if (ctx === null) throw new Error('Could not open a canvas to draw the figure on.')
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     this.paint(ctx, width, height, false)
 
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
-    ctx.font = '11px system-ui, sans-serif'
+    ctx.font = scaleFont('11px system-ui, sans-serif')
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
     ctx.fillStyle = ink
-    ctx.fillText(caption, 2, height + CAPTION_HEIGHT - 5)
+    ctx.fillText(caption, 2, height + this.captionHeight - 5)
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'destination-over'
     ctx.fillStyle = '#ffffff'
@@ -1849,7 +1910,7 @@ export class BrowserView {
    * column they were not aiming at.
    */
   private onColumnEdge(x: number, y: number): boolean {
-    return this.nameColumn > 0 && y >= RULER_HEIGHT && Math.abs(x - this.gutter) <= COLUMN_GRIP
+    return this.nameColumn > 0 && y >= this.rulerHeight && Math.abs(x - this.gutter) <= COLUMN_GRIP
   }
 
   private laneAt(y: number): { lane: Lane; onBorder: boolean } | null {
@@ -1933,7 +1994,7 @@ export class BrowserView {
       // below it means pan, which is the other thing a hand wants — is a
       // keystroke spent on the one gesture that is unambiguous from its
       // position alone.
-      if (y < RULER_HEIGHT) {
+      if (y < this.rulerHeight) {
         this.drag = { mode: 'select', x0: x, x }
         return
       }
@@ -1958,7 +2019,7 @@ export class BrowserView {
         // claim only a caret makes; over the ruler it says which of the two
         // things a press there will do — a name is a link to that sequence, and
         // the rest of the band is a range waiting to be dragged out.
-        const onRuler = y < RULER_HEIGHT
+        const onRuler = y < this.rulerHeight
         const onName = onRuler && this.bandNameAt(x, y) !== null
         // …and over a handle, where the open hand is the one shape that says
         // "take hold of this". The arrowhead points *at* a base pair, which is
@@ -2286,7 +2347,7 @@ export class BrowserView {
     if (this.clickTimer !== null) clearTimeout(this.clickTimer)
     this.clickTimer = window.setTimeout(() => {
       this.clickTimer = null
-      if (y < RULER_HEIGHT) {
+      if (y < this.rulerHeight) {
         // The *name*, not the band. A band is as wide as its sequence is on
         // screen, so at whole-genome zoom clicking anywhere in the top sixty
         // pixels would zoom somewhere — including the click that ended a drag
@@ -2591,17 +2652,27 @@ const NAME_TOP = 9
  * its text has to fit in one. The block itself is drawn by
  * `render/laneLabel.ts`, which takes these rather than choosing them.
  */
-const BROWSER_LABEL_STYLE: LaneLabelStyle = {
-  nameFont: NAME_FONT,
-  rangeFont: RANGE_FONT,
-  swatch: 9,
-  nameTop: NAME_TOP,
-  nameLine: 13,
-  detailDrop: 14,
-  inset: 5,
-  hitHeight: 15,
-  autoSlot: 16,
-  grip: LANE_GRIP,
+function browserLabelStyle(): LaneLabelStyle {
+  return {
+    nameFont: scaleFont(NAME_FONT),
+    rangeFont: scaleFont(RANGE_FONT),
+    // Everything but the grip is in the same units as the text it spaces: the
+    // two line heights keep the name and the range apart, the hit height is the
+    // click box a caret opens from, and the autoscale slot is a mark placed
+    // against measured text. Leaving them fixed while the type grows is what
+    // makes a scaled block overlap itself and the limit boxes miss their
+    // glyphs. The grip is a pointer tolerance against a border and does not
+    // move — the border does not get easier to hit because the writing is
+    // larger.
+    swatch: scaleLength(9),
+    nameTop: scaleLength(NAME_TOP),
+    nameLine: scaleLength(13),
+    detailDrop: scaleLength(14),
+    inset: scaleLength(5),
+    hitHeight: scaleLength(15),
+    autoSlot: scaleLength(16),
+    grip: LANE_GRIP,
+  }
 }
 
 /** The layer and the canvas share an origin here, so nothing is offset. */

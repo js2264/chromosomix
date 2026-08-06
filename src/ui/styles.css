@@ -2612,6 +2612,14 @@ p {
   color: var(--accent);
 }
 
+/* The percentage between the two presses that set it. A fixed width so the
+   buttons do not shuffle sideways between 80% and 100%, which is exactly the
+   change a reader is watching for when they press one. */
+.text-scale-note {
+  min-width: 2.6rem;
+  text-align: center;
+}
+
 /* --- dialogs ----------------------------------------------------------- */
 
 .modal-backdrop {
