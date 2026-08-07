@@ -26,7 +26,7 @@
  * other respect a lane.
  */
 
-import type { AnnotationStore } from '../annotations/store'
+import { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, LaneEdge } from '../annotations/types'
 import { placementOn } from '../annotations/types'
 
@@ -53,6 +53,22 @@ export const VIEWPOINT_ID = '4c'
 export const VIEWPOINT_EDGE: LaneEdge = 'top'
 
 let anchor: Viewpoint | null = null
+/**
+ * Where the 4C lane lives on a file that has no annotation store of its own.
+ *
+ * A file with a genome layer carries no annotations at all (§8.5) and still has
+ * a 4C lane, so the lane needs somewhere to be an entry in. It cannot be the
+ * panel's own field: a panel is rebuilt on every navigation — a click on a
+ * chromosome, a zoom that opens a region — and a store rebuilt with it would
+ * take the lane, its colour, its height and its edge with it, which is the one
+ * thing the anchor beside it is kept as a locus to avoid.
+ *
+ * So it is held here, beside the anchor, for exactly as long as the anchor is:
+ * {@link resetViewpoint} drops both on the way into another file, which is the
+ * moment the entry stops meaning anything. Nothing persists it — the same
+ * reason the entry is never written to session storage.
+ */
+let borrowed: AnnotationStore | null = null
 /**
  * The name the lane was last given *by us*.
  *
@@ -97,9 +113,22 @@ export function subscribeViewpoint(listener: (anchor: Viewpoint | null) => void)
  */
 export function resetViewpoint(): void {
   derived = ''
+  borrowed = null
   if (anchor === null) return
   anchor = null
   announce()
+}
+
+/**
+ * The store a surface with none of its own draws its 4C lane from.
+ *
+ * One per file rather than one per view, which is the whole point of it being
+ * here: see {@link borrowed}. Persists nothing, and holds nothing but the one
+ * entry this module puts in it.
+ */
+export function viewpointOnlyStore(): AnnotationStore {
+  borrowed ??= new AnnotationStore('', { persist: false })
+  return borrowed
 }
 
 function announce(): void {

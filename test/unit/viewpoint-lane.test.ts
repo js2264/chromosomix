@@ -24,6 +24,7 @@ import {
   showViewpoint,
   syncViewpointLabel,
   viewpointEntry,
+  viewpointOnlyStore,
 } from '../../src/ui/viewpoint'
 
 const int = (n: number): string => String(n)
@@ -158,6 +159,43 @@ describe('what a session remembers', () => {
     showViewpoint(private_, true, int)
     private_.restyle(VIEWPOINT_ID, { colour: '#abcdef' })
     expect(AnnotationStore.stored(key)).toEqual([])
+  })
+})
+
+/**
+ * Where the lane lives on a file that carries no annotations at all (§8.5).
+ *
+ * There is no store to join, so one is borrowed — and it has to belong to the
+ * **file** rather than to the view. A map panel is rebuilt on every navigation:
+ * a click on a chromosome, a zoom that opens a region. A store rebuilt with it
+ * would take the lane, its colour, its height and its edge with it every time,
+ * which is the one thing keeping the anchor as a locus exists to prevent.
+ */
+describe('the borrowed store', () => {
+  it('is the same store for every view of one file', () => {
+    const first = viewpointOnlyStore()
+    showViewpoint(first, true, int)
+    first.restyle(VIEWPOINT_ID, { colour: '#0f0f0f' })
+    // A second panel, on the same file: what the reader styled is still there.
+    const second = viewpointOnlyStore()
+    expect(second).toBe(first)
+    expect(isViewpointShown(second)).toBe(true)
+    expect(viewpointEntry(second)?.style.colour).toBe('#0f0f0f')
+  })
+
+  it('is dropped on the way into another file', () => {
+    const first = viewpointOnlyStore()
+    showViewpoint(first, true, int)
+    resetViewpoint()
+    const next = viewpointOnlyStore()
+    expect(next).not.toBe(first)
+    expect(isViewpointShown(next)).toBe(false)
+  })
+
+  it('persists nothing', () => {
+    const store = viewpointOnlyStore()
+    showViewpoint(store, true, int)
+    expect(AnnotationStore.stored('')).toEqual([])
   })
 })
 

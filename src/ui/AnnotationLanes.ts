@@ -1447,16 +1447,21 @@ function drawPrompt(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1))
   ctx.setLineDash([])
   ctx.globalAlpha = 1
-  ctx.font = scaleFont(LANE_FONT)
-  ctx.fillStyle = palette.guide
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  // In the lane's own reading direction, so a strip beside the map says it the
-  // same way up as that stack's track names do.
-  laneText(ctx, frame, text, (frame.alongFrom + frame.alongTo) / 2, frame.thickness / 2, {
-    halo: palette.halo,
-    maxWidth: Math.max(40, span - 12),
-  })
+  // Empty in a figure: the sentence is an instruction to somebody with a map in
+  // front of them, and the outline alone says what a saved figure needs — that
+  // this lane is a lane, and that there is nothing in it.
+  if (text !== '') {
+    ctx.font = scaleFont(LANE_FONT)
+    ctx.fillStyle = palette.guide
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    // In the lane's own reading direction, so a strip beside the map says it the
+    // same way up as that stack's track names do.
+    laneText(ctx, frame, text, (frame.alongFrom + frame.alongTo) / 2, frame.thickness / 2, {
+      halo: palette.halo,
+      maxWidth: Math.max(40, span - 12),
+    })
+  }
   ctx.restore()
 }
 

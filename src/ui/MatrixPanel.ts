@@ -92,6 +92,7 @@ import {
   subscribeViewpoint,
   syncViewpointLabel,
   viewpointLabel,
+  viewpointOnlyStore,
 } from './viewpoint'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
@@ -636,9 +637,11 @@ export class MatrixPanel {
     // here; where they are mounted and what listens to them comes later.
     //
     // Where the file has no annotation machinery there is still a 4C lane, so
-    // there is still a store — a private one that persists nothing, and that
-    // nothing but this panel can put anything into.
-    this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
+    // there is still a store — one that persists nothing and holds nothing but
+    // that lane. It belongs to the *file* rather than to this panel, because a
+    // panel is rebuilt on every navigation and a store rebuilt with it would
+    // throw the lane away every time the reader opened a chromosome.
+    this.laneStore = options.annotations?.store ?? viewpointOnlyStore()
     this.lanes = new AnnotationLanes({
       store: this.laneStore,
       ...(options.annotations?.manual === undefined ? {} : { manual: options.annotations.manual }),
@@ -2191,11 +2194,16 @@ export class MatrixPanel {
    * whole-genome block is, where a cell *is* a sequence.
    */
   private viewpointPrompt(): string {
-    const anchor = getViewpointAnchor()
-    if (anchor === null) return 'Press Shift + drag on the map to define an anchor region'
+    // The level first, and that order is the point: where a cell *is* a whole
+    // sequence there is no coordinate inside one to anchor on, so the Shift-drag
+    // this would otherwise ask for is a gesture that does nothing — and a lane
+    // that asks for it says the feature is broken rather than that the view is
+    // the wrong one for it.
     if (this.locusAxes.rows === null && this.locusAxes.cols === null) {
       return 'No anchor at this level — open a region to read a 4C profile'
     }
+    const anchor = getViewpointAnchor()
+    if (anchor === null) return 'Press Shift + drag on the map to define an anchor region'
     return `${viewpointLabel(anchor, fmt.int)} is not in this view`
   }
 
@@ -2234,11 +2242,22 @@ export class MatrixPanel {
    * from.
    *
    * The handles are controls — a column of them down the margin is furniture a
-   * reader of the figure has no use for. Everything else here is the picture and
-   * stays.
+   * reader of the figure has no use for. So is the empty 4C lane's instruction:
+   * "press Shift + drag on the map" is addressed to somebody with a map in front
+   * of them, and a saved figure is exactly the reader who has not. The lane keeps
+   * its outline, so an empty strip in a figure reads as a lane with nothing in it
+   * rather than as a gap the layout got wrong. Everything else here is the
+   * picture and stays.
    */
   private figureGeometry(): LaneGeometry {
-    return { ...this.laneGeometry(), handles: false, grip: null, scaling: null }
+    const live = this.laneGeometry()
+    return {
+      ...live,
+      viewpoint: { ...live.viewpoint, prompt: '' },
+      handles: false,
+      grip: null,
+      scaling: null,
+    }
   }
 
   /**
