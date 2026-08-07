@@ -1,11 +1,20 @@
 /**
  * Every example the picker offers actually opens.
  *
- * This is the one test that reads `public/demo/` rather than a generated
- * fixture, and it exists because of the failure mode it catches: the demo
- * datasets get replaced, `ui/examples.ts` keeps naming the old ones, and the
- * landing page ships a dropdown in which every choice 404s. Nothing else in the
- * suite touches those files, so nothing else notices.
+ * This is the one test that reads `demo/` rather than a generated fixture, and
+ * it exists because of the failure mode it catches: the demo datasets get
+ * replaced, `ui/examples.ts` keeps naming the old ones, and the landing page
+ * ships a dropdown in which every choice 404s. Nothing else in the suite
+ * touches those files, so nothing else notices.
+ *
+ * That failure got *easier* to ship when the datasets moved to S3, because the
+ * picker now points at a bucket no test can reach: a rename here is a 404 that
+ * nothing on this machine can see. So the rule the checks below encode is that
+ * `demo/` on disk and `demo/` on the bucket are one tree —
+ * `scripts/publish-demo.sh` uploads this directory and nothing else — which
+ * makes "the file exists on disk" the strongest statement about the bucket that
+ * can be made without the network, and makes a missing file a red CI run rather
+ * than a broken landing page.
  *
  * The catalogue is now a list of **published sessions** rather than of data
  * files, which puts one more link in the chain and one more way to break it: a
@@ -26,6 +35,7 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import {
   DEMO_ANNOTATION_FILES,
+  DEMO_BUCKET,
   DEMO_FILES,
   demoAnnotationsFor,
 } from '../../src/ui/examples'
@@ -35,20 +45,33 @@ import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
 import { parseUri } from '../../src/uri'
 
-const DIR = decodeURIComponent(new URL('../../public/demo/', import.meta.url).pathname)
+const DIR = decodeURIComponent(new URL('../../demo/', import.meta.url).pathname)
 
 /**
  * Where a config is served from, for the resolution step.
  *
- * Any absolute base does: what is being checked is that the *names* inside a
- * config resolve to files in the directory the config is in, and a `https://`
- * origin is what the app will always hand `resolveConfig` on the web.
+ * Deliberately *not* {@link DEMO_BUCKET}: what is being checked is that a
+ * session's relative names resolve to files in the folder the session is in,
+ * and using the real bucket here would let a check pass for the wrong reason —
+ * an absolute S3 URL baked into a config would satisfy `startsWith` while being
+ * exactly the thing that stops the folder from being copyable. A foreign origin
+ * cannot be satisfied that way.
  */
-const ORIGIN = 'https://example.org/metacooler.js/demo/'
+const ORIGIN = 'https://example.org/published/demo/'
 
-/** The file name a resolved URI ends in, which is what `public/demo/` holds. */
-function nameOf(uri: string): string {
-  return parseUri(uri).path.split('/').pop() ?? ''
+/**
+ * A resolved URI as its path under `demo/`, which is what both the disk and the
+ * bucket are keyed by.
+ *
+ * Slicing the origin off rather than taking the last path segment: the two were
+ * the same thing when every demo sat in one flat directory, and are not now
+ * that each dataset has a folder. It also asserts something on its way past —
+ * a URI that did not resolve under `demo/` yields a path with a scheme still on
+ * it, which no `existsSync` will accept.
+ */
+function underDemo(uri: string): string {
+  const path = parseUri(uri).path
+  return path.startsWith(ORIGIN) ? path.slice(ORIGIN.length) : path
 }
 
 /** Read one of the published sessions, as the app reads it. */
@@ -71,31 +94,62 @@ describe('the picker examples', () => {
     }
   })
 
+  /**
+   * Every session is in a dataset folder, and the folder is where its data is.
+   *
+   * The flat `demo/` directory is what the S3 move replaced, and a session left
+   * at the root would still open — `resolveConfig` would find its files beside
+   * it — right up until a second dataset arrived wanting a file of the same
+   * name. Naming the folder is what keeps `demo/yeast/` a thing you can copy.
+   */
+  it('puts every session in a dataset folder', () => {
+    for (const file of DEMO_FILES) {
+      expect(file, `${file} is at the root of demo/ rather than in a dataset folder`).toMatch(
+        /^[^/]+\/[^/]+$/,
+      )
+    }
+  })
+
+  /**
+   * The bucket the picker reads is a directory prefix, not an object.
+   *
+   * `demoExamples()` concatenates `${base}${folder}/${file}`, so a base that had
+   * lost its trailing slash would produce `…/demoyeast/…` — a 404 on every
+   * example, and one that reads as a missing file rather than a broken
+   * constant. It cannot be checked through `demoExamples()` here, which needs a
+   * `window`, so it is checked on the constant.
+   */
+  it('reads them from an absolute prefix ending in a slash', () => {
+    expect(DEMO_BUCKET).toMatch(/^https:\/\/.+\/demo\/$/)
+  })
+
   for (const file of DEMO_FILES) {
     it(`ships ${file}`, () => {
-      expect(existsSync(`${DIR}${file}`), `${file} is offered by the picker but not in public/demo/`)
-        .toBe(true)
+      expect(existsSync(`${DIR}${file}`), `${file} is offered by the picker but not in demo/`).toBe(
+        true,
+      )
     })
 
     it(`resolves every file ${file} names`, () => {
       const config = published(file)
       // Relative inside the file, absolute after resolution — that is the whole
-      // of what lets one directory of sessions work in dev, on Pages and in the
-      // desktop build, and a config that had absolute URLs baked in would pass
-      // every other check here and open nowhere but the machine that wrote it.
+      // of what lets one dataset folder work on the bucket, in the desktop
+      // build and off a laptop, and a config that had absolute URLs baked in
+      // would pass every other check here and open nowhere but the bucket it
+      // was written against.
       expect(config.state.uri.startsWith(ORIGIN), `${file} names ${config.state.uri}`).toBe(true)
       const named = [config.state.uri, ...config.tracks.map((track) => track.source.url ?? '')]
       for (const uri of named) {
         expect(
-          existsSync(`${DIR}${nameOf(uri)}`),
-          `${file} names ${nameOf(uri)}, which is not in public/demo/`,
+          existsSync(`${DIR}${underDemo(uri)}`),
+          `${file} names ${underDemo(uri)}, which is not in demo/`,
         ).toBe(true)
       }
     })
 
     it(`opens what ${file} names`, async () => {
       const config = published(file)
-      const path = `${DIR}${nameOf(config.state.uri)}`
+      const path = `${DIR}${underDemo(config.state.uri)}`
 
       // A browser session names a bigWig, a bigBed or a sizes file — not a
       // cooler — so `MetaCooler` is the wrong check for one. What makes it
@@ -163,7 +217,7 @@ describe('the annotations published beside a demo map', () => {
     it(`ships ${file}`, () => {
       expect(
         existsSync(`${DIR}${file}`),
-        `${file} is offered beside a demo map but is not in public/demo/`,
+        `${file} is offered beside a demo map but is not in demo/`,
       ).toBe(true)
     })
   }

@@ -11,11 +11,13 @@
  * The four that matter, in the order of how much they cost:
  *
  * 1. **No data, and nothing else out of `public/`.** `vite.pinned.config.ts`
- *    turns `publicDir` off, and turning it back on — which is one line, and a
- *    plausible-sounding fix for a missing icon — puts 250 MB of demo datasets
- *    into *every archived commit*. Twenty of those is 5 GB against a 1 GB Pages
- *    site: the deployment starts failing days later, for a reason nothing
- *    connects to the config change that caused it.
+ *    turns `publicDir` off. The demo datasets moved to a bucket, so today that
+ *    saves only the icons — but the failure it was written for is one line
+ *    away in either direction: turning `publicDir` back on (a plausible-sounding
+ *    fix for a missing icon) or dropping a dataset back beside the app puts
+ *    250 MB into *every archived commit*. Twenty of those is 5 GB against a
+ *    1 GB Pages site: the deployment starts failing days later, for a reason
+ *    nothing connects to the change that caused it.
  * 2. **The base has to be the pinned one.** Vite bakes absolute asset URLs at
  *    build time, so a copy built for `/` and served from `/v/<commit>/` is a
  *    blank page with three 404s — and archived builds are exactly the thing

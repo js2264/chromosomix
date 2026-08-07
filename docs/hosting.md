@@ -90,8 +90,15 @@ exposes no way to change response headers. **Pages cannot host data for this vie
 The viewer refuses the case rather than reading corrupt bytes: `RemoteRangeSource.open` checks
 `Content-Encoding` on the probe, and `windowOf` checks every response body against the span its own
 `Content-Range` claims, for browsers that do not expose the header to JS. The worker then falls back
-to a single whole-object `GET` — a complete encoded stream *does* inflate correctly — which is what
-keeps the demo files in `public/demo/` working on Pages, at the cost of the bounded-read property.
+to a single whole-object `GET` — a complete encoded stream *does* inflate correctly — at the cost of
+the bounded-read property.
+
+That fallback is what kept the demo files working while they were published on Pages beside the app,
+and the reason they are not any more: they are on S3 now
+(`scripts/publish-demo.sh`, [deploy.md](deploy.md#the-demo-files)), where
+`application/octet-stream` is served uncompressed and the landing page exercises the ranged path
+rather than the escape hatch. Keep the fallback — a reader will point the viewer at a host that
+compresses — but do not design around it.
 
 ## Verifying a bucket before you trust it
 

@@ -4,9 +4,11 @@ The app is a static bundle — no backend, no server-side rendering, no API (SPE
 is a file copy. `.github/workflows/deploy.yml` builds on every push to `main` and publishes `dist/`
 through the official Pages actions.
 
-**What is published is the app, five demo datasets and ten track resources** (see below). Real datasets are served from a
-bucket configured per [hosting.md](hosting.md); nothing under `data/` is committed or uploaded, and
-a dropped local file still never leaves the browser.
+**What Pages publishes is the app and nothing else.** The five demo datasets and eleven track
+resources it used to carry now live on the lab's S3 bucket, configured per
+[hosting.md](hosting.md) and uploaded by `scripts/publish-demo.sh` (see
+[below](#the-demo-files)). Nothing under `data/` is committed or uploaded, and a dropped local file
+still never leaves the browser.
 
 ## One-time setup
 
@@ -56,16 +58,16 @@ missing file.
 
 ## The demo files
 
-`public/demo/` holds five published datasets, so the deployed site opens something real without
-anyone first standing up a bucket:
+The five published datasets live on the lab bucket, one folder per dataset under
+`https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`:
 
 | file | data | provenance |
 | --- | --- | --- |
-| `Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
-| `Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
-| `Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
-| `Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
-| `Yeast_microC_G2M_1kb.cool` (19 MB) | 16 chromosomes of synthetic yeast (`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts, balanced | mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`) |
+| `mock-community/Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
+| `mock-community/Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
+| `yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
+| `ecoli/Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
+| `yeast/Yeast_microC_G2M_1kb.cool` (19 MB) | 16 chromosomes of synthetic yeast (`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts, balanced | mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`) |
 
 `Yeast_microC_G2M_1kb.cool` is the **single-resolution** cooler in the set: every other map here is
 either a metacool or an `.mcool` ladder, so it is what exercises the path where there is no
@@ -75,39 +77,56 @@ grid the loop calls below were made on. **The `_1kb` in the name is load-bearing
 from `bin-size` before renaming it, since an earlier copy of this file was called `_2kb` and was
 not.
 
-Vite copies `public/` into `dist/` verbatim, so they land at:
+### Why they are not in `public/` any more
 
-```
-https://<owner>.github.io/<repo>/demo/Mock_microbial_community.metacool
-```
-
-They are deliberately **same-origin with the app**, which removes one class of failure
+They were, and being same-origin with the app removed one class of failure
 [hosting.md](hosting.md) is written about: no CORS preflight, no `AllowedOrigins`, no
-`ExposeHeaders`.
-
-It does not remove the rest, and Pages fails one of them. Pages honours `Range`, but it also
-**gzips `application/octet-stream`**, which is what it serves every `.metacool` and `.mcool` as — so
-ranges address the compressed stream and the reader gets bytes from the wrong offsets. The measured
-headers and the reasoning are in
+`ExposeHeaders`. It did not remove the rest, and Pages fails one of them. Pages honours `Range`, but
+it also **gzips `application/octet-stream`**, which is what it serves every `.metacool` and `.mcool`
+as — so ranges address the compressed stream and the reader gets bytes from the wrong offsets. The
+measured headers and the reasoning are in
 [hosting.md](hosting.md#transfer-compression-breaks-ranges); the short version is that no browser
 can opt out, because `Accept-Encoding` is a forbidden header name.
 
-So the demo files here open by a **fallback**: the probe sees `Content-Encoding`, refuses the ranged
-path, and the worker downloads the object whole into memory instead (`worker/sources.ts`). A
-complete gzip stream inflates correctly, so this works — but it transfers the entire file, which is
-the one property the remote path exists to avoid. That is the real reason to keep this directory
-small, and the reason **data belongs on a bucket, not on Pages**. Anything a reader is meant to
-explore rather than glance at should be published per hosting.md and reached by URL.
+Every demo therefore opened by a **fallback**: the probe saw `Content-Encoding`, refused the ranged
+path, and the worker downloaded the object whole into memory instead (`worker/sources.ts`). That
+works — a complete gzip stream inflates correctly — but it transfers the entire file, which is the
+one property the remote path exists to avoid. The landing page was demonstrating the fallback rather
+than the reader.
 
-Two things to keep in mind:
+Moving the data to S3 fixes both halves of that at once, and costs the CORS configuration back:
 
-- The three plain coolers carry no genome layer, and that is deliberate: they are what exercises the
-  plain-cooler path on the deployed site — the resolution ladder landing on its finest level, the
-  single-resolution file with no ladder at all, and a contig-only view with the genomes table absent
-  rather than empty.
-- This is ~250 MB in git history and in every Pages artifact, counting the track resources below.
-  It is a fixed cost, not a per-release one — keep it that way. New or larger datasets belong on a
-  bucket and in the catalog, not here.
+- **The app is 19 MB instead of ~265 MB.** That is every Pages artifact, every `npm run build`, and
+  the ~12 MB source map is most of what is left.
+- **The demos are read the way §11 says a published dataset is read.** S3 does not compress
+  `application/octet-stream`, so the probe succeeds and the reader takes the bounded-range path —
+  the same path a reader's own bucket will take.
+- **The bucket must answer a preflight** and expose `Content-Length` and `Content-Range`.
+  `scripts/publish-demo.sh --cors` applies that policy, and the same script verifies it afterwards
+  with hosting.md's three `curl` calls.
+
+The `demo/` directory in the repository is the upload source, and `test/unit/demo-examples.test.ts`
+reads it: disk and bucket are one tree, so a renamed file is a red CI run rather than a landing page
+where every choice 404s. The datasets stay in git history either way — deleting them from the tree
+would not shrink a clone — so keeping them checked out is what lets CI open a real `.cool` rather
+than trust a URL it cannot reach.
+
+One thing to keep in mind: the three plain coolers carry no genome layer, and that is deliberate.
+They are what exercises the plain-cooler path on the deployed site — the resolution ladder landing on
+its finest level, the single-resolution file with no ladder at all, and a contig-only view with the
+genomes table absent rather than empty.
+
+### Publishing them
+
+```bash
+./scripts/publish-demo.sh --dry-run   # what would be uploaded
+./scripts/publish-demo.sh             # sync demo/ -> s3://rsglab-data/demo/, apply CORS, verify
+```
+
+It needs the AWS CLI and credentials with `s3:PutObject` on the bucket, from any source the CLI's
+usual chain accepts. It is **not** part of `npm run build` and not part of the deploy workflow: the
+data changes on the order of once a year and the app deploys on every push, so coupling them would
+mean re-uploading 250 MB to publish a CSS fix.
 
 None of them is in the example dropdown. What the dropdown offers is the sessions below, and those
 name these.
@@ -134,16 +153,18 @@ tracks on both edges, two strands sharing a lane. All of that is already writabl
 written as one.
 
 **Names inside a session are relative, and must stay that way.** The URL of the session itself is
-built from `BASE_URL` and made absolute against the page, because a *relative* URI in a shared link
-would not re-open — `inferSource` follows a link only when its path is `http(s)://`. But the files a
-published session names are resolved against the session's own URL (`resolveConfig`), which is what
-lets one directory work in dev (`/demo/`), on Pages (`/<repo>/demo/`) and in the desktop build (a
-third origin entirely). An *exported* session names absolute URLs and is left untouched by that step,
-so the two kinds can be mixed in one file.
+absolute — built from the bucket prefix in `ui/examples.ts` — because a *relative* URI in a shared
+link would not re-open: `inferSource` follows a link only when its path is `http(s)://`. But the
+files a published session names are resolved against the session's own URL (`resolveConfig`), which
+is what makes a dataset folder self-contained: `demo/yeast/` holds two sessions and everything they
+name, and it opens from the bucket, from a copy on another bucket, or from `python3 -m http.server`
+over the directory. It is also why moving 250 MB from Pages to S3 changed no line of any
+`.metacooler.json`. An *exported* session names absolute URLs and is left untouched by that step, so
+the two kinds can be mixed in one file.
 
 ## The track resources
 
-`public/demo/` also carries eleven files that are **not maps**. They are what the annotation cards
+`demo/yeast/` also carries eleven files that are **not maps**. They are what the annotation cards
 (SPECS §8) draw: a real signal beside a real map rather than a fixture. Every one of them is aligned
 to `Yeast_microC_G2M_1kb.cool` and is meant to be used with it. Ten of the eleven are named by the
 two yeast sessions above, placed, coloured and grouped — `Yeast_Shotgun.bw` is the one neither uses,
@@ -243,11 +264,11 @@ of them consequences of being a *copy*:
 | base | `/<repo>/` | `/<repo>/v/<commit>/`, from `PINNED_BASE` |
 | service worker | emitted and registered | neither |
 | installable | yes | no — `stripPwaTags()`, shared with the desktop build |
-| `public/` | copied, 250 MB | not copied; `__DEMO_BASE__` points at the site's own `demo/` |
+| `public/` | copied (icons and manifest, ~50 KB) | not copied |
 | source maps | yes, ~13 MB | no |
 
-That leaves **~5 MB per commit**, against a Pages site limit of 1 GB of which the demo data already
-spends ~250 MB. Most of those 5 MB are the HDF5 build, whose chunk is content-hashed and identical
+That leaves **~5 MB per commit**, against a Pages site limit of 1 GB — all of which is now the app's,
+since the demo data moved to the bucket. Most of those 5 MB are the HDF5 build, whose chunk is content-hashed and identical
 between builds — so git stores one copy of it however many commits are kept, and the archive branch
 grows by a few hundred kilobytes per push rather than by five megabytes.
 
@@ -414,7 +435,7 @@ file on it.
 
 **What is cached is the app, never the data.** The precache is the built JS and CSS, the shell, the
 manifest and the three icons — about 5 MB, most of it the HDF5 build that makes opening a file
-possible offline at all. The demo datasets and track resources under `public/demo/` are 250 MB and are *not* cached, and
+possible offline at all. The demo datasets and track resources are 250 MB on the bucket and are *not* cached, and
 neither is anything the viewer opens: `fetch` in the worker answers only for URLs in that list, by
 exact match, and every other request reaches the network untouched. That is not a nicety — a remote
 `.metacool` is read with HTTP range requests, and a cache is the wrong shape for a 206.

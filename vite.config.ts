@@ -101,7 +101,12 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(COMMIT),
     __APP_COMMIT_DATE__: JSON.stringify(git(['log', '-1', '--format=%cs'])),
     __APP_TARGET__: JSON.stringify('web'),
-    __DEMO_BASE__: JSON.stringify(''),
+    // Empty means "the bucket `ui/examples.ts` names". Both targets ship it
+    // empty now that the demos are on S3 rather than in `public/`, so the two
+    // builds read the identical URLs and there is no per-target base left to
+    // get wrong. `DEMO_BASE` overrides it for a fork with its own bucket, or
+    // for a local copy of `demo/` when the network is not available.
+    __DEMO_BASE__: JSON.stringify(process.env.DEMO_BASE ?? ''),
   },
   plugins: [serviceWorker(process.env.BASE_PATH ?? '/')],
   resolve: {

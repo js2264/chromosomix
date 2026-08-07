@@ -12,11 +12,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **The demo datasets moved to S3, and the app got 14× lighter.** The five
+  published maps and eleven track resources are no longer copied into the
+  bundle out of `public/demo/`; they live on the lab bucket at
+  `https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`, one folder per
+  dataset, uploaded by `scripts/publish-demo.sh`. A `npm run build` is **19 MB
+  instead of ~265 MB**, and 12 MB of what is left is the source map.
+
+  Size was the smaller half of it. Same-origin hosting waived the CORS
+  requirements of §11 and failed a different one: GitHub Pages gzips
+  `application/octet-stream`, which is what it served every `.metacool` and
+  `.mcool` as, and a `Range` over a compressed body addresses the octets of the
+  *compressed* stream. Every demo therefore opened through the whole-object
+  fallback — the probe saw `Content-Encoding`, refused the ranged path, and the
+  worker downloaded the entire file into memory. The landing page was
+  demonstrating the escape hatch rather than the reader. S3 does not compress
+  that type, so the demos now take the bounded-range path: the one a reader's
+  own bucket will take. What comes back is the CORS half — a preflight, and
+  `Content-Length` and `Content-Range` exposed to JavaScript — which
+  `publish-demo.sh` configures and then verifies with hosting.md's three `curl`
+  calls before it reports success.
+
+  **No `.metacooler.json` changed a line.** The names inside a published
+  session are relative and are resolved against the session's own URL, so
+  moving the folder moved the session with it — which is the property that made
+  the whole change three edits instead of thirty, and the reason a dataset
+  folder stays something you can copy to another bucket.
+
+  The datasets stay checked out in the repository, under `demo/`, because that
+  directory is both what the sync uploads and what
+  `test/unit/demo-examples.test.ts` reads: disk and bucket are one tree, so a
+  renamed file is a red CI run rather than a landing page where every choice
+  404s. They are in git history either way — removing them from the tree would
+  not shrink a clone.
+
+  Two build configs lost a special case with it. The desktop build no longer
+  needs `__DEMO_BASE__` pointed at the website (and no longer trips over the
+  Pages 301 that carries no `Access-Control-Allow-Origin`), and the archived
+  pinned build no longer points its examples back at the site root. Both now
+  read the same URLs the web build does.
+
 ### Added
 
 - **The example list is a shelf of sessions.** Every entry in the landing
   page's dropdown is now a `.metacooler.json` published beside the data it
-  names, and nothing else — three of them, in `public/demo/`. A `.cool` in a
+  names, and nothing else — three of them, in `demo/`. A `.cool` in a
   dropdown can only ever offer what dropping that `.cool` offers: a map at its
   landing view, with nothing beside it. What a first-time reader should meet is
   the application doing its job, and that has been writable as a file since the

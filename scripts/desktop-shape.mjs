@@ -22,11 +22,14 @@
  *    a worker out of this build (see `src/pwa.ts`); this is where they are
  *    checked rather than trusted, because all three are edits somebody could
  *    reverse for a plausible-sounding reason.
- * 4. **No data.** The demo datasets and track resources under `public/demo/`
- *    are ~250 MB. They are what the viewer *opens*, not what it is, and this
- *    build reads them over the network exactly as it reads any other remote
- *    file. Swept in, they make every installer a quarter of a gigabyte larger
- *    and nothing reports a problem.
+ * 4. **No data.** The demo datasets and track resources are ~250 MB. They are
+ *    what the viewer *opens*, not what it is, and this build reads them over
+ *    the network exactly as it reads any other remote file. Swept in, they make
+ *    every installer a quarter of a gigabyte larger and nothing reports a
+ *    problem. They live on a bucket now rather than in `public/`, so there is
+ *    nothing in the tree for `publicDir` to sweep in today — which is a reason
+ *    to keep this check, not to drop it: the guard is what makes reintroducing
+ *    a dataset beside the app a red build instead of a fat installer.
  *
  * Pure string and array predicates, no filesystem: the caller reads, this
  * decides. Each returns a list of human-readable problems, empty when there are

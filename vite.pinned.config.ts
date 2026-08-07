@@ -26,10 +26,12 @@
  * 2. **Not installable.** `stripPwaTags()` takes the manifest and touch-icon
  *    links out for the reasons written where it lives — the sharpest being that
  *    a dock icon must not open a version somebody pinned once to check a figure.
- * 3. **No data.** `publicDir` is off, so the 250 MB under `public/demo/` is
- *    copied once, by the site build, and every archived copy points its example
- *    URLs back at it through `__DEMO_BASE__`. Archiving that directory per
- *    commit would exhaust the 1 GB Pages budget in four pushes.
+ * 3. **No data.** `publicDir` is off. The 250 MB of demo datasets are on the
+ *    bucket now, which every archived copy reaches exactly as the live build
+ *    does, so there is nothing in `public/` left to exclude — but archiving a
+ *    directory of that size per commit would exhaust the 1 GB Pages budget in
+ *    four pushes, which is why the switch stays off and is asserted after the
+ *    build rather than trusted.
  * 4. **No source maps.** ~13 MB of the ~19 MB a build weighs. They earn their
  *    place on the site, where a console error in the field is worth reading;
  *    they do not earn it twenty times over in an archive whose whole point is
@@ -65,14 +67,14 @@ if (!SHAPE.test(PINNED_BASE)) {
   )
 }
 
-/**
- * The site root, which is where the data and the version manifest live.
- *
- * Derived from the base rather than passed in as a second variable: the two
- * would have to agree, and a build in which they did not would serve its
- * examples from a directory that does not exist.
+/*
+ * There used to be a `SITE_BASE` here, stripping `v/<commit>/` off the base to
+ * find the site root, because that is where the demo data was. Nothing needs it
+ * now: the data is on the bucket, and the version manifest is fetched at
+ * runtime by `src/versions.ts`, which derives the site root from the URL the
+ * build is actually being served from — which is the more robust of the two,
+ * since it is right even for an archived build opened from a mirror.
  */
-const SITE_BASE = PINNED_BASE.replace(/v\/[0-9a-f]{7,40}\/$/, '')
 
 /**
  * The one file from `public/` an archived build still needs.
@@ -107,11 +109,19 @@ export default defineConfig({
   plugins: [stripPwaTags(), shellIcon()],
   define: {
     ...base.define,
-    // Root-relative, not an origin: an archived build is served from the same
-    // site as the data it points at, and a hard-coded origin would be one more
-    // thing to get wrong when the site moves. `demoExamples()` resolves it
-    // against `window.location`, so this lands on the site's own `demo/`.
-    __DEMO_BASE__: JSON.stringify(SITE_BASE),
+    // `__DEMO_BASE__` is deliberately *not* overridden. It used to be
+    // `SITE_BASE` — root-relative, because an archived build was served from the
+    // same site as the 250 MB of data it pointed at, and a hard-coded origin
+    // would have been one more thing to get wrong when the site moved. The data
+    // is on the bucket now, which an archived build reaches exactly as the live
+    // one does, so the spread above carries the web build's empty value and
+    // `demoExamples()` falls through to `DEMO_BUCKET`.
+    //
+    // Leaving the old line in place would have been the subtle failure: it
+    // named the *site root*, and `demoExamples()` used to append the `demo/`
+    // segment itself. It does not any more — the segment is part of the bucket
+    // prefix — so `SITE_BASE` would now build `/<repo>/yeast/…`, a 404 on every
+    // example, in the one build nobody opens for months.
   },
   build: {
     ...base.build,

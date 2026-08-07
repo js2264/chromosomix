@@ -11,9 +11,11 @@
  *
  * 1. **Only what the app is made of.** Code, styles and the shell. Anything the
  *    app *reads* — a `.metacool`, a `.mcool`, the demo datasets and track
- *    resources under `public/demo/` — is data, and data is what the viewer
- *    opens, not what it is. The demo files alone are 250 MB; precaching them
- *    would turn a page load into a download of every dataset the site ships.
+ *    resources — is data, and data is what the viewer opens, not what it is.
+ *    The demo files alone are 250 MB; they are on a bucket now, which rule 3
+ *    already excludes, but the ordering matters: this rule is what kept them
+ *    out while they were in `public/`, and it is what would keep the next
+ *    dataset out if one were put back there.
  * 2. **No source maps.** They are ~12 MB of this build, they are fetched only
  *    when devtools is open, and they are useless offline for the same reason.
  * 3. **Nothing from another origin.** A remote `.metacool` is read with range
@@ -25,10 +27,12 @@
 /**
  * Files from `public/` that are part of the app rather than data it opens.
  *
- * Named one by one, because `public/` is where both live: these four and 250 MB
- * of demo datasets and track resources sit in the same directory, and a rule
- * clever enough to tell them apart by pattern is a rule that will one day sweep
- * in a file nobody meant. Four names in a list cannot.
+ * Named one by one rather than swept up by pattern. `public/` holds only these
+ * four today, and a glob over it would be correct — right up until the next
+ * thing is put there, which is how 250 MB of demo datasets came to share the
+ * directory with them in the first place. A rule clever enough to tell app from
+ * data by pattern is a rule that will one day sweep in a file nobody meant.
+ * Four names in a list cannot.
  *
  * The manifest earns its place: without it an installed window cannot read its
  * own name and icon offline, which is the one moment it matters. The icons are
