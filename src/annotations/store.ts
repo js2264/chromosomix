@@ -17,7 +17,7 @@
  * or pretending the data is still loaded.
  */
 
-import { laneGrowsInward } from '../render/lane'
+import { laneStartsFlipped } from '../render/lane'
 import { recall, remember } from '../state/UiMemory'
 import type {
   AnnotationCard,
@@ -225,17 +225,18 @@ export class AnnotationStore {
       // map lands there — it is simply not what "add a track" should mean.
       placement,
       // A file dropped on an edge arrives already turned the right way round,
-      // for the reason {@link place} turns one that is moved: on half the edges
-      // a lane grows *away* from the matrix unless it is flipped, and a reader
-      // who aimed at an edge is asking for a lane to read beside the map, not
-      // one to read away from it. A style handed in wins — that is a restored
-      // row, which is carrying a decision already made.
+      // for the reason {@link place} turns one that is moved: beside the map a
+      // lane grows *away* from the matrix unless it is flipped, and a reader
+      // who aimed at that edge is asking for a lane to read beside the map, not
+      // one to read away from it. Which edges that is, and why the horizontal
+      // ones are not among them, is `laneStartsFlipped`'s. A style handed in
+      // wins — that is a restored row, carrying a decision already made.
       style:
         options.style ??
         (() => {
           const base = defaultStyle(options.kind, this.nextColour())
           const side = sideOf(placement)
-          return side !== 'neither' && !laneGrowsInward(side)
+          return side !== 'neither' && laneStartsFlipped(side)
             ? { ...base, flip: !base.flip }
             : base
         })(),
@@ -266,14 +267,11 @@ export class AnnotationStore {
    * Draw one row on a different edge, and turn its axis to face the map.
    *
    * Which way a lane's values grow is not a preference — it is a reading
-   * direction. Unflipped, a lane's values grow up the page or right across it,
-   * whichever the conventional orientation of its axis is
-   * ({@link laneGrowsInward}); which of those points *at* the matrix then
-   * depends on the side, so on two of the four edges the same track grows
-   * outward, away from the picture it is beside. Two stacks meeting at a corner
-   * then disagree about which way is more. Turning the axis on the way across
-   * puts the growth back towards the matrix and makes the pair read as one
-   * picture.
+   * direction, and the two axes answer it differently: a horizontal lane grows
+   * up the page wherever it is, and a vertical one grows towards the matrix
+   * ({@link laneStartsFlipped}). So a lane moving between two edges that give
+   * different answers has to be turned on the way, or it arrives reading
+   * backwards from every other lane on the stack it joins.
    *
    * A **toggle** and not an assignment, which is the whole reason this is a
    * method rather than a default. A reader who deliberately hung a bottom track
@@ -293,7 +291,7 @@ export class AnnotationStore {
     const was = sideOf(entry.placement)
     const now = sideOf(whole)
     const turned =
-      was !== 'neither' && now !== 'neither' && laneGrowsInward(was) !== laneGrowsInward(now)
+      was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
     this.update(id, {
       placement: whole,
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
@@ -308,14 +306,13 @@ export class AnnotationStore {
   }
 
   /**
-   * Turn every outward-facing axis round — what the 1D browser needs.
+   * Turn every turned axis back — what the 1D browser needs.
    *
-   * On the top and right edges a lane grows *outward*, away from the matrix, so
-   * it is drawn flipped: that is what makes the stacks meeting at a corner of
-   * one figure agree about which way is more ({@link place}). The browser has no
-   * corner and no map — every lane there is a bottom lane — so a track that came
-   * from one of those edges arrives hanging from its ceiling, which is not what
-   * anybody chose.
+   * A lane beside the map's right edge grows *outward*, away from the matrix,
+   * unless it is flipped, so it is drawn flipped ({@link place}). The browser
+   * has no map to be beside — every lane there is a horizontal one under a
+   * ruler — so a track that came from that edge arrives hanging from its
+   * ceiling, which is not what anybody chose.
    *
    * A *toggle*, and therefore its own inverse: the same call puts the picture
    * back on the way to the map, and a track deliberately hung from its ceiling
@@ -329,7 +326,7 @@ export class AnnotationStore {
     let hit = false
     this.items = this.items.map((entry) => {
       const side = sideOf(entry.placement)
-      if (side === 'neither' || laneGrowsInward(side)) return entry
+      if (side === 'neither' || !laneStartsFlipped(side)) return entry
       hit = true
       return { ...entry, style: { ...entry.style, flip: !entry.style.flip } }
     })

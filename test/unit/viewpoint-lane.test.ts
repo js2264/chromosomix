@@ -66,11 +66,12 @@ describe('switching the profile on', () => {
     expect(store.drawnOn(VIEWPOINT_EDGE).map((row) => row.id)).toEqual([VIEWPOINT_ID])
   })
 
-  // Every new lane grows towards the map, whichever side of it that is, and the
-  // profile is a lane: above the map that means hanging down towards it.
-  it('faces the map like every other new lane', () => {
+  // A horizontal lane grows up the page wherever it is, and the profile is a
+  // lane: above the map it stands on its floor exactly as a track under one
+  // does, rather than hanging from its ceiling.
+  it('reads the way every other horizontal lane reads', () => {
     showViewpoint(store, true, int)
-    expect(viewpointEntry(store)?.style.flip).toBe(true)
+    expect(viewpointEntry(store)?.style.flip).toBe(false)
   })
 
   // Hiding rather than removing is what makes the button safe to press twice:
@@ -90,11 +91,12 @@ describe('switching the profile on', () => {
     expect(store.drawnOn('left').map((row) => row.id)).toEqual([VIEWPOINT_ID])
   })
 
-  it('can be moved to any edge, and turns its axis to keep facing the map', () => {
+  it('can be moved to any edge, and turns its axis where that edge reads', () => {
     showViewpoint(store, true, int)
-    // Above the map, facing it means growing down; below it, growing up. Both
-    // are `place`'s doing, and neither is the caller's to know.
-    expect(viewpointEntry(store)?.style.flip).toBe(true)
+    // Up the page on all three of the edges that read that way; turned round on
+    // the one that does not. All of it is `place`'s doing, and none of it is the
+    // caller's to know.
+    expect(viewpointEntry(store)?.style.flip).toBe(false)
     store.place(VIEWPOINT_ID, placementOn('bottom'))
     expect(viewpointEntry(store)?.style.flip).toBe(false)
     store.place(VIEWPOINT_ID, placementOn('right'))

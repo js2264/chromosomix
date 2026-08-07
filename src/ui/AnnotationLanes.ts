@@ -47,18 +47,21 @@ import {
   GRIP_ROOM,
   GROUP_BAR,
   acrossToCanvas,
+  barPath,
   clipLane,
   drawGrip,
   drawGroupBars,
   gripAcross,
   gripBox,
   groupRuns,
+  laneGrowsInward,
   laneIsHorizontal,
   laneOutward,
   laneRect,
   laneText,
   laneX,
   laneY,
+  valueAcross,
   withinGrip,
   type LaneFrame,
 } from '../render/lane'
@@ -234,6 +237,20 @@ interface Lane {
    * place a reader is certainly looking at the moment they need it.
    */
   prompt: string | null
+  /**
+   * Where the 4C anchor falls on **this lane's own axis**, in matrix units.
+   *
+   * The band the profile is summed over is on the *other* axis, so it is
+   * nowhere in this picture; this is the complementary fact, and it is the one
+   * a reader keeps asking for — where is the viewpoint on the axis I am reading
+   * along? On a map read about its diagonal that is where the self-contact peak
+   * ought to be, which is what makes the mark worth drawing beside the line
+   * rather than only in the lane's name.
+   *
+   * `null` where the anchor names a sequence this axis does not carry, which
+   * off the diagonal is the ordinary case.
+   */
+  anchor: [number, number] | null
 }
 
 /**
@@ -774,6 +791,7 @@ export class AnnotationLanes {
       const frame = this.frameOf(edge, slot, geometry)
       const profiles: Lane['profiles'] = []
       let prompt: string | null = null
+      let anchor: [number, number] | null = null
       for (const member of [slot.entry, ...slot.overlaid]) {
         // The 4C profile comes from the block on screen rather than from a
         // fetch, so it is the one lane that draws without an axis — and the one
@@ -781,7 +799,13 @@ export class AnnotationLanes {
         if (member.kind === 'viewpoint') {
           const profile = this.viewpointProfile(edge, frame, geometry)
           if (profile === null) prompt = geometry.viewpoint.prompt
-          else profiles.push({ entry: member, profile })
+          else {
+            profiles.push({ entry: member, profile })
+            // Only beside a line there is: a mark on the axis under an empty
+            // lane that has just said the anchor is not in this view would be
+            // the lane contradicting itself.
+            anchor = laneIsHorizontal(edge) ? geometry.viewpoint.cols : geometry.viewpoint.rows
+          }
           continue
         }
         // A sequence is a value track from here: beside a map, where a pixel is
@@ -793,7 +817,7 @@ export class AnnotationLanes {
           profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
         })
       }
-      return { entry: slot.entry, overlaid: slot.overlaid, frame, profiles, prompt }
+      return { entry: slot.entry, overlaid: slot.overlaid, frame, profiles, prompt, anchor }
     })
   }
 
@@ -821,7 +845,15 @@ export class AnnotationLanes {
 
   private frameOf(edge: LaneEdge, slot: Slot, geometry: LaneGeometry): LaneFrame {
     const { plot, data, colScale, rowScale } = geometry
-    const acrossFrom = this.nearEdgeOf(edge, slot)
+    const gutter = this.gutterOf(slot)
+    // Taken off the **floor** end, which is the one end of a lane that never
+    // carries ink: the signal grows away from it, so the mark sits under the
+    // line rather than in it. Off the lane's own height rather than added to
+    // it, so switching the mark's lane on does not change how much of the map
+    // the stack takes — the lane pays for its own furniture.
+    const floorAtFar = laneGrowsInward(edge) !== slot.entry.style.flip
+    const acrossFrom = this.nearEdgeOf(edge, slot) + (floorAtFar ? 0 : laneOutward(edge) * gutter)
+    const thickness = slot.thickness - gutter
     if (laneIsHorizontal(edge)) {
       return {
         orientation: edge,
@@ -831,7 +863,7 @@ export class AnnotationLanes {
         alongFrom: data.x,
         alongTo: data.x + data.width,
         acrossFrom,
-        thickness: slot.thickness,
+        thickness,
       }
     }
     return {
@@ -842,8 +874,19 @@ export class AnnotationLanes {
       alongFrom: data.y,
       alongTo: data.y + data.height,
       acrossFrom,
-      thickness: slot.thickness,
+      thickness,
     }
+  }
+
+  /**
+   * How much of a lane's thickness is kept clear for a mark on its axis.
+   *
+   * Only the 4C lane has one, and it has it whether or not an anchor is set:
+   * reserving the band only when there is something to draw in it would shrink
+   * and grow the line under the hand that had just drawn the anchor.
+   */
+  private gutterOf(slot: Slot): number {
+    return slot.entry.kind === 'viewpoint' ? ANCHOR_GUTTER : 0
   }
 
   /**
@@ -1002,6 +1045,16 @@ export class AnnotationLanes {
       }
       ctx.restore()
       if (label !== null) this.labelLane(ctx, lane, geometry, label, state)
+
+      // Where the 4C anchor is on this lane's own axis, in the band the lane
+      // kept clear for it. Outside the clip because it is outside the data:
+      // {@link gutterOf} took the room off the floor end, which is the one end
+      // the signal never reaches. Part of the picture rather than a control, so
+      // it goes into an exported figure — a profile whose viewpoint is not
+      // marked is a claim with its subject left off.
+      if (lane.anchor !== null) {
+        anchorBar(ctx, frame, lane.anchor, entry.style.flip, entry.style.colour)
+      }
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1503,6 +1556,68 @@ function anchorMark(
 const ANCHOR_LENGTH = 7
 const ANCHOR_HALF = 4
 const ANCHOR_GAP = 2
+
+/**
+ * The band a 4C lane keeps clear of its own signal, for the mark that says
+ * where its anchor is.
+ *
+ * The bar itself is the width a group bar is, because it is the same kind of
+ * statement — "this stretch, here" — and a reader who has learned one glyph
+ * should not have to learn a second. The couple of pixels beside it are what
+ * stop it reading as part of the track's own fill.
+ */
+const ANCHOR_BAR = GROUP_BAR
+const ANCHOR_BAR_GAP = 2
+const ANCHOR_GUTTER = ANCHOR_BAR + ANCHOR_BAR_GAP
+
+/**
+ * The shortest a mark may be along the axis.
+ *
+ * A one-bin anchor on a whole-chromosome view is a fifth of a pixel, and a mark
+ * nobody can see is a mark that is not there. Square is the floor: past that it
+ * would be claiming a stretch it does not cover.
+ */
+const ANCHOR_BAR_MIN = ANCHOR_BAR
+
+/**
+ * The 4C anchor, as a bar on the lane's own genomic axis.
+ *
+ * The band the profile is summed over is on the *other* axis and so is nowhere
+ * in this picture; this is the complementary fact — where the viewpoint sits
+ * along the axis being read — and on a map read about its diagonal it is where
+ * the self-contact peak ought to be. Drawn in the lane's own colour, at the
+ * group bar's weight, in the gutter {@link AnnotationLanes.gutterOf} reserved
+ * off the floor end.
+ */
+function anchorBar(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  span: readonly [number, number],
+  flip: boolean,
+  colour: string,
+): void {
+  const from = frame.toPixel(Math.min(span[0], span[1]))
+  const to = frame.toPixel(Math.max(span[0], span[1]))
+  const low = Math.max(frame.alongFrom, Math.min(from, to))
+  const high = Math.min(frame.alongTo, Math.max(from, to))
+  // Off this stretch of the axis entirely — the reader has panned past their own
+  // viewpoint, which is an ordinary thing to do and not a thing to draw.
+  if (high < frame.alongFrom || low > frame.alongTo) return
+  const short = Math.max(0, ANCHOR_BAR_MIN - (high - low)) / 2
+
+  // Outward from the floor, which is where `valueAcross` says a value of zero
+  // is — so the bar sits under the line on every edge and either way up.
+  const floor = valueAcross(frame, flip ? 1 : 0)
+  const step = floor === 0 ? -1 : 1
+  const near = floor + step * ANCHOR_BAR_GAP
+  ctx.save()
+  ctx.fillStyle = colour
+  ctx.globalAlpha = 0.85
+  ctx.beginPath()
+  barPath(ctx, ...laneRect(frame, low - short, high + short, near, near + step * ANCHOR_BAR))
+  ctx.fill()
+  ctx.restore()
+}
 
 /**
  * One hairline across a lane, at a position along its axis.

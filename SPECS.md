@@ -735,12 +735,18 @@ place that knows which of the two is x and which way each of them points. The co
 rather than four — which is what made adding the two mirrored stacks a coordinate conversion rather
 than a second renderer.
 
-Which way a lane *grows* is the one thing that is not a coordinate. Unflipped, a horizontal lane's
-values grow up the page and a vertical one's grow right across it — the conventional orientation of
-each axis — so on two edges that points at the matrix and on the other two it points away. Every lane
-added to an edge is turned to face the matrix, and moving one between edges that disagree turns it
-again: two stacks meeting at a corner of one figure must agree about which way is more, and a reader
-who deliberately hung a track from its ceiling keeps that decision through the move.
+Which way a lane *grows* is the one thing that is not a coordinate, and the two axes answer it
+differently. A **horizontal** lane grows up the page wherever it is, above the map and below it
+alike: there is a universal reading convention for a track on a genomic axis — every browser ever
+built draws coverage rising from a floor under a ruler — and it beats every argument from the
+picture's own symmetry, because a profile above a contact map hanging from its ceiling is one a
+reader has to mirror in their head before they can compare it with the one below. A **vertical** lane
+has no such convention, so what decides is the corner: it grows towards the matrix, since a lane
+growing outward from the map's own edge reads as pointing away from the thing it is beside.
+
+Exactly one edge therefore turns a lane's axis on arrival, which is what it was when there were only
+two. Moving a lane between two edges turns it again exactly when that answer changes, so a reader who
+deliberately hung a track from its ceiling keeps that decision through the move.
 
 **The virtual 4C profile is a lane.** A 4C experiment fixes one locus and asks what it touches; a
 contact map already contains the answer for every locus at once, and extracting one is a band of the
@@ -760,6 +766,13 @@ Moving it to another edge is not a rotation but a different question. A strip ab
 sums a band of **rows** and answers per column; a strip beside it sums a band of **columns** and
 answers per row. Same anchor, same block, the transpose — which off the diagonal may have an answer
 on one axis and none on the other, and the lane says so.
+
+The lane also marks **where its anchor is on its own axis**, as a short bar in a gutter it keeps
+clear off its floor — the one end of a lane the signal never reaches. The band being summed is on the
+other axis and is therefore nowhere in the picture; this is the complementary fact, and it is the one
+a reader keeps asking for, because on a map read about its diagonal it is where the self-contact peak
+ought to be. Off the diagonal the anchor may name a sequence this axis does not carry, and then there
+is no mark.
 
 ---
 

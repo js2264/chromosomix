@@ -75,14 +75,41 @@ export function laneOutward(edge: LaneEdge): 1 | -1 {
  * towards a map that is above and away from one that is below — and this is
  * that question answered once.
  *
- * It is what the whole application phrases the flip in terms of: a lane added
- * to any edge grows towards the map, because two stacks meeting at a corner
- * must agree about which way is more, and moving a lane from one edge to
- * another turns its axis exactly when the answer here changes
- * (`AnnotationStore.place`).
+ * Pure geometry, and the only thing {@link valueAcross} consults. What a lane
+ * *starts* at is a separate question with a separate answer:
+ * {@link laneStartsFlipped}.
  */
 export function laneGrowsInward(edge: LaneEdge): boolean {
   return edge === 'bottom' || edge === 'left'
+}
+
+/**
+ * Whether a lane added to this edge has its value axis turned round.
+ *
+ * A policy rather than a geometry, and it is two rules because the two axes are
+ * not alike.
+ *
+ * **A horizontal lane always grows up the page**, above the map and below it
+ * alike. There is a universal reading convention for a track on a genomic axis
+ * — every browser ever built draws coverage rising from a floor under a ruler —
+ * and it beats every argument from the picture's own symmetry: a profile above
+ * a contact map hanging from its ceiling is a profile a reader has to mirror in
+ * their head before they can compare it with the one below.
+ *
+ * **A vertical lane grows towards the matrix.** There is no such convention for
+ * a track turned a quarter turn, so what decides is the corner: the stacks
+ * meeting at one have to agree about which way is more, and a lane growing
+ * outward from the map's own edge reads as pointing away from the thing it is
+ * beside. That is why the right-hand stack has always been turned and the
+ * left-hand one has not — on the left, growing right *is* growing towards it.
+ *
+ * So exactly one edge turns, which is what it has always been. Moving a lane
+ * between two edges turns its axis exactly when this answer changes, which is
+ * what keeps a reader's own deviation from the default through the move
+ * (`AnnotationStore.place`).
+ */
+export function laneStartsFlipped(edge: LaneEdge): boolean {
+  return !laneIsHorizontal(edge) && !laneGrowsInward(edge)
 }
 
 /** Canvas coordinate of an across-offset, on the axis the lane is thick in. */
@@ -324,6 +351,26 @@ export function drawGrip(
 export const GROUP_BAR = 3
 export const GROUP_FONT = '600 9px system-ui, sans-serif'
 
+/**
+ * A bar's outline: rounded where the context has `roundRect`, square where it
+ * does not.
+ *
+ * The export replays these through `VectorPage`, whose op list has no rounded
+ * rectangle, and a bar that vanished from the PDF would be worse than a
+ * square-cornered one. Here rather than at each caller because the fallback is
+ * the kind of two-line rule that is only ever remembered at the first of them.
+ */
+export function barPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  if (ctx.roundRect === undefined) ctx.rect(x, y, width, height)
+  else ctx.roundRect(x, y, width, height, Math.min(width, height) / 2)
+}
+
 /** A run of adjacent lanes that share one value axis. */
 export interface GroupRun {
   group: string
@@ -419,12 +466,7 @@ export function drawGroupBars(
     ctx.fillStyle = run.colour
     ctx.globalAlpha = 0.85
     ctx.beginPath()
-    // `roundRect` where the context has it, a plain rectangle where it does not:
-    // the export replays this through `VectorPage`, whose op list has no rounded
-    // rectangle, and a bar that vanished from the PDF would be worse than a
-    // square-cornered one.
-    if (ctx.roundRect === undefined) ctx.rect(x, y, width, height)
-    else ctx.roundRect(x, y, width, height, GROUP_BAR / 2)
+    barPath(ctx, x, y, width, height)
     ctx.fill()
 
     // The name runs *with* the bar — the only orientation that fits a word

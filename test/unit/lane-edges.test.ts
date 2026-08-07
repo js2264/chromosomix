@@ -28,6 +28,7 @@ import {
   laneIsHorizontal,
   laneOutward,
   laneRect,
+  laneStartsFlipped,
   valueAcross,
   type LaneFrame,
 } from '../../src/render/lane'
@@ -146,6 +147,43 @@ describe('which way an unflipped lane grows', () => {
     expect(laneGrowsInward('left')).toBe(true)
     expect(laneGrowsInward('top')).toBe(false)
     expect(laneGrowsInward('right')).toBe(false)
+  })
+
+  /**
+   * …and which way a lane *starts*, which is a policy on top of that geometry
+   * and is two rules rather than one.
+   *
+   * A horizontal lane keeps the conventional reading of a track under a ruler —
+   * up from a floor — above the map and below it alike, because that convention
+   * is universal and beats the picture's own symmetry. A vertical lane has no
+   * such convention, so the corner decides and it faces the matrix. Exactly one
+   * edge therefore turns, which is what it was when there were only two.
+   */
+  it('starts a lane turned round on the right edge and nowhere else', () => {
+    expect(laneStartsFlipped('right')).toBe(true)
+    for (const edge of ['top', 'bottom', 'left'] as const) {
+      expect(laneStartsFlipped(edge)).toBe(false)
+    }
+  })
+
+  it('starts every horizontal lane growing up the page', () => {
+    for (const edge of ['top', 'bottom'] as const) {
+      const frame = frameOf(edge)
+      const flip = laneStartsFlipped(edge)
+      const full = acrossToCanvas(frame, valueAcross(frame, flip ? 0 : 1))
+      const floor = acrossToCanvas(frame, valueAcross(frame, flip ? 1 : 0))
+      expect(full).toBeLessThan(floor)
+    }
+  })
+
+  it('starts every vertical lane growing towards the map', () => {
+    for (const edge of ['left', 'right'] as const) {
+      const frame = frameOf(edge)
+      const flip = laneStartsFlipped(edge)
+      // Towards the map is `across` decreasing, whichever canvas direction that
+      // is: `across` runs outward by construction.
+      expect(valueAcross(frame, flip ? 0 : 1)).toBeLessThan(valueAcross(frame, flip ? 1 : 0))
+    }
   })
 
   it('draws a full value up the page on both horizontal edges', () => {

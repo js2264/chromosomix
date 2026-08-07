@@ -451,14 +451,19 @@ describe('the annotations published beside a demo map', () => {
 
 /**
  * Which way a lane's values grow is a reading direction rather than a
- * preference. Unflipped, a lane grows up the page or right across it — the
- * conventional orientation of its axis — and which of those points *at* the
- * matrix depends on which side of it the lane is: a bottom lane grows towards
- * the map, and the same track beside it grows *away* unless it is turned round.
- * So moving a track between two stacks that disagree turns it, and the turn is a
- * toggle — a reader who deliberately hung a bottom track from its ceiling has
- * said something about it, and setting `flip` from the edge would throw that
- * away on the way across.
+ * preference, and the two axes answer it differently.
+ *
+ * A **horizontal** lane grows up the page wherever it is: every browser ever
+ * built draws coverage rising from a floor under a ruler, and a profile above a
+ * contact map hanging from its ceiling is one a reader has to mirror in their
+ * head before they can compare it with the one below. A **vertical** lane has no
+ * such convention, so what decides is the corner: it grows towards the matrix,
+ * which beside the map's right edge means turning it round.
+ *
+ * So one edge turns, and moving a track between two edges that give different
+ * answers turns it on the way. The turn is a toggle — a reader who deliberately
+ * hung a bottom track from its ceiling has said something about it, and setting
+ * `flip` from the edge would throw that away on the way across.
  */
 describe('the edge a track is drawn on, and which way it grows', () => {
   const track = (store: AnnotationStore, placement?: Partial<Placement>) =>
@@ -479,18 +484,21 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
-  // The two mirrors, and the pairs are what make the rule one rule: `bottom` and
-  // `left` both grow towards the map unflipped, `top` and `right` both grow
-  // away, so a move within a pair turns nothing and a move across one turns.
+  // Three of the four edges read the same way, so a move between any two of them
+  // turns nothing: a track under the map, over it, or to its left all grow the
+  // way a track under a ruler does.
   it('turns nothing on a move between two edges that read the same way', () => {
     const store = freshStore(`flip-pair-${Math.random()}.cool`)
     const entry = track(store)
-    store.place(entry.id, placementOn('left'))
-    expect(store.byId(entry.id)?.style.flip).toBe(false)
-    store.place(entry.id, placementOn('top'))
-    expect(store.byId(entry.id)?.style.flip).toBe(true)
+    for (const edge of ['top', 'left', 'bottom', 'top'] as const) {
+      store.place(entry.id, placementOn(edge))
+      expect(store.byId(entry.id)?.style.flip).toBe(false)
+    }
+    // …and only the one that does not turns it, in either direction.
     store.place(entry.id, placementOn('right'))
     expect(store.byId(entry.id)?.style.flip).toBe(true)
+    store.place(entry.id, placementOn('top'))
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
   // A toggle, not an assignment: the reader's own decision survives the round
@@ -516,15 +524,31 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
-  // A file dropped on an edge arrives already turned round, for the same
-  // reason: the reader aimed at that edge, not at that orientation. Every new
-  // lane grows towards the map, whichever side of it that is.
-  it('starts a track dropped on an edge already facing the map', () => {
+  // A file dropped on an edge arrives already turned the right way round, for
+  // the same reason: the reader aimed at that edge, not at that orientation.
+  it('starts a track dropped on an edge reading the way that edge reads', () => {
     const store = freshStore(`flip4-${Math.random()}.cool`)
-    expect(track(store, placementOn('right')).style.flip).toBe(true)
-    expect(track(store, placementOn('top')).style.flip).toBe(true)
+    // Up the page, above the map and below it alike.
+    expect(track(store, placementOn('top')).style.flip).toBe(false)
     expect(track(store, placementOn('bottom')).style.flip).toBe(false)
+    // Towards the matrix, which on the left is already which way it grows.
     expect(track(store, placementOn('left')).style.flip).toBe(false)
+    expect(track(store, placementOn('right')).style.flip).toBe(true)
+  })
+
+  // On the way to the 1D browser, where there is no map to be beside and every
+  // lane is a horizontal one under a ruler. Only the edge that turns, turns
+  // back — and it is its own inverse, so the round trip is a no-op.
+  it('turns the axes the browser would read backwards, and only those', () => {
+    const store = freshStore(`flip5-${Math.random()}.cool`)
+    const right = track(store, placementOn('right'))
+    const top = track(store, placementOn('top'))
+    store.turnAxesForBrowser()
+    expect(store.byId(right.id)?.style.flip).toBe(false)
+    expect(store.byId(top.id)?.style.flip).toBe(false)
+    store.turnAxesForBrowser()
+    expect(store.byId(right.id)?.style.flip).toBe(true)
+    expect(store.byId(top.id)?.style.flip).toBe(false)
   })
 })
 
