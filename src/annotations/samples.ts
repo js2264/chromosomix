@@ -15,6 +15,7 @@
  */
 
 import type { LocusAxis } from '../render/locus'
+import { combineSamples, type TrackOp } from './derived'
 import type { TrackSampleSet } from './types'
 import type { AnnotationClient } from './worker/client'
 
@@ -83,7 +84,29 @@ export class SampleCache {
     domain: readonly [number, number]
     /** Pixels the view spans, which is what the resolution is chosen against. */
     pixels: number
+    /**
+     * The two rows this one is computed from, where it is computed from any.
+     *
+     * Handed in rather than looked up, because this cache deliberately knows
+     * nothing about the store: it is keyed on ids and windows and holds no
+     * opinion about what a row *is*. The caller reads `derivedFrom` off the
+     * entry it is about to draw and passes it through.
+     */
+    derived?: { a: string; b: string; op: TrackOp }
   }): TrackSampleSet | null {
+    // A derived lane fetches nothing of its own. Both operands are asked for the
+    // same window at the same resolution — through this same method, so they are
+    // cached, padded and rounded exactly as any other lane's are — and combined
+    // per frame. The combination is one pass over a few thousand intervals and
+    // is deliberately not cached: it would need invalidating whenever either
+    // operand moved, and the two of them already own that question.
+    const derived = options.derived
+    if (derived !== undefined) {
+      const a = this.samplesFor({ ...options, entry: derived.a, derived: undefined })
+      const b = this.samplesFor({ ...options, entry: derived.b, derived: undefined })
+      return combineSamples(a, b, derived.op)
+    }
+
     const key = `${options.entry}:${options.scope}`
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)

@@ -22,6 +22,12 @@
  * behind the chevron is what genuinely wants a form.
  */
 
+import {
+  TRACK_OPS,
+  TRACK_OP_LABELS,
+  derivedTrackLabel,
+  isTrackOp,
+} from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import {
@@ -429,10 +435,24 @@ export class AnnotationCard {
       for (const entry of chosen) this.props.store.restyle(entry.id, { colour: colour.value })
     })
 
+    // Exactly two, and both of them profiles. A comparison of three tracks is
+    // not a thing, and a comparison of a gene model against a bigWig is not
+    // either — so the control appears when the selection *is* a pair rather than
+    // appearing always and refusing when clicked. The order is the order they
+    // are listed in, which is the order the reader put them in and the only one
+    // this code could justify: `a / b` and `b / a` are different questions and
+    // nothing here can guess which was meant. The row that results says which
+    // way round it went, and the ⇄ on it is how the other way is asked for.
+    const pair =
+      chosen.length === 2 && chosen.every((entry) => entry.kind === 'track')
+        ? this.combineControl(chosen[0], chosen[1])
+        : null
+
     return el(
       'div',
       { class: 'ann-batch' },
       el('span', { class: 'ann-batch-count', text: `${chosen.length} selected` }),
+      ...(pair === null ? [] : [pair]),
       group,
       colour,
       button('same height', () => {
@@ -453,6 +473,52 @@ export class AnnotationCard {
         this.render()
       }, { class: 'btn btn-quiet' }),
     )
+  }
+
+  /**
+   * Make one lane out of the two that are ticked.
+   *
+   * A dropdown that acts on selection rather than a button beside a picker,
+   * because the operation *is* the whole of the decision: the two operands are
+   * already chosen, and asking for them again in a dialog would be asking the
+   * reader to repeat the gesture they just made.
+   *
+   * The ticks are cleared afterwards for {@link batchBar}'s reason — the gesture
+   * is finished, the result is a row of its own, and leaving the pair selected
+   * leaves the next batch action pointing at the operands of something.
+   */
+  private combineControl(a: AnnotationEntry, b: AnnotationEntry): HTMLElement {
+    const select = el('select', { class: 'select' })
+    select.appendChild(el('option', { value: '', text: 'combine…' }))
+    for (const op of TRACK_OPS) {
+      select.appendChild(el('option', { value: op, text: TRACK_OP_LABELS[op] }))
+    }
+    select.value = ''
+    select.title = `One lane from ${a.label} and ${b.label}, drawn as their comparison`
+    select.addEventListener('change', () => {
+      const op = select.value
+      if (!isTrackOp(op)) return
+      const entry = this.props.store.begin({
+        card: 'linear',
+        kind: 'track',
+        // Nothing to name and nothing to re-read: the values are computed from
+        // two rows that are already here, exactly as the 4C profile is computed
+        // from the block already on screen.
+        source: { kind: 'derived', name: derivedTrackLabel(a.label, b.label, op) },
+        label: derivedTrackLabel(a.label, b.label, op),
+        placement: a.placement,
+      })
+      this.props.store.update(entry.id, {
+        derivedFrom: { a: a.id, b: b.id, op },
+        // Ready the moment it exists: there is no file behind it to wait for,
+        // and a lane is drawn when it is ready.
+        status: 'ready',
+        summary: `${TRACK_OP_LABELS[op]} of two tracks`,
+      })
+      this.ticked.clear()
+      this.render()
+    })
+    return select
   }
 
   private grip(entry: AnnotationEntry, index: number, total: number): HTMLElement {

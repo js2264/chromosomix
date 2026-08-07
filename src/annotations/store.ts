@@ -333,9 +333,34 @@ export class AnnotationStore {
     if (hit) this.changed()
   }
 
+  /**
+   * Take a row out, and with it anything computed from it.
+   *
+   * The cascade is not a courtesy. A derived row holds no data — it names two
+   * other rows and reads whatever they have in hand (`annotations/derived.ts`) —
+   * so an operand that is removed leaves a lane that can never draw again,
+   * keeping its name, its colour and its place in the stack while showing
+   * nothing. Removing it is the only outcome that is not a lie; the alternative
+   * of refusing to remove the operand is worse, since it makes an ordinary row
+   * undeletable for a reason the reader cannot see.
+   */
   remove(id: string): void {
     const before = this.items.length
-    this.items = this.items.filter((entry) => entry.id !== id)
+    const gone = new Set([id])
+    // Iterated to a fixed point, because a derived row may itself be an operand:
+    // a ratio of two ratios is a reasonable thing to build, and one pass would
+    // leave the outer one orphaned.
+    for (;;) {
+      const next = this.items.filter(
+        (entry) =>
+          !gone.has(entry.id) &&
+          entry.derivedFrom !== undefined &&
+          (gone.has(entry.derivedFrom.a) || gone.has(entry.derivedFrom.b)),
+      )
+      if (next.length === 0) break
+      for (const entry of next) gone.add(entry.id)
+    }
+    this.items = this.items.filter((entry) => !gone.has(entry.id))
     if (this.items.length !== before) this.changed()
   }
 
