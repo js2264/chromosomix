@@ -178,7 +178,18 @@ export interface ParsedRange {
 // Rendering (spec §7)
 // ---------------------------------------------------------------------------
 
-export type Transform = 'log1p' | 'log10' | 'none'
+/**
+ * The scale a value is drawn on.
+ *
+ * The first three mirror `metacooler show`'s `_transform_matrix` and are frozen
+ * by spec §7.1's parity requirement. `log2` is the viewer's own and exists for
+ * the values the CLI cannot produce: a ratio — of two files, or of a cell to its
+ * distance-decay baseline — is a quantity whose neutral point is `1`, and only a
+ * logarithm puts twice and half the same distance either side of it. Base two
+ * rather than ten because the readings that matter are doublings, and because
+ * every Hi-C tool that draws a ratio draws `log2` of it.
+ */
+export type Transform = 'log1p' | 'log10' | 'log2' | 'none'
 
 export interface ColorScale {
   /** Low bound in transformed units. `NaN` asks for the auto rule. */

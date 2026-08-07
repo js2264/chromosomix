@@ -78,6 +78,39 @@ const REDS_STOPS = [
   '#CB181D', '#A50F15', '#67000D',
 ]
 
+/**
+ * `RdBu_r`: ColorBrewer's eleven-class red–blue, reversed, for the values that
+ * have a **middle** rather than a floor.
+ *
+ * Every other ramp in this file is sequential, because every value the viewer
+ * could draw until now was a count and a count has a bottom. A ratio does not:
+ * it has a neutral point, and twice and half are the same size of departure in
+ * opposite directions. Drawn on a sequential ramp, "the two files agree" is some
+ * arbitrary mid-tone with no edge to it, and the eye — which finds a hue
+ * boundary instantly and a lightness step slowly — has nothing to find.
+ *
+ * Reversed, so **red is more and blue is less**. That is the direction every
+ * Hi-C tool draws a log ratio in, and getting it backwards would be the kind of
+ * error that never announces itself.
+ *
+ * The centre stop is `#F7F7F7` rather than `#FFFFFF`: unlike `Reds`, the middle
+ * of a diverging map is not the empty background but a real reading — "measured,
+ * and equal" — and it has to be distinguishable from the paper a `NaN` leaves
+ * behind. `render/derive.ts` produces `NaN` for exactly the cells where no
+ * comparison could be made, and those two must not look the same.
+ *
+ * Not in {@link COLOR_VISION_SAFE_COLORMAPS}, and not because it is unsafe: that
+ * list's criterion is monotonic lightness, which a diverging map is built to
+ * violate — its lightness peaks in the middle by design. Red against blue is the
+ * one hue pair that survives the common deficiencies, which is why ColorBrewer
+ * marks this scheme colour-blind safe, and the lightness ramp within each arm
+ * carries the magnitude even where the hue does not.
+ */
+const RDBU_R_STOPS = [
+  '#053061', '#2166AC', '#4393C3', '#92C5DE', '#D1E5F0', '#F7F7F7', '#FDDBC7',
+  '#F4A582', '#D6604D', '#B2182B', '#67001F',
+]
+
 /** Interpolate hex stops to a flat `size * 3` RGB table, as the tables are. */
 function rampFromStops(stops: readonly string[], size: number): number[] {
   const points = stops.map((hex) => [
@@ -111,10 +144,33 @@ const RGB_TABLES: Record<string, readonly number[]> = {
   cividis: CIVIDIS_RGB,
   viridis: VIRIDIS_RGB,
   magma: MAGMA_RGB,
+  RdBu_r: rampFromStops(RDBU_R_STOPS, COLORMAP_SIZE),
 }
 
 /** Every colormap the viewer offers, in the order the picker should list them. */
 export const COLORMAP_NAMES: string[] = Object.keys(RGB_TABLES)
+
+/**
+ * The ramps built for a value with a neutral middle, and the one a derived map
+ * opens on.
+ *
+ * A list rather than a single name because the set is what the *picker* needs:
+ * choosing a sequential ramp for a ratio is a legitimate thing to want — it is
+ * how you read the magnitude of a departure without its direction — so nothing
+ * here forbids it. What the panel does with this is pick the opening colormap
+ * when a derivation is switched on, and put it back when it is switched off, so
+ * that a reader who never touches the control is never shown a ratio on a ramp
+ * that cannot express one.
+ */
+export const DIVERGING_COLORMAPS: string[] = ['RdBu_r']
+
+/** What a derived map with a neutral value opens on. */
+export const DEFAULT_DIVERGING_COLORMAP = 'RdBu_r'
+
+/** Whether `name` is one of the ramps built around a middle. */
+export function isDivergingColormap(name: string): boolean {
+  return DIVERGING_COLORMAPS.includes(name)
+}
 
 /**
  * Colormaps that stay monotonic in perceived lightness for the common forms of
