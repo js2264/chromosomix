@@ -2980,6 +2980,105 @@ export class MatrixPanel {
     this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
+    const { dense, presentationMoved } = this.derive(data, second)
+    // Two legends for two files' counts — and under a ratio or a difference
+    // there are no longer two sets of counts in the square but one derived
+    // field, so the second strip would be a second scale for numbers that do
+    // not exist.
+    this.barCanvas2.classList.toggle('hidden', this.second === null || this.neutral !== null)
+    // Two legends need more room than one: each caption gains a triangle and
+    // there are two of them side by side, and a clipped caption on a legend is
+    // worse than a narrower plot.
+    this.barSlot.classList.toggle('is-compare', this.second !== null)
+    // The second legend is a function of the gain as well as of the colour
+    // scale, and the gain is recomputed per block. Without this the legend
+    // redraw is skipped whenever a *pinned* clip survives a navigation, and the
+    // second file's ticks keep the previous block's numbers.
+    this.painted = null
+    this.heatmap.setMatrix(dense, separatorsFor(data))
+    // A cell is a bin, so a block's span in cells is its length in base pairs:
+    // the contigs worth naming in a 300-contig genome are the long ones, and
+    // they are named however many short ones surround them. Above bin level a
+    // cell *is* a contig or a genome, every block is one cell wide, and the
+    // rule has nothing to read — hence 0, which turns it off.
+    this.heatmap.setLabelMinSpan(
+      data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
+    )
+    this.heatmap.setAxisCoords({
+      rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
+      cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
+    })
+    // The annotations' view of the same two axes. Rebuilt per block rather than
+    // patched, so a stale mapping can never be drawn over fresh data — the same
+    // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
+    // Built for *every* block, and no longer only where there are annotations to
+    // draw against it: the lanes were the first reader of §8.4's one coordinate
+    // model and the line under the map is the second, and a file with no tracks
+    // on it still knows what window it is showing.
+    const context = this.options.annotations
+    const shared = {
+      level: data.level,
+      binsize: this.options.binsize,
+      contigLength: context?.contigLength ?? ((): number | undefined => undefined),
+    }
+    this.locusAxes = {
+      rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+      cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
+    }
+    // The presentation a derivation took over, recorded now that the block it
+    // was chosen for is actually in. Announced from here rather than from
+    // `syncDivergingScale` so the store is not patched — and the router not
+    // re-entered — half way through installing a matrix.
+    if (presentationMoved) {
+      this.options.onScaleChange?.({
+        transform: this.transform,
+        colormap: this.colormap,
+        vmin: this.manualVmin,
+        vmax: this.manualVmax,
+      })
+    }
+    // Unconditionally, because every file has lanes now: the 4C profile is one,
+    // and it is drawn against the same two axes even where no annotation can be.
+    this.lanes.setAxes(this.locusAxes)
+    // The caret was measured into a lane of the outgoing block, and the number
+    // in it belongs to a picture that no longer exists.
+    this.laneEditor?.close()
+    // The lane's name follows the anchor until the reader renames it, and a new
+    // block can put the anchor in view or take it out of it.
+    syncViewpointLabel(this.laneStore, fmt.int)
+    this.heatmap.setScale(this.scale())
+    this.setBusy(false)
+    this.schedule()
+  }
+
+  /** Show or hide the "loading" veil; the canvas keeps its last picture. */
+  /**
+   * The bin size of the grid actually on screen, when the read decided it.
+   *
+   * A view builds its panel before it knows how coarse the block will come
+   * back — a genome's contig count is not known until the range resolves — so
+   * the resolution is set from the result rather than guessed at construction.
+   * Every coordinate the panel computes is `binsize` times a cell offset, so
+   * this must be called *before* {@link setData} or the first frame is drawn
+   * against the previous grid.
+   */
+  setResolution(binsize: number): void {
+    if (binsize > 0) this.options.binsize = binsize
+  }
+
+
+  /**
+   * Turn the block that was read into the block that is drawn.
+   *
+   * Split out of {@link setData} because it has two callers with opposite needs:
+   * a new block refits the view, and a *recomputed* one must not — see
+   * {@link rederive}. Everything about the picture except its geometry is
+   * decided here.
+   */
+  private derive(
+    data: MatrixResult,
+    second: MatrixResult | undefined,
+  ): { dense: DenseMatrix; presentationMoved: boolean } {
     // Every derivation is applied to each file *separately* and before the two
     // are put together, because each is a statement about one library: file 2's
     // coverage bias is file 2's, and a baseline measured across a ratio is a
@@ -3027,79 +3126,58 @@ export class MatrixPanel {
             { op, gain },
           )
     this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
-    this.syncDivergingScale()
-    const dense =
+    const presentationMoved = this.syncDivergingScale()
+    const dense: DenseMatrix =
       merged === undefined
         ? { ...toDense(data), values: mine.values }
         : { ...toDense(data), values: merged.values }
     this.drawn = dense.values
-    this.barCanvas2.classList.toggle('hidden', this.second === null)
-    // Two legends need more room than one: each caption gains a triangle and
-    // there are two of them side by side, and a clipped caption on a legend is
-    // worse than a narrower plot.
-    this.barSlot.classList.toggle('is-compare', this.second !== null)
-    // The second legend is a function of the gain as well as of the colour
-    // scale, and the gain is recomputed per block. Without this the legend
-    // redraw is skipped whenever a *pinned* clip survives a navigation, and the
-    // second file's ticks keep the previous block's numbers.
-    this.painted = null
-    this.heatmap.setMatrix(dense, separatorsFor(data))
-    // A cell is a bin, so a block's span in cells is its length in base pairs:
-    // the contigs worth naming in a 300-contig genome are the long ones, and
-    // they are named however many short ones surround them. Above bin level a
-    // cell *is* a contig or a genome, every block is one cell wide, and the
-    // rule has nothing to read — hence 0, which turns it off.
-    this.heatmap.setLabelMinSpan(
-      data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
-    )
-    this.heatmap.setAxisCoords({
-      rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
-      cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
-    })
-    // The annotations' view of the same two axes. Rebuilt per block rather than
-    // patched, so a stale mapping can never be drawn over fresh data — the same
-    // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
-    // Built for *every* block, and no longer only where there are annotations to
-    // draw against it: the lanes were the first reader of §8.4's one coordinate
-    // model and the line under the map is the second, and a file with no tracks
-    // on it still knows what window it is showing.
-    const context = this.options.annotations
-    const shared = {
-      level: data.level,
-      binsize: this.options.binsize,
-      contigLength: context?.contigLength ?? ((): number | undefined => undefined),
-    }
-    this.locusAxes = {
-      rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
-      cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-    }
-    // Unconditionally, because every file has lanes now: the 4C profile is one,
-    // and it is drawn against the same two axes even where no annotation can be.
-    this.lanes.setAxes(this.locusAxes)
-    // The caret was measured into a lane of the outgoing block, and the number
-    // in it belongs to a picture that no longer exists.
-    this.laneEditor?.close()
-    // The lane's name follows the anchor until the reader renames it, and a new
-    // block can put the anchor in view or take it out of it.
-    syncViewpointLabel(this.laneStore, fmt.int)
-    this.heatmap.setScale(this.scale())
-    this.setBusy(false)
-    this.schedule()
+    // The strip is the only place the numbers beside it are named, and a ratio
+    // drawn under a caption reading `count` is worse than one with no caption.
+    // `count` where nothing was derived, rather than `deriveBlock`'s own word
+    // for the identity: the strip has said `count` since before any of this
+    // existed and the commonest picture in the app should not have its legend
+    // reworded by a feature it is not using.
+    const barLabel = this.derivedLabel() ?? this.derived?.label ?? 'counts'
+    this.colorbar.setCaption(barLabel === 'counts' ? 'count' : barLabel)
+    return { dense, presentationMoved }
   }
 
-  /** Show or hide the "loading" veil; the canvas keeps its last picture. */
   /**
-   * The bin size of the grid actually on screen, when the read decided it.
+   * Recompute the picture from the block already in hand.
    *
-   * A view builds its panel before it knows how coarse the block will come
-   * back — a genome's contig count is not known until the range resolves — so
-   * the resolution is set from the result rather than guessed at construction.
-   * Every coordinate the panel computes is `binsize` times a cell offset, so
-   * this must be called *before* {@link setData} or the first frame is drawn
-   * against the previous grid.
+   * What a change of derivation is: the same cells, in different units. Reading
+   * them again would cost a worker round trip at best and, on a gated
+   * whole-genome view (§7.3), would put a 26-million-pixel scan back behind its
+   * button — so the panel is handed the new presentation and re-runs the
+   * arithmetic over the block it is holding.
+   *
+   * The presentation is *replaced*, not merged, because a stale `derive` object
+   * is exactly the bug this exists to avoid: the session builds a fresh one per
+   * render and the panel's captured reference does not follow it. Written into
+   * `options` in place, as {@link setResolution} writes the bin size — the
+   * reference is fixed, the settings on it are not.
    */
-  setResolution(binsize: number): void {
-    if (binsize > 0) this.options.binsize = binsize
+  rederive(derive: DerivePresentation | undefined, compare?: ComparePresentation): void {
+    const data = this.data
+    if (data === null) return
+    this.options.derive = derive
+    if (compare !== undefined) this.options.compare = compare
+    const { dense, presentationMoved } = this.derive(data, this.second?.data)
+    this.heatmap.setValues(dense.values)
+    // The colourbar is a function of the scale *and* of what the numbers are, and
+    // neither the transform nor the clip need have moved for a ratio to want a
+    // different bar from a count.
+    this.painted = null
+    if (presentationMoved) {
+      this.options.onScaleChange?.({
+        transform: this.transform,
+        colormap: this.colormap,
+        vmin: this.manualVmin,
+        vmax: this.manualVmax,
+      })
+    }
+    this.schedule()
   }
 
   setBusy(busy: boolean, message = 'loading…'): void {
@@ -3146,20 +3224,20 @@ export class MatrixPanel {
    * boolean would see no transition and leave a difference — which is signed and
    * centred on zero — being drawn on `log2`.
    */
-  private syncDivergingScale(): void {
+  private syncDivergingScale(): boolean {
     const wanted = preferredTransform(this.neutral)
-    if (wanted === this.divergingApplied) return
+    if (wanted === this.divergingApplied) return false
     if (wanted === null) {
       const back = this.divergingRestore
       this.divergingRestore = null
       this.divergingApplied = null
-      if (back === null) return
+      if (back === null) return false
       this.transform = back.transform
       this.colormap = back.colormap
       this.manualVmin = back.vmin
       this.manualVmax = back.vmax
       this.syncScaleControls()
-      return
+      return true
     }
     this.divergingRestore ??= {
       transform: this.transform,
@@ -3177,6 +3255,7 @@ export class MatrixPanel {
     this.manualVmax = undefined
     this.divergingApplied = wanted
     this.syncScaleControls()
+    return true
   }
 
   /**
@@ -3226,12 +3305,16 @@ export class MatrixPanel {
   }
 
   /**
-   * Put the scale on screen without announcing it.
+   * Put the scale on screen. The announcement is the caller's, and
+   * {@link setData} makes it once the block is in.
    *
-   * Deliberately silent, for {@link applyScale}'s reason read the other way
-   * round: this is not a change the reader made, so echoing it would write a
-   * transform nobody chose into the URL. Nothing is lost by staying quiet — a
-   * link carries the derivation, and a panel that receives one runs this again.
+   * Staying silent was tried and is not available: the session calls
+   * {@link applyScale} with the *state's* scale on every render of a whole-file
+   * view, so a transform this panel chose without recording it is overwritten by
+   * the next render for any reason at all — and the reason is usually the very
+   * patch that turned the derivation on. Announcing also makes the link right,
+   * which is the stronger argument: a shared ratio map reproduces as a ratio map
+   * on a diverging ramp rather than as one on `log1p` counts.
    */
   private syncScaleControls(): void {
     this.transformSelect.value = this.transform
