@@ -76,6 +76,13 @@ import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import type { ScoreChoice } from './scores'
+import { ViewpointLane } from './ViewpointLane'
+import {
+  getViewpoint,
+  setViewpointAnchor,
+  setViewpointShown,
+  subscribeViewpoint,
+} from './viewpoint'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import {
@@ -364,6 +371,14 @@ export class MatrixPanel {
   private readonly groupsCard: GroupsCard | null
   /** The open feature card, so a second click replaces it rather than stacking. */
   private featureDialog: Modal | null = null
+  /**
+   * The 4C strip above the map. Built always, mounted always, and *empty* until
+   * the reader turns it on — a canvas of zero height costs a repaint nothing,
+   * and building it lazily would mean the grid reflowing the first time it
+   * appeared, which moves the map under the hand that just asked for it.
+   */
+  private readonly viewpointLane = new ViewpointLane()
+  private unsubscribeViewpoint: () => void = () => {}
 
   private readonly canvas: HTMLCanvasElement
   private readonly barCanvas: HTMLCanvasElement
@@ -611,6 +626,10 @@ export class MatrixPanel {
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
       onLabelClick: (axis, block) => this.options.onLabelClick?.(axis, block.label),
+      // Shift-drag names the 4C anchor. Reported as rows of the block and turned
+      // into a *locus* here, because this is the object that knows the axis: the
+      // anchor has to outlive the block it was drawn on, and rows do not.
+      onAnchor: (rows) => this.setAnchorRows(rows),
       // Only wired when the view wants it; without it a drag zooms, which is
       // the renderer's own behaviour.
       ...(options.onSelectRegion === undefined
@@ -884,6 +903,10 @@ export class MatrixPanel {
       this.colorbar2.draw()
       this.schedule()
     })
+    // A change of anchor or of visibility is a different picture, and the strip
+    // is drawn inside the map's own frame — so this is a repaint request rather
+    // than a draw of its own, which keeps the two in step by construction.
+    this.unsubscribeViewpoint = subscribeViewpoint(() => this.schedule())
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
@@ -983,6 +1006,11 @@ export class MatrixPanel {
             { class: 'btn btn-icon', size: 15 },
           ),
           ...MATRIX_OPTIONS.map(optionToggle),
+          // The 4C strip. In this row rather than in Tracks because it is a
+          // reading *of the matrix* — the columns of the block on screen, summed
+          // over a band of its rows — and it appears attached to the map rather
+          // than in the stack beside it.
+          this.viewpointToggle(),
         ),
       ),
     )
@@ -1057,6 +1085,7 @@ export class MatrixPanel {
     this.grid = el(
       'div',
       { class: 'panel-grid' },
+      this.viewpointLane.el,
       wrap,
       ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
       ...this.laneLayers.values(),
@@ -1476,6 +1505,7 @@ export class MatrixPanel {
     // mode on leaves a button reading "Done" that nothing will ever answer.
     this.cancelPicking()
     this.unsubscribePlotOptions()
+    this.unsubscribeViewpoint()
     this.unsubscribeTextScale()
     this.themeWatchers()
     this.narrowWatcher()
@@ -2025,6 +2055,111 @@ export class MatrixPanel {
    * ones it draws in. That is the whole of §8.4's "nothing computes a second
    * mapping", stated as one function.
    */
+  /**
+   * The button that shows the 4C strip, lit while it is up.
+   *
+   * A toggle and not a two-state pair, for the reason every overlay in this row
+   * is one: what it currently *is* is visible in the picture, and a control that
+   * names its own state leaves a reader guessing whether they are reading a
+   * label or an action.
+   */
+  private viewpointToggle(): HTMLElement {
+    const node = iconButton(
+      'chart-line',
+      'A virtual 4C profile above the map: pick an anchor with Shift + drag, and this is ' +
+        'the sum of every column over it — computed from the block on screen, at the ' +
+        'resolution it is drawn at.',
+      () => setViewpointShown(!getViewpoint().shown),
+      { class: 'btn btn-icon btn-toggle', size: 15 },
+    )
+    const sync = (): void => node.setAttribute('aria-pressed', String(getViewpoint().shown))
+    sync()
+    this.laneListeners.push(subscribeViewpoint(sync))
+    return node
+  }
+
+  /**
+   * Turn a band of block rows into the locus the store keeps.
+   *
+   * The gesture happens on a picture and the answer has to survive the picture:
+   * pan, zoom, change resolution, open the browser, and the anchor still names
+   * the same stretch of the same sequence. Rows are none of that — they are an
+   * offset into whichever block was loaded when the hand moved.
+   *
+   * The end takes the *next* bin's start rather than the last bin's, so the span
+   * covers the whole of the last row rather than stopping at its first base.
+   */
+  private setAnchorRows(rows: [number, number]): void {
+    const axis = this.locusAxes.rows
+    if (axis === null) return
+    const from = axis.unitToLocus(rows[0])
+    const to = axis.unitToLocus(Math.max(rows[0], rows[1] - 1))
+    const segment = axis.segmentAt(rows[0])
+    if (from === null || to === null || segment === null) return
+    setViewpointAnchor({
+      contig: from.contig,
+      start: Math.round(from.bp),
+      end: Math.round(to.bp + segment.bpPerUnit),
+    })
+  }
+
+  /**
+   * Paint the 4C strip, or collapse it to nothing.
+   *
+   * Height zero rather than `display: none`, so the canvas stays in the grid and
+   * the row it occupies simply has no size: turning the lane on and off then
+   * costs a reflow of one track rather than a re-layout of the panel, and the
+   * map does not jump under the pointer that just pressed the button.
+   */
+  private drawViewpoint(): void {
+    const shown = getViewpoint().shown
+    this.viewpointLane.el.classList.toggle('hidden', !shown)
+    if (!shown) return
+    const palette = readCanvasPalette(this.canvas)
+    this.viewpointLane.draw(
+      {
+        data: this.heatmap.dataRect,
+        colScale: this.heatmap.scaleX,
+        cssWidth: this.heatmap.cssSize.width,
+        matrix: this.heatmap.block,
+        rows: this.anchorRows(),
+        palette: {
+          label: palette.labelColor,
+          halo: palette.labelHaloColor,
+          line: palette.plotBorderColor,
+        },
+      },
+      this.heatmap.devicePixelRatio,
+    )
+  }
+
+  /**
+   * The anchor as rows of the block on screen, or `null` when it is elsewhere.
+   *
+   * The anchor is kept as a locus (`ui/viewpoint.ts`) precisely so that this
+   * question can be asked freshly of every block: pan, zoom, change resolution,
+   * open another region, and the same locus lands on different rows or on none
+   * at all. `null` is a real answer and the lane says so rather than drawing a
+   * profile of whatever happens to be at those row numbers now.
+   */
+  private anchorRows(): [number, number] | null {
+    const anchor = getViewpoint().anchor
+    const matrix = this.heatmap.block
+    const axis = this.locusAxes.rows
+    if (anchor === null || matrix === null || axis === null) return null
+    // Block-local from the start: `locusToUnit` answers in this axis's own
+    // coordinates, which are already the rows of the block it was built for.
+    const lo = axis.locusToUnit(anchor.contig, anchor.start)
+    const hi = axis.locusToUnit(anchor.contig, Math.max(anchor.start, anchor.end - 1))
+    if (lo === null || hi === null) return null
+    const from = Math.floor(Math.min(lo, hi))
+    const to = Math.floor(Math.max(lo, hi)) + 1
+    // Off this block entirely — the reader has panned away from their anchor, or
+    // opened somewhere else. A real answer, and the lane says so.
+    if (to <= 0 || from >= matrix.nrows) return null
+    return [Math.max(0, from), Math.min(matrix.nrows, to)]
+  }
+
   private laneGeometry(): LaneGeometry {
     const palette = readCanvasPalette(this.canvas)
     return {
@@ -2772,6 +2907,7 @@ export class MatrixPanel {
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
       this.lanes?.draw(this.laneGeometry())
+      this.drawViewpoint()
       // …and for the same reason: the scales the heatmap has just written are
       // what this reads, and writing it before the draw would show the previous
       // frame's window for one frame of every drag.
