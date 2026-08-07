@@ -1,6 +1,13 @@
 {
-  "latest": "428e526",
+  "latest": "50ba73c",
   "versions": [
+    {
+      "commit": "50ba73c",
+      "version": "0.8.0",
+      "date": "2026-08-07T10:01:02+02:00",
+      "subject": "fix(publish-demo): run on the bash macOS actually ships",
+      "tag": ""
+    },
     {
       "commit": "428e526",
       "version": "0.8.0",
