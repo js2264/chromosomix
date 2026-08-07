@@ -1,22 +1,34 @@
 /**
  * The geometry every lane is drawn in.
  *
- * A lane is a strip beside the matrix: under it, where the genomic axis runs
- * left to right and shares the heatmap's column scale, or beside it, where the
- * same axis runs top to bottom and shares the row scale. Everything else about
- * the two is identical, so rather than two renderers there is one, written in
- * terms of *along* (the genomic direction) and *across* (the value or stacking
- * direction), and this module is the only place that knows which is x.
+ * A lane is a strip beside the matrix — under it, over it, or down either side
+ * — where one of the map's two axes is the genomic one and the strip's own
+ * thickness is the other. Everything else about the four is identical, so
+ * rather than four renderers there is one, written in terms of *along* (the
+ * genomic direction) and *across* (the value or stacking direction), and this
+ * module is the only place that knows which is x, which way each of them
+ * points, and where zero is.
+ *
+ * **Across always runs outward, away from the map.** `acrossFrom` is the canvas
+ * pixel of the lane's edge *nearest the matrix* and `across` counts from there
+ * towards the reader, which on a top or left stack is the direction the canvas
+ * coordinate runs *backwards* in. That one convention is what lets every hit
+ * test, every label and every clip in this application say "the far border" and
+ * mean the same border on all four edges: the alternative — canvas offsets —
+ * puts the resize border at `thickness` on two edges and at `0` on the other
+ * two, and every caller has to know which.
  *
  * `toPixel` comes from the heatmap's own `Scale` (spec §8.4). Nothing here
  * computes a coordinate mapping; it is handed one, and that is what makes a
  * track and the matrix column above it structurally incapable of drifting.
  */
 
+import type { LaneEdge } from '../annotations/types'
+
 /** Where a lane is, and how its two directions map to the canvas. */
 export interface LaneFrame {
-  /** Which edge this lane is on: the bottom of the map, or its right. */
-  orientation: 'bottom' | 'right'
+  /** Which edge of the map this lane is on. */
+  orientation: LaneEdge
   /** Canvas pixel for a matrix coordinate, along the genomic axis. */
   toPixel(unit: number): number
   /** Matrix coordinate for a canvas pixel, along the genomic axis. */
@@ -26,33 +38,87 @@ export interface LaneFrame {
   /** Pixel extent of the *data* along the genomic axis — the heatmap's dataRect. */
   alongFrom: number
   alongTo: number
-  /** Where this lane starts across, in canvas pixels. */
+  /**
+   * Canvas pixel of the lane's edge nearest the map; `across` counts *outward*
+   * from it. On a bottom or right stack that is the smaller canvas coordinate
+   * and the two run together; on a top or left stack it is the larger, and the
+   * across direction is the canvas direction reversed.
+   */
   acrossFrom: number
   /** How thick the lane is, in canvas pixels. */
   thickness: number
 }
 
+/** Whether this edge's genomic axis runs across the page rather than down it. */
+export function laneIsHorizontal(edge: LaneEdge): boolean {
+  return edge === 'top' || edge === 'bottom'
+}
+
+/**
+ * Which way the canvas coordinate moves as `across` grows — outward, away from
+ * the map.
+ *
+ * `+1` below and beside the map, where outward is down and right; `-1` above it
+ * and to its left, where outward is up and back.
+ */
+export function laneOutward(edge: LaneEdge): 1 | -1 {
+  return edge === 'top' || edge === 'left' ? -1 : 1
+}
+
+/**
+ * Whether an unflipped lane on this edge grows *towards* the matrix.
+ *
+ * The rule underneath is one rule and it is the conventional orientation of a
+ * plot: a horizontal lane's values grow **up** the page and a vertical lane's
+ * grow **right** across it, whichever side of the map the lane happens to be
+ * on. Which of those points at the matrix then depends on the side — up is
+ * towards a map that is above and away from one that is below — and this is
+ * that question answered once.
+ *
+ * It is what the whole application phrases the flip in terms of: a lane added
+ * to any edge grows towards the map, because two stacks meeting at a corner
+ * must agree about which way is more, and moving a lane from one edge to
+ * another turns its axis exactly when the answer here changes
+ * (`AnnotationStore.place`).
+ */
+export function laneGrowsInward(edge: LaneEdge): boolean {
+  return edge === 'bottom' || edge === 'left'
+}
+
+/** Canvas coordinate of an across-offset, on the axis the lane is thick in. */
+export function acrossToCanvas(frame: LaneFrame, across: number): number {
+  return frame.acrossFrom + laneOutward(frame.orientation) * across
+}
+
+/** The inverse: how far outward a canvas coordinate is, in lane coordinates. */
+export function canvasToAcross(frame: LaneFrame, canvas: number): number {
+  return laneOutward(frame.orientation) * (canvas - frame.acrossFrom)
+}
+
 /**
  * The across-offset a normalised value sits at.
  *
- * A bottom lane grows **upward** from its own floor and a right lane grows
- * **rightward** from its own left edge, which is the conventional orientation
- * for each side and the reason this is a branch rather than one formula. Both
- * put the baseline against the edge nearest the reader's entry into the lane.
+ * A lane grows towards the map or away from it, and {@link laneGrowsInward} is
+ * what decides — `across` already points outward, so the whole difference
+ * between the four edges is which end of `[0, thickness]` a value of 1 lands
+ * on. Both readings put the baseline against one edge of the strip and the
+ * ceiling against the other; neither depends on which axis is x.
  */
 export function valueAcross(frame: LaneFrame, normalised: number): number {
   const clamped = normalised < 0 ? 0 : normalised > 1 ? 1 : normalised
-  return frame.orientation === 'bottom' ? frame.thickness * (1 - clamped) : frame.thickness * clamped
+  return laneGrowsInward(frame.orientation)
+    ? frame.thickness * (1 - clamped)
+    : frame.thickness * clamped
 }
 
 /** Canvas x for a point given in lane coordinates. */
 export function laneX(frame: LaneFrame, along: number, across: number): number {
-  return frame.orientation === 'bottom' ? along : frame.acrossFrom + across
+  return laneIsHorizontal(frame.orientation) ? along : acrossToCanvas(frame, across)
 }
 
 /** Canvas y for a point given in lane coordinates. */
 export function laneY(frame: LaneFrame, along: number, across: number): number {
-  return frame.orientation === 'bottom' ? frame.acrossFrom + across : along
+  return laneIsHorizontal(frame.orientation) ? acrossToCanvas(frame, across) : along
 }
 
 /** `ctx.moveTo` in lane coordinates. */
@@ -93,11 +159,16 @@ export function laneRect(
 ): [number, number, number, number] {
   const alongLow = Math.min(along0, along1)
   const alongSpan = Math.max(1, Math.abs(along1 - along0))
-  const acrossLow = Math.min(across0, across1)
-  const acrossSpan = Math.max(1, Math.abs(across1 - across0))
-  return frame.orientation === 'bottom'
-    ? [alongLow, frame.acrossFrom + acrossLow, alongSpan, acrossSpan]
-    : [frame.acrossFrom + acrossLow, alongLow, acrossSpan, alongSpan]
+  // Through the canvas conversion rather than a bare `min`, because on a top or
+  // left stack the larger across-offset is the *smaller* canvas coordinate, and
+  // a rectangle is always given by its low corner and a positive span.
+  const canvas0 = acrossToCanvas(frame, across0)
+  const canvas1 = acrossToCanvas(frame, across1)
+  const acrossLow = Math.min(canvas0, canvas1)
+  const acrossSpan = Math.max(1, Math.abs(canvas1 - canvas0))
+  return laneIsHorizontal(frame.orientation)
+    ? [alongLow, acrossLow, alongSpan, acrossSpan]
+    : [acrossLow, alongLow, acrossSpan, alongSpan]
 }
 
 /**
@@ -159,23 +230,25 @@ export const GRIP_ROOM = GRIP_ALONG + GRIP_GAP
 /**
  * Where along the axis the handle hangs: immediately before the track's name.
  *
- * Which end of the lane that is depends on which way the lane reads. A bottom
- * lane runs left to right and its name starts at the left, so the handle goes
- * off the left. A right-hand lane turns a quarter turn and reads *upward*: its
- * name starts at the bottom, so the handle goes below it — the end the label
- * begins at, not the end the axis does. A handle at the far end of the track
- * from its own name is a handle belonging to nothing in particular.
+ * Which end of the lane that is depends on which way the lane *reads*, which is
+ * a fact about the axis rather than about the side: a horizontal lane runs left
+ * to right and its name starts at the left, so the handle goes off the left,
+ * above the map and below it alike. A vertical lane turns a quarter turn and
+ * reads *upward*: its name starts at the bottom, so the handle goes below it —
+ * the end the label begins at, not the end the axis does. A handle at the far
+ * end of the track from its own name is a handle belonging to nothing in
+ * particular.
  *
  * It never overlaps the data, in either direction, and that is the one thing it
  * must not do — a handle sitting on the signal is both illegible and a target
- * you cannot tell from the picture. Before a bottom lane it is clamped at the
- * canvas edge, because the space there is the plot's own left margin and there
- * is nothing a stack can do to make more of it. *After* a right-hand lane the
- * space is the stack's own canvas, so the caller sizes that canvas to fit
+ * you cannot tell from the picture. Before a horizontal lane it is clamped at
+ * the canvas edge, because the space there is the plot's own left margin and
+ * there is nothing a stack can do to make more of it. *After* a vertical lane
+ * the space is the stack's own canvas, so the caller sizes that canvas to fit
  * (`AnnotationLanes.tailFor`) rather than the handle backing into the track.
  */
 export function gripFrom(frame: LaneFrame): number {
-  return frame.orientation === 'bottom'
+  return laneIsHorizontal(frame.orientation)
     ? Math.max(0, frame.alongFrom - GRIP_GAP - GRIP_ALONG)
     : frame.alongTo + GRIP_GAP
 }
@@ -255,7 +328,15 @@ export const GROUP_FONT = '600 9px system-ui, sans-serif'
 export interface GroupRun {
   group: string
   colour: string
-  /** Across-offsets of the run's two ends, in the stack's own coordinates. */
+  /**
+   * The run's two ends on the stacking axis, in **canvas** pixels and in
+   * ascending order.
+   *
+   * Canvas rather than lane coordinates because a bar is a fact about a run of
+   * lanes rather than about any one of them, so there is no `across` for it to
+   * be measured in — and because the caller that lays a stack out is the one
+   * that knows which way its slots run.
+   */
   from: number
   to: number
 }
@@ -306,7 +387,8 @@ export function drawGroupBars(
   ctx: CanvasRenderingContext2D,
   runs: readonly GroupRun[],
   options: {
-    orientation: 'bottom' | 'right'
+    /** Whether the lanes' genomic axis runs across the page rather than down it. */
+    horizontal: boolean
     along: number
     /**
      * Where the group's *name* goes, when it is not simply beside its bar.
@@ -323,7 +405,7 @@ export function drawGroupBars(
   },
 ): void {
   if (runs.length === 0) return
-  const bottom = options.orientation === 'bottom'
+  const bottom = options.horizontal
   ctx.save()
   for (const run of runs) {
     // The bar spans the lanes it groups, so it is long *across* the stack and
@@ -366,12 +448,13 @@ export function drawGroupBars(
 }
 
 /**
- * Draw `text` so it reads correctly on either edge.
+ * Draw `text` so it reads correctly on any edge.
  *
- * A right-hand lane runs top to bottom, so its labels turn a quarter turn
+ * A vertical lane runs top to bottom, so its labels turn a quarter turn
  * anticlockwise — the same rotation the heatmap gives its column labels, and for
  * the same reason: a name needs the length of the axis it belongs to, not the
- * width of the strip.
+ * width of the strip. Which side of the map the lane is on makes no difference:
+ * a name above the map reads the same way up as one below it.
  */
 export function laneText(
   ctx: CanvasRenderingContext2D,
@@ -379,19 +462,25 @@ export function laneText(
   text: string,
   along: number,
   across: number,
-  options: { halo?: string } = {},
+  options: { halo?: string; maxWidth?: number } = {},
 ): void {
   const x = laneX(frame, along, across)
   const y = laneY(frame, along, across)
   ctx.save()
   ctx.translate(x, y)
-  if (frame.orientation === 'right') ctx.rotate(-Math.PI / 2)
+  if (!laneIsHorizontal(frame.orientation)) ctx.rotate(-Math.PI / 2)
+  // Given to the canvas rather than measured against, so a phrase too long for
+  // its lane is condensed rather than run off the end of it. Absent for every
+  // caller that has already fitted its own text.
+  const width = options.maxWidth
   if (options.halo !== undefined) {
     ctx.strokeStyle = options.halo
     ctx.lineWidth = 3
     ctx.lineJoin = 'round'
-    ctx.strokeText(text, 0, 0)
+    if (width === undefined) ctx.strokeText(text, 0, 0)
+    else ctx.strokeText(text, 0, 0, width)
   }
-  ctx.fillText(text, 0, 0)
+  if (width === undefined) ctx.fillText(text, 0, 0)
+  else ctx.fillText(text, 0, 0, width)
   ctx.restore()
 }

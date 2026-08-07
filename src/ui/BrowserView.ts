@@ -1045,11 +1045,14 @@ export class BrowserView {
    * comparable by construction.
    */
   private layout(): Lane[] {
-    // Both cards, because in one dimension there is no "on the map" to be an
-    // overlay of: a BED is boxes and a BEDPE is arcs, and each takes a lane of
-    // its own like everything else here.
+    // Both *file* cards, because in one dimension there is no "on the map" to
+    // be an overlay of: a BED is boxes and a BEDPE is arcs, and each takes a
+    // lane of its own like everything else here. Not the 4C profile, which is a
+    // reading of a contact map's columns and has no meaning on a surface that
+    // has no contact map — it stays in the store because the map it belongs to
+    // is one tab switch away.
     const entries = this.props.store.entries.filter(
-      (entry) => entry.visible && entry.status === 'ready',
+      (entry) => entry.card !== 'viewpoint' && entry.visible && entry.status === 'ready',
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,
@@ -1231,7 +1234,7 @@ export class BrowserView {
         LANE_GAP,
       ),
       {
-        orientation: 'bottom',
+        horizontal: true,
         along: 0,
         labelAlong: GRIP_MARGIN + 2,
         text: this.text,
@@ -2365,7 +2368,10 @@ export class BrowserView {
       const hit = this.laneAt(y)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store)
+      // No edge: this surface has no map for a lane to be beside, so there is
+      // no location to offer and every lane reads the way a horizontal track
+      // under a ruler does.
+      openLaneMenu(event.clientX, event.clientY, hit.lane.entry, this.props.store, null)
     }
 
     canvas.addEventListener('pointerdown', onDown)

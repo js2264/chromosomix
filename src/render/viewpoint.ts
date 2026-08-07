@@ -7,6 +7,12 @@
  * a reader can do by eye and cannot do accurately: pick a band of rows, and read
  * off how dark each column is within it. Summing that band is a virtual 4C.
  *
+ * Both ways round. The profile is drawn as a lane, a lane is drawn along one of
+ * the map's two axes, and which axis it is decides which way the band is taken:
+ * a strip above or below the map sums a band of rows and answers per column, a
+ * strip beside it sums a band of columns and answers per row. The same locus,
+ * the same block, the transpose of the same question.
+ *
  * **Computed from the block already on screen, never from a fresh read.** The
  * dense block the heatmap is drawing is the same numbers a query would return,
  * it is in memory, and it is already at the resolution the picture is at — so
@@ -27,32 +33,48 @@ import type { LaneFrame } from './lane'
 import type { PixelProfile } from './tracks'
 
 /**
- * Column sums of `matrix` over the rows in `anchor`, in block-local columns.
+ * The band sums of `matrix`: one number per position along `along`, summed over
+ * the anchor's band on the other axis.
  *
- * `anchor` is a half-open range of **block-local row indices**, already clamped
- * by the caller — the anchor is defined by a gesture over the picture, so the
- * rows it names are the rows on screen by construction.
+ * `along: 'cols'` is the reading a strip above or below the map makes — a band
+ * of **rows** collapsed to one value per column — and `along: 'rows'` is its
+ * transpose, which is what a strip down either *side* of the map is a picture
+ * of. Neither is more fundamental than the other: a contact map read about its
+ * diagonal says the same thing both ways round, and which one a lane wants is
+ * decided entirely by which axis it is drawn along. One function rather than
+ * two because a second copy of a nested loop over a dense block is a second
+ * place for the `NaN` rule below to be forgotten.
+ *
+ * `anchor` is a half-open range of **block-local indices** on the *other* axis,
+ * already clamped by the caller — the anchor is defined by a gesture over the
+ * picture, so the rows it names are the rows on screen by construction.
  *
  * Accumulated in `Float64Array` and not in the block's own `Float32Array`: a
- * column sum over a thousand rows of a deep map runs past what a float32 adds
- * without drift, and the drift shows up as a profile whose tall peaks are a few
- * per cent short — plausible, and wrong.
+ * sum over a thousand rows of a deep map runs past what a float32 adds without
+ * drift, and the drift shows up as a profile whose tall peaks are a few per
+ * cent short — plausible, and wrong.
  *
  * `NaN` is skipped rather than propagated. A balanced matrix marks the bins the
  * balancer dropped as `NaN` (§6.4), and one such bin inside the anchor would
  * otherwise take the whole column with it — turning "this row was filtered" into
  * "this column touches nothing", which is the opposite claim.
  */
-export function columnSums(matrix: DenseMatrix, anchor: Extent): Float64Array {
+export function bandSums(
+  matrix: DenseMatrix,
+  anchor: Extent,
+  along: 'cols' | 'rows' = 'cols',
+): Float64Array {
   const { nrows, ncols, values } = matrix
-  const out = new Float64Array(ncols)
-  const from = Math.max(0, Math.min(nrows, Math.trunc(anchor[0])))
-  const to = Math.max(from, Math.min(nrows, Math.trunc(anchor[1])))
-  for (let row = from; row < to; row++) {
-    const base = row * ncols
-    for (let col = 0; col < ncols; col++) {
-      const value = values[base + col]
-      if (!Number.isNaN(value)) out[col] += value
+  // The axis the band is *taken over* is the one the profile is not along.
+  const depth = along === 'cols' ? nrows : ncols
+  const width = along === 'cols' ? ncols : nrows
+  const out = new Float64Array(width)
+  const from = Math.max(0, Math.min(depth, Math.trunc(anchor[0])))
+  const to = Math.max(from, Math.min(depth, Math.trunc(anchor[1])))
+  for (let band = from; band < to; band++) {
+    for (let at = 0; at < width; at++) {
+      const value = along === 'cols' ? values[band * ncols + at] : values[at * ncols + band]
+      if (!Number.isNaN(value)) out[at] += value
     }
   }
   return out

@@ -17,7 +17,7 @@ import {
   type ManualMark,
 } from '../../src/annotations/manual'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
-import { defaultStyle } from '../../src/annotations/types'
+import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { overlapWarning } from '../../src/ui/AnnotationCard'
 import { demoAnnotationsFor, DEMO_ANNOTATION_FILES } from '../../src/ui/examples'
 
@@ -78,14 +78,16 @@ describe('the annotation store', () => {
     expect(store.entries.map((entry) => entry.id)).toEqual(['a1', 'a2', 'a3'])
   })
 
-  // One edge and not both: two copies of one track is twice the ink for no more
-  // information. The *bottom* edge, because that is the orientation a track is
-  // read in — under a ruler, left to right — and the right-hand stack is the
-  // one you choose deliberately, per track or by dropping a file there.
+  // One edge and not four: four copies of one track is four times the ink for
+  // no more information. The *bottom* edge, because that is the orientation a
+  // track is read in — under a ruler, left to right — and the other three are
+  // the ones you choose deliberately, per track or by dropping a file there.
   it('starts on the bottom edge only', () => {
     const entry = store.begin({ card: 'linear', kind: 'track', source: localSource })
-    expect(entry.placement).toEqual({ bottom: true, right: false })
-    expect(store.drawnOn('right')).toHaveLength(0)
+    expect(entry.placement).toEqual({ top: false, right: false, bottom: true, left: false })
+    for (const edge of ['top', 'right', 'left'] as const) {
+      expect(store.drawnOn(edge)).toHaveLength(0)
+    }
   })
 
   it('honours a placement the caller asks for', () => {
@@ -93,9 +95,23 @@ describe('the annotation store', () => {
       card: 'linear',
       kind: 'track',
       source: localSource,
+      placement: { left: true },
+    })
+    expect(entry.placement).toEqual({ top: false, right: false, bottom: false, left: true })
+  })
+
+  // A session written before the top and left stacks existed carries two of the
+  // four keys. `undefined` is falsy enough that nothing visibly breaks, but a
+  // record with holes in it is one that every count over its edges gets wrong —
+  // so the door it comes in through fills them.
+  it('fills in the edges an older session never wrote', () => {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: localSource,
       placement: { bottom: false, right: true },
     })
-    expect(entry.placement).toEqual({ bottom: false, right: true })
+    expect(entry.placement).toEqual({ top: false, right: true, bottom: false, left: false })
   })
 
   it('draws nothing that has not finished loading', () => {
@@ -435,14 +451,17 @@ describe('the annotations published beside a demo map', () => {
 
 /**
  * Which way a lane's values grow is a reading direction rather than a
- * preference: a bottom lane grows up towards the map, and the same track beside
- * the map grows *away* from it unless it is turned round. So moving a track
- * between the two stacks turns it, and the turn is a toggle — a reader who
- * deliberately hung a bottom track from its ceiling has said something about it,
- * and setting `flip` from the edge would throw that away on the way across.
+ * preference. Unflipped, a lane grows up the page or right across it — the
+ * conventional orientation of its axis — and which of those points *at* the
+ * matrix depends on which side of it the lane is: a bottom lane grows towards
+ * the map, and the same track beside it grows *away* unless it is turned round.
+ * So moving a track between two stacks that disagree turns it, and the turn is a
+ * toggle — a reader who deliberately hung a bottom track from its ceiling has
+ * said something about it, and setting `flip` from the edge would throw that
+ * away on the way across.
  */
 describe('the edge a track is drawn on, and which way it grows', () => {
-  const track = (store: AnnotationStore, placement?: { bottom: boolean; right: boolean }) =>
+  const track = (store: AnnotationStore, placement?: Partial<Placement>) =>
     store.begin({
       card: 'linear',
       kind: 'track',
@@ -454,10 +473,24 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     const store = freshStore(`flip-${Math.random()}.cool`)
     const entry = track(store)
     expect(store.byId(entry.id)?.style.flip).toBe(false)
-    store.place(entry.id, { bottom: false, right: true })
+    store.place(entry.id, placementOn('right'))
     expect(store.byId(entry.id)?.style.flip).toBe(true)
-    store.place(entry.id, { bottom: true, right: false })
+    store.place(entry.id, placementOn('bottom'))
     expect(store.byId(entry.id)?.style.flip).toBe(false)
+  })
+
+  // The two mirrors, and the pairs are what make the rule one rule: `bottom` and
+  // `left` both grow towards the map unflipped, `top` and `right` both grow
+  // away, so a move within a pair turns nothing and a move across one turns.
+  it('turns nothing on a move between two edges that read the same way', () => {
+    const store = freshStore(`flip-pair-${Math.random()}.cool`)
+    const entry = track(store)
+    store.place(entry.id, placementOn('left'))
+    expect(store.byId(entry.id)?.style.flip).toBe(false)
+    store.place(entry.id, placementOn('top'))
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
+    store.place(entry.id, placementOn('right'))
+    expect(store.byId(entry.id)?.style.flip).toBe(true)
   })
 
   // A toggle, not an assignment: the reader's own decision survives the round
@@ -466,29 +499,32 @@ describe('the edge a track is drawn on, and which way it grows', () => {
     const store = freshStore(`flip2-${Math.random()}.cool`)
     const entry = track(store)
     store.restyle(entry.id, { flip: true })
-    store.place(entry.id, { bottom: false, right: true })
+    store.place(entry.id, placementOn('right'))
     expect(store.byId(entry.id)?.style.flip).toBe(false)
-    store.place(entry.id, { bottom: true, right: false })
+    store.place(entry.id, placementOn('bottom'))
     expect(store.byId(entry.id)?.style.flip).toBe(true)
   })
 
-  // A track drawn on both edges has one `flip` and two readings, so there is no
+  // A track drawn on two edges has one `flip` and two readings, so there is no
   // answer that is right for both stacks: it keeps what it had.
-  it('leaves a track drawn on both edges alone', () => {
+  it('leaves a track drawn on two edges alone', () => {
     const store = freshStore(`flip3-${Math.random()}.cool`)
     const entry = track(store)
     store.place(entry.id, { bottom: true, right: true })
     expect(store.byId(entry.id)?.style.flip).toBe(false)
-    store.place(entry.id, { bottom: false, right: true })
+    store.place(entry.id, placementOn('right'))
     expect(store.byId(entry.id)?.style.flip).toBe(false)
   })
 
-  // A file dropped on the right of the map arrives already turned round, for
-  // the same reason: the reader aimed at that edge, not at that orientation.
-  it('starts a track dropped on the right edge already turned round', () => {
+  // A file dropped on an edge arrives already turned round, for the same
+  // reason: the reader aimed at that edge, not at that orientation. Every new
+  // lane grows towards the map, whichever side of it that is.
+  it('starts a track dropped on an edge already facing the map', () => {
     const store = freshStore(`flip4-${Math.random()}.cool`)
-    expect(track(store, { bottom: false, right: true }).style.flip).toBe(true)
-    expect(track(store, { bottom: true, right: false }).style.flip).toBe(false)
+    expect(track(store, placementOn('right')).style.flip).toBe(true)
+    expect(track(store, placementOn('top')).style.flip).toBe(true)
+    expect(track(store, placementOn('bottom')).style.flip).toBe(false)
+    expect(track(store, placementOn('left')).style.flip).toBe(false)
   })
 })
 

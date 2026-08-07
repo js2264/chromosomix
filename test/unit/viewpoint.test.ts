@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { columnSums, profileFromSums } from '@/render/viewpoint'
+import { bandSums, profileFromSums } from '@/render/viewpoint'
 import type { LaneFrame } from '@/render/lane'
 import type { DenseMatrix } from '@/types'
 
@@ -46,15 +46,15 @@ function frame(pixels: number, units: number): LaneFrame {
 describe('summing a band of rows', () => {
   it('adds the rows the anchor names, and no others', () => {
     // Cell (r, c) = c + 1, so a band of k rows sums to k * (c + 1).
-    const sums = columnSums(block(6, 4, (_row, col) => col + 1), [2, 5])
+    const sums = bandSums(block(6, 4, (_row, col) => col + 1), [2, 5])
     expect([...sums]).toEqual([3, 6, 9, 12])
   })
 
   it('is half-open, and clamps an anchor that runs off the block', () => {
     const matrix = block(4, 3, () => 1)
-    expect([...columnSums(matrix, [0, 1])]).toEqual([1, 1, 1])
-    expect([...columnSums(matrix, [3, 400])]).toEqual([1, 1, 1])
-    expect([...columnSums(matrix, [2, 2])]).toEqual([0, 0, 0])
+    expect([...bandSums(matrix, [0, 1])]).toEqual([1, 1, 1])
+    expect([...bandSums(matrix, [3, 400])]).toEqual([1, 1, 1])
+    expect([...bandSums(matrix, [2, 2])]).toEqual([0, 0, 0])
   })
 
   // The balancer drops low-coverage bins and leaves `NaN` behind (§6.4). One of
@@ -62,7 +62,42 @@ describe('summing a band of rows', () => {
   // filtered" and "this column touches nothing" are opposite claims.
   it('skips a filtered bin rather than propagating it', () => {
     const matrix = block(3, 2, (row, col) => (row === 1 ? Number.NaN : col + 1))
-    expect([...columnSums(matrix, [0, 3])]).toEqual([2, 4])
+    expect([...bandSums(matrix, [0, 3])]).toEqual([2, 4])
+  })
+})
+
+/**
+ * The other way round, which is what a 4C lane drawn *beside* the map is a
+ * picture of: the same anchor, summed over a band of columns, answered per row.
+ *
+ * It is a separate description rather than a parameterised copy of the one above
+ * because the failure it guards against is a transposed index — a bug that
+ * produces a plausible profile of the wrong axis, and that a test sharing the
+ * loop under test could not see.
+ */
+describe('summing a band of columns', () => {
+  it('answers per row, over the columns the anchor names', () => {
+    // Cell (r, c) = r + 1, so a band of k columns sums to k * (r + 1).
+    const sums = bandSums(block(4, 6, (row) => row + 1), [2, 5], 'rows')
+    expect([...sums]).toEqual([3, 6, 9, 12])
+  })
+
+  it('is the transpose of the row band, on a block that is not square', () => {
+    // Rows and columns carry different numbers, so an axis mix-up cannot
+    // coincide: reading (r, c) = 10r + c one way must not answer the other.
+    const matrix = block(3, 5, (row, col) => 10 * row + col)
+    expect([...bandSums(matrix, [0, 3], 'cols')]).toEqual([30, 33, 36, 39, 42])
+    expect([...bandSums(matrix, [0, 5], 'rows')]).toEqual([10, 60, 110])
+  })
+
+  it('clamps to the column count rather than to the row count', () => {
+    const matrix = block(2, 3, () => 1)
+    expect([...bandSums(matrix, [0, 400], 'rows')]).toEqual([3, 3])
+  })
+
+  it('skips a filtered bin rather than propagating it', () => {
+    const matrix = block(2, 3, (row, col) => (col === 1 ? Number.NaN : row + 1))
+    expect([...bandSums(matrix, [0, 3], 'rows')]).toEqual([2, 4])
   })
 })
 

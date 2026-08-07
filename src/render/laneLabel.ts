@@ -24,7 +24,7 @@
  * quarter turn is `render/lane.ts`'s business and not this module's (§8.4).
  */
 
-import { laneRect, laneText, valueAcross, type LaneFrame } from './lane'
+import { laneIsHorizontal, laneRect, laneText, valueAcross, type LaneFrame } from './lane'
 import { formatLimit, normaliser } from './tracks'
 
 /** A rectangle in canvas pixels: what a pointer is tested against. */
@@ -335,13 +335,14 @@ export function drawLaneLabel(
   }
   if (names.length === 0) return out
 
-  // Which way the text advances along the axis. A bottom lane reads left to
-  // right; a right-hand lane turns a quarter turn anticlockwise and reads
-  // *upward*, so every run after the first starts at a smaller `along`.
-  const dir = frame.orientation === 'bottom' ? 1 : -1
-  const near = frame.orientation === 'bottom'
-    ? frame.alongFrom + style.inset
-    : frame.alongTo - style.inset
+  // Which way the text advances along the axis, which is a fact about the axis
+  // rather than about the side of the map the lane is on: a horizontal lane
+  // reads left to right, above the map and below it alike, and a vertical one
+  // turns a quarter turn anticlockwise and reads *upward*, so every run after
+  // the first starts at a smaller `along`.
+  const horizontal = laneIsHorizontal(frame.orientation)
+  const dir = horizontal ? 1 : -1
+  const near = horizontal ? frame.alongFrom + style.inset : frame.alongTo - style.inset
   const want = (width: number): void => {
     if (width > out.wanted) out.wanted = width
   }

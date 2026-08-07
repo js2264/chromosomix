@@ -33,10 +33,20 @@
  * it is kept because "the annotation" and "a peak set" are not the same thing on
  * screen even when the file format is.
  */
-export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
+export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence' | 'viewpoint'
 
-/** Which card an entry belongs to; see §8.1. */
-export type AnnotationCard = 'linear' | 'overlay'
+/**
+ * Which card an entry belongs to; see §8.1.
+ *
+ * `viewpoint` is the odd one and it belongs to no card at all: the virtual 4C
+ * profile is a *reading of the matrix* rather than a file loaded against it, so
+ * it has no row in the Tracks card, no place in the 1D browser, and nothing to
+ * remember across a reload. It is here so that everything else about a lane —
+ * its colour, its name, its value axis, its height, which edge it is drawn on,
+ * where it sits in the stack — is the one implementation the other kinds use,
+ * rather than a second copy of all of it (§5.8).
+ */
+export type AnnotationCard = 'linear' | 'overlay' | 'viewpoint'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's
@@ -46,6 +56,50 @@ export type AnnotationCard = 'linear' | 'overlay'
 export type AnnotationSource =
   | { kind: 'local'; file: File; name: string }
   | { kind: 'remote'; url: string; name: string }
+
+/**
+ * Which edge of the map a lane is drawn on.
+ *
+ * All four, and they are peers. `bottom` and `right` follow the map's columns
+ * and rows respectively; `top` is `bottom`'s mirror and `left` is `right`'s, and
+ * everything from the layout to the value axis is written in terms of *along*
+ * and *across* so that adding the mirrors added no branch anybody has to keep in
+ * step (`render/lane.ts`).
+ */
+export type LaneEdge = 'top' | 'right' | 'bottom' | 'left'
+
+/**
+ * The edges in the order a stack is laid out and drawn.
+ *
+ * Clockwise from the top, which is also the order they are listed in every
+ * control that offers them, so a reader who has seen one list has seen them all.
+ */
+export const LANE_EDGES: readonly LaneEdge[] = ['top', 'right', 'bottom', 'left']
+
+/**
+ * Whether this kind is drawn as a value profile against an axis.
+ *
+ * The question every lane asks before it resolves a pair of limits, writes a
+ * range under a name, or answers a readout with a number — and it is asked in a
+ * dozen places, which is exactly why it is a function rather than a list of
+ * kinds spelled out at each of them. A FASTA is one of these beside a map,
+ * because at a bin per pixel a sequence can only be its GC content.
+ */
+export function drawsAProfile(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'sequence' || kind === 'viewpoint'
+}
+
+/**
+ * Whether the reader may move this kind's value axis.
+ *
+ * Everything {@link drawsAProfile} covers except a sequence: GC content is a
+ * fraction pinned to the whole of `[0, 1]` on purpose, so that the same genome
+ * looks the same in two views (see {@link defaultStyle}). A ceiling drag, a
+ * ⌘-scroll and the autoscale button all ask this.
+ */
+export function hasAMovableAxis(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'viewpoint'
+}
 
 /** A half-open genomic interval on one contig, as every query here takes one. */
 export interface Region {
@@ -220,10 +274,32 @@ export interface TrackSampleSet {
 // Presentation
 // ---------------------------------------------------------------------------
 
-/** Which edge (or edges) an annotation is drawn on. Both may be true. */
-export interface Placement {
-  bottom: boolean
-  right: boolean
+/** Which edge (or edges) an annotation is drawn on. Any number may be true. */
+export type Placement = Record<LaneEdge, boolean>
+
+/** Nothing drawn anywhere — the base every placement is built from. */
+export function noPlacement(): Placement {
+  return { top: false, right: false, bottom: false, left: false }
+}
+
+/** A placement drawn on exactly one edge. */
+export function placementOn(edge: LaneEdge): Placement {
+  return { ...noPlacement(), [edge]: true }
+}
+
+/**
+ * A stored placement, made whole.
+ *
+ * A session written before the top and left stacks existed carries two of the
+ * four keys, and `undefined` is falsy enough that nothing would visibly break —
+ * but a record with missing keys is one every `Object.entries` over it counts
+ * wrong, and this is the one door those values come in through.
+ */
+export function normalisePlacement(placement: Partial<Placement> | undefined): Placement {
+  const base = noPlacement()
+  if (placement === undefined) return base
+  for (const edge of LANE_EDGES) base[edge] = placement[edge] === true
+  return base
 }
 
 /** How a value track is resolved into ink. */
@@ -288,7 +364,19 @@ export interface AnnotationStyle {
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : kind === 'sequence' ? 46 : 16,
+    // The 4C strip opens at 68 rather than at a track's 90: it is a reading of
+    // the picture beside it rather than a track in its own right, and it should
+    // not take a third of the map's height the moment it is switched on.
+    size:
+      kind === 'track'
+        ? 90
+        : kind === 'gtf'
+          ? 92
+          : kind === 'sequence'
+            ? 46
+            : kind === 'viewpoint'
+              ? 68
+              : 16,
     mode: kind === 'sequence' ? 'line' : 'area',
     // GC content is a fraction, and a fraction has an axis whether or not this
     // window happens to use all of it. Autoscaling it would make the same
@@ -345,7 +433,14 @@ export interface AnnotationEntry {
   kind: AnnotationKind
   /** What to call it on screen. Starts as the file name, minus its suffix. */
   label: string
-  source: AnnotationSource | { kind: 'detached'; name: string }
+  /**
+   * Where this came from.
+   *
+   * `derived` is the case with no file behind it at all: the 4C profile is
+   * computed from the block already on screen, so there is nothing to name, to
+   * re-read after a reload, or to report a contig overlap against.
+   */
+  source: AnnotationSource | { kind: 'detached'; name: string } | { kind: 'derived'; name: string }
   status: AnnotationStatus
   /** Set when `status === 'error'`; the message is shown in the row. */
   error?: string

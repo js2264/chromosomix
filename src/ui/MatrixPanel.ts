@@ -33,14 +33,22 @@ import {
   type ManualStore,
 } from '../annotations/manual'
 import type { GroupSettings } from '../annotations/groups'
-import type { AnnotationStore } from '../annotations/store'
+import { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
 import { cardTitle, iconButton } from './icons'
-import type { AnnotationEntry, FeatureSet } from '../annotations/types'
+import {
+  LANE_EDGES,
+  drawsAProfile,
+  hasAMovableAxis,
+  placementOn,
+  type AnnotationEntry,
+  type FeatureSet,
+} from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
 import { ColorbarView, DEFAULT_COLORBAR_FONT, formatCount } from '../render/colorbar'
+import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
 import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
 import { formatLocus } from '../genome/assembly'
 import {
@@ -76,12 +84,14 @@ import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import type { ScoreChoice } from './scores'
-import { VIEWPOINT_GAP, ViewpointLane } from './ViewpointLane'
 import {
-  getViewpoint,
+  getViewpointAnchor,
+  isViewpointShown,
   setViewpointAnchor,
-  setViewpointShown,
+  showViewpoint,
   subscribeViewpoint,
+  syncViewpointLabel,
+  viewpointLabel,
 } from './viewpoint'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
@@ -318,6 +328,9 @@ export interface AnnotationContext {
    * dropping on the card in the sidebar: aiming at the bottom of the map is a
    * reader saying which stack they want it in, in the same gesture that brings
    * the file in.
+   *
+   * Absent on a file that cannot carry annotation files at all, which is also
+   * what turns the drop rectangles into move-only targets.
    */
   loadOnEdge?(files: readonly File[], edge: LaneEdge): void
 }
@@ -372,12 +385,15 @@ export class MatrixPanel {
   /** The open feature card, so a second click replaces it rather than stacking. */
   private featureDialog: Modal | null = null
   /**
-   * The 4C strip above the map. Built always, mounted always, and *empty* until
-   * the reader turns it on — a canvas of zero height costs a repaint nothing,
-   * and building it lazily would mean the grid reflowing the first time it
-   * appeared, which moves the map under the hand that just asked for it.
+   * The store the lanes are drawn from.
+   *
+   * The session's, where the file has one. Where it has not — a file with a
+   * genome layer carries no annotations at all (§8.5) — a private one that
+   * nothing persists, because the 4C profile is still a lane and a lane needs
+   * somewhere to be an entry *in*. That is the whole of the fallback: no
+   * worker, no loader, no cards, and nothing that could load a file.
    */
-  private readonly viewpointLane = new ViewpointLane()
+  private readonly laneStore: AnnotationStore
   private unsubscribeViewpoint: () => void = () => {}
 
   private readonly canvas: HTMLCanvasElement
@@ -438,13 +454,15 @@ export class MatrixPanel {
   /** The scale the colourbar was last drawn for; `null` until it has been. */
   private painted: ColorScale | null = null
   /**
-   * The annotation lanes, or `null` on a file that cannot carry them (§8.5).
+   * The lane stacks — all four of them, on every file.
    *
-   * Every use of it is optional-chained rather than guarded by a flag, so the
-   * "no annotations" path is the absence of an object rather than a branch that
-   * has to be kept correct in six places.
+   * No longer `null` on a file that carries no annotations (§8.5), because the
+   * 4C profile is a lane and every file has one to offer. What the gate decides
+   * now is what can be *put* in the stacks, not whether the stacks exist: a
+   * metacool gets no annotation worker, no loader and no cards, and its lanes
+   * hold exactly the one entry the reader can make from the map itself.
    */
-  private readonly lanes: AnnotationLanes | null
+  private readonly lanes: AnnotationLanes
   /** The grid holding the map and its lanes; the tooltip's positioning parent. */
   private readonly grid: HTMLElement
   /** The cell under the pointer, so the lanes can continue the crosshair. */
@@ -558,7 +576,7 @@ export class MatrixPanel {
   /** Teardowns for the lane canvases' own pointer listeners. */
   private readonly laneListeners: Array<() => void> = []
   /** The stack thicknesses the stylesheet was last told about, per edge. */
-  private laneBudget = { bottom: -1, right: -1, top: -1 }
+  private laneBudget: Record<LaneEdge, number> = { top: -1, right: -1, bottom: -1, left: -1 }
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -610,6 +628,24 @@ export class MatrixPanel {
     this.tooltip = el('div', { class: 'cell-tip hidden' }, this.tip.matrix, this.tip.lane)
     this.titleNode = el('h2', { class: 'panel-title', text: '' })
     this.overlay = el('div', { class: 'panel-overlay hidden' })
+
+    // The lanes and the store behind them, before anything that can *ask* about
+    // them: the 4C toggle in the Map card reads the store to know whether it is
+    // lit, and the first scheduled frame measures the stacks. Both run while the
+    // constructor is still building the cards below. Only the canvases are made
+    // here; where they are mounted and what listens to them comes later.
+    //
+    // Where the file has no annotation machinery there is still a 4C lane, so
+    // there is still a store — a private one that persists nothing, and that
+    // nothing but this panel can put anything into.
+    this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
+    this.lanes = new AnnotationLanes({
+      store: this.laneStore,
+      ...(options.annotations?.manual === undefined ? {} : { manual: options.annotations.manual }),
+      ...(options.annotations?.client === undefined ? {} : { client: options.annotations.client }),
+      ...(options.annotations?.groups === undefined ? {} : { groups: options.annotations.groups }),
+      onChange: () => this.schedule(),
+    })
 
     this.heatmap = new HeatmapView(this.canvas, {
       plotOptions: getPlotOptions(),
@@ -903,14 +939,12 @@ export class MatrixPanel {
       this.colorbar2.draw()
       this.schedule()
     })
-    // A change of anchor or of visibility is a different picture, and the strip
-    // is drawn inside the map's own frame — so this is a repaint request rather
-    // than a draw of its own, which keeps the two in step by construction.
+    // A change of anchor is a different picture *and* a different name for the
+    // lane drawing it, until the reader has renamed it themselves. The store
+    // subscription above turns the rename into a repaint, so this asks for one
+    // only for the anchor the label did not change.
     this.unsubscribeViewpoint = subscribeViewpoint(() => {
-      // `syncLaneMetrics` before the repaint, because showing the strip changes
-      // how much room the *map* has: without it the map keeps its size, the
-      // strip is added above it, and the tracks below go under the fold.
-      this.syncLaneMetrics()
+      syncViewpointLabel(this.laneStore, fmt.int)
       this.schedule()
     })
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
@@ -1035,79 +1069,63 @@ export class MatrixPanel {
     // for the crosshair, offered in both rows, meant the two disagreed on sight.
     this.paintPlotOptions(getPlotOptions())
 
-    // The two edge rectangles live **inside the map**, not over the grid that
+    // The four edge rectangles live **inside the map**, not over the grid that
     // holds the map and its lanes. Over the grid they covered a quarter of the
     // height and a fifth of the width of the whole thing — which is where the
     // lane stacks are — so a track dragged towards the end of its own stack met
     // a drop target instead of the gap it was aiming for, and the last position
     // in the order could not be reached at all. Inside the map they overlap
-    // nothing that can be dragged, they are forty-pixel strips rather than
-    // quarters of the picture, and they still name the edge they stand for: the
-    // bottom of the picture means below it, the side of it means beside it.
+    // nothing that can be dragged, they are thirty-pixel strips rather than
+    // quarters of the picture, and they still name the edge they stand for.
     //
-    // Built whenever there are annotations at all, not only when files can be
-    // loaded: the rectangles are also where a lane already drawn is dragged to
-    // move it from one edge to the other, and that gesture needs no loader.
+    // Built on every file, not only where annotations can be loaded: the
+    // rectangles are also where a lane already drawn is dragged to move it to
+    // another edge, and that gesture needs no loader — the 4C lane is one.
     const wrap = el(
       'div',
       { class: 'heatmap-wrap' },
       this.canvas,
       this.overlay,
-      ...(options.annotations === undefined
-        ? []
-        : [this.edgeZone('bottom'), this.edgeZone('right')]),
+      ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     )
 
-    this.lanes =
-      options.annotations === undefined
-        ? null
-        : new AnnotationLanes({
-            store: options.annotations.store,
-            manual: options.annotations.manual,
-            client: options.annotations.client,
-            groups: options.annotations.groups,
-            onChange: () => this.schedule(),
-          })
-
-    const annotations = options.annotations
-    if (this.lanes !== null && annotations !== undefined) {
-      for (const edge of ['bottom', 'right'] as const) {
-        const layer = el('div', { class: 'lane-overlays' })
-        this.laneLayers.set(edge, layer)
-        this.laneControls.set(
-          edge,
-          // A track added, removed or regrouped moves the lane a caret was
-          // measured into, and a box hanging over the wrong lane would commit
-          // its number to the right one. A pan changes no signature, which is
-          // why the caret survives one.
-          new LaneControls(layer, annotations.store, () => this.laneEditor?.close()),
-        )
-      }
+    for (const edge of LANE_EDGES) {
+      const layer = el('div', { class: 'lane-overlays' })
+      this.laneLayers.set(edge, layer)
+      this.laneControls.set(
+        edge,
+        // A track added, removed or regrouped moves the lane a caret was
+        // measured into, and a box hanging over the wrong lane would commit
+        // its number to the right one. A pan changes no signature, which is
+        // why the caret survives one.
+        new LaneControls(layer, this.laneStore, () => this.laneEditor?.close()),
+      )
     }
 
     // The map and its lanes are one grid, so a lane canvas is the same width as
     // the map's canvas by construction rather than by arrangement — and the
-    // tooltip, parented here, can float over either.
+    // tooltip, parented here, can float over any of them.
     this.grid = el(
       'div',
       { class: 'panel-grid' },
-      this.viewpointLane.el,
       wrap,
-      ...(this.lanes === null ? [] : [this.lanes.rightEl, this.lanes.bottomEl]),
+      ...LANE_EDGES.map((edge) => this.lanes.canvasFor(edge)),
       ...this.laneLayers.values(),
       this.tooltip,
     )
-    if (this.lanes !== null && annotations !== undefined) {
-      this.laneEditor = new LaneEditor({
-        host: this.grid,
-        store: annotations.store,
-        shownLimits: (id) => this.lanes?.shownLimits(id) ?? null,
-        onChange: () => this.schedule(),
-      })
-      this.watchLane('bottom', this.lanes.bottomEl)
-      this.watchLane('right', this.lanes.rightEl)
-    }
-    if (options.annotations !== undefined) this.watchEdgeDrops()
+    this.laneEditor = new LaneEditor({
+      host: this.grid,
+      store: this.laneStore,
+      shownLimits: (id) => this.lanes.shownLimits(id),
+      onChange: () => this.schedule(),
+    })
+    for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
+    this.watchEdgeDrops()
+    // A restyle, a rename or a move of any lane is a different picture — and on
+    // a file with no annotation machinery this is the only subscription there
+    // is, because the 4C lane lives in the private store.
+    this.laneListeners.push(this.laneStore.subscribe(() => this.schedule()))
+    const annotations = options.annotations
     if (options.annotations !== undefined) {
       this.heatmap.setOverlayPainter((ctx, frame) => this.paintOverlays(ctx, frame))
       // Escape abandons a half-finished pick. On the window rather than the
@@ -1125,7 +1143,6 @@ export class MatrixPanel {
       // The cards write to the stores and the panel reads from them; neither
       // needs a reference to the other, which is what lets the cards live in the
       // shell's sidebar while the plot lives inside a view the shell replaces.
-      this.laneListeners.push(options.annotations.store.subscribe(() => this.schedule()))
       this.laneListeners.push(options.annotations.manual.subscribe(() => this.schedule()))
     }
 
@@ -1234,14 +1251,11 @@ export class MatrixPanel {
     const zone = el(
       'div',
       { class: `lane-drop lane-drop-${edge}` },
-      el('span', {
-        class: 'lane-drop-label',
-        text: edge === 'bottom' ? 'tracks below the map' : 'tracks beside the map',
-      }),
+      el('span', { class: 'lane-drop-label', text: EDGE_WORDS[edge] }),
     )
     this.edgeZones.set(edge, zone)
     zone.addEventListener('dragover', (event) => {
-      if (!dragHasFiles(event) && !dragHasTrack(event)) return
+      if (!this.acceptsDrag(event)) return
       // Both, and in this order: the default action for a dropped file is to
       // navigate the window to it, and the panel above is not the one that
       // decides where this file goes.
@@ -1266,26 +1280,41 @@ export class MatrixPanel {
       const moved = event.dataTransfer?.getData(TRACK_DRAG_TYPE) ?? ''
       if (moved !== '') {
         event.preventDefault()
-        const store = this.options.annotations?.store
-        const entry = store?.byId(moved)
-        if (store !== undefined && entry !== undefined) {
-          store.update(moved, {
-            placement: { bottom: edge === 'bottom', right: edge === 'right' },
-          })
+        if (this.laneStore.byId(moved) !== undefined) {
+          this.laneStore.place(moved, placementOn(edge))
         }
         return
       }
 
+      const load = this.options.annotations?.loadOnEdge
       const files = Array.from(event.dataTransfer?.files ?? [])
-      if (files.length === 0) return
+      // Untouched where this file cannot carry tracks at all (§8.5). The shell
+      // stands aside for a `.lane-drop` target, so claiming a drop we cannot
+      // answer would swallow it — and a `.cool` dropped on a metacool's map is
+      // still a file the session knows how to open.
+      if (files.length === 0 || load === undefined) return
       event.preventDefault()
       // Not stopped: the shell's content-wide handler has to see this drop to
       // put its own highlight away, and it stands aside for a `.lane-drop`
       // target exactly as it does for the picker's zone — so the files are
       // loaded once, here, with the edge the reader aimed at.
-      this.options.annotations?.loadOnEdge?.(files, edge)
+      load(files, edge)
     })
     return zone
+  }
+
+  /**
+   * Whether one of the rectangles will answer for this drag.
+   *
+   * A lane being moved always: that gesture is about which edge a lane is drawn
+   * on, and every file has lanes. A *file* only where one can be loaded — the
+   * rectangles are inside the map and the shell hands a drop on them to this
+   * panel, so lighting them up for a drag we would ignore is a target that eats
+   * the file.
+   */
+  private acceptsDrag(event: DragEvent): boolean {
+    if (dragHasTrack(event)) return true
+    return dragHasFiles(event) && this.options.annotations?.loadOnEdge !== undefined
   }
 
   /**
@@ -1307,7 +1336,7 @@ export class MatrixPanel {
    */
   private watchEdgeDrops(): void {
     const show = (event: DragEvent): void => {
-      if (!dragHasFiles(event) && !dragHasTrack(event)) return
+      if (!this.acceptsDrag(event)) return
       this.grid.classList.add('is-dropping')
     }
     const hide = (event: DragEvent): void => {
@@ -1403,12 +1432,9 @@ export class MatrixPanel {
    * implementation waiting to drift from the other.
    */
   autoscaleTracks(): void {
-    const store = this.options.annotations?.store
-    if (store === undefined) return
-    for (const entry of store.entries) {
-      if (entry.kind !== 'track' && entry.kind !== 'sequence') continue
-      if (entry.style.limits.auto) continue
-      store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
+    for (const entry of this.laneStore.entries) {
+      if (!drawsAProfile(entry.kind) || entry.style.limits.auto) continue
+      this.laneStore.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
     }
   }
 
@@ -1423,13 +1449,12 @@ export class MatrixPanel {
     const held = this.laneScaling
     this.laneScaling = null
     this.schedule()
-    const store = this.options.annotations?.store
-    if (held === null || held.factor === 1 || store === undefined) return
-    const extent = this.lanes?.extentOf(edge, held.id) ?? null
+    if (held === null || held.factor === 1) return
+    const extent = this.lanes.extentOf(edge, held.id)
     for (const member of members) {
-      if (member.kind !== 'track') continue
+      if (!hasAMovableAxis(member.kind)) continue
       const next = nudgedLimits(member.style.limits, extent, held.factor)
-      if (next !== null) store.restyle(member.id, { limits: next })
+      if (next !== null) this.laneStore.restyle(member.id, { limits: next })
     }
   }
 
@@ -1447,48 +1472,45 @@ export class MatrixPanel {
    * taken out of the map's own column.
    */
   fitTracks(): void {
-    const lanes = this.lanes
-    const store = this.options.annotations?.store
-    if (lanes === null || store === undefined) return
     const box = this.grid.getBoundingClientRect()
-    for (const edge of ['bottom', 'right'] as const) {
-      const slots = lanes.boundariesOf(edge).length
+    // Per axis rather than per edge: the stacks above and below the map take
+    // from one height between them, and a half each would let four lanes take
+    // the whole window. The same for the two beside it.
+    for (const axis of [
+      { edges: ['top', 'bottom'] as const, room: box.height },
+      { edges: ['left', 'right'] as const, room: box.width },
+    ]) {
+      const slots = axis.edges.reduce((total, edge) => total + this.lanes.slotCount(edge), 0)
       if (slots === 0) continue
-      // Half the box on the axis this stack takes from, which is the most a
-      // stack may claim without the map ceasing to be the thing being looked at.
-      const room = (edge === 'bottom' ? box.height : box.width) / 2 - LANE_GAP * (slots + 1)
+      // Half the box on the axis these stacks take from, which is the most they
+      // may claim without the map ceasing to be the thing being looked at.
+      const room = axis.room / 2 - LANE_GAP * (slots + 1)
       const size = heightThatFills(room, slots)
       if (size === null) continue
-      setTrackHeight(store, lanes.lanesOn(edge), size)
+      for (const edge of axis.edges) {
+        setTrackHeight(this.laneStore, this.lanes.lanesOn(edge), size)
+      }
     }
   }
 
   /**
    * The other way out of a stretch: every lane down to the shortest of them.
    *
-   * Across both edges rather than each on its own, which is the same rule
+   * Across every edge rather than each on its own, which is the same rule
    * {@link setTrackHeight} follows and for the same reason: a bottom lane and a
    * right-hand one meet at the corner of one figure, and two stacks shrunk to
    * two different heights is the corner disagreeing with itself.
    */
   shrinkTracks(): void {
-    const lanes = this.lanes
-    const store = this.options.annotations?.store
-    if (lanes === null || store === undefined) return
-    const size = smallestLaneSize([...lanes.lanesOn('bottom'), ...lanes.lanesOn('right')])
+    const size = smallestLaneSize(LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge)))
     if (size === null) return
-    for (const edge of ['bottom', 'right'] as const) {
-      setTrackHeight(store, lanes.lanesOn(edge), size)
-    }
+    this.setTrackHeight(size)
   }
 
-  /** Give every lane on both edges one height, chosen rather than computed. */
+  /** Give every lane on every edge one height, chosen rather than computed. */
   setTrackHeight(px: number): void {
-    const lanes = this.lanes
-    const store = this.options.annotations?.store
-    if (lanes === null || store === undefined) return
-    for (const edge of ['bottom', 'right'] as const) {
-      setTrackHeight(store, lanes.lanesOn(edge), px)
+    for (const edge of LANE_EDGES) {
+      setTrackHeight(this.laneStore, this.lanes.lanesOn(edge), px)
     }
   }
 
@@ -1522,7 +1544,7 @@ export class MatrixPanel {
     // The lanes' sample cache goes with the panel, not with the file: the store
     // outlives this view, and a cache keyed on a view's own geometry would be
     // answering the next view's questions with the last one's data.
-    this.lanes?.destroy()
+    this.lanes.destroy()
     // Through the editor's own close, not by detaching its node: removing a
     // focused input *is* a blur, so a raw removal would hand the blur handler a
     // live editor and commit a value on the way out — from here, that is a store
@@ -1588,14 +1610,15 @@ export class MatrixPanel {
     const gap = 10
     // The lanes are part of the figure, so they are part of its box. A track
     // exported without them is a picture of a claim with its evidence cropped
-    // off.
-    const rightLanes = this.lanes?.thicknessOf('right') ?? 0
-    const bottomLanes = this.lanes?.thicknessOf('bottom') ?? 0
+    // off. The two that come *before* the map also move it: everything else on
+    // the page is placed against `origin` rather than against the canvas.
+    const stacks = this.laneStacks()
+    const origin = { x: stacks.left, y: stacks.top }
     // A compared figure carries both legends, side by side, because the two
     // value axes are the only thing distinguishing whose counts a colour is.
     const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
-    const width = plot.width + rightLanes + gap + bar.width + bar2.width
-    const body = Math.max(plot.height + bottomLanes, bar.height, bar2.height)
+    const width = stacks.left + plot.width + stacks.right + gap + bar.width + bar2.width
+    const body = Math.max(stacks.top + plot.height + stacks.bottom, bar.height, bar2.height)
 
     const out = document.createElement('canvas')
     const ctx = out.getContext('2d')
@@ -1606,9 +1629,10 @@ export class MatrixPanel {
     // than running off the edge. Setting `width`/`height` resets the context,
     // so nothing is drawn until after.
     // Aligned with the *drawn* frame, not the canvas: the plot is inset by
-    // however much its labels need, and a caption flush with the canvas edge
-    // hangs off the left of the picture it belongs to.
-    const left = this.heatmap.dataRect.x
+    // however much its labels need — and by whatever stack stands to its left —
+    // and a caption flush with the canvas edge hangs off the left of the
+    // picture it belongs to.
+    const left = origin.x + this.heatmap.dataRect.x
     const caption = this.figureCaption(now)
     const lines = captionLines(ctx, caption, Math.max(120, width - left))
     const captionHeight = captionHeightOf(lines)
@@ -1631,15 +1655,14 @@ export class MatrixPanel {
     out.width = Math.max(1, Math.round(width * scale))
     out.height = Math.max(1, Math.round(height * scale))
 
-    // The plot draws from the canvas origin and clears as it goes, so it goes
-    // first and the background goes on underneath at the end. The caption is
-    // *below* the figure, which is where a caption goes and — not incidentally
-    // — the only place that needs no offset for anything else.
-    this.heatmap.renderTo(ctx, scale)
-    // Placed exactly as the grid places them — below the plot, and beside it —
-    // and *redrawn* at the export scale rather than blown up from the screen
-    // canvases, so a 300 dpi figure has 300 dpi track names.
-    this.lanes?.renderInto(ctx, this.figureGeometry(), scale)
+    // The plot draws from `origin` and clears as it goes, so it goes first and
+    // the background goes on underneath at the end. The caption is *below* the
+    // figure, which is where a caption goes.
+    this.heatmap.renderTo(ctx, scale, origin)
+    // Placed exactly as the grid places them — around the plot, on all four
+    // sides — and *redrawn* at the export scale rather than blown up from the
+    // screen canvases, so a 300 dpi figure has 300 dpi track names.
+    this.lanes.renderInto(ctx, this.figureGeometry(), scale, origin)
 
     // The legend renders into a canvas of its own and is then placed, because
     // `renderTo` also draws from the origin — there is nowhere to pass an
@@ -1654,7 +1677,7 @@ export class MatrixPanel {
     // context, and drawing the legend through that would put it at 3× its
     // offset, which is off the canvas entirely.
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    const barLeft = plot.width + rightLanes + gap
+    const barLeft = stacks.left + plot.width + stacks.right + gap
     ctx.drawImage(barCanvas, Math.round(barLeft * scale), 0)
 
     if (this.second !== null) {
@@ -1718,14 +1741,14 @@ export class MatrixPanel {
     const bar = this.colorbar.cssSize
     const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
     const gap = 10
-    const rightLanes = this.lanes?.thicknessOf('right') ?? 0
-    const bottomLanes = this.lanes?.thicknessOf('bottom') ?? 0
-    const width = plot.width + rightLanes + gap + bar.width + bar2.width
-    const body = Math.max(plot.height + bottomLanes, bar.height, bar2.height)
+    const stacks = this.laneStacks()
+    const origin = { x: stacks.left, y: stacks.top }
+    const width = stacks.left + plot.width + stacks.right + gap + bar.width + bar2.width
+    const body = Math.max(stacks.top + plot.height + stacks.bottom, bar.height, bar2.height)
 
     const measure = document.createElement('canvas').getContext('2d')
     if (measure === null) throw new Error('Could not measure the caption.')
-    const left = this.heatmap.dataRect.x
+    const left = origin.x + this.heatmap.dataRect.x
     const caption = this.figureCaption(now)
     const lines = captionLines(measure, caption, Math.max(120, width - left))
     const height = body + captionHeightOf(lines)
@@ -1737,14 +1760,14 @@ export class MatrixPanel {
     ctx.fillStyle = readPageBackground()
     ctx.fillRect(0, 0, width, height)
 
-    this.heatmap.renderTo(ctx, 1)
-    this.lanes?.renderInto(ctx, this.figureGeometry(), 1)
+    this.heatmap.renderTo(ctx, 1, origin)
+    this.lanes.renderInto(ctx, this.figureGeometry(), 1, origin)
 
     // Each legend where the grid puts it. `renderTo` draws from the origin and
     // sets an absolute transform, so an offset has to be applied under it —
     // which is what `setOrigin` is for, and why this is not the intermediate
     // canvas the raster path needs.
-    const barLeft = plot.width + rightLanes + gap
+    const barLeft = stacks.left + plot.width + stacks.right + gap
     page.setOrigin(barLeft, 0)
     this.colorbar.renderTo(ctx, 1)
     if (this.second !== null) {
@@ -2072,15 +2095,21 @@ export class MatrixPanel {
   private viewpointToggle(): HTMLElement {
     const node = iconButton(
       'chart-line',
-      'A virtual 4C profile above the map: pick an anchor with Shift + drag, and this is ' +
-        'the sum of every column over it — computed from the block on screen, at the ' +
-        'resolution it is drawn at.',
-      () => setViewpointShown(!getViewpoint().shown),
+      'A virtual 4C profile, as a lane of its own: pick an anchor with Shift + drag, and this ' +
+        'is the sum over it — computed from the block on screen, at the resolution it is drawn ' +
+        'at. It is a lane like any other, so it can be renamed, recoloured, rescaled, resized, ' +
+        'reordered and dragged to any edge of the map; beside the map it reads the other way ' +
+        'round, which is the same anchor answered about rows instead of columns.',
+      () => showViewpoint(this.laneStore, !isViewpointShown(this.laneStore), fmt.int),
       { class: 'btn btn-icon btn-toggle', size: 15 },
     )
-    const sync = (): void => node.setAttribute('aria-pressed', String(getViewpoint().shown))
+    const sync = (): void =>
+      node.setAttribute('aria-pressed', String(isViewpointShown(this.laneStore)))
     sync()
-    this.laneListeners.push(subscribeViewpoint(sync))
+    // Off the *store*, because that is where the lane's visibility now lives:
+    // hiding it from the lane's own right-click menu has to light this button
+    // down, and a subscription to the anchor would never hear about it.
+    this.laneListeners.push(this.laneStore.subscribe(sync))
     return node
   }
 
@@ -2112,63 +2141,62 @@ export class MatrixPanel {
       start: Math.round(from.bp),
       end: Math.round(to.bp + segment.bpPerUnit),
     })
+    // The gesture is a deliberate one on the picture, so it puts the lane up if
+    // it was not already there: drawing nothing in response would leave a reader
+    // who had just dragged over a locus with no evidence anything had happened.
+    showViewpoint(this.laneStore, true, fmt.int)
+    syncViewpointLabel(this.laneStore, fmt.int)
   }
 
   /**
-   * Paint the 4C strip, or collapse it to nothing.
-   *
-   * Height zero rather than `display: none`, so the canvas stays in the grid and
-   * the row it occupies simply has no size: turning the lane on and off then
-   * costs a reflow of one track rather than a re-layout of the panel, and the
-   * map does not jump under the pointer that just pressed the button.
-   */
-  private drawViewpoint(): void {
-    const shown = getViewpoint().shown
-    this.viewpointLane.el.classList.toggle('hidden', !shown)
-    if (!shown) return
-    const palette = readCanvasPalette(this.canvas)
-    this.viewpointLane.draw(
-      {
-        data: this.heatmap.dataRect,
-        colScale: this.heatmap.scaleX,
-        cssWidth: this.heatmap.cssSize.width,
-        matrix: this.heatmap.block,
-        rows: this.anchorRows(),
-        palette: {
-          label: palette.labelColor,
-          halo: palette.labelHaloColor,
-          line: palette.plotBorderColor,
-        },
-      },
-      this.heatmap.devicePixelRatio,
-    )
-  }
-
-  /**
-   * The anchor as rows of the block on screen, or `null` when it is elsewhere.
+   * The anchor as a band of one axis of the block on screen, or `null`.
    *
    * The anchor is kept as a locus (`ui/viewpoint.ts`) precisely so that this
-   * question can be asked freshly of every block: pan, zoom, change resolution,
-   * open another region, and the same locus lands on different rows or on none
-   * at all. `null` is a real answer and the lane says so rather than drawing a
-   * profile of whatever happens to be at those row numbers now.
+   * question can be asked freshly of every block *and of either axis*: pan,
+   * zoom, change resolution, open another region, and the same locus lands on
+   * different rows or on none at all. `null` is a real answer and the lane says
+   * so rather than drawing a profile of whatever happens to be at those row
+   * numbers now.
+   *
+   * Asked of both axes each frame, because a 4C lane under the map sums a band
+   * of *rows* and one beside it sums a band of *columns* — the same locus, and
+   * off the diagonal two different questions, one of which may have no answer.
    */
-  private anchorRows(): [number, number] | null {
-    const anchor = getViewpoint().anchor
+  private anchorBand(which: 'rows' | 'cols'): [number, number] | null {
+    const anchor = getViewpointAnchor()
     const matrix = this.heatmap.block
-    const axis = this.locusAxes.rows
+    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
     if (anchor === null || matrix === null || axis === null) return null
     // Block-local from the start: `locusToUnit` answers in this axis's own
     // coordinates, which are already the rows of the block it was built for.
     const lo = axis.locusToUnit(anchor.contig, anchor.start)
     const hi = axis.locusToUnit(anchor.contig, Math.max(anchor.start, anchor.end - 1))
     if (lo === null || hi === null) return null
+    const extent = which === 'rows' ? matrix.nrows : matrix.ncols
     const from = Math.floor(Math.min(lo, hi))
     const to = Math.floor(Math.max(lo, hi)) + 1
     // Off this block entirely — the reader has panned away from their anchor, or
     // opened somewhere else. A real answer, and the lane says so.
-    if (to <= 0 || from >= matrix.nrows) return null
-    return [Math.max(0, from), Math.min(matrix.nrows, to)]
+    if (to <= 0 || from >= extent) return null
+    return [Math.max(0, from), Math.min(extent, to)]
+  }
+
+  /**
+   * What an empty 4C lane says.
+   *
+   * Three states and three different sentences, because they call for three
+   * different things from the reader: there is no anchor yet, or there is one
+   * and this block does not contain it, or there is one and this view has no
+   * coordinate system to look for it in — which is what a contig-level or
+   * whole-genome block is, where a cell *is* a sequence.
+   */
+  private viewpointPrompt(): string {
+    const anchor = getViewpointAnchor()
+    if (anchor === null) return 'Press Shift + drag on the map to define an anchor region'
+    if (this.locusAxes.rows === null && this.locusAxes.cols === null) {
+      return 'No anchor at this level — open a region to read a 4C profile'
+    }
+    return `${viewpointLabel(anchor, fmt.int)} is not in this view`
   }
 
   private laneGeometry(): LaneGeometry {
@@ -2180,6 +2208,12 @@ export class MatrixPanel {
       rowScale: this.heatmap.scaleY,
       cssWidth: this.heatmap.cssSize.width,
       cssHeight: this.heatmap.cssSize.height,
+      viewpoint: {
+        matrix: this.heatmap.block,
+        rows: this.anchorBand('rows'),
+        cols: this.anchorBand('cols'),
+        prompt: this.viewpointPrompt(),
+      },
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       crosshair: getPlotOptions().crosshair,
       guide: this.laneHover,
@@ -2208,6 +2242,23 @@ export class MatrixPanel {
   }
 
   /**
+   * How much room each stack needs, for a figure that has to make room for it.
+   *
+   * Two of the four move the map rather than merely extending the page, which
+   * is why this is one call and not four: everything a figure draws is placed
+   * against the plot's own corner, and above the map and to its left that
+   * corner is not the canvas's.
+   */
+  private laneStacks(): Record<LaneEdge, number> {
+    return {
+      top: this.lanes.thicknessOf('top'),
+      right: this.lanes.thicknessOf('right'),
+      bottom: this.lanes.thicknessOf('bottom'),
+      left: this.lanes.thicknessOf('left'),
+    }
+  }
+
+  /**
    * Follow the pointer over one lane stack.
    *
    * The lanes get their own listeners rather than sharing the heatmap's, because
@@ -2231,8 +2282,10 @@ export class MatrixPanel {
    */
   private dragLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
     const lanes = this.lanes
-    const context = this.options.annotations
-    if (lanes === null || context === undefined) return
+    const store = this.laneStore
+    const horizontal = laneIsHorizontal(edge)
+    /** Which way a pointer displacement on this canvas moves *outward*. */
+    const outward = lanes.outwardOf(edge)
 
     /**
      * Three gestures on one surface, told apart by *where* the press lands.
@@ -2281,8 +2334,8 @@ export class MatrixPanel {
       within = 0,
       members: AnnotationEntry[] = [],
     ): void => {
-      const across = edge === 'bottom' ? event.clientY : event.clientX
-      const along = edge === 'bottom' ? event.clientX : event.clientY
+      const across = horizontal ? event.clientY : event.clientX
+      const along = horizontal ? event.clientX : event.clientY
       drag = {
         id,
         kind,
@@ -2326,11 +2379,11 @@ export class MatrixPanel {
         // gesture can end: a drag whose target only appears once you are on it
         // is a drag nobody makes twice.
         //
-        // The *other* edge's rectangle, and only that one. A track dragged out
-        // of the bottom stack cannot be moved to the bottom — it is already
-        // there — so offering it that target is offering a gesture with no
-        // outcome, and a lit rectangle that does nothing when you let go reads
-        // as the drag having failed.
+        // Every rectangle *but this edge's own*. A track dragged out of the
+        // bottom stack cannot be moved to the bottom — it is already there — so
+        // offering it that target is offering a gesture with no outcome, and a
+        // lit rectangle that does nothing when you let go reads as the drag
+        // having failed.
         this.edgeZones.get(edge)?.classList.add('away')
         this.grid.classList.add('is-dropping')
         return
@@ -2351,14 +2404,14 @@ export class MatrixPanel {
       // says whether it is the pan a lane has always been or a drag on that
       // lane's ceiling. The border needs no such reading — a border can be
       // dragged for exactly one thing.
-      const within = (edge === 'bottom' ? y : x) - lanes.acrossOf(edge, hit.entry.id)
+      const within = lanes.withinLane(edge, hit.entry.id, x, y)
       start(
         hit.entry.id,
         hit.onBorder ? 'size' : 'press',
         event,
         hit.entry.style.size,
         within,
-        hit.members.filter((member) => member.kind === 'track'),
+        hit.members.filter((member) => hasAMovableAxis(member.kind)),
       )
       if (!hit.onBorder) canvas.classList.add('grabbing')
     }
@@ -2400,8 +2453,8 @@ export class MatrixPanel {
         }
         return
       }
-      const now = edge === 'bottom' ? event.clientY : event.clientX
-      const alongNow = edge === 'bottom' ? event.clientX : event.clientY
+      const now = horizontal ? event.clientY : event.clientX
+      const alongNow = horizontal ? event.clientX : event.clientY
 
       if (drag.kind === 'press') {
         const across = now - drag.from0
@@ -2425,8 +2478,6 @@ export class MatrixPanel {
       }
 
       if (drag.kind === 'scale') {
-        const lanes = this.lanes
-        if (lanes === null) return
         const frame = lanes.frameFor(edge, drag.id, this.laneGeometry())
         if (frame === null) return
         this.laneScaling = {
@@ -2434,7 +2485,12 @@ export class MatrixPanel {
           factor: ceilingFactor(
             frame,
             drag.within,
-            now - drag.from0 + drag.within,
+            // In the lane's own across coordinates, which run outward from the
+            // map — so on a stack above or to the left of it the pointer's
+            // displacement is the *negative* of the travel. `ceilingFactor` asks
+            // the frame which way a larger value is drawn, and it can only be
+            // asked in the units it answers in.
+            drag.within + outward * (now - drag.from0),
             drag.members[0]?.style.flip === true,
           ),
         }
@@ -2456,12 +2512,12 @@ export class MatrixPanel {
         // beside the stack: past either end there is no slot being pointed at,
         // and answering anyway would fling the track to the top of the order on
         // the way out to a rectangle.
-        const across = edge === 'bottom' ? event.clientY - box.top : event.clientX - box.left
-        const span = edge === 'bottom' ? canvas.clientHeight : canvas.clientWidth
+        const x = event.clientX - box.left
+        const y = event.clientY - box.top
+        const across = horizontal ? y : x
+        const span = horizontal ? canvas.clientHeight : canvas.clientWidth
         if (across < 0 || across > span) return
-        const bounds = lanes.boundariesOf(edge)
-        let to = 0
-        while (to + 1 < bounds.length && across >= bounds[to + 1]) to++
+        const to = lanes.slotIndexAt(edge, x, y)
         // Once per slot *crossed*, not once per pointer move. Without it an
         // overlay group thrashes: moving its host past its own members only
         // re-elects a host, the two orders draw identically, and the move fires
@@ -2478,19 +2534,20 @@ export class MatrixPanel {
         if (delta === 0) return
         // `panBy` takes a *canvas* displacement, which is what this is: the lane
         // and the map share their pixels on this axis by construction (§8.4).
-        if (edge === 'bottom') this.heatmap.panBy(delta, 0)
+        if (horizontal) this.heatmap.panBy(delta, 0)
         else this.heatmap.panBy(0, delta)
         return
       }
 
-      // Thickness grows *away* from the map on both edges, so the delta is the
-      // pointer's own displacement in the across direction.
+      // Thickness grows *away* from the map on every edge, so the delta is the
+      // pointer's displacement in the outward direction — which above the map
+      // and to its left is the canvas direction reversed.
       // Every track in the lane, because an overlay group shares one strip:
       // resizing the host alone would leave its members claiming a height the
       // stack no longer gives them.
-      const next = laneSize(drag.size + (now - drag.from))
+      const next = laneSize(drag.size + outward * (now - drag.from))
       for (const member of lanes.membersOf(edge, drag.id)) {
-        context.store.restyle(member.id, { size: next })
+        store.restyle(member.id, { size: next })
       }
     }
 
@@ -2522,12 +2579,9 @@ export class MatrixPanel {
       if (drag.kind === 'grip' && drag.to !== null) {
         const target = drag.to
         // Every member, because an overlay group is one lane on screen and would
-        // otherwise be split across the two edges by a single drag.
+        // otherwise be split across two edges by a single drag.
         for (const member of lanes.membersOf(edge, drag.id)) {
-          context.store.place(member.id, {
-            bottom: target === 'bottom',
-            right: target === 'right',
-          })
+          store.place(member.id, placementOn(target))
         }
       }
       if (drag.kind === 'grip') {
@@ -2546,7 +2600,7 @@ export class MatrixPanel {
       const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.entry, context.store)
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -2592,9 +2646,8 @@ export class MatrixPanel {
   }
 
   private watchLane(edge: LaneEdge, canvas: HTMLCanvasElement): void {
+    const lanes = this.lanes
     const onMove = (event: MouseEvent): void => {
-      const lanes = this.lanes
-      if (lanes === null) return
       // A track being carried to an edge is not a position being pointed at.
       if (this.laneGripping) {
         this.tooltip.classList.add('hidden')
@@ -2607,7 +2660,7 @@ export class MatrixPanel {
       // The hairline first, and through a repaint rather than a second canvas:
       // it crosses the lane stack and the map, and both are redrawn from this
       // one number on the next frame.
-      const along = edge === 'bottom' ? x : y
+      const along = laneIsHorizontal(edge) ? x : y
       const before = this.laneHover
       if (before === null || before.edge !== edge || before.along !== along) {
         this.laneHover = { edge, along }
@@ -2714,8 +2767,8 @@ export class MatrixPanel {
       // a trackpad pinch arrives as a wheel with `ctrlKey` set, so taking it here
       // would swallow every pinch and run away with a ceiling instead of zooming.
       const lanes = this.lanes
-      const store = this.options.annotations?.store
-      if (CEILING_MODIFIER(event) && lanes !== null && store !== undefined) {
+      const store = this.laneStore
+      if (CEILING_MODIFIER(event)) {
         const hit = lanes.laneAt(edge, x, y)
         if (hit === null) return
         event.preventDefault()
@@ -2725,7 +2778,7 @@ export class MatrixPanel {
         const extent = lanes.extentOf(edge, hit.entry.id)
         const factor = event.deltaY < 0 ? 1 / CEILING_STEP : CEILING_STEP
         for (const member of hit.members) {
-          if (member.kind !== 'track') continue
+          if (!hasAMovableAxis(member.kind)) continue
           const next = nudgedLimits(member.style.limits, extent, factor)
           if (next !== null) store.restyle(member.id, { limits: next })
         }
@@ -2738,7 +2791,7 @@ export class MatrixPanel {
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
       event.preventDefault()
       const at = middle()
-      if (edge === 'bottom') at.x = x
+      if (laneIsHorizontal(edge)) at.x = x
       else at.y = y
       this.heatmap.zoomAt(at.x, at.y, Math.exp(-event.deltaY * 0.002))
     }
@@ -2822,12 +2875,15 @@ export class MatrixPanel {
       rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
       cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
     }
-    if (context !== undefined) {
-      this.lanes?.setAxes(this.locusAxes)
-      // The caret was measured into a lane of the outgoing block, and the number
-      // in it belongs to a picture that no longer exists.
-      this.laneEditor?.close()
-    }
+    // Unconditionally, because every file has lanes now: the 4C profile is one,
+    // and it is drawn against the same two axes even where no annotation can be.
+    this.lanes.setAxes(this.locusAxes)
+    // The caret was measured into a lane of the outgoing block, and the number
+    // in it belongs to a picture that no longer exists.
+    this.laneEditor?.close()
+    // The lane's name follows the anchor until the reader renames it, and a new
+    // block can put the anchor in view or take it out of it.
+    syncViewpointLabel(this.laneStore, fmt.int)
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
@@ -2917,8 +2973,7 @@ export class MatrixPanel {
       // After the matrix and inside the same frame: the lanes read the scales
       // the heatmap has just written, so drawing them anywhere else would show
       // the previous frame's pan for one frame on every drag.
-      this.lanes?.draw(this.laneGeometry())
-      this.drawViewpoint()
+      this.lanes.draw(this.laneGeometry())
       // …and for the same reason: the scales the heatmap has just written are
       // what this reads, and writing it before the draw would show the previous
       // frame's window for one frame of every drag.
@@ -2956,38 +3011,36 @@ export class MatrixPanel {
   }
 
   /**
-   * Tell the stylesheet how much vertical budget the bottom lanes take, and
-   * re-measure whenever either stack changes thickness.
+   * Tell the stylesheet how much vertical budget the horizontal stacks take, and
+   * re-measure whenever any stack changes thickness.
    *
-   * The plot's size is `100vh` minus its furniture, and a stack of tracks under
-   * it is furniture: without the property, six tracks push the map off the
-   * bottom of the window. The *right* stack needs no property — the grid's own
-   * `max-width` takes it out of the plot's width, since a percentage written
-   * here would resolve against the plot's own track and chase its own tail — but
-   * it still has to be watched, because a lane appearing beside the map resizes
-   * the map just as surely as one appearing under it.
+   * The plot's size is `100vh` minus its furniture, and a stack of tracks above
+   * or below it is furniture: without the properties, six tracks push the map
+   * off the bottom of the window. The *vertical* stacks need no property — the
+   * grid's own `max-width` takes them out of the plot's width, since a
+   * percentage written here would resolve against the plot's own track and chase
+   * its own tail — but they still have to be watched, because a lane appearing
+   * beside the map resizes the map just as surely as one appearing under it.
    *
    * Written only when a thickness changes, because assigning a custom property
    * invalidates layout and this runs on every frame of a drag.
    */
   private syncLaneMetrics(): void {
-    const bottom = this.lanes?.thicknessOf('bottom') ?? 0
-    const right = this.lanes?.thicknessOf('right') ?? 0
-    // The 4C strip is furniture in exactly the same sense: it sits above the map
-    // in the same vertical budget, and without this the map kept its size, the
-    // strip was added to the top of it, and the tracks under the pair went below
-    // the fold — which is the one thing this property exists to prevent.
-    const top = getViewpoint().shown ? this.viewpointLane.height + VIEWPOINT_GAP : 0
-    if (
-      bottom === this.laneBudget.bottom &&
-      right === this.laneBudget.right &&
-      top === this.laneBudget.top
-    ) {
-      return
+    const next = {
+      top: this.lanes.thicknessOf('top'),
+      right: this.lanes.thicknessOf('right'),
+      bottom: this.lanes.thicknessOf('bottom'),
+      left: this.lanes.thicknessOf('left'),
     }
-    this.laneBudget = { bottom, right, top }
-    this.grid.style.setProperty('--lane-bottom', `${bottom}px`)
-    this.grid.style.setProperty('--lane-top', `${top}px`)
+    if (LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge])) return
+    this.laneBudget = next
+    // The gap the grid keeps between a stack and the map is part of the budget:
+    // it is arithmetic in a stylesheet, and a gap the arithmetic did not know
+    // about is a gap the map is pushed down by.
+    const room = (thickness: number): string =>
+      `${thickness === 0 ? 0 : thickness + LANE_GAP}px`
+    this.grid.style.setProperty('--lane-top', room(next.top))
+    this.grid.style.setProperty('--lane-bottom', room(next.bottom))
     // Re-measure *now*, in the same frame, rather than waiting for the resize
     // observer. The observer watches the grid, and the grid's width is the wider
     // of the plot and the lane below it — so a plot that has just shrunk under a
@@ -3007,14 +3060,13 @@ export class MatrixPanel {
    * `.lane-bottom` sits four pixels down.
    */
   private syncLaneControls(): void {
-    const lanes = this.lanes
     for (const [edge, controls] of this.laneControls) {
-      const canvas = edge === 'bottom' ? lanes?.bottomEl : lanes?.rightEl
-      if (lanes === null || canvas === undefined || canvas.classList.contains('hidden')) {
+      const canvas = this.lanes.canvasFor(edge)
+      if (canvas.classList.contains('hidden')) {
         controls.clear()
         continue
       }
-      controls.sync(lanes.marksOn(edge), { left: canvas.offsetLeft, top: canvas.offsetTop })
+      controls.sync(this.lanes.marksOn(edge), { left: canvas.offsetLeft, top: canvas.offsetTop })
     }
   }
 
@@ -3952,21 +4004,45 @@ export function toDense(data: MatrixResult): DenseMatrix {
 }
 
 
+/** What each edge is called, wherever one has to be named to a reader. */
+const EDGE_WORDS: Record<LaneEdge, string> = {
+  top: 'above the map',
+  right: 'beside the map',
+  bottom: 'below the map',
+  left: 'left of the map',
+}
+
 /**
- * The right-click menu on a lane: its colour, and what its value axis spans.
+ * The right-click menu on a lane: its colour, its axis, and where it is drawn.
  *
- * The two things the side panel offers for a track that a reader beside the map
+ * The things the side panel offers for a track that a reader beside the map
  * actually reaches for, brought to where the track is. Colour opens the
  * browser's own picker — the same control the card uses, so the two cannot drift
  * — and the range is offered as the choices worth having rather than as two
  * boxes: auto, and the round steps around what is on screen. A number box in a
  * context menu is a form in a menu.
+ *
+ * The location block and the flip are here for a reason worth stating: the 4C
+ * profile is a lane with no row in any card, so a control it cannot reach from
+ * the picture is a control it does not have. Offering them to every lane rather
+ * than to that one is the same argument the rest of this file makes — a lane is
+ * a lane — and it saves every other track a trip to the sidebar as well.
  */
 export function openLaneMenu(
   x: number,
   y: number,
   entry: AnnotationEntry,
   store: AnnotationStore,
+  /**
+   * The stack the menu was opened from — what "towards the map" is measured
+   * against, and what the location block moves the lane *off*.
+   *
+   * `null` on a surface with no map to have edges: the 1D browser draws every
+   * lane the same way up and its placement means nothing until the reader goes
+   * back to a map, so offering four edges there would be offering a control
+   * with no visible effect.
+   */
+  edge: LaneEdge | null,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = [
@@ -3991,7 +4067,7 @@ export function openLaneMenu(
     },
   ]
 
-  if (entry.kind === 'track') {
+  if (hasAMovableAxis(entry.kind)) {
     items.push(
       { label: 'Range' },
       {
@@ -4013,13 +4089,47 @@ export function openLaneMenu(
     )
   }
 
+  // Where the lane goes, as words. The same field the row's `location` control
+  // writes and the same call the drag onto a rectangle makes, so a lane moved
+  // three different ways is moved once — including the axis turning to keep
+  // facing the map, which is `place`'s and not any caller's.
+  if (edge !== null) {
+    items.push(
+      { label: 'Draw it' },
+      ...LANE_EDGES.map((side) => ({
+        label: EDGE_WORDS[side],
+        disabled:
+          entry.placement[side] && LANE_EDGES.filter((each) => entry.placement[each]).length === 1,
+        run: () => store.place(entry.id, placementOn(side)),
+      })),
+    )
+  }
+
+  if (drawsAProfile(entry.kind)) {
+    // Which way the signal currently grows, which is the edge's own reading
+    // turned round by the flip — not the flip on its own. A lane above the map
+    // and one below it with the same `flip` grow in opposite directions
+    // relative to the picture, and "flip" is not a word about a picture.
+    const towards = laneGrowsInward(edge ?? 'bottom') !== entry.style.flip
+    items.push({
+      label: towards ? 'Grow away from the map' : 'Grow towards the map',
+      hint: towards ? 'now towards' : 'now away',
+      run: () => store.restyle(entry.id, { flip: !entry.style.flip }),
+    })
+  }
+
   items.push(
-    { label: 'This track' },
+    { label: entry.kind === 'viewpoint' ? 'This profile' : 'This track' },
     {
       label: entry.visible ? 'Hide' : 'Show',
       run: () => store.update(entry.id, { visible: !entry.visible }),
     },
-    { label: 'Remove', run: () => store.remove(entry.id) },
+    // Nothing to remove on the 4C lane: there is no file to put down, and the
+    // button that made it would make a *new* one in the factory's colours,
+    // throwing away whatever the reader had styled. Hiding is what they mean.
+    ...(entry.kind === 'viewpoint'
+      ? []
+      : [{ label: 'Remove', run: (): void => store.remove(entry.id) }]),
   )
   openMenu(x, y, items)
 }
