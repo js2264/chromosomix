@@ -590,7 +590,14 @@ export class BrowserView {
     this.bases = new BaseCache(props.client, () => this.schedule())
     this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
-    this.unsubscribes.push(subscribePlotOptions(() => this.schedule()))
+    this.unsubscribes.push(
+      subscribePlotOptions((plot) => {
+        // Put the card away now rather than on the next pointer move — see the
+        // map's twin. The repaint below is for the overlays that draw on canvas.
+        if (!plot.tooltip) this.tooltip.classList.add('hidden')
+        this.schedule()
+      }),
+    )
     // The ruler's height is the one thing a scale change moves that is not
     // simply redrawn: everything below it starts at that number, and a press
     // above it means something else.
@@ -2689,6 +2696,14 @@ export class BrowserView {
 
     setReadout(`${where}${parts.length === 0 ? '' : `   ${parts.join('   ·   ')}`}`)
     if (rows.length === 0) {
+      this.tooltip.classList.add('hidden')
+      return
+    }
+    // The same gate the map's card has, over the same store: a reader who put
+    // the card away beside a matrix means it away, and finding it back in the
+    // browser would be the app disagreeing with itself. `setReadout` above has
+    // already run, so the status line keeps saying what the pointer is on.
+    if (!getPlotOptions().tooltip) {
       this.tooltip.classList.add('hidden')
       return
     }

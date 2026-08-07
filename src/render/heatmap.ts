@@ -559,6 +559,26 @@ export interface PlotOptions {
   labels: boolean
   /** Guide lines through the hovered cell. */
   crosshair: boolean
+  /**
+   * The card that follows the pointer, naming what is under it.
+   *
+   * A preference and not a fixed part of the view, because the two things a
+   * reader does with a contact map want opposite answers. Reading it — what is
+   * this cell, what are these tracks worth here — is the tooltip's whole reason
+   * to exist. *Looking* at it, which is what somebody does while framing a
+   * figure or showing it to another person, is a thing the card is directly in
+   * the way of: it covers a few hundred square pixels of the picture wherever
+   * the hand happens to be resting.
+   *
+   * The status line under the window says the same thing without covering
+   * anything, so nothing is lost by turning this off — which is what makes it a
+   * toggle rather than a compromise.
+   *
+   * The renderer itself draws no tooltip; this is read by the two panels that
+   * own one. It lives here because it is one of the same kind of thing and
+   * because both surfaces have to agree about it (`ui/plotOptions.ts`).
+   */
+  tooltip: boolean
   /** Base-pair coordinates along an axis that has a single one (§7.1). */
   ticks: boolean
 }
@@ -583,6 +603,9 @@ export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   breaks: true,
   labels: true,
   crosshair: false,
+  // On: a figure has no pointer, so this costs a saved plot nothing, and the
+  // renderer's defaults are read by views that then hand them to a panel.
+  tooltip: true,
   ticks: true,
 }
 

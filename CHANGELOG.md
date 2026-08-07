@@ -246,6 +246,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   navigating back. A pan is rewound rather than merely stopped: a pan that ends
   where the reader changed their mind is the pan happening anyway.
 
+- **The hover card can be put away.** A `tooltip` toggle beside the crosshair, in
+  both Aesthetics rows and over one store, so pressing either moves both. The
+  two things a reader does with a contact map want opposite answers: reading it
+  is the card's whole reason to exist, and *looking* at it — framing a figure,
+  showing it to somebody — is a thing the card is directly in the way of. The
+  status line under the window carries the same reading and covers nothing, so
+  turning it off costs a hover no information.
+
 - **The crosshair is offered in both Aesthetics rows.** It is the one preference
   genuinely about both pictures — one pointer, guide lines through the matrix and
   through every lane — so it is in **Map** and in **Tracks**, one key over one
