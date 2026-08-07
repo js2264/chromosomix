@@ -1099,6 +1099,36 @@ export class BrowserView {
       : last.frame.acrossFrom + last.frame.thickness + LANE_GAP
   }
 
+  /**
+   * How tall the canvas is **on screen**: its content, or the room left in the
+   * column under it, whichever is more.
+   *
+   * The tracks are a picture of an axis, and the axis does not stop where the
+   * last one does. A reader pointing below the stack is pointing at a
+   * coordinate — the crosshair belongs there and so does the readout — and until
+   * the canvas reached that far there was nothing under the pointer to answer
+   * with: the empty space was the column's, not the plot's, and the pointer
+   * moved over it silently.
+   *
+   * Measured exactly as {@link fitTracks} measures, and against the same host,
+   * because it is the same question about the same room. The measurement cannot
+   * chase its own tail: what it reads is where the stage *begins*, which depends
+   * on the header above it and not on how tall this canvas turns out to be.
+   *
+   * Only on screen. A figure is a picture of the tracks, and blank paper under
+   * them is not part of it — so {@link heightOf} is what the export asks for.
+   */
+  private screenHeight(content: number): number {
+    const host = this.roomHost()
+    if (host === null) return content
+    const padding = Number.parseFloat(window.getComputedStyle(host).paddingBottom)
+    const room =
+      host.getBoundingClientRect().bottom -
+      (Number.isFinite(padding) ? padding : 0) -
+      this.stage.getBoundingClientRect().top
+    return Math.max(content, Math.floor(room))
+  }
+
   // -------------------------------------------------------------------------
   // Drawing
   // -------------------------------------------------------------------------
@@ -1139,7 +1169,11 @@ export class BrowserView {
 
     this.lanes = this.layout()
     for (const lane of this.lanes) this.fill(lane)
-    const height = this.heightOf(this.lanes)
+    // Down to the foot of the column rather than to the foot of the last track:
+    // the axis carries on past the stack, and so does what a reader can point
+    // at. See {@link screenHeight}. Measured before the canvas is resized, so
+    // the read costs nothing the `clientWidth` above has not already paid for.
+    const height = this.screenHeight(this.heightOf(this.lanes))
 
     this.canvas.style.width = `${width}px`
     this.canvas.style.height = `${height}px`
@@ -1244,7 +1278,12 @@ export class BrowserView {
 
     // Under the shared preference, like everything else drawn over the data: a
     // reader who turned the crosshair off beside a map meant it off.
-    if (this.hover !== null && this.crosshair) {
+    //
+    // And only where the pointer is on the **axis**. The line says "this
+    // coordinate", and the strip before the axis — the handles' margin and the
+    // name column when it is on — holds no coordinate at all: a line drawn
+    // through a column of track names is pointing at a word.
+    if (this.hover !== null && this.crosshair && this.hover.x >= this.gutter) {
       drawGuide(ctx, this.hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
     }
     // The resize grip, where the pointer is on a lane's lower border. The
@@ -2619,7 +2658,11 @@ export class BrowserView {
   }
 
   private describe(x: number, y: number, clientX: number, clientY: number): void {
-    const locus = this.axis.unitToLocus(this.atUnit(x))
+    // Nothing before the axis begins. The strip there is the handles' margin and
+    // the name column, and neither is a position: a readout naming a base pair
+    // while the pointer is on a track's *name* would be answering a question
+    // nobody asked, at a coordinate the arrowhead is not on.
+    const locus = x < this.gutter ? null : this.axis.unitToLocus(this.atUnit(x))
     if (locus === null) {
       this.tooltip.classList.add('hidden')
       setReadout('')
