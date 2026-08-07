@@ -152,7 +152,11 @@ export class AnnotationLoader {
    * `File` handle is still open, because the tab never went away.
    */
   carry(entry: AnnotationEntry): void {
-    if (entry.source.kind === 'detached') return
+    // Nothing without a file behind it. `detached` has lost its handle and the
+    // 4C profile never had one: it is a reading of the map that is being put
+    // away, so carrying it to the next file would be carrying a picture of
+    // somewhere the reader never pointed at.
+    if (entry.source.kind === 'detached' || entry.source.kind === 'derived') return
     this.begin(entry.source, entry.label, {
       id: entry.id,
       card: entry.card,

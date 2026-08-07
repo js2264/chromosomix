@@ -40,6 +40,7 @@ import {
 } from '../state/ViewState'
 import { recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import { resetViewpoint } from '../ui/viewpoint'
 import { scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
@@ -55,7 +56,7 @@ import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../wo
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
-import type { AnnotationEntry, Placement } from '../annotations/types'
+import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
@@ -1608,6 +1609,10 @@ export class Session {
   private alreadyLoaded(source: SourceSpec): boolean {
     const rows = this.annotations?.store.entries ?? []
     return rows.some((entry) => {
+      // Only rows that came from a file. The 4C profile is a lane in the same
+      // store with a name and no bytes behind it, and a file that happened to
+      // be called the same thing is not "already loaded".
+      if (entry.source.kind === 'derived') return false
       if (entry.source.kind === 'remote') {
         return source.kind === 'remote' && entry.source.url === source.url
       }
@@ -1629,6 +1634,9 @@ export class Session {
    */
   private setUpBrowserAnnotations(assembly: Assembly): void {
     const scope = this.memoryKey(assembly.uri)
+    // A new genome is a new set of sequence names; an anchor from the last one
+    // would name a place this one has never heard of. See `setUpAnnotations`.
+    resetViewpoint()
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
@@ -1892,7 +1900,7 @@ export class Session {
     // either way.
     // The right-hand stack's tracks are drawn flipped so they grow towards the
     // map; the browser has no map to grow towards, so they are turned back.
-    this.annotations?.store.turnRightHandAxes()
+    this.annotations?.store.turnAxesForBrowser()
     this.setGeneral([this.genomeCardFor(assembly)])
     this.syncCompareCard()
     // Where the map was looking, carried across as a locus. Read *before* the
@@ -1924,7 +1932,7 @@ export class Session {
     // …and turned again on the way back, by the same call: it is a toggle, so
     // the round trip is the identity and a track hung deliberately from its
     // ceiling keeps that decision through both halves of it.
-    this.annotations?.store.turnRightHandAxes()
+    this.annotations?.store.turnAxesForBrowser()
     this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
     this.syncCompareCard()
     this.mounted = null
@@ -2126,6 +2134,13 @@ export class Session {
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
+    // The 4C anchor names a sequence, and the same name in another file is
+    // another place: carrying one across would draw a profile of somewhere the
+    // reader never pointed at. The *lane* needs no clearing — it lives in the
+    // outgoing file's store, which is being replaced — but the anchor is a
+    // module-level fact about which locus is being asked about, and this is the
+    // one moment that stops being true.
+    resetViewpoint()
     // The comparison belonged to the file that is being replaced. Its worker
     // goes with it — the second map was a second map *of this one*, and there is
     // no sense in which it survives the first being closed.
@@ -2528,9 +2543,7 @@ export class Session {
           // rather than around it, and only reaches the loader for the files
           // that actually become tracks.
           loadOnEdge: (files, edge) => {
-            for (const file of files) {
-              this.dropped(file, { bottom: edge === 'bottom', right: edge === 'right' })
-            }
+            for (const file of files) this.dropped(file, placementOn(edge))
           },
         }
   }
@@ -2754,7 +2767,7 @@ export class Session {
       this.parkedMap = null
       this.assembly = null
       this.browser = null
-      this.annotations?.store.turnRightHandAxes()
+      this.annotations?.store.turnAxesForBrowser()
       this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
       this.syncCompareCard()
       this.mounted = null

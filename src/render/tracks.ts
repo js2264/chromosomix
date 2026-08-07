@@ -17,7 +17,7 @@
  * because it says what the average hid.
  */
 
-import { valueAcross, laneRect, type LaneFrame } from './lane'
+import { valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
 import type { Limits, TrackSampleSet } from '../annotations/types'
 
@@ -484,10 +484,15 @@ function tracePath(
   }
 }
 
+/**
+ * One point of the trace, in canvas coordinates.
+ *
+ * Through the shared helpers rather than inlined, which it was: an inlined copy
+ * of the axis mapping is a second place for it to be right, and the day a third
+ * edge existed the copy drew every profile on it sideways.
+ */
 function pointOf(frame: LaneFrame, along: number, across: number): [number, number] {
-  return frame.orientation === 'bottom'
-    ? [along, frame.acrossFrom + across]
-    : [frame.acrossFrom + across, along]
+  return [laneX(frame, along, across), laneY(frame, along, across)]
 }
 
 /**
@@ -505,7 +510,10 @@ function drawFloor(ctx: CanvasRenderingContext2D, frame: LaneFrame, paint: Track
   ctx.strokeStyle = paint.guideColour
   ctx.lineWidth = 0.75
   ctx.beginPath()
-  const across = frame.orientation === 'bottom' ? frame.thickness : 0
+  // Where a value of zero lands, which is the edge of the strip the fill grows
+  // from — asked of `valueAcross` rather than written out, so the floor rule and
+  // the fill cannot come to disagree about which end of the lane that is.
+  const across = valueAcross(frame, 0)
   const start = pointOf(frame, frame.alongFrom, across)
   const end = pointOf(frame, frame.alongTo, across)
   ctx.moveTo(start[0], start[1])

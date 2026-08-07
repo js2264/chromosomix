@@ -24,7 +24,12 @@
 
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
+import {
+  LANE_EDGES,
+  type AnnotationEntry,
+  type ContigOverlap,
+  type LaneEdge,
+} from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
 import { subscribeReveal } from './revealTrack'
@@ -230,11 +235,7 @@ export class AnnotationCard {
     }
     this.pending = false
 
-    // Every loaded file, in one list. Which of the store's two cards an entry
-    // belongs to still decides where it is *drawn* — a pair goes on the map,
-    // everything else beside it — but that is a fact about the format and not a
-    // shelf the reader has to put it on.
-    const entries = [...this.props.store.entries]
+    const entries = this.fileRows()
     // Rows that have gone take their tick with them, or a batch would act on
     // ids the store has never heard of.
     for (const id of [...this.ticked]) {
@@ -504,8 +505,14 @@ export class AnnotationCard {
       event.preventDefault()
       const to = index + step
       if (to < 0 || to >= total) return
+      // Past the row it is swapping with, by identity: the rows on this card are
+      // the store's *files*, and the store holds more than files (§8.9), so a
+      // step in this list is not always a step in the store's own.
+      const neighbour = this.fileRows()[to]
+      const at = this.props.store.entries.findIndex((row) => row.id === neighbour?.id)
+      if (neighbour === undefined || at < 0) return
       this.refocus = { attribute: 'data-grip', id: entry.id }
-      this.props.store.moveTo(entry.id, to)
+      this.props.store.moveTo(entry.id, at)
     })
     return node
   }
@@ -541,19 +548,42 @@ export class AnnotationCard {
       event.preventDefault()
       this.dragging = null
 
-      // Every loaded file, in one list. Which of the store's two cards an entry
-    // belongs to still decides where it is *drawn* — a pair goes on the map,
-    // everything else beside it — but that is a fact about the format and not a
-    // shelf the reader has to put it on.
-    const entries = [...this.props.store.entries]
+      // By **identity**, not by index. The rows on this card are the store's
+      // *files*, which is not everything the store holds — the 4C profile lives
+      // there too and is not listed — so a position in what is being looked at
+      // is not a position in the store's own list. The row the drop landed on
+      // names an entry, and the entry's place in the store is looked up, which
+      // is what every other drag in the application does (`AnnotationStore.moveTo`).
+      const rows = this.fileRows()
+      const target = rows[index]
+      if (target === undefined) return
+      const entries = this.props.store.entries
       const from = entries.findIndex((candidate) => candidate.id === moved)
-      if (from < 0) return
+      const onto = entries.findIndex((candidate) => candidate.id === target.id)
+      if (from < 0 || onto < 0) return
       // Where it goes in the list as it stands, then the same place counted in
       // the list with the dragged row already taken out of it — which is the
-      // list `move` inserts into.
-      const insertAt = index + (sideOf(event) === 'after' ? 1 : 0)
+      // list `moveTo` inserts into.
+      const insertAt = onto + (sideOf(event) === 'after' ? 1 : 0)
       this.props.store.moveTo(moved, insertAt > from ? insertAt - 1 : insertAt)
     })
+  }
+
+  /**
+   * The rows this card lists: every loaded **file**, in one list.
+   *
+   * Which of the store's cards an entry belongs to still decides where it is
+   * *drawn* — a pair goes on the map, everything else beside it — but that is a
+   * fact about the format and not a shelf the reader has to put it on.
+   *
+   * The 4C profile shares the store and is not one of these. It is a reading of
+   * the matrix rather than a file loaded against it, so there is nothing this
+   * card could say about where it came from, nothing to put down, and nothing
+   * to re-attach after a reload; its controls are on the lane itself and in the
+   * lane's own menu (§8.9).
+   */
+  private fileRows(): AnnotationEntry[] {
+    return this.props.store.entries.filter((entry) => entry.card !== 'viewpoint')
   }
 
   private clearDropMarks(): void {
@@ -630,16 +660,16 @@ export class AnnotationCard {
   }
 
   /**
-   * Which edge of the map this lane is drawn on — §8.1's "bottom, right, or
-   * both".
+   * Which edges of the map this lane is drawn on — §8.1's placement, over all
+   * four of them.
    *
-   * Two buttons that are not a choice between each other: a track can be on one
-   * edge or on both, and both is a real answer for a feature set you want to
-   * read against either axis. They were two `B`/`R` tick boxes on the row's
+   * Four buttons that are not a choice between each other: a track can be on one
+   * edge or on several, and several is a real answer for a feature set you want
+   * to read against either axis. They were two `B`/`R` tick boxes on the row's
    * head, in six-point type between the name and the eye, which is a lot of
    * standing furniture for a decision taken once — and the same decision can now
-   * be taken by dragging the lane itself onto the other edge of the map, which
-   * is where a reader is looking when they want it moved. So they come down here
+   * be taken by dragging the lane itself onto any edge of the map, which is
+   * where a reader is looking when they want it moved. So they come down here
    * with the rest of the settings, as words rather than as initials.
    *
    * The last edge on cannot be turned off. A lane on no edge is drawn nowhere
@@ -647,8 +677,8 @@ export class AnnotationCard {
    * disappeared; the eye beside the name is what hides a track, and it says so.
    */
   private placement(entry: AnnotationEntry): HTMLElement {
-    const only = (['bottom', 'right'] as const).filter((edge) => entry.placement[edge])
-    const button = (edge: 'bottom' | 'right'): HTMLElement => {
+    const only = LANE_EDGES.filter((edge) => entry.placement[edge])
+    const button = (edge: LaneEdge): HTMLElement => {
       const on = entry.placement[edge]
       const last = on && only.length === 1
       const node = el('button', {
@@ -664,7 +694,7 @@ export class AnnotationCard {
       node.setAttribute('aria-pressed', String(on))
       node.addEventListener('click', () => {
         if (last) return
-        // Through `place`, not `update`: moving between the two stacks turns the
+        // Through `place`, not `update`: moving between two stacks turns the
         // value axis round so it grows towards the map on either side, and that
         // rule belongs to every path that moves a track rather than to the one
         // that happens to be a button.
@@ -676,7 +706,7 @@ export class AnnotationCard {
       'div',
       { class: 'field ann-field' },
       el('span', { class: 'field-label', text: 'location' }),
-      el('div', { class: 'ann-places' }, button('bottom'), button('right')),
+      el('div', { class: 'ann-places' }, ...LANE_EDGES.map(button)),
     )
   }
 

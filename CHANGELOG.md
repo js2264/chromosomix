@@ -14,6 +14,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Four edges, and a 4C profile that is a lane on any of them.** A track can be
+  drawn above the map and down its left side as well as below it and beside it,
+  and the four stacks are peers: the same drop rectangles, the same handle to
+  reorder or move a lane, the same border to drag it taller, the same hairline,
+  tooltip, group bars, loop anchors and exported figure. The row's **location**
+  control now offers all four, and a lane's right-click menu offers them too —
+  as words, beside a new item that says which way the signal grows.
+
+  Which way it grows is the one thing that is not a coordinate, and it is now one
+  rule instead of two cases. Unflipped, a horizontal lane's values grow **up** the
+  page and a vertical one's grow **right** across it — the conventional
+  orientation of each axis — so on two edges that points at the matrix and on the
+  other two it points away. Every lane added to an edge is turned to face the
+  matrix, and moving one between two edges that disagree turns it again: two
+  stacks meeting at a corner of one figure have to agree about which way is more.
+  Bottom and right behave exactly as before; top and left fell out of the same
+  sentence.
+
+  What made this affordable is that `render/lane.ts` is still the only module
+  that knows which of *along* and *across* is x. **Across now always runs
+  outward, away from the map**, which above the map and to its left is the canvas
+  direction reversed — so "the far border", "the end the handle hangs off" and
+  "where the baseline is" stay one answer each rather than becoming four. The two
+  new stacks cost a coordinate conversion, not a second renderer.
+
+  **The virtual 4C profile is now one of these lanes**, and that is the point of
+  the change rather than a consequence of it. It was a strip of its own with a
+  canvas of its own, which meant it had none of what a lane has: no name you can
+  type, no limits you can type, no autoscale, no ceiling drag, no floor to drag,
+  no colour, no handle, no readout, no place in the stack. It is now a synthetic
+  entry in the same store every track lives in, so it has all of them, from the
+  one implementation — and can be dragged to any edge like anything else.
+
+  Moved to the left or right of the map it answers a **different question**, not a
+  rotated one: a strip above or below the map sums a band of rows and answers per
+  column, and a strip beside it sums a band of columns and answers per row. Same
+  anchor, same block, the transpose. Off the diagonal that may have an answer on
+  one axis and none on the other, and the lane says which.
+
+  It carries no file, so it is on no card, is never written to session storage,
+  and is not drawn in the 1D browser. It is also the only lane that draws where
+  there is no coordinate system at all — a contig-level or whole-genome block —
+  because its numbers come from the block on screen rather than from a fetch;
+  there it says, in the lane, that an anchor cannot be named at this level, which
+  is a better answer than the "not in this view" it used to give.
+
+  Switching it off **hides** the lane rather than removing it, so the colour,
+  height, axis and edge a reader chose survive being turned off and on.
+
 - **Private buckets.** **Open a file → private buckets…** takes a URL prefix, a
   region and an access key, and everything under that prefix is then read with
   a Signature Version 4 signature on every request — the map, its tracks, a
@@ -55,6 +104,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   credentialed preflight needs.
 
 ### Changed
+
+- **The 4C strip opens hanging from its ceiling rather than standing on its
+  floor.** It is a lane now, and every lane faces the matrix — above the map that
+  means growing downwards, pointing at the columns it is a reading of. One item
+  in its right-click menu turns it round, and the choice sticks.
+
+- **A track dragged out of the Tracks card onto an edge turns its axis**, which a
+  track dragged there by the handle on its own picture has always done. The two
+  gestures mean the same thing and now take the same road; the card's own
+  location control has always taken it.
 
 - **The demo datasets moved to S3, and the app got 14× lighter.** The five
   published maps and eleven track resources are no longer copied into the

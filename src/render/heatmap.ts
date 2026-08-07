@@ -1016,6 +1016,14 @@ export class HeatmapView {
   private cssWidth = 0
   private cssHeight = 0
   private dpr = 1
+  /**
+   * Where the plot's own corner sits on the page it is being drawn onto.
+   *
+   * Zero on screen — the canvas *is* the plot — and set only by
+   * {@link renderTo}, where a figure may have to leave room above and to the
+   * left of the map for the lane stacks that go there.
+   */
+  private pageOrigin: { x: number; y: number } = { x: 0, y: 0 }
 
   /** CSS pixels per matrix cell. */
   private zoom = 1
@@ -1833,7 +1841,13 @@ export class HeatmapView {
   /** Rasterise if needed, then paint. Cheap enough to call every frame. */
   draw(): void {
     const ctx = this.ctx
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+    // Every transform below carries the page origin, which is zero on screen and
+    // is the room a figure's top and left lane stacks need. `clearRect` under it
+    // clears the plot's own box rather than the whole page, which is what lets
+    // the lanes be drawn before or after the map without one wiping the other.
+    const originX = this.pageOrigin.x * this.dpr
+    const originY = this.pageOrigin.y * this.dpr
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, originX, originY)
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight)
     if (this.matrix === null) return
 
@@ -1874,13 +1888,13 @@ export class HeatmapView {
       0,
       0,
       this.zoom * sy * this.dpr,
-      this.dpr * (plot.x - this.originX * this.zoom),
-      this.dpr * (plot.y - this.originY * this.zoom)
+      originX + this.dpr * (plot.x - this.originX * this.zoom),
+      originY + this.dpr * (plot.y - this.originY * this.zoom)
     )
     ctx.drawImage(offscreen, 0, 0)
     ctx.restore()
 
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, originX, originY)
     if (this.plot.dividers) this.drawSeparators()
     if (this.plot.breaks) this.drawBreaks()
     this.drawLabels()
@@ -1937,17 +1951,30 @@ export class HeatmapView {
    * sharper labels and hairlines rather than a wider picture. The raster itself
    * is at matrix resolution and independent of this, so nothing is
    * re-rasterised either.
+   *
+   * `origin` is where the plot's own top-left corner goes on the page, in CSS
+   * pixels. Zero on screen, and on a figure whatever the lane stacks *before*
+   * the map need: a strip above it or down its left side is part of the picture
+   * and has to be drawn somewhere, and everything else on the page is placed
+   * against this corner rather than against the canvas's.
    */
-  renderTo(ctx: CanvasRenderingContext2D, scale: number): void {
+  renderTo(
+    ctx: CanvasRenderingContext2D,
+    scale: number,
+    origin: { x: number; y: number } = { x: 0, y: 0 },
+  ): void {
     const previousCtx = this.ctx
     const previousDpr = this.dpr
+    const previousOrigin = this.pageOrigin
     this.ctx = ctx
     this.dpr = scale
+    this.pageOrigin = origin
     try {
       this.draw()
     } finally {
       this.ctx = previousCtx
       this.dpr = previousDpr
+      this.pageOrigin = previousOrigin
     }
   }
 

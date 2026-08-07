@@ -17,7 +17,16 @@
 
 import { featureRange } from '../annotations/featureset'
 import type { FeatureSet } from '../annotations/types'
-import { laneRect, laneText, valueAcross, type LaneFrame } from './lane'
+import {
+  canvasToAcross,
+  laneIsHorizontal,
+  laneLine,
+  laneMove,
+  laneRect,
+  laneText,
+  valueAcross,
+  type LaneFrame,
+} from './lane'
 import type { LocusAxis } from './locus'
 
 /** Where one feature ended up. `along` is in canvas pixels. */
@@ -419,6 +428,7 @@ function drawStrandMarks(
   ctx.restore()
 }
 
+/** One segment of a strand chevron, in lane coordinates. */
 function line(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,
@@ -427,12 +437,8 @@ function line(
   along1: number,
   across1: number,
 ): void {
-  const x0 = frame.orientation === 'bottom' ? along0 : frame.acrossFrom + across0
-  const y0 = frame.orientation === 'bottom' ? frame.acrossFrom + across0 : along0
-  const x1 = frame.orientation === 'bottom' ? along1 : frame.acrossFrom + across1
-  const y1 = frame.orientation === 'bottom' ? frame.acrossFrom + across1 : along1
-  ctx.moveTo(x0, y0)
-  ctx.lineTo(x1, y1)
+  laneMove(ctx, frame, along0, across0)
+  laneLine(ctx, frame, along1, across1)
 }
 
 /**
@@ -507,8 +513,11 @@ export function featureAt(
   x: number,
   y: number,
 ): FeaturePlacement | null {
-  const along = frame.orientation === 'bottom' ? x : y
-  const across = (frame.orientation === 'bottom' ? y : x) - frame.acrossFrom
+  // The exact inverse of what `laneRect` did when the boxes were drawn — through
+  // the same module, so the two cannot answer differently about an edge where
+  // `across` runs backwards against the canvas.
+  const along = laneIsHorizontal(frame.orientation) ? x : y
+  const across = canvasToAcross(frame, laneIsHorizontal(frame.orientation) ? y : x)
   if (across < 0 || across > frame.thickness) return null
   const rowHeight = frame.thickness / layout.rows
   const row = Math.min(layout.rows - 1, Math.max(0, Math.floor(across / rowHeight)))

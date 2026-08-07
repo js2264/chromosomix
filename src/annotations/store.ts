@@ -17,15 +17,18 @@
  * or pretending the data is still loaded.
  */
 
+import { laneGrowsInward } from '../render/lane'
 import { recall, remember } from '../state/UiMemory'
 import type {
   AnnotationCard,
   AnnotationEntry,
   AnnotationKind,
   AnnotationSource,
+  LaneEdge,
+  Placement,
   StoredEntry,
 } from './types'
-import { defaultStyle } from './types'
+import { LANE_EDGES, defaultStyle, normalisePlacement, placementOn } from './types'
 
 /**
  * The colour a newly loaded annotation gets, cycled.
@@ -77,7 +80,18 @@ export class AnnotationStore {
   private items: AnnotationEntry[] = []
   private readonly listeners = new Set<AnnotationListener>()
 
-  constructor(private readonly uri: string) {}
+  /**
+   * @param uri  What the rows are remembered under (§8.6).
+   * @param options.persist `false` for a store nothing should outlive: a file
+   *   with a genome layer carries no annotations at all (§8.5) and yet still
+   *   has a 4C lane, which needs somewhere to be a lane *in*. Writing an empty
+   *   list under a key nobody reads is not harmful, but it is a lie about what
+   *   the session holds, and this is cheaper than one.
+   */
+  constructor(
+    private readonly uri: string,
+    private readonly options: { persist?: boolean } = {},
+  ) {}
 
   get entries(): readonly AnnotationEntry[] {
     return this.items
@@ -88,11 +102,17 @@ export class AnnotationStore {
     return this.items.filter((entry) => entry.card === card)
   }
 
-  /** The rows that are loaded, visible, and drawn on `edge`. */
-  drawnOn(edge: 'bottom' | 'right'): AnnotationEntry[] {
+  /**
+   * The rows that are loaded, visible, and drawn on `edge`.
+   *
+   * Every card but the overlay one, which is the difference from "the Tracks
+   * card's rows": the 4C profile has a card of its own precisely because it is
+   * not a loaded file, and it is a lane in every other respect (§8.1).
+   */
+  drawnOn(edge: LaneEdge): AnnotationEntry[] {
     return this.items.filter(
       (entry) =>
-        entry.card === 'linear' &&
+        entry.card !== 'overlay' &&
         entry.visible &&
         entry.status === 'ready' &&
         entry.placement[edge],
@@ -174,13 +194,16 @@ export class AnnotationStore {
   begin(options: {
     card: AnnotationCard
     kind: AnnotationKind
-    source: AnnotationSource
+    source: AnnotationSource | { kind: 'derived'; name: string }
     id?: string
     label?: string
-    placement?: { bottom: boolean; right: boolean }
+    placement?: Partial<Placement>
     style?: AnnotationEntry['style']
   }): AnnotationEntry {
-    const placement = options.placement ?? { bottom: true, right: false }
+    const placement =
+      options.placement === undefined
+        ? placementOn('bottom')
+        : normalisePlacement(options.placement)
     // An id handed in is reserved before anything is minted, so a row restored
     // out of storage cannot have its id handed to the next file dropped.
     const wanted = options.id
@@ -193,25 +216,28 @@ export class AnnotationStore {
       source: options.source,
       status: 'loading',
       visible: true,
-      // One edge and not both: two copies of one track is twice the ink for no
-      // more information. The **bottom** edge, because that is where a track is
-      // read: every genome browser ever built stacks them horizontally under a
-      // ruler, and a coverage profile turned on its side has to be read with
-      // your head tilted. The right edge is still there — the B and R boxes on
-      // the row move a track to either, and a file dropped on the right of the
+      // One edge and not four: four copies of one track is four times the ink
+      // for no more information. The **bottom** edge, because that is where a
+      // track is read: every genome browser ever built stacks them horizontally
+      // under a ruler, and a coverage profile turned on its side has to be read
+      // with your head tilted. The other three are still there — the location
+      // row moves a track to any of them, and a file dropped on an edge of the
       // map lands there — it is simply not what "add a track" should mean.
       placement,
-      // A file dropped on the right of the map arrives already turned round, for
-      // the reason {@link place} turns one that is moved there: on that stack a
-      // track grows *away* from the matrix unless it is flipped, and a reader
-      // who aimed at the right edge is asking for a lane to read beside the map,
-      // not one to read away from it. A style handed in wins — that is a
-      // restored row, which is carrying a decision already made.
+      // A file dropped on an edge arrives already turned the right way round,
+      // for the reason {@link place} turns one that is moved: on half the edges
+      // a lane grows *away* from the matrix unless it is flipped, and a reader
+      // who aimed at an edge is asking for a lane to read beside the map, not
+      // one to read away from it. A style handed in wins — that is a restored
+      // row, which is carrying a decision already made.
       style:
         options.style ??
         (() => {
           const base = defaultStyle(options.kind, this.nextColour())
-          return sideOf(placement) === 'right' ? { ...base, flip: !base.flip } : base
+          const side = sideOf(placement)
+          return side !== 'neither' && !laneGrowsInward(side)
+            ? { ...base, flip: !base.flip }
+            : base
         })(),
     }
     // Only a *handed-in* id can already be here — a minted one is reserved past
@@ -239,12 +265,15 @@ export class AnnotationStore {
   /**
    * Draw one row on a different edge, and turn its axis to face the map.
    *
-   * Which way a lane's values grow is not a preference on the right-hand stack —
-   * it is a reading direction. A bottom lane grows *up* from its floor, towards
-   * the map above it; the same track beside the map grows *outward*, away from
-   * it, so the two stacks meeting at the corner of one figure disagree about
-   * which way is more. Flipping a right-hand lane puts the growth back towards
-   * the matrix and makes the pair read as one picture.
+   * Which way a lane's values grow is not a preference — it is a reading
+   * direction. Unflipped, a lane's values grow up the page or right across it,
+   * whichever the conventional orientation of its axis is
+   * ({@link laneGrowsInward}); which of those points *at* the matrix then
+   * depends on the side, so on two of the four edges the same track grows
+   * outward, away from the picture it is beside. Two stacks meeting at a corner
+   * then disagree about which way is more. Turning the axis on the way across
+   * puts the growth back towards the matrix and makes the pair read as one
+   * picture.
    *
    * A **toggle** and not an assignment, which is the whole reason this is a
    * method rather than a default. A reader who deliberately hung a bottom track
@@ -253,18 +282,20 @@ export class AnnotationStore {
    * Toggling preserves it: a pre-flipped bottom track becomes an unflipped
    * right-hand one, and moving it home restores exactly what was there.
    *
-   * Only between the two edges. A track drawn on *both* has one `flip` and two
-   * readings, so there is no answer that is right for both stacks — it keeps
-   * whatever it had, and the reader decides.
+   * Only between one edge and one other. A track drawn on *two* has one `flip`
+   * and two readings, so there is no answer that is right for both stacks — it
+   * keeps whatever it had, and the reader decides.
    */
-  place(id: string, placement: { bottom: boolean; right: boolean }): void {
+  place(id: string, placement: Partial<Placement>): void {
     const entry = this.byId(id)
     if (entry === undefined) return
+    const whole = normalisePlacement(placement)
     const was = sideOf(entry.placement)
-    const now = sideOf(placement)
-    const turned = (was === 'bottom' && now === 'right') || (was === 'right' && now === 'bottom')
+    const now = sideOf(whole)
+    const turned =
+      was !== 'neither' && now !== 'neither' && laneGrowsInward(was) !== laneGrowsInward(now)
     this.update(id, {
-      placement,
+      placement: whole,
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
     })
   }
@@ -277,26 +308,28 @@ export class AnnotationStore {
   }
 
   /**
-   * Turn every right-hand track's axis round — what the 1D browser needs.
+   * Turn every outward-facing axis round — what the 1D browser needs.
    *
-   * A lane beside the map's right edge grows *outward*, away from the matrix, so
-   * it is drawn flipped: that is what makes the two stacks meeting at the corner
-   * of one figure agree about which way is more ({@link place}). The browser has
-   * no corner and no map — every lane there is a bottom lane — so a track that
-   * came from the right edge arrives hanging from its ceiling, which is not what
+   * On the top and right edges a lane grows *outward*, away from the matrix, so
+   * it is drawn flipped: that is what makes the stacks meeting at a corner of
+   * one figure agree about which way is more ({@link place}). The browser has no
+   * corner and no map — every lane there is a bottom lane — so a track that came
+   * from one of those edges arrives hanging from its ceiling, which is not what
    * anybody chose.
    *
    * A *toggle*, and therefore its own inverse: the same call puts the picture
    * back on the way to the map, and a track deliberately hung from its ceiling
    * keeps that decision through both trips. The set it acts on is the tracks
-   * drawn on the right edge and nowhere else — a track on both has one `flip`
-   * and two readings, so there is no answer that is right for both stacks and it
-   * is left alone, exactly as {@link place} leaves it.
+   * drawn on exactly one edge, and only the edges whose reading disagrees with
+   * the browser's — a track on two has one `flip` and two readings, so there is
+   * no answer that is right for both stacks and it is left alone, exactly as
+   * {@link place} leaves it.
    */
-  turnRightHandAxes(): void {
+  turnAxesForBrowser(): void {
     let hit = false
     this.items = this.items.map((entry) => {
-      if (sideOf(entry.placement) !== 'right') return entry
+      const side = sideOf(entry.placement)
+      if (side === 'neither' || laneGrowsInward(side)) return entry
       hit = true
       return { ...entry, style: { ...entry.style, flip: !entry.style.flip } }
     })
@@ -399,6 +432,7 @@ export class AnnotationStore {
   }
 
   private persist(): void {
+    if (this.options.persist === false) return
     remember(this.uri, STORE_SCOPE, this.items.filter(persistable).map(toStored))
   }
 
@@ -430,9 +464,16 @@ export class AnnotationStore {
 
 const STORE_SCOPE = 'annotations'
 
-/** An entry worth remembering: one that finished loading from a nameable source. */
+/**
+ * An entry worth remembering: one that finished loading from a nameable source.
+ *
+ * Never the 4C profile. It has no file behind it, so there is nothing a reload
+ * could re-read; what it *is* a picture of — the anchor — is a gesture on a
+ * block, and the block is gone. Remembering its colours alone would leave a
+ * strip on screen that says 4C and is a picture of nothing.
+ */
 function persistable(entry: AnnotationEntry): boolean {
-  return entry.status === 'ready' || entry.status === 'detached'
+  return entry.kind !== 'viewpoint' && (entry.status === 'ready' || entry.status === 'detached')
 }
 
 function toStored(entry: AnnotationEntry): StoredEntry {
@@ -469,10 +510,9 @@ function isStoredEntry(value: unknown): value is StoredEntry {
 }
 
 /** Which stack a placement puts a track in, if it puts it in exactly one. */
-function sideOf(placement: { bottom: boolean; right: boolean }): 'bottom' | 'right' | 'neither' {
-  if (placement.bottom && !placement.right) return 'bottom'
-  if (placement.right && !placement.bottom) return 'right'
-  return 'neither'
+function sideOf(placement: Placement): LaneEdge | 'neither' {
+  const on = LANE_EDGES.filter((edge) => placement[edge])
+  return on.length === 1 ? on[0] : 'neither'
 }
 
 /**

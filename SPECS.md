@@ -590,9 +590,14 @@ empty — on a file that cannot carry them.
 **Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
 on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
 comparison), **tracks** (bigWig, any number, resolved as lines or areas), and **bed-like files** (any
-number, resolved as genomic segments). Each is placed on the bottom edge, the right edge, or both, by
-tick box; each carries its own limits, style, colour and value scaling; and any set of tracks may
-share one autoscale group.
+number, resolved as genomic segments). Each is placed on any of the map's four edges — above, below,
+or down either side — or on several at once; each carries its own limits, style, colour and value
+scaling; and any set of tracks may share one autoscale group.
+
+A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
+of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
+remember across a reload, and no place in the 1D browser — and it is a lane in every other respect,
+which is the point of it.
 
 **Map overlays.** Annotations drawn *on* the matrix. Bed-like files mark on-diagonal borders or
 elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from the card above because
@@ -693,9 +698,9 @@ place where BED's quirks live. A file past a million intervals is cut off, and s
 
 ### 8.8 One lane, two surfaces
 
-There are two places a track is drawn — the stacks on the map's bottom and right edges, and the
-map-less 1D browser (§5.8) — and they are *one surface*, not two that are kept in step. §8.4 states
-that as a coordinate rule; this states it for everything above the coordinates.
+There are two places a track is drawn — the stacks on the map's four edges, and the map-less 1D
+browser (§5.8) — and they are *one surface*, not two that are kept in step. §8.4 states that as a
+coordinate rule; this states it for everything above the coordinates.
 
 A lane's **label block** is drawn once (`render/laneLabel.ts`) and, crucially, hands back the boxes
 it measured: the chip before each name, one box per end of the range, the spot for the autoscale
@@ -718,6 +723,43 @@ mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarte
 `render/lane.ts`'s business and nothing else's. And anything a lane *draws* lands in the exported
 figure, so it must stay inside `VectorPage`'s op list, while anything that is a *control* must stay
 in the DOM layer, which the figure geometry does not build.
+
+### 8.9 Four edges, and the 4C lane that proves it
+
+A lane may be drawn on **any of the map's four edges**, and the four are peers. `top` and `bottom`
+follow the map's columns; `left` and `right` follow its rows. One rule covers all of them and it is
+in `render/lane.ts`: a lane is laid out in *along* (the genomic direction) and *across* (the value or
+stacking direction), **across always runs outward, away from the map**, and that module is the only
+place that knows which of the two is x and which way each of them points. The consequence is that
+"the far border", "the end the handle hangs off" and "where the baseline is" are one answer each
+rather than four — which is what made adding the two mirrored stacks a coordinate conversion rather
+than a second renderer.
+
+Which way a lane *grows* is the one thing that is not a coordinate. Unflipped, a horizontal lane's
+values grow up the page and a vertical one's grow right across it — the conventional orientation of
+each axis — so on two edges that points at the matrix and on the other two it points away. Every lane
+added to an edge is turned to face the matrix, and moving one between edges that disagree turns it
+again: two stacks meeting at a corner of one figure must agree about which way is more, and a reader
+who deliberately hung a track from its ceiling keeps that decision through the move.
+
+**The virtual 4C profile is a lane.** A 4C experiment fixes one locus and asks what it touches; a
+contact map already contains the answer for every locus at once, and extracting one is a band of the
+matrix summed (`render/viewpoint.ts`). Shift-dragging on the map names the anchor, as a locus rather
+than as rows, so it survives a pan, a zoom, a change of resolution and a change of view.
+
+What makes it a *lane* rather than a strip of its own is the whole of the design: it is a synthetic
+entry in the same `AnnotationStore`, so renaming it, typing its limits, handing its axis back to the
+data, dragging its ceiling, dragging its floor to resize it, dragging its handle to reorder it or to
+move it to another edge, reading it in the tooltip and drawing it into an exported figure are all the
+one implementation every other lane uses. It carries no file, so it is on no card, is never
+persisted, and is not drawn in the 1D browser — and because it is computed from the block already on
+screen rather than fetched, it is the one lane that draws on a block with no coordinate system at
+all.
+
+Moving it to another edge is not a rotation but a different question. A strip above or below the map
+sums a band of **rows** and answers per column; a strip beside it sums a band of **columns** and
+answers per row. Same anchor, same block, the transpose — which off the diagonal may have an answer
+on one axis and none on the other, and the lane says so.
 
 ---
 
