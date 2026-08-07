@@ -1,6 +1,13 @@
 {
-  "latest": "50ba73c",
+  "latest": "e702ca2",
   "versions": [
+    {
+      "commit": "e702ca2",
+      "version": "0.8.0",
+      "date": "2026-08-07T10:43:08+02:00",
+      "subject": "fix(ui): the 4C anchor takes either direction, and the strip pays for its own room",
+      "tag": ""
+    },
     {
       "commit": "50ba73c",
       "version": "0.8.0",
