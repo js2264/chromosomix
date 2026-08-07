@@ -39,6 +39,7 @@ const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 const KEY_ORDER = [
   'uri',
   'uri2',
+  'maps',
   'view',
   'genome',
   'genome2',
@@ -61,6 +62,7 @@ const KEY_ORDER = [
 /** The keys a patch may remove; `uri` and `view` always exist. */
 const OPTIONAL_KEYS = [
   'uri2',
+  'maps',
   'genome',
   'genome2',
   'genomes',
@@ -90,7 +92,18 @@ function encode(value: string): string {
   // made `genomes=MAG_1%2CMAG_2` and `locus=IV:400%2C000-460%2C000` out of two
   // strings a reader would otherwise recognise at a glance. It is legal in a
   // fragment and it is not one of the two characters the split depends on.
-  return encodeURIComponent(value).replace(/%2F/g, '/').replace(/%3A/g, ':').replace(/%2C/g, ',')
+  //
+  // `|` joins the panels of a deck (§16.6) and is here for the opposite reason
+  // to the comma's: it was chosen *because* RFC 3986 excludes it from URIs, so
+  // it cannot occur inside one of the values it separates. Left readable for
+  // the same reason the comma is — `maps=a.cool|b.cool` is a list at a glance
+  // and `maps=a.cool%7Cb.cool` is not — and safely, since a URI that reaches
+  // here containing one has already been escaped by `encodeURIComponent`.
+  return encodeURIComponent(value)
+    .replace(/%2F/g, '/')
+    .replace(/%3A/g, ':')
+    .replace(/%2C/g, ',')
+    .replace(/%7C/g, '|')
 }
 
 function decode(value: string): string {
@@ -142,6 +155,13 @@ export function parseViewState(hash: string): ViewState | null {
 
   const uri2 = raw.get('uri2')
   if (uri2 !== undefined && uri2 !== '') state.uri2 = uri2
+
+  // Kept as the string the hash carried rather than split here: the list is a
+  // *deck*, whose vacancies and order are `panels/deck.ts`'s vocabulary, and
+  // splitting it in the parser would put half of that vocabulary in a module
+  // whose one job is the round trip. `parseMaps` is the reader.
+  const maps = raw.get('maps')
+  if (maps !== undefined && maps !== '') state.maps = maps
 
   const genome = raw.get('genome')
   if (genome !== undefined) state.genome = genome

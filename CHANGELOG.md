@@ -14,6 +14,83 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **N maps side by side, navigating together** (§16). Several contact maps on
+  screen at once, each with its own file, its own reader worker and its own
+  colour scale, all showing the same place. Addable, removable, reorderable,
+  laid out as a row, a column or a near-square grid, and carried in one hash key
+  so a deck of four remote files is a link.
+
+  The viewer already had two answers to "two files" and this is a third because
+  neither generalises. A **tab** is a whole second session and only one is on
+  screen, so it answers *open* rather than *compare*. The **lower-left triangle**
+  is two files in one square, which is the strongest comparison available and is
+  why it is gated on a matching bin size and a matching chromosome list. Both are
+  untouched, and a session may hold a blended square *and* a deck: they are
+  different claims about the files, and both can be true of one screen.
+
+  **The view is shared and the presentation is not.** Which region, which level,
+  which score, which balancing — that is what is being looked at, and four files
+  at four regions are four unrelated pictures that happen to be adjacent. The
+  clip is per panel and has to be: `vmax` is a number of contacts, and two
+  libraries at different depths do not have the same one, so one clip across a
+  deck draws the shallower file as an empty rectangle. **One scale** is offered
+  for the case where the reader knows the files are comparable, off by default
+  because it is the stronger claim — the same argument the two-file split settles
+  with *match depth*, reached from the other side.
+
+  **The lock's currency is base pairs, not matrix cells**, and that is the whole
+  of why panels can be locked where triangles cannot. A 1 kb file and a 5 kb file
+  both answer `chrI:20,000-80,000` and the answers are 60 cells and 12; a lock in
+  cells moves the coarse panel five times too far and would have to be gated on a
+  matching bin size, which is exactly the refusal side-by-side panels do not need.
+  Conversion rounds outward, so a coarse panel shows at least what was asked for
+  and never less; and a window running off the end of a shorter block is slid
+  back inside it keeping its span, rather than truncated to the overlap, because
+  answering a 40 kb view with a one-bin view is a different zoom in a deck whose
+  whole promise is that the panels show the same thing.
+
+  There is one owner and panels never speak to each other: with N panels each
+  echoing to N−1 others there are N² conversations and no frame in which the deck
+  is in one state. The feedback loop is guarded three ways, because an echo has
+  three shapes — the synchronous one, the one frame later from a panel that had
+  to slide (which otherwise makes "pan past the end of the short one" mean "you
+  cannot pan past the end of the short one"), and the one that arrives later at
+  the same window seen through a coarser grid. Without the last, a
+  two-resolution deck drifts a cell per frame until it hits a wall.
+
+  **A companion is asked for its block by name**, so a file that has no `chrI` is
+  refused by `parse_metacooler_range`'s own error listing its own sequences. The
+  one gate that does exist compares the *blocks* rather than the files: two panels
+  that resolved one name to spans of different length resolved it against
+  different sequences, and one window would be two places. A panel the gate
+  refuses is still drawn, still readable and still exportable — only the lock is
+  off, and it says so in a line under its own heading rather than only in a
+  tooltip on a 14 px chain, because a still map reads as data.
+
+  **A local map keeps its slot in a link.** `uri2` omits a local second file,
+  which is right when there is one slot; with several, omission moves everything
+  after it one place left and a deck of three arrives as a deck of two with
+  nothing saying a map is missing. It is written as `~`, and the recipient gets a
+  drop rectangle where the sender's file was. The separator is `|` rather than the
+  comma the other lists use: a comma is legal in a URI, so `maps=a,b` would
+  resolve — to two maps that are neither of the ones that were sent — the first
+  time somebody published `sample,rep1.cool`.
+
+  **N panels cannot silently blow the memory budget.** `checkBrowserDenseSize` was
+  written for one block and has no idea how many are about to be live, so the
+  deck divides one panel's allowance between all of them: a deck can never cost
+  more than the single map it replaced, and every map added shrinks every panel's
+  share, which is what refuses an over-large deck by arithmetic rather than by a
+  guessed limit. Six panels is the ceiling above that, for the reason twelve
+  sessions is one.
+
+  The three side panels are untouched. The deck's controls ride above its own
+  grid and each panel's colour and export cards ride inside that panel, which is
+  both the plainest statement of what is shared and what is not, and the only
+  placement that works on a file with a genome layer — where the Annotations
+  column does not exist at all (§8.5), and which is exactly the kind of file a
+  deck is most useful for.
+
 - **Values the file does not contain.** A cooler stores counts and, if somebody
   ran `cooler balance`, one weight per bin. Everything a reader wants beyond that
   is arithmetic over numbers already on screen, and none of it needs a companion

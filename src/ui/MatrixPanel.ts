@@ -328,7 +328,16 @@ export interface DerivePresentation {
   normalise?: Normalisation
   /** Whether cells are divided by what their genomic distance predicts. */
   expected: boolean
-  onExpectedChange(on: boolean): void
+  /**
+   * Absent where this panel applies the derivation but does not own it.
+   *
+   * A companion panel of a deck (§16) is exactly that case: the derivation is
+   * one of the things the deck *shares*, so every panel has to draw it and only
+   * one may offer the control — five copies of a shared toggle being five ways
+   * for a reader to put the deck out of step with itself. No handler, no
+   * control, and the values are still derived.
+   */
+  onExpectedChange?(on: boolean): void
 }
 
 export interface ComparePresentation {
@@ -486,6 +495,8 @@ export class MatrixPanel {
   private exportName = 'contact-map'
 
   private data: MatrixResult | null = null
+  /** Where this panel is looking, for whoever is keeping N of them in step. */
+  private viewportListener: ((rows: [number, number], cols: [number, number]) => void) | null = null
   /**
    * The second file's block, when one is open, and the factor applied to it.
    *
@@ -1127,10 +1138,11 @@ export class MatrixPanel {
     // and folding it in would make the two mutually exclusive for no reason but
     // the shape of the control.
     const derive = options.derive
-    if (derive !== undefined) {
+    if (derive !== undefined && derive.onExpectedChange !== undefined) {
+      const onExpectedChange = derive.onExpectedChange
       const expected = el('input', { class: 'checkbox', type: 'checkbox' })
       expected.checked = derive.expected
-      expected.addEventListener('change', () => derive.onExpectedChange(expected.checked))
+      expected.addEventListener('change', () => onExpectedChange(expected.checked))
       controls.unshift(
         field(
           'O/E',
@@ -3144,6 +3156,25 @@ export class MatrixPanel {
   }
 
   /**
+   * Record which derivation this panel is drawing, without recomputing.
+   *
+   * Separate from {@link rederive} because a panel that is *about* to be handed
+   * a fresh block needs the setting in place before {@link setData} reads it,
+   * and recomputing the outgoing block first would be a pass over cells that are
+   * being replaced.
+   *
+   * @returns `true` when the setting was already what was asked for.
+   */
+  setDerive(derive: DerivePresentation | undefined): boolean {
+    const held = this.options.derive
+    const same =
+      held?.normalise === derive?.normalise &&
+      (held?.expected === true) === (derive?.expected === true)
+    this.options.derive = derive
+    return same
+  }
+
+  /**
    * Recompute the picture from the block already in hand.
    *
    * What a change of derivation is: the same cells, in different units. Reading
@@ -3159,10 +3190,14 @@ export class MatrixPanel {
    * reference is fixed, the settings on it are not.
    */
   rederive(derive: DerivePresentation | undefined, compare?: ComparePresentation): void {
-    const data = this.data
-    if (data === null) return
-    this.options.derive = derive
+    const unchanged = this.setDerive(derive)
     if (compare !== undefined) this.options.compare = compare
+    const data = this.data
+    // Nothing to recompute, but the setting is recorded either way: the session
+    // builds a fresh presentation object on every render and hands it over
+    // whether or not a reader touched anything, and recomputing a 16 M-cell
+    // block for an equal object would make every unrelated repaint expensive.
+    if (data === null || (unchanged && compare === undefined)) return
     const { dense, presentationMoved } = this.derive(data, this.second?.data)
     this.heatmap.setValues(dense.values)
     // The colourbar is a function of the scale *and* of what the numbers are, and
@@ -3406,7 +3441,62 @@ export class MatrixPanel {
           this.manualVmin === undefined && this.manualVmax === undefined,
         )
       }
+      // Last, and only where somebody is listening. A deck of panels follows
+      // this (§16.3); a single map has no listener and the line costs nothing.
+      // Reported from the frame rather than from the mutators because the
+      // mutators are several and this is one place they all end at — which also
+      // means a report is at most one per frame however hard the map is dragged.
+      if (this.viewportListener !== null && this.data !== null) {
+        const window = this.heatmap.cellWindow()
+        this.viewportListener(window.rows, window.cols)
+      }
     })
+  }
+
+  // -------------------------------------------------------------------------
+  // The shared viewport (§16.3)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Follow this panel's pan and zoom.
+   *
+   * Set after construction rather than taken as an option, because the panel a
+   * deck locks to is usually one it did not build: the lead panel belongs to
+   * whichever view is mounted — a region view, a genome view — and those views
+   * have no idea a deck exists and should not gain one. One setter reaches all
+   * five of them.
+   */
+  setViewportListener(listener: ((rows: [number, number], cols: [number, number]) => void) | null): void {
+    this.viewportListener = listener
+  }
+
+  /** What this panel is showing, in its own cells, or `null` with no block. */
+  viewport(): { rows: [number, number]; cols: [number, number] } | null {
+    return this.data === null ? null : this.heatmap.cellWindow()
+  }
+
+  /** How many cells each axis of the block has — the lock's clamp. */
+  cellCount(): { rows: number; cols: number } {
+    return { rows: this.data?.nrows ?? 1, cols: this.data?.ncols ?? 1 }
+  }
+
+  /** Base pairs one cell covers, after whatever pooling the read chose. */
+  bpPerCell(): number {
+    return this.options.binsize
+  }
+
+  /**
+   * Show a cell window that came from outside — the deck's lock.
+   *
+   * The counterpart of {@link applyScale}, and separate from the panel's own
+   * gestures for the same reason: a control in here announces what it did, and
+   * this is what the panel is *told*. The listener still fires on the next
+   * frame, because a redraw is a redraw; the lock recognises its own broadcast
+   * coming back rather than this pretending it did not happen (`panels/lock.ts`).
+   */
+  showViewport(rows: [number, number], cols: [number, number]): void {
+    if (this.data === null) return
+    this.heatmap.showCellWindow(rows, cols)
   }
 
   /**

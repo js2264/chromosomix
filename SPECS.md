@@ -279,6 +279,10 @@ A **match-depth** option scales the second file so its 99th percentile meets the
 order statistic §7.1 picks `vmax` with — for the case that motivates it, two libraries of different
 depth. Two colourbars then read the same colours in each file's own counts.
 
+This is the design for **two** files and it stays exactly as it is. §16 is the design for N, which is
+a weaker claim on the files and therefore a different picture; the two compose, and a session may
+hold both at once.
+
 ### 5.8 The 1D genome browser
 
 A session may hold a **genome** instead of a file: a list of sequences and their lengths, with tracks
@@ -1072,3 +1076,187 @@ blanket injection would turn into a read-anything primitive.
 measured at ~15× slower per read with a fixed ~3 ms floor per call, which is precisely what HDF5's
 many-small-reads metadata walk punishes. If a local path is ever wanted, it is wanted as a *string*
 for addressing, and the bytes stay on the Blob.
+
+---
+
+## 16. N maps side by side
+
+Several contact maps on screen at once, navigating together — HiGlass's multi-view, arrived at from
+this app's own constraints rather than ported from its architecture. There is no tile server and no
+pyramid here (§2), so a panel is not a viewport onto a stream: it is a whole bounded block, held
+whole, exactly as the single map already is. What N panels add is a **shared coordinate**, not a
+shared cache.
+
+The viewer already had two answers to "two files", and this is a third because neither of them
+generalises. A **tab** (§5.6) is a whole second session with its own worker, tables, tracks and
+address-bar entry, and only one is on screen at a time — it answers *open*, not *compare*. The
+**lower-left triangle** (§5.7) is two files in one square, which is the strongest comparison
+available and is why it is gated on a matching bin size and a matching chromosome list. Both survive
+untouched, and a session may hold a blended square *and* a deck: they are different claims, and both
+can be true of one screen.
+
+### 16.1 The panel model
+
+A deck is a **lead** and its **companions**.
+
+The lead is the session's own file. It owns the breadcrumb, the genomes and contigs tables, the
+tracks, the record card and, where there is one, the second file blended into its lower triangle. It
+is not in the companion list and it is not reorderable, because "which file is this session of" is
+not a thing that should change by dragging.
+
+A companion is the smallest thing that is still a map: its own `ReaderClient` — so its own worker, its
+own h5wasm instance, its own I/O — its own colour scale, its own block, and a heading with its name
+on it. It has no annotations, no level toggle, no score picker and no second file. Each of those is a
+control over something the deck *shares*, and five copies of a shared control are five ways to put
+the deck out of step with itself.
+
+The lead's element is **re-parented** into the first cell of the grid rather than rebuilt, so a
+session with companions costs the session it would have been, plus the companions.
+
+### 16.2 What is shared, and what is not
+
+| | Shared | Per panel |
+|---|---|---|
+| Which region, genome, pair or selection | yes | |
+| Aggregation level (`bin` / `contig`) | yes | |
+| Score column and balancing | yes | |
+| Pan and zoom | yes (§16.3) | opt out |
+| Transform and colormap | seeded from the lead | yes |
+| `vmin` / `vmax` | opt in | yes |
+
+The rule is: **what is being looked at** is shared, **how it is drawn** is not.
+
+The selection has to be shared, or a deck showing four files at four regions is four unrelated
+pictures that happen to be adjacent. It is shared **by name** — `chrI:20,000-80,000`, `MAG_7`, a list
+of ticked sequences — and each companion resolves the name through its own reader. That is what makes
+the feature affordable, and it is also what makes its failures well worded: a file with no `chrI` is
+refused by `parse_metacooler_range`'s own error, listing its own sequences (§5.4). No gate had to be
+written for that case and none could have phrased it better.
+
+The clip has to be per panel. `vmax` is a number of contacts, and two libraries sequenced to
+different depths do not have the same one — one clip across a deck draws the shallower file as an
+empty rectangle. This is §5.7's argument reached from the other side: there, one grid forces one
+scale and the second file is rescaled onto it with **match depth**; here, two grids allow two scales,
+and the reader opts *in* to sharing with **one scale**, off by default because it is the stronger
+claim.
+
+### 16.3 The navigation lock
+
+The currency is **base pairs**, measured from each block's own start, and not matrix cells.
+
+That is the whole of why panels can be honestly locked where triangles cannot. A 1 kb file and a 5 kb
+file both answer `chrI:20,000-80,000`; the answers are 60 cells and 12. A lock in cells moves the
+coarse panel five times too far, and would have to be gated on a matching bin size — which is exactly
+§5.7's refusal, reintroduced for no reason. A lock in base pairs is one division and one
+multiplication per axis at each end.
+
+Conversion **rounds outward**: a window landing between two coarse cells becomes the smallest cell
+window containing it, so a coarse panel shows at least what was asked for and never less. A window
+running off the end of a shorter block is **slid back inside it, keeping its span**, not truncated to
+whatever overlaps — truncating would answer a 40 kb view with a one-bin view, which is a wildly
+different zoom in a deck whose whole promise is that the panels are showing the same thing. It is the
+rule `HeatmapView.clampView` already follows for a pan against the edge of one map.
+
+There is one owner. Panels never speak to each other: each reports where it is and the lock decides.
+With N panels each echoing to N−1 others there are N² conversations and no frame in which the deck is
+in one state.
+
+The feedback loop is real and is guarded three ways, because an echo has three shapes. A panel moved
+programmatically redraws, and redrawing is how a panel reports — so every push returns as a report
+one frame later, quantised to the receiving panel's grid and possibly slid inside its block.
+
+1. The **synchronous** echo is swallowed by a flag held for the length of one broadcast.
+2. A pushed panel is owed exactly **one** report and that report is thrown away. This is what stops a
+   panel that *slid* from becoming the driver — without it, panning the lead past the end of the
+   shortest companion's contig drags the lead back to where that companion stopped, which turns "pan
+   past the end of the short one" into "you cannot pan past the end of the short one", in a deck
+   assembled precisely because the files are not identical.
+3. Anything arriving later at what is, to within **half a cell of the reporting panel**, the window
+   already broadcast is swallowed as the same window seen through that panel's quantisation — a
+   resize, a re-fit, a second frame of one gesture.
+
+Without (3) a two-resolution deck drifts one coarse cell per frame until it hits a wall.
+
+Any panel may be taken off the lead individually, the lead included.
+
+### 16.4 The compatibility gate, and why it is weaker
+
+`compareRefusal` (§5.7) refuses a genome layer, a different bin size and a different chromosome list.
+Each names a way the *blended* picture would be a lie. Side by side, two of the three objections
+evaporate: two grids may be two resolutions, and each panel indexes its own list of sequences.
+
+What is left is the one claim panels actually make — *these two pictures are of the same place* — and
+it is checked against the **blocks that came back**, not against the files. Two panels that resolved
+one name to spans of different length resolved it against different sequences, whatever the name
+says, and a shared window between them would be two places. The tolerance is one cell of the coarser
+panel, because the last bin of a contig may be short (§3.3) and a stricter test would refuse every
+honest pair whose bin size does not divide the contig.
+
+A panel the gate refuses is **still shown**, still readable and still exportable. Only the lock is
+off, and the panel says so in a line under its own heading rather than only in a tooltip on a chain
+icon — a lock that claims to be closed while the deck skips it is the one way this can be quietly
+wrong, and a still map reads as data.
+
+### 16.5 Layout, and the three side panels
+
+The panels are a CSS grid of equal columns — `row`, `column`, or a near-square `grid` — chosen in the
+deck's own bar. Equal always: a comparison whose halves are different sizes is one the eye has to
+correct for. Panels are addable, removable and reorderable one place at a time.
+
+The deck's controls ride **above the grid**, and each panel's colour card rides **inside that panel**.
+They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
+furniture and each describes the one file the session is of; and one of them — Annotations — does not
+exist at all on a file with a genome layer (§8.5), which is exactly the kind of file a deck is most
+useful for, so a deck control living there would be missing precisely where it is wanted. The chosen
+placement is also the plainest statement of §16.2's split: shared controls above the grid, per-panel
+controls on the picture they control.
+
+The grid is inside `.content`, which pins the light palette for its whole subtree, so the maps do not
+change colour in the dark theme and no rule had to be written to keep them from it.
+
+### 16.6 Links
+
+One key, `maps`, holding the companions in order.
+
+Pipe-separated, not comma-separated like `genomes` and `regions`. A comma is legal in a URI path, so
+`maps=a,b` resolves — to two maps that are neither of the ones that were sent — the first time
+somebody publishes `sample,rep1.cool`. RFC 3986 excludes `|` from every part of a URI, so the split
+cannot be wrong. It is left unescaped in the hash for the reason the comma is: `maps=a.cool|b.cool`
+is a list at a glance and `maps=a.cool%7Cb.cool` is not.
+
+A **local** companion is written as `~`, not omitted. `uri2` omits its local second file, which is
+right when there is one slot: its absence says *nothing here*, which is true. With N slots omission
+moves every companion after it one place to the left, so a deck of `[remote, local, remote]` arrives
+as a deck of two with nothing anywhere saying a map is missing. The placeholder keeps the count and
+the order, and the recipient gets a drop rectangle where the sender's file was.
+
+Nothing else is in the hash. The lock, the layout and "one scale" live in the per-file session memory
+(§8.6) beside the table filters, on the same grounds: the hash has never carried a pan or a zoom, so
+there is nothing there for a lock to be consistent with, and how many columns the grid has is
+furniture in the sense the width of a side panel is.
+
+### 16.7 Cost
+
+`checkBrowserDenseSize` budgets **one** block against a share of what the device reports, and has no
+idea how many blocks are about to be live. Five whole-genome coolers are five dense blocks, five
+rasters and five pooled buffers, all resident, each passing a guard that was asked about one.
+
+So the deck divides. Every panel is read with `budgetBytes` set to the deck's whole allowance — one
+panel's — divided by the number of panels. Two consequences, both wanted: a deck can never cost more
+than the single map it replaced, and **every map added shrinks every panel's share**, so an
+over-large deck is refused by arithmetic rather than by a limit somebody had to guess. The refusal is
+`checkBrowserDenseSize`'s own, with its own numbers in it, printed beside the panel it is about.
+
+A hard ceiling of **six panels including the lead** sits above that, for the reason `MAX_SESSIONS`
+has one: a panel is a worker and an h5wasm instance whether or not its block is large.
+
+### 16.8 What is not offered
+
+A companion answers views that name a **place** — a region, a genome, a pair, a selection, the whole
+file. The two tables and the whole-metagenome scan (§7.3) are pictures of a *file*, and a second
+file's genomes table is not this one with more rows in it. "Add a map" is disabled there rather than
+hidden, so the answer to "can this viewer do that" is *yes, from a map*.
+
+A companion also carries no tracks. §8's contig-naming contract is between a track and one file's
+`/contigs`, and a lane beside a companion would be a fourth thing keyed on a third assembly. The
+lead's tracks are untouched and stay where they are.

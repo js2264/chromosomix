@@ -1539,6 +1539,56 @@ export class HeatmapView {
     return this.zoom
   }
 
+  /**
+   * What is on screen, in matrix cells: `[lo, hi)` per axis.
+   *
+   * The transform stated as a *window* rather than as the origin-and-zoom it is
+   * held in, because a window is the only form two panels can exchange. Zoom is
+   * CSS pixels per cell, so a panel half as wide showing the same zoom shows
+   * half as much genome; and a cell is a different number of base pairs in
+   * every file. A window is a claim about the data and survives both (§16.3).
+   */
+  cellWindow(): { rows: [number, number]; cols: [number, number] } {
+    const plot = this.plotRect
+    return {
+      rows: [this.originY, this.originY + plot.height / this.zoom],
+      cols: [this.originX, this.originX + plot.width / this.zoom],
+    }
+  }
+
+  /**
+   * Show a cell window — the inverse of {@link cellWindow}, and what a locked
+   * deck drives every panel through.
+   *
+   * The zoom that fits **the larger** of the two spans, so the whole of what was
+   * asked for is on screen even where the panel's aspect differs from the
+   * window's. One scalar for both axes is not a limitation to work around here:
+   * it is what keeps cells square, exactly as `imshow(aspect="equal")` does, and
+   * a lock that broke it would make the two maps disagree about which way is
+   * along the genome.
+   *
+   * `clampView` afterwards, so a panel whose block is shorter than the window
+   * stops at its own last row rather than sliding into empty space. The window
+   * it then reports is the clamped one, which is the honest answer and is what
+   * `ViewportLock` expects to come back.
+   */
+  showCellWindow(rows: [number, number], cols: [number, number]): void {
+    const plot = this.plotRect
+    const rowSpan = Math.max(1e-6, rows[1] - rows[0])
+    const colSpan = Math.max(1e-6, cols[1] - cols[0])
+    const wanted = Math.min(plot.width / colSpan, plot.height / rowSpan)
+    this.zoom = clamp(
+      Number.isFinite(wanted) && wanted > 0 ? wanted : this.zoom,
+      this.minZoom(),
+      this.maxZoom(),
+    )
+    this.originX = (cols[0] + cols[1]) / 2 - plot.width / this.zoom / 2
+    this.originY = (rows[0] + rows[1]) / 2 - plot.height / this.zoom / 2
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
   private dims(): { nrows: number; ncols: number } {
     return this.matrix === null
       ? { nrows: 1, ncols: 1 }
