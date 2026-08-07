@@ -64,6 +64,8 @@ import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
+import { PanelDeck } from '../panels/PanelDeck'
+import { MAX_PANELS, parseMaps } from '../panels/deck'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
@@ -506,6 +508,17 @@ export class Session {
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
   /**
+   * Further files, each in a panel of its own beside this one (§16).
+   *
+   * The other generalisation of "two files", and orthogonal to {@link compare}
+   * rather than a replacement for it: the triangle is two files in one square,
+   * this is N squares under one navigation, and a session may hold both. Built
+   * on demand and put down when the last companion is closed, so a session with
+   * one map is exactly the session it was before decks existed — no grid, no
+   * lock, no toolbar.
+   */
+  private deck: PanelDeck | null = null
+  /**
    * The genome this session is browsing, when there is no contact map.
    *
    * A session is in one of two shapes and this is the discriminant: with a
@@ -681,12 +694,15 @@ export class Session {
   relayout(): void {
     this.current?.panel?.remeasure()
     this.current?.remeasure?.()
+    this.deck?.relayout()
   }
 
   destroy(): void {
     this.destroyed = true
     this.current?.destroy?.()
     this.current = null
+    this.deck?.destroy()
+    this.deck = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
     this.annotations?.client.destroy()
@@ -828,6 +844,18 @@ export class Session {
         keys: KEYS.find,
         enabled: this.current?.focusSearch !== undefined,
         run: () => this.current?.focusSearch?.(),
+      },
+      {
+        id: 'add-map',
+        group: 'File',
+        title: 'Add a map beside this one',
+        hint:
+          'Another file, in a panel of its own, navigating with this one (§16). Both maps show ' +
+          'the same region at their own bin size — side by side is a weaker claim than the ' +
+          'lower-left triangle, so it takes no matching grid.',
+        enabled:
+          file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deckIsPossible,
+        run: () => this.addMap(),
       },
       {
         id: 'hide-map',
@@ -2536,6 +2564,100 @@ export class Session {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // The deck of panels (§16)
+  // -------------------------------------------------------------------------
+
+  /**
+   * What was last handed to {@link showContent}, so a deck built *after* a view
+   * was mounted can frame it without re-reading its block.
+   */
+  private contentNode: HTMLElement | null = null
+
+  /**
+   * Bring the companions in line with the hash, and put the deck down when the
+   * last of them is closed.
+   *
+   * Built lazily and destroyed eagerly, so a session with one map holds no
+   * deck, no lock and no toolbar — it is byte for byte the session it was
+   * before panels existed, which is the property that makes this feature
+   * additive rather than a rewrite of the router.
+   */
+  private syncDeck(state: ViewState): void {
+    if (this.deck === null && parseMaps(state.maps).length === 0) return
+    const deck = this.ensureDeck()
+    deck.apply(state)
+    if (!deck.isEmpty) return
+    deck.destroy()
+    this.deck = null
+    // The frame has gone with it, so the mounted view has to be put back on its
+    // own. Directly rather than through a re-render: the view is intact and
+    // re-reading its block to change what it is parented into would make
+    // closing the last companion cost a fetch.
+    if (this.contentNode !== null) this.contentEl.replaceChildren(this.contentNode)
+  }
+
+  /**
+   * The deck, built if this session has none yet.
+   *
+   * The build re-frames immediately rather than waiting for the next render,
+   * because the two ways a deck comes into existence are a hash that already
+   * names companions — where a render is about to happen anyway — and the "add
+   * a map" command, where one is not and where a grid that appeared on the next
+   * navigation would read as a bug.
+   */
+  private ensureDeck(): PanelDeck {
+    if (this.deck !== null) return this.deck
+    const deck = new PanelDeck({
+      // `replace`, always. Building a deck one file at a time should leave one
+      // history entry rather than five that each undo a file — the same rule
+      // the colour controls follow, and for the same reason: adding a map to
+      // what is on screen is not a navigation away from it.
+      onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
+      memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
+      // Without the handler: §7.5's controls belong to the lead, and every
+      // companion draws what they say without offering a second copy of them.
+      derive: () => {
+        const state = this.store.state
+        if (state === null) return undefined
+        const { onExpectedChange: _own, ...shared } = this.derivePresentation(state)
+        return shared
+      },
+    })
+    this.deck = deck
+    // `isConnected`, because the node this holds may be one a render in
+    // progress is about to replace — and framing a detached view would put the
+    // outgoing picture on screen inside a grid, one frame before the incoming
+    // one arrives through `showContent` and does it properly.
+    if (this.contentNode !== null && this.contentNode.isConnected) {
+      this.contentEl.replaceChildren(deck.frame(this.contentNode))
+      deck.setLead(this.current?.panel ?? null)
+    }
+    return deck
+  }
+
+  /** The "add a map" command: open a deck if there is none, and ask for a file. */
+  private addMap(): void {
+    if (this.file === null) return
+    this.ensureDeck().promptAdd()
+  }
+
+  /**
+   * Whether a second panel would have anything to draw.
+   *
+   * The deck answers views that name a *place* — a region, a genome, a pair, a
+   * selection, the whole file — and there are three that name a **file**
+   * instead: the two tables and the whole-metagenome scan. A second file's
+   * genomes table is not this file's genomes table with more in it, it is
+   * another table, so offering a panel there would be offering to put two
+   * unrelated pages side by side. The command is disabled rather than hidden,
+   * so the answer to "can this viewer do that" is *yes, from a map*.
+   */
+  private get deckIsPossible(): boolean {
+    const view = this.store.state?.view
+    return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
+  }
+
   /**
    * Rebuild the mounted view for the state it is already in.
    *
@@ -2800,6 +2922,11 @@ export class Session {
       // released it; this was the one that did not.
       this.dropCompare()
       this.compareCard = null
+      // …and every companion panel, each of which is another worker on another
+      // file of the same shape. A deck is a picture *beside* this session's
+      // file, and there is no longer one for it to be beside.
+      this.deck?.destroy()
+      this.deck = null
       // For the same reason, and it is the one view the session holds: a cached
       // whole-file matrix is a picture of a file nobody can now navigate to,
       // and the scan that produced it may still be running.
@@ -2930,6 +3057,15 @@ export class Session {
         void this.openCompare(wanted, source)
       }
     }
+
+    // …and the same reconciliation for the deck (§16), one line lower because
+    // it is the same question asked of N files rather than of one: the hash
+    // names the companions, and this is where a pasted link, a restored tab and
+    // a panel opened by hand all arrive. Before the repaint short-circuit
+    // below, because a deck follows the *view* and a colour-only change is
+    // still a view its panels have to be handed — a link that pins `vmax` and
+    // nothing else must not leave four maps unreconciled.
+    this.syncDeck(state)
 
     // A colour change is a repaint, not a navigation.
     //
@@ -3584,7 +3720,13 @@ export class Session {
     // none, and a button that arms a gesture nothing can complete is worse than
     // one that is plainly unavailable.
     this.manualCard?.refresh()
-    this.contentEl.replaceChildren(node)
+    // The deck, where there is one, is a frame around whatever was going to be
+    // mounted: the view's own element is *re-parented* into the first cell of a
+    // grid rather than rebuilt, so a session with companions costs the session
+    // it would have been plus the companions (§16.1).
+    this.contentNode = node
+    this.contentEl.replaceChildren(this.deck?.frame(node) ?? node)
+    this.deck?.setLead(view?.panel ?? null)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.

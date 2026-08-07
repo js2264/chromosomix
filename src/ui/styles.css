@@ -4943,3 +4943,169 @@ p {
   font-size: var(--step--2);
   color: var(--text-dim);
 }
+
+/* ---------------------------------------------------------------------------
+   The deck: N maps side by side, under one navigation (§16).
+
+   Every rule here is inside `.content`, which pins the light palette for its
+   whole subtree — so the panels do not change colour in the dark theme without
+   a single declaration being written for them, which is the same thing that
+   already keeps the single map light.
+   --------------------------------------------------------------------------- */
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* The controls that are about the deck rather than about one panel. Above the
+   grid rather than in a side column, because the three columns are the
+   *session's* furniture and one of them does not exist at all on a file with a
+   genome layer (§8.5) — which is exactly the kind of file a deck is for. */
+.deck-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.deck-count {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.deck-spacer {
+  flex: 1 1 auto;
+}
+
+.deck-layout.is-on,
+.deck-share.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.deck-lock.is-off {
+  color: var(--text-faint);
+}
+
+.deck-add {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.deck-url {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.deck-warning {
+  margin: 0;
+}
+
+/* Equal columns, always: two maps of one region at two depths are a comparison,
+   and a comparison whose halves are different sizes is one the eye has to
+   correct for. `minmax(0, 1fr)` rather than `1fr` because a grid item's default
+   minimum is its content, and a canvas's content is whatever width it was last
+   given — so plain `1fr` would let one panel's last frame decide the whole
+   grid's width and never give it back. */
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--deck-columns, 1), minmax(0, 1fr));
+  gap: 0.6rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.deck-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* The lead is the session's own view — its heading, its search box, its lanes,
+   its cards — re-parented into the first cell. Nothing about it is restyled:
+   a panel that looked different from the map it was a moment ago would say the
+   deck had replaced it rather than framed it. */
+.deck-panel.is-lead {
+  min-width: 0;
+}
+
+/* The plot fills its column instead of claiming the window's height.
+   `.heatmap-wrap`'s own `clamp` has a 20rem floor, which four side by side
+   overflow; the cap keeps it square and stops a wide window from producing four
+   plots taller than the page. */
+.deck .heatmap-wrap {
+  width: min(
+    100%,
+    calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px))
+  );
+}
+
+.deck-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.deck-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--step--1);
+  font-weight: 600;
+}
+
+.deck-name-vacant {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.deck-note {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+/* A panel that is not following the deck says so where a reader looking at the
+   still map will find it, not only in a tooltip on a 14 px chain. */
+.deck-unlocked {
+  color: var(--danger);
+}
+
+.deck-panel.is-unlocked .deck-lock {
+  color: var(--text-faint);
+}
+
+.deck-body {
+  min-width: 0;
+}
+
+/* The colour card, folded, inside the panel it controls — which is the plainest
+   statement of §16.2's split: the view is shared and lives above the grid, the
+   presentation is per panel and lives on the picture. */
+.deck-look {
+  font-size: var(--step--1);
+}
+
+.deck-look > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 0.15rem 0;
+}
+
+.deck-vacant {
+  min-height: 8rem;
+}

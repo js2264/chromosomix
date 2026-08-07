@@ -276,6 +276,18 @@ export interface ViewState {
    * had and for the same reason (§11).
    */
   uri2?: string
+  /**
+   * Further coolers, each drawn in a panel of its own beside this one (§16).
+   *
+   * The plural of {@link uri}, and a weaker claim than {@link uri2}: a second
+   * file *blended into* this square has to share its grid, and a second file
+   * *beside* it has only to share its coordinates. Pipe-separated rather than
+   * comma-separated because a comma is legal in a URI and a pipe is not
+   * (`panels/deck.ts`), and a local companion is written as `~` rather than
+   * dropped, so a link keeps the count and the order of what was sent even
+   * where it cannot keep the bytes (§11).
+   */
+  maps?: string
   view: ViewKind
   /** Genome name for `genome`; row genome for `pair`. */
   genome?: string
