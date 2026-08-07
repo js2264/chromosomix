@@ -798,7 +798,7 @@ export interface HeatmapOptions {
    * with no `onAnchor` a Shift-drag is a pan, which is what every drag on a map
    * without a viewpoint lane should be.
    */
-  onAnchor?: (rows: [number, number]) => void
+  onAnchor?: (axis: 'rows' | 'cols', span: [number, number]) => void
   /**
    * What the two spans of a drag say, per axis, already formatted.
    *
@@ -975,7 +975,7 @@ export class HeatmapView {
   private readonly onCellClick: ((cell: Cell) => void) | null
   private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
   private readonly onSelect: ((selection: SelectionBox) => void) | null
-  private onAnchor: ((rows: [number, number]) => void) | null
+  private onAnchor: ((axis: 'rows' | 'cols', span: [number, number]) => void) | null
   private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
@@ -1624,27 +1624,33 @@ export class HeatmapView {
   /**
    * Hand over the row band a Shift-drag covered — the 4C anchor.
    *
-   * Rows, not a box: a viewpoint is a band of the genome, and what it touches is
-   * every column. Reported in **block-local row indices** because that is what
-   * the column sum is taken over and what the owner can turn into a locus; it
-   * knows the block's extents and this does not.
+   * A band, not a box: a viewpoint is a stretch of the genome, and what it
+   * touches is everything else. Reported as **block-local indices on a named
+   * axis**, because that is what the owner can turn into a locus — it knows the
+   * block's extents and its two coordinate axes, and this does not.
    *
    * A band under one row is still a band. A reader who taps rather than drags
    * has named the bin they tapped, which is a perfectly good viewpoint and the
    * finest one this resolution can express.
    */
-  private finishAnchor(y0: number, y: number): void {
+  private finishAnchor(x0: number, y0: number, x: number, y: number): void {
     const emit = this.onAnchor
     const matrix = this.matrix
     if (emit === null || matrix === null) return
     const plot = this.plotRect
-    const rows = [
-      this.rowScale.toUnit(Math.min(y0, y) - plot.y),
-      this.rowScale.toUnit(Math.max(y0, y) - plot.y),
-    ]
-    const lo = Math.max(0, Math.min(matrix.nrows - 1, Math.floor(rows[0])))
-    const hi = Math.max(lo + 1, Math.min(matrix.nrows, Math.ceil(rows[1])))
-    emit([lo, hi])
+    // Whichever way the hand went. A band of rows and a band of columns name the
+    // same stretch of genome on a map read about its diagonal, so insisting on
+    // one direction would be insisting on a gesture rather than on an answer —
+    // and a reader whose drag came out a few degrees the wrong side of vertical
+    // got a one-bin anchor and no idea why.
+    const vertical = Math.abs(y - y0) >= Math.abs(x - x0)
+    const scale = vertical ? this.rowScale : this.colScale
+    const [a, b] = vertical ? [y0 - plot.y, y - plot.y] : [x0 - plot.x, x - plot.x]
+    const span = [scale.toUnit(Math.min(a, b)), scale.toUnit(Math.max(a, b))]
+    const limit = vertical ? matrix.nrows : matrix.ncols
+    const lo = Math.max(0, Math.min(limit - 1, Math.floor(span[0])))
+    const hi = Math.max(lo + 1, Math.min(limit, Math.ceil(span[1])))
+    emit(vertical ? 'rows' : 'cols', [lo, hi])
   }
 
   private finishSelection(x0: number, y0: number, x: number, y: number): void {
@@ -2011,24 +2017,34 @@ export class HeatmapView {
     const drag = this.drag
     if (drag === null || drag.mode !== 'anchor') return
     const plot = this.dataRect
-    const top = Math.min(drag.y0, drag.y)
-    const height = Math.max(1, Math.abs(drag.y - drag.y0))
+    // The band follows the hand: a mostly-vertical drag names rows and is drawn
+    // across, a mostly-horizontal one names columns and is drawn down. Same test
+    // `finishAnchor` decides by, so what is drawn is what is taken.
+    const vertical = Math.abs(drag.y - drag.y0) >= Math.abs(drag.x - drag.x0)
+    const from = vertical ? Math.min(drag.y0, drag.y) : Math.min(drag.x0, drag.x)
+    const size = Math.max(1, vertical ? Math.abs(drag.y - drag.y0) : Math.abs(drag.x - drag.x0))
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
     ctx.clip()
     ctx.fillStyle = this.opts.selectionFill
-    ctx.fillRect(plot.x, top, plot.width, height)
+    if (vertical) ctx.fillRect(plot.x, from, plot.width, size)
+    else ctx.fillRect(from, plot.y, size, plot.height)
     ctx.strokeStyle = this.opts.selectionColor
     ctx.lineWidth = Math.max(1 / this.dpr, 1)
     // The two long edges only: the ends are the edges of the plot, and a rule
     // drawn there would look like a boundary the reader had chosen.
     ctx.beginPath()
-    ctx.moveTo(plot.x, this.snap(top))
-    ctx.lineTo(plot.x + plot.width, this.snap(top))
-    ctx.moveTo(plot.x, this.snap(top + height))
-    ctx.lineTo(plot.x + plot.width, this.snap(top + height))
+    for (const edge of [from, from + size]) {
+      if (vertical) {
+        ctx.moveTo(plot.x, this.snap(edge))
+        ctx.lineTo(plot.x + plot.width, this.snap(edge))
+      } else {
+        ctx.moveTo(this.snap(edge), plot.y)
+        ctx.lineTo(this.snap(edge), plot.y + plot.height)
+      }
+    }
     ctx.stroke()
     ctx.restore()
   }
@@ -2967,7 +2983,7 @@ export class HeatmapView {
       // clamped, diagonal-locked one the marquee was drawn to, and a release
       // outside the canvas has no meaningful position at all.
       if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, drag.x, drag.y)
-      if (drag.mode === 'anchor') this.finishAnchor(drag.y0, drag.y)
+      if (drag.mode === 'anchor') this.finishAnchor(drag.x0, drag.y0, drag.x, drag.y)
       this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {

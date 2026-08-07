@@ -76,7 +76,7 @@ import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import type { ScoreChoice } from './scores'
-import { ViewpointLane } from './ViewpointLane'
+import { VIEWPOINT_GAP, ViewpointLane } from './ViewpointLane'
 import {
   getViewpoint,
   setViewpointAnchor,
@@ -558,7 +558,7 @@ export class MatrixPanel {
   /** Teardowns for the lane canvases' own pointer listeners. */
   private readonly laneListeners: Array<() => void> = []
   /** The stack thicknesses the stylesheet was last told about, per edge. */
-  private laneBudget = { bottom: -1, right: -1 }
+  private laneBudget = { bottom: -1, right: -1, top: -1 }
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -629,7 +629,7 @@ export class MatrixPanel {
       // Shift-drag names the 4C anchor. Reported as rows of the block and turned
       // into a *locus* here, because this is the object that knows the axis: the
       // anchor has to outlive the block it was drawn on, and rows do not.
-      onAnchor: (rows) => this.setAnchorRows(rows),
+      onAnchor: (axis, span) => this.setAnchorSpan(axis, span),
       // Only wired when the view wants it; without it a drag zooms, which is
       // the renderer's own behaviour.
       ...(options.onSelectRegion === undefined
@@ -906,7 +906,13 @@ export class MatrixPanel {
     // A change of anchor or of visibility is a different picture, and the strip
     // is drawn inside the map's own frame — so this is a repaint request rather
     // than a draw of its own, which keeps the two in step by construction.
-    this.unsubscribeViewpoint = subscribeViewpoint(() => this.schedule())
+    this.unsubscribeViewpoint = subscribeViewpoint(() => {
+      // `syncLaneMetrics` before the repaint, because showing the strip changes
+      // how much room the *map* has: without it the map keeps its size, the
+      // strip is added above it, and the tracks below go under the fold.
+      this.syncLaneMetrics()
+      this.schedule()
+    })
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
@@ -2089,12 +2095,17 @@ export class MatrixPanel {
    * The end takes the *next* bin's start rather than the last bin's, so the span
    * covers the whole of the last row rather than stopping at its first base.
    */
-  private setAnchorRows(rows: [number, number]): void {
-    const axis = this.locusAxes.rows
+  private setAnchorSpan(which: 'rows' | 'cols', span: [number, number]): void {
+    // Resolved through the axis the drag was actually measured on. On an
+    // on-diagonal block the two axes are the same sequence and either answer is
+    // the same locus; on a rectangular one they are different sequences, and
+    // reading a horizontal drag through the row axis would name somewhere the
+    // reader never pointed at.
+    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
     if (axis === null) return
-    const from = axis.unitToLocus(rows[0])
-    const to = axis.unitToLocus(Math.max(rows[0], rows[1] - 1))
-    const segment = axis.segmentAt(rows[0])
+    const from = axis.unitToLocus(span[0])
+    const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
+    const segment = axis.segmentAt(span[0])
     if (from === null || to === null || segment === null) return
     setViewpointAnchor({
       contig: from.contig,
@@ -2962,9 +2973,21 @@ export class MatrixPanel {
   private syncLaneMetrics(): void {
     const bottom = this.lanes?.thicknessOf('bottom') ?? 0
     const right = this.lanes?.thicknessOf('right') ?? 0
-    if (bottom === this.laneBudget.bottom && right === this.laneBudget.right) return
-    this.laneBudget = { bottom, right }
+    // The 4C strip is furniture in exactly the same sense: it sits above the map
+    // in the same vertical budget, and without this the map kept its size, the
+    // strip was added to the top of it, and the tracks under the pair went below
+    // the fold — which is the one thing this property exists to prevent.
+    const top = getViewpoint().shown ? this.viewpointLane.height + VIEWPOINT_GAP : 0
+    if (
+      bottom === this.laneBudget.bottom &&
+      right === this.laneBudget.right &&
+      top === this.laneBudget.top
+    ) {
+      return
+    }
+    this.laneBudget = { bottom, right, top }
     this.grid.style.setProperty('--lane-bottom', `${bottom}px`)
+    this.grid.style.setProperty('--lane-top', `${top}px`)
     // Re-measure *now*, in the same frame, rather than waiting for the resize
     // observer. The observer watches the grid, and the grid's width is the wider
     // of the plot and the lane below it — so a plot that has just shrunk under a
