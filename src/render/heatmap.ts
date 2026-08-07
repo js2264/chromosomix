@@ -169,8 +169,13 @@ export function poolDisplay(
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
   const pooled = new Float32Array(width * height)
-  const centre =
-    scale.neutral === undefined ? null : transformValue(scale.neutral, transform)
+  // A neutral value only *has* a middle if it survives the transform. `log2` of
+  // a difference map's neutral `0` is `-Infinity`, which is not a position on
+  // the scale and would make every departure from it infinite; there the field
+  // is drawn by the ordinary rules, which is the honest outcome — a signed
+  // difference has no logarithm to be symmetric about.
+  const centreRaw = scale.neutral === undefined ? null : transformValue(scale.neutral, transform)
+  const centre = centreRaw !== null && Number.isFinite(centreRaw) ? centreRaw : null
   const pool: PooledDisplay = {
     width,
     height,
@@ -208,14 +213,34 @@ export function poolDisplay(
       for (let rx = 0; rx < width; rx++) {
         const x0 = rx * strideX
         const x1 = Math.min(x0 + strideX, ncols)
+        // The farthest **finite** departure, with a non-finite one kept only
+        // when the block holds nothing else. Without that restriction this
+        // reduction erases the picture rather than summarising it: an empty
+        // cell of a ratio field is `0`, whose `log2` is `-Infinity`, and a
+        // contact map is mostly empty — so every pooled block would contain one
+        // and infinity would win all of them. Measured on an 8,192-row sparse
+        // ratio field, that put 0 of 32,768 pooled pixels at a finite value and
+        // drew the whole map as one colour at fit zoom.
+        //
+        // The same rule the maximum path applies to NaN, for the same reason,
+        // one step further: a value that cannot be compared must not out-rank
+        // every value that can.
         let best = Number.NaN
         let far = -1
+        let fallback = Number.NaN
         for (let y = y0; y < y1; y++) {
           const row = y * ncols
           for (let x = x0; x < x1; x++) {
             const raw = values[row + x]
             if (Number.isNaN(raw)) continue
             const t = displayValue(raw, transform, balanced)
+            if (!Number.isFinite(t)) {
+              // Off the end in one direction. Worth drawing where there is
+              // nothing else in the block to draw, and never worth losing a
+              // real reading for.
+              if (Number.isNaN(fallback)) fallback = t
+              continue
+            }
             const away = Math.abs(t - centreOf)
             if (away > far) {
               far = away
@@ -223,7 +248,7 @@ export function poolDisplay(
             }
           }
         }
-        pooled[ry * width + rx] = best
+        pooled[ry * width + rx] = Number.isNaN(best) ? fallback : best
       }
     }
     return pool

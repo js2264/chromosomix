@@ -2997,11 +2997,7 @@ export class MatrixPanel {
     // there are no longer two sets of counts in the square but one derived
     // field, so the second strip would be a second scale for numbers that do
     // not exist.
-    this.barCanvas2.classList.toggle('hidden', this.second === null || this.neutral !== null)
-    // Two legends need more room than one: each caption gains a triangle and
-    // there are two of them side by side, and a clipped caption on a legend is
-    // worse than a narrower plot.
-    this.barSlot.classList.toggle('is-compare', this.second !== null)
+    this.syncLegendSlots()
     // The second legend is a function of the gain as well as of the colour
     // scale, and the gain is recomputed per block. Without this the legend
     // redraw is skipped whenever a *pinned* clip survives a navigation, and the
@@ -3155,6 +3151,54 @@ export class MatrixPanel {
     return { dense, presentationMoved }
   }
 
+
+  /**
+   * How many legends there are, and how much room they need.
+   *
+   * A function of {@link second} and {@link neutral}, so it has to run wherever
+   * either moves — which is {@link setData} *and* {@link rederive}. Left in
+   * `setData` alone, ticking O/E on a compared map kept a second strip on screen
+   * labelled in the second file's counts, beside a square that had become one
+   * derived field: the exact misreading the rule below exists to prevent, put
+   * back by the path that recomputes without re-reading.
+   */
+  private syncLegendSlots(): void {
+    this.barCanvas2.classList.toggle('hidden', this.second === null || this.neutral !== null)
+    // Two legends need more room than one: each caption gains a triangle and
+    // there are two of them side by side, and a clipped caption on a legend is
+    // worse than a narrower plot.
+    this.barSlot.classList.toggle('is-compare', this.second !== null)
+  }
+
+  /**
+   * The colour scale this panel would be drawn on if nothing were derived.
+   *
+   * What a *new* panel should be seeded with, and not the same thing as the
+   * scale on screen: a derivation borrows the transform, the colormap and the
+   * clip while it is on ({@link syncDivergingScale}), so the live values may be
+   * `log2` and a diverging ramp chosen for a ratio. Handing those to a panel
+   * that is going to draw plain counts puts every empty cell — most of a sparse
+   * Hi-C block — at `-Infinity` on a ramp whose middle then means nothing.
+   *
+   * The borrowed presentation is held for exactly this reason, so this is the
+   * same answer the panel itself would give back when the derivation is
+   * switched off.
+   */
+  baseScale(): { transform: Transform; colormap: string; vmin?: number; vmax?: number } {
+    const base = this.divergingRestore ?? {
+      transform: this.transform,
+      colormap: this.colormap,
+      vmin: this.manualVmin,
+      vmax: this.manualVmax,
+    }
+    return {
+      transform: base.transform,
+      colormap: base.colormap,
+      ...(base.vmin === undefined ? {} : { vmin: base.vmin }),
+      ...(base.vmax === undefined ? {} : { vmax: base.vmax }),
+    }
+  }
+
   /**
    * Record which derivation this panel is drawing, without recomputing.
    *
@@ -3199,6 +3243,7 @@ export class MatrixPanel {
     // block for an equal object would make every unrelated repaint expensive.
     if (data === null || (unchanged && compare === undefined)) return
     const { dense, presentationMoved } = this.derive(data, this.second?.data)
+    this.syncLegendSlots()
     this.heatmap.setValues(dense.values)
     // The colourbar is a function of the scale *and* of what the numbers are, and
     // neither the transform nor the clip need have moved for a ratio to want a

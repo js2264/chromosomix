@@ -254,9 +254,38 @@ export const SCALE_KEYS = ['transform', 'colormap', 'vmin', 'vmax'] as const
  * showing the previous block — a far worse failure than an unnecessary reload.
  */
 export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
+  return differsOnly(a, b, SCALE_KEYS)
+}
+
+/**
+ * The keys that change the **values** without changing which block is read.
+ *
+ * A third category between "paint it differently" and "read something else",
+ * and it exists because §7.5's derivations are transforms applied *after* the
+ * read: the same cells, in different units. Treated as data keys they cost a
+ * worker round trip and a rebuilt view for arithmetic over an array already in
+ * memory — and on a gated whole-genome map (§7.3) the rebuild puts a full pixel
+ * scan back behind its button, so ticking a box makes the map disappear.
+ *
+ * `op` is deliberately *not* here. Which of split, ratio and difference is in
+ * force decides which controls the panel draws — the depth tickbox is offered
+ * under one and not the others — and controls are built once, at construction.
+ */
+export const DERIVED_KEYS = ['oe'] as const
+
+/**
+ * `true` when two states select the same block and differ only in how it is
+ * painted or what arithmetic is done to it — the two things a mounted view can
+ * be *told*, rather than rebuilt for.
+ */
+export function differsOnlyInPresentation(a: ViewState, b: ViewState): boolean {
+  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS])
+}
+
+function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {
   const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)])
   for (const key of keys) {
-    if ((SCALE_KEYS as readonly string[]).includes(key)) continue
+    if (allowed.includes(key)) continue
     if (a[key as keyof ViewState] !== b[key as keyof ViewState]) return false
   }
   return true

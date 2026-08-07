@@ -37,6 +37,7 @@ import {
   type BlockValues,
 } from '@/render/derive'
 import { autoSymmetricRange, transformValues } from '@/render/scale'
+import { poolDisplay } from '@/render/heatmap'
 import { combine, blendAcrossDiagonal } from '@/render/compare'
 
 function block(
@@ -402,5 +403,54 @@ describe('the normalisation names', () => {
     expect(isNormalisation('ice')).toBe(true)
     expect(isNormalisation('KR')).toBe(false)
     expect(isNormalisation('')).toBe(false)
+  })
+})
+
+describe('drawing a diverging field at fit zoom', () => {
+  /** A sparse ratio field: mostly empty, a few real ratios — a Hi-C map's shape. */
+  function sparseRatios(rows: number, cols: number): Float32Array {
+    const values = new Float32Array(rows * cols)
+    for (let i = 0; i < values.length; i += 37) values[i] = 2
+    return values
+  }
+
+  it('does not let one empty cell erase the block it is pooled with', () => {
+    // An empty cell of a ratio field is 0, whose `log2` is -Infinity, and a
+    // contact map is mostly empty — so a reduction that ranked by raw distance
+    // from neutral put an infinity in *every* pooled block and drew the whole
+    // map as one colour. This is the regression: 0 of 32,768 pooled pixels came
+    // back finite.
+    const rows = 8192
+    const cols = 8
+    const pooled = poolDisplay(
+      { nrows: rows, ncols: cols, values: sparseRatios(rows, cols), rowExtent: [0, rows], colExtent: [0, cols] },
+      { vmin: Number.NaN, vmax: Number.NaN, transform: 'log2', colormap: 'RdBu_r', neutral: 1 },
+    )
+    // Something must actually have been pooled, or the test proves nothing.
+    expect(pooled.strideY).toBeGreaterThan(1)
+    let finite = 0
+    for (const value of pooled.values) if (Number.isFinite(value)) finite++
+    expect(finite).toBeGreaterThan(0)
+  })
+
+  it('still draws a block that has nothing but an infinity in it', () => {
+    // "Off the end in one direction" is a real reading where there is no other,
+    // and dropping it would blank a genuinely empty region instead of flooring it.
+    const values = new Float32Array(16 * 16)
+    const pooled = poolDisplay(
+      { nrows: 16, ncols: 16, values, rowExtent: [0, 16], colExtent: [0, 16] },
+      { vmin: Number.NaN, vmax: Number.NaN, transform: 'log2', colormap: 'RdBu_r', neutral: 1 },
+      { maxDim: 4 },
+    )
+    expect(pooled.values.every((v) => v === Number.NEGATIVE_INFINITY)).toBe(true)
+  })
+
+  it('falls back to the ordinary rules where neutral is not on the scale', () => {
+    // `log2` is offered on every map, and a difference map's neutral is 0 —
+    // whose log2 is -Infinity. Treated as a centre it makes every distance
+    // infinite and the range `[-Infinity, -Infinity]`.
+    const range = autoSymmetricRange(Float32Array.from([-1, 0, 1]), Number.NEGATIVE_INFINITY)
+    expect(Number.isFinite(range.vmin)).toBe(true)
+    expect(Number.isFinite(range.vmax)).toBe(true)
   })
 })
