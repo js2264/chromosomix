@@ -185,6 +185,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   naming a base pair while the arrowhead is on a word. That was true of the
   readout already and is now true of the line as well.
 
+  **Only what follows the pointer goes down there.** The sequence boundaries and
+  the name column's own edge stop with the tracks: a boundary is a mark *on* the
+  tracks, and a rule carrying it through a screen's worth of blank space is a
+  divider between two things that are not there.
+
   Only on screen. A figure is a picture of the tracks, and blank paper under them
   is not part of it, so an exported one is unchanged.
 
