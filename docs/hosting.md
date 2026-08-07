@@ -149,6 +149,83 @@ behave identically, minus the overview — the app never requires a companion fi
 
 ## Private files
 
+Two ways, and they are for different situations.
+
+### Drag-and-drop
+
 Local drag-and-drop, same code path, different byte source. Nothing is uploaded, so there are no
 accounts, no storage cost and no GDPR review. The UI says so on screen, and the claim is testable:
 a dropped file must render without a single network request leaving the browser.
+
+### A private bucket prefix
+
+For data that lives on a bucket and should not be public — a lab's own collections, a dataset under
+review — the viewer signs its requests with AWS Signature Version 4. **Open a file → private
+buckets…** takes a URL prefix, a region and an access key, and everything under that prefix is then
+read signed. Everything else, the public demos included, stays unsigned.
+
+The scope is a **prefix, not a bucket**. `…/collections/` and not `…/rsglab-data/`, so a bucket whose
+`demo/` prefix is public and whose `collections/` prefix is not works as one bucket: signing the
+public half would add a preflight to every read for nothing, and would fail outright against a key
+scoped as below.
+
+**The key needs exactly two permissions.** Reading is `s3:GetObject` on the objects; *browsing* is
+`s3:ListBucket` on the bucket, which is a different permission — a key with only the first works
+fine for pasted URLs and cannot list, and the app says so rather than reporting a broken bucket.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::rsglab-data/collections/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::rsglab-data",
+      "Condition": { "StringLike": { "s3:prefix": ["collections/*"] } }
+    }
+  ]
+}
+```
+
+**CORS is not the public policy.** A signed request carries an `Authorization` header, which is not
+safelisted, so the browser preflights it — and a preflight for a credentialed request cannot be
+answered by `AllowedOrigins: ["*"]`. Name the app:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://js2264.github.io", "https://jserizay.com"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": [
+      "Range", "If-Match", "If-None-Match",
+      "Authorization", "x-amz-date", "x-amz-content-sha256", "x-amz-security-token"
+    ],
+    "ExposeHeaders": ["Content-Length", "Content-Range", "ETag", "Accept-Ranges"],
+    "MaxAgeSeconds": 86400
+  }
+]
+```
+
+`MaxAgeSeconds` is doing real work here: without it the browser preflights *every* range request
+rather than once per prefix, which doubles the request count on the one path the §12 budgets are
+about.
+
+**The key is in the browser, and there is no arrangement in which it is not.** The app has no
+backend by construction (C1), so whatever signs a request holds the key that signs it — the same
+property that makes a dropped file never leave the machine. It is kept in `localStorage`, readable
+by any script on the origin. What bounds that is the key's own permissions, which is why the policy
+above grants two actions on one prefix and why the dialog says never to paste an administrator key.
+Use a dedicated IAM user; if the lab uses SSO, the dialog takes a session token too and the
+credential simply expires.
+
+**Implementation.** `src/s3/sigv4.ts`, with its own SHA-256 in `src/s3/sha256.ts` rather than
+`crypto.subtle`. That is not a preference: the reader's hot path is a *synchronous*
+`XMLHttpRequest` — Emscripten's stream `read` op is synchronous — so there is no `await` between
+HDF5 asking for bytes and the request going out, and every `crypto.subtle` method returns a promise.
+Presigned URLs were the alternative and are worse here: they are scoped to one method, so the `HEAD`
+probe needs its own, and they expire while a tab is open.

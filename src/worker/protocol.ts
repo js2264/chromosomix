@@ -19,6 +19,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -32,8 +33,23 @@ export type SourceKind = 'local' | 'remote'
  * How to obtain the bytes. A `File` is structured-cloneable, so a dropped file
  * is handed to the worker by reference — it is never read into a buffer on the
  * main thread and it never leaves the browser (spec §11).
+ *
+ * A remote source may carry the credential that signs it. It travels *with the
+ * URL* rather than being configured on the worker, and the two properties that
+ * follow are both wanted:
+ *
+ * - The worker holds no credential store and cannot enumerate one. It is handed
+ *   the single key the URL it was given needs, for as long as that open lasts.
+ * - `localStorage` does not exist in a worker, so a worker-side lookup was never
+ *   available anyway — the shape the platform forces is also the better one.
+ *
+ * Absent means an unsigned request, which is the whole of the public path: the
+ * demo bucket is read with no `Authorization` header, no preflight, and no
+ * credential ever reaching this message.
  */
-export type SourceSpec = { kind: 'local'; file: File } | { kind: 'remote'; url: string }
+export type SourceSpec =
+  | { kind: 'local'; file: File }
+  | { kind: 'remote'; url: string; credential?: S3Credential }
 
 // ---------------------------------------------------------------------------
 // Wire-safe tables

@@ -9,6 +9,7 @@
 
 import { ViewerError } from '../errors'
 import { registerThread } from '../perf/threads'
+import { withCredential } from '../s3/attach'
 import {
   reviveError,
   type ProgressHandler,
@@ -84,7 +85,12 @@ export class ReaderClient {
     onProgress?: ProgressHandler,
   ): Promise<ResultMap[K]> {
     const id = this.nextId++
-    const message = { ...payload, id } as WorkerRequest
+    // The one place a private bucket's key joins a request to this worker. See
+    // `s3/attach.ts`: stamping here rather than where the source was built is
+    // what keeps the dozen construction sites ignorant of credentials, and what
+    // makes a key edited mid-session apply to the next request rather than to
+    // the next reload.
+    const message = withCredential({ ...payload, id }) as WorkerRequest
     return new Promise<ResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)

@@ -79,6 +79,8 @@ import { button, dragHasFiles, el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
+import { credentialFor } from '../s3/credentials'
+import { signS3Request } from '../s3/sigv4'
 
 /**
  * What the shell does for a session, and the only direction the coupling runs.
@@ -1156,11 +1158,21 @@ export class Session {
     this.showContent(loading(`Reading ${fileLabel(url)}`))
     this.host.sessionChanged(this)
     try {
-      const response = await fetch(url)
+      // Signed when a bucket entry covers it, unsigned otherwise. A published
+      // session in a private prefix is the natural way to share a private
+      // figure — it names the files beside it, and every one of those is read
+      // through the workers, which sign their own requests — so this fetch
+      // being the one unsigned link would make the whole arrangement fail at
+      // its first step.
+      const credential = credentialFor(url)
+      const response = await fetch(url, {
+        headers:
+          credential === null ? {} : signS3Request({ method: 'GET', url, credential }),
+      })
       if (!response.ok) {
         throw new Error(
           `${fileLabel(url)} could not be read: the host answered ${response.status} ` +
-            `${response.statusText}.`,
+            `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
       const config = parseConfig(await response.text())

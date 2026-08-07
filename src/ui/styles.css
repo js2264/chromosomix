@@ -4472,3 +4472,190 @@ p {
 .ann-demo {
   font-size: var(--step--1);
 }
+
+/* --- private buckets ---------------------------------------------------- */
+
+/* A text-weight button, for a control that is a *link to a screen* rather than
+   an action on this one. The picker's "private buckets…" and the browser's
+   breadcrumbs are both this: pressing them navigates, and giving them the same
+   filled chrome as `open` would put two equal-looking buttons beside each other
+   with very different consequences. */
+.btn-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.remote-private {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.bucket-body {
+  overflow: auto;
+  padding: 0.75rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bucket-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bucket-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.bucket-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+/* The prefix and the key id are the two fields a reader checks when a bucket
+   stops working, and both are long. They wrap rather than elide: a prefix cut
+   off mid-path cannot be compared against the one in the console, which is the
+   only thing anyone is looking at it for. */
+.bucket-row-base,
+.bucket-row-meta {
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.bucket-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.bucket-add h3 {
+  margin: 0;
+}
+
+.bucket-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bucket-error {
+  color: var(--danger);
+}
+
+.bucket-empty {
+  margin: 0;
+}
+
+/* Quiet rather than alarming. It is a standing property of a no-server app, not
+   a warning that something has gone wrong, and styling it as a red banner would
+   make the one screen where a user is being careful look like a failure. */
+.bucket-note {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+.bucket-note svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.bucket-browse {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.bucket-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-size: var(--step--1);
+}
+
+.bucket-crumb-sep {
+  color: var(--text-dim);
+}
+
+.bucket-entries {
+  display: flex;
+  flex-direction: column;
+  /* Bounded, because a prefix may hold a thousand keys and the dialog must not
+     become a page. The listing scrolls inside its own box, so the breadcrumbs
+     above it stay put — which is what makes going back up possible from the
+     bottom of a long folder. */
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.bucket-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bucket-entry:last-child {
+  border-bottom: none;
+}
+
+.bucket-entry:hover {
+  background: var(--accent-soft);
+}
+
+.bucket-entry-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bucket-entry-size {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}

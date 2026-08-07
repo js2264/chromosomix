@@ -12,6 +12,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **Private buckets.** **Open a file → private buckets…** takes a URL prefix, a
+  region and an access key, and everything under that prefix is then read with
+  a Signature Version 4 signature on every request — the map, its tracks, a
+  published session in the same folder. Everything else, the public demos
+  included, stays unsigned. The dialog also *browses* a prefix: one
+  `ListObjectsV2` per level, folders and files as rows, click to open. That is
+  the half a URL box cannot do, since nobody remembers the key of a `.mcool`
+  inside `collections/hum53/2026-03-run2/`.
+
+  The scope is a **prefix, not a bucket**, so a bucket whose `demo/` is public
+  and whose `collections/` is not works as one bucket. Signing the public half
+  would add a CORS preflight to every read for nothing, and would fail outright
+  against a key scoped the way `docs/hosting.md` says to scope it. Matching is
+  longest-prefix, so a per-project key can sit inside a general lab key.
+
+  **The signer computes SHA-256 itself** (`src/s3/sha256.ts`) rather than using
+  `crypto.subtle`, and that is a requirement rather than a preference: the
+  reader's hot path is a *synchronous* `XMLHttpRequest`, because Emscripten's
+  stream `read` op is synchronous, so there is no `await` between HDF5 asking
+  for bytes and the request going out — and every `crypto.subtle` method returns
+  a promise. Presigned URLs were the alternative and are worse here: scoped to
+  one method, so the `HEAD` probe needs its own, and they expire while a tab is
+  open. The hashing is checked against `node:crypto` at every length across the
+  padding boundary, against AWS's published vectors, and against a second
+  implementation for whole requests.
+
+  Credentials are looked up **once, at the worker boundary**, so the dozen
+  places that build a remote source — the URL box, the compare card, a resolved
+  session config, a restored track row — know nothing about keys, and a key
+  added mid-session applies to the next request rather than the next reload. The
+  worker holds no credential store and gets only the one key the URL it was
+  handed needs.
+
+  The key is in `localStorage` and readable by any script on the origin. There
+  is no arrangement in which it is not — the app has no backend by construction,
+  which is the same property that makes a dropped file never leave the machine
+  — so what bounds it is the key's own permissions. The dialog says so, and
+  `docs/hosting.md` has the two-action IAM policy and the CORS policy a
+  credentialed preflight needs.
+
 ### Changed
 
 - **The demo datasets moved to S3, and the app got 14× lighter.** The five

@@ -16,6 +16,7 @@
  */
 
 import type { AnnotationPayload, BaseRegion, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type { S3Credential } from '../../s3/sigv4'
 import type { AssemblyOrigin, Contig } from '../../genome/assembly'
 
 /**
@@ -41,8 +42,17 @@ export type DetectedFormat =
   | 'hdf5'
   | 'fasta'
 
-/** How to reach the bytes, in the shape that survives `postMessage`. */
-export type WireSource = { kind: 'local'; file: File; name: string } | { kind: 'remote'; url: string; name: string }
+/**
+ * How to reach the bytes, in the shape that survives `postMessage`.
+ *
+ * A remote track may carry the credential that signs it, for the reasons in
+ * `worker/protocol.ts`'s `SourceSpec`: the worker has no credential store and
+ * no `localStorage` to build one from, so the one key the URL needs travels
+ * with the URL. Absent means an unsigned request, which is every public track.
+ */
+export type WireSource =
+  | { kind: 'local'; file: File; name: string }
+  | { kind: 'remote'; url: string; name: string; credential?: S3Credential }
 
 export interface LoadResult {
   format: DetectedFormat
