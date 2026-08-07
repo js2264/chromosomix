@@ -1245,9 +1245,14 @@ export function transparencyField(store: AnnotationStore): HTMLElement {
     // Read from the *store*, so the box shows what the tracks actually are: a
     // config loaded with faded tracks, or a single row's own opacity changed
     // from its settings, both land here.
+    // Zero rather than `null` for an empty store: `null` means "leave the box
+    // alone", which on a session with no tracks yet left it *blank* — a number
+    // field showing nothing, in a card whose other two boxes show numbers. There
+    // is a true answer here and it is zero: nothing is faded, because there is
+    // nothing to fade, and a track dropped in a moment later arrives opaque.
     read: () => {
       const first = store.entries[0]
-      return first === undefined ? null : Math.round((1 - first.style.opacity) * 100)
+      return first === undefined ? 0 : Math.round((1 - first.style.opacity) * 100)
     },
     apply: (percent) => {
       const opacity = 1 - percent / 100

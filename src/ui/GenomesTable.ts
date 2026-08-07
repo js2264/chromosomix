@@ -21,6 +21,7 @@
 import { payloadColumnIsText, type GenomesResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
+import { SearchBox } from './SearchBox'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 /** Columns the format guarantees, in the order they are shown. */
@@ -48,12 +49,24 @@ export interface GenomesTableOptions {
    * when they wonder whether the whole thing can be seen at once.
    */
   onOpenWhole(): void
+  /**
+   * Go straight to a window, without opening the genome that contains it.
+   *
+   * The twin of the contigs table's box, and the same gap: every other door on
+   * this screen opens a *whole* something — a genome, a selection of them, the
+   * file — while a reader who knows the ten kilobases they want has to walk
+   * through two of those to reach a box that will take them. The reader is
+   * resolved by `parseMetacoolerRange`, which takes a genome name, a contig
+   * name, or either with coordinates on it, so one box answers all of them.
+   */
+  onOpenRegion(region: string): void
 }
 
 export class GenomesTable {
   readonly el: HTMLElement
   private readonly table: VirtualTable
   private readonly names: string[]
+  private readonly locus: SearchBox
 
   constructor(options: GenomesTableOptions) {
     const { data } = options
@@ -107,6 +120,17 @@ export class GenomesTable {
       }),
     )
 
+    this.locus = new SearchBox({
+      placeholder: 'genome, contig, or contig:start-end',
+      title:
+        'Open a window without opening the genome around it first — MAG_012, a contig of ' +
+        'one, or contig:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
+        'cooler. The same box the / key opens.',
+      onSubmit: (text) => {
+        if (text !== '') options.onOpenRegion(text)
+      },
+    })
+
     this.el = el(
       'section',
       { class: 'view view-genomes' },
@@ -119,16 +143,25 @@ export class GenomesTable {
           text:
             'Click a genome to open its matrix. Tick any number and show them as one map — ' +
             'each genome on the diagonal and every block between them off it, which is the ' +
-            'phage–host, plasmid–host and HGT view.',
+            'phage–host, plasmid–host and HGT view. Or name a window in the box and go ' +
+            'straight there.',
         }),
+        this.locus.el,
       ),
       this.table.el,
     )
   }
 
-  /** The `/` key: a table's box is the filter above it. */
+  /**
+   * The `/` key: the **locus** box, as in every other view of this application.
+   *
+   * The filter keeps its own box directly above the rows — visible, and one
+   * click away, which is where a reader narrowing a list is already looking.
+   * `/` is the key that opens the region bar on a map and the search field in
+   * the browser, and a table is not the place for it to mean something else.
+   */
   focusSearch(): void {
-    this.table.focusSearch()
+    this.locus.focus()
   }
 
   /** Release the table's listeners and flush its pending filter state. */

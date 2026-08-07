@@ -2980,6 +2980,12 @@ export class Session {
       onOpenSelection: (names) =>
         this.store.set({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
       onOpenWhole: () => this.store.set({ uri: state.uri, view: this.wholeFileView() }),
+      // Straight to the window, past the two whole-something doors beside it.
+      // No `genome` on the state: the reader resolves a genome name, a contig
+      // name and either with coordinates on it, so what was typed decides which
+      // of those it was — guessing here would be this method answering a
+      // question `parseMetacoolerRange` is about to answer properly.
+      onOpenRegion: (region) => this.store.set({ uri: state.uri, view: 'region', region }),
     })
     this.showContent(view.el, view)
   }
@@ -3011,6 +3017,11 @@ export class Session {
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
+      // The same destination a click on a row reaches, with coordinates on it —
+      // and offered on a MAG's contig list too, where "open the whole contig
+      // first" is exactly as expensive a detour as it is at the top level.
+      onOpenRegion: (region: string) =>
+        this.store.set({ uri: state.uri, view: 'region', region, genome: state.genome }),
       // Neither while this table is one genome's contigs: "the whole file" is
       // not the question someone reading a MAG's contigs is asking, and the map
       // of *those* contigs is the genome view one crumb up.
