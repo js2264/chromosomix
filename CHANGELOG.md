@@ -246,6 +246,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   navigating back. A pan is rewound rather than merely stopped: a pan that ends
   where the reader changed their mind is the pan happening anyway.
 
+- **A virtual 4C profile above the map.** A 4C experiment fixes one locus and
+  asks what it touches; a contact map already holds the answer for every locus at
+  once, and pulling one out is arithmetic a reader can do by eye and cannot do
+  accurately. Turn the strip on from the Map card, Shift-drag a band of rows on
+  the picture, and the lane above it draws the sum of every column over that
+  band.
+
+  Computed from the block already on screen and never from a fresh read, which
+  is what makes it honest as well as free: the line is a summary of the pixels
+  above it, at the same pooling, from the same score column, with the same
+  balancing. A separately-read profile could disagree with the picture it is
+  drawn over, and would, at every level but the finest.
+
+  The strip is a canvas of its own in the panel's grid, exactly as wide as the
+  map's and drawn through the map's own column scale — so a peak sits under the
+  column it came from by construction rather than by arrangement. It draws
+  through `drawTrack`, so it looks like the tracks beside it because it is one,
+  and the fill, the outline and the floor follow the same overlay toggles. Shown
+  and empty until an anchor is drawn, because that empty box is the only place a
+  reader is certainly looking at the moment they need to be told the gesture.
+
+  The anchor is kept as a **locus**, not as bins or block rows: pan, zoom, change
+  resolution and it still names the same stretch of the same sequence. Panned
+  away from, the lane says so rather than drawing a profile of whatever is at
+  those row numbers now.
+
 - **A score picker where the balanced tickbox was.** One dropdown in the Map
   card naming what the cells *are*: `counts`, `balanced` where the file carries
   weights, and then every further value column the file's own `/pixels` group

@@ -792,6 +792,14 @@ export interface HeatmapOptions {
    */
   onSelect?: (selection: SelectionBox) => void
   /**
+   * A Shift-drag named a band of rows — the 4C anchor (`ui/viewpoint.ts`).
+   *
+   * Block-local row indices, half-open. Absent turns the gesture off entirely:
+   * with no `onAnchor` a Shift-drag is a pan, which is what every drag on a map
+   * without a viewpoint lane should be.
+   */
+  onAnchor?: (rows: [number, number]) => void
+  /**
    * What the two spans of a drag say, per axis, already formatted.
    *
    * The renderer owns *where* the numbers go and the caller owns *what they
@@ -832,7 +840,7 @@ export interface HeatmapOptions {
  * correction afterwards.
  */
 interface Drag {
-  mode: 'select' | 'pan'
+  mode: 'select' | 'pan' | 'anchor'
   /** Where the button went down, in canvas CSS pixels. */
   x0: number
   y0: number
@@ -860,6 +868,7 @@ type ResolvedOptions = Required<
     | 'onCellClick'
     | 'onLabelClick'
     | 'onSelect'
+    | 'onAnchor'
     | 'selectionLabel'
     | 'onHover'
     | 'plotOptions'
@@ -966,6 +975,7 @@ export class HeatmapView {
   private readonly onCellClick: ((cell: Cell) => void) | null
   private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
   private readonly onSelect: ((selection: SelectionBox) => void) | null
+  private onAnchor: ((rows: [number, number]) => void) | null
   private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
@@ -1073,6 +1083,7 @@ export class HeatmapView {
     this.onCellClick = options.onCellClick ?? null
     this.onLabelClick = options.onLabelClick ?? null
     this.onSelect = options.onSelect ?? null
+    this.onAnchor = options.onAnchor ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
 
@@ -1179,6 +1190,16 @@ export class HeatmapView {
   }
 
   /** The plot area: the canvas minus the label margins. */
+  /** Device pixels per CSS pixel, as this view resolved it. */
+  get devicePixelRatio(): number {
+    return this.dpr
+  }
+
+  /** The block on screen, or `null` before one has been set. */
+  get block(): DenseMatrix | null {
+    return this.matrix
+  }
+
   get plotRect(): Rect {
     const m = this.computedMargin
     return {
@@ -1600,6 +1621,32 @@ export class HeatmapView {
    * picture when the question was about the data. A view that wants the old
    * behaviour simply does not pass `onSelect`.
    */
+  /**
+   * Hand over the row band a Shift-drag covered — the 4C anchor.
+   *
+   * Rows, not a box: a viewpoint is a band of the genome, and what it touches is
+   * every column. Reported in **block-local row indices** because that is what
+   * the column sum is taken over and what the owner can turn into a locus; it
+   * knows the block's extents and this does not.
+   *
+   * A band under one row is still a band. A reader who taps rather than drags
+   * has named the bin they tapped, which is a perfectly good viewpoint and the
+   * finest one this resolution can express.
+   */
+  private finishAnchor(y0: number, y: number): void {
+    const emit = this.onAnchor
+    const matrix = this.matrix
+    if (emit === null || matrix === null) return
+    const plot = this.plotRect
+    const rows = [
+      this.rowScale.toUnit(Math.min(y0, y) - plot.y),
+      this.rowScale.toUnit(Math.max(y0, y) - plot.y),
+    ]
+    const lo = Math.max(0, Math.min(matrix.nrows - 1, Math.floor(rows[0])))
+    const hi = Math.max(lo + 1, Math.min(matrix.nrows, Math.ceil(rows[1])))
+    emit([lo, hi])
+  }
+
   private finishSelection(x0: number, y0: number, x: number, y: number): void {
     const emit = this.onSelect
     if (emit === null) {
@@ -1952,9 +1999,47 @@ export class HeatmapView {
     ctx.restore()
   }
 
+  /**
+   * The band a 4C anchor drag is covering: rows, edge to edge.
+   *
+   * A stripe rather than a box, because that is what a viewpoint *is* — a band
+   * of the genome whose contacts with every column are being asked for. Drawing
+   * it as a square would be drawing the wrong claim: it would say the columns
+   * outside the square are not part of the question, and every one of them is.
+   */
+  private drawAnchorBand(): void {
+    const drag = this.drag
+    if (drag === null || drag.mode !== 'anchor') return
+    const plot = this.dataRect
+    const top = Math.min(drag.y0, drag.y)
+    const height = Math.max(1, Math.abs(drag.y - drag.y0))
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.fillStyle = this.opts.selectionFill
+    ctx.fillRect(plot.x, top, plot.width, height)
+    ctx.strokeStyle = this.opts.selectionColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 1)
+    // The two long edges only: the ends are the edges of the plot, and a rule
+    // drawn there would look like a boundary the reader had chosen.
+    ctx.beginPath()
+    ctx.moveTo(plot.x, this.snap(top))
+    ctx.lineTo(plot.x + plot.width, this.snap(top))
+    ctx.moveTo(plot.x, this.snap(top + height))
+    ctx.lineTo(plot.x + plot.width, this.snap(top + height))
+    ctx.stroke()
+    ctx.restore()
+  }
+
   /** The rubber band, while a selection drag is in progress. */
   private drawSelection(): void {
     const drag = this.drag
+    if (drag?.mode === 'anchor') {
+      this.drawAnchorBand()
+      return
+    }
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
     const plot = this.dataRect
     const ctx = this.ctx
@@ -2732,7 +2817,12 @@ export class HeatmapView {
       if (e.button !== 0) return
       const [x, y] = local(e)
       this.dragMoved = false
-      const mode = wantsSelect(e) ? 'select' : 'pan'
+      // Three gestures on one button, told apart by the modifiers. Option
+      // selects a region to open; Option with Shift does the same on the
+      // diagonal; **Shift alone** draws the 4C anchor, which is the one gesture
+      // that changes nothing about where the reader is looking — see
+      // `ui/viewpoint.ts`. Everything else pans.
+      const mode = wantsSelect(e) ? 'select' : e.shiftKey && this.onAnchor !== null ? 'anchor' : 'pan'
       const diagonal = mode === 'select' && e.shiftKey
       const [ax, ay] = diagonal ? this.onDiagonal(x, y) : [x, y]
       this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal }
@@ -2877,6 +2967,7 @@ export class HeatmapView {
       // clamped, diagonal-locked one the marquee was drawn to, and a release
       // outside the canvas has no meaningful position at all.
       if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, drag.x, drag.y)
+      if (drag.mode === 'anchor') this.finishAnchor(drag.y0, drag.y)
       this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {
