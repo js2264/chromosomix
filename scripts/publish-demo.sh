@@ -26,15 +26,35 @@ REGION="${DEMO_REGION:-eu-west-3}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/demo"
 
-DRY=()
+# A plain string rather than an array, and expanded unquoted at the call sites.
+#
+# The array version is what you would write, and it does not run on a Mac:
+# macOS still ships bash 3.2 (the last GPLv2 release, from 2007), where
+# `"${ARRAY[@]}"` on an *empty* array counts as an unbound variable under
+# `set -u` and aborts. Bash 4.4 fixed it, so the same script works on Linux and
+# fails on the machine most likely to run it.
+#
+# The portable array idiom — `${DRY[@]+"${DRY[@]}"}` — is the other fix and is
+# unreadable. This value is one fixed token with no whitespace and no glob
+# characters, which is the narrow case where an unquoted expansion is exactly
+# right: empty expands to no argument at all, which is the behaviour wanted.
+DRY=''
 CORS_ONLY=0
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY=(--dryrun) ;;
-    --cors) CORS_ONLY=1 ;;
-    *) echo "unknown option: $arg" >&2; exit 2 ;;
-  esac
-done
+# Guarded, because `"$@"` with no positional parameters is itself unbound under
+# `set -u` in some bash 3.2 builds — the same class of bug, one line up.
+if [ $# -gt 0 ]; then
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY='--dryrun' ;;
+      --cors) CORS_ONLY=1 ;;
+      -h|--help)
+        echo "usage: $0 [--dry-run] [--cors]" >&2
+        exit 0
+        ;;
+      *) echo "unknown option: $arg" >&2; exit 2 ;;
+    esac
+  done
+fi
 
 command -v aws >/dev/null || {
   echo "the AWS CLI is not on PATH; see https://aws.amazon.com/cli/" >&2
@@ -62,9 +82,16 @@ command -v aws >/dev/null || {
 # `AllowedOrigins` is `*` because this prefix is public demonstration data —
 # reproductions of published datasets, all with an accession in their `note`.
 # A private prefix must not copy this line; see docs/hosting.md.
+#
+# A failure here does **not** abort the script, and that is deliberate: it runs
+# after the upload, so aborting would throw away the verification of 250 MB that
+# did transfer, over a permission (`s3:PutBucketCors`) an upload key may
+# reasonably not have. The verify step below tests the policy that matters
+# rather than trusting this call, so a bucket whose CORS was set once by hand
+# passes and a bucket with none fails with the specific header named.
 apply_cors() {
   echo "==> applying CORS to s3://$BUCKET"
-  aws s3api put-bucket-cors \
+  if ! aws s3api put-bucket-cors \
     --region "$REGION" \
     --bucket "$BUCKET" \
     --cors-configuration '{
@@ -77,7 +104,10 @@ apply_cors() {
           "MaxAgeSeconds": 86400
         }
       ]
-    }'
+    }'; then
+    echo "    could not set CORS (needs s3:PutBucketCors). The verify step below will" >&2
+    echo "    say whether the policy already on the bucket is good enough." >&2
+  fi
 }
 
 if [ "$CORS_ONLY" = 1 ]; then
@@ -109,7 +139,7 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --exclude '*.json' \
   --content-type application/octet-stream \
   --cache-control 'public, max-age=31536000, immutable' \
-  "${DRY[@]}"
+  $DRY
 
 # The sessions are read with one plain `fetch(...).text()`, so the type is
 # cosmetic to the app and useful to anyone who opens one in a browser. Their
@@ -122,9 +152,9 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --include '*.json' \
   --content-type application/json \
   --cache-control 'public, max-age=300' \
-  "${DRY[@]}"
+  $DRY
 
-if [ ${#DRY[@]} -ne 0 ]; then
+if [ -n "$DRY" ]; then
   echo "==> dry run; nothing uploaded"
   exit 0
 fi
@@ -143,6 +173,21 @@ URL="https://$BUCKET.s3.$REGION.amazonaws.com/$PREFIX/yeast/Yeast_microC_G2M_1kb
 echo "==> verifying $URL"
 
 headers="$(curl -sSI -H 'Accept-Encoding: gzip, deflate, br' "$URL")"
+
+# The status first, because everything below reads a header out of the response
+# and a 403 has none of them. Checked separately so that "the object is not
+# public" is reported as itself: uploading does not make an object readable, and
+# a bucket that blocks public access answers 403 to exactly this request while
+# the sync above reported complete success.
+status="$(printf '%s' "$headers" | awk 'toupper($1) ~ /^HTTP/ { code = $2 } END { print code }')"
+if [ "$status" != "200" ]; then
+  echo "FAIL: the object is not publicly readable — an anonymous HEAD got ${status:-no response}." >&2
+  echo "      The upload succeeded; this is the bucket policy, not the files. Allow" >&2
+  echo "      s3:GetObject to * on arn:aws:s3:::$BUCKET/$PREFIX/* and make sure the" >&2
+  echo "      account-level Block Public Access setting is not overriding it." >&2
+  exit 1
+fi
+
 if ! grep -qi '^accept-ranges: bytes' <<<"$headers"; then
   echo "FAIL: no 'Accept-Ranges: bytes' — the reader would download whole files" >&2
   exit 1
