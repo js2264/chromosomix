@@ -103,13 +103,16 @@ export class ContigsTable {
       if (chooser !== undefined && rows.length > 0) chooser(rows.map((row) => names[row]))
     })
     show.disabled = true
-    const all = button('select all', () => this.table.selectAll(), {
+    // No "select all" here any more. It lived in the toolbar, three controls
+    // away from the rows it acted on, and it was the *only* thing in this table
+    // that could not say which rows it meant — so a reader who had filtered to
+    // six of them read the button, pressed it, and had no way to tell from the
+    // toolbar whether they had six or every one in the file. The box in the
+    // filter row says it by where it is: it sits in the gutter directly above
+    // the ticks it sets, on the line the filters are on.
+    const none = button('clear selection', () => this.table.clearSelection(), {
       class: 'btn btn-quiet',
-      title: 'Tick everything the current filters leave visible',
-    })
-    const none = button('clear', () => this.table.clearSelection(), {
-      class: 'btn btn-quiet',
-      title: 'Untick everything',
+      title: 'Untick everything, including rows the filters are hiding',
     })
     none.disabled = true
 
@@ -133,7 +136,6 @@ export class ContigsTable {
       onOpen: (row) => options.onOpenContig(names[row]),
     })
     if (chooser !== undefined) {
-      this.table.addToolbarItem(all)
       this.table.addToolbarItem(none)
       this.table.addToolbarItem(show)
     }
