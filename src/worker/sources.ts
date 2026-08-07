@@ -11,6 +11,7 @@ import { ViewerError } from '../errors'
 import type { ByteSource } from '../types'
 import { LocalFileSource } from '../sources/LocalFileSource'
 import { RemoteRangeSource } from '../sources/RemoteRangeSource'
+import { signS3Request, type S3Credential } from '../s3/sigv4'
 import type { SourceSpec } from './protocol'
 
 /**
@@ -33,13 +34,20 @@ export async function createSource(spec: SourceSpec): Promise<ByteSource> {
   }
   const reused = borrowRemote(spec.url)
   if (reused !== null) return reused
+  // Present only for a private bucket; `undefined` is the public path and is
+  // the one every demo takes. See `SourceSpec` on why the credential arrives
+  // with the URL rather than being configured on this worker.
+  const credential = spec.credential
   try {
-    return keep(spec.url, await RemoteRangeSource.open(spec.url))
+    return keep(
+      spec.url,
+      await RemoteRangeSource.open(spec.url, credential === undefined ? {} : { credential }),
+    )
   } catch (err) {
     if (err instanceof ViewerError && err.code === 'remote-compressed') {
       // Retained like any other remote source, and here it matters most: this
       // path has already downloaded the whole object once.
-      return keep(spec.url, await wholeObject(spec.url, err))
+      return keep(spec.url, await wholeObject(spec.url, err, credential))
     }
     if (err instanceof ViewerError) throw err
     // A failed probe is almost always one of two things, and the two need
@@ -171,7 +179,11 @@ const MAX_WHOLE_OBJECT_BYTES = 128 << 20
  * published demo files do not open at all — GitHub Pages compresses every one
  * of them and gives no way to stop it (see docs/deploy.md).
  */
-async function wholeObject(url: string, cause: ViewerError): Promise<ByteSource> {
+async function wholeObject(
+  url: string,
+  cause: ViewerError,
+  credential?: S3Credential,
+): Promise<ByteSource> {
   const encoded = cause.detail['encodedLength']
   const size = typeof encoded === 'number' ? encoded : null
   if (size !== null && size > MAX_WHOLE_OBJECT_BYTES) {
@@ -185,7 +197,12 @@ async function wholeObject(url: string, cause: ViewerError): Promise<ByteSource>
   }
   let bytes: Uint8Array
   try {
-    const response = await fetch(url)
+    // Signed like every other read of the same object: this is a `GET` of the
+    // whole thing rather than a range of it, which changes nothing about what
+    // the bucket requires to answer it.
+    const response = await fetch(url, {
+      headers: credential === undefined ? {} : signS3Request({ method: 'GET', url, credential }),
+    })
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}`)
     }

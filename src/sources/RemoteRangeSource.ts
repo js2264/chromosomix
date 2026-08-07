@@ -25,6 +25,7 @@ import type { ByteSource, SourceStats } from '../types'
 import { ViewerError } from '../errors'
 import type { H5FSNode } from '../h5/bootstrap'
 import { getH5 } from '../h5/bootstrap'
+import { signS3Request, type S3Credential } from '../s3/sigv4'
 
 /** 1 MiB. Large enough that HDF5's metadata walk lands repeatedly in one chunk. */
 const DEFAULT_CHUNK_SIZE = 1 << 20
@@ -39,6 +40,22 @@ export interface RemoteRangeOptions {
   maxCacheBytes?: number
   /** Injected for tests. Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch
+  /**
+   * The credential to sign every request with, for a private bucket.
+   *
+   * Omitted for a public object, and that is not merely an optimisation:
+   * an `Authorization` header turns each request into a preflight plus a real
+   * request, and a bucket policy scoped to one prefix would *reject* a signed
+   * read of a public one. Unsigned is the correct request for public data, not
+   * a weaker version of the signed one.
+   *
+   * This is the reason `s3/sha256.ts` exists. The signature has to be computable
+   * inside {@link RemoteRangeSource.fetchRange}, which is synchronous because
+   * Emscripten's stream `read` op is, so there is no `await` available and
+   * `crypto.subtle` — whose every method returns a promise — cannot be reached
+   * from there.
+   */
+  credential?: S3Credential
 }
 
 export class RemoteRangeSource implements ByteSource {
@@ -54,6 +71,7 @@ export class RemoteRangeSource implements ByteSource {
   private requests: number
   private bytesRead: number
   private mountPath: string | null = null
+  private readonly credential: S3Credential | undefined
 
   private constructor(
     url: string,
@@ -64,6 +82,7 @@ export class RemoteRangeSource implements ByteSource {
     this.url = url
     this.id = url
     this.size = size
+    this.credential = options.credential
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
     const requested = Math.trunc(options.maxCacheBytes ?? DEFAULT_CACHE_BYTES)
     this.maxCacheBytes = Math.max(this.chunkSize, requested)
@@ -84,6 +103,15 @@ export class RemoteRangeSource implements ByteSource {
    */
   static async open(url: string, options: RemoteRangeOptions = {}): Promise<RemoteRangeSource> {
     const doFetch = options.fetchImpl ?? globalThis.fetch
+    // Signed per request, not once for the source: `x-amz-date` is part of the
+    // signature and S3 refuses a stamp more than fifteen minutes old, so a
+    // header bag computed at open time would start failing partway through a
+    // long session — on a file that had been reading fine, which is the worst
+    // shape a failure can have.
+    const sign = (method: string): Record<string, string> =>
+      options.credential === undefined
+        ? {}
+        : signS3Request({ method, url, credential: options.credential })
     if (typeof doFetch !== 'function') {
       throw new ViewerError('remote-cors', 'this runtime has no fetch(); remote files need one', {
         url,
@@ -95,7 +123,7 @@ export class RemoteRangeSource implements ByteSource {
     let head: Response | null = null
     try {
       cost.requests += 1
-      head = await doFetch(url, { method: 'HEAD' })
+      head = await doFetch(url, { method: 'HEAD', headers: sign('HEAD') })
     } catch (cause) {
       await failCrossOrigin(url, host, cause, doFetch, cost)
     }
@@ -103,13 +131,26 @@ export class RemoteRangeSource implements ByteSource {
       // An HTTP error status is neither of spec §10's two remote refusals: the
       // request was allowed through and answered, it just did not name a
       // readable object. `bad-uri` is the honest code for that.
+      //
+      // The advice splits on whether a key was used, because the two situations
+      // share a status code and share nothing else. Told the public story, a
+      // reader with a private bucket goes looking for a permissions problem on
+      // an object that is *meant* to be private; told the private story, a
+      // reader with no key configured goes hunting for a key they never had.
       throw new ViewerError(
         'bad-uri',
-        `${host} answered ${head.status} ${head.statusText} to a HEAD of ${url}; ` +
-          'the viewer needs a publicly readable object. A presigned URL will not work — ' +
-          'it is signed for a single method, so the HEAD probe fails even when the GET ' +
-          'would have succeeded.',
-        { url, host, status: head.status },
+        options.credential === undefined
+          ? `${host} answered ${head.status} ${head.statusText} to a HEAD of ${url}; ` +
+            'the viewer needs a publicly readable object, or a bucket entry holding a key ' +
+            'for it (Open a file → Private buckets). A presigned URL will not work — it is ' +
+            'signed for a single method, so the HEAD probe fails even when the GET would ' +
+            'have succeeded.'
+          : `${host} answered ${head.status} ${head.statusText} to a signed HEAD of ${url}. ` +
+            'The key reached the bucket and was rejected: check that the region on the ' +
+            'bucket entry matches the bucket, that the key is allowed `s3:GetObject` on ' +
+            'this prefix, and — for a temporary credential — that the session token has ' +
+            'not expired.',
+        { url, host, status: head.status, signed: options.credential !== undefined },
       )
     }
 
@@ -153,7 +194,7 @@ export class RemoteRangeSource implements ByteSource {
     let probe: Response
     try {
       cost.requests += 1
-      probe = await doFetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' } })
+      probe = await doFetch(url, { method: 'GET', headers: { ...sign('GET'), Range: 'bytes=0-0' } })
     } catch (cause) {
       await failCrossOrigin(url, host, cause, doFetch, cost)
       throw new Error('unreachable')
@@ -335,12 +376,41 @@ export class RemoteRangeSource implements ByteSource {
   private fetchRange(from: number, to: number): Uint8Array {
     const xhr = new XMLHttpRequest()
     xhr.open('GET', this.url, false)
+    // The synchronous signature. Every header here is computed in a straight
+    // line by `s3/sigv4.ts` — no promise, no `crypto.subtle` — because there is
+    // nowhere in this method to await one: it is called from an Emscripten
+    // stream `read` op that must return a byte count.
+    //
+    // `Range` is set *after* signing and is deliberately not part of the
+    // signature. S3 does not require it to be, and signing it would mean a
+    // fresh derivation for every chunk of every read rather than one per
+    // request against a cached key.
+    if (this.credential !== undefined) {
+      const headers = signS3Request({ method: 'GET', url: this.url, credential: this.credential })
+      for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
+    }
     xhr.setRequestHeader('Range', `bytes=${from}-${to}`)
     // Allowed on a synchronous request only inside a worker; the guard in
     // mount() is what makes this reachable.
     xhr.responseType = 'arraybuffer'
     xhr.send(null)
     this.requests += 1
+    if (xhr.status === 403 && this.credential !== undefined) {
+      // Distinguished from the range failure below because the fix is
+      // different and neither message would suggest the other. A signed request
+      // that is refused is a key problem — wrong region, expired token, an IAM
+      // policy that does not cover this prefix — not a host that ignores
+      // `Range`, and the reader has already got past the probe, so the object
+      // is there and readable in principle.
+      throw new ViewerError(
+        'bad-uri',
+        `${hostOf(this.url)} refused a signed request for bytes ${from}-${to} of ${this.url}. ` +
+          'The key reached the bucket and was rejected: check the region on the bucket entry ' +
+          'matches the bucket, that the key is allowed `s3:GetObject` on this prefix, and — ' +
+          'for a temporary credential — that the session token has not expired.',
+        { url: this.url, status: 403, from, to, signed: true },
+      )
+    }
     if (xhr.status !== 206 && xhr.status !== 200) {
       throw new ViewerError(
         'remote-no-ranges',

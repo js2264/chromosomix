@@ -12,6 +12,7 @@
  */
 
 import { registerThread, type ThreadHandle } from '../../perf/threads'
+import { withCredential } from '../../s3/attach'
 import type {
   AnnotationRequest,
   AnnotationRequestKind,
@@ -76,7 +77,11 @@ export class AnnotationClient {
     // is a question about a file nothing has opened yet — so TypeScript can no
     // longer see the spread as any one member of it. The discriminant is
     // `payload.kind`, which `AnnotationRequestOf<K>` has already pinned.
-    const message = { ...payload, id } as unknown as AnnotationRequest
+    // Stamped with a bucket key here, for the reasons in `s3/attach.ts` — the
+    // same boundary treatment the reader worker's client gives its own
+    // messages, so a private bigWig and a private cooler need the same nothing
+    // of their callers.
+    const message = withCredential({ ...payload, id }) as unknown as AnnotationRequest
     return new Promise<AnnotationResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
       worker.postMessage(message)

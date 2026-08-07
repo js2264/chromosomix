@@ -211,6 +211,20 @@ export class FilePicker {
             'Add ::entries/<name> to address one entry of an .mmetacool.',
         }),
         el('div', { class: 'remote-row' }, this.urlInput, button('open', () => this.openRemote())),
+        // Beside the URL box rather than in a settings screen, because it is
+        // the same gesture as the box: "open a file that is not on this
+        // machine". A key configured here also makes the box itself work on a
+        // private URL, so a reader who was pasting one and getting 403s finds
+        // the fix next to the thing that was failing.
+        el(
+          'div',
+          { class: 'remote-private' },
+          button('private buckets…', () => this.openBuckets(), { class: 'btn-link' }),
+          el('span', {
+            class: 'hint',
+            text: 'Add a key for a private prefix, and browse what is under it.',
+          }),
+        ),
       ),
       examples,
       this.entryBox,
@@ -292,7 +306,31 @@ export class FilePicker {
     const url = this.urlInput.value.trim()
     if (url === '') return
     const { path } = splitUri(url)
+    // No credential attached here on purpose. The lookup happens once, at the
+    // worker boundary (`s3/attach.ts`), so a URL typed before a key was added
+    // and re-opened after still picks it up — and every other construction site
+    // in the app gets the same behaviour without knowing this exists.
     this.props.onOpen(url, { kind: 'remote', url: path })
+  }
+
+  /**
+   * The buckets dialog, imported on demand.
+   *
+   * A dynamic import because this is the one screen most readers never open:
+   * the dialog and the listing parser are ~8 kB that a session opening a public
+   * demo has no use for.
+   *
+   * It does **not** keep the signer out of the entry chunk, and it was never
+   * going to: `worker/client.ts` has to look a credential up on every outbound
+   * message and `app/Session.ts` signs the session-config fetch, so the hashing
+   * is reachable from the first screen either way. The split is worth having
+   * for the dialog; claiming more for it would be claiming something the build
+   * output contradicts.
+   */
+  private openBuckets(): void {
+    void import('./BucketsCard').then(({ openBuckets }) => {
+      openBuckets({ onOpen: (uri, source) => this.props.onOpen(uri, source) })
+    })
   }
 }
 

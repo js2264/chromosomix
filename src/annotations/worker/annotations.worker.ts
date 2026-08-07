@@ -16,6 +16,8 @@ import { BigBed, BigWig } from '@gmod/bbi'
 import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
 
+import { signS3Request } from '../../s3/sigv4'
+
 import { transfersFor } from '../../worker/protocol'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
@@ -274,8 +276,36 @@ function contigsOf(ends: Map<string, number>): Contig[] {
 // Loading
 // ---------------------------------------------------------------------------
 
+/**
+ * A read handle over a track file, signed when the bucket wants it signed.
+ *
+ * `generic-filehandle2` takes a `fetch` override, which is the whole hook: it
+ * builds its own `Range` headers and calls through, so wrapping the fetcher
+ * signs every read it makes — the first four magic bytes, a bigWig's header and
+ * R-tree, and every zoom block afterwards — without this file knowing how many
+ * requests that is.
+ *
+ * The signature is computed per call rather than once per handle, because
+ * `x-amz-date` is signed and S3 refuses a stamp older than fifteen minutes. A
+ * bigWig handle outlives that easily: it is kept for as long as the track is on
+ * screen and re-read on every pan.
+ */
 function handleFor(source: WireSource): BlobFile | RemoteFile {
-  return source.kind === 'local' ? new BlobFile(source.file) : new RemoteFile(source.url)
+  if (source.kind === 'local') return new BlobFile(source.file)
+  const { credential } = source
+  if (credential === undefined) return new RemoteFile(source.url)
+  return new RemoteFile(source.url, {
+    fetch: (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      return fetch(input, {
+        ...init,
+        headers: {
+          ...(init?.headers as Record<string, string> | undefined),
+          ...signS3Request({ method: init?.method ?? 'GET', url, credential }),
+        },
+      })
+    },
+  })
 }
 
 /**
