@@ -1,6 +1,13 @@
 {
-  "latest": "e702ca2",
+  "latest": "0d94613",
   "versions": [
+    {
+      "commit": "0d94613",
+      "version": "0.8.0",
+      "date": "2026-08-07T17:05:32+02:00",
+      "subject": "fix(browser): the sequence boundaries stop with the tracks, the crosshair does not",
+      "tag": ""
+    },
     {
       "commit": "e702ca2",
       "version": "0.8.0",
