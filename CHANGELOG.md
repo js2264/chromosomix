@@ -169,6 +169,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pinned build no longer points its examples back at the site root. Both now
   read the same URLs the web build does.
 
+### Fixed
+
+- **The last lane of a stack shows the rule on its resize border**, which it
+  never has. The rule is drawn a pixel *outside* the lane, in the gap before the
+  next one — and the last lane has no gap, because its far edge is the canvas's
+  own end: the whole two-pixel stroke landed outside the canvas and was clipped
+  away. The drag went on working perfectly, which is the worst of the two
+  failures, because a gesture that is never announced is one a reader finds by
+  accident or not at all. It is now held inside the canvas by its own half-width,
+  which costs every other lane nothing since they are nowhere near either end.
+
 ### Added
 
 - **The example list is a shelf of sessions.** Every entry in the landing

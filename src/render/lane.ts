@@ -314,6 +314,34 @@ export function withinGrip(box: [number, number, number, number], x: number, y: 
 /** Slack around the drawn glyph. A six-pixel target is one nobody hits. */
 const GRIP_PAD = 4
 
+/** How thick the rule marking a lane's draggable far border is. */
+export const BORDER_RULE = 2
+
+/**
+ * Where to centre that rule, given the border it marks.
+ *
+ * A pixel past the lane's far edge, out in the gap before the next lane, where
+ * it is not ink on anybody's data — **except on the last lane of a stack**,
+ * where there is no gap: its far edge is the canvas's own, and a rule centred a
+ * pixel past that is a rule drawn entirely outside the canvas. That was
+ * invisible while the drag it announces worked perfectly, which is the worst of
+ * both, because the reader finds the gesture by accident or not at all.
+ *
+ * So it is held inside the canvas by its own half-width, which costs every other
+ * lane nothing: they are nowhere near either end. Pure arithmetic, and out here
+ * rather than inline in the paint because a rule that knew its own width in one
+ * place and was clamped by a number written down in another would go back to
+ * being invisible the day either changed.
+ *
+ * @param border Canvas coordinate of the lane's far edge.
+ * @param outward `+1` or `-1`; see {@link laneOutward}.
+ * @param total The stack's whole thickness — the canvas's extent across.
+ */
+export function borderRuleAt(border: number, outward: 1 | -1, total: number): number {
+  const room = BORDER_RULE / 2
+  return Math.max(room, Math.min(total - room, border + outward * room))
+}
+
 /**
  * Paint the handle.
  *
