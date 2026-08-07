@@ -22,15 +22,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   control now offers all four, and a lane's right-click menu offers them too —
   as words, beside a new item that says which way the signal grows.
 
-  Which way it grows is the one thing that is not a coordinate, and it is now one
-  rule instead of two cases. Unflipped, a horizontal lane's values grow **up** the
-  page and a vertical one's grow **right** across it — the conventional
-  orientation of each axis — so on two edges that points at the matrix and on the
-  other two it points away. Every lane added to an edge is turned to face the
-  matrix, and moving one between two edges that disagree turns it again: two
-  stacks meeting at a corner of one figure have to agree about which way is more.
-  Bottom and right behave exactly as before; top and left fell out of the same
-  sentence.
+  Which way it grows is the one thing that is not a coordinate, and the two axes
+  answer it differently. A **horizontal** lane grows up the page wherever it is:
+  every browser ever built draws coverage rising from a floor under a ruler, and
+  a profile above a contact map hanging from its ceiling is one a reader has to
+  mirror in their head before they can compare it with the one below. A
+  **vertical** lane has no such convention, so the corner decides and it grows
+  towards the matrix. Exactly one edge therefore turns a lane on arrival, which
+  is what it was when there were only two — bottom and right behave exactly as
+  before, and moving a lane between two edges turns it again precisely when that
+  answer changes, so a reader who deliberately hung a track from its ceiling
+  keeps that decision through the move.
 
   What made this affordable is that `render/lane.ts` is still the only module
   that knows which of *along* and *across* is x. **Across now always runs
@@ -52,6 +54,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   column, and a strip beside it sums a band of columns and answers per row. Same
   anchor, same block, the transpose. Off the diagonal that may have an answer on
   one axis and none on the other, and the lane says which.
+
+  It also **marks where its anchor is on its own axis**, as a short bar — the
+  same glyph a group of tracks is marked with — in a gutter it keeps clear off
+  its floor, which is the one end of a lane the signal never reaches, so the mark
+  sits under the line rather than in it. The band being summed is on the *other*
+  axis and so is nowhere in the picture; this is the fact a reader keeps asking
+  for instead, because on a map read about its diagonal it is where the
+  self-contact peak ought to be. The room comes out of the lane's own height
+  rather than being added to it, and it is kept whether or not an anchor is set,
+  so the line does not jump under the hand that has just drawn one.
 
   It carries no file, so it is on no card, is never written to session storage,
   and is not drawn in the 1D browser. It is also the only lane that draws where
@@ -111,11 +123,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   credentialed preflight needs.
 
 ### Changed
-
-- **The 4C strip opens hanging from its ceiling rather than standing on its
-  floor.** It is a lane now, and every lane faces the matrix — above the map that
-  means growing downwards, pointing at the columns it is a reading of. One item
-  in its right-click menu turns it round, and the choice sticks.
 
 - **A track dragged out of the Tracks card onto an edge turns its axis**, which a
   track dragged there by the handle on its own picture has always done. The two
