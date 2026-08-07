@@ -590,6 +590,75 @@ above and does not weaken it — no code path reaches `__unbinned__` through thi
 
 ---
 
+### 7.5 Derived values — computed here, never read
+
+A cooler stores one number per pixel and, if somebody ran `cooler balance`, one weight per bin.
+Everything else a reader wants is arithmetic over numbers that are already on screen, and none of it
+requires a companion file, a preprocessing step or a server — so C1, C2 and C3 permit all of it.
+
+Three families, in `render/derive.ts` and `render/compare.ts`:
+
+| Family | Offered as | Cost |
+|---|---|---|
+| **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
+| **Baseline** — observed / expected | a toggle of its own | two passes |
+| **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
+
+**Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
+*from the block*, and that is a genome-wide statement only if the block is the genome — which §2 is
+precisely the claim that it is. One block, so one answer. A tile server computing coverage from the
+tile under the pointer produces a different normalisation at every zoom level and every pan; there
+the same feature would need a precomputed weight column, which is why HiGlass reads one. Where the
+assumption does not hold — a windowed region of a whole cooler chromosome — the number is a
+statement about the window, and the caption says so rather than leaving the label to imply otherwise.
+
+**Juicer's `KR` is not offered, and its absence is not a gap.** Knight–Ruiz and iterative correction
+solve the same problem — the unique diagonal scaling that makes a symmetric non-negative matrix
+doubly stochastic — and converge to the same weights; KR is a Newton solver that reaches it in fewer
+passes. At §2's scale the fixed point converges in milliseconds, so the faster solver would buy a
+name in a menu and nothing a reader could see. A file balanced with `KR` elsewhere and read here
+under `ICE` shows the same picture.
+
+**Normalisation and baseline compose, and their order is fixed.** Normalise first: the decay curve is
+an average over cells, so measuring it before the coverage bias is out means measuring it partly on
+the bias, and every cell of a badly-covered bin is then compared against a baseline its own
+under-coverage helped set. This is cooltools' order, for the same reason.
+
+**Diverging values need three things to change together**, and changing fewer produces a plausible
+picture of the wrong thing:
+
+1. `log2` joins the transform list (§7.1's three are still frozen by the parity requirement — this one
+   is the viewer's own, for values the CLI cannot produce). Twice and half then sit the same distance
+   either side of neutral.
+2. The auto range becomes **symmetric about neutral**. Otherwise the colour meaning "these agree"
+   lands at an arbitrary point in the ramp, and a map of two identical files comes out uniformly
+   coloured rather than uniformly neutral.
+3. The colormap becomes **diverging** (`RdBu_r`, red is more). A ratio on a sequential ramp hides the
+   only thing it is for.
+
+The panel takes the transform, the colormap and the clip when a derivation is switched on and gives
+all three back when it is switched off, because none of them means the same thing about a ratio as
+about a count — a `vmax` of 8 is a sensible ceiling on `log1p` counts and nonsense on `log2` of a
+ratio.
+
+**Pooling changes too.** A contact map is pooled by its brightest cell, because its signal *is* the
+bright cell. A ratio pooled that way shows only the arm above neutral, so every region where the
+second file is the stronger one vanishes at fit zoom — half of what a difference map exists for.
+A diverging field is pooled by departure from neutral instead.
+
+**Tracks get the same three operations** (`annotations/derived.ts`), combined on the **common
+refinement** of the two interval lists rather than on a grid: two bigWigs' intervals do not line up,
+and evaluating both onto a uniform grid smears every boundary that falls inside a cell, so a sharp
+edge in a control becomes a ramp and the ratio against it spikes at exactly the position that
+mattered. A derived lane fetches nothing of its own — both operands go through the ordinary sample
+cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
+
+**What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
+`oe`, and the comparison is `op`. All three are part of *what is being looked at* rather than how it
+is shaded, so §11's rule applies: a recipient sees the numbers the sender saw.
+
+---
+
 ## 8. Tracks and annotations
 
 A contact map is read against what is on the sequence: genes, peaks, coverage, called loops. This

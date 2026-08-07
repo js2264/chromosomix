@@ -10,6 +10,91 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Values the file does not contain.** A cooler stores counts and, if somebody
+  ran `cooler balance`, one weight per bin. Everything a reader wants beyond that
+  is arithmetic over numbers already on screen, and none of it needs a companion
+  file, a preprocessing step or a server — so the constraints that shape this
+  viewer permit all of it.
+
+  **Normalisation** joins the score picker: `VC`, `VC √` and `ICE`, computed from
+  the block. They are in that list rather than beside it because a reader
+  choosing between `balanced` and `ICE` is choosing between two answers to one
+  question — whose balancing, the file's or ours — and because `balanced` is only
+  offered on a file somebody balanced, so a reader of an ordinary file previously
+  had one entry, no control drawn at all, and no answer to "can I see this
+  normalised".
+
+  **Observed over expected** gets a toggle of its own, because it answers
+  "compared to what" rather than "what number is in the cell", and it composes
+  with every entry in that list — `O/E` of balanced counts is the standard
+  reading, and folding it into the same dropdown would have made the two mutually
+  exclusive for no reason but the shape of the control. Contact frequency falls
+  by two to three orders of magnitude from the diagonal outwards; that decay is
+  the strongest signal in any Hi-C map and the one nobody is looking for, and
+  dividing it out is what makes the departures from it the picture.
+
+  **The comparison becomes a three-way**: `split`, `ratio`, `difference`. The
+  split answers "what do these two look like"; past a certain similarity the eye
+  cannot get "where do they differ" out of two triangles at all, and the other
+  two draw that directly, with every cell where the files agree at the neutral
+  colour. Depth matching is forced on for both and its checkbox hidden — a ratio
+  of two libraries at different depth *is* that scalar everywhere, a flat wash
+  with the structure invisible, so there the depth is a nuisance parameter with
+  no reading rather than a choice worth offering.
+
+  Juicer's `KR` is deliberately not a fourth normalisation. It and iterative
+  correction solve the same problem and converge to the same weights; KR is a
+  faster solver for it, and at this scale the fixed point converges in
+  milliseconds, so it would buy a name in a menu and nothing anyone could see. A
+  file balanced with `KR` elsewhere and read here under `ICE` shows the same map.
+
+- **A colour scale that can express a middle.** A ratio is not a quantity with a
+  bright end but one with a neutral point, and three things had to change
+  together for that to be drawable — doing fewer would have produced a plausible
+  picture of the wrong thing. `log2` joins the transform list, so twice and half
+  sit the same distance either side of neutral; the auto range becomes symmetric
+  about it, so the colour meaning "these agree" is the middle of the ramp rather
+  than an arbitrary point in it; and `RdBu_r` is the first diverging colormap,
+  red for more. The panel takes the transform, the colormap and the clip when a
+  derivation is switched on and gives all three back when it is switched off,
+  because a `vmax` of 8 is a sensible ceiling on `log1p` counts and nonsense on
+  `log2` of a ratio.
+
+  Pooling changed with them. A contact map is pooled by its brightest cell,
+  because its signal *is* the bright cell; a ratio pooled that way shows only the
+  arm above neutral, so every region where the second file is the stronger one
+  would have vanished at fit zoom — half of what a difference map is for.
+
+- **One lane made out of two.** The same three operations for the tracks: a
+  ratio, a log ratio or a difference of two bigWigs, from the batch bar when the
+  selection is a pair. Two profiles drawn as two lanes are read by eye, one
+  against the other, and the eye is bad at it — a small consistent difference is
+  invisible under the large shared shape.
+
+  Combined on the **common refinement** of the two interval lists rather than on
+  a grid. Two bigWigs' intervals do not line up, and evaluating both onto a
+  uniform grid is one line and wrong exactly where it matters: a boundary falling
+  inside a cell is smeared across it, so a sharp edge in a control track becomes
+  a ramp and the ratio against it develops a spike at the position being asked
+  about. Cutting at every boundary of either input is exact and costs at most as
+  many intervals as the two inputs together. A derived lane fetches nothing of
+  its own — both operands go through the ordinary sample cache — so it inherits
+  the pan-and-zoom-free rule from the two it is made of, and removing an operand
+  takes it with them.
+
+### Changed
+
+- A shared link carries the two new readings, because both are part of what is
+  being looked at rather than how it is shaded: `oe` for the baseline and `op`
+  for the comparison. The normalisation needed no key of its own — it is a
+  `score`, and resolves through the same list the picker is built from, so a hash
+  naming one this build cannot serve lands on counts rather than on a read that
+  cannot be answered.
+
 ## [0.9.0] - 2026-08-07
 
 ### Added
