@@ -874,6 +874,9 @@ export class MatrixPanel {
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
+      // Put away now, not on the next pointer move: a control that needs the
+      // hand to twitch before it takes effect reads as not having worked.
+      if (!options.tooltip) this.tooltip.classList.add('hidden')
     })
 
     if (options.offerBalance === true) {
@@ -2466,7 +2469,15 @@ export class MatrixPanel {
         ),
         ...readout.detail.map((line) => el('div', { class: 'cell-tip-line', text: line })),
       )
-      this.tooltip.classList.remove('hidden')
+      // The one gate for the card on this surface. Everything above it still runs
+    // — the readout the status line shows is the same measurement — so turning
+    // the card off costs a hover nothing and gives back the few hundred square
+    // pixels it was covering.
+    if (!getPlotOptions().tooltip) {
+      this.tooltip.classList.add('hidden')
+      return
+    }
+    this.tooltip.classList.remove('hidden')
       this.placeTooltip(canvas.offsetLeft + x, canvas.offsetTop + y)
     }
     const onLeave = (): void => {
@@ -3064,6 +3075,14 @@ export class MatrixPanel {
     // twice, once on each side of the diagonal, to compare one locus.
     tip.count.textContent = counts
 
+    // The one gate for the card on this surface. Everything above it still runs
+    // — the readout the status line shows is the same measurement — so turning
+    // the card off costs a hover nothing and gives back the few hundred square
+    // pixels it was covering.
+    if (!getPlotOptions().tooltip) {
+      this.tooltip.classList.add('hidden')
+      return
+    }
     this.tooltip.classList.remove('hidden')
     if (at !== undefined) this.placeTooltip(at.x, at.y)
   }

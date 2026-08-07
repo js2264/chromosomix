@@ -70,6 +70,7 @@ const LUCIDE = [
   'chart-line',
   'download',
   'clipboard-copy',
+  'message-square-text',
   'star',
   'save',
   // The card headings. One mark per card in the three panels, so a column of

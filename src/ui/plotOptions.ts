@@ -52,6 +52,7 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   outline: true,
   gutter: false,
   crosshair: true,
+  tooltip: true,
   dividers: false,
   breaks: true,
   labels: false,
@@ -75,6 +76,7 @@ export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
   'outline',
   'baseline',
   'crosshair',
+  'tooltip',
 ]
 /**
  * The crosshair is in **both** lists, and that is the point rather than an
@@ -97,6 +99,7 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'labels',
   'ticks',
   'crosshair',
+  'tooltip',
 ]
 
 /**
@@ -115,6 +118,7 @@ export const PLOT_OPTION_ICONS: Record<PlotOptionKey, IconName> = {
   baseline: 'align-end-horizontal',
   gutter: 'align-right',
   crosshair: 'crosshair',
+  tooltip: 'message-square-text',
   dividers: 'grid-2x2',
   breaks: 'separator-vertical',
   labels: 'tag',
@@ -154,6 +158,13 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
       'names. Off, a name is drawn over the data it belongs to.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
+  tooltip: {
+    label: 'tooltip',
+    hint:
+      'The card that follows the pointer, naming the cell and what every track is worth there. ' +
+      'Off, the same reading stays in the status line under the window — where it covers none ' +
+      'of the picture, which is what somebody framing a figure wants.',
+  },
   dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
   breaks: {
     label: 'breaks',
@@ -182,6 +193,7 @@ export const PLOT_OPTION_KEYS: Record<PlotOptionKey, string> = {
   baseline: 'r',
   gutter: 'u',
   crosshair: 'x',
+  tooltip: 'p',
   dividers: 'd',
   breaks: 'e',
   labels: 'l',
@@ -208,6 +220,7 @@ function read(): PlotOptions {
       baseline: pick('baseline'),
       gutter: pick('gutter'),
       crosshair: pick('crosshair'),
+      tooltip: pick('tooltip'),
       dividers: pick('dividers'),
       breaks: pick('breaks'),
       labels: pick('labels'),

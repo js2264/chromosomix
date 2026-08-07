@@ -111,6 +111,7 @@ describe('overlay toggles', () => {
       breaks: true,
       labels: true,
       crosshair: false,
+      tooltip: true,
       ticks: true,
     })
   })
@@ -150,6 +151,7 @@ describe('overlay toggles', () => {
       breaks: true,
       labels: true,
       crosshair: true,
+      tooltip: true,
       ticks: true,
     })
     view.setPlotOptions({ dividers: false })
@@ -163,6 +165,7 @@ describe('overlay toggles', () => {
       breaks: true,
       labels: true,
       crosshair: true,
+      tooltip: true,
       ticks: true,
     })
   })
