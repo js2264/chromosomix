@@ -467,8 +467,21 @@ function meanOfActive(sums: Float64Array, weights: Float64Array): number {
  * diagonal a cell is on.
  */
 export interface ExpectedModel {
-  /** Mean value per bin separation, for cells within one sequence. */
+  /**
+   * Mean value per bin separation, for cells within one sequence, indexed from
+   * {@link base} rather than from zero.
+   *
+   * The offset is what bounds the allocation. Indexed by absolute separation, a
+   * 100 × 100 block covering two windows of one chromosome three million bins
+   * apart would need a three-million-entry curve to hold ten thousand cells —
+   * 24 MB per array, for a block that is 40 KB. Separations within a block span
+   * at most `nrows + ncols`, whatever their absolute size, so storing them
+   * relative to the smallest one the block can produce makes the curve the size
+   * of the block instead of the size of the genome.
+   */
   cis: Float64Array
+  /** The separation `cis[0]` describes. */
+  base: number
   /** Mean value between any two different sequences, or `NaN` where there are none. */
   trans: number
 }
@@ -483,24 +496,25 @@ export function expectedModel(
   const rowStart = block.rowExtent[0]
   const colStart = block.colExtent[0]
 
-  const span = maxSeparation(rowStart, nrows, colStart, ncols)
+  const base = minSeparation(rowStart, nrows, colStart, ncols)
+  const span = maxSeparation(rowStart, nrows, colStart, ncols) - base
   const sums = new Float64Array(span + 1)
   const counts = new Float64Array(span + 1)
   let transSum = 0
   let transCount = 0
 
   for (let r = 0; r < nrows; r++) {
-    const base = r * ncols
+    const row = r * ncols
     const rowBin = rowStart + r
     const mine = rowLabel[r]
     for (let c = 0; c < ncols; c++) {
-      const value = values[base + c]
+      const value = values[row + c]
       if (!Number.isFinite(value)) continue
       // An axis with no runs at all — a plain cooler read as one span — is one
       // sequence as far as this is concerned, which is what `null === null`
       // gives without a branch of its own.
       if (mine === colLabel[c]) {
-        const d = Math.abs(rowBin - (colStart + c))
+        const d = Math.abs(rowBin - (colStart + c)) - base
         sums[d] += value
         counts[d]++
       } else {
@@ -512,7 +526,7 @@ export function expectedModel(
 
   const cis = new Float64Array(span + 1)
   for (let d = 0; d <= span; d++) cis[d] = counts[d] > 0 ? sums[d] / counts[d] : Number.NaN
-  return { cis, trans: transCount > 0 ? transSum / transCount : Number.NaN }
+  return { cis, base, trans: transCount > 0 ? transSum / transCount : Number.NaN }
 }
 
 /**
@@ -542,23 +556,23 @@ export function observedOverExpected(
   const out = new Float32Array(nrows * ncols)
 
   for (let r = 0; r < nrows; r++) {
-    const base = r * ncols
+    const row = r * ncols
     const rowBin = rowStart + r
     const mine = rowLabel[r]
     for (let c = 0; c < ncols; c++) {
-      const value = values[base + c]
+      const value = values[row + c]
       if (!Number.isFinite(value)) {
-        out[base + c] = Number.NaN
+        out[row + c] = Number.NaN
         continue
       }
       let expected: number
       if (mine === colLabel[c]) {
-        const d = Math.abs(rowBin - (colStart + c))
-        expected = d < model.cis.length ? model.cis[d] : Number.NaN
+        const d = Math.abs(rowBin - (colStart + c)) - model.base
+        expected = d >= 0 && d < model.cis.length ? model.cis[d] : Number.NaN
       } else {
         expected = model.trans
       }
-      out[base + c] = expected > 0 ? value / expected : Number.NaN
+      out[row + c] = expected > 0 ? value / expected : Number.NaN
     }
   }
   return out
@@ -659,6 +673,22 @@ function maxSeparation(rowStart: number, nrows: number, colStart: number, ncols:
   const a = Math.abs(rowStart - (colStart + Math.max(0, ncols - 1)))
   const b = Math.abs(rowStart + Math.max(0, nrows - 1) - colStart)
   return Math.max(a, b)
+}
+
+/**
+ * The smallest bin separation any cell of the block can have.
+ *
+ * Zero wherever the two axes overlap, which is every on-diagonal block; the gap
+ * between them otherwise. Subtracting it is what keeps {@link ExpectedModel.cis}
+ * the size of the block rather than the size of the distance between its two
+ * windows.
+ */
+function minSeparation(rowStart: number, nrows: number, colStart: number, ncols: number): number {
+  const rowEnd = rowStart + Math.max(0, nrows - 1)
+  const colEnd = colStart + Math.max(0, ncols - 1)
+  if (rowStart > colEnd) return rowStart - colEnd
+  if (colStart > rowEnd) return colStart - rowEnd
+  return 0
 }
 
 /**

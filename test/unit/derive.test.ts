@@ -231,15 +231,34 @@ describe('expected, and observed over it', () => {
     expect(oe[1]).toBeCloseTo(1, 6)
   })
 
+  it('sizes the curve by the block, not by how far apart its two windows are', () => {
+    // A 2 × 2 block covering two windows of one contig three million bins apart.
+    // Indexed by absolute separation the curve would need three million entries
+    // — 24 MB, for four cells — so it is indexed from the block's own smallest
+    // separation instead.
+    const b = block(2, 2, () => 1, [0, 2], [3_000_000, 3_000_002])
+    const model = expectedModel(b, { rows: runs('c', 2), cols: runs('c', 2) })
+    expect(model.cis.length).toBeLessThanOrEqual(2 + 2)
+    expect(model.base).toBe(2_999_999)
+    // And it still answers at the right separations.
+    const oe = observedOverExpected(b, { rows: runs('c', 2), cols: runs('c', 2) }, model)
+    for (const value of oe) expect(value).toBeCloseTo(1, 6)
+  })
+
   it('measures separation in absolute bins, not in row and column indices', () => {
     // A block covering two distant windows of one contig. Judged by indices,
     // cell [0][0] would be separation 0 — the brightest cell in any map — when
     // it is in fact a hundred bins apart and should be nowhere near the diagonal.
     const b = block(2, 2, () => 1, [0, 2], [100, 102])
     const model = expectedModel(b, { rows: runs('c', 2), cols: runs('c', 2) })
-    expect(Number.isNaN(model.cis[0])).toBe(true)
-    expect(model.cis[100]).toBeCloseTo(1, 6)
-    expect(model.cis[99]).toBeCloseTo(1, 6)
+    // The closest any two ends of this block come is 99 bins, so nothing in it
+    // sits on the diagonal — which is the whole point. Judged by row and column
+    // index, cell [0][0] would be separation 0, the brightest cell in any map.
+    expect(model.base).toBe(99)
+    // Separations 99, 100 and 101, and nothing else: `cis[0]` is 99 apart here,
+    // not 0 apart.
+    expect(model.cis).toHaveLength(3)
+    for (const value of model.cis) expect(value).toBeCloseTo(1, 6)
   })
 
   it('separates sequences: one curve within, one scalar between', () => {
