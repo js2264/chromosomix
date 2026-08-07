@@ -305,6 +305,15 @@ it. And a drag on the **ruler** selects a range to zoom into with no modifier at
 strip is where a reader points to say "this much", and it is the one gesture whose meaning its
 position already settles, so spending a keystroke on it buys nothing.
 
+**The plot is the whole column, not the stack.** The canvas reaches the foot of the column rather
+than the foot of the last lane, so pointing anywhere under the tracks names a coordinate, draws the
+crosshair and reads every track at it — the axis does not stop where the tracks do, and a view with
+two lanes in a tall window would otherwise have a screenful of surface that answers nothing. It stops
+at the **start of the axis**, though: the strip before it is the handles' margin and, when it is on,
+the track names' column, and neither is a position — so the line stops there and the readout says
+nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
+fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
+
 Each lane carries its own controls — colour, `auto`, a ceiling slider, its group — revealed by
 pointing at it and drawn under the track's name rather than over its data. They are transparent to
 the pointer while they are hidden, so a lane that has not been pointed at yet has no invisible band

@@ -169,6 +169,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pinned build no longer points its examples back at the site root. Both now
   read the same URLs the web build does.
 
+### Changed
+
+- **The 1D browser's crosshair and readout follow the pointer below the tracks
+  too.** The canvas used to stop at the foot of the last lane, so the space under
+  the stack belonged to the column rather than to the plot and the pointer moved
+  over it silently — which is a lot of dead surface on a view with two tracks in
+  a tall window. The canvas now reaches the foot of the column, and pointing
+  anywhere in it names a coordinate and reads every track at it, exactly as
+  pointing at a track does.
+
+  **Not before the axis begins.** The strip at the left is the handles' margin
+  and, when it is on, the track names' column, and neither is a position: the
+  crosshair stops at the axis and the readout says nothing there, rather than
+  naming a base pair while the arrowhead is on a word. That was true of the
+  readout already and is now true of the line as well.
+
+  Only on screen. A figure is a picture of the tracks, and blank paper under them
+  is not part of it, so an exported one is unchanged.
+
 ### Fixed
 
 - **The last lane of a stack shows the rule on its resize border**, which it
