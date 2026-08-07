@@ -35,3 +35,8 @@ data/*.mcool
 data/*.pairs.gz
 data/*.txt
 data/*.tsv
+
+# Scratch checkouts an agent works in. A worktree is a checkout of *this*
+# repository, so `git add -A` at the top level offers to commit it as an
+# embedded repo — one gitlink pointing at a path that exists on one machine.
+.claude/worktrees/
