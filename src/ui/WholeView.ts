@@ -46,6 +46,7 @@ import {
   poolingNote,
   blockSummary,
   type AnnotationContext,
+  type DerivePresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -129,6 +130,13 @@ export interface WholeViewProps {
   namesGenomes: boolean
   onLevelChange(level: 'bin' | 'contig'): void
   onScoreChange(choice: ScoreChoice): void
+  /**
+   * The derived-values presentation (`render/derive.ts`), built by the session.
+   *
+   * Passed through rather than assembled here: four views mount the same panel,
+   * and a default decided in each is a default that comes to differ.
+   */
+  derive?: DerivePresentation
   onScaleChange(scale: ScaleState): void
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
@@ -266,6 +274,7 @@ export class WholeView {
       balance: props.balance,
 
       onScaleChange: (scale) => props.onScaleChange(scale),
+      ...(props.derive === undefined ? {} : { derive: props.derive }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

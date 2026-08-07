@@ -59,11 +59,27 @@ import {
   type OverlayFrame,
 } from '../render/overlays'
 import { AnnotationLanes, LANE_GAP, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
-import { alignable, blendAcrossDiagonal, matchGain } from '../render/compare'
+import {
+  COMPARE_OPS,
+  alignable,
+  combine,
+  isCompareOp,
+  matchGain,
+  type CompareOp,
+} from '../render/compare'
+import {
+  deriveBlock,
+  preferredTransform,
+  type AxisRun,
+  type DerivedValues,
+  type Normalisation,
+} from '../render/derive'
 import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
+  DEFAULT_DIVERGING_COLORMAP,
   DEFAULT_UI_COLORMAP,
+  isDivergingColormap,
 } from '../render/colormaps'
 import {
   CROSSHAIR_COLOR,
@@ -145,6 +161,19 @@ import {
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
+
+/**
+ * What each way of putting two files together is called on screen.
+ *
+ * `split` rather than "diagonal" or "side by side": it is the word the card and
+ * the spec already use for this, and a control that renamed it would leave a
+ * reader looking for the feature they read about.
+ */
+const COMPARE_OP_LABELS: Record<CompareOp, string> = {
+  split: 'split',
+  ratio: 'ratio',
+  difference: 'difference',
+}
 
 /**
  * What a dragged box resolves to: one block, and how much of it.
@@ -283,11 +312,31 @@ export interface MatrixPanelOptions {
    * comparison has of its own.
    */
   compare?: ComparePresentation
+  /**
+   * Values computed here rather than read (`render/derive.ts`).
+   *
+   * The normalisation arrives through {@link MatrixPanelOptions.scores}, because
+   * to a reader it is one more answer to "what are these cells"; the baseline
+   * has a control of its own, because it answers "compared to what" and composes
+   * with every one of those answers.
+   */
+  derive?: DerivePresentation
+}
+
+export interface DerivePresentation {
+  /** Normalisation to compute from the block; absent for none. */
+  normalise?: Normalisation
+  /** Whether cells are divided by what their genomic distance predicts. */
+  expected: boolean
+  onExpectedChange(on: boolean): void
 }
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
   labels: [string, string]
+  /** How the two are put together — the split, or one derived field. */
+  op: CompareOp
+  onOpChange(op: CompareOp): void
   /**
    * Whether the second file's counts are scaled to the first's bright end.
    *
@@ -446,6 +495,43 @@ export class MatrixPanel {
    * is still in the matrix.
    */
   private second: { data: MatrixResult; gain: number } | null = null
+  /**
+   * What this block was turned into, kept for the readout and the colourbar.
+   *
+   * The readout's problem is the compared map's, one step further on: after the
+   * derivation the matrix holds a ratio, and a reader hovering a cell is asking
+   * about a ratio *and* about the counts behind it. Both are still reachable —
+   * the counts from {@link data}, the derived value from here.
+   */
+  private derived: DerivedValues | null = null
+  /**
+   * The values the heatmap is drawing — the derived field where there is one,
+   * and the block's own values where there is not.
+   *
+   * A reference to the array already handed to the renderer, not a copy, so the
+   * readout is by construction reporting the number under the colour rather than
+   * a second computation that could disagree with it.
+   */
+  private drawn: Float32Array | null = null
+  /** The neutral value of what is currently drawn, or `null` for a count field. */
+  private neutral: number | null = null
+  /**
+   * The presentation to give back when the derivation is switched off, and the
+   * transform the derived one is currently holding.
+   *
+   * A derived field takes over the transform, the colormap and the clip, because
+   * none of the three means the same thing about a ratio as about a count — a
+   * `vmax` of 8 is a sensible ceiling on `log1p` counts and nonsense on `log2`
+   * of a ratio. Taking them is only defensible if they come back, so what was
+   * there is held here rather than overwritten.
+   */
+  private divergingRestore: {
+    transform: Transform
+    colormap: string
+    vmin: number | undefined
+    vmax: number | undefined
+  } | null = null
+  private divergingApplied: Transform | null = null
   private transform: Transform
   private colormap: string
   private manualVmin: number | undefined
@@ -995,16 +1081,65 @@ export class MatrixPanel {
 
     if (options.compare !== undefined) {
       const compare = options.compare
-      const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
-      normalise.checked = compare.normalise
-      normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
+      // Only under the split. A ratio and a difference force it on, because
+      // there the depth scalar is a nuisance parameter with no reading at all
+      // ({@link compareNormalising}), and a control whose setting cannot change
+      // the picture is worse than no control.
+      if (compare.op === 'split') {
+        const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
+        normalise.checked = compare.normalise
+        normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
+        controls.unshift(
+          field(
+            'match depth',
+            normalise,
+            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s, ` +
+              'so the two triangles saturate together. Off, one colour is one count on both sides of ' +
+              'the diagonal — the stronger claim, and wrong to read when the files differ in depth.',
+          ),
+        )
+      }
+
+      const opSelect = el('select', { class: 'select' })
+      for (const name of COMPARE_OPS) {
+        opSelect.appendChild(el('option', { value: name, text: COMPARE_OP_LABELS[name] }))
+      }
+      opSelect.value = compare.op
+      opSelect.addEventListener('change', () => {
+        if (isCompareOp(opSelect.value)) compare.onOpChange(opSelect.value)
+      })
       controls.unshift(
         field(
-          'match depth',
-          normalise,
-          `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s, ` +
-            'so the two triangles saturate together. Off, one colour is one count on both sides of ' +
-            'the diagonal — the stronger claim, and wrong to read when the files differ in depth.',
+          'compare',
+          opSelect,
+          `How the two files are put together. \`split\` draws ${compare.labels[0]} above the ` +
+            `diagonal and ${compare.labels[1]} below it, each in its own counts. \`ratio\` and ` +
+            '`difference` draw one derived field over the whole square, on a scale centred where ' +
+            'the two agree — the disagreement is then the only thing with any colour in it. Both ' +
+            'match depth automatically, since otherwise the picture is the depth difference.',
+        ),
+      )
+    }
+
+    // The baseline. A control of its own rather than an entry in the score
+    // picker, because it composes with every entry in that list rather than
+    // being one more of them: `O/E` of balanced counts is the standard reading,
+    // and folding it in would make the two mutually exclusive for no reason but
+    // the shape of the control.
+    const derive = options.derive
+    if (derive !== undefined) {
+      const expected = el('input', { class: 'checkbox', type: 'checkbox' })
+      expected.checked = derive.expected
+      expected.addEventListener('change', () => derive.onExpectedChange(expected.checked))
+      controls.unshift(
+        field(
+          'O/E',
+          expected,
+          'Divide each cell by what its genomic distance predicts — the mean over every pair of ' +
+            'bins that far apart, measured on this block, with one scalar between sequences. ' +
+            'Contact frequency falls by orders of magnitude from the diagonal outwards and that ' +
+            'decay is not what anybody is looking for; dividing it out makes the departures from ' +
+            'it the picture. Drawn on a scale centred at 1.',
         ),
       )
     }
@@ -1845,6 +1980,16 @@ export class MatrixPanel {
     if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize)} bins`)
     if (this.level === 'contig') parts.push('contig level')
     if (this.options.balance === true) parts.push('balanced')
+    // What the cells are, in the caption, because an exported figure leaves the
+    // controls behind: a ratio map and a count map are the same picture to
+    // anyone who receives one without being told which it is.
+    // Both halves, and in the order they were applied: `ICE · O/E · file1 /
+    // file2` is a complete account of the arithmetic, where either half alone
+    // would describe a different figure.
+    if (this.derived !== null && this.derived.label !== 'counts') parts.push(this.derived.label)
+    const comparison = this.comparisonLabel()
+    if (comparison !== null) parts.push(comparison)
+    if (this.derived?.scope != null) parts.push(this.derived.scope)
     parts.push(this.transform === 'none' ? 'linear' : this.transform)
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
@@ -2835,25 +2980,59 @@ export class MatrixPanel {
     this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
-    this.second =
-      second !== undefined && alignable(data, second)
-        ? {
-            data: second,
-            gain: this.options.compare?.normalise === true ? matchGain(data, second) : 1,
-          }
-        : null
-    // Two aligned blocks with two axes each — the merged values are the first
-    // file's above the diagonal and the second's below, and everything else
-    // about the block (its extents, its runs, its level) is unchanged, because
-    // the two files agree on all of it. That agreement is what the compare gate
-    // checks before either read is made.
+    // Every derivation is applied to each file *separately* and before the two
+    // are put together, because each is a statement about one library: file 2's
+    // coverage bias is file 2's, and a baseline measured across a ratio is a
+    // baseline of nothing. `runs` is the same for both by construction — the
+    // compare gate refused any second file whose sequences differ.
+    const runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] } = {
+      rows: data.rowGroups,
+      cols: data.colGroups,
+    }
+    const derivation = {
+      normalise: this.options.derive?.normalise,
+      expected: this.options.derive?.expected === true,
+    }
+    const mine = deriveBlock(data, derivation, runs)
+    this.derived = mine
+    const aligned = second !== undefined && alignable(data, second) ? second : undefined
+    const theirs =
+      aligned === undefined ? undefined : deriveBlock(aligned, derivation, runs)
+
+    const op = this.options.compare?.op ?? 'split'
+    // Measured on the *derived* blocks, not the raw ones: a normalisation may
+    // already have removed the depth difference the gain exists to correct, and
+    // matching again on top of it would scale one file for a reason that is no
+    // longer there. Where nothing is derived the two are the same array, so this
+    // is byte for byte the number it always was.
+    const gain =
+      aligned !== undefined && this.compareNormalising(op)
+        ? matchGain({ ...data, values: mine.values }, { ...aligned, values: theirs!.values })
+        : 1
+    this.second = aligned === undefined ? null : { data: aligned, gain }
+
+    // Two aligned blocks with two axes each — under the split the merged values
+    // are the first file's above the diagonal and the second's below, and
+    // everything else about the block (its extents, its runs, its level) is
+    // unchanged, because the two files agree on all of it. That agreement is
+    // what the compare gate checks before either read is made. Under a ratio or
+    // a difference there are no longer two files in the square at all, but one
+    // derived field over the whole of it.
+    const merged =
+      theirs === undefined
+        ? undefined
+        : combine(
+            { ...data, values: mine.values },
+            { ...aligned!, values: theirs.values },
+            { op, gain },
+          )
+    this.neutral = merged === undefined || op === 'split' ? mine.neutral : merged.neutral
+    this.syncDivergingScale()
     const dense =
-      this.second === null
-        ? toDense(data)
-        : {
-            ...toDense(data),
-            values: blendAcrossDiagonal(data, this.second.data, { gain: this.second.gain }).values,
-          }
+      merged === undefined
+        ? { ...toDense(data), values: mine.values }
+        : { ...toDense(data), values: merged.values }
+    this.drawn = dense.values
     this.barCanvas2.classList.toggle('hidden', this.second === null)
     // Two legends need more room than one: each caption gains a triangle and
     // there are two of them side by side, and a clipped caption on a legend is
@@ -2939,7 +3118,125 @@ export class MatrixPanel {
       transform: this.transform,
       colormap: this.colormap,
       balanced: this.options.balance === true,
+      ...(this.neutral === null ? {} : { neutral: this.neutral }),
     }
+  }
+
+  /**
+   * Whether the second file's counts are scaled to the first's bright end.
+   *
+   * The reader's choice under the split, and **not** a choice under a ratio or a
+   * difference, where it is forced on. Two libraries at different depth differ
+   * by roughly a scalar; under the split that scalar is a real reading about two
+   * real files and the honest default is to leave it in, but a ratio *is* that
+   * scalar everywhere — a flat wash whose colour is the depth difference and
+   * whose structure is invisible — and a difference of raw counts is dominated
+   * by it just as completely. There the depth is a nuisance parameter with no
+   * reading at all, so the control is hidden rather than left to be got wrong.
+   */
+  private compareNormalising(op: CompareOp): boolean {
+    return op !== 'split' || this.options.compare?.normalise === true
+  }
+
+  /**
+   * Hand the presentation over to a derived field, or hand it back.
+   *
+   * Driven by the *transform* the derivation wants rather than by a flag, which
+   * is what makes the ratio-to-difference move work: both are derived, so a
+   * boolean would see no transition and leave a difference — which is signed and
+   * centred on zero — being drawn on `log2`.
+   */
+  private syncDivergingScale(): void {
+    const wanted = preferredTransform(this.neutral)
+    if (wanted === this.divergingApplied) return
+    if (wanted === null) {
+      const back = this.divergingRestore
+      this.divergingRestore = null
+      this.divergingApplied = null
+      if (back === null) return
+      this.transform = back.transform
+      this.colormap = back.colormap
+      this.manualVmin = back.vmin
+      this.manualVmax = back.vmax
+      this.syncScaleControls()
+      return
+    }
+    this.divergingRestore ??= {
+      transform: this.transform,
+      colormap: this.colormap,
+      vmin: this.manualVmin,
+      vmax: this.manualVmax,
+    }
+    this.transform = wanted
+    // Only where the reader has not already chosen a diverging ramp: somebody
+    // who picked one deliberately keeps it across a change of operation.
+    if (!isDivergingColormap(this.colormap)) this.colormap = DEFAULT_DIVERGING_COLORMAP
+    // The clip goes, and does not come back until the derivation does: it was
+    // measured in counts, and there is no reading of it in ratios.
+    this.manualVmin = undefined
+    this.manualVmax = undefined
+    this.divergingApplied = wanted
+    this.syncScaleControls()
+  }
+
+  /**
+   * What the derived field says at one cell, or `null` where nothing is derived.
+   *
+   * Read out of the matrix the heatmap is actually drawing rather than
+   * recomputed, so the number under the pointer is by construction the number
+   * under the colour. A ratio is written as a multiple (`1.8×`) rather than as
+   * its logarithm: the log is how it is *drawn*, because that is what centres
+   * the scale, and it is not how anybody says it.
+   */
+  private derivedReading(row: number, col: number): string | null {
+    const label = this.derivedLabel()
+    if (label === null) return null
+    const values = this.drawn
+    if (values === null || this.data === null) return null
+    const drawn = values[row * this.data.ncols + col]
+    if (drawn === undefined || Number.isNaN(drawn)) return `${label} —`
+    if (this.neutral === 1) {
+      // `Infinity` is a real answer here — present in one file and absent in the
+      // other — and printing it as a multiple would read as a bug rather than as
+      // the finding it is.
+      if (!Number.isFinite(drawn)) return `${label} ∞`
+      return `${label} ${fmt.num(drawn)}×`
+    }
+    return `${label} ${fmt.num(drawn)}`
+  }
+
+  /**
+   * What the derived field is called, or `null` when the cells are as read.
+   *
+   * The comparison wins where there is one, because it is the outermost
+   * operation: the cells hold `file1 / file2` *of* whatever each file was
+   * derived into, and naming the inner step would describe the operand rather
+   * than the value. The caption has room for both and says both.
+   */
+  private derivedLabel(): string | null {
+    return this.comparisonLabel() ?? (this.options.derive?.expected === true ? 'O/E' : null)
+  }
+
+  /** How the two open files are being combined, or `null` for one file or a split. */
+  private comparisonLabel(): string | null {
+    const op = this.options.compare?.op ?? 'split'
+    const labels = this.options.compare?.labels
+    if (this.second === null || labels === undefined || op === 'split') return null
+    return op === 'ratio' ? `${labels[0]} / ${labels[1]}` : `${labels[0]} − ${labels[1]}`
+  }
+
+  /**
+   * Put the scale on screen without announcing it.
+   *
+   * Deliberately silent, for {@link applyScale}'s reason read the other way
+   * round: this is not a change the reader made, so echoing it would write a
+   * transform nobody chose into the URL. Nothing is lost by staying quiet — a
+   * link carries the derivation, and a panel that receives one runs this again.
+   */
+  private syncScaleControls(): void {
+    this.transformSelect.value = this.transform
+    this.colormapSelect.value = this.colormap
+    this.heatmap.setScale(this.scale())
   }
 
   /**
@@ -3270,6 +3567,12 @@ export class MatrixPanel {
               ? 'NaN (unbalanced)'
               : fmt.num(this.second.data.values[slot])
           }`
+    // A derived cell is two questions, and answering only the second is what
+    // makes a ratio map unreadable: "1.8× expected" is the reading, and "37
+    // contacts" is what tells you whether to believe it. A departure computed
+    // from three counts against a baseline of two is noise, and only the raw
+    // numbers beside it say so.
+    const reading = this.derivedReading(cell.row, cell.col)
     // The genome each end belongs to, read before the distance because the
     // distance needs them: two MAGs may each have a `contig_1`, and on a
     // coarsened axis the name is most of what is left to tell them apart.
@@ -3285,6 +3588,7 @@ export class MatrixPanel {
     setReadout(
       `${rowLabel}  ×  ${colLabel}` +
         (distance === null ? '' : `   ${fmt.bp(distance)} apart`) +
+        (reading === null ? '' : `   ${reading}`) +
         `   ${counts}`,
     )
 

@@ -33,6 +33,9 @@
 
 import type { BlockValues } from './derive'
 import { percentileOf } from './scale'
+import type { CompareOp } from '../types'
+
+export type { CompareOp }
 
 /**
  * The part of a read this module needs: shape, values, and where they sit.
@@ -131,7 +134,7 @@ export function blendAcrossDiagonal(
 }
 
 /**
- * What two aligned files are reduced to.
+ * Every way of putting two files together, in the order they are offered.
  *
  * `split` is the picture; the other two are the measurement. They are one
  * control because they are one question — *how* do I want these two put together
@@ -139,9 +142,6 @@ export function blendAcrossDiagonal(
  * same alignment gate, so offering them anywhere but beside each other would
  * suggest they cost different amounts.
  */
-export type CompareOp = 'split' | 'ratio' | 'difference'
-
-/** Every way of putting two files together, in the order they are offered. */
 export const COMPARE_OPS: readonly CompareOp[] = ['split', 'ratio', 'difference']
 
 export function isCompareOp(value: string): value is CompareOp {

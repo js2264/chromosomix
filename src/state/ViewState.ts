@@ -18,6 +18,7 @@
  * not have should land on the genomes table, not on a broken screen.
  */
 
+import { isCompareOp } from '../render/compare'
 import type { Transform, ViewKind, ViewState } from '../types'
 
 const VIEW_KINDS: ViewKind[] = [
@@ -53,6 +54,8 @@ const KEY_ORDER = [
   'vmax',
   'balance',
   'score',
+  'oe',
+  'op',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -72,6 +75,8 @@ const OPTIONAL_KEYS = [
   'vmax',
   'balance',
   'score',
+  'oe',
+  'op',
 ] as const
 
 /**
@@ -166,6 +171,17 @@ export function parseViewState(hash: string): ViewState | null {
   // Balanced or raw *is* part of what is being looked at, so a link carries it.
   const balance = raw.get('balance')
   if (balance !== undefined) state.balance = balance === '1' || balance === 'true'
+
+  // The two derived readings, for the reason `balance` and `score` are here: a
+  // recipient of a link has to see the numbers the sender saw, and "observed
+  // over expected" and "the ratio of these two files" are different pictures of
+  // one region rather than two ways of shading one. The normalisation needs no
+  // key of its own — it is a `score`, and `ui/scores.ts` resolves it.
+  const oe = raw.get('oe')
+  if (oe !== undefined) state.oe = oe === '1' || oe === 'true'
+
+  const op = raw.get('op')
+  if (op !== undefined && isCompareOp(op)) state.op = op
 
   // A clip bound may legitimately be negative — `log10` of a balanced matrix is
   // negative throughout — so the only thing rejected here is a non-number.

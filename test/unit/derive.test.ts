@@ -151,7 +151,7 @@ describe('iterative balancing', () => {
     // Not an outer product, so VC leaves a residue and only the fixed point
     // gets there. The asymmetric entries are what make the two differ.
     const b = block(4, 4, (r, c) => 1 + ((r * 7 + c * 3) % 5) + (r === c ? 20 : 0))
-    const balanced = balanceBlock(b)
+    const balanced = balanceBlock(b).values
     const sums = rowSums(balanced, 4, 4)
     const mean = sums.reduce((a, x) => a + x, 0) / sums.length
     for (const sum of sums) expect(Math.abs(sum / mean - 1)).toBeLessThan(BALANCE_TOLERANCE * 10)
@@ -162,7 +162,7 @@ describe('iterative balancing', () => {
     // leaves the two triangles subtly different — which draws a seam along the
     // diagonal that a reader takes for structure.
     const b = block(5, 5, (r, c) => 1 + ((r * c) % 4) + (r === c ? 9 : 0))
-    const balanced = balanceBlock(b)
+    const balanced = balanceBlock(b).values
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
         expect(balanced[r * 5 + c]).toBe(balanced[c * 5 + r])
@@ -175,7 +175,7 @@ describe('iterative balancing', () => {
     // same picture: both flatten it completely, and they can differ only by the
     // overall scalar each chooses.
     const b = outerProduct([1, 3, 9, 27], [1, 3, 9, 27])
-    const balanced = balanceBlock(b)
+    const balanced = balanceBlock(b).values
     const first = balanced[0]
     // To the convergence tolerance rather than to a decimal count, and to a
     // small multiple of it rather than to the number itself: the loop stops when
@@ -189,7 +189,7 @@ describe('iterative balancing', () => {
 
   it('drops empty bins instead of dragging every other bin towards them', () => {
     const b = block(3, 3, (r, c) => (r === 1 || c === 1 ? 0 : 4))
-    const balanced = balanceBlock(b)
+    const balanced = balanceBlock(b).values
     for (let i = 0; i < 3; i++) {
       expect(Number.isNaN(balanced[1 * 3 + i])).toBe(true)
       expect(Number.isNaN(balanced[i * 3 + 1])).toBe(true)
@@ -199,7 +199,7 @@ describe('iterative balancing', () => {
 
   it('balances a rectangular block on both axes independently', () => {
     const b = block(2, 4, (r, c) => (r + 1) * (c + 1), [0, 2], [10, 14])
-    const balanced = balanceBlock(b)
+    const balanced = balanceBlock(b).values
     const rows = rowSums(balanced, 2, 4)
     const cols = colSums(balanced, 2, 4)
     expect(rows[0]).toBeCloseTo(rows[1], 6)
