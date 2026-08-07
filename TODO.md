@@ -76,6 +76,8 @@
 - [x] `Reds` in the colormap picker.
 - [x] A track moved to the right of the map turns round, so both stacks grow towards the matrix. A toggle, so a deliberately flipped track gets its own orientation back on the way home.
 
+- [x] Values the file does not contain, on the map and in the lanes. Normalisation in the score picker — VC, VC √, ICE, computed from the block, so a file nobody balanced has an answer to "can I see this normalised". O/E on a toggle of its own, because it composes with every entry in that list rather than being one more of them. The comparison becomes split, ratio or difference: past a certain similarity the eye cannot get "where do they differ" out of two triangles. `log2`, a symmetric auto range and `RdBu_r` are what make a quantity with a middle drawable at all, and pooling by departure from neutral is what keeps the second file's half of it on screen at fit zoom. The same three operations for two bigWigs, combined on the common refinement of their intervals rather than on a grid that would smear every boundary.
+
 ## FOR NOW
 
 
