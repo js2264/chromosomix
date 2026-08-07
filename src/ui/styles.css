@@ -1916,6 +1916,24 @@ p {
   padding: 0 0.3rem 0.35rem;
 }
 
+/* The gutter cell of the filter row, holding the tick-everything-showing box.
+   Centred on the same axis as the row checkboxes below it, so the column reads
+   as one column: the header box is the one at the top of it, not a control
+   floating beside the first filter. */
+.tf-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 0.35rem;
+}
+
+/* Sized against the row boxes rather than the page's default, and given a
+   pointer: it is the only checkbox in this table that is a *button* — the ones
+   below it record a row's state, this one changes every row's at once. */
+.tf-check-box {
+  cursor: pointer;
+}
+
 .tf-input {
   width: 100%;
   font: inherit;

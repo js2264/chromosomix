@@ -78,13 +78,12 @@ export class GenomesTable {
       if (rows.length > 0) options.onOpenSelection(rows.map((row) => this.names[row]))
     })
     show.disabled = true
-    const all = button('select all', () => this.table.selectAll(), {
+    // "Select all" has moved into the filter row, as a box in the gutter above
+    // the ticks it sets — see the contigs table for why a toolbar button could
+    // not say which rows it meant.
+    const none = button('clear selection', () => this.table.clearSelection(), {
       class: 'btn btn-quiet',
-      title: 'Tick every genome the current filters leave visible',
-    })
-    const none = button('clear', () => this.table.clearSelection(), {
-      class: 'btn btn-quiet',
-      title: 'Untick everything',
+      title: 'Untick everything, including rows the filters are hiding',
     })
     none.disabled = true
 
@@ -111,7 +110,6 @@ export class GenomesTable {
               : 'show selected →'
       },
     })
-    this.table.addToolbarItem(all)
     this.table.addToolbarItem(none)
     this.table.addToolbarItem(show)
     this.table.addToolbarItem(

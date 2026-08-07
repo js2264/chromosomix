@@ -132,6 +132,17 @@ export class VirtualTable {
   private readonly toolbar: HTMLElement
   /** The filter field, so `/` can reach it — see {@link focusSearch}. */
   private readonly searchBox: HTMLInputElement
+  /**
+   * The box in the filter row's gutter: tick, or untick, everything showing.
+   *
+   * Built unconditionally and mounted only when the table is selectable, so
+   * {@link syncHeadCheck} has one thing to write to rather than a lookup that
+   * may find nothing.
+   */
+  private readonly headCheck = el('input', {
+    class: 'checkbox tf-check-box',
+    type: 'checkbox',
+  })
 
   constructor(options: VirtualTableOptions) {
     this.options = { rowHeight: 28, ...options }
@@ -174,13 +185,27 @@ export class VirtualTable {
       this.filters.clear()
       this.search = ''
       searchBox.value = ''
-      for (const input of this.filterRow.querySelectorAll('input')) {
+      // `.tf-input` rather than every input in the row: the row also holds the
+      // select-everything-showing box, and blanking that would be clearing a
+      // *selection* from a button that says it clears filters.
+      for (const input of this.filterRow.querySelectorAll('.tf-input')) {
+        if (!(input instanceof HTMLInputElement)) continue
         input.value = ''
         input.classList.remove('active')
       }
       this.recompute()
     })
     this.toolbar = el('div', { class: 'table-toolbar' }, searchBox, this.status, reset)
+
+    this.headCheck.title =
+      'Tick every row the filters are showing, or untick them if they all are. ' +
+      'Rows a filter is hiding are left alone.'
+    this.headCheck.addEventListener('click', (event) => {
+      // The header is inside the scroller and the filter row sits over the
+      // columns; a press here is about the selection and nothing else.
+      event.stopPropagation()
+      this.toggleVisible()
+    })
 
     this.header = el('div', { class: 'thead-row', style: { gridTemplateColumns: template } })
     this.filterRow = el('div', { class: 'tfilter-row', style: { gridTemplateColumns: template } })
@@ -280,18 +305,33 @@ export class VirtualTable {
   }
 
   /**
-   * Tick everything the reader can currently see — the filtered, searched set,
-   * not the whole file.
+   * Tick or untick everything the reader can currently see — the filtered,
+   * searched set, and never the whole file.
    *
-   * That is what makes "select all" worth having: filter to completeness above
-   * 90, then take all of them. Selecting rows a filter is hiding would be
-   * answering a question nobody asked, and there would be no way to see what
-   * had been chosen.
+   * That is what makes the control worth having: filter to completeness above
+   * 90, then take all of them. Rows a filter is hiding are left exactly as they
+   * were, in both directions, because the box sits in the header of the column
+   * it applies to and what that column is showing is what it can honestly speak
+   * for. Emptying the selection outright is a different question and has its own
+   * button beside the table.
+   *
+   * The direction is decided by what is on screen, which is the behaviour every
+   * header checkbox has: all of them ticked means the press unticks, anything
+   * less means it ticks the rest.
    */
-  selectAll(): void {
-    for (const row of this.visible) this.selected.add(row)
+  toggleVisible(): void {
+    const all = this.allVisibleSelected()
+    for (const row of this.visible) {
+      if (all) this.selected.delete(row)
+      else this.selected.add(row)
+    }
     this.options.onSelect?.([...this.selected])
     this.paint()
+  }
+
+  /** `true` when every visible row is ticked — and there is one to tick. */
+  private allVisibleSelected(): boolean {
+    return this.visible.length > 0 && this.visible.every((row) => this.selected.has(row))
   }
 
   private gridTemplate(): string {
@@ -303,7 +343,12 @@ export class VirtualTable {
   private buildHeader(): void {
     if (this.options.selectable === true) {
       this.header.appendChild(el('div', { class: 'th th-check', text: '' }))
-      this.filterRow.appendChild(el('div', { class: 'tf' }))
+      // In the **filter** row, not the label row, and that is where it belongs:
+      // it selects what the filters left, so it sits on the line the filters are
+      // on, in the gutter directly above the boxes it ticks. In the label row it
+      // would have read as a heading for the column of checkboxes — a thing to
+      // sort by — which is what a box in a `<th>` looks like.
+      this.filterRow.appendChild(el('div', { class: 'tf tf-check' }, this.headCheck))
     }
     for (const column of this.options.columns) {
       const label = el('span', { text: column.label })
@@ -518,7 +563,23 @@ export class VirtualTable {
     return this.headHeightCache
   }
 
+  /**
+   * The header box against what is on screen: ticked, part-ticked, or empty.
+   *
+   * `indeterminate` for a partial selection, because "some of these" is a third
+   * state and drawing it as either of the other two is a lie a reader acts on —
+   * an empty box over four ticked rows reads as "nothing is selected".
+   */
+  private syncHeadCheck(): void {
+    if (this.options.selectable !== true) return
+    const all = this.allVisibleSelected()
+    const some = !all && this.visible.some((row) => this.selected.has(row))
+    this.headCheck.checked = all
+    this.headCheck.indeterminate = some
+  }
+
   private paint(): void {
+    this.syncHeadCheck()
     const { rowHeight } = this.options
     const height = this.viewport.clientHeight || 400
     // The sticky header scrolls with the content, so it occupies the first

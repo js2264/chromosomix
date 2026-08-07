@@ -251,6 +251,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   through every lane — so it is in **Map** and in **Tracks**, one key over one
   store, and pressing either moves both.
 
+- **Select everything the filters left, from the filter row.** The tables' "select
+  all" button has gone, and a tick box sits in the gutter of the filter row
+  instead — directly above the column of row checkboxes, on the line the filter
+  boxes are on. It was already the filtered set the old button acted on, but it
+  sat in the toolbar three controls away from the rows, with nothing about it
+  saying which rows it meant; a reader who had filtered to six of sixteen read
+  the words "select all" and could not tell from the toolbar which they had got.
+  The box says it by where it is, and shows a third state — part-ticked — when
+  some of what is showing is selected. Pressing it when everything showing is
+  ticked unticks it. Rows a filter is hiding are left alone in both directions;
+  "clear", renamed **clear selection**, is the one that empties everything.
+
 - **A locus box on the two table views.** The landing screen of a cooler is its
   chromosome table and of a metacool its genome table, and both offered exactly
   two doors: a whole sequence by clicking its row, or the whole file from the
