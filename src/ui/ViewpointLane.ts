@@ -32,6 +32,15 @@ import { getViewpoint, viewpointLabel, type Viewpoint } from './viewpoint'
 /** How tall the strip is, before the text scale has its say. */
 export const VIEWPOINT_HEIGHT = 68
 
+/**
+ * Air between the strip and the map, matching the gap the lane stacks keep.
+ *
+ * Counted into the map's height budget rather than left to the grid, because the
+ * budget is arithmetic in a stylesheet (`--lane-top`) and a gap the arithmetic
+ * did not know about is a gap the map is pushed down by.
+ */
+export const VIEWPOINT_GAP = 4
+
 /** The colour the profile is drawn in, when nothing else has been chosen. */
 const VIEWPOINT_COLOUR = '#0072b2'
 

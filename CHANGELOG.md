@@ -246,6 +246,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   navigating back. A pan is rewound rather than merely stopped: a pan that ends
   where the reader changed their mind is the pan happening anyway.
 
+- **The 4C anchor is drawn in whichever direction the hand went.** A band of rows
+  and a band of columns name the same stretch of a map read about its diagonal,
+  so insisting on a vertical drag was insisting on a gesture rather than on an
+  answer — and a drag that came out a few degrees the wrong side of vertical gave
+  a one-bin anchor with no hint why. The band on screen follows the same test, so
+  what is drawn is what is taken, and on a rectangular block each direction is
+  resolved through its own axis rather than through the rows.
+
+- **The 4C strip comes out of the map's height budget.** It is furniture above
+  the map in exactly the sense a track stack is furniture below it, and without
+  saying so the map kept its size, the strip was added on top, and the tracks
+  under the pair went below the fold. `--lane-top` joins `--lane-bottom` in the
+  plot's `clamp`, so turning the strip on shrinks the map by the strip's height
+  wherever height is what is binding.
+
 - **A virtual 4C profile above the map.** A 4C experiment fixes one locus and
   asks what it touches; a contact map already holds the answer for every locus at
   once, and pulling one out is arithmetic a reader can do by eye and cannot do

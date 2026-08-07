@@ -2106,6 +2106,7 @@ p {
 .panel-grid > .viewpoint-canvas {
   grid-area: 1 / 1;
   display: block;
+  margin-bottom: 4px;
   /* The map must not shift sideways when the strip appears, and it will if the
      strip is ever wider than its column. */
   max-width: 100%;
@@ -2118,6 +2119,7 @@ p {
 .panel-grid > .viewpoint-canvas.hidden {
   display: block;
   height: 0;
+  margin-bottom: 0;
   visibility: hidden;
 }
 
@@ -2271,7 +2273,13 @@ p {
      tall stack of tracks pushes the plot off the bottom of the window. The
      property is written by the panel and defaults to nothing, so a view with no
      annotations is sized exactly as it was before they existed. */
-  width: clamp(20rem, calc(100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px)), 60rem);
+  width: clamp(
+    20rem,
+    calc(
+      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px)
+    ),
+    60rem
+  );
   /* Of its own grid track, which the grid's cap has already taken the right-hand
      lane stack out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
