@@ -21,6 +21,7 @@ import { button, el, field } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary } from './MatrixPanel'
+import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox } from './SearchBox'
 
 export interface PairViewProps {
@@ -36,7 +37,19 @@ export interface PairViewProps {
   scale: ScaleState
   balance: boolean
   hasWeights: boolean
-  onBalanceChange(balance: boolean): void
+  /**
+   * The `/pixels` column the reads take; `count` when absent.
+   *
+   * Resolved by the session rather than derived here from {@link score}, so the
+   * fallback for a hash naming a column this file does not have is decided in
+   * one place — see `Session.valueOf`.
+   */
+  value?: string
+  /** Value columns this file carries, for the score picker (`ui/scores.ts`). */
+  scoreColumns?: readonly string[]
+  /** The picker's current choice, by id; `count` when absent. */
+  score?: string
+  onScoreChange(choice: ScoreChoice): void
   onChangeGenomes(rowGenome: string, colGenome: string): void
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
@@ -104,8 +117,11 @@ export class PairView {
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
-      offerBalance: props.hasWeights,
-      onBalanceChange: (balance) => props.onBalanceChange(balance),
+      scores: {
+        choices: scoreChoices(props),
+        current: scoreFor(scoreChoices(props), props).id,
+        onChange: (choice) => props.onScoreChange(choice),
+      },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
         this.level = level
@@ -205,7 +221,12 @@ export class PairView {
         this.props.client.request<'range'>({ kind: 'range', range: this.props.rowGenome }),
         this.props.client.request<'range'>({ kind: 'range', range: this.props.colGenome }),
       ])
-      const query = { rows: rows.extent, cols: cols.extent, balance: this.props.balance }
+      const query = {
+        rows: rows.extent,
+        cols: cols.extent,
+        balance: this.props.balance,
+        ...(this.props.value === undefined ? {} : { value: this.props.value }),
+      }
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })

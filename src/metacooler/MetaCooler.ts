@@ -51,6 +51,7 @@ import {
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
+  scoreColumns,
   DENSE_HINTS,
   forEachPixelRangesAsync,
   forEachPixelSpanAsync,
@@ -377,6 +378,19 @@ export class MetaCooler {
    */
   get hasWeights(): boolean {
     return this.handle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`)
+  }
+
+  /**
+   * The `/pixels` value columns this file carries, `count` first.
+   *
+   * One `keys` call on a group, no read. What it is *for* is the score picker:
+   * cooler fixes three columns and lets a file carry more, and a viewer that
+   * assumed `count` could not show the others at all — so a file that had gone
+   * to the trouble of storing an expected value, a second normalisation or a
+   * per-pixel significance had no way of saying so.
+   */
+  get scoreColumns(): string[] {
+    return scoreColumns(this.handle)
   }
 
   /** Number of genomes, `__unbinned__` included; `0` for a plain cooler. */

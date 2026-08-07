@@ -145,6 +145,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     entryGroup: mc.entryGroup,
     hasGenomes: mc.hasGenomes,
     hasWeights: mc.hasWeights,
+    scoreColumns: mc.scoreColumns,
     sourceBytes: source.size,
     sourceKind: request.source.kind,
   }
@@ -233,6 +234,7 @@ async function handleMatrix(
       rows: request.rows,
       cols,
       ...(request.balance === true ? { balance: true } : {}),
+      ...(request.value === undefined ? {} : { value: request.value }),
       ...(request.budgetBytes === undefined ? {} : { budgetBytes: request.budgetBytes }),
     },
     hintFor(request.rows, cols),
@@ -263,7 +265,12 @@ async function pooledResult(
 ): Promise<MatrixResult> {
   const id = request.id
   const pooled = await mc.pooledMatrix(
-    { rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    {
+      rows,
+      cols,
+      ...(request.balance === true ? { balance: true } : {}),
+      ...(request.value === undefined ? {} : { value: request.value }),
+    },
     aim,
     scanHooks(id),
   )
@@ -507,7 +514,12 @@ async function handleAggregate(
   const { mc } = requireSession()
   const cols = request.cols ?? request.rows
   const aggregated = await mc.aggregateSparse(
-    { rows: request.rows, cols, ...(request.balance === true ? { balance: true } : {}) },
+    {
+      rows: request.rows,
+      cols,
+      ...(request.balance === true ? { balance: true } : {}),
+      ...(request.value === undefined ? {} : { value: request.value }),
+    },
     request.level,
     scanHooks(request.id),
   )
@@ -591,6 +603,7 @@ async function handleSelection(
   const selected = await mc.selectionMatrix(units, plan, {
     ...scanHooks(id),
     ...(request.balance === true ? { balance: true } : {}),
+      ...(request.value === undefined ? {} : { value: request.value }),
   })
   if (cancelled.has(id)) throw abortError()
 

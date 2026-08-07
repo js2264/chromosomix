@@ -13,6 +13,7 @@ import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary, poolingNote } from './MatrixPanel'
+import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -33,7 +34,19 @@ export interface GenomeViewProps {
   scale: ScaleState
   balance: boolean
   hasWeights: boolean
-  onBalanceChange(balance: boolean): void
+  /**
+   * The `/pixels` column the reads take; `count` when absent.
+   *
+   * Resolved by the session rather than derived here from {@link score}, so the
+   * fallback for a hash naming a column this file does not have is decided in
+   * one place — see `Session.valueOf`.
+   */
+  value?: string
+  /** Value columns this file carries, for the score picker (`ui/scores.ts`). */
+  scoreColumns?: readonly string[]
+  /** The picker's current choice, by id; `count` when absent. */
+  score?: string
+  onScoreChange(choice: ScoreChoice): void
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
@@ -98,8 +111,11 @@ export class GenomeView {
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
-      offerBalance: props.hasWeights,
-      onBalanceChange: (balance) => props.onBalanceChange(balance),
+      scores: {
+        choices: scoreChoices(props),
+        current: scoreFor(scoreChoices(props), props).id,
+        onChange: (choice) => props.onScoreChange(choice),
+      },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onLevelChange: (level) => {
         this.level = level

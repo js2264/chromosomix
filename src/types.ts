@@ -111,6 +111,20 @@ export interface MatrixQuery {
   /** Apply `/bins` weights if a balancing column is present (spec §6.4). */
   balance?: boolean
   /**
+   * Which `/pixels` column the cell values come from. Defaults to `count`.
+   *
+   * cooler fixes three columns and lets a file carry more, and the extra ones
+   * are values per pixel exactly as `count` is — an expected value, a second
+   * normalisation, a per-pixel significance. Naming the column here rather than
+   * assuming `count` is what lets a file's own vocabulary reach the picture;
+   * `scoreColumns` is how a file says which it has.
+   *
+   * Orthogonal to {@link balance}, which multiplies whatever was read by the two
+   * bin weights: an extra column can be balanced like any other if that is what
+   * the reader asks for.
+   */
+  value?: string
+  /**
    * Override the tab's memory budget for this one read.
    *
    * The budget is a guess from `navigator.deviceMemory`, which is Chromium-only
@@ -276,6 +290,16 @@ export interface ViewState {
    * were looking at would mislead its recipient.
    */
   balance?: boolean
+  /**
+   * Which score the cells are drawn from — a `/pixels` column, or `balanced`.
+   *
+   * Part of the shared view for the reason `balance` is: two people looking at
+   * the same link have to be looking at the same numbers, and "expected" and
+   * "count" are different pictures of the same region rather than two ways of
+   * shading one. `balance` is kept beside it rather than folded into it so that
+   * every link written before this field existed still resolves.
+   */
+  score?: string
   /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts

@@ -75,6 +75,7 @@ import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
+import type { ScoreChoice } from './scores'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import {
@@ -188,8 +189,21 @@ export interface MatrixPanelOptions {
   }
   /** Whether counts are currently multiplied by their bin weights (§6.4). */
   balance?: boolean
-  /** Offer the balance control at all — only files with a weight column do. */
-  offerBalance?: boolean
+  /**
+   * What the cells can be drawn from, and which of those they are.
+   *
+   * One control where there were two halves of a question: a tickbox that said
+   * "balanced" and no way at all to reach a file's other `/pixels` columns. See
+   * `ui/scores.ts` for why balancing is in the same list as the columns despite
+   * being a transform rather than one.
+   *
+   * Absent on a view that does not offer the choice at all.
+   */
+  scores?: {
+    choices: readonly ScoreChoice[]
+    current: string
+    onChange(choice: ScoreChoice): void
+  }
   onScaleChange?(scale: {
     transform: Transform
     colormap: string
@@ -197,7 +211,6 @@ export interface MatrixPanelOptions {
     vmax?: number
   }): void
   onLevelChange?(level: 'bin' | 'contig'): void
-  onBalanceChange?(balance: boolean): void
   /** A cell was clicked; offsets are block-local, ids are absolute. */
   onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
   /**
@@ -879,22 +892,37 @@ export class MatrixPanel {
       if (!options.tooltip) this.tooltip.classList.add('hidden')
     })
 
-    if (options.offerBalance === true) {
-      const balance = el('input', { class: 'checkbox', type: 'checkbox' })
-      balance.checked = options.balance === true
-      // No transform is forced here any more. Balanced values are fractions, so
+    // Offered whenever there is more than one answer. A file with no weights and
+    // no extra columns has exactly one thing its cells can be, and a dropdown
+    // with a single entry is a control that cannot be used — it says "you have a
+    // choice here" and then refuses to make one.
+    const scores = options.scores
+    if (scores !== undefined && scores.choices.length > 1) {
+      const select = el('select', { class: 'select' })
+      for (const choice of scores.choices) {
+        select.appendChild(el('option', { value: choice.id, text: choice.label }))
+      }
+      select.value = scores.current
+      select.addEventListener('change', () => {
+        const picked = scores.choices.find((choice) => choice.id === select.value)
+        if (picked !== undefined) scores.onChange(picked)
+      })
+      // No transform is forced by any of these. Balanced values are fractions, so
       // `log10` of them is negative throughout, which the auto rule used to
-      // answer with `[0, 1]` — a blank panel — and this control used to dodge by
-      // switching the transform to `log1p` behind the user's back. Both the rule
-      // and `log10`'s treatment of zero now handle a sub-unit matrix, so the
-      // transform is the user's choice again (`render/scale.ts`).
-      balance.addEventListener('change', () => options.onBalanceChange?.(balance.checked))
+      // answer with `[0, 1]` — a blank panel — and the old tickbox used to dodge
+      // by switching the transform to `log1p` behind the user's back. Both the
+      // rule and `log10`'s treatment of zero now handle a sub-unit matrix, so the
+      // transform is the user's choice again (`render/scale.ts`), which is also
+      // what makes an unknown extra column safe to offer: whatever it holds, the
+      // reader can find a transform that shows it.
       controls.unshift(
         field(
-          'balanced',
-          balance,
-          'Multiply each cell by its two bin weights — cooler`s balanced matrix. ' +
-            'Bins the balancer dropped have no weight and show as blank.',
+          'score',
+          select,
+          'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
+            'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
+            'dropped have no weight and show as blank. Anything below those is a further column ' +
+            'this file carries in /pixels, under its own name.',
         ),
       )
     }
