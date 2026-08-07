@@ -1371,6 +1371,32 @@ export class HeatmapView {
   }
 
   /**
+   * Swap the values of the block already loaded, keeping the view exactly where
+   * it is.
+   *
+   * {@link setMatrix} ends in `fit`, which is right for a *new* block and wrong
+   * for the same block recomputed: a derived value (`render/derive.ts`) is a
+   * post-read transform over cells that are already here, so switching one on
+   * must not cost a read, must not re-open a gated whole-genome scan, and must
+   * not throw away the pan and zoom the reader arrived at — the picture is of
+   * the same place, in different units.
+   *
+   * The dimensions and extents are the caller's to keep identical; nothing here
+   * checks, because the only caller is the one that just recomputed this array
+   * from the block this object is holding.
+   */
+  setValues(values: Float32Array): void {
+    if (this.matrix === null) return
+    this.matrix = { ...this.matrix, values }
+    this.dirtyRaster = true
+    // The pooling is a function of the values, so it cannot survive them. The
+    // auto range hangs off it and goes with it, which is what re-measures a
+    // ratio's scale instead of keeping the counts'.
+    this.pooled = null
+    this.changed()
+  }
+
+  /**
    * Declare what each axis measures in base pairs, for the position ticks.
    *
    * Set alongside the matrix and cleared by passing two `null`s. It changes no

@@ -2519,6 +2519,11 @@ export class Session {
       op: this.compareOp(),
       onOpChange: (op) => {
         this.store.patch(op === 'split' ? { op: undefined } : { op })
+        // A remount, unlike the baseline beside it: the split needs the second
+        // file's own block kept per-file and the derived operations do not, so
+        // the *controls* differ between them — the depth tickbox is there under
+        // one and not under the others — and the controls are built once, at
+        // construction.
         this.remount()
       },
       onFailure: (message) => {
@@ -2540,6 +2545,23 @@ export class Session {
    * Clearing `mounted` is what makes the next render a navigation rather than a
    * repaint.
    */
+  /**
+   * Recompute the picture without re-reading it.
+   *
+   * A derivation is a transform over cells that are already on screen, so it
+   * must not go through {@link remount}: that destroys the view, and on a gated
+   * whole-genome map (§7.3) the rebuilt one puts a full pixel scan back behind
+   * its button — the reader ticks a box and their map disappears.
+   *
+   * The presentation is rebuilt from the state rather than passed in, so this
+   * has one source of truth with every other render.
+   */
+  private rederive(): void {
+    const state = this.store.state
+    if (state === null) return
+    this.current?.panel?.rederive(this.derivePresentation(state))
+  }
+
   private remount(): void {
     const state = this.store.state
     if (state === null) return
@@ -2697,7 +2719,7 @@ export class Session {
       expected: state.oe === true,
       onExpectedChange: (on) => {
         this.store.patch({ oe: on ? true : undefined })
-        this.remount()
+        this.rederive()
       },
     }
   }
