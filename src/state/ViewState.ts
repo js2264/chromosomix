@@ -52,6 +52,7 @@ const KEY_ORDER = [
   'vmin',
   'vmax',
   'balance',
+  'score',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -70,6 +71,7 @@ const OPTIONAL_KEYS = [
   'vmin',
   'vmax',
   'balance',
+  'score',
 ] as const
 
 /**

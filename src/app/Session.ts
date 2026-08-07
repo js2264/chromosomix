@@ -40,6 +40,7 @@ import {
 } from '../state/ViewState'
 import { recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import { scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
   buildConfig,
@@ -2596,6 +2597,48 @@ export class Session {
     this.store.patch({ balance: balance === this.balancedByDefault() ? undefined : balance })
   }
 
+  /**
+   * Record a score choice, in the two fields that between them say what a link
+   * means.
+   *
+   * `balance` is written exactly as it always was — a link from before this
+   * control existed still says `balance=1`, and one written today still has to
+   * be readable by a build from before it — and `score` carries the rest. The
+   * plain and balanced choices therefore leave `score` off entirely, so the
+   * common cases produce the same hash they did yesterday.
+   */
+  private setScore(choice: ScoreChoice): void {
+    this.setBalance(choice.balance)
+    this.store.patch({ score: choice.value === undefined ? undefined : choice.id })
+  }
+
+  /**
+   * The `/pixels` column the reads should take, or `undefined` for `count`.
+   *
+   * Resolved through the same list the picker is built from, so a hash naming a
+   * column this file does not have falls back to counts rather than to a read
+   * that cannot be served — the state is a shared link and every field of one is
+   * untrusted input.
+   */
+  private valueOf(state: ViewState): string | undefined {
+    const props = this.scoreProps(state)
+    return scoreFor(scoreChoices(props), { ...props, balance: state.balance }).value
+  }
+
+  /** What every map view needs to build its score picker. */
+  private scoreProps(state: ViewState): {
+    hasWeights: boolean
+    scoreColumns: readonly string[]
+    score?: string
+  } {
+    const info = this.file?.info
+    return {
+      hasWeights: info?.hasWeights === true,
+      scoreColumns: info?.scoreColumns ?? ['count'],
+      ...(state.score === undefined ? {} : { score: state.score }),
+    }
+  }
+
   /** The colour scale in force: the state's fields over the file's defaults. */
   private scaleOf(state: ViewState): ScaleState {
     return scaleOf(state, this.balancedByDefault() ? { transform: 'log10' } : {})
@@ -3061,7 +3104,7 @@ export class Session {
           level,
           scale: this.scaleOf(state),
           balance,
-          hasWeights: file.info.hasWeights,
+          ...this.scoreProps(state),
           // Offered for a cooler too, now that the roll-up accumulates from the
           // stored pixels: a chromosome-level whole-genome view of yeast is
           // 17 x 17 cells and always fits, which makes it the honest answer when
@@ -3078,7 +3121,7 @@ export class Session {
           // (§7.4) or is a cooler that can carry annotations (§8.5), never both.
           namesGenomes: file.info.hasGenomes,
           onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
-          onBalanceChange: (next) => this.setBalance(next),
+          onScoreChange: (choice) => this.setScore(choice),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.store.set({
@@ -3134,7 +3177,8 @@ export class Session {
       level: 'bin',
       scale: this.scaleOf(state),
       balance: this.balanceOf(state),
-      hasWeights: file.info.hasWeights,
+      value: this.valueOf(state),
+      ...this.scoreProps(state),
       // No level toggle: the roll-up reads a bin range, and a selection is not
       // one. The sequences are already the axis at bin level here.
       offerLevel: false,
@@ -3146,7 +3190,7 @@ export class Session {
       namesGenomes: file.info.hasGenomes,
       selection: { ...selection, bins, contigs },
       onLevelChange: () => {},
-      onBalanceChange: (next) => this.setBalance(next),
+      onScoreChange: (choice) => this.setScore(choice),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
         this.store.set({
@@ -3230,8 +3274,9 @@ export class Session {
       binsize: this.file?.info.binsize ?? 1,
       genome: state.genome,
       balance: this.balanceOf(state),
-      hasWeights: this.file?.info.hasWeights === true,
-      onBalanceChange: (balance) => this.setBalance(balance),
+      value: this.valueOf(state),
+      ...this.scoreProps(state),
+      onScoreChange: (choice) => this.setScore(choice),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
@@ -3262,8 +3307,9 @@ export class Session {
       binsize: file.info.binsize ?? 1,
       genomeNames: file.displayNames,
       balance: this.balanceOf(state),
-      hasWeights: file.info.hasWeights,
-      onBalanceChange: (balance) => this.setBalance(balance),
+      value: this.valueOf(state),
+      ...this.scoreProps(state),
+      onScoreChange: (choice) => this.setScore(choice),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -3305,8 +3351,9 @@ export class Session {
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       ...(this.compareContext() === undefined ? {} : { compare: this.compareContext() }),
       balance: this.balanceOf(state),
-      hasWeights: this.file?.info.hasWeights === true,
-      onBalanceChange: (balance) => this.setBalance(balance),
+      value: this.valueOf(state),
+      ...this.scoreProps(state),
+      onScoreChange: (choice) => this.setScore(choice),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),

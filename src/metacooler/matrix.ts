@@ -37,6 +37,38 @@ import type { DenseMatrix, Extent, MatrixQuery, PixelChunk } from '../types'
 /** cooler's own name for the balancing weights; `cooler balance` writes it. */
 export const DEFAULT_WEIGHT_COLUMN = 'weight'
 
+/**
+ * The value column every cooler has, and the default for every read.
+ *
+ * cooler's schema fixes `/pixels` at `bin1_id`, `bin2_id`, `count`, and a file
+ * may carry more beside them — a second normalisation, an expected value, a
+ * per-pixel p-value. Those are data columns exactly as `count` is, so the
+ * reader takes the column *by name* rather than knowing one; see
+ * {@link scoreColumns} for how a file says which it has.
+ */
+export const DEFAULT_COUNT_COLUMN = 'count'
+
+/** The two `/pixels` columns that are coordinates rather than values. */
+const PIXEL_COORDINATES = new Set(['bin1_id', 'bin2_id'])
+
+/**
+ * The value columns a file offers, `count` first.
+ *
+ * Read from the group's own child list rather than from a fixed set, because
+ * "what is in this file" is a question the file answers and this code cannot.
+ * Coordinates are dropped; everything else is a number per pixel and therefore
+ * something a reader might want the map drawn from.
+ */
+export function scoreColumns(handle: Hdf5Handle): string[] {
+  const keys = handle.keys('pixels').filter((key) => !PIXEL_COORDINATES.has(key))
+  // `count` first wherever it is, because it is the one every file has and the
+  // one every other column is an alternative *to*.
+  return [
+    ...keys.filter((key) => key === DEFAULT_COUNT_COLUMN),
+    ...keys.filter((key) => key !== DEFAULT_COUNT_COLUMN).sort(),
+  ]
+}
+
 export const DENSE_HINTS = {
   /** `show --level genome` on a file with too many genomes. */
   genome: 'Use a smaller file.',
@@ -332,12 +364,13 @@ export function forEachPixelSpan(
   hi: number,
   onChunk: (chunk: PixelChunk) => void,
   chunkSize: number = PIXEL_CHUNK,
+  value: string = DEFAULT_COUNT_COLUMN,
 ): void {
   const range = pixelSpanRange(h, lo, hi)
   if (range === null) return
   const width = Math.max(1, Math.trunc(chunkSize))
   for (let at = range[0]; at < range[1]; at += width) {
-    onChunk(readPixelWindow(h, at, Math.min(at + width, range[1])))
+    onChunk(readPixelWindow(h, at, Math.min(at + width, range[1]), value))
   }
 }
 
@@ -351,10 +384,15 @@ function pixelSpanRange(h: Hdf5Handle, lo: number, hi: number): [number, number]
   return p1 <= p0 ? null : [p0, p1]
 }
 
-function readPixelWindow(h: Hdf5Handle, at: number, end: number): PixelChunk {
+function readPixelWindow(
+  h: Hdf5Handle,
+  at: number,
+  end: number,
+  value: string = DEFAULT_COUNT_COLUMN,
+): PixelChunk {
   const bin1 = h.readInt32('pixels/bin1_id', at, end)
   const bin2 = h.readInt32('pixels/bin2_id', at, end)
-  const count = h.readNumeric('pixels/count', at, end)
+  const count = h.readNumeric(`pixels/${value}`, at, end)
   return { bin1, bin2, count, length: count.length }
 }
 
@@ -551,9 +589,16 @@ export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string)
     // Scattered window by window: `scatterDense` is additive and per-pixel, so
     // it needs no knowledge that the span arrived in pieces, and the peak COO
     // footprint is one window rather than the whole row band.
-    forEachPixelSpan(src.handle, plan.span[0], plan.span[1], (chunk) => {
-      scatterDense(chunk, rows, cols, plan, values)
-    })
+    forEachPixelSpan(
+      src.handle,
+      plan.span[0],
+      plan.span[1],
+      (chunk) => {
+        scatterDense(chunk, rows, cols, plan, values)
+      },
+      PIXEL_CHUNK,
+      q.value ?? DEFAULT_COUNT_COLUMN,
+    )
     if (q.balance === true) applyWeights(src.handle, rows, cols, values)
   }
   return { nrows: nRows, ncols: nCols, values, rowExtent: rows, colExtent: cols }

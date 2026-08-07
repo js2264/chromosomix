@@ -48,6 +48,7 @@ import {
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 
 export interface WholeViewProps {
@@ -98,6 +99,18 @@ export interface WholeViewProps {
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean
   /**
+   * The `/pixels` column the reads take; `count` when absent.
+   *
+   * Resolved by the session rather than derived here from {@link score}, so the
+   * fallback for a hash naming a column this file does not have is decided in
+   * one place — see `Session.valueOf`.
+   */
+  value?: string
+  /** Value columns this file carries, for the score picker (`ui/scores.ts`). */
+  scoreColumns?: readonly string[]
+  /** The picker's current choice, by id; `count` when absent. */
+  score?: string
+  /**
    * Offer the bin ↔ contig roll-up. Off for a cooler: there the unit is a
    * chromosome, one file often holds one of them, and "contig level" on a
    * single-genome file is a picture of a single cell.
@@ -115,7 +128,7 @@ export interface WholeViewProps {
    */
   namesGenomes: boolean
   onLevelChange(level: 'bin' | 'contig'): void
-  onBalanceChange(balance: boolean): void
+  onScoreChange(choice: ScoreChoice): void
   onScaleChange(scale: ScaleState): void
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
@@ -251,9 +264,13 @@ export class WholeView {
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
-      offerBalance: props.hasWeights,
+
       onScaleChange: (scale) => props.onScaleChange(scale),
-      onBalanceChange: (balance) => props.onBalanceChange(balance),
+      scores: {
+        choices: scoreChoices(props),
+        current: scoreFor(scoreChoices(props), props).id,
+        onChange: (choice) => props.onScoreChange(choice),
+      },
       // Reported, not acted on. Both of these change *what is read*, so they go
       // out to the URL and the shell brings back a view built for the answer —
       // which is also what decides whether the new read is one to ask about

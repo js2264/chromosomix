@@ -246,6 +246,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   navigating back. A pan is rewound rather than merely stopped: a pan that ends
   where the reader changed their mind is the pan happening anyway.
 
+- **A score picker where the balanced tickbox was.** One dropdown in the Map
+  card naming what the cells *are*: `counts`, `balanced` where the file carries
+  weights, and then every further value column the file's own `/pixels` group
+  holds, under its own name. cooler fixes three columns and lets a file carry
+  more — an expected value, a second normalisation, a per-pixel significance —
+  and a viewer that assumed `count` could not draw any of them, so a file that
+  had gone to the trouble of storing one had no way of saying so. Present on
+  metacools too, where before there was no control at all.
+
+  The choice is one control because it is one question, though balancing is a
+  transform and the others are columns: a tickbox beside a dropdown would be
+  splitting "what am I looking at" across two places. `balance` stays in the
+  view state exactly as it was, so every link written before this exists still
+  resolves; `score` carries the rest.
+
 - **The hover card can be put away.** A `tooltip` toggle beside the crosshair, in
   both Aesthetics rows and over one store, so pressing either moves both. The
   two things a reader does with a contact map want opposite answers: reading it

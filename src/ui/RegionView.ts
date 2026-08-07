@@ -34,6 +34,7 @@ import {
   type AnnotationContext,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -55,9 +56,21 @@ export interface RegionViewProps {
   balance: boolean
   /** Whether the file carries a weight column at all. */
   hasWeights: boolean
+  /**
+   * The `/pixels` column the reads take; `count` when absent.
+   *
+   * Resolved by the session rather than derived here from {@link score}, so the
+   * fallback for a hash naming a column this file does not have is decided in
+   * one place — see `Session.valueOf`.
+   */
+  value?: string
+  /** Value columns this file carries, for the score picker (`ui/scores.ts`). */
+  scoreColumns?: readonly string[]
+  /** The picker's current choice, by id; `count` when absent. */
+  score?: string
   /** What one sequence is called here: a contig, or a chromosome. */
   noun: string
-  onBalanceChange(balance: boolean): void
+  onScoreChange(choice: ScoreChoice): void
   /**
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
@@ -150,8 +163,11 @@ export class RegionView {
       detachedControls: true,
       hideTitle: true,
       balance: props.balance,
-      offerBalance: props.hasWeights,
-      onBalanceChange: (balance) => props.onBalanceChange(balance),
+      scores: {
+        choices: scoreChoices(props),
+        current: scoreFor(scoreChoices(props), props).id,
+        onChange: (choice) => props.onScoreChange(choice),
+      },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
@@ -262,9 +278,15 @@ export class RegionView {
           kind: 'matrix',
           rows: [lo, hi],
           balance: this.props.balance,
+          ...(this.props.value === undefined ? {} : { value: this.props.value }),
         })
         const second = await secondBlock(this.props.compare, (client) =>
-          client.request<'matrix'>({ kind: 'matrix', rows: [lo, hi], balance: this.props.balance }),
+          client.request<'matrix'>({
+            kind: 'matrix',
+            rows: [lo, hi],
+            balance: this.props.balance,
+            ...(this.props.value === undefined ? {} : { value: this.props.value }),
+          }),
         )
         if (this.disposed) return
         this.title.textContent = this.props.region
@@ -288,6 +310,7 @@ export class RegionView {
         rows: [lo, hi],
         cols: [lo2, hi2],
         balance: this.props.balance,
+        ...(this.props.value === undefined ? {} : { value: this.props.value }),
       })
       const second = await secondBlock(this.props.compare, (client) =>
         client.request<'matrix'>({
@@ -295,6 +318,7 @@ export class RegionView {
           rows: [lo, hi],
           cols: [lo2, hi2],
           balance: this.props.balance,
+          ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }),
       )
       if (this.disposed) return

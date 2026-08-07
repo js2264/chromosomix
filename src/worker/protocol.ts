@@ -186,6 +186,14 @@ export interface OpenResult {
   hasGenomes: boolean
   /** `true` when `/bins/weight` exists, so balanced counts can be offered. */
   hasWeights: boolean
+  /**
+   * The `/pixels` value columns, `count` first — what the score picker lists.
+   *
+   * On the info rather than fetched on demand because it is one group listing
+   * taken while the file is being opened anyway, and because every view that
+   * offers the picker would otherwise ask for it separately.
+   */
+  scoreColumns: string[]
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
   sourceKind: SourceKind
@@ -453,6 +461,8 @@ export type WorkerRequest =
       rows: Extent
       cols?: Extent
       balance?: boolean
+      /** `/pixels` column the values come from; `count` when absent. */
+      value?: string
       budgetBytes?: number
       genomes?: boolean
       binsPerCell?: number
@@ -465,6 +475,8 @@ export type WorkerRequest =
       cols?: Extent
       level: 'contig' | 'genome'
       balance?: boolean
+      /** `/pixels` column the values come from; `count` when absent. */
+      value?: string
       budgetBytes?: number
       genomes?: boolean
     }
@@ -479,6 +491,8 @@ export type WorkerRequest =
       unit: 'genome' | 'contig'
       names: string[]
       balance?: boolean
+      /** `/pixels` column the values come from; `count` when absent. */
+      value?: string
       binsPerCell?: number
       contigsPerCell?: number
     }

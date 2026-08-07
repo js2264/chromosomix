@@ -167,6 +167,7 @@ function opened(over: Partial<OpenResult> = {}): OpenResult {
     entryGroup: '',
     hasGenomes: false,
     hasWeights: false,
+    scoreColumns: ['count'],
     sourceBytes: 1,
     sourceKind: 'remote',
     ...over,
