@@ -63,6 +63,24 @@ export function transformValues(
         out[i] = x > 0 ? Math.log10(x) : 0
       }
       return out
+    case 'log2':
+      // Deliberately *not* `log10`'s clamp. That one is numpy's, and it is right
+      // for counts, where zero is the bottom of the picture; `log2` exists for
+      // ratios, where zero means "none of this in the numerator" and belongs at
+      // the low end of the scale rather than at its middle. Folding it to `0`
+      // would draw every empty cell as the neutral colour, which on a ratio map
+      // reads as "the two files agree here" — the single most misleading thing
+      // this module could produce.
+      // `NaN` survives, where `log10` sends it to `0`. That asymmetry is as
+      // deliberate as the one above: under `log10` a NaN is an unbalanced bin
+      // and numpy draws it as background, but a NaN under `log2` is a ratio that
+      // could not be formed — two empty cells, or a bin either file discarded —
+      // and the raster leaves those transparent rather than claiming agreement.
+      for (let i = 0; i < n; i++) {
+        const x = v[i]
+        out[i] = Number.isNaN(x) ? Number.NaN : x > 0 ? Math.log2(x) : Number.NEGATIVE_INFINITY
+      }
+      return out
     case 'none':
       // A loop rather than `out.set(v)`: `out` is a union of two typed arrays
       // and TypeScript refuses to resolve `set` across the union.
@@ -113,6 +131,8 @@ export function transformValue(x: number, transform: Transform): number {
       return Math.log1p(x)
     case 'log10':
       return x > 0 ? Math.log10(x) : 0
+    case 'log2':
+      return Number.isNaN(x) ? Number.NaN : x > 0 ? Math.log2(x) : Number.NEGATIVE_INFINITY
     case 'none':
       return x
     default:
@@ -128,6 +148,9 @@ export function transformValue(x: number, transform: Transform): number {
  * clamped to `0` on the way out, so `inverseTransform(0, 'log10')` returns `1`
  * and cannot distinguish that from a true count of `1`. Label the bottom of a
  * `log10` colourbar as "≤ 1" rather than pretending otherwise.
+ *
+ * `log2` is a true inverse over the whole range it produces, because it clamps
+ * nothing: it is `-Infinity` that stands for zero, and `2 ** -Infinity` is `0`.
  */
 export function inverseTransform(x: number, transform: Transform): number {
   switch (transform) {
@@ -135,6 +158,8 @@ export function inverseTransform(x: number, transform: Transform): number {
       return Math.expm1(x)
     case 'log10':
       return 10 ** x
+    case 'log2':
+      return 2 ** x
     case 'none':
       return x
     default:
@@ -353,6 +378,47 @@ export function autoRangeOf(
   // A constant matrix has no range to speak of; matplotlib collapses one to the
   // colormap's low end, and `vmin + 1` is the span that reproduces that.
   return vmax > vmin ? { vmin, vmax } : { vmin, vmax: vmin + 1 }
+}
+
+/**
+ * The auto rule for a quantity read against a **middle** rather than against
+ * zero: a ratio of two files, or of a cell to its distance-decay baseline.
+ *
+ * Everything above is built on the assumption that a value has a floor and a
+ * bright end, which is true of counts and false of a ratio. Two things have to
+ * change together, and doing only one of them is worse than doing neither:
+ *
+ * 1. **The range is symmetric about the neutral value.** A colour scale running
+ *    from the 1st to the 99th percentile of a log ratio is almost never centred
+ *    on zero, so the colour that means "these agree" lands somewhere arbitrary
+ *    in the ramp — and on a diverging colormap it lands on a hue, so a map of
+ *    two identical files comes out uniformly blue. Half-width from the *larger*
+ *    of the two tails, so neither direction is clipped harder than the other.
+ * 2. **The colormap is diverging** — `render/colormaps.ts`, and the panel's job
+ *    rather than this function's.
+ *
+ * The half-width is the 99th percentile of the distance from neutral rather than
+ * the maximum, for the reason §7.1 clips at all: a handful of cells where one
+ * file has counts and the other has none are `±Infinity`, and a range that
+ * accommodated them would compress everything real into the middle two colours.
+ *
+ * @param centre The neutral value **in transformed units** — `transformValue(1,
+ * 'log2')` is `0` for a ratio, and `0` for a difference under `none`.
+ */
+export function autoSymmetricRange(
+  display: ArrayLike<number>,
+  centre = 0,
+): ValueRange {
+  const spread = collectWhere(display, (x) => Number.isFinite(x))
+  for (let i = 0; i < spread.length; i++) spread[i] = Math.abs(spread[i] - centre)
+  // A block with nothing finite in it, and a block whose every cell sits exactly
+  // on neutral, are both ranges of zero width. `1` is the same fallback span
+  // `autoRangeOf` uses for a constant matrix, and it puts the whole picture on
+  // the colormap's middle colour — which is what a map of two identical files
+  // should look like.
+  const half = spread.length === 0 ? 1 : percentileOf(spread, AUTO_VMAX_PERCENTILE)
+  const width = half > 0 ? half : 1
+  return { vmin: centre - width, vmax: centre + width }
 }
 
 /**

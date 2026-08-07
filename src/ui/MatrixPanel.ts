@@ -144,7 +144,7 @@ import {
 } from './plotOptions'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 
-const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
+const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 
 /**
  * What a dragged box resolves to: one block, and how much of it.

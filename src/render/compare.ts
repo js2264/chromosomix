@@ -1,5 +1,6 @@
 /**
- * Two files in one square: the first above the diagonal, the second below it.
+ * Two files in one square: side by side across the diagonal, or reduced to the
+ * one number that is the comparison itself.
  *
  * A contact matrix is symmetric, so half of every map on screen is a mirror of
  * the other half and carries no information at all. That is the room this uses:
@@ -15,22 +16,32 @@
  * second. Splitting the *screen* instead would put two unrelated blocks side by
  * side and invite them to be read as one picture.
  *
+ * The split answers "what do these two look like"; it does not answer "where do
+ * they differ", and past a certain similarity the eye cannot get that out of two
+ * triangles at all. {@link combine} is the other reading: collapse the pair to
+ * one derived field — a ratio or a difference — where the *only* thing drawn is
+ * the disagreement, and every cell that matches is the neutral colour. Both are
+ * the same two blocks and the same alignment gate; they differ in what is thrown
+ * away, which is why they are one control with three settings rather than a
+ * comparison mode and a separate arithmetic feature.
+ *
  * Nothing here draws. It produces one values array in the shape the renderer
  * already takes, which is what keeps `render/heatmap.ts` unaware that comparing
  * exists — pooling, colouring, pan and zoom are the same code on a compared map
  * as on any other.
  */
 
+import type { BlockValues } from './derive'
 import { percentileOf } from './scale'
 
-/** The part of a read this module needs: shape, values, and where they sit. */
-export interface CompareBlock {
-  nrows: number
-  ncols: number
-  values: Float32Array
-  rowExtent: readonly [number, number]
-  colExtent: readonly [number, number]
-}
+/**
+ * The part of a read this module needs: shape, values, and where they sit.
+ *
+ * The same shape `render/derive.ts` works over, and named there because a single
+ * file's derivations are the more basic of the two: comparing is arithmetic over
+ * two of these, deriving is arithmetic over one.
+ */
+export type CompareBlock = BlockValues
 
 export interface Blend {
   /** Merged values, row-major, `nrows * ncols` long. */
@@ -117,6 +128,77 @@ export function blendAcrossDiagonal(
     }
   }
   return { values, lower, upper: nrows * ncols - lower }
+}
+
+/**
+ * What two aligned files are reduced to.
+ *
+ * `split` is the picture; the other two are the measurement. They are one
+ * control because they are one question — *how* do I want these two put together
+ * — and because every one of them is served by the same pair of reads and the
+ * same alignment gate, so offering them anywhere but beside each other would
+ * suggest they cost different amounts.
+ */
+export type CompareOp = 'split' | 'ratio' | 'difference'
+
+/** Every way of putting two files together, in the order they are offered. */
+export const COMPARE_OPS: readonly CompareOp[] = ['split', 'ratio', 'difference']
+
+export function isCompareOp(value: string): value is CompareOp {
+  return (COMPARE_OPS as readonly string[]).includes(value)
+}
+
+export interface Combined extends Blend {
+  /**
+   * The value that means "these two agree", or `null` for the split, which is
+   * not a derived quantity at all but two files' own counts side by side.
+   *
+   * `1` for the ratio and `0` for the difference — the number the colour scale
+   * is made symmetric about and the colourbar's middle tick.
+   */
+  neutral: number | null
+}
+
+/**
+ * Put two aligned blocks together, whichever way was asked for.
+ *
+ * `gain` is applied to the second file in every case, and it matters far more
+ * here than it does to the split: two libraries at different depth differ by
+ * roughly a scalar, so their *ratio* is that scalar everywhere and the picture
+ * is a flat wash whose colour is the depth ratio and whose structure is
+ * invisible. `matchGain` divides it out, which is why the ratio and difference
+ * turn depth matching on by default where the split leaves it off — see
+ * `ui/MatrixPanel.ts`, which owns that default because it owns the control.
+ *
+ * The arithmetic is deliberately plain, because JavaScript's own division
+ * already produces the three answers a reader needs and a guarded version would
+ * have to reproduce them: `4 / 0` is `Infinity`, which the raster clamps to the
+ * top of the scale and which is the truth — present in one file, absent in the
+ * other; `0 / 0` is `NaN`, drawn transparent, which is also the truth, since two
+ * empty cells have no ratio; and a `NaN` from either file, an unbalanced bin,
+ * carries through to mean the comparison could not be made.
+ */
+export function combine(
+  primary: CompareBlock,
+  second: CompareBlock,
+  options: { op: CompareOp; gain?: number },
+): Combined {
+  const gain = options.gain ?? 1
+  if (options.op === 'split') return { ...blendAcrossDiagonal(primary, second, { gain }), neutral: null }
+
+  const { nrows, ncols } = primary
+  const cells = nrows * ncols
+  const values = new Float32Array(cells)
+  const ratio = options.op === 'ratio'
+  for (let i = 0; i < cells; i++) {
+    const other = second.values[i] * gain
+    values[i] = ratio ? primary.values[i] / other : primary.values[i] - other
+  }
+  // Both files are drawn over the whole square rather than a triangle each, so
+  // neither count is a count of cells on screen any more. Reported as the whole
+  // block for both, which is what a caller counting "cells from file 2" has to
+  // be told when the answer is "all of them, and from file 1 as well".
+  return { values, lower: cells, upper: cells, neutral: ratio ? 1 : 0 }
 }
 
 /**

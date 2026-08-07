@@ -32,7 +32,7 @@ const VIEW_KINDS: ViewKind[] = [
   'browser',
 ]
 const LEVELS = ['bin', 'contig', 'genome'] as const
-const TRANSFORMS: Transform[] = ['log1p', 'log10', 'none']
+const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 
 /** Serialisation order — stable so two equal states produce equal strings. */
 const KEY_ORDER = [

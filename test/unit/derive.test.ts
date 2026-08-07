@@ -1,0 +1,387 @@
+/**
+ * Values the file does not contain.
+ *
+ * Every function under test produces a picture that looks entirely plausible
+ * when it is wrong, which is the reason for pinning each of them to arithmetic
+ * done by hand rather than to a snapshot:
+ *
+ * - a coverage normalisation that divides by raw marginals instead of
+ *   mean-normalised ones still flattens the map, and only the *numbers* — every
+ *   one of them a thousand times smaller — say so;
+ * - a balancing pass that alternates row and column updates over a symmetric
+ *   matrix converges to flat marginals too, and draws a seam down the diagonal
+ *   that reads as structure;
+ * - an expected model that measures separation in row and column *indices*
+ *   rather than in absolute bins is correct on every on-diagonal block and wrong
+ *   on every other one;
+ * - and a ratio that folds `x / 0` to zero rather than to infinity turns "only
+ *   in this file" into "in neither", which is the opposite reading.
+ *
+ * The outer-product identity does most of the work below. A matrix `v[i][j] =
+ * a[i] * b[j]` is exactly what a pure coverage bias looks like — every cell is
+ * the product of two per-bin factors and nothing else — so a correct correction
+ * must flatten it to a constant, and the constant is computable in one line.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import {
+  BALANCE_TOLERANCE,
+  balanceBlock,
+  coverageNormalise,
+  expectedModel,
+  isNormalisation,
+  marginalsOf,
+  observedOverExpected,
+  type AxisRun,
+  type BlockValues,
+} from '@/render/derive'
+import { autoSymmetricRange, transformValues } from '@/render/scale'
+import { combine, blendAcrossDiagonal } from '@/render/compare'
+
+function block(
+  nrows: number,
+  ncols: number,
+  fill: (row: number, col: number) => number,
+  rowExtent: [number, number] = [0, nrows],
+  colExtent: [number, number] = [0, ncols],
+): BlockValues {
+  const values = new Float32Array(nrows * ncols)
+  for (let r = 0; r < nrows; r++) {
+    for (let c = 0; c < ncols; c++) values[r * ncols + c] = fill(r, c)
+  }
+  return { nrows, ncols, values, rowExtent, colExtent }
+}
+
+/** `v[i][j] = a[i] * b[j]` — a matrix whose every cell is pure per-bin bias. */
+function outerProduct(a: readonly number[], b: readonly number[]): BlockValues {
+  return block(a.length, b.length, (r, c) => a[r] * b[c])
+}
+
+function rowSums(values: ArrayLike<number>, nrows: number, ncols: number): number[] {
+  const out: number[] = []
+  for (let r = 0; r < nrows; r++) {
+    let sum = 0
+    for (let c = 0; c < ncols; c++) {
+      const value = values[r * ncols + c]
+      if (Number.isFinite(value)) sum += value
+    }
+    out.push(sum)
+  }
+  return out
+}
+
+function colSums(values: ArrayLike<number>, nrows: number, ncols: number): number[] {
+  const out: number[] = []
+  for (let c = 0; c < ncols; c++) {
+    let sum = 0
+    for (let r = 0; r < nrows; r++) {
+      const value = values[r * ncols + c]
+      if (Number.isFinite(value)) sum += value
+    }
+    out.push(sum)
+  }
+  return out
+}
+
+describe('marginals', () => {
+  it('sums each axis', () => {
+    const { rows, cols } = marginalsOf(block(2, 3, (r, c) => r * 3 + c))
+    expect([...rows]).toEqual([3, 12])
+    expect([...cols]).toEqual([3, 5, 7])
+  })
+
+  it('skips non-finite cells rather than propagating them', () => {
+    // One discarded bin would otherwise turn the marginal of every bin it
+    // touches into NaN, and every normalisation below divides by a marginal —
+    // so a single NaN would blank the whole map.
+    const b = block(2, 2, (r, c) => (r === 0 && c === 1 ? Number.NaN : 2))
+    const { rows, cols } = marginalsOf(b)
+    expect([...rows]).toEqual([2, 4])
+    expect([...cols]).toEqual([4, 2])
+  })
+})
+
+describe('coverage normalisation', () => {
+  it('flattens a pure outer product, which is what a coverage bias is', () => {
+    const out = coverageNormalise(outerProduct([1, 2, 4], [1, 2, 4]), 1)
+    // mean(a) * mean(b) — the constant a correct VC leaves behind.
+    const expected = (7 / 3) * (7 / 3)
+    for (const value of out) expect(value).toBeCloseTo(expected, 5)
+  })
+
+  it('stays in the units it started in, rather than collapsing towards 1/total', () => {
+    // The failure this pins is dividing by *raw* marginals: the map still comes
+    // out flat, but every value is smaller by a factor of the library depth, so
+    // a stored colour clip and the readout both silently change meaning.
+    const counts = outerProduct([10, 20, 40], [10, 20, 40])
+    const scaled = outerProduct([1000, 2000, 4000], [1000, 2000, 4000])
+    const a = coverageNormalise(counts, 1)
+    const b = coverageNormalise(scaled, 1)
+    // Ten thousand times the counts is ten thousand times the corrected value —
+    // a scalar on the whole library survives, only the per-bin part is removed.
+    for (let i = 0; i < a.length; i++) expect(b[i] / a[i]).toBeCloseTo(1e4, 3)
+  })
+
+  it('halves the correction under the square-root convention', () => {
+    const b = block(2, 2, (r, c) => [1, 2][r] * [1, 2][c])
+    // Marginals [3, 6] on both axes, mean 4.5, so the scales are [2/3, 4/3].
+    const full = coverageNormalise(b, 1)
+    const half = coverageNormalise(b, 0.5)
+    expect(full[0]).toBeCloseTo(1 / ((2 / 3) * (2 / 3)), 5)
+    expect(half[0]).toBeCloseTo(1 / Math.sqrt((2 / 3) * (2 / 3)), 5)
+    // Every cell of the half-strength result is the geometric mean of the raw
+    // value and the fully corrected one, which is what "half the correction" is.
+    for (let i = 0; i < half.length; i++) {
+      expect(half[i]).toBeCloseTo(Math.sqrt(b.values[i] * full[i]), 4)
+    }
+  })
+
+  it('gives a bin with no coverage no value at all', () => {
+    const out = coverageNormalise(block(2, 2, (r, c) => (r === 1 || c === 1 ? 0 : 5)), 1)
+    expect(out[0]).toBeGreaterThan(0)
+    expect(Number.isNaN(out[1])).toBe(true)
+    expect(Number.isNaN(out[2])).toBe(true)
+    expect(Number.isNaN(out[3])).toBe(true)
+  })
+})
+
+describe('iterative balancing', () => {
+  it('flattens the marginals of a matrix a single pass cannot', () => {
+    // Not an outer product, so VC leaves a residue and only the fixed point
+    // gets there. The asymmetric entries are what make the two differ.
+    const b = block(4, 4, (r, c) => 1 + ((r * 7 + c * 3) % 5) + (r === c ? 20 : 0))
+    const balanced = balanceBlock(b)
+    const sums = rowSums(balanced, 4, 4)
+    const mean = sums.reduce((a, x) => a + x, 0) / sums.length
+    for (const sum of sums) expect(Math.abs(sum / mean - 1)).toBeLessThan(BALANCE_TOLERANCE * 10)
+  })
+
+  it('keeps a symmetric matrix symmetric to the bit', () => {
+    // Alternating row and column updates converges to flat marginals too, but
+    // leaves the two triangles subtly different — which draws a seam along the
+    // diagonal that a reader takes for structure.
+    const b = block(5, 5, (r, c) => 1 + ((r * c) % 4) + (r === c ? 9 : 0))
+    const balanced = balanceBlock(b)
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        expect(balanced[r * 5 + c]).toBe(balanced[c * 5 + r])
+      }
+    }
+  })
+
+  it('agrees with coverage normalisation where the bias really is an outer product', () => {
+    // The one case both methods have an exact answer for, so they must give the
+    // same picture: both flatten it completely, and they can differ only by the
+    // overall scalar each chooses.
+    const b = outerProduct([1, 3, 9, 27], [1, 3, 9, 27])
+    const balanced = balanceBlock(b)
+    const first = balanced[0]
+    // To the convergence tolerance rather than to a decimal count, and to a
+    // small multiple of it rather than to the number itself: the loop stops when
+    // the *marginals* are flat to `BALANCE_TOLERANCE`, and every cell carries
+    // the residual error of the two weights that scale it, so the cell-level
+    // bound is a couple of times the marginal one by construction.
+    for (const value of balanced) {
+      expect(Math.abs(value / first - 1)).toBeLessThan(4 * BALANCE_TOLERANCE)
+    }
+  })
+
+  it('drops empty bins instead of dragging every other bin towards them', () => {
+    const b = block(3, 3, (r, c) => (r === 1 || c === 1 ? 0 : 4))
+    const balanced = balanceBlock(b)
+    for (let i = 0; i < 3; i++) {
+      expect(Number.isNaN(balanced[1 * 3 + i])).toBe(true)
+      expect(Number.isNaN(balanced[i * 3 + 1])).toBe(true)
+    }
+    expect(balanced[0]).toBeGreaterThan(0)
+  })
+
+  it('balances a rectangular block on both axes independently', () => {
+    const b = block(2, 4, (r, c) => (r + 1) * (c + 1), [0, 2], [10, 14])
+    const balanced = balanceBlock(b)
+    const rows = rowSums(balanced, 2, 4)
+    const cols = colSums(balanced, 2, 4)
+    expect(rows[0]).toBeCloseTo(rows[1], 6)
+    for (const sum of cols) expect(sum).toBeCloseTo(cols[0], 6)
+  })
+})
+
+describe('expected, and observed over it', () => {
+  const runs = (label: string, end: number): AxisRun[] => [{ label, start: 0, end }]
+
+  it('averages each bin separation over the whole block', () => {
+    const decay = [10, 5, 2, 1]
+    const b = block(4, 4, (r, c) => decay[Math.abs(r - c)])
+    const model = expectedModel(b, { rows: runs('c', 4), cols: runs('c', 4) })
+    expect([...model.cis]).toEqual(decay)
+    // Nothing is trans, so there is no scalar to report.
+    expect(Number.isNaN(model.trans)).toBe(true)
+  })
+
+  it('reports a cell as its multiple of what its distance predicts', () => {
+    const decay = [10, 5, 2, 1]
+    const b = block(4, 4, (r, c) => (r === 0 && c === 2 ? 4 : decay[Math.abs(r - c)]))
+    const oe = observedOverExpected(b, { rows: runs('c', 4), cols: runs('c', 4) })
+    // Separation 2 holds [0][2]=4 and three cells of 2, so expected is 2.5.
+    expect(oe[0 * 4 + 2]).toBeCloseTo(4 / 2.5, 5)
+    expect(oe[2 * 4 + 0]).toBeCloseTo(2 / 2.5, 5)
+    // Every other separation is uniform, so it is exactly its own expectation.
+    expect(oe[0]).toBeCloseTo(1, 6)
+    expect(oe[1]).toBeCloseTo(1, 6)
+  })
+
+  it('measures separation in absolute bins, not in row and column indices', () => {
+    // A block covering two distant windows of one contig. Judged by indices,
+    // cell [0][0] would be separation 0 — the brightest cell in any map — when
+    // it is in fact a hundred bins apart and should be nowhere near the diagonal.
+    const b = block(2, 2, () => 1, [0, 2], [100, 102])
+    const model = expectedModel(b, { rows: runs('c', 2), cols: runs('c', 2) })
+    expect(Number.isNaN(model.cis[0])).toBe(true)
+    expect(model.cis[100]).toBeCloseTo(1, 6)
+    expect(model.cis[99]).toBeCloseTo(1, 6)
+  })
+
+  it('separates sequences: one curve within, one scalar between', () => {
+    const rowRuns: AxisRun[] = [
+      { label: 'a', start: 0, end: 2 },
+      { label: 'b', start: 2, end: 4 },
+    ]
+    // 8 within a sequence at every separation, 1 between them.
+    const b = block(4, 4, (r, c) => (r < 2 === c < 2 ? 8 : 1))
+    const model = expectedModel(b, { rows: rowRuns, cols: rowRuns })
+    expect(model.cis[0]).toBeCloseTo(8, 6)
+    expect(model.cis[1]).toBeCloseTo(8, 6)
+    expect(model.trans).toBeCloseTo(1, 6)
+    // Which makes every cell exactly its own expectation, in both regimes — a
+    // pooled model that ignored the run boundary would put the trans cells far
+    // below 1 and invent a checkerboard.
+    const oe = observedOverExpected(b, { rows: rowRuns, cols: rowRuns })
+    for (const value of oe) expect(value).toBeCloseTo(1, 5)
+  })
+
+  it('treats an unlabelled axis as one sequence', () => {
+    // A plain cooler read as a single span has no runs, and every cell of it is
+    // within one sequence.
+    const b = block(3, 3, (r, c) => (r === c ? 9 : 3))
+    const model = expectedModel(b, { rows: [], cols: [] })
+    expect(model.cis[0]).toBeCloseTo(9, 6)
+    expect(model.cis[1]).toBeCloseTo(3, 6)
+    expect(Number.isNaN(model.trans)).toBe(true)
+  })
+
+  it('has no ratio to a baseline that does not exist', () => {
+    const b = block(2, 2, () => 0)
+    const oe = observedOverExpected(b, { rows: [], cols: [] })
+    for (const value of oe) expect(Number.isNaN(value)).toBe(true)
+  })
+})
+
+describe('two files reduced to one number', () => {
+  const a = block(2, 2, (r, c) => [[4, 2], [8, 1]][r][c])
+  const b = block(2, 2, (r, c) => [[2, 2], [2, 0]][r][c])
+
+  it('divides, and lets the three edge cases mean what they mean', () => {
+    const out = combine(a, b, { op: 'ratio' })
+    expect(out.neutral).toBe(1)
+    expect(out.values[0]).toBeCloseTo(2, 6)
+    expect(out.values[1]).toBeCloseTo(1, 6)
+    expect(out.values[2]).toBeCloseTo(4, 6)
+    // Present in one file and absent in the other: the top of the scale, not a
+    // fold to zero and not a NaN.
+    expect(out.values[3]).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('has no ratio between two empty cells', () => {
+    const empty = block(1, 1, () => 0)
+    expect(Number.isNaN(combine(empty, empty, { op: 'ratio' }).values[0])).toBe(true)
+  })
+
+  it('subtracts, with the neutral point at zero', () => {
+    const out = combine(a, b, { op: 'difference' })
+    expect(out.neutral).toBe(0)
+    expect([...out.values]).toEqual([2, 0, 6, 1])
+  })
+
+  it('applies the depth gain to the second file before either operation', () => {
+    // The whole reason the gain matters more here than to the split: two
+    // libraries at different depth have a *constant* ratio, so without this the
+    // picture is a flat wash whose colour is the depth ratio.
+    const deep = block(1, 1, () => 10)
+    const shallow = block(1, 1, () => 5)
+    expect(combine(deep, shallow, { op: 'ratio', gain: 2 }).values[0]).toBeCloseTo(1, 6)
+    expect(combine(deep, shallow, { op: 'difference', gain: 2 }).values[0]).toBeCloseTo(0, 6)
+  })
+
+  it('leaves the split exactly as it was', () => {
+    const split = combine(a, b, { op: 'split', gain: 3 })
+    const legacy = blendAcrossDiagonal(a, b, { gain: 3 })
+    expect(split.neutral).toBeNull()
+    expect([...split.values]).toEqual([...legacy.values])
+    expect(split.lower).toBe(legacy.lower)
+  })
+
+  it('carries a discarded bin through as no comparison rather than as agreement', () => {
+    const withNaN = block(1, 1, () => Number.NaN)
+    const ok = block(1, 1, () => 4)
+    expect(Number.isNaN(combine(ok, withNaN, { op: 'ratio' }).values[0])).toBe(true)
+    expect(Number.isNaN(combine(withNaN, ok, { op: 'difference' }).values[0])).toBe(true)
+  })
+})
+
+describe('the log2 scale', () => {
+  it('puts twice and half the same distance either side of neutral', () => {
+    const out = transformValues(Float32Array.from([0.25, 0.5, 1, 2, 4]), 'log2')
+    expect([...out]).toEqual([-2, -1, 0, 1, 2])
+  })
+
+  it('sends an empty numerator to the bottom of the scale, not to its middle', () => {
+    // `log10`'s numpy clamp folds zero to 0, which on a ratio map is the colour
+    // that means "these two agree" — the single most misleading output possible.
+    expect(transformValues(Float32Array.from([0]), 'log2')[0]).toBe(Number.NEGATIVE_INFINITY)
+    expect(transformValues(Float32Array.from([0]), 'log10')[0]).toBe(0)
+  })
+
+  it('keeps a comparison that could not be made out of the picture entirely', () => {
+    expect(Number.isNaN(transformValues(Float32Array.from([Number.NaN]), 'log2')[0])).toBe(true)
+  })
+})
+
+describe('the symmetric auto range', () => {
+  it('centres on neutral even when the data are lopsided', () => {
+    // Everything above neutral. An asymmetric range would put "these agree"
+    // at the very bottom of the ramp and draw the whole map in one arm of it.
+    const range = autoSymmetricRange(Float32Array.from([0.5, 1, 1.5, 2, 3]), 0)
+    expect(range.vmin).toBeCloseTo(-range.vmax, 10)
+    expect(range.vmax).toBeGreaterThan(0)
+  })
+
+  it('ignores the infinities a ratio produces', () => {
+    const finite = autoSymmetricRange(Float32Array.from([-1, 0, 1]), 0)
+    const withInfinities = autoSymmetricRange(
+      Float32Array.from([-1, 0, 1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]),
+      0,
+    )
+    expect(withInfinities.vmax).toBeCloseTo(finite.vmax, 10)
+  })
+
+  it('gives a map of two identical files a range rather than a point', () => {
+    const range = autoSymmetricRange(new Float32Array(16), 0)
+    expect(range.vmax).toBeGreaterThan(0)
+    expect(range.vmin).toBeCloseTo(-range.vmax, 10)
+  })
+
+  it('respects a neutral point that is not zero', () => {
+    const range = autoSymmetricRange(Float32Array.from([3, 5, 7]), 5)
+    expect((range.vmin + range.vmax) / 2).toBeCloseTo(5, 10)
+  })
+})
+
+describe('the normalisation names', () => {
+  it('accepts only what it can serve, so a shared link cannot ask for more', () => {
+    expect(isNormalisation('vc')).toBe(true)
+    expect(isNormalisation('ice')).toBe(true)
+    expect(isNormalisation('KR')).toBe(false)
+    expect(isNormalisation('')).toBe(false)
+  })
+})
