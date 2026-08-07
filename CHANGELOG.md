@@ -58,10 +58,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   there is no coordinate system at all — a contig-level or whole-genome block —
   because its numbers come from the block on screen rather than from a fetch;
   there it says, in the lane, that an anchor cannot be named at this level, which
-  is a better answer than the "not in this view" it used to give.
+  is a better answer than the "not in this view" it used to give and than the
+  instruction for a gesture that does nothing there.
 
   Switching it off **hides** the lane rather than removing it, so the colour,
-  height, axis and edge a reader chose survive being turned off and on.
+  height, axis and edge a reader chose survive being turned off and on — and on
+  a file that carries no annotations at all the lane belongs to the *file* rather
+  than to the view, so it survives opening a chromosome as well.
+
+  The empty lane's instruction is a control and stays on screen: an exported
+  figure gets the outline, so an empty strip reads as a lane with nothing in it,
+  and not a sentence addressed to somebody with a map in front of them.
 
 - **Private buckets.** **Open a file → private buckets…** takes a URL prefix, a
   region and an access key, and everything under that prefix is then read with
