@@ -241,3 +241,23 @@ describe('what a companion is asked for', () => {
     expect(planFor({ uri: 'a', view: 'selection' }).kind).toBe('none')
   })
 })
+
+describe('a member that carries the separator', () => {
+  it('round-trips a URI containing a pipe as one map, not two', () => {
+    // The separator was chosen because RFC 3986 excludes it from URIs — but that
+    // is an invariant this module has to *maintain*, not a fact about the
+    // strings handed to it, because `ViewState.encode` writes the pipe back
+    // readable after encoding. Unescaped, the link resolves to a different
+    // number of maps than were sent, and nothing says so.
+    const refs = [
+      { kind: 'remote' as const, uri: 'https://host/a|b.cool' },
+      { kind: 'remote' as const, uri: 'https://host/c.cool' },
+    ]
+    const wire = serialiseMaps(refs)
+    expect(wire).toBeDefined()
+    expect(parseMaps(wire)).toEqual(refs)
+    // And the separator is still legible for the ordinary case it exists for.
+    expect(serialiseMaps([{ kind: 'remote', uri: 'a.cool' }, { kind: 'remote', uri: 'b.cool' }]))
+      .toBe('a.cool|b.cool')
+  })
+})

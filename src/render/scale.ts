@@ -409,6 +409,11 @@ export function autoSymmetricRange(
   display: ArrayLike<number>,
   centre = 0,
 ): ValueRange {
+  // A neutral point that is not on the scale cannot be the middle of it. This
+  // is reachable: `log2` is offered on every map now, and `transformValue(0,
+  // 'log2')` — a difference map's neutral — is `-Infinity`, which would make
+  // every distance infinite and the range `[-Infinity, -Infinity]`.
+  if (!Number.isFinite(centre)) return autoRangeOfDisplay(display, 'none')
   const spread = collectWhere(display, (x) => Number.isFinite(x))
   for (let i = 0; i < spread.length; i++) spread[i] = Math.abs(spread[i] - centre)
   // A block with nothing finite in it, and a block whose every cell sits exactly

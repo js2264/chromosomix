@@ -298,26 +298,41 @@ export class PanelDeck {
    * {@link destroy}.
    */
   private adopt(wanted: readonly PanelRef[]): void {
-    const held = new Map<string, Slot>()
+    // A *queue* per URI, not one slot per URI. The same file twice is a
+    // legitimate deck — the plainest way to read one map at two colour scales —
+    // and keyed one-to-one the second slot overwrote the first, so the first
+    // never appeared in the reuse map, never reached the orphan loop, and kept
+    // its worker, its h5wasm instance and its dense block for the life of the
+    // tab with its element already dropped from the grid.
+    const spare = new Map<string, Slot[]>()
     for (const slot of this.slots) {
-      if (slot.ref.kind !== 'vacant') held.set(slot.ref.uri, slot)
+      if (slot.ref.kind === 'vacant') continue
+      const queue = spare.get(slot.ref.uri)
+      if (queue === undefined) spare.set(slot.ref.uri, [slot])
+      else queue.push(slot)
     }
+    const reused = new Set<Slot>()
     const next: Slot[] = []
     for (const ref of wanted.slice(0, MAX_PANELS - 1)) {
       if (ref.kind !== 'vacant') {
-        const existing = held.get(ref.uri)
+        const existing = spare.get(ref.uri)?.shift()
         if (existing !== undefined) {
-          held.delete(ref.uri)
+          reused.add(existing)
           next.push(existing)
           continue
         }
       }
       next.push(this.build(ref))
     }
-    for (const orphan of held.values()) {
-      this.lock.leave(orphan.id)
-      orphan.panel?.destroy()
-      orphan.vacancy?.destroy()
+    // Swept over what was actually held rather than over what is left in the
+    // reuse map, which is what brings vacancies into the sweep: a vacancy has no
+    // URI to be keyed by, so one that disappeared from the list used to be
+    // dropped from `slots` with its drop rectangle still listening.
+    for (const slot of this.slots) {
+      if (reused.has(slot)) continue
+      this.lock.leave(slot.id)
+      slot.panel?.destroy()
+      slot.vacancy?.destroy()
     }
     this.slots = next
     this.paintGrid()
@@ -344,7 +359,7 @@ export class PanelDeck {
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
       initialLook: () => {
-        const look = this.leadLook()
+        const look = this.leadBaseLook()
         return this.shareLook ? look : { transform: look.transform, colormap: look.colormap }
       },
       onMove: (delta) => this.move(slot, delta),
@@ -628,6 +643,32 @@ export class PanelDeck {
       colormap: scale.colormap,
       ...(Number.isFinite(scale.vmin) ? { vmin: scale.vmin } : {}),
       ...(Number.isFinite(scale.vmax) ? { vmax: scale.vmax } : {}),
+    }
+  }
+
+  /**
+   * The lead's scale **without** whatever a derivation borrowed from it (§7.5).
+   *
+   * What a new companion opens on, and deliberately not {@link leadLook}. The
+   * two differ exactly when the lead is drawing a derived field, and the case
+   * that matters is the one a companion cannot share: two files in the lead's
+   * square under `ratio` put it on `log2` and a diverging ramp, and a companion
+   * has one file and draws plain counts. Seeded with the live look it would draw
+   * them on `log2`, where every empty cell of a sparse block is `-Infinity` and
+   * the ramp's middle means nothing — a broken picture, from a control the
+   * reader never pointed at it.
+   *
+   * The derivations the deck *does* share need no exception: a companion turns
+   * them on for itself and reaches the same presentation by the same route.
+   */
+  private leadBaseLook(): ScaleState {
+    const base = this.lead?.baseScale()
+    if (base === undefined) return this.leadLook()
+    return {
+      transform: base.transform,
+      colormap: base.colormap,
+      ...(base.vmin === undefined ? {} : { vmin: base.vmin }),
+      ...(base.vmax === undefined ? {} : { vmax: base.vmax }),
     }
   }
 

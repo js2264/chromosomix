@@ -422,17 +422,13 @@ export class ColorbarView {
     // routinely 0.0009 where the caption said "count". Naming it here is the
     // only place the reader is told which of the two the numbers beside the
     // strip are.
-    // A derived field is neither of the two, and its caption is the only thing
-    // that can say what it is — `O/E`, or `treated / control`. It wins over the
-    // balanced override because the cells went through balancing *and then*
-    // through the derivation, and it is the outermost operation that names the
-    // number beside the strip.
-    const units =
-      this.scale.neutral !== undefined
-        ? o.caption
-        : this.scale.balanced === true
-          ? 'balanced'
-          : o.caption
+    // The override applies only where nothing was derived. A derived field went
+    // through balancing *and then* through the arithmetic, and it is the
+    // outermost operation that names the number beside the strip — so `O/E` or
+    // `treated / control`, which the caller has already put in the caption,
+    // rather than `balanced`.
+    const derived = this.scale.neutral !== undefined
+    const units = this.scale.balanced === true && !derived ? 'balanced' : o.caption
     const body =
       !o.showTransform || this.scale.transform === 'none'
         ? units

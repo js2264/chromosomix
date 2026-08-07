@@ -61,10 +61,20 @@ export type PanelRef =
  * first time somebody publishes a file whose name contains one — and the
  * failure is silent: the link resolves, to two maps that are neither of the
  * ones that were sent. RFC 3986 excludes `|` from every part of a URI, so a
- * URI that has been through `encodeURIComponent` never contains a literal one,
- * and the split cannot be wrong.
+ * URI that has been through `encodeURIComponent` never contains a literal one.
+ *
+ * That last clause is an *invariant this module maintains*, not a fact about the
+ * strings that arrive here. `state/ViewState.ts` writes the pipe back readable
+ * after encoding the whole hash value, so a member that reached this point
+ * carrying a raw one would come out the other side indistinguishable from the
+ * separator — a link that resolves, to a different number of maps than were
+ * sent. {@link serialiseMaps} escapes it per member so the claim above is true
+ * by construction rather than by hope.
  */
 export const MAPS_SEPARATOR = '|'
+
+/** The separator as it appears *inside* a member, where it is data. */
+const ESCAPED_SEPARATOR = '%7C'
 
 /**
  * The `maps` value for a list of companions, or `undefined` for no key at all.
@@ -83,7 +93,13 @@ export const MAPS_SEPARATOR = '|'
 export function serialiseMaps(refs: readonly PanelRef[]): string | undefined {
   if (refs.length === 0) return undefined
   return refs
-    .map((ref) => (ref.kind === 'remote' ? ref.uri : VACANT))
+    .map((ref) =>
+      // Only the separator, and only inside a member. Escaping the whole URI
+      // would double-encode it and cost the readability the pipe was chosen for
+      // — `maps=a.cool|b.cool` is a list at a glance and
+      // `maps=http%3A%2F%2F…` is not.
+      ref.kind === 'remote' ? ref.uri.split(MAPS_SEPARATOR).join(ESCAPED_SEPARATOR) : VACANT,
+    )
     .join(MAPS_SEPARATOR)
 }
 
@@ -100,7 +116,11 @@ export function parseMaps(value: string | undefined): PanelRef[] {
   for (const part of value.split(MAPS_SEPARATOR)) {
     const trimmed = part.trim()
     if (trimmed === '') continue
-    refs.push(trimmed === VACANT ? { kind: 'vacant' } : { kind: 'remote', uri: trimmed })
+    refs.push(
+      trimmed === VACANT
+        ? { kind: 'vacant' }
+        : { kind: 'remote', uri: trimmed.split(ESCAPED_SEPARATOR).join(MAPS_SEPARATOR) },
+    )
     if (refs.length >= MAX_PANELS - 1) break
   }
   return refs

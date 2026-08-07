@@ -441,8 +441,9 @@ export class AnnotationCard {
     // appearing always and refusing when clicked. The order is the order they
     // are listed in, which is the order the reader put them in and the only one
     // this code could justify: `a / b` and `b / a` are different questions and
-    // nothing here can guess which was meant. The row that results says which
-    // way round it went, and the ⇄ on it is how the other way is asked for.
+    // nothing here can guess which was meant. The row that results is named for
+    // the operation it is, so which way round it went is legible on the card;
+    // the other way round is a second combine of the same two rows.
     const pair =
       chosen.length === 2 && chosen.every((entry) => entry.kind === 'track')
         ? this.combineControl(chosen[0], chosen[1])

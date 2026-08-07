@@ -30,7 +30,7 @@ import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import {
   ViewStore,
-  differsOnlyInScale,
+  differsOnlyInPresentation,
   landingState,
   matrixLevel,
   overviewLevel,
@@ -3080,12 +3080,18 @@ export class Session {
     // `applyScale` rather than "do nothing": the change does not always come
     // from the panel. A pasted link or the back button moves the *hash* first,
     // and the mounted panel has to follow it.
+    //
+    // A *derivation* (§7.5) takes the same road for the same reason and one
+    // more: it is arithmetic over cells already in memory, so rebuilding to
+    // apply it would pay a worker round trip for nothing — and on a gated
+    // whole-genome map it would put the scan back behind its button.
     if (
       this.mounted !== null &&
       this.current !== null &&
-      differsOnlyInScale(this.mounted, state)
+      differsOnlyInPresentation(this.mounted, state)
     ) {
       this.current.applyScale?.(this.scaleOf(state))
+      this.rederive()
       this.mounted = state
       this.breadcrumb?.render(state)
       this.host.activity(this)
