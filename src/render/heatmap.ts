@@ -15,7 +15,14 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { Scale, autoRangeOfDisplay, displayValue, type ValueRange } from './scale'
+import {
+  Scale,
+  autoRangeOfDisplay,
+  autoSymmetricRange,
+  displayValue,
+  transformValue,
+  type ValueRange,
+} from './scale'
 
 // ---------------------------------------------------------------------------
 // Rasterisation — pure, no canvas, so it is testable under Node
@@ -107,6 +114,13 @@ export interface PooledDisplay {
   transform: Transform
   balanced: boolean
   /**
+   * The neutral value in **display** units, or `null` for an ordinary
+   * one-ended quantity. Part of the cache key like the two above: it decides
+   * both the reduction that produced {@link values} and the auto range read off
+   * them.
+   */
+  centre: number | null
+  /**
    * The auto range over {@link values}, memoised by {@link colorize} on first
    * demand.
    *
@@ -155,7 +169,18 @@ export function poolDisplay(
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
   const pooled = new Float32Array(width * height)
-  const pool: PooledDisplay = { width, height, strideX, strideY, values: pooled, transform, balanced }
+  const centre =
+    scale.neutral === undefined ? null : transformValue(scale.neutral, transform)
+  const pool: PooledDisplay = {
+    width,
+    height,
+    strideX,
+    strideY,
+    values: pooled,
+    transform,
+    balanced,
+    centre,
+  }
 
   // Nothing is pooled: a block small enough to draw a pixel per cell. The
   // general loop below still pays its four bounds and its NaN-max reduction for
@@ -165,6 +190,42 @@ export function poolDisplay(
   if (strideX === 1 && strideY === 1) {
     const n = nrows * ncols
     for (let i = 0; i < n; i++) pooled[i] = displayValue(values[i], transform, balanced)
+    return pool
+  }
+
+  // A diverging field is pooled by *departure* from neutral rather than by
+  // magnitude, and it cannot take the raw shortcut either. Both follow from the
+  // same fact: `|display - centre|` and `|raw - neutral|` do not order the same
+  // way across the two arms — under `log2` about 1, a cell of 4 is three away in
+  // raw units and two away in display units, while a cell of 0.25 is 0.75 away
+  // in raw and also two in display. Reducing on the raw distance would make the
+  // arm above neutral win every tie and quietly erase the other one.
+  const centreOf = pool.centre
+  if (centreOf !== null) {
+    for (let ry = 0; ry < height; ry++) {
+      const y0 = ry * strideY
+      const y1 = Math.min(y0 + strideY, nrows)
+      for (let rx = 0; rx < width; rx++) {
+        const x0 = rx * strideX
+        const x1 = Math.min(x0 + strideX, ncols)
+        let best = Number.NaN
+        let far = -1
+        for (let y = y0; y < y1; y++) {
+          const row = y * ncols
+          for (let x = x0; x < x1; x++) {
+            const raw = values[row + x]
+            if (Number.isNaN(raw)) continue
+            const t = displayValue(raw, transform, balanced)
+            const away = Math.abs(t - centreOf)
+            if (away > far) {
+              far = away
+              best = t
+            }
+          }
+        }
+        pooled[ry * width + rx] = best
+      }
+    }
     return pool
   }
 
@@ -229,7 +290,14 @@ export function colorize(
     // Memoised on the pooled block, because that is what it is a property of.
     // A colormap change cannot move it, and recomputing it there was the
     // dominant cost of the most common colour interaction there is.
-    pooled.autoRange ??= autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
+    // Symmetric about neutral where there is one. Reading a diverging field
+    // with the ordinary rule puts the colour that means "these agree" at an
+    // arbitrary point in the ramp, so a map of two identical files comes out
+    // uniformly coloured rather than uniformly neutral.
+    pooled.autoRange ??=
+      pooled.centre === null
+        ? autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
+        : autoSymmetricRange(values, pooled.centre)
     auto = pooled.autoRange
   }
   const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
@@ -2214,10 +2282,20 @@ export class HeatmapView {
   private rasterizeNow(): void {
     if (this.matrix === null) return
     const balanced = this.colorScale.balanced === true
+    // `centre` is in the key for the same reason the other two are: it selects
+    // the reduction, so a pooling made for counts is the wrong array for a ratio
+    // even at an identical transform. Compared in display units, which is what
+    // the pooled block stores, so switching derivation *and* transform together
+    // is still one comparison.
+    const centre =
+      this.colorScale.neutral === undefined
+        ? null
+        : transformValue(this.colorScale.neutral, this.colorScale.transform)
     if (
       this.pooled === null ||
       this.pooled.transform !== this.colorScale.transform ||
-      this.pooled.balanced !== balanced
+      this.pooled.balanced !== balanced ||
+      this.pooled.centre !== centre
     ) {
       this.pooled = poolDisplay(this.matrix, this.colorScale)
     }

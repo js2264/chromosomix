@@ -191,6 +191,16 @@ export interface ParsedRange {
  */
 export type Transform = 'log1p' | 'log10' | 'log2' | 'none'
 
+/**
+ * What two aligned files are reduced to (`render/compare.ts`).
+ *
+ * Here rather than beside the code that implements it, for `Transform`'s reason:
+ * the view state carries it, so it is part of the contract every layer codes
+ * against rather than a detail of the renderer. `render/compare.ts` owns the
+ * list and the guard.
+ */
+export type CompareOp = 'split' | 'ratio' | 'difference'
+
 export interface ColorScale {
   /** Low bound in transformed units. `NaN` asks for the auto rule. */
   vmin: number
@@ -206,6 +216,20 @@ export interface ColorScale {
    * `render/scale.ts`'s `displayValue`.
    */
   balanced?: boolean
+  /**
+   * The value that means "nothing to report", in **raw** units, for a quantity
+   * read against a middle rather than against a floor — `1` for a ratio, `0` for
+   * a difference. Absent for every ordinary count matrix.
+   *
+   * It changes two things that have to change together, and both live in
+   * `render/heatmap.ts`: the auto range becomes symmetric about it
+   * (`autoSymmetricRange`), and the pooling reduction stops taking the maximum.
+   * A contact map is pooled by its brightest cell because its signal *is* the
+   * bright cell; a ratio map pooled that way would show only the arm above
+   * neutral, so every region where the second file is the stronger one would
+   * vanish at fit zoom — the half of the picture a difference map exists for.
+   */
+  neutral?: number
 }
 
 /** A boundary line drawn across the heatmap, with the label it separates. */
@@ -311,6 +335,24 @@ export interface ViewState {
    * every link written before this field existed still resolves.
    */
   score?: string
+  /**
+   * Whether each cell is divided by what its genomic distance predicts
+   * (`render/derive.ts`).
+   *
+   * Beside {@link score} rather than folded into it, because it composes with
+   * every value in that list rather than being one more of them: the standard
+   * reading is observed over expected *of* balanced counts.
+   */
+  oe?: boolean
+  /**
+   * How two open files are put together — the diagonal split, or one derived
+   * field over the whole square (`render/compare.ts`).
+   *
+   * Meaningless with one file open, and dropped rather than defended: a link
+   * naming a ratio and one file lands on that file's own map, which is the same
+   * thing `uri2` does for a local second file that cannot be reopened (§11).
+   */
+  op?: CompareOp
   /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts

@@ -15,9 +15,28 @@
  * (§6.4) — but to a reader choosing what to look at it is one more answer to
  * "what am I seeing", and offering it as a tickbox beside a dropdown would be
  * splitting one question across two controls. The choice is flattened here and
- * unflattened into {@link ScoreChoice}'s two fields, which is the shape the
+ * unflattened into {@link ScoreChoice}'s three fields, which is the shape the
  * reader wants.
+ *
+ * The same argument admits the normalisations `render/derive.ts` computes, and
+ * they are the reason the list stopped being short. `balanced` is only offered
+ * on a file somebody ran `cooler balance` over, which most files are not, and a
+ * reader of one of those had exactly one entry — so the control disappeared
+ * entirely and the answer to "can I see this normalised" was no. VC, VC √ and
+ * ICE need nothing from the file but its counts, so they are always there, and
+ * they belong in this list rather than beside it because a reader picking
+ * between `balanced` and `ICE` is picking between two answers to one question:
+ * whose balancing, the file's or ours.
+ *
+ * Observed-over-expected is deliberately **not** in this list, and it is the one
+ * place the argument above stops. It does not answer "what number is in the
+ * cell" — it answers "compared to what", and it composes with every entry here
+ * (the standard pipeline is O/E *of* balanced counts). Folding it in would make
+ * `balanced` and `O/E` mutually exclusive, which is not a limitation of the
+ * arithmetic but only of the control; it gets a toggle of its own.
  */
+
+import type { Normalisation } from '../render/derive'
 
 /** One entry in the picker: what it says, and what it asks the reader for. */
 export interface ScoreChoice {
@@ -29,6 +48,16 @@ export interface ScoreChoice {
   balance: boolean
   /** `/pixels` column to read; absent means `count`. */
   value?: string
+  /**
+   * Normalisation to compute here from whatever was read; absent means none.
+   *
+   * Orthogonal to the two fields above, and in practice never combined with
+   * {@link balance}: correcting a matrix that has already been corrected is not
+   * a picture of anything. {@link scoreChoices} never emits both, so the
+   * exclusivity is a fact about the list rather than a rule the renderer has to
+   * enforce.
+   */
+  normalise?: Normalisation
 }
 
 /** The id of the plain, always-present choice. */
@@ -42,9 +71,16 @@ export const BALANCED_SCORE = 'balanced'
  * Counts first because every cooler has them and everything else is an
  * alternative *to* them; balanced immediately after, because on a file that
  * carries weights it is what most readers actually want and the pair is one
- * decision. The file's own extra columns come last, under their own names —
- * this code has no vocabulary for what `expected` or `qvalue` mean and does not
- * invent one.
+ * decision. Then the three the viewer can compute from counts alone, cheapest
+ * first — which is also weakest-assumption first, so a reader working down the
+ * list is asking for progressively more to be taken on trust. The file's own
+ * extra columns come last, under their own names — this code has no vocabulary
+ * for what `expected` or `qvalue` mean and does not invent one.
+ *
+ * `ice` sits *below* `balanced` rather than replacing it on a file that has
+ * both. They should agree, and where they do not the file's own weights are the
+ * better answer: a real balancing run filters bins before it starts, and this
+ * one deliberately does not (`render/derive.ts`).
  */
 export function scoreChoices(info: {
   hasWeights: boolean
@@ -55,6 +91,9 @@ export function scoreChoices(info: {
   return [
     { id: COUNT_SCORE, label: 'counts', balance: false },
     ...(info.hasWeights ? [{ id: BALANCED_SCORE, label: 'balanced', balance: true }] : []),
+    { id: 'vc', label: 'VC', balance: false, normalise: 'vc' as const },
+    { id: 'vcsqrt', label: 'VC √', balance: false, normalise: 'vcsqrt' as const },
+    { id: 'ice', label: 'ICE', balance: false, normalise: 'ice' as const },
     ...extras.map((key) => ({ id: key, label: key, balance: false, value: key })),
   ]
 }

@@ -32,6 +32,8 @@ export function presentationOf(compare: CompareRead | undefined): ComparePresent
     labels: compare.labels,
     normalise: compare.normalise,
     onNormaliseChange: (on) => compare.onNormaliseChange(on),
+    op: compare.op,
+    onOpChange: (op) => compare.onOpChange(op),
   }
 }
 

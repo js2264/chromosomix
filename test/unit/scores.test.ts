@@ -13,19 +13,43 @@ import { describe, expect, it } from 'vitest'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '@/ui/scores'
 
 describe('what the cells can be', () => {
-  it('offers counts alone for a file with nothing else', () => {
+  // The plainest file there is — no weights, no extra columns — and it still has
+  // a choice, which is the whole of the argument for computing normalisations
+  // here. Before, this file's picker had one entry and so was not drawn at all,
+  // and the answer to "can I see this normalised" was no.
+  it('offers the computed normalisations on a file that carries nothing but counts', () => {
     const choices = scoreChoices({ hasWeights: false, scoreColumns: ['count'] })
-    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE])
-    // One entry: the card must not draw a dropdown that cannot be used.
-    expect(choices).toHaveLength(1)
+    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, 'vc', 'vcsqrt', 'ice'])
+    // Counts first: everything else is an alternative *to* them.
+    expect(choices[0].normalise).toBeUndefined()
+    // None of them reads anything the file has not got.
+    for (const choice of choices.slice(1)) {
+      expect(choice.balance).toBe(false)
+      expect(choice.value).toBeUndefined()
+    }
   })
 
   it('adds balanced where there are weights, next to the counts it transforms', () => {
     const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count'] })
-    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, BALANCED_SCORE])
+    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, BALANCED_SCORE, 'vc', 'vcsqrt', 'ice'])
     expect(choices[1].balance).toBe(true)
     // Balancing is a transform, not a column: nothing else is read for it.
     expect(choices[1].value).toBeUndefined()
+    // And the file's own weights sit above the ones computed here, because where
+    // the two disagree the file's are the better answer: a real balancing run
+    // filters bins first and this one does not.
+    expect(choices[1].normalise).toBeUndefined()
+    expect(choices[4].normalise).toBe('ice')
+  })
+
+  // Never both at once. Correcting a matrix that has already been corrected is
+  // not a picture of anything, and keeping the two exclusive here is what saves
+  // the renderer from having to enforce it.
+  it('never asks for the file’s weights and a computed normalisation together', () => {
+    const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count', 'expected'] })
+    for (const choice of choices) {
+      expect(choice.balance && choice.normalise !== undefined).toBe(false)
+    }
   })
 
   // The file's own vocabulary, under the file's own names — this code has none
@@ -38,8 +62,16 @@ describe('what the cells can be', () => {
       hasWeights: true,
       scoreColumns: ['count', 'expected', 'qvalue'],
     })
-    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, BALANCED_SCORE, 'expected', 'qvalue'])
-    expect(choices[2]).toMatchObject({ value: 'expected', balance: false })
+    expect(choices.map((c) => c.id)).toEqual([
+      COUNT_SCORE,
+      BALANCED_SCORE,
+      'vc',
+      'vcsqrt',
+      'ice',
+      'expected',
+      'qvalue',
+    ])
+    expect(choices[5]).toMatchObject({ value: 'expected', balance: false })
   })
 
   it('resolves what a link asks for', () => {

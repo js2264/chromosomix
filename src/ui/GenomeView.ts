@@ -12,7 +12,9 @@ import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { cardTitle } from './icons'
-import { MatrixPanel, axisRegion, blockSummary, poolingNote } from './MatrixPanel'
+import { MatrixPanel, axisRegion, blockSummary, poolingNote,
+  type DerivePresentation,
+} from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
@@ -47,6 +49,13 @@ export interface GenomeViewProps {
   /** The picker's current choice, by id; `count` when absent. */
   score?: string
   onScoreChange(choice: ScoreChoice): void
+  /**
+   * The derived-values presentation (`render/derive.ts`), built by the session.
+   *
+   * Passed through rather than assembled here: four views mount the same panel,
+   * and a default decided in each is a default that comes to differ.
+   */
+  derive?: DerivePresentation
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
@@ -111,6 +120,7 @@ export class GenomeView {
       hideTitle: true,
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
+      ...(props.derive === undefined ? {} : { derive: props.derive }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

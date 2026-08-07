@@ -32,6 +32,7 @@ import {
   axisRegion,
   blockSummary,
   type AnnotationContext,
+  type DerivePresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -71,6 +72,13 @@ export interface RegionViewProps {
   /** What one sequence is called here: a contig, or a chromosome. */
   noun: string
   onScoreChange(choice: ScoreChoice): void
+  /**
+   * The derived-values presentation (`render/derive.ts`), built by the session.
+   *
+   * Passed through rather than assembled here: four views mount the same panel,
+   * and a default decided in each is a default that comes to differ.
+   */
+  derive?: DerivePresentation
   /**
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
@@ -163,6 +171,7 @@ export class RegionView {
       detachedControls: true,
       hideTitle: true,
       balance: props.balance,
+      ...(props.derive === undefined ? {} : { derive: props.derive }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

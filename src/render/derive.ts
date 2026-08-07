@@ -108,6 +108,32 @@ export function isNormalisation(value: string): value is Normalisation {
 export const BALANCE_MAX_ROUNDS = 200
 
 /**
+ * Cell visits one balancing pass is allowed in total, across all its rounds.
+ *
+ * The round cap alone is a cap on *iterations*, and iterations are not what
+ * costs: one round is one pass over the block, so 200 rounds over a 4,096²
+ * whole-genome overview is 3.3 billion cell visits and a freeze measured in
+ * seconds — on the main thread, at the moment a reader picks an entry from a
+ * dropdown. The blocks this is really for are far smaller (§2: a MAG at 5 kb is
+ * ~1,000 bins, so ~10⁶ cells, and the full 200 rounds cost less than the frame
+ * they land in), and the budget is what keeps the pathological case from being
+ * paid for by the ordinary one.
+ *
+ * Spent rather than refused, and a floor of a few rounds regardless: iterative
+ * correction converges geometrically, so a dozen rounds over a large block
+ * removes most of the bias the fixed point would, and stopping early is much
+ * closer to right than falling back to raw counts would be. What it is not is
+ * *converged*, which is why {@link balanceBlock} reports it.
+ */
+export const BALANCE_CELL_BUDGET = 2.5e8
+
+/** Rounds this block can afford, between a usable floor and the cap. */
+function roundsFor(cells: number): number {
+  if (cells <= 0) return BALANCE_MAX_ROUNDS
+  return Math.max(4, Math.min(BALANCE_MAX_ROUNDS, Math.floor(BALANCE_CELL_BUDGET / cells)))
+}
+
+/**
  * When the marginals are flat enough to stop.
  *
  * The variance of the marginals divided by their mean, which is the same
@@ -271,8 +297,20 @@ function scaleToUnitMean(marginal: Float64Array, power: 0.5 | 1): Float64Array {
  * Rows that are entirely empty are held at zero weight throughout and emitted as
  * `NaN`; they are excluded from the target, or a matrix that is mostly empty
  * would drive the target towards zero and take every real row with it.
+ *
+ * `converged` is `false` where the rounds ran out — see
+ * {@link BALANCE_CELL_BUDGET}. The values are still the best scaling found and
+ * are still worth drawing; what a caller must not do is describe them as
+ * balanced without qualification, which is what {@link DerivedValues.scope}
+ * carries to the caption.
  */
-export function balanceBlock(block: BlockValues): Float32Array {
+export interface BalanceResult {
+  values: Float32Array
+  /** Whether the marginals reached {@link BALANCE_TOLERANCE} before the rounds ran out. */
+  converged: boolean
+}
+
+export function balanceBlock(block: BlockValues): BalanceResult {
   const { nrows, ncols, values } = block
   const symmetric =
     nrows === ncols &&
@@ -287,7 +325,9 @@ export function balanceBlock(block: BlockValues): Float32Array {
 
   const rowSum = new Float64Array(nrows)
   const colSum = new Float64Array(ncols)
-  for (let round = 0; round < BALANCE_MAX_ROUNDS; round++) {
+  const rounds = roundsFor(nrows * ncols)
+  let converged = false
+  for (let round = 0; round < rounds; round++) {
     rowSum.fill(0)
     colSum.fill(0)
     for (let r = 0; r < nrows; r++) {
@@ -309,7 +349,13 @@ export function balanceBlock(block: BlockValues): Float32Array {
 
     if (symmetric) {
       const target = meanOfActive(rowSum, rowWeight)
-      if (!(target > 0)) break
+      // Nothing left to balance — an empty block, or one every bin of which was
+      // dropped. Converged in the only sense available: another round would
+      // change nothing.
+      if (!(target > 0)) {
+        converged = true
+        break
+      }
       let drift = 0
       for (let r = 0; r < nrows; r++) {
         if (rowWeight[r] === 0) continue
@@ -325,13 +371,19 @@ export function balanceBlock(block: BlockValues): Float32Array {
         rowWeight[r] *= Math.sqrt(target / mass)
         colWeight[r] = rowWeight[r]
       }
-      if (drift < BALANCE_TOLERANCE) break
+      if (drift < BALANCE_TOLERANCE) {
+        converged = true
+        break
+      }
       continue
     }
 
     const rowTarget = meanOfActive(rowSum, rowWeight)
     const colTarget = meanOfActive(colSum, colWeight)
-    if (!(rowTarget > 0) || !(colTarget > 0)) break
+    if (!(rowTarget > 0) || !(colTarget > 0)) {
+      converged = true
+      break
+    }
     let drift = 0
     for (let r = 0; r < nrows; r++) {
       if (rowWeight[r] === 0) continue
@@ -353,7 +405,10 @@ export function balanceBlock(block: BlockValues): Float32Array {
       drift = Math.max(drift, Math.abs(mass / colTarget - 1))
       colWeight[c] *= colTarget / mass
     }
-    if (drift < BALANCE_TOLERANCE) break
+    if (drift < BALANCE_TOLERANCE) {
+      converged = true
+      break
+    }
   }
 
   const out = new Float32Array(nrows * ncols)
@@ -365,7 +420,7 @@ export function balanceBlock(block: BlockValues): Float32Array {
       out[base + c] = rw > 0 && cw > 0 ? rw * values[base + c] * cw : Number.NaN
     }
   }
-  return out
+  return { values: out, converged }
 }
 
 /** The mean of the entries whose weight is still live. */
@@ -507,6 +562,96 @@ export function observedOverExpected(
     }
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// The two of them together
+// ---------------------------------------------------------------------------
+
+/** What a caller asks for: a normalisation, a baseline, either, or neither. */
+export interface Derivation {
+  normalise?: Normalisation
+  /** Divide by what the genomic distance predicts. */
+  expected?: boolean
+}
+
+/**
+ * Apply a normalisation and then a baseline, in that order, and describe the
+ * result.
+ *
+ * The order is not a preference. Both steps are estimates *from the block*, and
+ * the distance-decay curve is an average over cells — so measuring it before the
+ * coverage bias has been taken out means measuring it partly on the bias, and
+ * every cell of a badly-covered bin is then compared against a baseline its own
+ * under-coverage helped set. Normalise first, and the curve is a statement about
+ * distance alone. It is also the order cooltools uses, for the same reason.
+ *
+ * The identity case returns the block's own array rather than a copy. Nothing
+ * downstream mutates it, and the alternative is a needless pass over up to 16 M
+ * cells on the single commonest path there is — a reader who asked for none of
+ * this.
+ */
+export function deriveBlock(
+  block: BlockValues,
+  derivation: Derivation,
+  runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
+): DerivedValues {
+  const parts: string[] = []
+  let scope: string | null = null
+  let values = block.values
+
+  switch (derivation.normalise) {
+    case 'vc':
+      values = coverageNormalise(block, 1)
+      parts.push('VC')
+      break
+    case 'vcsqrt':
+      values = coverageNormalise(block, 0.5)
+      parts.push('VC √')
+      break
+    case 'ice': {
+      const balanced = balanceBlock(block)
+      values = balanced.values
+      parts.push('ICE')
+      // Said rather than hidden: a partly-converged scaling is a better picture
+      // than raw counts and a worse one than the label promises, and the reader
+      // is the one who can decide whether that matters.
+      if (!balanced.converged) scope = 'stopped before convergence — block too large'
+      break
+    }
+    default:
+      break
+  }
+
+  if (derivation.expected === true) {
+    const stepped = { ...block, values }
+    values = observedOverExpected(stepped, runs)
+    parts.push('O/E')
+  }
+
+  return {
+    values,
+    // Only the baseline produces a middle. A normalisation rescales a count and
+    // leaves it a count — still a quantity with a floor at zero — which is why
+    // `VC` alone stays on a sequential ramp and `O/E` does not.
+    neutral: derivation.expected === true ? 1 : null,
+    label: parts.length === 0 ? 'counts' : parts.join(' · '),
+    scope,
+  }
+}
+
+/**
+ * The transform a derived quantity should be read on, where it has an opinion.
+ *
+ * A ratio wants `log2`, so that twice and half are the same distance either side
+ * of neutral; a difference is already symmetric and wants none. Offered as a
+ * *default* the panel adopts on the way in and gives back on the way out —
+ * nothing here forbids reading a ratio on a linear scale, it only refuses to
+ * make that the thing a reader is shown without asking.
+ */
+export function preferredTransform(neutral: number | null): 'log2' | 'none' | null {
+  if (neutral === null) return null
+  return neutral === 1 ? 'log2' : 'none'
 }
 
 /** The largest bin separation any cell of the block can have. */

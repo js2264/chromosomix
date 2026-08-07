@@ -41,7 +41,7 @@ import {
 import { recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import { resetViewpoint } from '../ui/viewpoint'
-import { scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
+import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
   buildConfig,
@@ -50,7 +50,9 @@ import {
   resolveConfig,
   type SessionConfig,
 } from '../state/SessionConfig'
-import type { Transform, ViewState } from '../types'
+import type { CompareOp, Transform, ViewState } from '../types'
+import type { Normalisation } from '../render/derive'
+import type { DerivePresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
@@ -2461,7 +2463,21 @@ export class Session {
    * has been dropped on it.
    */
   private compareKey(): string {
-    return this.compare === null ? '' : `${this.compare.uri}|${String(this.normalising())}`
+    return this.compare === null
+      ? ''
+      : `${this.compare.uri}|${String(this.normalising())}|${this.compareOp()}`
+  }
+
+  /**
+   * How the two open files are put together, from the view state.
+   *
+   * `split` wherever there is no second file, so that a link carrying `op=ratio`
+   * and one file lands on that file's own map rather than on a comparison with
+   * nothing — the same thing a `uri2` naming a local file does (§11).
+   */
+  private compareOp(): CompareOp {
+    if (this.compare === null) return 'split'
+    return this.store.state?.op ?? 'split'
   }
 
   private dropCompare(): void {
@@ -2495,6 +2511,14 @@ export class Session {
       normalise: this.normalising(),
       onNormaliseChange: (on) => {
         remember(this.memoryKey(file.uri), 'compare:normalise', on)
+        this.remount()
+      },
+      // In the view state rather than in session memory, unlike the depth match
+      // beside it: that one changes how the picture is drawn, this one changes
+      // what is in it. A link naming a ratio has to produce a ratio.
+      op: this.compareOp(),
+      onOpChange: (op) => {
+        this.store.patch(op === 'split' ? { op: undefined } : { op })
         this.remount()
       },
       onFailure: (message) => {
@@ -2622,7 +2646,12 @@ export class Session {
    */
   private setScore(choice: ScoreChoice): void {
     this.setBalance(choice.balance)
-    this.store.patch({ score: choice.value === undefined ? undefined : choice.id })
+    // Every choice but the two legacy ones writes its id. The test cannot be
+    // "does it name a column" any more: a computed normalisation names none and
+    // still has to be carried, or picking `VC` would leave the hash saying
+    // `counts` and a shared link would show the wrong numbers.
+    const legacy = choice.id === COUNT_SCORE || choice.id === BALANCED_SCORE
+    this.store.patch({ score: legacy ? undefined : choice.id })
   }
 
   /**
@@ -2634,8 +2663,43 @@ export class Session {
    * untrusted input.
    */
   private valueOf(state: ViewState): string | undefined {
+    return this.scoreOf(state).value
+  }
+
+  /**
+   * The normalisation to compute from the block, or `undefined` for none.
+   *
+   * Resolved through the picker's own list for {@link valueOf}'s reason: a hash
+   * naming one has to land on something this build can serve, and there is
+   * exactly one place that decides what that is.
+   */
+  private normaliseOf(state: ViewState): Normalisation | undefined {
+    return this.scoreOf(state).normalise
+  }
+
+  /** The picker entry the state resolves to, whichever field named it. */
+  private scoreOf(state: ViewState): ScoreChoice {
     const props = this.scoreProps(state)
-    return scoreFor(scoreChoices(props), { ...props, balance: state.balance }).value
+    return scoreFor(scoreChoices(props), { ...props, balance: state.balance })
+  }
+
+  /**
+   * What every map view needs to draw and drive the baseline toggle.
+   *
+   * Built here rather than in each view for the reason the score picker's props
+   * are: four views mount the same panel, and a default decided four times is a
+   * default that comes to differ in three of them.
+   */
+  private derivePresentation(state: ViewState): DerivePresentation {
+    const normalise = this.normaliseOf(state)
+    return {
+      ...(normalise === undefined ? {} : { normalise }),
+      expected: state.oe === true,
+      onExpectedChange: (on) => {
+        this.store.patch({ oe: on ? true : undefined })
+        this.remount()
+      },
+    }
   }
 
   /** What every map view needs to build its score picker. */
@@ -3135,6 +3199,7 @@ export class Session {
           namesGenomes: file.info.hasGenomes,
           onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScoreChange: (choice) => this.setScore(choice),
+          derive: this.derivePresentation(state),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.store.set({
@@ -3204,6 +3269,7 @@ export class Session {
       selection: { ...selection, bins, contigs },
       onLevelChange: () => {},
       onScoreChange: (choice) => this.setScore(choice),
+      derive: this.derivePresentation(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
         this.store.set({
@@ -3290,6 +3356,7 @@ export class Session {
       value: this.valueOf(state),
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
+      derive: this.derivePresentation(state),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
@@ -3323,6 +3390,7 @@ export class Session {
       value: this.valueOf(state),
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
+      derive: this.derivePresentation(state),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -3367,6 +3435,7 @@ export class Session {
       value: this.valueOf(state),
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
+      derive: this.derivePresentation(state),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
