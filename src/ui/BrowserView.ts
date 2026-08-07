@@ -1726,6 +1726,7 @@ export class BrowserView {
         axis: this.axis,
         domain: lane.frame.domain,
         pixels: this.scale.pixels,
+        ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
       })
       lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
     }

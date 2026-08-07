@@ -933,6 +933,7 @@ export class AnnotationLanes {
         axis,
         domain: frame.domain,
         pixels: Math.abs(frame.alongTo - frame.alongFrom),
+        ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
       }) ?? null
     )
   }

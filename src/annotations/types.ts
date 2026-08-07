@@ -33,6 +33,8 @@
  * it is kept because "the annotation" and "a peak set" are not the same thing on
  * screen even when the file format is.
  */
+import type { TrackOp } from './derived'
+
 export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence' | 'viewpoint'
 
 /**
@@ -441,6 +443,17 @@ export interface AnnotationEntry {
    * re-read after a reload, or to report a contig overlap against.
    */
   source: AnnotationSource | { kind: 'detached'; name: string } | { kind: 'derived'; name: string }
+  /**
+   * The two tracks this one is computed from, where it is computed from any.
+   *
+   * Ids rather than samples, because the operands are ordinary rows with their
+   * own fetches and their own caches: a derived lane holds no data of its own and
+   * reads whatever the two it names have in hand at the moment it is drawn
+   * (`annotations/derived.ts`). Which is also why an operand that is removed
+   * leaves this row unable to draw rather than wrong — `annotations/store.ts`
+   * takes the derived row with it.
+   */
+  derivedFrom?: { a: string; b: string; op: TrackOp }
   status: AnnotationStatus
   /** Set when `status === 'error'`; the message is shown in the row. */
   error?: string
