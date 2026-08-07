@@ -19,8 +19,10 @@ import { describe, expect, it } from 'vitest'
 
 import { LANE_EDGES, type LaneEdge } from '../../src/annotations/types'
 import {
+  BORDER_RULE,
   GRIP_GAP,
   acrossToCanvas,
+  borderRuleAt,
   canvasToAcross,
   gripBox,
   gripFrom,
@@ -214,6 +216,45 @@ describe('which way an unflipped lane grows', () => {
       expect([0, frame.thickness]).toContain(valueAcross(frame, 0))
       expect([0, frame.thickness]).toContain(valueAcross(frame, 1))
       expect(valueAcross(frame, 0)).not.toBe(valueAcross(frame, 1))
+    }
+  })
+})
+
+/**
+ * The rule that marks the border a resize drag grabs.
+ *
+ * It is drawn a pixel outside the lane, in the gap before the next one — and the
+ * last lane of a stack has no gap, because its far edge *is* the canvas's own.
+ * A rule centred past that edge is drawn entirely outside the canvas: invisible,
+ * while the drag it announces goes on working perfectly. That is the worst of
+ * both, because a reader finds the gesture by accident or not at all, and it is
+ * the kind of thing that fails silently in exactly one of a stack's lanes.
+ */
+describe('the rule on a lane’s draggable border', () => {
+  const total = 200
+
+  it('sits in the gap for a lane with one after it', () => {
+    // Below and beside the map, where outward runs with the canvas…
+    expect(borderRuleAt(90, 1, total)).toBe(91)
+    // …and above it and to its left, where it runs against it.
+    expect(borderRuleAt(110, -1, total)).toBe(109)
+  })
+
+  it('stays inside the canvas on the last lane of a stack', () => {
+    // The last lane's far edge is the canvas's own end, whichever end that is.
+    expect(borderRuleAt(total, 1, total)).toBe(total - BORDER_RULE / 2)
+    expect(borderRuleAt(0, -1, total)).toBe(BORDER_RULE / 2)
+  })
+
+  // The property the two cases above are examples of, and the one that actually
+  // matters: wherever the border is, the whole stroke lands on the canvas.
+  it('never draws a stroke outside the canvas, at any border', () => {
+    for (const outward of [1, -1] as const) {
+      for (let border = 0; border <= total; border += 1) {
+        const at = borderRuleAt(border, outward, total)
+        expect(at - BORDER_RULE / 2).toBeGreaterThanOrEqual(0)
+        expect(at + BORDER_RULE / 2).toBeLessThanOrEqual(total)
+      }
     }
   })
 })

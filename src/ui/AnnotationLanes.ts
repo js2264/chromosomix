@@ -44,10 +44,11 @@ import {
   type FeatureLayout,
 } from '../render/features'
 import {
+  BORDER_RULE,
   GRIP_ROOM,
   GROUP_BAR,
-  acrossToCanvas,
   barPath,
+  borderRuleAt,
   clipLane,
   drawGrip,
   drawGroupBars,
@@ -237,6 +238,17 @@ interface Lane {
    * place a reader is certainly looking at the moment they need it.
    */
   prompt: string | null
+  /**
+   * The canvas coordinate of the border a resize drag grabs — the lane's far
+   * edge, away from the map.
+   *
+   * The **slot's**, not the frame's, and those are not always the same: a lane
+   * that keeps a gutter clear of its own signal ({@link AnnotationLanes.gutterOf})
+   * has a frame short of its slot at whichever end the gutter came off. What a
+   * reader can take hold of is the slot's edge, so that is what the rule marking
+   * it has to be drawn on.
+   */
+  border: number
   /**
    * Where the 4C anchor falls on **this lane's own axis**, in matrix units.
    *
@@ -817,7 +829,15 @@ export class AnnotationLanes {
           profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
         })
       }
-      return { entry: slot.entry, overlaid: slot.overlaid, frame, profiles, prompt, anchor }
+      return {
+        entry: slot.entry,
+        overlaid: slot.overlaid,
+        frame,
+        border: this.nearEdgeOf(edge, slot) + laneOutward(edge) * slot.thickness,
+        profiles,
+        prompt,
+        anchor,
+      }
     })
   }
 
@@ -1098,10 +1118,9 @@ export class AnnotationLanes {
       if (geometry.border === entry.id) {
         ctx.save()
         ctx.strokeStyle = geometry.palette.crosshair
-        ctx.lineWidth = 2
+        ctx.lineWidth = BORDER_RULE
         ctx.beginPath()
-        // A pixel past the lane's far edge, whichever canvas direction that is.
-        const at = acrossToCanvas(frame, frame.thickness) + laneOutward(edge)
+        const at = borderRuleAt(lane.border, laneOutward(edge), this.thicknessOf(edge))
         if (laneIsHorizontal(edge)) {
           ctx.moveTo(frame.alongFrom, at)
           ctx.lineTo(frame.alongTo, at)
