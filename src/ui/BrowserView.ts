@@ -1239,7 +1239,14 @@ export class BrowserView {
       fonts: { ruler: scaleFont(RULER_FONT), tick: scaleFont(TICK_FONT) },
     }
     this.bands = drawRuler(ctx, ruler)
-    drawBoundaries(ctx, ruler, this.rulerHeight, height)
+    // Where the tracks end, which on screen is not where the canvas does: the
+    // canvas reaches the foot of the column so that a reader can point below the
+    // stack ({@link screenHeight}). What follows the pointer belongs down there
+    // and what describes the *picture* does not — a sequence boundary is a mark
+    // on the tracks, and a rule carrying it through a screen's worth of blank
+    // space is a divider between two things that are not there.
+    const foot = this.heightOf(this.lanes)
+    drawBoundaries(ctx, ruler, this.rulerHeight, foot)
 
     this.layouts.clear()
     this.rangeHits = []
@@ -1312,7 +1319,10 @@ export class BrowserView {
       ctx.beginPath()
       const edge = snapTo(this.gutter, this.dpr)
       ctx.moveTo(edge, this.rulerHeight)
-      ctx.lineTo(edge, height)
+      // To the foot of the *tracks*, for the reason the boundaries stop there:
+      // the column holds names, the names are beside the tracks, and its edge is
+      // as long as the thing it is the edge of.
+      ctx.lineTo(edge, foot)
       ctx.stroke()
       ctx.restore()
     }

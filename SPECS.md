@@ -314,6 +314,11 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
+Only what follows the pointer goes down there. Everything that describes the *picture* — the sequence
+boundaries, the name column's own edge — stops with the tracks: a boundary is a mark *on* the tracks,
+and a rule carrying it through a screen's worth of blank space is a divider between two things that
+are not there.
+
 Each lane carries its own controls — colour, `auto`, a ceiling slider, its group — revealed by
 pointing at it and drawn under the track's name rather than over its data. They are transparent to
 the pointer while they are hidden, so a lane that has not been pointed at yet has no invisible band
