@@ -16,6 +16,7 @@
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
+import { SearchBox } from './SearchBox'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 const CORE_ORDER = ['name', 'length']
@@ -31,6 +32,22 @@ export interface ContigsTableOptions {
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenContig(name: string): void
+  /**
+   * Go straight to a window inside a sequence: `chrIV:1,200,000-1,210,000`.
+   *
+   * The door this view did not have. Everything else here opens a *whole*
+   * something — a whole sequence by clicking its row, the whole file from the
+   * toolbar — and on a mammalian cooler the smaller of those two is still a
+   * quarter of a gigabase. A reader who knows the ten kilobases they want had to
+   * open the chromosome that contains them and narrow from there, which is a
+   * large read taken to reach a small one; the reader is already paying for it
+   * by the time the box they need appears.
+   *
+   * The read itself was never the problem. `readDenseMatrix` bounds every query
+   * by `bin1_offset`, so ten bins cost ten bins' worth of pixels whichever view
+   * asks — the whole of what was missing is somewhere to ask from.
+   */
+  onOpenRegion?(region: string): void
   /** Show every ticked sequence as one map — see the genomes table's twin. */
   onOpenSelection?(names: string[]): void
   /**
@@ -46,6 +63,7 @@ export interface ContigsTableOptions {
 export class ContigsTable {
   readonly el: HTMLElement
   private readonly table: VirtualTable
+  private readonly locus: SearchBox | null
 
   constructor(options: ContigsTableOptions) {
     const payload = options.data.table
@@ -128,6 +146,24 @@ export class ContigsTable {
       )
     }
 
+    // Optional on the class, always passed by the session: a table with nowhere
+    // to send a locus should not grow a box that pretends otherwise, and this
+    // one is mounted from two places.
+    const go = options.onOpenRegion
+    this.locus =
+      go === undefined
+        ? null
+        : new SearchBox({
+            placeholder: 'contig, or contig:start-end',
+            title:
+              'Open a window inside a sequence without opening the whole of it first — ' +
+              'chrIV:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
+              'cooler. The same box the / key opens.',
+            onSubmit: (text) => {
+              if (text !== '') go(text)
+            },
+          })
+
     this.el = el(
       'section',
       { class: 'view view-contigs' },
@@ -147,14 +183,25 @@ export class ContigsTable {
             'Click a contig to open it as a region. Add coordinates in the region box ' +
               'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
         }),
+        ...(this.locus === null ? [] : [this.locus.el]),
       ),
       this.table.el,
     )
   }
 
-  /** The `/` key: a table's box is the filter above it. */
+  /**
+   * The `/` key.
+   *
+   * The **locus** box where there is one, and the filter otherwise. `/` means
+   * "where do I want to be" in every other view of this application — it is the
+   * key that opens the region bar on a map and the search field in the browser —
+   * and a table is not the place for it to mean something else. The filter keeps
+   * its own box directly above the rows, visible and one click away, which is
+   * where a reader narrowing a list is already looking.
+   */
   focusSearch(): void {
-    this.table.focusSearch()
+    if (this.locus !== null) this.locus.focus()
+    else this.table.focusSearch()
   }
 
   /** Release the table's listeners and flush its pending filter state. */

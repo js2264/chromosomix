@@ -1812,6 +1812,21 @@ p {
   margin-bottom: 0.75rem;
 }
 
+/* The locus box under a table's heading and hint, not beside them: the hint is
+   a paragraph two lines long at this width, and a box floated next to it would
+   be a control hanging off the end of a sentence. Bounded rather than
+   full-width, so it reads as one field a coordinate goes into rather than as a
+   second search over the table below it. */
+.view-head > .search-box {
+  /* `max-width`, not the `flex` basis the class carries for the toolbars it
+     usually sits in: `.view-head` is a block, so a flex basis on a child of it
+     is a declaration nothing reads, and the box ran the full width of the table
+     below — which made a field for one coordinate look like a second search
+     over the rows. */
+  max-width: 26rem;
+  margin-top: 0.5rem;
+}
+
 .table {
   display: flex;
   flex-direction: column;

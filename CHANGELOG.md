@@ -251,6 +251,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   through every lane — so it is in **Map** and in **Tracks**, one key over one
   store, and pressing either moves both.
 
+- **A locus box on the two table views.** The landing screen of a cooler is its
+  chromosome table and of a metacool its genome table, and both offered exactly
+  two doors: a whole sequence by clicking its row, or the whole file from the
+  toolbar. A reader who knew the ten kilobases they wanted had to open the
+  chromosome around them and narrow from there — a large read taken to reach a
+  small one, and the box that would have taken them straight there only appeared
+  once they had paid for it. Both tables now carry the box, `/` opens it, and
+  `chrIV:1,200,000-1,210,000` goes to a ten-bin block without the chromosome
+  ever being read. The read path needed nothing: `readDenseMatrix` has always
+  bounded a query by `bin1_offset`, so ten bins have always cost ten bins' worth
+  of pixels — what was missing was somewhere to ask from.
+
 - **Stretch and shrink are a mirrored pair.** `unfold-vertical` against
   `fold-vertical`, everywhere the two sit together: two arrows apart and two
   arrows together, which is what the pair actually does. The old mark was a
