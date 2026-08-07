@@ -7,7 +7,7 @@
  * be absorbed into the one before it rather than given a row of its own, and
  * then a chromosome has one bin *fewer* than the division says.
  *
- * `public/demo/Yeast_mpneumoniae_G2M.mcool` (cooler 0.8.11) is such a file at
+ * `demo/yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool` (cooler 0.8.11) is such a file at
  * every resolution, and at 2 kb five chromosomes are affected — I, VI, XII, XIV
  * and XVI, the ones whose 1 kb bin count was odd. The
  * extra bin the arithmetic returns is the *first bin of the next chromosome*,
@@ -28,7 +28,7 @@ import { parseMetacoolerRange } from '../../src/metacooler/range'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 
 const FILE = decodeURIComponent(
-  new URL('../../public/demo/Yeast_mpneumoniae_G2M.mcool', import.meta.url).pathname,
+  new URL('../../demo/yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool', import.meta.url).pathname,
 )
 
 /** The five affected chromosomes at 2 kb, and what the division wrongly adds. */

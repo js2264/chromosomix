@@ -1,11 +1,19 @@
 /**
- * The demo sessions published beside the app.
+ * The demo sessions published on the lab's bucket.
  *
- * `public/demo/` is copied into the build verbatim, so these are served from
- * the app's own origin (see docs/deploy.md). That is not a shortcut around
- * §11: the reader takes exactly the remote path it takes for a bucket — a
- * `HEAD`, then bounded range `GET`s — and only the CORS half of the hosting
- * requirements falls away, because there is no second origin to negotiate with.
+ * They used to ship inside the bundle, in `public/demo/`, which put 250 MB of
+ * Hi-C into every Pages artifact and every desktop checkout — and made the
+ * deployed site read them through the *whole-object fallback*, because Pages
+ * gzips `application/octet-stream` and a gzipped body cannot be range-read
+ * (docs/hosting.md). Moving them to S3 fixes both at once: the app is a few MB
+ * again, and the demos are now read the way §11 says a published dataset is
+ * read — a `HEAD`, then bounded range `GET`s — which means the landing page
+ * exercises the same path a reader's own bucket will.
+ *
+ * The price is the half of the hosting requirements that same-origin hosting
+ * used to waive: the bucket must answer a CORS preflight and expose
+ * `Content-Length` and `Content-Range`. That is bucket configuration, not code,
+ * and `scripts/publish-demo.sh` applies it alongside the upload.
  *
  * **Every entry in the picker is a session file, not a data file.** A `.cool`
  * in the list could only ever offer what dropping that file offers: a map at
@@ -17,26 +25,36 @@
  * name, and choosing one is the same gesture as dropping a session somebody
  * sent you. Nothing here is a second way of opening a file.
  *
- * URLs are built from `BASE_URL` and made absolute against the page, for two
- * reasons: the base is `/` in dev and `/<repo>/` on Pages, and a view state
- * carrying a *relative* URI would not survive being shared — `inferSource` in
- * `app/Session.ts` re-opens a link only when its path is `http(s)://`. The
- * files each config *names* stay relative inside it, and are resolved against
- * the config's own URL on the way in (`resolveConfig`), which is what lets one
- * directory of sessions work in dev, on Pages and in the desktop build.
+ * Each session sits in the bucket folder holding the files it names, and the
+ * names *inside* it stay relative — resolved against the config's own URL on
+ * the way in (`resolveConfig`). That is what keeps a dataset folder a
+ * self-contained thing: `demo/yeast/` can be copied to another bucket, or
+ * served off a laptop, and both of its sessions still open. It is also why
+ * moving the data to S3 changed no line of any `.metacooler.json`.
  */
 
 declare const __DEMO_BASE__: string
 
 /**
- * Where the demos are, when they are not beside the app.
+ * The published root, with its trailing slash: one folder per dataset under it.
  *
- * Empty on the web, where `BASE_URL` resolved against the page is right by
- * construction — the files are in `public/demo/` and ship with the bundle. Set
- * to an absolute origin in the desktop build, which serves its renderer from
- * `app://viewer` and publishes no demos of its own; those URLs then go through
- * the *remote* reader, which needs a `HEAD` and bounded range `GET`s that a
- * static handler over a packaged directory does not answer.
+ * The repository's own `demo/` directory mirrors this exactly — it is what
+ * `scripts/publish-demo.sh` uploads and what `demo-examples.test.ts` checks —
+ * so the tree on disk and the tree on the bucket are the same tree, and a demo
+ * that is broken on the site is broken in CI first.
+ */
+export const DEMO_BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/'
+
+/**
+ * Where to read the demos from, when it is not {@link DEMO_BUCKET}.
+ *
+ * Empty in both shipped builds, which is what makes the web target and the
+ * desktop target read the identical URLs — the demos are no longer "beside the
+ * app" in either one, so there is no longer a per-target base to get wrong.
+ * The override survives as a build-time escape hatch (`DEMO_BASE=… vite build`)
+ * for the two cases that want it: a fork publishing its own bucket, and
+ * `python3 -m http.server` over a local copy of `demo/` when the network is
+ * not available.
  *
  * `typeof` because `vitest` applies no `define` block (see `version.ts`).
  */
@@ -63,9 +81,21 @@ export interface Example {
  * provenance is a screenshot: it shows the viewer working and tells you nothing
  * you could check. And each one says what the *session* adds on top of the
  * file, because that is the part a reader cannot see from the name.
+ *
+ * `folder` is the dataset's own directory under {@link DEMO_BUCKET}, and it is
+ * where every file that session names is looked for: two entries sharing a
+ * folder — as the two yeast sessions do — are two figures over one copy of the
+ * data, not two copies of it.
  */
-const DEMO: Array<{ file: string; label: string; note: string; kind: 'map' | 'genome' }> = [
+const DEMO: Array<{
+  folder: string
+  file: string
+  label: string
+  note: string
+  kind: 'map' | 'genome'
+}> = [
   {
+    folder: 'mock-community',
     file: 'Mock_microbial_community.metacooler.json',
     label: 'Mock microbial community — 49 MAGs, 1/2/4 kb ladder (mmetacool)',
     kind: 'map',
@@ -76,6 +106,7 @@ const DEMO: Array<{ file: string; label: string; note: string; kind: 'map' | 'ge
       '(SRA SRR32680160; DOI: 10.1038/s41564-025-02108-2)',
   },
   {
+    folder: 'yeast',
     file: 'Yeast_microC.metacooler.json',
     label: 'Yeast micro-C, G2/M — a map with tracks on both edges (cool)',
     kind: 'map',
@@ -87,6 +118,7 @@ const DEMO: Array<{ file: string; label: string; note: string; kind: 'map' | 'ge
       '(DOI: 10.1126/science.adm9466)',
   },
   {
+    folder: 'yeast',
     file: 'Yeast_tracks.metacooler.json',
     label: 'Yeast chromatin and transcription — a genome browser, no map (bigWig)',
     kind: 'genome',
@@ -119,19 +151,32 @@ interface DemoAnnotation {
   label: string
 }
 
-const DEMO_ANNOTATIONS: Record<string, DemoAnnotation[]> = {
-  'Yeast_microC_G2M_1kb.cool': [
-    { file: 'Yeast_annotations.gtf', label: 'genes' },
-    { file: 'Yeast_MNase.bw', label: 'MNase' },
-    { file: 'Yeast_ATAC.bw', label: 'ATAC' },
-    { file: 'Yeast_ChIP_Pol2-vs-input.bw', label: 'Pol II / input' },
-    { file: 'Yeast_RNA_fwd.bw', label: 'RNA +' },
-    { file: 'Yeast_RNA_rev.bw', label: 'RNA −' },
-    { file: 'Yeast_Shotgun.bw', label: 'shotgun' },
-    { file: 'Yeast_ATAC.narrowPeak', label: 'ATAC peaks' },
-    { file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak', label: 'Pol II peaks' },
-    { file: 'Yeast_microC_loops.tsv', label: 'loops' },
-  ],
+/**
+ * The shelf beside one map: the dataset folder it lives in, and what is in it.
+ *
+ * The folder is recorded even though {@link demoAnnotationsFor} never reads it
+ * — that function resolves against the *map's own URL*, which is the only thing
+ * that also works for a copy of the folder served from somewhere else. It is
+ * here for the test, which has to find these files on disk, and writing it down
+ * once beside the names is what keeps the two from disagreeing about where the
+ * data lives.
+ */
+const DEMO_ANNOTATIONS: Record<string, { folder: string; entries: DemoAnnotation[] }> = {
+  'Yeast_microC_G2M_1kb.cool': {
+    folder: 'yeast',
+    entries: [
+      { file: 'Yeast_annotations.gtf', label: 'genes' },
+      { file: 'Yeast_MNase.bw', label: 'MNase' },
+      { file: 'Yeast_ATAC.bw', label: 'ATAC' },
+      { file: 'Yeast_ChIP_Pol2-vs-input.bw', label: 'Pol II / input' },
+      { file: 'Yeast_RNA_fwd.bw', label: 'RNA +' },
+      { file: 'Yeast_RNA_rev.bw', label: 'RNA −' },
+      { file: 'Yeast_Shotgun.bw', label: 'shotgun' },
+      { file: 'Yeast_ATAC.narrowPeak', label: 'ATAC peaks' },
+      { file: 'Yeast_ChIP_Pol2-vs-input.narrowPeak', label: 'Pol II peaks' },
+      { file: 'Yeast_microC_loops.tsv', label: 'loops' },
+    ],
+  },
 }
 
 /** One loadable annotation, with the URL resolved for wherever this is served. */
@@ -142,35 +187,38 @@ export interface DemoAnnotationLink extends DemoAnnotation {
 /**
  * The annotations published beside the map at `uri`, or `[]`.
  *
- * Matched on the file name at the end of the URI, so it works for the published
- * site, for `vite dev`, and for a copy of `public/demo/` served from anywhere
- * else — and not for a *local* file of the same name, which would be someone
- * else's data under a familiar name.
+ * Matched on the file name at the end of the URI, so it works for the bucket,
+ * for a local copy of `demo/yeast/` served from anywhere else, and for a fork
+ * publishing the same folder under its own name — and not for a *local* file of
+ * the same name, which would be someone else's data under a familiar name.
  */
 export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
   if (!/^https?:\/\//i.test(uri)) return []
   const name = uri.split('?')[0].split('#')[0].split('/').pop() ?? ''
-  const entries = DEMO_ANNOTATIONS[name]
-  if (entries === undefined) return []
+  const shelf = DEMO_ANNOTATIONS[name]
+  if (shelf === undefined) return []
   const base = uri.slice(0, uri.length - name.length)
-  return entries.map((entry) => ({ ...entry, url: `${base}${entry.file}` }))
+  return shelf.entries.map((entry) => ({ ...entry, url: `${base}${entry.file}` }))
 }
 
-/** Every published annotation file, for the test that checks they are on disk. */
-export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOTATIONS)
-  .flat()
-  .map((entry) => entry.file)
+/**
+ * Every published annotation, as its path under `demo/`, for the test that
+ * checks they are on disk — and so for the sync that puts them on the bucket.
+ */
+export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOTATIONS).flatMap(
+  (shelf) => shelf.entries.map((entry) => `${shelf.folder}/${entry.file}`),
+)
 
 /**
- * The session files this module offers, for the test that reads every one of
- * them out of `public/demo/` and opens what it names.
+ * The session files this module offers, as their paths under `demo/`, for the
+ * test that reads every one of them off disk and opens what it names.
  *
  * A separate export rather than `demoExamples().map(...)` because that function
- * needs `import.meta.env.BASE_URL` and `window.location`, neither of which
- * exists in the node test runtime — and because the thing worth checking is the
- * file on disk, not the URL built around it.
+ * needs `window.location`, which does not exist in the node test runtime — and
+ * because the thing worth checking is the file on disk, which is what the sync
+ * uploads, not the URL built around it.
  */
-export const DEMO_FILES: readonly string[] = DEMO.map((entry) => entry.file)
+export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder}/${entry.file}`)
 
 /**
  * Absolute URLs for the published sessions, in the order they should be
@@ -179,14 +227,15 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => entry.file)
  * map with tracks around it and as the tracks with no map at all.
  */
 export function demoExamples(): Example[] {
-  // An absolute base wins over the second argument to `new URL`, so the line
-  // below is unchanged in either case and nothing downstream can tell which one
-  // it got: `inferSource` still sees `http(s)://`, and a view state naming a
-  // demo re-opens in the desktop build exactly as it does on the website.
-  const base = DEMO_BASE !== '' ? DEMO_BASE : import.meta.env.BASE_URL
+  const base = DEMO_BASE !== '' ? DEMO_BASE : DEMO_BUCKET
+  // Still resolved against the page, even though both candidates are already
+  // absolute: it costs nothing, and it is what lets the escape hatch be a
+  // *relative* base — `DEMO_BASE=/demo/ npm run build` for a copy served beside
+  // the app. Whatever comes out is `http(s)://`, which is the shape
+  // `inferSource` in `app/Session.ts` needs to re-open a shared link.
   return DEMO.map((entry) => ({
     label: entry.label,
-    url: new URL(`${base}demo/${entry.file}`, window.location.href).href,
+    url: new URL(`${base}${entry.folder}/${entry.file}`, window.location.href).href,
     note: entry.note,
     kind: entry.kind,
   }))

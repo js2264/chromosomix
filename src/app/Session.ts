@@ -1147,8 +1147,10 @@ export class Session {
    * one differ in nothing after this line.
    *
    * Relative names inside are resolved against this URL ({@link resolveConfig}),
-   * which is what lets `public/demo/`'s own sessions ship in the repository and
-   * still open on Pages, in `vite dev`, and in the desktop build.
+   * which is what makes a published dataset folder self-contained: the sessions
+   * in `demo/yeast/` open from the bucket, from a copy of that folder on another
+   * bucket, and in the desktop build, without any of the three being written
+   * into the file.
    */
   private async openConfigUrl(url: string): Promise<void> {
     this.showContent(loading(`Reading ${fileLabel(url)}`))

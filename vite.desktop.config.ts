@@ -35,11 +35,13 @@ export default defineConfig({
   // `./` removes that coupling, and it is greppable, which is what lets
   // `desktop-shape.mjs` assert it.
   base: './',
-  // The 250 MB of demo datasets in `public/` are the app's *data*, and this
-  // build reads them over the network like any other remote file. This is the
-  // first of the two guards that keep them out of the installer; the second
-  // reads the packed asar, because a config is a claim and the archive is the
-  // answer.
+  // `public/` now holds only the icons and the manifest, but this build wants
+  // none of them: an installed application has its own icon and does not
+  // install itself from a web manifest. Keeping the directory off is also the
+  // first of the two guards that no data file reaches the installer — the
+  // second reads the packed asar, because a config is a claim and the archive
+  // is the answer — and that guard stays worth having whether or not there
+  // happens to be a dataset in `public/` today.
   publicDir: false,
   // Replaces the web plugin list entirely: the service worker plugin is not
   // here, so `sw.js` is never emitted for this target. That is guard one of
@@ -48,12 +50,15 @@ export default defineConfig({
   define: {
     ...base.define,
     __APP_TARGET__: JSON.stringify('desktop'),
-    // The canonical final origin, not `pkg.homepage`. The GitHub Pages URL
-    // answers 301 to the custom domain *without* an `Access-Control-Allow-Origin`
-    // header on the redirect, and a cross-origin fetch is blocked before the
-    // redirect is followed — so pointing this at `homepage` ships a picker in
-    // which every example errors, which is the first thing a new user clicks.
-    __DEMO_BASE__: JSON.stringify(process.env.DEMO_BASE ?? 'https://jserizay.com/metacooler.js/'),
+    // `__DEMO_BASE__` is deliberately *not* overridden any more. It used to name the website,
+    // because the demos were published beside the app and a renderer served
+    // from `app://viewer` had to be told where the website was — and it had to
+    // name the canonical origin rather than `pkg.homepage`, since the Pages URL
+    // answers 301 to the custom domain without an `Access-Control-Allow-Origin`
+    // header on the redirect, which blocked every example. The demos are on the
+    // bucket now, which both targets reach the same way, so the special case
+    // and the redirect it was avoiding are both gone. The spread above carries
+    // the web build's value, `DEMO_BASE` included.
   },
   build: {
     ...base.build,

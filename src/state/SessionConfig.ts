@@ -216,13 +216,13 @@ export function looksLikeConfig(name: string): boolean {
  * Point a config's file names at wherever the config itself was found.
  *
  * An *exported* session names absolute URLs, because that is what the tab it
- * came from was reading. A config **published beside its data** cannot: the app
- * is served from `/` in dev and `/<repo>/` on Pages, the desktop build reads the
- * same files over the network from a third place, and a session file that had to
- * name one of them would be right in exactly one of the three. So a relative
- * name here means *the file next to this config*, resolved against the config's
- * own URL — the same rule an `<img src>` in a page follows, and the reason
- * `public/demo/`'s own sessions are a directory anyone can copy anywhere.
+ * came from was reading. A config **published beside its data** should not: a
+ * folder of data is a thing that gets copied — to a bucket, to a colleague's
+ * bucket, to a directory served off a laptop — and a session naming one of
+ * those absolutely is right in exactly one of them. So a relative name here
+ * means *the file next to this config*, resolved against the config's own URL —
+ * the same rule an `<img src>` in a page follows, and the reason `demo/yeast/`
+ * is a directory anyone can copy anywhere.
  *
  * Absolute URIs are left exactly as they are, so an exported session is
  * untouched by this and a config may mix the two: a published session naming a

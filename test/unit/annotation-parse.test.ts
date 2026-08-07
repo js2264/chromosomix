@@ -5,7 +5,9 @@
  * The demo files are the point: spec §8.3 says detection is by content, and the
  * only way to know that holds is to run it over a real Ensembl GTF, a real MACS
  * narrowPeak and a real headed loop TSV rather than over three lines written to
- * pass. They are committed under `public/demo/`, so this needs no fixtures.
+ * pass. They are committed under `demo/yeast/`, so this needs no fixtures — the
+ * same directory `scripts/publish-demo.sh` uploads, so what is parsed here is
+ * byte for byte what the site serves.
  */
 
 import { readFileSync } from 'node:fs'
@@ -16,7 +18,7 @@ import { featureRange, overlapWith } from '../../src/annotations/featureset'
 import { parseBed, parseBedpe, parseGtf, readHeader, sniffFormat } from '../../src/annotations/parse'
 
 function demo(name: string): string {
-  return readFileSync(fileURLToPath(new URL(`../../public/demo/${name}`, import.meta.url)), 'utf8')
+  return readFileSync(fileURLToPath(new URL(`../../demo/yeast/${name}`, import.meta.url)), 'utf8')
 }
 
 /** The map these files are aligned to: `Yeast_microC_G2M_1kb.cool`'s chroms. */
