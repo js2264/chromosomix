@@ -2930,10 +2930,20 @@ export class Session {
     return this.scoreOf(state).normalise
   }
 
-  /** The picker entry the state resolves to, whichever field named it. */
+  /**
+   * The picker entry the state resolves to, whichever field named it.
+   *
+   * Through {@link balanceOf} and not through `state.balance`, which is what
+   * every view that mounts a picker does — a cooler somebody balanced opens
+   * balanced and that default is nowhere in the hash. Read straight, this said
+   * `count` for a map whose own picker said `balanced`, which cost nothing
+   * while the only two callers wanted a column and a normalisation (neither of
+   * which the default touches) and cost a whole quantity the moment a deck
+   * asked what score to share.
+   */
   private scoreOf(state: ViewState): ScoreChoice {
     const props = this.scoreProps(state)
-    return scoreFor(scoreChoices(props), { ...props, balance: state.balance })
+    return scoreFor(scoreChoices(props), { ...props, balance: this.balanceOf(state) })
   }
 
   /**

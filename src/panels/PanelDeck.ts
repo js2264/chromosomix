@@ -195,6 +195,21 @@ export class PanelDeck {
   private readonly toolbar: HTMLElement
   private readonly grid: HTMLElement
   private readonly leadHead = el('header', { class: 'deck-head deck-head-lead hidden' })
+  /**
+   * Where the lead view's own heading goes while a deck is on.
+   *
+   * The heading, the locus box, the back link and the block summary belong to
+   * the *session*, not to the first cell of a grid — they answer "what am I
+   * looking at", which is one question however many pictures are on screen. Left
+   * inside cell 0 they made it a head taller than every other cell, so the first
+   * map was drawn smaller than the maps it was there to be compared with, and
+   * the reader had to correct for the difference before reading anything.
+   */
+  private readonly leadHeadHost = el('div', { class: 'deck-lead-head hidden' })
+  /** What was hoisted out of which view, so it can be put back. */
+  private hoisted: { head: HTMLElement; view: HTMLElement } | null = null
+  /** The deck's own line in that summary — how many maps, and how many empty. */
+  private readonly deckNote = el('span', { class: 'deck-maps' })
   private readonly leadCell = el('div', { class: 'deck-panel is-lead' }, this.leadHead)
   private readonly addRow: HTMLElement
   private readonly urlInput: HTMLInputElement
@@ -279,6 +294,7 @@ export class PanelDeck {
     this.el = el(
       'div',
       { class: 'deck' },
+      this.leadHeadHost,
       this.toolbar,
       this.addRow,
       this.warning,
@@ -302,8 +318,49 @@ export class PanelDeck {
    */
   frame(lead: HTMLElement): HTMLElement {
     this.paintLeadHead()
+    this.hoistHead(lead)
     this.leadCell.replaceChildren(this.leadHead, lead)
+    this.paintBar()
     return this.el
+  }
+
+  /**
+   * Take the view's own heading out of cell 0 and put it above the grid.
+   *
+   * Moved rather than rebuilt, so the region box keeps its caret, the stepper
+   * keeps its listeners and the summary keeps whatever the last read wrote into
+   * it. Every view a deck can frame has exactly one `.view-head` and it is the
+   * first child of the view's root (§16.8 lists which they are); anything else
+   * in there — a whole-genome view's gate and progress bar, say — is about the
+   * *picture* and stays with it.
+   *
+   * The deck's own note goes immediately after the summary rather than into it:
+   * a view rewrites that element on every read, and anything the deck had put
+   * inside would go with the previous block's numbers.
+   */
+  private hoistHead(lead: HTMLElement): void {
+    this.lowerHead()
+    const head = lead.querySelector<HTMLElement>(':scope > .view-head')
+    if (head === null) {
+      this.leadHeadHost.replaceChildren()
+      this.leadHeadHost.classList.add('hidden')
+      return
+    }
+    this.hoisted = { head, view: lead }
+    this.leadHeadHost.replaceChildren(head)
+    this.leadHeadHost.classList.remove('hidden')
+    const summary = head.querySelector(':scope > .summary, :scope > .match-kind')
+    if (summary === null) head.append(this.deckNote)
+    else summary.after(this.deckNote)
+  }
+
+  /** Give the heading back to the view it belongs to, first child as it was. */
+  private lowerHead(): void {
+    const held = this.hoisted
+    this.hoisted = null
+    this.deckNote.remove()
+    if (held === null) return
+    held.view.prepend(held.head)
   }
 
   /**
@@ -403,6 +460,10 @@ export class PanelDeck {
 
   destroy(): void {
     this.destroyed = true
+    // Before anything else: the heading is the *view's*, it outlives this deck,
+    // and a session that puts its last companion down must get it back rather
+    // than lose its locus box with the grid.
+    this.lowerHead()
     for (const slot of this.slots) {
       slot.panel?.destroy()
       slot.vacancy?.destroy()
@@ -1011,19 +1072,25 @@ export class PanelDeck {
       { class: 'btn btn-icon deck-save', size: 14 },
     )
 
+    // How many maps is a fact about *what is being looked at*, so it goes in the
+    // line that already says that — beside the block's size and the window's
+    // span, in the view's own summary — rather than in a bar of controls. The
+    // empty cells are counted apart rather than folded in, because "4 maps"
+    // over a 2 × 2 grid with two rectangles in it is the deck telling the reader
+    // something they can see is untrue.
+    // The separator only where there is something in front of it: the summary is
+    // empty until the first block lands, and a line opening with a bullet is a
+    // sentence with its first clause missing.
+    const said = this.deckNote.previousElementSibling?.textContent ?? ''
+    this.deckNote.textContent =
+      `${said === '' ? '' : ' · '}${empty === 0 ? `${filled} maps` : `${filled} of ${cells} maps`}`
+    this.deckNote.title =
+      `A deck of ${this.rows()} × ${this.columnsNow()}` +
+      (empty === 0 ? '' : `, ${empty} empty — drop a file on one to open it there`) +
+      '. One navigation across every panel: the region, the level and the score are shared, ' +
+      'and each panel keeps its own colour scale. The chain on a panel takes it off the lead.'
+
     this.toolbar.replaceChildren(
-      el('span', {
-        class: 'deck-count',
-        // The empty cells are counted separately rather than folded into the
-        // total, because "4 maps" over a 2 × 2 grid with two rectangles in it is
-        // the deck telling the reader something they can see is untrue.
-        text: empty === 0 ? `${filled} maps` : `${filled} of ${cells}`,
-        title:
-          `${this.rows()} × ${this.columnsNow()}` +
-          (empty === 0 ? '' : `, ${empty} empty — drop a file on one to open it there`) +
-          '. One navigation across every panel: the region, the level and the score are shared, ' +
-          'and each panel keeps its own colour scale. The chain on a panel takes it off the lead.',
-      }),
       leadLock,
       el('span', { class: 'deck-spacer' }),
       columns,

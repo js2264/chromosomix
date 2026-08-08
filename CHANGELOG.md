@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The session's heading leaves the deck's first cell.** The title, the locus
+  box, the back link and the block summary answer *what am I looking at*, which
+  is one question however many pictures are on screen, so a deck hoists them
+  above its grid — and cell 0 becomes a cell like the others, holding a map and
+  its file name. Inside, they made the first cell a head taller than the rest
+  and the first map was drawn smaller than the maps it was there to be compared
+  with. The deck's count rides on the end of that summary now, `113 × 113 bins ·
+  … · 3 maps`, rather than in a bar of controls.
+
 - **A deck's bar holds only what is shared**: the master chain, one scale for
   all, how many maps across, and one figure of the whole deck at 300 dpi. Adding
   a map is the `+` on an edge and rearranging is the grip, so neither is a button
@@ -258,6 +267,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   entry the way the compare card and the picker already do, preferring the lead's
   bin size, and publishes what it opened so the link names the map rather than
   the collection.
+
+- **A companion knows it is balanced.** Under `log10` a balanced cell is
+  negative, and the automatic range keeps negatives only when it is told the
+  matrix is balanced — so a companion built without the flag drew a blank
+  rectangle from a range of `[0, ~0]` over data that was perfectly good, with a
+  key calling the numbers counts. The score's own resolution had the same shape
+  of bug one level up: read straight from the state it answered `count` for a
+  map whose picker said `balanced`, because the default is a fact about the file
+  and is nowhere in the hash.
 
 - **A new companion opens on the lead's score and clip.** The score is shared as
   a *resolved* choice rather than as the hash key that named it: a balanced file
