@@ -22,6 +22,7 @@ import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary,
   type DerivePresentation,
+  type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox } from './SearchBox'
@@ -59,6 +60,8 @@ export interface PairViewProps {
    * and a default decided in each is a default that comes to differ.
    */
   derive?: DerivePresentation
+  /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
+  turn?: TurnPresentation
   onChangeGenomes(rowGenome: string, colGenome: string): void
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
@@ -127,6 +130,7 @@ export class PairView {
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
+      ...(props.turn === undefined ? {} : { turn: props.turn }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

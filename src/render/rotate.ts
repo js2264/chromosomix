@@ -53,6 +53,8 @@
  * improvement; nothing here pretends they are zeros.
  */
 
+import { LocusAxis } from './locus'
+
 /** The part of a read this module needs. */
 export interface RotatableBlock {
   nrows: number
@@ -264,4 +266,49 @@ export function isTurnable(block: {
   // One run, or none at all — a plain cooler read as a single span has no runs
   // and is one sequence by construction.
   return (block.rowGroups?.length ?? 1) <= 1
+}
+
+/**
+ * The genomic axis under a turned block.
+ *
+ * Built here rather than by `locusAxisFrom` because the turned block's columns
+ * are half a bin, and that helper takes its scale from a bin size shared with
+ * the rest of the read. One segment always: {@link isTurnable} has already
+ * refused anything spanning more than one sequence, which is the condition that
+ * would need more.
+ *
+ * This is what makes a turned map worth having. §8.4 gives the heatmap and the
+ * lanes *one* coordinate model, so the moment the x axis becomes an ordinary
+ * genomic axis every track already lines up with the picture — nothing in
+ * `AnnotationLanes` has to learn that the map was turned.
+ */
+export function turnedAxis(
+  rotated: Pick<RotatedBlock, 'ncols' | 'originBin'>,
+  contig: { label: string; firstBin: number; length: number },
+  binsize: number,
+): LocusAxis | null {
+  if (!(binsize > 0) || rotated.ncols <= 0) return null
+  return new LocusAxis([
+    {
+      contig: contig.label,
+      unitStart: 0,
+      unitEnd: rotated.ncols,
+      // Where column 0's left edge sits inside the sequence. The block may begin
+      // part-way into it, and the turned block inherits that offset unchanged.
+      bpStart: (rotated.originBin - contig.firstBin) * binsize,
+      bpPerUnit: binsize * BIN_FRACTION,
+      contigLength: contig.length,
+    },
+  ])
+}
+
+/**
+ * How far from the diagonal a band of `rows` rows reaches, in base pairs.
+ *
+ * The reader's number, and the one the y axis is labelled with: a row is one bin
+ * of *separation* even though it is half a bin of height, which is the whole of
+ * what {@link rotateBlock}'s header means by height being half of distance.
+ */
+export function separationBp(rows: number, binsize: number): number {
+  return Math.max(0, rows) * binsize
 }

@@ -75,6 +75,15 @@ import {
   type Normalisation,
 } from '../render/derive'
 import {
+  BIN_FRACTION,
+  cellAt,
+  isTurnable,
+  rotateBlock,
+  turnedAxis,
+  type RotateDirection,
+  type RotatedBlock,
+} from '../render/rotate'
+import {
   COLORMAP_NAMES,
   COLOR_VISION_SAFE_COLORMAPS,
   DEFAULT_DIVERGING_COLORMAP,
@@ -169,6 +178,16 @@ const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
  * the spec already use for this, and a control that renamed it would leave a
  * reader looking for the feature they read about.
  */
+/**
+ * How much of the block a turned map opens on, as a fraction of the window.
+ *
+ * A quarter: enough that a domain and the loops at its corners are all on
+ * screen, little enough that the band fills the panel rather than tapering to an
+ * apex. Not a distance in base pairs, because a default of "500 kb" is most of a
+ * bacterial chromosome and a rounding error on a human one.
+ */
+const DEFAULT_TURN_FRACTION = 0.25
+
 const COMPARE_OP_LABELS: Record<CompareOp, string> = {
   split: 'split',
   ratio: 'ratio',
@@ -321,6 +340,36 @@ export interface MatrixPanelOptions {
    * with every one of those answers.
    */
   derive?: DerivePresentation
+  /**
+   * Draw the map turned 45° (`render/rotate.ts`).
+   *
+   * Present on every view that mounts a panel; whether it is *offered* is
+   * `isTurnable`'s answer about the block, which cannot be known until one has
+   * arrived. The panel therefore reports back what it found rather than being
+   * told — {@link TurnPresentation.onAvailable} is how the control learns to
+   * grey itself.
+   */
+  turn?: TurnPresentation
+}
+
+export interface TurnPresentation {
+  /** Whether the reader has asked for the turned view. */
+  on: boolean
+  onChange(on: boolean): void
+  /**
+   * Which way distance grows: `up` for a lone map and for the first file of a
+   * comparison, `down` for the second, so the pair meets at one genomic axis.
+   */
+  direction?: RotateDirection
+  /**
+   * Whether this block *can* be turned, reported after every read.
+   *
+   * The gate is a fact about the block rather than about the view — a region of
+   * one chromosome can be turned and the whole of a metagenome cannot — and the
+   * block is what the panel has. The control is greyed rather than hidden on a
+   * `false`, so a reader can see what exists and learn what it wants of them.
+   */
+  onAvailable?(possible: boolean): void
 }
 
 export interface DerivePresentation {
@@ -524,6 +573,26 @@ export class MatrixPanel {
    * a second computation that could disagree with it.
    */
   private drawn: Float32Array | null = null
+  /**
+   * The turned block on screen, or `null` for a square map.
+   *
+   * Kept because the readout cannot work without it: a pointer over a turned map
+   * is over a band row and a half-bin column, and the pair of bins that produced
+   * the cell is only recoverable through `render/rotate.ts`'s inverse.
+   */
+  private turned: RotatedBlock | null = null
+  /** The turn control, greyed while the block on screen has no diagonal. */
+  private turnButton: HTMLElement | null = null
+  /** The last title {@link setData} was given, so a turn can re-run it. */
+  private lastTitle = ''
+  /**
+   * How deep the turned band is, in bins of separation, once a reader has said.
+   *
+   * `null` is "nobody has", which takes {@link DEFAULT_TURN_FRACTION}. Held on
+   * the panel rather than in the view state because it is the same kind of fact
+   * as a pan or a zoom, and §11's hash has never carried one of those.
+   */
+  private turnRows: number | null = null
   /** The neutral value of what is currently drawn, or `null` for a count field. */
   private neutral: number | null = null
   /**
@@ -1130,6 +1199,25 @@ export class MatrixPanel {
             'match depth automatically, since otherwise the picture is the depth difference.',
         ),
       )
+    }
+
+    // The turn. A button rather than a tickbox, and beside the overlay marks
+    // rather than among the value controls, because it changes the *shape* of
+    // the picture and not what is in it — the same category as "fit", which
+    // leads that row for the same reason.
+    const turn = options.turn
+    if (turn !== undefined) {
+      const button = iconButton(
+        'triangle',
+        'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
+          'Available on one sequence against itself, which is the only block that has a diagonal ' +
+          'to measure from.',
+        () => turn.onChange(!turn.on),
+        { class: 'btn btn-icon', size: 15 },
+      )
+      button.classList.toggle('is-on', turn.on)
+      this.turnButton = button
+      controls.unshift(field('turn', button, ''))
     }
 
     // The baseline. A control of its own rather than an entry in the score
@@ -2987,12 +3075,14 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    this.lastTitle = title
     // Blanked rather than left to the next frame: the outgoing block's window
     // under the incoming block's bin count is a line describing two pictures.
     this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
-    const { dense, presentationMoved } = this.derive(data, second)
+    const { dense, presentationMoved, turned } = this.derive(data, second)
+    this.turned = turned
     // Two legends for two files' counts — and under a ratio or a difference
     // there are no longer two sets of counts in the square but one derived
     // field, so the second strip would be a second scale for numbers that do
@@ -3003,7 +3093,11 @@ export class MatrixPanel {
     // redraw is skipped whenever a *pinned* clip survives a navigation, and the
     // second file's ticks keep the previous block's numbers.
     this.painted = null
-    this.heatmap.setMatrix(dense, separatorsFor(data))
+    // No separators under a turn: `isTurnable` has already refused any block
+    // spanning more than one sequence, so there is no boundary to draw — and the
+    // square block's own would land at the wrong columns anyway, the axis now
+    // being counted in half bins.
+    this.heatmap.setMatrix(dense, turned === null ? separatorsFor(data) : { rows: [], cols: [] })
     // A cell is a bin, so a block's span in cells is its length in base pairs:
     // the contigs worth naming in a 300-contig genome are the long ones, and
     // they are named however many short ones surround them. Above bin level a
@@ -3013,8 +3107,15 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords({
-      rows: axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
-      cols: axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
+      // Under a turn the column ruler is a genomic one at half the bin size, and
+      // there is no row ruler at all: the vertical axis is a distance, and
+      // labelling it with positions would name places that are not there.
+      rows: turned === null
+        ? axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize)
+        : null,
+      cols: turned === null
+        ? axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize)
+        : axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize * BIN_FRACTION),
     })
     // The annotations' view of the same two axes. Rebuilt per block rather than
     // patched, so a stale mapping can never be drawn over fresh data — the same
@@ -3029,10 +3130,19 @@ export class MatrixPanel {
       binsize: this.options.binsize,
       contigLength: context?.contigLength ?? ((): number | undefined => undefined),
     }
-    this.locusAxes = {
-      rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
-      cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-    }
+    // A turned block has one genomic axis and one that is not: x is position,
+    // measured in the half-bin columns the rotation produced, and y is distance
+    // from the diagonal, which is not a place and has no locus. `null` on rows
+    // is exactly right for the lanes — a stack drawn against a genomic axis has
+    // nothing to draw itself against up the side, which is why a turn moves
+    // every track to the bottom.
+    this.locusAxes =
+      turned === null
+        ? {
+            rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+            cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
+          }
+        : { rows: null, cols: this.turnedLocus(turned, data) }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -3086,7 +3196,7 @@ export class MatrixPanel {
   private derive(
     data: MatrixResult,
     second: MatrixResult | undefined,
-  ): { dense: DenseMatrix; presentationMoved: boolean } {
+  ): { dense: DenseMatrix; presentationMoved: boolean; turned: RotatedBlock | null } {
     // Every derivation is applied to each file *separately* and before the two
     // are put together, because each is a statement about one library: file 2's
     // coverage bias is file 2's, and a baseline measured across a ratio is a
@@ -3139,7 +3249,43 @@ export class MatrixPanel {
       merged === undefined
         ? { ...toDense(data), values: mine.values }
         : { ...toDense(data), values: merged.values }
-    this.drawn = dense.values
+    // Turned last, over whatever the arithmetic produced: the rotation is a
+    // change of *geometry* and everything above it is a change of value, so a
+    // turned O/E map and a turned ratio cost this one extra pass and no special
+    // case anywhere. Reported rather than assumed — whether a block has a
+    // diagonal to measure from is a fact about the block.
+    const canTurn = isTurnable(data)
+    this.options.turn?.onAvailable?.(canTurn)
+    // Greyed rather than hidden: a reader looking at a whole metagenome should
+    // be able to see that the control exists and find out what it wants of them.
+    this.turnButton?.classList.toggle('is-disabled', !canTurn)
+    if (this.turnButton instanceof HTMLButtonElement) this.turnButton.disabled = !canTurn
+    let out = dense
+    const turned =
+      canTurn && this.options.turn?.on === true
+        ? rotateBlock(
+            { ...data, values: dense.values },
+            {
+              maxSeparation: this.turnDepth(data),
+              ...(this.options.turn.direction === undefined
+                ? {}
+                : { direction: this.options.turn.direction }),
+            },
+          )
+        : null
+    if (turned !== null) {
+      out = {
+        nrows: turned.nrows,
+        ncols: turned.ncols,
+        values: turned.values,
+        // The band's own extents, in the half-bin units its columns are counted
+        // in, so anything downstream that measures a span in cells measures it
+        // in the grid actually on screen.
+        rowExtent: [0, turned.nrows],
+        colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
+      }
+    }
+    this.drawn = out.values
     // The strip is the only place the numbers beside it are named, and a ratio
     // drawn under a caption reading `count` is worse than one with no caption.
     // `count` where nothing was derived, rather than `deriveBlock`'s own word
@@ -3148,8 +3294,63 @@ export class MatrixPanel {
     // reworded by a feature it is not using.
     const barLabel = this.derivedLabel() ?? this.derived?.label ?? 'counts'
     this.colorbar.setCaption(barLabel === 'counts' ? 'count' : barLabel)
-    return { dense, presentationMoved }
+    return { dense: out, presentationMoved, turned }
   }
+
+  /**
+   * The cell of the *square* block a pointer is over.
+   *
+   * The identity on a square map, and the rotation's inverse on a turned one.
+   * Returned rather than branched on at every use, so the readout below has one
+   * coordinate system rather than two — which is the same reason §8.4 gives for
+   * the heatmap and the lanes sharing one.
+   */
+  private squareCell(cell: Cell): Cell {
+    const turned = this.turned
+    if (turned === null || this.data === null) return cell
+    const found = cellAt(turned, cell.row, cell.col)
+    if (found === null) return cell
+    return { ...cell, row: found.row, col: found.col }
+  }
+
+  /**
+   * The genomic axis under a turned block, or `null` where it cannot be built.
+   *
+   * One segment, because {@link isTurnable} refused anything wider than one
+   * sequence. The length comes from the annotation context where there is one
+   * and from the block otherwise, which is the same fallback `locusAxisFrom`
+   * makes for a run whose contig it cannot measure.
+   */
+  private turnedLocus(turned: RotatedBlock, data: MatrixResult): LocusAxis | null {
+    const run = data.rowGroups[0]
+    const label = run?.label ?? ''
+    const firstBin = run?.unitStart ?? data.rowExtent[0]
+    const known = this.options.annotations?.contigLength(label)
+    const length = known ?? (data.nrows + (data.rowExtent[0] - firstBin)) * this.options.binsize
+    return turnedAxis(turned, { label, firstBin, length }, this.options.binsize)
+  }
+
+  /**
+   * How far from the diagonal the turned band reaches, in **bins**.
+   *
+   * A whole triangle is always twice as wide as it is tall — that is what the
+   * half-bin lattice makes it — so turning a map and fitting it produces a
+   * triangle that fills the panel and touches nothing. Which is a fine picture
+   * and is not the one the turn is for: the reading is the band near the
+   * diagonal, and the far apex is the part of a contact map that has least in it.
+   *
+   * So the default is a *fraction* of the block, and the reader moves it. The
+   * fraction is deliberately not a distance in base pairs: a default of "500 kb"
+   * is most of a bacterial chromosome and a rounding error on a human one, and
+   * this viewer opens on both.
+   */
+  private turnDepth(data: MatrixResult): number {
+    const span = Math.max(1, Math.min(data.nrows, data.ncols))
+    const asked = this.turnRows
+    if (asked !== null) return Math.max(1, Math.min(span - 1, asked))
+    return Math.max(1, Math.min(span - 1, Math.ceil(span * DEFAULT_TURN_FRACTION)))
+  }
+
 
 
   /**
@@ -3233,15 +3434,31 @@ export class MatrixPanel {
    * `options` in place, as {@link setResolution} writes the bin size — the
    * reference is fixed, the settings on it are not.
    */
-  rederive(derive: DerivePresentation | undefined, compare?: ComparePresentation): void {
-    const unchanged = this.setDerive(derive)
+  rederive(
+    derive: DerivePresentation | undefined,
+    compare?: ComparePresentation,
+    turn?: TurnPresentation,
+  ): void {
+    const turnMoved =
+      turn !== undefined && (this.options.turn?.on === true) !== (turn.on === true)
+    const unchanged = this.setDerive(derive) && !turnMoved
     if (compare !== undefined) this.options.compare = compare
+    if (turn !== undefined) this.options.turn = turn
     const data = this.data
     // Nothing to recompute, but the setting is recorded either way: the session
     // builds a fresh presentation object on every render and hands it over
     // whether or not a reader touched anything, and recomputing a 16 M-cell
     // block for an equal object would make every unrelated repaint expensive.
     if (data === null || (unchanged && compare === undefined)) return
+    if (turnMoved) {
+      // A turn is a different *grid*, not different numbers in the same one, so
+      // the cheap in-place swap cannot serve it: the block changes shape, its
+      // axes change meaning, and the view has to be refitted around them.
+      // Re-run from the top, which is one pass over a block already in memory
+      // and still costs no read.
+      this.setData(data, this.lastTitle, this.second?.data)
+      return
+    }
     const { dense, presentationMoved } = this.derive(data, this.second?.data)
     this.syncLegendSlots()
     this.heatmap.setValues(dense.values)
@@ -3766,20 +3983,25 @@ export class MatrixPanel {
     this.tip.matrix.classList.remove('hidden')
     this.tip.lane.classList.add('hidden')
     const data = this.data
-    const rowGroup = groupAt(data.rowGroups, cell.row)
-    const colGroup = groupAt(data.colGroups, cell.col)
+    // A pointer over a turned map is over a band row and a half-bin column, and
+    // neither is a coordinate of the block the readout describes. Mapped back
+    // first, so everything below — the two names, the positions, the distance,
+    // the counts — is the same code reading the same square block it always did.
+    const square = this.squareCell(cell)
+    const rowGroup = groupAt(data.rowGroups, square.row)
+    const colGroup = groupAt(data.colGroups, square.col)
     // Positions are measured in absolute bin space, so each axis needs the bin
     // its own block starts at — they differ on a rectangular two-contig block.
     const rowStart = data.rowExtent[0]
     const colStart = data.colExtent[0]
-    const rowLabel = describeAxis(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
-    const colLabel = describeAxis(colGroup, cell.col, data.level, this.options.binsize, colStart)
+    const rowLabel = describeAxis(rowGroup, square.row, data.level, this.options.binsize, rowStart)
+    const colLabel = describeAxis(colGroup, square.col, data.level, this.options.binsize, colStart)
     // `cell.value` is what was *drawn*, which below the diagonal of a compared
     // map is the second file's count with any gain already in it. Neither half
     // of that is what a reader is asking about, so the numbers here come from
     // the blocks themselves: each file's own count, unscaled, at this cell.
     const compare = this.options.compare
-    const slot = cell.row * data.ncols + cell.col
+    const slot = square.row * data.ncols + square.col
     const mine = this.second === null ? cell.value : data.values[slot]
     const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
     const counts =
@@ -3795,22 +4017,25 @@ export class MatrixPanel {
     // contacts" is what tells you whether to believe it. A departure computed
     // from three counts against a baseline of two is noise, and only the raw
     // numbers beside it say so.
-    const reading = this.derivedReading(cell.row, cell.col)
+    const reading = this.derivedReading(square.row, square.col)
     // The genome each end belongs to, read before the distance because the
     // distance needs them: two MAGs may each have a `contig_1`, and on a
     // coarsened axis the name is most of what is left to tell them apart.
-    const rowGenome = groupAt(data.rowGenomes, cell.row)?.label
-    const colGenome = groupAt(data.colGenomes, cell.col)?.label
+    const rowGenome = groupAt(data.rowGenomes, square.row)?.label
+    const colGenome = groupAt(data.colGenomes, square.col)?.label
     const distance = separationOf(
-      { group: rowGroup, offset: cell.row, blockStart: rowStart, genome: rowGenome },
-      { group: colGroup, offset: cell.col, blockStart: colStart, genome: colGenome },
+      { group: rowGroup, offset: square.row, blockStart: rowStart, genome: rowGenome },
+      { group: colGroup, offset: square.col, blockStart: colStart, genome: colGenome },
       data.level,
       this.options.binsize,
     )
 
+    // On a turned map the separation *is* the y axis, so it leads: the reader's
+    // eye is already on a height and the number under it is what they are asking
+    // to have confirmed.
+    const apart = distance === null ? '' : `   ${fmt.bp(distance)} apart`
     setReadout(
-      `${rowLabel}  ×  ${colLabel}` +
-        (distance === null ? '' : `   ${fmt.bp(distance)} apart`) +
+      (this.turned === null ? `${rowLabel}  ×  ${colLabel}${apart}` : `${rowLabel}${apart}`) +
         (reading === null ? '' : `   ${reading}`) +
         `   ${counts}`,
     )

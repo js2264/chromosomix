@@ -47,6 +47,7 @@ import {
   blockSummary,
   type AnnotationContext,
   type DerivePresentation,
+  type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -137,6 +138,8 @@ export interface WholeViewProps {
    * and a default decided in each is a default that comes to differ.
    */
   derive?: DerivePresentation
+  /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
+  turn?: TurnPresentation
   onScaleChange(scale: ScaleState): void
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
@@ -275,6 +278,7 @@ export class WholeView {
 
       onScaleChange: (scale) => props.onScaleChange(scale),
       ...(props.derive === undefined ? {} : { derive: props.derive }),
+      ...(props.turn === undefined ? {} : { turn: props.turn }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

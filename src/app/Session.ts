@@ -52,7 +52,8 @@ import {
 } from '../state/SessionConfig'
 import type { CompareOp, Transform, ViewState } from '../types'
 import type { Normalisation } from '../render/derive'
-import type { DerivePresentation } from '../ui/MatrixPanel'
+import type { RotateDirection } from '../render/rotate'
+import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
@@ -2668,6 +2669,32 @@ export class Session {
    * repaint.
    */
   /**
+   * The turn, as every panel of the session sees it.
+   *
+   * Deck-wide by construction: it is built from the state, and every panel is
+   * handed the same state, so a flip is one key and N pictures. Which way each
+   * one grows is the caller's — a lone map and the first file of a comparison
+   * grow up, the second grows down so the pair meets at one axis.
+   */
+  private turnPresentation(state: ViewState, direction?: RotateDirection): TurnPresentation {
+    return {
+      on: state.flip === true,
+      ...(direction === undefined ? {} : { direction }),
+      onChange: (on) => {
+        this.store.patch({ flip: on ? true : undefined })
+        this.rederive()
+      },
+      // A block with no diagonal cannot be turned, and the reader is told by the
+      // control going flat rather than by the key being ignored in silence.
+      onAvailable: (possible) => {
+        if (!possible && this.store.state?.flip === true) {
+          this.store.patch({ flip: undefined }, { replace: true })
+        }
+      },
+    }
+  }
+
+  /**
    * Recompute the picture without re-reading it.
    *
    * A derivation is a transform over cells that are already on screen, so it
@@ -2681,7 +2708,7 @@ export class Session {
   private rederive(): void {
     const state = this.store.state
     if (state === null) return
-    this.current?.panel?.rederive(this.derivePresentation(state))
+    this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
   }
 
   private remount(): void {
@@ -3368,6 +3395,7 @@ export class Session {
           onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScoreChange: (choice) => this.setScore(choice),
           derive: this.derivePresentation(state),
+          turn: this.turnPresentation(state),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.store.set({
@@ -3438,6 +3466,7 @@ export class Session {
       onLevelChange: () => {},
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
+      turn: this.turnPresentation(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
         this.store.set({
@@ -3525,6 +3554,7 @@ export class Session {
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
+      turn: this.turnPresentation(state),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
@@ -3559,6 +3589,7 @@ export class Session {
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
+      turn: this.turnPresentation(state),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -3604,6 +3635,7 @@ export class Session {
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
+      turn: this.turnPresentation(state),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
