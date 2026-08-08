@@ -74,7 +74,7 @@ diverging ramp's centre colour across 96% of drawn pixels.
 
 ---
 
-## 3. The deck of panels (§16) — **skeleton only; see §3.1 for the real state**
+## 3. The deck of panels (§16) — **everything but tracks; see §3.1**
 
 Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 
@@ -97,8 +97,9 @@ Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 - Memory: `panelBudgetBytes` divides one block's allowance across N, so a deck
   cannot exceed the single map it replaced. `MAX_PANELS = 6`.
 
-**Everything below is what it does not do.** The honest summary is that the deck
-is a *data* feature that works and an *interaction* feature that barely exists.
+**Everything below is what it does not do.** Getting maps in and arranging them
+are done (§3.3, §3.4); what is left is §3.1's group C — a companion cannot carry
+a track, and that is now the whole of the gap.
 
 ### 3.1 Gap analysis
 
@@ -140,8 +141,8 @@ change. Ordered within each group by what I would do first.
 
 #### E. Smaller, and deliberate-or-not is worth deciding
 
-- **No deck-wide export.** Each panel exports itself; there is no "one figure of
-  all of them", which is what somebody assembling a paper figure wants.
+- ~~**No deck-wide export.**~~ Done by §3.4: the bar saves the whole deck as one
+  figure, laid out as it is on screen (`PanelDeck.saveDeck`).
 - **Companions never get the two-file compare** (`uri2`). Reasonable — a blended
   square inside a panel of a deck is two claims at once — but it is undocumented
   as a decision.
@@ -154,7 +155,8 @@ change. Ordered within each group by what I would do first.
 ### 3.2 Suggested order
 
 The dependency chain is real, and doing these out of order means doing them
-twice. **1 and 4 are done**; the rest stands as written.
+twice. **Everything but 2 and 6 is done**, and those two are one piece of work:
+the track model, then what it makes possible.
 
 1. ~~**D1**~~ — done, and see §3.3 for what it turned out to be attached to.
 2. **C2** — decide the track ownership model. Write the decision down before any

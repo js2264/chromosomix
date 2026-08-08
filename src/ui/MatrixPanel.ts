@@ -1387,7 +1387,20 @@ export class MatrixPanel {
       // "Map", not "View": the card beside it is about the tracks, and both of
       // them are views of something. This one is the matrix.
       cardTitle('Map', 'sliders-horizontal', 'controls-title'),
-      el('div', { class: 'panel-controls' }, ...controls),
+      // The value fields are in the corner menu where there *is* one, and in
+      // this card where there is not — never in both, because a node has one
+      // parent. Appending the same five to each moved them into whichever
+      // container was built second, which is this one, so the corner menu
+      // opened empty and a companion's only scale controls were in a card it
+      // never mounts. One set of widgets is still the rule (see
+      // {@link settingsEl}); this decides where that one set lives.
+      el(
+        'div',
+        { class: 'panel-controls' },
+        ...(this.settingsEl === null
+          ? controls
+          : controls.filter((node) => !valueFields.includes(node))),
+      ),
     )
     // After *both* rows exist, not after the first. The Map card is built well
     // below the Tracks card, so painting where the Tracks card ends left every
