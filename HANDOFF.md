@@ -4,7 +4,7 @@ Working document for whoever picks this up. Branched from **`001715f` (0.9.0)**;
 everything below is new since that tag. All of it is committed and pushed.
 
 **Green as of the last commit:** `npm run typecheck`,
-`npm run test:nofixtures` (1136 passed, 25 skipped), `npm run build`.
+`npm run test:nofixtures` (1144 passed, 25 skipped), `npm run build`.
 
 **Since the first handoff:** §3.1's **D1** and **A1** are done, A1 in the shape
 the user asked for rather than the one it was written in — see §3.3. Three
@@ -193,7 +193,10 @@ Three things worth knowing:
   both places.
 - **The grid is a rectangle** and a press adds a whole edge, because a single
   extra cell on the right of a two-row grid pushes every map after it one place
-  along. That is the constraint that decided B3.
+  along. That is the constraint that decided B3. `grownDeck` gives the shape and
+  `grownPlacement` gives *where each map goes*, and the two are only correct
+  together — see §6's trap about what happens when you have the first without
+  the second.
 - **An empty cell is a real cell** — a slot in `maps`, a place in `MAX_PANELS`,
   movable and closable — but it is *not* in the memory budget's divisor. It has
   no worker and no block, and dividing by it read the two maps of a 2 × 2 deck at
@@ -227,13 +230,24 @@ away, for a change that happened in another panel. It is now `DECK_KEYS` in
 the palette and matters a great deal when drawing a 2 × 2 is four changes to that
 key in a row.
 
+**Reviewed adversarially** — four lenses over the diff, each finding verified by
+an agent told to refute it. Twelve claims, eight survived, three distinct
+defects, all fixed above: the column-splice, the SVG hit target, and the frame's
+retained view. A fourth confirmed finding was the turned lock's *wording* rather
+than its behaviour — a deck of two resolutions turns to two depths, which is a
+real reason not to share a row window, and the refusal now says that instead of
+claiming the sequences disagree. Worth repeating the shape of the miss: the
+placement bug was invisible to `typecheck`, to 1,136 tests, and to a browser
+check, because every check exercised a deck of one row.
+
 **Browser-verified** on `demo/ecoli` at 1700 × 1050, driven with
 `playwright-core`: `+` beside a single map gives `1 of 2` and `maps=~`; `+` below
 gives `1 of 4` and a 2 × 2; a URL typed in the bar fills the first empty cell; the
 turn puts *both* maps on their diagonals showing the same window, and unturns;
 a file dropped on either an edge or an empty card opens there and leaves the
-lead's heading and lanes untouched; closing every cell puts the deck down and
-brings back the single map with its scale and its edges intact.
+lead's heading and lanes untouched; a map stacked under the lead stays under it
+when a column is added; closing every cell puts the deck down and brings back
+the single map with its scale and its edges intact.
 
 ## 4. Where the two features meet
 
@@ -381,6 +395,22 @@ before editing.
 - **A key that is neither data nor presentation defaults to a full rebuild**, and
   the default is right — but `maps` sat there for a whole feature, silently
   re-reading the lead's block every time a companion was added.
+- **A CSS grid's placement is derived, so changing the column count moves
+  everything.** `.deck-grid` is one flat list in `repeat(n, …)`, so cell `k` is
+  at row `⌊k/n⌋`, column `k mod n` — raising `n` re-maps every index at once.
+  Appending is right for a new *row* and wrong for a new *column*, which has to
+  be spliced into the end of each row (`grownPlacement`). The first version of
+  `grow` appended in both directions and turned a 2 × 2 into a three-wide row
+  with the fourth map stranded underneath. The arithmetic was right and the
+  placement was never asked about, which is why the tests passed.
+- **An inline `<svg>` is not an `HTMLElement`.** `event.target instanceof
+  HTMLElement` is false over any icon, so a guard written that way silently
+  skips its own exemption list for the most obvious pixel on a button. Use
+  `Element`; `closest` is on `Element`.
+- **A frame that outlives what it frames has to be told to let go.** The
+  session's `DeckFrame` is a permanent field, and `hold()` keeps the last view
+  parented inside it — so navigating to a view the deck cannot frame pinned a
+  destroyed heatmap's canvas for as long as the reader stayed away.
 
 ---
 

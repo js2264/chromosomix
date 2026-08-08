@@ -50,6 +50,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   to rectangles. A file dropped on an edge opens the cell that edge names and
   fills it in one movement.
 
+  Adding the column is a *splice* and not an append, one cell into the end of
+  each row. The grid is one flat list in `repeat(n, …)`, so a cell's position is
+  derived from its index and the column count and raising the count re-maps
+  every index at once — appending turns a 2 × 2 into a three-wide row with the
+  fourth map stranded underneath, which is precisely the rearrangement the whole
+  gesture exists to avoid.
+
 - **N maps side by side, navigating together** (§16). Several contact maps on
   screen at once, each with its own file, its own reader worker and its own
   colour scale, all showing the same place. Addable, removable, reorderable,
@@ -241,7 +248,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   area's own file handler took the same drop, so one gesture opened the companion
   the reader aimed at *and* loaded the file over the lead. The deck's cells and
   its `+` edges now answer for themselves, as the landing page's drop zone and
-  the map's lane edges already did.
+  the map's lane edges already did — and the exemption is tested with
+  `instanceof Element` rather than `HTMLElement`, since an inline `<svg>` is
+  neither, and the `+` glyph is the most obvious pixel on an edge to aim at.
+
+- **A refusal to lock a turned deck says what is actually wrong with it.** Two
+  files at different resolutions turn to different depths, because the depth is
+  a fraction of each block rounded to a whole bin — a real reason not to share a
+  row window, and nothing to do with the sequences. The panel used to borrow the
+  wording for two files that resolved one name against different sequences,
+  which is a claim a reader may act on.
+
+- **A view mounted without the `+` edges is no longer pinned by them.** The
+  session keeps one frame for its whole life and it holds the last view it
+  framed, so opening a genomes table left a destroyed heatmap's canvas
+  referenced until the reader navigated back to a map.
 
 ## [0.9.0] - 2026-08-07
 

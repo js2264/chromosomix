@@ -20,6 +20,7 @@ import {
   VACANT,
   columnsFor,
   grownDeck,
+  grownPlacement,
   moveItem,
   panelBudgetBytes,
   parseMaps,
@@ -171,11 +172,14 @@ describe('columnsFor', () => {
  * Drawing the deck (§16.9).
  *
  * The `+` on either edge of the map opens **cells**, not maps, and this is the
- * arithmetic that decides how many. It is worth pinning for one reason above
- * the others: growing must never move a map the reader has already placed, and
- * the only way that is structurally true is if a press adds a whole row or a
- * whole column and appends it. Anything that inserts in the middle of a
- * reading-order grid shifts every cell after it.
+ * arithmetic that decides how many. Worth pinning for one reason above the
+ * others: growing must never move a map the reader has already placed, and the
+ * shape alone does not deliver that. A deck is one flat list laid into
+ * `repeat(n, …)`, so a cell's position is *derived* from its index and the
+ * column count — which means raising the column count re-maps every index at
+ * once, and appending the new cells reflows the whole grid. The shape is here;
+ * where the maps go is `grownPlacement`, tested below, and the two are only
+ * correct together.
  */
 describe('growing a deck by an edge', () => {
   const shape = (cells: number, columns: number) => ({ cells, columns })
@@ -245,6 +249,99 @@ describe('growing a deck by an edge', () => {
   it('survives a nonsense column count', () => {
     expect(grownDeck(shape(4, 0), 'beside')).toEqual({ cells: 8, columns: 2 })
     expect(grownDeck(shape(4, 9), 'below')).toEqual({ cells: 8, columns: 4 })
+  })
+})
+
+/**
+ * Where the maps go when a deck grows — the half of it the shape does not say.
+ *
+ * The bug this exists to prevent, found by an adversarial review of the first
+ * attempt: `grownDeck` returned the right rectangle, `grow()` appended the new
+ * cells to the end of the flat list, and a 2 × 2 pressed on the right edge came
+ * back as a 3-wide row with the fourth map alone underneath — the column of
+ * empty cards appearing along the *bottom*, every map after the first row
+ * re-placed, and a file dropped on the edge opening in the middle of the last
+ * row. Appending is right for a row and wrong for a column, because only the
+ * column press changes the count every index is read against.
+ *
+ * These read as pictures. `[0, 1, null, 2, 3, null]` at three columns is
+ *
+ *     0 1 ·
+ *     2 3 ·
+ */
+describe('where the maps go when a deck grows', () => {
+  const shape = (cells: number, columns: number) => ({ cells, columns })
+
+  it('splices a column into the end of every row', () => {
+    // 2 × 2 → 2 × 3: each row keeps its pair and gains a cell on its right.
+    expect(grownPlacement(shape(4, 2), 'beside')).toEqual([0, 1, null, 2, 3, null])
+  })
+
+  it('appends a row, which is where a row goes', () => {
+    expect(grownPlacement(shape(4, 2), 'below')).toEqual([0, 1, 2, 3, null, null])
+  })
+
+  it('turns a lone map into a pair, either way round', () => {
+    expect(grownPlacement(shape(1, 1), 'beside')).toEqual([0, null])
+    expect(grownPlacement(shape(1, 1), 'below')).toEqual([0, null])
+  })
+
+  /**
+   * The two-press case that broke: a map stacked under the lead must not jump
+   * to sit beside it when the reader asks for a column.
+   */
+  it('keeps a stacked map stacked when a column is added', () => {
+    expect(grownPlacement(shape(2, 1), 'beside')).toEqual([0, null, 1, null])
+  })
+
+  /** A ragged last row is squared up, and the holes are cells like any other. */
+  it('fills the holes a closed map left', () => {
+    expect(grownPlacement(shape(3, 2), 'beside')).toEqual([0, 1, null, 2, null, null])
+    expect(grownPlacement(shape(3, 2), 'below')).toEqual([0, 1, 2, null, null, null])
+  })
+
+  /**
+   * The invariant the whole gesture rests on, over every shape a deck can be in:
+   * a press adds cells and moves nothing. Row and column are read off the new
+   * column count, which is exactly how the CSS grid reads them.
+   */
+  it('never moves a map that is already placed', () => {
+    for (let cells = 1; cells <= MAX_PANELS; cells++) {
+      for (let columns = 1; columns <= cells; columns++) {
+        for (const direction of ['beside', 'below'] as const) {
+          const before = { cells, columns }
+          const after = grownDeck(before, direction)
+          const places = grownPlacement(before, direction)
+          expect(places).toHaveLength(after.cells)
+          const seen = new Set<number>()
+          places.forEach((from, to) => {
+            if (from === null) return
+            expect(seen.has(from)).toBe(false)
+            seen.add(from)
+            expect(Math.floor(from / columns)).toBe(Math.floor(to / after.columns))
+            expect(from % columns).toBe(to % after.columns)
+          })
+          expect(seen.size).toBe(cells)
+          // And the lead is still the lead, which is what lets it stay the
+          // session's re-parented view rather than a panel like the others.
+          expect(places[0]).toBe(0)
+        }
+      }
+    }
+  })
+
+  /**
+   * A dropped file goes into the near end of the edge that was pressed, which
+   * is the first opened cell in reading order — the top of the new column, or
+   * the left of the new row.
+   */
+  it('opens its first new cell at the near end of the pressed edge', () => {
+    const firstOpened = (cells: number, columns: number, direction: 'beside' | 'below') =>
+      grownPlacement(shape(cells, columns), direction).findIndex((from) => from === null)
+    // 2 × 2 beside: cell 2 is row 0, column 2 — the top of the new column.
+    expect(firstOpened(4, 2, 'beside')).toBe(2)
+    // 2 × 2 below: cell 4 is row 2, column 0 — the left of the new row.
+    expect(firstOpened(4, 2, 'below')).toBe(4)
   })
 })
 

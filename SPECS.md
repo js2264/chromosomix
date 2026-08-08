@@ -1210,6 +1210,14 @@ says, and a shared window between them would be two places. The tolerance is one
 panel, because the last bin of a contig may be short (§3.3) and a stricter test would refuse every
 honest pair whose bin size does not divide the contig.
 
+A **turned** deck (§16.2) has a second way to disagree, and it is a different fact. Up the side of a
+band is distance from the diagonal, and how far a map opens up it is a fraction of its own block
+rounded to a whole bin — so two files at different resolutions turn to different depths, and one row
+window between them would be two distances. That refusal is about the *bands* and not about the
+sequences, and it is worded as such: borrowing the sentence above would tell a reader their files
+resolved one name against different sequences when they did not, which is a claim they may act on.
+It goes away when the deck is turned back off.
+
 A panel the gate refuses is **still shown**, still readable and still exportable. Only the lock is
 off, and the panel says so in a line under its own heading rather than only in a tooltip on a chain
 icon — a lock that claims to be closed while the deck skips it is the one way this can be quietly
