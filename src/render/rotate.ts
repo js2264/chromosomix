@@ -1,0 +1,267 @@
+/**
+ * The map turned 45°: position along the bottom, distance from the diagonal up
+ * the side.
+ *
+ * A contact map is symmetric about its diagonal, and the diagonal is where all
+ * the signal is — so a square map spends most of its area on the far corners,
+ * which are empty, and draws the part anybody is reading as a thin bright band
+ * across the middle. Turning it puts that band along the bottom of a rectangle
+ * and gives the whole picture to it. Two things follow, and the second is the
+ * real reason to do it:
+ *
+ * 1. A domain becomes a **triangle standing on the axis**, and a loop becomes a
+ *    **dot at the height of its own span** — both far easier to see than a
+ *    square-cornered block and a dot off the diagonal.
+ * 2. The x axis is now *genomic position*, the same axis a track is drawn
+ *    against. A coverage profile under a square map lines up with one edge of
+ *    it; under a turned map it lines up with the picture. That is what every
+ *    published Hi-C figure is doing, and it is what §8.4's one coordinate model
+ *    was already built for.
+ *
+ * ---
+ *
+ * **The transform is a true rotation, and that decides the units.** A cell
+ * `(b1, b2)` goes to `x = (b1 + b2) / 2` and `y = (b2 - b1) / 2`, both in bins,
+ * both drawn at the same bases per pixel. Isometric: nothing is stretched, a
+ * domain's two edges meet at a right angle over its midpoint, and a base pair
+ * measured up the side is the same length as a base pair measured along the
+ * bottom.
+ *
+ * The consequence to hold on to is that **height is half of separation**. A
+ * contact between two bins 100 kb apart sits 50 kb above the axis. The y axis is
+ * therefore *labelled* in separation — which is the question a reader is asking,
+ * and the number this module takes and returns — while the coordinate underneath
+ * it is half that. Stretching the picture to make the two agree is the
+ * alternative and it is worse: it would put a domain's edges at 63° and make a
+ * base pair up the side shorter than one along the bottom, so nothing could be
+ * measured off the plot with one ruler.
+ *
+ * **The lattice is half-bin.** `b1 + b2` and `b2 - b1` always share parity, so
+ * the rotated grid is a checkerboard: half its positions have no cell. Filling
+ * only those and interpolating the rest is one option and it blurs; drawing each
+ * source cell as a diamond is another and it costs a path per cell. Instead each
+ * source cell fills **two adjacent columns**, which makes the output dense,
+ * uniform, square-celled and exact to within the half bin it is drawn at. The
+ * output cell is `binsize / 2` on both axes, so the block the renderer receives
+ * is an ordinary uniform matrix and every part of it — pooling, colouring, pan,
+ * zoom, clip, colourbar, export — is the same code it always was.
+ *
+ * **The corners are empty, and that is honest.** A cell at the far left of the
+ * window and high up needs a partner off the left-hand end of the block, which
+ * was never read. Those two corner triangles come back `NaN` and draw as paper.
+ * Reading wider than the window would fill them and is the obvious later
+ * improvement; nothing here pretends they are zeros.
+ */
+
+/** The part of a read this module needs. */
+export interface RotatableBlock {
+  nrows: number
+  ncols: number
+  values: Float32Array
+  rowExtent: readonly [number, number]
+  colExtent: readonly [number, number]
+}
+
+/**
+ * Which way separation grows on screen.
+ *
+ * `up` is the ordinary turned map: the diagonal along the bottom, distance
+ * increasing towards the top of the panel. `down` is its mirror, and exists for
+ * exactly one thing — the two-file comparison, whose lower-left triangle has
+ * nowhere to go once the square is turned. Drawn `down` beneath a first map
+ * drawn `up`, the pair becomes two rectangles meeting at one shared genomic
+ * axis, which is a better presentation of that comparison than the square was:
+ * the two are read against each other at every position without the eye having
+ * to reflect one of them through a diagonal first.
+ */
+export type RotateDirection = 'up' | 'down'
+
+export interface RotateOptions {
+  /**
+   * Largest separation to keep, **in bins**, counted as `|b2 - b1|`.
+   *
+   * The reader's "how far from the diagonal am I looking", and the thing that
+   * makes this cheaper than the square it replaces rather than dearer: nobody
+   * wants the whole triangle, and a band is a fraction of the block.
+   */
+  maxSeparation: number
+  direction?: RotateDirection
+}
+
+/**
+ * A turned block, and everything needed to read a position back out of it.
+ *
+ * Shaped so the values half can be handed to the renderer as an ordinary dense
+ * matrix while the geometry half answers the questions only this module can:
+ * where a column sits on the genome, and which pair of bins a cell came from.
+ */
+export interface RotatedBlock {
+  nrows: number
+  ncols: number
+  /** Row-major, `nrows * ncols`, `NaN` where no cell of the square reaches. */
+  values: Float32Array
+  /**
+   * Absolute bin position of the **left edge of column 0**, in bins.
+   *
+   * The block's own first bin: column 0 is the cell where both ends are that
+   * bin. Columns advance by half a bin from there, which is what
+   * {@link BIN_FRACTION} names.
+   */
+  originBin: number
+  /** Separation, in bins, of the row furthest from the axis. */
+  maxSeparation: number
+  direction: RotateDirection
+}
+
+/**
+ * How much of a bin one output cell spans, on both axes.
+ *
+ * A half, and not a tuning knob: it is what the rotated lattice *is*. `b1 + b2`
+ * advances by one when either end moves by one bin, so the natural column width
+ * is half the bin size, and the same is true up the side.
+ */
+export const BIN_FRACTION = 0.5
+
+/**
+ * Turn a square on-diagonal block into a band above its own diagonal.
+ *
+ * The caller has already established that this block *has* a diagonal — see
+ * {@link isTurnable}, which is the gate the toggle is greyed by. Handing an
+ * off-diagonal block here would produce a picture of the distance between two
+ * sequences that do not have one.
+ */
+export function rotateBlock(block: RotatableBlock, options: RotateOptions): RotatedBlock {
+  const n = Math.min(block.nrows, block.ncols)
+  const direction = options.direction ?? 'up'
+  // At most the block itself: a separation wider than the window has no cells
+  // to draw, and asking for one would allocate rows that could only be NaN.
+  const maxSeparation = Math.max(0, Math.min(Math.trunc(options.maxSeparation), Math.max(0, n - 1)))
+  const width = Math.max(1, 2 * n - 1)
+  const height = maxSeparation + 1
+  const values = new Float32Array(width * height).fill(Number.NaN)
+
+  for (let separation = 0; separation <= maxSeparation; separation++) {
+    // Rows are emitted in the order they are drawn, so the renderer needs no
+    // notion of which way up this is: `up` puts the widest separation in row 0,
+    // which a top-to-bottom raster then draws as an apex over an axis along the
+    // bottom edge.
+    const row = direction === 'up' ? maxSeparation - separation : separation
+    const base = row * width
+    for (let i = 0; i + separation < n; i++) {
+      const j = i + separation
+      const value = block.values[i * block.ncols + j]
+      // Two columns per cell, which is what makes the output dense rather than
+      // a checkerboard: `i + j` and `i + j + 1` are the two half-bin columns the
+      // cell covers, and the second is where the parity gap would otherwise be.
+      const x = 2 * i + separation
+      values[base + x] = value
+      if (x + 1 < width) values[base + x + 1] = value
+    }
+  }
+
+  return {
+    nrows: height,
+    ncols: width,
+    values,
+    originBin: block.rowExtent[0],
+    maxSeparation,
+    direction,
+  }
+}
+
+/**
+ * The pair of bins a turned cell came from, or `null` off the end of the band.
+ *
+ * What the readout needs, and the reason the two-columns-per-cell rule above is
+ * worth stating precisely: a column is half a bin, so two adjacent columns can
+ * name the same pair, and which of them a pointer is over is not a fact about
+ * the data. The parity of `column + separation` is what picks the pair back out
+ * — one of the two columns hits the lattice exactly and the other is the filled
+ * neighbour, so the answer is the same cell either way.
+ */
+export function cellAt(
+  rotated: Pick<RotatedBlock, 'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'>,
+  row: number,
+  column: number,
+): { row: number; col: number; separation: number } | null {
+  if (row < 0 || row >= rotated.nrows || column < 0 || column >= rotated.ncols) return null
+  const separation = separationAt(rotated, row)
+  // `i + j` for this cell: the lattice point at or just left of the column.
+  const sum = (column + separation) % 2 === 0 ? column : column - 1
+  const i = (sum - separation) / 2
+  const j = i + separation
+  if (!Number.isInteger(i) || i < 0) return null
+  return { row: i, col: j, separation }
+}
+
+/** The separation, in bins, that a row of the turned block stands for. */
+export function separationAt(
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  row: number,
+): number {
+  return rotated.direction === 'up' ? rotated.maxSeparation - row : row
+}
+
+/** The row that draws a given separation. Inverse of {@link separationAt}. */
+export function rowForSeparation(
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  separation: number,
+): number {
+  return rotated.direction === 'up' ? rotated.maxSeparation - separation : separation
+}
+
+/**
+ * The absolute bin position at the centre of a turned column.
+ *
+ * Fractional by construction — a column is half a bin — and returned that way
+ * rather than rounded, because the axis under a turned map is a genomic ruler
+ * and rounding it would make every second tick land on the wrong side of a bin
+ * boundary.
+ */
+export function positionAt(rotated: Pick<RotatedBlock, 'originBin'>, column: number): number {
+  return rotated.originBin + (column + 0.5) * BIN_FRACTION
+}
+
+/**
+ * The separation a band of `rows` pixels can show, given how tall a cell is.
+ *
+ * The arithmetic behind "the box keeps its height and the distance follows the
+ * zoom": the panel's height in cells is fixed by the layout, a cell is half a
+ * bin *of height* and therefore a whole bin *of separation*, and so the deepest
+ * contact on screen is the row count in bins.
+ */
+export function separationForRows(rows: number): number {
+  return Math.max(0, Math.trunc(rows))
+}
+
+/**
+ * Whether a block can be turned at all.
+ *
+ * Three conditions, and each of them is the same condition looked at from a
+ * different side: **the block must have a diagonal**. Distance from it is the
+ * whole of the y axis, so a block that does not have one has no picture to make.
+ *
+ * - the two axes must cover the same bins, or the block is a rectangle between
+ *   two different stretches of the genome;
+ * - it must be one sequence, because a boundary between two of them is a
+ *   discontinuity in the x axis and the "distance" across it is not a distance;
+ * - it must be at bin level, because above that a cell is a whole sequence and
+ *   the separation between two of them is a count of sequences, not a length.
+ *
+ * The toggle is greyed rather than hidden where this is false, so that a reader
+ * looking at a whole metagenome can see the control exists and learn what it
+ * wants from them.
+ */
+export function isTurnable(block: {
+  level: 'bin' | 'contig' | 'genome'
+  rowExtent: readonly [number, number]
+  colExtent: readonly [number, number]
+  rowGroups?: ReadonlyArray<unknown>
+}): boolean {
+  if (block.level !== 'bin') return false
+  if (block.rowExtent[0] !== block.colExtent[0]) return false
+  if (block.rowExtent[1] !== block.colExtent[1]) return false
+  // One run, or none at all — a plain cooler read as a single span has no runs
+  // and is one sequence by construction.
+  return (block.rowGroups?.length ?? 1) <= 1
+}
