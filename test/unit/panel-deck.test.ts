@@ -21,7 +21,7 @@ import {
   columnsFor,
   grownDeck,
   grownPlacement,
-  moveItem,
+  swapItems,
   panelBudgetBytes,
   parseMaps,
   sameRefs,
@@ -144,15 +144,28 @@ describe('sameRefs', () => {
   })
 })
 
-describe('moveItem', () => {
-  it('moves one place either way', () => {
-    expect(moveItem(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c'])
-    expect(moveItem(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'c', 'b'])
+describe('swapItems', () => {
+  /**
+   * A swap and not an insert. The deck is a rectangle the reader drew, and
+   * sliding a map into a distant cell by shifting everything between here and
+   * there rearranges three pictures to move one.
+   */
+  it('exchanges two cells however far apart they are', () => {
+    expect(swapItems(['a', 'b', 'c', 'd'], 0, 3)).toEqual(['d', 'b', 'c', 'a'])
+    expect(swapItems(['a', 'b', 'c'], 1, 2)).toEqual(['a', 'c', 'b'])
   })
 
-  it('is inert off either end, so the arrow on the first panel does nothing', () => {
-    expect(moveItem(['a', 'b'], 0, -1)).toEqual(['a', 'b'])
-    expect(moveItem(['a', 'b'], 1, 2)).toEqual(['a', 'b'])
+  it('keeps the shape: nothing else moves', () => {
+    const before = ['a', 'b', 'c', 'd', 'e']
+    const after = swapItems(before, 1, 3)
+    expect(after).toHaveLength(before.length)
+    expect(after.filter((x, i) => x !== before[i])).toEqual(['d', 'b'])
+  })
+
+  it('is inert off either end, and on itself', () => {
+    expect(swapItems(['a', 'b'], 0, -1)).toEqual(['a', 'b'])
+    expect(swapItems(['a', 'b'], 1, 2)).toEqual(['a', 'b'])
+    expect(swapItems(['a', 'b'], 1, 1)).toEqual(['a', 'b'])
   })
 })
 

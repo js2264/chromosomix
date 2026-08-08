@@ -2278,7 +2278,8 @@ p {
   width: clamp(
     20rem,
     calc(
-      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px)
+      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px) -
+        var(--deck-edge, 0px)
     ),
     60rem
   );
@@ -2502,6 +2503,69 @@ p {
 
 .map-key-input:focus {
   outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The scale menu, in the bottom-left corner of the map.
+
+   For a panel with no sidebar of its own. What was there before was a fold
+   *under* the picture, which pushed every panel of a deck down by the height of
+   whatever was open in the one beside it — and a menu that opens upward over
+   the map costs the layout nothing at all.
+   --------------------------------------------------------------------------- */
+
+.map-settings-corner {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 3;
+}
+
+.map-settings-toggle {
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.map-settings-toggle[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Over the picture, not beside it, and wide enough for the clip's two boxes.
+   `max-height` with a scroll, because a panel one sixth of a window tall is
+   shorter than five fields and a menu that runs off the bottom of its own map
+   is worse than one that scrolls. */
+.map-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  min-width: 13rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  font-size: var(--step--1);
+}
+
+.map-settings .field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: space-between;
+}
+
+.map-settings .field-clip {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 /* --- view controls ----------------------------------------------------- */
@@ -5081,15 +5145,37 @@ p {
   display: grid;
   grid-template-columns: repeat(var(--deck-columns, 1), minmax(0, 1fr));
   gap: 0.6rem;
-  align-items: start;
+  /* Stretch, not start: a cell with a height is a cell its picture can be
+     pushed to the foot of, which is how the maps in a row line up when one of
+     them carries a heading the others do not. */
+  align-items: stretch;
   min-width: 0;
 }
 
+/* Bottom-aligned within its cell, which is what makes the maps line up down a
+   row: the cells are equal width, so the plots are equal size, and a picture
+   pushed to the foot of its cell starts where every other one does whatever
+   sits above it. `stretch` on the grid is what gives a cell a height to push
+   against. */
 .deck-panel {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   min-width: 0;
+}
+
+.deck-panel > .deck-body,
+.deck-panel.is-lead > .view {
+  margin-top: auto;
+}
+
+/* The room the *lead's* tracks take, reserved on every panel beside it — see
+   `PanelDeck.alignTo`. A companion has no lanes of its own, so without this its
+   plot is as wide as its cell while the lead's is inset by a stack, and two
+   pictures of one place come out at two sizes. */
+.deck-panel:not(.is-lead) .panel-grid {
+  padding: var(--deck-lane-top, 0px) var(--deck-lane-right, 0px) var(--deck-lane-bottom, 0px)
+    var(--deck-lane-left, 0px);
 }
 
 /* The lead is the session's own view — its heading, its search box, its lanes,
@@ -5128,6 +5214,49 @@ p {
   font-weight: 600;
 }
 
+/* The handle a map is dragged by. Only the grip, not the whole heading: the
+   heading holds a chain and a close, and the map below it takes a drag as a
+   pan — a panel draggable everywhere is a panel a reader cannot navigate. */
+.deck-grip {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: grab;
+  color: var(--text-faint);
+}
+
+.deck-grip:active {
+  cursor: grabbing;
+}
+
+.deck-panel:hover .deck-grip {
+  color: var(--text-dim);
+}
+
+/* The lead's heading carries a name and nothing else — the first map is always
+   the lead, so there is nothing on it to press. */
+.deck-head-lead {
+  color: var(--text-dim);
+}
+
+/* The tiling, while a map is looking for a cell. The cells are only worth
+   seeing as cells during the gesture; a permanent outline round every panel
+   would be a grid drawn over four pictures for nobody. */
+.deck-grid.is-arranging .deck-panel:not(.is-lead) {
+  outline: 1px dashed var(--border-strong);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
+
+.deck-grid.is-arranging .deck-panel.is-target {
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.deck-panel.is-dragging {
+  opacity: 0.45;
+}
+
 .deck-name-vacant {
   color: var(--text-faint);
   font-style: italic;
@@ -5153,19 +5282,6 @@ p {
   min-width: 0;
 }
 
-/* The colour card, folded, inside the panel it controls — which is the plainest
-   statement of §16.2's split: the view is shared and lives above the grid, the
-   presentation is per panel and lives on the picture. */
-.deck-look {
-  font-size: var(--step--1);
-}
-
-.deck-look > summary {
-  cursor: pointer;
-  color: var(--text-dim);
-  padding: 0.15rem 0;
-}
-
 /* An empty cell is a *card the size of a map*, not a slot in a list. Its whole
    job is to say "a picture goes here" before there is one, and a 2rem strip
    would say "a control goes here" instead. `aspect-ratio` with a floor, so a
@@ -5188,7 +5304,11 @@ p {
    whatever height the content area happens to have. The right-hand edge takes
    its height from the body's row, which is what makes it a rail down the map
    rather than a button beside it. */
+/* The `+` along the bottom comes out of the plot's own vertical budget. Without
+   it a map sized to the whole window puts the edge below the fold, and the one
+   gesture that says this viewer can show two maps needs a scroll to reach. */
 .deck-frame {
+  --deck-edge: 2.4rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;

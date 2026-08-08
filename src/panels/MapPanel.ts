@@ -23,6 +23,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { DECK_DRAG_TYPE } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
@@ -172,11 +173,30 @@ export interface MapPanelProps {
    * The same rule, from the same function, as the second file of a blend
    * (`Session.openCompare`) and as a collection dropped on the picker.
    */
+  /**
+   * The score the **lead** resolved to, or `undefined`.
+   *
+   * Shared, and shared as a resolved id rather than left to each panel to work
+   * out from the state, because the default is a fact about a *file*: a cooler
+   * somebody balanced opens balanced, and that choice is not written into the
+   * hash. Two panels each applying their own default therefore disagreed
+   * silently — a balanced lead beside a companion drawing raw counts, under a
+   * bar saying the score is one of the things a deck shares. Resolved against
+   * this file's own columns all the same, so a name it has not got falls back
+   * to counts rather than to a read it cannot answer.
+   */
+  score(): string | undefined
   preferBinsize(): number | undefined
   /** Rewrite this panel's URI after it resolved a collection to one of its entries. */
   onResolved(uri: string): void
-  /** Move this panel one place along the deck; absent at either end. */
-  onMove(delta: number): void
+  /**
+   * The grip before this panel's name was taken hold of, or let go.
+   *
+   * The deck shows its tiling while one is held, because a reader dragging a
+   * map has to be able to see where the map can *go* — the cells are only
+   * visible as cells while something is looking for one.
+   */
+  onDragChange(dragging: boolean): void
 }
 
 export class MapPanel {
@@ -238,16 +258,9 @@ export class MapPanel {
       el(
         'header',
         { class: 'deck-head' },
+        this.grip(),
         this.nameEl,
         this.lockButton,
-        iconButton('chevron-left', 'Move this map one place earlier', () => props.onMove(-1), {
-          class: 'btn btn-icon deck-move',
-          size: 14,
-        }),
-        iconButton('chevron-right', 'Move this map one place later', () => props.onMove(1), {
-          class: 'btn btn-icon deck-move',
-          size: 14,
-        }),
         iconButton('x', `Close ${fileLabel(props.uri)}`, () => props.onClose(), {
           class: 'btn-close',
           size: 14,
@@ -258,6 +271,39 @@ export class MapPanel {
       this.body,
     )
     this.say('opening…')
+  }
+
+  /**
+   * The handle a map is dragged by, before its name.
+   *
+   * A grip and not a pair of arrows. `◀` `▶` could only ever say *one place
+   * along a list*, which is a poor description of a 2 × 2: moving the bottom-left
+   * map to the top-right is three presses, each of them shuffling everything in
+   * between. A deck is an arrangement (§16.9), and the gesture for rearranging
+   * one is picking a map up and putting it where it goes.
+   *
+   * On the grip rather than on the whole heading, because the heading holds a
+   * chain and a close and the map below it takes a drag as a pan — a panel that
+   * is draggable everywhere is a panel a reader cannot navigate.
+   */
+  private grip(): HTMLElement {
+    const node = el('span', {
+      class: 'deck-grip',
+      title: 'Drag to move this map to another cell of the deck',
+      attrs: { draggable: 'true', 'aria-label': 'Move this map' },
+    })
+    node.append(icon('grip-vertical', { size: 12 }))
+    node.addEventListener('dragstart', (event) => {
+      event.dataTransfer?.setData(DECK_DRAG_TYPE, this.props.uri)
+      if (event.dataTransfer !== null) event.dataTransfer.effectAllowed = 'move'
+      this.el.classList.add('is-dragging')
+      this.props.onDragChange(true)
+    })
+    node.addEventListener('dragend', () => {
+      this.el.classList.remove('is-dragging')
+      this.props.onDragChange(false)
+    })
+    return node
   }
 
   /** What this panel is actually reading — the entry, where it descended into one. */
@@ -434,8 +480,22 @@ export class MapPanel {
    * under a contig-level axis.
    */
   private keyFor(state: ViewState, plan: Exclude<BlockPlan, { kind: 'none' }>, info: OpenResult): string {
-    const choice = scoreFor(scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns }), state)
-    return JSON.stringify([plan, matrixLevel(state), choice.id])
+    return JSON.stringify([plan, matrixLevel(state), this.scoreOf(info, state).id])
+  }
+
+  /**
+   * The score this panel reads, resolved against **its own** columns.
+   *
+   * The deck's choice first, because the score is one of the things a deck
+   * shares and the lead's default is not written into the hash for a companion
+   * to find (see {@link MapPanelProps.score}). Then the state, then the file's
+   * own default — and `scoreFor` lands on counts for any of them this file
+   * cannot serve, which is the same rule a hash naming a missing column meets.
+   */
+  private scoreOf(info: OpenResult, state: ViewState) {
+    const choices = scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns })
+    const shared = this.props.score()
+    return scoreFor(choices, shared === undefined ? state : { ...state, score: shared })
   }
 
   private async readBlock(
@@ -443,8 +503,8 @@ export class MapPanel {
     plan: Exclude<BlockPlan, { kind: 'none' }>,
     info: OpenResult,
   ): Promise<MatrixResult> {
-    const choices = scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns })
-    const choice = scoreFor(choices, state)
+    const choice = this.scoreOf(info, state)
+    this.panel?.setScoreLabel(choice.label)
     const level = matrixLevel(state)
     // Resolved against *this* file's columns rather than carried over from the
     // lead: a hash naming `expected` is naming a column, and the file beside it
@@ -519,7 +579,22 @@ export class MapPanel {
       // Read once, here, rather than held from construction: a companion is
       // built before its file has been opened and the lead may have been
       // recoloured in between.
-      this.look = { ...this.props.initialLook(), ...this.look }
+      //
+      // The lead's **clip** only where this panel is drawing the same quantity.
+      // A clip is a pair of numbers in one score's units, and a file with no
+      // weight column falls back to counts (see {@link scoreOf}) — handing it a
+      // lead's balanced `[-3.8, -0.4]` would draw a perfectly good map as a
+      // black rectangle, from a control the reader never pointed at it. The
+      // transform and the ramp are handed over either way: a deck whose panels
+      // are drawn with different ramps is one where the eye has to translate
+      // before it can compare.
+      const look = this.props.initialLook()
+      const shared = this.props.score()
+      const comparable = shared === undefined || shared === this.scoreOf(info, state).id
+      this.look = {
+        ...(comparable ? look : { transform: look.transform, colormap: look.colormap }),
+        ...this.look,
+      }
       const turn = this.props.turn()
       this.panel = new MatrixPanel({
         binsize: info.binsize ?? 1,
@@ -527,6 +602,7 @@ export class MapPanel {
         ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
         ...(turn === undefined ? {} : { turn }),
         detachedControls: true,
+        cornerControls: true,
         hideTitle: true,
         caption: { file: fileLabel(this.uri) },
         // The clip a companion arrives at is its own — see {@link applyLook}.
@@ -534,21 +610,13 @@ export class MapPanel {
           this.look = scale
         },
       })
-      // Colour and export, folded, under the picture they belong to. Not the
-      // Tracks card and not Groups: both are about annotations, a companion
-      // carries none, and a card offering to size lanes that cannot exist is
-      // worse than no card. Export *is* offered, because a panel of a deck is
-      // exactly the thing somebody wants as a figure on its own.
-      this.body.replaceChildren(
-        this.panel.el,
-        el(
-          'details',
-          { class: 'deck-look' },
-          el('summary', { text: 'colour and export' }),
-          this.panel.controlsEl,
-          this.panel.exportEl,
-        ),
-      )
+      // Nothing under the picture. A companion's scale controls are on the map
+      // itself, in the corner menu a detached panel builds for exactly this
+      // case (`ui/MatrixPanel.ts`) — a fold under each panel pushed every other
+      // panel of the deck down by the height of whatever was open in it. Not
+      // the Tracks card and not Groups either: both are about annotations and a
+      // companion carries none.
+      this.body.replaceChildren(this.panel.el)
     }
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
@@ -603,7 +671,6 @@ export class VacantPanel {
     origin: VacancyOrigin
     onOpen(file: File): void
     onClose(): void
-    onMove(delta: number): void
   }) {
     const drawn = props.origin === 'drawn'
     const input = el('input', { class: 'hidden-input', type: 'file' })
@@ -656,14 +723,8 @@ export class VacantPanel {
         'header',
         { class: 'deck-head' },
         el('span', { class: 'deck-name deck-name-vacant', text: 'empty' }),
-        iconButton('chevron-left', 'Move this cell one place earlier', () => props.onMove(-1), {
-          class: 'btn btn-icon deck-move',
-          size: 14,
-        }),
-        iconButton('chevron-right', 'Move this cell one place later', () => props.onMove(1), {
-          class: 'btn btn-icon deck-move',
-          size: 14,
-        }),
+        // No grip: an empty cell is a *place*, and dragging a place is not a
+        // gesture. It is where the maps are dragged **to**.
         iconButton('x', 'Close this cell — the deck loses a place', () => props.onClose(), {
           class: 'btn-close',
           size: 14,
