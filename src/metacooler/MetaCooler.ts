@@ -892,7 +892,7 @@ export class MetaCooler {
   async selectionMatrix(
     units: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
     aim: PoolPlan,
-    options: SpanScanOptions & { balance?: boolean } = {},
+    options: SpanScanOptions & { balance?: boolean; cellCap?: number } = {},
   ): Promise<
     Omit<AggregatedMatrix, 'level'> & {
       binsPerCell: number
@@ -901,7 +901,14 @@ export class MetaCooler {
       pooling: BinPooling
     }
   > {
-    const pooling = selectionPooling(this.nBins, units, aim)
+    // `cellCap` is the caller's ceiling on the *picture*, which is what a memory
+    // budget resolves to here: the block is square, so a byte budget divides
+    // into a cells-per-axis cap and nothing else has to change. Absent means
+    // `selectionPooling`'s own cap, which is the raster's.
+    const pooling =
+      options.cellCap === undefined
+        ? selectionPooling(this.nBins, units, aim)
+        : selectionPooling(this.nBins, units, aim, options.cellCap)
     // On the diagonal by construction: one axis, used twice. `planRead` decides
     // what that means for the store rather than this function assuming it — a
     // `square` file holds both triangles and each stored pixel is its own cell,

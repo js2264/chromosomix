@@ -2629,7 +2629,7 @@ export class Session {
     // progress is about to replace — and framing a detached view would put the
     // outgoing picture on screen inside a grid, one frame before the incoming
     // one arrives through `showContent` and does it properly.
-    if (this.contentNode !== null && this.contentNode.isConnected) {
+    if (this.contentNode !== null && this.contentNode.isConnected && this.deckIsPossible) {
       this.contentEl.replaceChildren(deck.frame(this.contentNode))
       deck.setLead(this.current?.panel ?? null)
     }
@@ -3092,6 +3092,10 @@ export class Session {
     ) {
       this.current.applyScale?.(this.scaleOf(state))
       this.rederive()
+      // After the lead has the new scale, never before: the deck is reconciled
+      // above (a colour-only change is still a view its panels must be handed),
+      // and reading the lead's clip there reads the one it is about to replace.
+      this.deck?.syncSharedLook()
       this.mounted = state
       this.breadcrumb?.render(state)
       this.host.activity(this)
@@ -3731,7 +3735,14 @@ export class Session {
     // grid rather than rebuilt, so a session with companions costs the session
     // it would have been plus the companions (§16.1).
     this.contentNode = node
-    this.contentEl.replaceChildren(this.deck?.frame(node) ?? node)
+    // …but only for a view the companions can answer. A table or an overview is
+    // of *this file* and nothing else, so framing one put a genomes table into
+    // one sixth of the column beside five rectangles each saying it has nothing
+    // to draw. The deck is kept — navigating back to a map must not cost five
+    // files reopened — it simply stops being a frame while there is nothing for
+    // it to be a frame around.
+    const framed = this.deckIsPossible ? (this.deck?.frame(node) ?? node) : node
+    this.contentEl.replaceChildren(framed)
     this.deck?.setLead(view?.panel ?? null)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes

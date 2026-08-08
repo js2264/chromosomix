@@ -379,6 +379,7 @@ export class MapPanel {
         kind: 'selection',
         unit: plan.unit,
         names: plan.names,
+        budgetBytes,
         ...balance,
         ...value,
       })

@@ -603,7 +603,14 @@ async function handleSelection(
   const selected = await mc.selectionMatrix(units, plan, {
     ...scanHooks(id),
     ...(request.balance === true ? { balance: true } : {}),
-      ...(request.value === undefined ? {} : { value: request.value }),
+    ...(request.value === undefined ? {} : { value: request.value }),
+    // A byte budget is a cells-per-axis cap on a square block: four bytes a
+    // cell, so `cap = √(budget / 4)`. Floored at one cell so a budget too small
+    // to hold anything still produces a picture rather than an empty axis —
+    // the refusal a deck wants is "coarser", not "nothing".
+    ...(request.budgetBytes === undefined
+      ? {}
+      : { cellCap: Math.max(1, Math.floor(Math.sqrt(request.budgetBytes / 4))) }),
   })
   if (cancelled.has(id)) throw abortError()
 

@@ -120,16 +120,25 @@ describe('spansAgree', () => {
  * which is the echo the lock has to recognise.
  */
 function panel(id: string, bpPerCell: number, cells: number) {
-  const state = { rows: [0, cells] as CellSpan, cols: [0, cells] as CellSpan, locked: true, shown: 0 }
+  const state = {
+    rows: [0, cells] as CellSpan,
+    cols: [0, cells] as CellSpan,
+    locked: true,
+    shown: 0,
+    /** `false` stands in for a panel whose block has not arrived. */
+    loaded: true,
+  }
   const member: LockMember = {
     id,
     bpPerCell: () => bpPerCell,
     cells: () => ({ rows: cells, cols: cells }),
     locked: () => state.locked,
     show: (rows, cols) => {
+      if (!state.loaded) return false
       state.rows = rows
       state.cols = cols
       state.shown += 1
+      return true
     },
   }
   return { member, state }
@@ -319,5 +328,52 @@ describe('ViewportLock', () => {
     lock.report('a', [10, 60], [10, 60])
     expect(first.state.shown).toBe(0)
     expect(second.state.shown).toBe(1)
+  })
+})
+
+describe('a panel that could not be moved', () => {
+  it('is not owed a report it will never send', () => {
+    // `pushTo` records one report as owed per pushed panel and throws it away,
+    // which is what stops a panel that clamped the window from becoming the
+    // driver. A panel whose block has not arrived cannot move and never reports,
+    // so recording the debt left it owed for the life of the deck — and the
+    // panel's first *real* gesture, once its block landed, was swallowed as the
+    // answer to a push that never happened.
+    const lock = new ViewportLock()
+    const lead = panel('lead', 1000, 100)
+    const late = panel('late', 1000, 100)
+    late.state.loaded = false
+    lock.join(lead.member)
+    lock.join(late.member)
+
+    drag(lock, lead, [10, 30], [10, 30])
+    expect(late.state.shown).toBe(0)
+
+    // Its block arrives, and the reader pans *it*. The deck must follow.
+    late.state.loaded = true
+    drag(lock, late, [50, 70], [50, 70])
+    expect(lead.state.rows).toEqual([50, 70])
+  })
+})
+
+describe('navigating to a different block', () => {
+  it('forgets a window that is no longer a place', () => {
+    // The currency is base pairs from each block's own first cell, so a window
+    // is a statement about one block. Carried across a navigation it still
+    // parses and means somewhere else, and a companion that finishes reading
+    // before the lead would be scrolled to a window nobody asked for.
+    const lock = new ViewportLock()
+    const lead = panel('lead', 1000, 100)
+    const other = panel('other', 1000, 100)
+    lock.join(lead.member)
+    lock.join(other.member)
+    drag(lock, lead, [10, 30], [10, 30])
+    expect(lock.window).not.toBeNull()
+
+    lock.reset()
+    expect(lock.window).toBeNull()
+    const before = other.state.shown
+    lock.catchUp('other')
+    expect(other.state.shown).toBe(before)
   })
 })

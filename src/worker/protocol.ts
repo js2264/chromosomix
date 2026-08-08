@@ -495,6 +495,16 @@ export type WorkerRequest =
       value?: string
       binsPerCell?: number
       contigsPerCell?: number
+      /**
+       * Ceiling on the dense block this read may build, as `matrix` takes one.
+       *
+       * A selection is already capped at `POOLED_CELL_CAP²` cells whatever the
+       * file's size, so this is not what stops a runaway read — it is what lets a
+       * *deck* divide that ceiling. Six panels each entitled to the whole cap is
+       * six times the one block the guard was written for (§16.7), and the
+       * selection path was the one request kind with no way to say so.
+       */
+      budgetBytes?: number
     }
   | { id: number; kind: 'overview'; level?: 'genome' | 'contig'; maxUnits?: number }
   | { id: number; kind: 'overviewSidecar'; url: string }
