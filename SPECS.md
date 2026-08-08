@@ -1354,9 +1354,20 @@ file. The two tables and the whole-metagenome scan (§7.3) are pictures of a *fi
 file's genomes table is not this one with more rows in it. "Add a map" is disabled there rather than
 hidden, so the answer to "can this viewer do that" is *yes, from a map*.
 
-A companion also carries no tracks. §8's contig-naming contract is between a track and one file's
-`/contigs`, and a lane beside a companion would be a fourth thing keyed on a third assembly. The
-lead's tracks are untouched and stay where they are.
+A companion **does** carry tracks, and that is a change from what this section used to say. §8's
+contig-naming contract is between a track and one file's `/contigs`, and the reason a lane beside a
+companion looked like a fourth thing keyed on a third assembly is that the *track* and the *lane*
+were one object. They are two now (§17.4): a track is the import and the style true of it
+everywhere, a lane is one placement of it on one map. There is still exactly one list of tracks and
+one contig contract; what a deck adds is where each of them is drawn.
+
+Which forces one rule on the layout. **Every map leaves room for the deepest stack on each edge**,
+whichever map has it, and pads out the difference between that and its own. Without it a map with a
+strip above it stands lower than a map without one, and two pictures of one place have to be
+corrected for before they can be read against each other — which is the whole thing a deck is for.
+The figure is asked of every panel at the moment it is used rather than accumulated as the panels
+report: they announce their stacks in whatever order they finish reading, and a running maximum is a
+maximum over whoever has spoken so far.
 
 ### 16.9 Drawing the deck
 
@@ -1417,3 +1428,124 @@ first empty cell in the deck: the two differ only when the deck already had a ho
 there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
 chooser, the command palette — takes the first empty cell instead, because those name no position
 and the empty cells are the reader's own instruction about where the next map goes.
+
+## 17. The turn: 45°, distance up the side
+
+A contact map is symmetric about its diagonal, and the diagonal is where all the signal is. So a
+square map spends most of its area on the far corners, which are empty, and draws the part anybody
+is reading as a thin bright band across the middle. Turning it puts that band along the bottom of a
+rectangle and gives the whole picture to it.
+
+Two things follow, and the second is the real reason to do it. A domain becomes a **triangle
+standing on the axis** and a loop becomes a **dot at the height of its own span**, both far easier
+to see than a square-cornered block and a dot off the diagonal. And the x axis becomes *genomic
+position* — the same axis a track is drawn against. A coverage profile under a square map lines up
+with one edge of it; under a turned map it lines up with the picture. That is what every published
+Hi-C figure is doing, and it is what §8.4's one coordinate model was already built for.
+
+### 17.1 The geometry, and what it fixes
+
+A cell `(b1, b2)` goes to `x = (b1 + b2) / 2` and `y = (b2 - b1) / 2`, both in bins, both drawn at
+the same bases per pixel. A **true rotation**: nothing is stretched, a domain's two edges meet at a
+right angle over its midpoint, and a base pair measured up the side is the same length as one
+measured along the bottom.
+
+The consequence to hold on to is that **height is half of separation**. A contact between two bins
+100 kb apart sits 50 kb above the axis. The y axis is therefore *labelled* in separation, which is
+the question a reader is asking, while the coordinate underneath it is half that. Stretching the
+picture to make the two agree is the alternative and it is worse: it would put a domain's edges at
+63° and make a base pair up the side shorter than one along the bottom, so nothing could be measured
+off the plot with one ruler.
+
+**The lattice is half-bin.** `b1 + b2` and `b2 - b1` always share parity, so the rotated grid is a
+checkerboard with half its positions empty. Filling only those and interpolating blurs; drawing each
+source cell as a diamond costs a path per cell. Instead each source cell fills **two adjacent
+columns**, which makes the output dense, uniform, square-celled and exact to within the half bin it
+is drawn at — and an ordinary uniform matrix, so pooling, colouring, pan, zoom, clip, the colourbar
+and export are all the code they always were.
+
+**The corners are empty, and that is honest.** A cell at the far left of the window and high up
+needs a partner off the left-hand end of the block, which was never read. Those two corner triangles
+come back `NaN` and draw as paper. Reading wider than the window would fill them and is the obvious
+later improvement; nothing pretends they are zeros.
+
+### 17.2 Where it is offered, and how deep it goes
+
+Only on a block that **has a diagonal**: the two axes must cover the same bins, it must be one
+sequence, and it must be at bin level. Each is the same condition from a different side — distance
+from the diagonal is the whole of the y axis, so a block without one has no picture to make, and
+"the distance across a boundary between two sequences" is not a distance. The toggle is **greyed
+rather than hidden** where this is false, so a reader looking at a whole metagenome can see that the
+control exists and find out what it wants of them.
+
+How far from the diagonal the band reaches opens at a **quarter of the block** and is dragged from
+there, by a bar along the band's top edge. A fraction rather than a distance in base pairs,
+deliberately: a default of "500 kb" is most of a bacterial chromosome and a rounding error on a
+human one, and this viewer opens on both. A whole triangle is always exactly twice as wide as it is
+tall — that is what the half-bin lattice makes it — so fitting one produces a picture that fills the
+panel and touches nothing, which is a fine picture and is not the one the turn is for.
+
+The drag gives the band the pixels the hand travelled. Its rate is taken **once, at the press**:
+the band is redrawn deeper on every step, so a rate read from the band as it grows would make the
+second half of one continuous movement slower than the first.
+
+### 17.3 The turn is the deck's, not one map's
+
+Like the derivations of §7.5, the turn is a property of the **session** and reaches every map in a
+deck. A bar claiming one navigation over a band and four squares is not a comparison. The
+navigation lock (§16.3) measures a turned map's window in the same base pairs it measures a square
+one's, remembering that a rotated cell is half a bin — without which every turned panel drew half of
+what the one beside it drew.
+
+### 17.4 Tracks under a turned map, and marks on one
+
+**Every track falls into the stack below the rectangle**, whichever edge it was put on, and a track
+placed on two edges arrives there once. There is nothing for a vertical lane to be drawn against:
+up the side is a distance, not a place.
+
+This is a *presentation* of the placement and not a rewrite of it. The turn is something a reader
+switches on and off, and a track that came back from it on the bottom edge because it happened to be
+turned when they pressed the button would be the picture editing their settings behind them — so
+"back where it came from on the way home" costs nothing, the store never having moved.
+
+Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
+where a locus is:
+
+- a **line** stays a line at the same place on the genome, joining up with the same line in the lane
+  below it — a mark stored as horizontal is drawn too, the axis it was drawn against being gone but
+  the locus it names not;
+- a **domain** becomes a triangle standing on the axis, apex over its own midpoint at the height of
+  its own span;
+- a **loop** becomes one dot at that height — the pair and its mirror rotate to the same point, so
+  the square map's "which half do I ring" question does not arise;
+- an **arrowhead** stands over the dot it names with its tip pointing back at it, square to the axis
+  rather than at 45°, and on the far side from the diagonal so the cell is never under the glyph.
+
+A call further out than the band shows is **not drawn**. That is outside the data rather than off
+the edge of the picture, and a dot pinned to the top would claim a depth the map is not showing.
+
+### 17.5 The ruler up the side
+
+A distance, in the same 1–2–5 ladder every other ruler uses, and the same affine line: the gradient
+is simply negative, separation growing towards the top of the picture while a row index grows
+towards the bottom. The tick *spacing* is the one thing that could not be shared — the default is
+the width of a base-pair label, because a horizontal ruler is what it was chosen for, and a turned
+band is a hundred pixels tall, which at that spacing fits one tick, on the diagonal, in the corner
+the column labels have already claimed.
+
+### 17.6 Not yet: the butterfly
+
+Two files compared under a turn should be **two rectangles meeting at one genomic axis**, the second
+growing downward — which is a better presentation of that comparison than the square, the two being
+read against each other at every position without the eye reflecting one through a diagonal first.
+`RotateDirection` exists for it and `rotate.ts` will draw a `down` band today; what is missing is the
+block that holds both halves at once, and the decision it forces.
+
+The two halves' diagonals are **adjacent rows, not the same row**, so the combined block's y axis is
+two affine lines meeting in the middle rather than one — and `AxisCoords`, which every ruler in the
+app is, is one line. Three ways out, none free: share the diagonal row between the files, which
+loses one file's self-contacts at the join; give the row ruler a supplier seam so it can be
+piecewise, which is a second tick mechanism beside the one §17.5 uses; or label the lower half in
+negative distance, which makes one affine line serve both and asks the reader to read `-100 kb` as
+"100 kb, in the other file". Until one of those is chosen the compare stays square under a turn,
+which is correct and is not what it should be.

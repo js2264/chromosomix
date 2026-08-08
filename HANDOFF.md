@@ -4,13 +4,12 @@ Working document for whoever picks this up. Branched from **`001715f` (0.9.0)**;
 everything below is new since that tag. All of it is committed and pushed.
 
 **Green as of the last commit:** `npm run typecheck`,
-`npm run test:nofixtures` (1146 passed, 25 skipped), `npm run build`.
+`npm run test:nofixtures` (1202 passed, 25 skipped), `npm run build`.
 
-**Since the first handoff:** §3.1's **A1**, **A2**, **B1**, **B3**, **D1** and
-**B4** are done, and **B2** is closed as a decision rather than as work — see §3.3
-and §3.4. **C1** and **C2** (the track model, and companions that can carry a
-track) are done; **C3** is attempted and reverted, and **C4** is built but has
-never been seen on screen. §3.1's C table is the detail.
+**State:** all three gaps in §1 are closed. The deck (§3) is complete, tracks
+included; the turn (§5) is complete but for the butterfly, which is open on a
+design decision rather than on work and is written up in `SPECS.md` §17.6. §7 is
+the honest list of what is thin rather than missing.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
 with "Cannot find type definition file for 'node'" until you do, which looks
@@ -25,7 +24,7 @@ Close three gaps against HiGlass, raised in this order:
 1. **Comparison capped at exactly two files.** → §16, the deck of panels.
 2. **No derived or arithmetic maps** — O/E, ratios, on-the-fly normalisation, and
    the same for tracks. → §7.5, derived values.
-3. **No 45° view.** → `render/rotate.ts`, *partially landed — see §5*.
+3. **No 45° view.** → `render/rotate.ts` and `SPECS.md` §17 — see §5.
 
 (1) was built by a subagent in an isolated worktree and merged; (2) and (3) were
 built in the main session. The merge and the seam between them were then
@@ -75,7 +74,7 @@ diverging ramp's centre colour across 96% of drawn pixels.
 
 ---
 
-## 3. The deck of panels (§16) — **everything but tracks; see §3.1**
+## 3. The deck of panels (§16) — **complete**
 
 Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 
@@ -98,9 +97,10 @@ Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 - Memory: `panelBudgetBytes` divides one block's allowance across N, so a deck
   cannot exceed the single map it replaced. `MAX_PANELS = 6`.
 
-**Everything below is what it does not do.** Getting maps in and arranging them
-are done (§3.3, §3.4); what is left is §3.1's group C — a companion cannot carry
-a track, and that is now the whole of the gap.
+**§3.1 below is the gap analysis this branch worked through, kept because each
+row names the code and the reasoning.** Every item in it is now closed. Group C —
+tracks on any map of a deck — was the last, and the alignment rule it forced
+(C3) is written up in `SPECS.md` §16.8.
 
 ### 3.1 Gap analysis
 
@@ -125,14 +125,14 @@ change. Ordered within each group by what I would do first.
 
 #### C. Tracks
 
-The model is decided and built; two of the four are done.
+All four are done.
 
 | # | Gap | Where |
 |---|---|---|
 | ~~C1~~ | **Done.** A companion is handed an annotation context of its own — the session's one store, plus the id of the map whose lanes it draws — so a panel of a deck carries tracks. `ui/AnnotationLanes.ts` needed no change: it is still given a list of entries keyed by id and never learns lanes exist. A file dropped on a companion's edge is placed on *that* map. | `MapPanel.show`, `Session.annotationContext` |
 | ~~C2~~ | **Decided, built and tested** (`src/annotations/placement.ts`, `test/unit/placement.test.ts`, 20). A **track** is the import and the style true of it everywhere; a **lane** is one placement — a map, four edge booleans, and a *sparse* patch. `resolveStyle` is one spread, and the property that matters is what a lane omits: a lane with no patch cannot drift from its track. `LANE_OVERRIDES` is two fields (`limits`, `flip`) on purpose — every field a lane can differ on is a field two maps can no longer be compared on, which is why **height is shared**. | `annotations/placement.ts`, `AnnotationStore` |
-| C3 | **Alignment is still the lead's stack, not the deck's.** `PanelDeck.alignTo` reserves what the *lead's* lanes take on each edge, which was right while only the lead could carry a track and is wrong the moment a companion does: a companion with three tracks under a lead with one pushes its own picture up and the maps stop lining up. `MapPanel.laneRoom(edge)` and `MatrixPanel.laneExtent(edge)` are in place and correct — nothing reads them yet. **Attempted and reverted**: driving the reservation from the per-panel maximum needs a companion's report folded in without a re-align loop, and a companion's first report arrives long before the lead's, so an unguarded version reserves nothing at all and every map loses its stack room. Verify with `--deck-lane-bottom` on `.deck-grid`: it must be non-zero once the lead has a lane. | `PanelDeck.alignTo`, `MapPanel.laneRoom` |
-| C4 | **Built, not verified.** The location control is one row of four edges *per map*, with `every map` (propagate, no patch) and `no map` (withdraw, keeps the import). A session with one map keeps exactly the row it always had. It typechecks and the store beneath it is unit-tested, but **the control has never been seen on screen**: in an automated browser run the track row's settings disclosure would not open — one `.ann-body` in the DOM, `hidden`, no children, unmoved by a real click or a dispatched one. That is the next thing to look at, and it may well be a live bug rather than a test artefact. | `AnnotationCard.placement`, `edgeRow`, `everyMapRow` |
+| ~~C3~~ | **Done.** The reserved room is now the deepest stack on each edge **across the deck**, and every panel — the lead included — pads out the difference between that and its own (`MatrixPanel.setLaneFloor`, `--lane-pad-*`). The earlier attempt failed because it accumulated a maximum as panels reported, and they report in whatever order they finish reading: a companion's first report arrives long before the lead's, so the running maximum was a maximum over one panel. `deepestStacks` folds over all of them at the moment of use instead, which has no order to get wrong. Pinned in `test/unit/panel-deck.test.ts`; verified on screen with a track above one map and below the other, both squares at the same top and the same size. | `PanelDeck.align`, `deck.deepestStacks`, `MatrixPanel.writeLaneMetrics` |
+| ~~C4~~ | **Done and seen.** The location control is one row of four edges *per map*, with `every map` (propagate, no patch) and `no map` (withdraw, keeps the import). The disclosure that would not open opened all along — the run that said otherwise had clicked a row with no track in it. What *was* broken was the control's shape: a label column and four edge buttons cannot share a sidebar row, so `bottom` read as `bottc` and both map names truncated to the shared `Ecoli.mcool…` prefix, at exactly the point where they stop being the same file. The field turns on its side. | `AnnotationCard.placement`, `edgeRow`, `everyMapRow` |
 
 #### D. Defects — wrong, not missing
 
@@ -157,18 +157,19 @@ The model is decided and built; two of the four are done.
 ### 3.2 Suggested order
 
 The dependency chain is real, and doing these out of order means doing them
-twice. **Everything but 2 and 6 is done**, and those two are one piece of work:
-the track model, then what it makes possible.
+twice. **All of it is done**; the order is kept because it is the reason the last
+two landed cleanly.
 
 1. ~~**D1**~~ — done, and see §3.3 for what it turned out to be attached to.
-2. **C2** — decide the track ownership model. Write the decision down before any
-   code. Everything in C waits on it.
+2. ~~**C2**~~ — the track ownership model, decided and written down before any
+   code. Everything in C waited on it, and it is why C3 and C4 were small.
 3. ~~**B2**~~ — closed as a decision: the first map is always the lead.
 4. ~~**A1**~~ — done as the `+` edges (§3.3).
 5. ~~**B3 → B1**~~ — done: a rectangle with a drawn column count, and a grip
    that swaps two cells.
-6. **C1 → C3 → C4** — tracks per map, then alignment, then broadcast.
-7. **B4** and the rest of E.
+6. ~~**C1 → C3 → C4**~~ — tracks per map, then alignment, then broadcast.
+7. ~~**B4**~~ and the rest of E — of which two remain, both deliberate: a
+   companion never gets the two-file compare, and there is no promote-to-lead.
 
 ### 3.4 The second batch
 
@@ -325,11 +326,11 @@ purpose is that adjacent pictures are comparable.
 
 ---
 
-## 5. The 45° turn — **partially landed**
+## 5. The 45° turn — **complete but for the butterfly**
 
-`src/render/rotate.ts`, `test/unit/rotate.test.ts` (17). Commits `9d67ccc`
-(geometry) and `0d1ccbf` (wiring). **`SPECS.md` has no section for this yet and
-`CHANGELOG.md` has no entry — write both.**
+`src/render/rotate.ts`, `test/unit/rotate.test.ts` (28),
+`test/unit/overlays-turned.test.ts` (17). Written up in `SPECS.md` §17 and in the
+changelog.
 
 ### Agreed spec (from the user, verbatim intent)
 
@@ -376,37 +377,63 @@ Worth knowing before you "fix" them:
    "correct" this by stretching — that puts a domain's edges at 63° and makes the
    plot unmeasurable with one ruler.
 
-### What is NOT done — the actual remaining work
+### What landed after that
 
-Roughly in the order I'd do it.
+Each of these was on the "not done" list above and is now in, tested, and seen on
+screen. They are listed with what they turned out to cost, because the estimates
+in the first handoff were wrong in both directions.
 
-1. **Overlays are not rotated.** *(the long pole, and the only one that is
-   currently wrong rather than absent)* `render/overlays.ts` draws lines,
-   crosshairs, loops, hand-drawn marks and pairs at square-map coordinates. On a
-   turned map they land in the wrong place. A vertical line should become a ray
-   (`x - y = c`), a diagonal feature a horizontal line, and a **loop should become
-   a single dot at the height of its span** — which is strictly better than the
-   box it is now. Until this is done, a reader with annotations on a turned map is
-   being shown marks that lie.
-2. **Tracks do not fall to a bottom stack.** The vertical axis is correctly
-   `null`, so side lanes have nothing to draw against — but they are not *moved*,
-   and there is no restore-on-unflip. Precedent for remember-and-restore is the
-   lane-flip rule already in `TODO.md`'s DONE list.
-3. **No drag-the-top-edge gesture.** `MatrixPanel.turnRows` exists and is honoured
-   by `turnDepth`; nothing writes it. The gesture to copy is the one that sets a
-   track's ceiling by dragging across its body.
-4. **No butterfly.** `rotateBlock` takes `direction: 'down'` and it is tested, but
-   the compare path neither emits the second map nor stacks the two. Tracks go
-   **below both** (user's choice).
-5. **A y ruler labelled in separation.** There is currently no tick or label up
-   the side at all.
-6. **Empty corners.** A cell at the edge of the window and high up needs a partner
+1. **Overlays turned** — and the diagnosis in the first handoff was wrong. They
+   were not "drawn at square-map coordinates"; every one of them *bailed out* at
+   `rows === null`, which a turned map always is, so a turned map had no marks on
+   it at all. Absent rather than lying, which is better and is still a hole: the
+   reader's own marks vanished when they pressed the toggle. What replaces the row
+   axis is the pair of loci a mark was always about — see `SPECS.md` §17.4 for the
+   four shapes. `drawDiagonalFeatures` is tested but **not reachable from the UI
+   today**: `loader.cardFor` gives the overlay card to a bedpe and to nothing else,
+   so a BED is always a lane. Worth knowing before hunting for the triangle on
+   screen.
+2. **Tracks fall to one stack below**, and it cost less than expected because it
+   is a *presentation* and not a move: `AnnotationLanes.drawnOn` asks the store for
+   everything the map draws when the axes carry a turn, and the store never
+   changes. Which makes the restore free. `drawnAnywhereOn` exists because a track
+   on two edges must arrive once, in the list's own order — a reader orders the
+   list to order the stack.
+3. **The depth gesture**: a bar along the band's top edge, `MatrixPanel.watchDepth`.
+   The one thing worth knowing is that the rate must be captured **at the press** —
+   the band is redrawn deeper on every step, so a rate read live falls as the
+   picture grows and the second half of a drag is slower than the first. Note that
+   the band is recentred in the plot on each redraw, so the edge under the hand
+   drifts even though the band's *height* follows it exactly. Pinning the diagonal
+   instead would be a change to the fit, not to this gesture.
+4. **The y ruler**, `separationCoords`. It is the same `AxisCoords` line every
+   ruler is, with a negative gradient; `bpTicks` learned to order its two ends.
+   The tick *gap* had to become per-axis (`AxisCoords.tickGapPx`): the default is
+   the width of a bp label, and a band a hundred pixels tall fits one tick at it —
+   on the diagonal, in the corner the column labels have already taken, so the
+   ruler came out blank until that was found.
+5. **Docs**: `SPECS.md` §17, and §16.8 rewritten — it used to say a companion
+   carries no tracks.
+
+### What is NOT done
+
+1. **The butterfly.** Two compared files as two rectangles meeting at one genomic
+   axis, the second growing downward, tracks below both. This is open on a
+   **decision**, not on work. `rotateBlock` takes `direction: 'down'` and is
+   tested; stacking two halves into one block is an afternoon. The problem is the
+   ruler: the two halves' diagonals are *adjacent rows, not the same row*, so the
+   combined y axis is two affine lines meeting in the middle, and `AxisCoords` —
+   which every ruler in the app is — is one line. Three ways out, all with a cost,
+   set out in `SPECS.md` §17.6: share the diagonal row (loses one file's
+   self-contacts at the join), give the row ruler a supplier seam (a second tick
+   mechanism beside §17.5's), or label the lower half in negative distance (one
+   line serves both, and the reader has to read `-100 kb` as "100 kb, other
+   file"). Pick one before writing anything. Also needs: `cellAt`/`separationAt`
+   to know which half a row is in so the readout names the right file, and the
+   depth grip to take the top half's edge.
+2. **Empty corners.** A cell at the edge of the window and high up needs a partner
    off the end of the block. Honest as `NaN` today; filling them means reading
    wider than the window, which is a change to view read-planning.
-7. **Docs.** A `SPECS.md` section for the geometry and a `CHANGELOG.md` entry for
-   the feature. §16.2 and §16.3 now say what a turn means to a *deck* — shared
-   like the derivations, and measured in half-bins by the lock — and the
-   changelog has the three fixes; the turn itself is still undocumented.
 
 ---
 
@@ -471,10 +498,16 @@ before editing.
 
 Reported honestly rather than quietly left:
 
-- **The deck is still mostly skeleton.** §3.1 minus A1, A2 and D1 is the full
-  account, and it is still the largest body of remaining work on this branch:
-  nothing about tracks (C), nothing about moving a map with the pointer (B1), and
-  the lead is still not a panel (B2).
+- **`drawDiagonalFeatures` is unreachable from the UI.** `loader.cardFor` gives
+  the overlay card to a bedpe and to nothing else, so a BED is always a lane and
+  the code that draws features *on* the map — square or turned — never runs. It
+  is correct and tested either way; it is dead until something can put a feature
+  set on the overlay card. Pre-existing, not introduced here, but worth knowing
+  before hunting for a triangle on screen.
+- **The depth grip's edge drifts under the hand.** The band's *height* follows a
+  drag exactly, but the plot recentres on each redraw, so the top edge moves half
+  as far as the pointer. Pinning the diagonal instead is a change to the fit, and
+  the fit recentres everywhere else in the app.
 - Panel layout at 4–6 panels has been looked at once, at 2 × 2 with two maps and
   two empty cells. Five and six cells, and any of it in a narrow window, have
   not.
@@ -485,7 +518,8 @@ Reported honestly rather than quietly left:
   name — and if it happens the lock refuses the panel rather than mixing a
   separation axis with a position one, which is the safe failure. Not tested,
   because I could not construct it.
-- The turn's own remaining work is §5, and the overlays are still the long pole.
+- The turn's own remaining work is the butterfly, §5. Everything else on that
+  list is in.
 
 ---
 
