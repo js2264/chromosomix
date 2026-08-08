@@ -87,6 +87,7 @@ import {
 } from '../render/tracks'
 import type { ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
   LANE_EDGES,
   drawsAProfile,
@@ -365,6 +366,8 @@ export class AnnotationLanes {
   constructor(
     private readonly options: {
       store: AnnotationStore
+      /** Whose lanes to draw; the session's own map when absent. */
+      map?: MapId
       /**
        * The reader's own marks. Drawn *into* the lanes as well as onto the map:
        * a line called out on the matrix is a coordinate, and the tracks beside
@@ -473,7 +476,7 @@ export class AnnotationLanes {
    * block on screen, which every block has, so it draws wherever it is put.
    */
   private drawnOn(edge: LaneEdge): AnnotationEntry[] {
-    const entries = this.options.store.drawnOn(edge)
+    const entries = this.options.store.drawnOnMap(this.options.map ?? LEAD_MAP, edge)
     if (this.axisFor(edge) !== null) return entries
     return entries.filter((entry) => entry.kind === 'viewpoint')
   }

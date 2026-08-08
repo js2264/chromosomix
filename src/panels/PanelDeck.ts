@@ -57,6 +57,7 @@ import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import type {
+  AnnotationContext,
   DerivePresentation,
   MatrixPanel,
   PanelGeometry,
@@ -82,6 +83,8 @@ import {
   type PanelRef,
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
+import { LEAD_MAP } from '../annotations/placement'
+import { fileLabel } from '../ui/labels'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
@@ -114,6 +117,16 @@ export interface PanelDeckProps {
    * comparisons rather than a choice.
    */
   derive?(): DerivePresentation | undefined
+  /**
+   * One panel's lanes, by the id the deck knows it as.
+   *
+   * The session owns the store; the deck owns the ids. Handed as a function of
+   * the slot rather than resolved here, because which tracks a map draws is the
+   * session's business and the deck's only contribution is a name.
+   */
+  annotations?(map: string): AnnotationContext | undefined
+  /** What the session's own map is called, for the placement control's rows. */
+  leadLabel?(): string
   /**
    * Whether the deck is turned 45°, or `undefined`.
    *
@@ -456,6 +469,22 @@ export class PanelDeck {
     this.urlInput.focus()
   }
 
+  /**
+   * Every map a track can be drawn on, in the order they are on screen.
+   *
+   * The lead first, because it is cell 0 and always is. An empty cell is not
+   * offered: a placement on a map that holds no file would be a lane waiting
+   * for a picture, and the reader can place it the moment one arrives.
+   */
+  get mapList(): Array<{ id: string; label: string }> {
+    const out = [{ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' }]
+    for (const slot of this.slots) {
+      if (slot.panel === null) continue
+      out.push({ id: slot.id, label: fileLabel(slot.ref.kind === 'remote' ? slot.ref.uri : slot.id) })
+    }
+    return out
+  }
+
   /** `true` when there is nothing here but the lead — the deck may be put down. */
   get isEmpty(): boolean {
     return this.slots.length === 0
@@ -637,6 +666,7 @@ export class PanelDeck {
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
+      annotations: () => this.props.annotations?.(slot.id),
       score: () => this.props.score?.(),
       // The lead's scale, clip included. A map opened beside another is opened
       // to be compared with it, and a comparison whose two halves are on two

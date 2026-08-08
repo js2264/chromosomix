@@ -28,7 +28,12 @@ import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { MatrixResult, OpenResult, SourceSpec } from '../worker/protocol'
-import { MatrixPanel, type DerivePresentation, type TurnPresentation } from '../ui/MatrixPanel'
+import {
+  MatrixPanel,
+  type AnnotationContext,
+  type DerivePresentation,
+  type TurnPresentation,
+} from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
@@ -143,6 +148,15 @@ export interface MapPanelProps {
    * over it (`ui/MatrixPanel.ts`'s `DerivePresentation`).
    */
   derive(): DerivePresentation | undefined
+  /**
+   * This panel's own lanes (`annotations/placement.ts`), or `undefined` where
+   * the session carries no annotations at all (§8.5).
+   *
+   * A thunk so it is never stale, like the two beside it. The store is the
+   * session's one store — the tracks are a single list however many maps are on
+   * screen — and what makes it *this* panel's is the map id inside.
+   */
+  annotations(): AnnotationContext | undefined
   /**
    * Whether the deck is turned 45°, as a thunk so it is never stale.
    *
@@ -601,6 +615,9 @@ export class MapPanel {
         initial: this.look,
         ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
         ...(turn === undefined ? {} : { turn }),
+        ...(this.props.annotations() === undefined
+          ? {}
+          : { annotations: this.props.annotations() }),
         detachedControls: true,
         cornerControls: true,
         hideTitle: true,

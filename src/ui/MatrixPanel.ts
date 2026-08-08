@@ -114,6 +114,7 @@ import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
+import type { MapId } from '../annotations/placement'
 import type { ScoreChoice } from './scores'
 import {
   getViewpointAnchor,
@@ -448,6 +449,14 @@ export interface ComparePresentation {
 /** What the panel needs to draw annotations against this file. */
 export interface AnnotationContext {
   store: AnnotationStore
+  /**
+   * Which map's lanes this panel draws (`annotations/placement.ts`).
+   *
+   * The tracks are one list for the whole session; a map draws the ones placed
+   * on it, with whatever patch that placement carries. Absent means the
+   * session's own map, which is what every view but a deck's companions is.
+   */
+  map?: MapId
   manual: ManualStore
   client: AnnotationClient
   /**
@@ -863,6 +872,7 @@ export class MatrixPanel {
     this.laneStore = options.annotations?.store ?? viewpointOnlyStore()
     this.lanes = new AnnotationLanes({
       store: this.laneStore,
+      ...(options.annotations?.map === undefined ? {} : { map: options.annotations.map }),
       ...(options.annotations?.manual === undefined ? {} : { manual: options.annotations.manual }),
       ...(options.annotations?.client === undefined ? {} : { client: options.annotations.client }),
       ...(options.annotations?.groups === undefined ? {} : { groups: options.annotations.groups }),
