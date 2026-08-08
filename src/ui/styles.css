@@ -5099,10 +5099,31 @@ p {
   background: var(--bg-sunken);
 }
 
-.deck-count {
+/* The view's own heading, above the grid rather than in its first cell. It
+   answers "what am I looking at", which is one question however many pictures
+   are on screen — and inside cell 0 it made that cell a head taller than the
+   others, so the first map was drawn smaller than the maps it is there to be
+   compared with. */
+.deck-lead-head {
+  min-width: 0;
+}
+
+.deck-lead-head > .view-head {
+  margin-bottom: 0;
+}
+
+/* The summary goes inline inside a deck, so the deck's own note reads as the
+   end of that sentence rather than as a line under it. */
+.deck-lead-head .summary,
+.deck-lead-head .match-kind {
+  display: inline;
+}
+
+.deck-maps {
   font-size: var(--step--1);
   font-weight: 600;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .deck-spacer {

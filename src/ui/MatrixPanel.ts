@@ -3946,6 +3946,22 @@ export class MatrixPanel {
   }
 
   /**
+   * Say whether the cells have been through the file's weights.
+   *
+   * Not cosmetic. A balanced cell is a fraction, so under `log10` every value
+   * in the block is *negative* — and the automatic range knows to keep them
+   * only because it is told the matrix is balanced (`render/scale.ts`). A
+   * companion built without this drew a blank rectangle from a range of
+   * `[0, ~0]`, over data that was perfectly good, while its key called the
+   * numbers counts.
+   */
+  setBalanced(balanced: boolean): void {
+    if ((this.options.balance === true) === balanced) return
+    this.options.balance = balanced
+    this.painted = null
+  }
+
+  /**
    * Whether the block on screen is a turned band rather than a square.
    *
    * What the panel *found*, not what it was asked for: a block with no diagonal

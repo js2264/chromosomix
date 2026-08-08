@@ -1142,7 +1142,13 @@ the feature affordable, and it is also what makes its failures well worded: a fi
 refused by `parse_metacooler_range`'s own error, listing its own sequences (§5.4). No gate had to be
 written for that case and none could have phrased it better.
 
-The score is shared as a **resolved choice**, not as the hash key that named it. A file somebody
+The score is shared as a **resolved choice**, not as the hash key that named it. The resolution runs
+through the *file's* default as every view's own picker does — read straight from the state it said
+`count` for a map whose picker said `balanced`, which cost nothing while the only callers wanted a
+column and a normalisation and cost a whole quantity the moment a deck asked what to share. A
+companion is told the answer *and* whether it is balanced: under `log10` a balanced cell is
+negative, and the automatic range keeps negatives only when it is told the matrix is balanced — a
+companion that was not drew a blank rectangle over perfectly good data. A file somebody
 balanced opens balanced and that default is nowhere in the URL, so two panels each applying their
 own default disagreed silently — a balanced lead beside a companion drawing raw counts, under a bar
 saying the score is one of the things a deck shares. Each panel still resolves the id against its
@@ -1240,6 +1246,18 @@ wrong, and a still map reads as data.
 The panels are a CSS grid of equal columns, as many across as the reader asked for — with a `+` on an
 edge (§16.9) or with the picker in the deck's bar. Equal always: a comparison whose halves are
 different sizes is one the eye has to correct for.
+
+**The session's heading leaves the first cell.** The view's title, its locus box, its back link and
+its block summary answer *what am I looking at*, which is one question however many pictures are on
+screen — so in a deck they are hoisted above the grid and cell 0 holds the map and its file name,
+exactly as every other cell does. Left inside, they made the first cell a head taller than the
+others and the first map was drawn smaller than the maps it is there to be compared with. The
+element is **moved**, not rebuilt, so the box keeps its caret and the summary keeps the numbers the
+last read wrote into it; it goes back when the deck is put down.
+
+The deck's own count rides on the end of that summary — `113 × 113 bins · … · 3 maps` — because how
+many maps is a fact about what is being looked at, and the line that already says that is where a
+reader is looking. Not in the bar, which is controls.
 
 **The maps are aligned to the pixel, tracks or no tracks.** A companion carries no lanes of its own
 (§16.8), so the room the lead's stacks take is *reserved* on every panel beside it, and each panel's

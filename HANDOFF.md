@@ -6,10 +6,10 @@ everything below is new since that tag. All of it is committed and pushed.
 **Green as of the last commit:** `npm run typecheck`,
 `npm run test:nofixtures` (1146 passed, 25 skipped), `npm run build`.
 
-**Since the first handoff:** §3.1's **A1**, **A2**, **B1**, **B3** and **D1** are
-done, and **B2** is closed as a decision rather than as work — see §3.3 and §3.4,
-which also list the seven defects found on the way. **C** (tracks) is untouched
-and is now the whole of what is left.
+**Since the first handoff:** §3.1's **A1**, **A2**, **B1**, **B3**, **D1** and
+**B4** are done, and **B2** is closed as a decision rather than as work — see §3.3
+and §3.4, which also list the defects found on the way. **C** (tracks) is
+untouched and is now the whole of what is left.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
 with "Cannot find type definition file for 'node'" until you do, which looks
@@ -119,7 +119,7 @@ change. Ordered within each group by what I would do first.
 | ~~B1~~ | **Done** — see §3.4. A grip before each companion's name, the tiling shown while one is held, and a drop that *exchanges* two cells. A swap and not an insert: sliding a map into a distant cell by shifting everything between here and there rearranges three pictures to move one. | `MapPanel.grip`, `PanelDeck.watchArranging` |
 | ~~B2~~ | **Closed as a decision, not as work.** The first map is always the lead, by the reader's own instruction: it is the session's view re-parented into cell 0, it owns the breadcrumb and the tables and the tracks, and which file a session is *of* is not a thing that should change by dragging. It has a name like every other cell and no grip. What survives of B2 is E's promote, which is not wanted either. | `PanelDeck.leadCell`, `setLead` |
 | ~~B3~~ | **Decided and built.** The deck is a **rectangle of cells filled in reading order**, with an explicit column count the reader draws with a `+` or picks in the bar, and empty cells as first-class members of the list. No layout *tree*, and there should not be one until something needs a cell two columns wide. | `PanelDeck.columnsNow`, `deck.grownDeck` |
-| B4 | **Half done.** The maps line up to the pixel now — the lead's lane room is reserved on every panel and every picture is pushed to the foot of its cell — but the lead's *cell* is still taller, because it keeps the view heading, the locus box, the back link and the block summary. Hoisting those above the grid is the structural fix the spacer stands in for. | `.deck-panel` in `styles.css`; what `setLead` re-parents |
+| ~~B4~~ | **Done.** The maps line up to the pixel — the lead's lane room is reserved on every panel and every picture is pushed to the foot of its cell — and the view's own heading is *hoisted above the grid*, so cell 0 is a cell like the others. Moved rather than rebuilt, and given back when the deck is put down. | `PanelDeck.hoistHead`, `.deck-lead-head` |
 
 #### C. Tracks — the largest gap
 
@@ -196,9 +196,16 @@ Three things worth knowing before touching any of it:
   move its cards into the Aesthetics column; only a companion sets the former.
   Inferring one from the other put a second scale menu on the session's own map.
 
-Still open from this batch: the lead's cell is taller than the others (B4 above),
-and a companion still re-reads its block after a trip through a table, because a
-view a companion cannot answer tears its `MatrixPanel` down.
+One thing this batch found that is worth carrying forward: **a companion needs to
+be told what it is drawing, not only what to read.** `MatrixPanel` decides its
+automatic range partly from `options.balance` — under `log10` a balanced cell is
+negative, and negatives are kept only for a matrix that says it is balanced — so
+a companion given the right *score* and not the flag drew a blank rectangle over
+good data. Anything else moved from the session's own presentation into a
+companion's should be checked for the same shape of gap.
+
+Still open from this batch: a companion re-reads its block after a trip through a
+table, because a view no companion can answer tears its `MatrixPanel` down.
 
 ### 3.3 What landed after the first handoff
 

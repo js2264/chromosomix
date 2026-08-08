@@ -126,6 +126,12 @@
 - [x] The maps line up to the pixel, tracks or no tracks, and the `+` along the bottom of a single
       map is above the fold.
 
+- [x] The session's heading, its locus box and its block summary are above the deck rather than in
+      its first cell — they answer "what am I looking at", which is one question however many
+      pictures are on screen, and inside cell 0 they made the first map smaller than the maps it is
+      there to be compared with. The summary carries the deck's own count on the end of it: `113 ×
+      113 bins · … · 3 maps`.
+
 ## FOR NOW
 
 The deck of maps (§16) is a data feature that works and an interaction feature
@@ -138,11 +144,6 @@ because the chain between them is real.
 - [ ] Decide who owns a track when there are N maps — one store per panel, or one
       store that knows which maps each track is on. Everything else about tracks
       waits on that sentence being written down.
-- [ ] The first map's cell still holds the view's heading, its locus box and its
-      block summary, which the others have no copy of. The maps line up now — the
-      pictures are pushed to the foot of their cells — but the lead's cell is
-      taller than it needs to be, and hoisting that furniture above the grid is
-      the structural fix the spacer stands in for.
 - [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
       them carry different numbers, and a track sent to every map or taken off
       every map in one gesture.

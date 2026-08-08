@@ -504,7 +504,6 @@ export class MapPanel {
     info: OpenResult,
   ): Promise<MatrixResult> {
     const choice = this.scoreOf(info, state)
-    this.panel?.setScoreLabel(choice.label)
     const level = matrixLevel(state)
     // Resolved against *this* file's columns rather than carried over from the
     // lead: a hash naming `expected` is naming a column, and the file beside it
@@ -598,6 +597,7 @@ export class MapPanel {
       const turn = this.props.turn()
       this.panel = new MatrixPanel({
         binsize: info.binsize ?? 1,
+        balance: this.scoreOf(info, state).balance,
         initial: this.look,
         ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
         ...(turn === undefined ? {} : { turn }),
@@ -618,6 +618,12 @@ export class MapPanel {
       // companion carries none.
       this.body.replaceChildren(this.panel.el)
     }
+    // After the panel exists, and on every block. `readBlock` runs *before* the
+    // first one is built, so a score applied there is applied to nothing — which
+    // left a balanced companion labelled `Count` and, worse, scaled as one.
+    const score = this.scoreOf(info, state)
+    this.panel.setScoreLabel(score.label)
+    this.panel.setBalanced(score.balance)
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
     this.panel.setData(result, fileLabel(this.uri))
