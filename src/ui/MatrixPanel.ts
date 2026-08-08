@@ -370,6 +370,19 @@ export interface MatrixPanelOptions {
   turn?: TurnPresentation
 }
 
+/**
+ * How big a panel came out, for whoever is laying it out beside others.
+ *
+ * Both halves are needed and they answer different questions: `lanes` is the
+ * room a companion has to *reserve* so its picture sits at the same height,
+ * and `plot` is the size that picture has to *be*.
+ */
+export interface PanelGeometry {
+  lanes: Record<LaneEdge, number>
+  /** The plot's width in CSS pixels; it is square. */
+  plot: number
+}
+
 export interface TurnPresentation {
   /** Whether the reader has asked for the turned view. */
   on: boolean
@@ -543,7 +556,7 @@ export class MatrixPanel {
    * itself is not in it — that is read from the picker, which is where the
    * reader chose it (see {@link keyFor}).
    */
-  private laneListener: ((budget: Record<LaneEdge, number>) => void) | null = null
+  private laneListener: ((geometry: PanelGeometry) => void) | null = null
   private hoverListener: ((cell: { row: number; col: number } | null) => void) | null = null
   /** Where another panel's pointer is, in this panel's cells. */
   private echo: { row: number; col: number } | null = null
@@ -1900,6 +1913,7 @@ export class MatrixPanel {
    * a block smaller than its window.
    */
   private placeKey(): void {
+    this.reportGeometry()
     const plot = this.heatmap.plotRect
     const size = this.heatmap.cssSize
     this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
@@ -3952,9 +3966,31 @@ export class MatrixPanel {
    * rather than read, because it changes when a track is added and nothing
    * outside this panel can know when that was.
    */
-  setLaneListener(listener: ((budget: Record<LaneEdge, number>) => void) | null): void {
+  setLaneListener(listener: ((geometry: PanelGeometry) => void) | null): void {
     this.laneListener = listener
-    if (listener !== null) listener({ ...this.laneBudget })
+    if (listener !== null) this.reportGeometry()
+  }
+
+  /**
+   * Tell whoever is laying this panel out beside others how big it came out.
+   *
+   * The **measured** width, not the rule that produced it. A companion's plot
+   * is sized by the same stylesheet from the same variables and still lands
+   * somewhere else, because the two are in cells of different content — one
+   * `clamp` bottoms out, the other is capped by its column — and chasing that
+   * through CSS is chasing a derivation with four inputs. A number the deck can
+   * hand to every other panel has one.
+   */
+  private reportGeometry(): void {
+    this.laneListener?.({
+      lanes: {
+        top: this.laneBudget.top === 0 ? 0 : this.laneBudget.top + LANE_GAP,
+        right: this.laneBudget.right === 0 ? 0 : this.laneBudget.right + LANE_GAP,
+        bottom: this.laneBudget.bottom === 0 ? 0 : this.laneBudget.bottom + LANE_GAP,
+        left: this.laneBudget.left === 0 ? 0 : this.laneBudget.left + LANE_GAP,
+      },
+      plot: this.heatmap.cssSize.width,
+    })
   }
 
   /** What this panel is showing, in its own cells, or `null` with no block. */
@@ -4091,12 +4127,7 @@ export class MatrixPanel {
     // that N pictures of one place can be compared, and a picture inset by a
     // stack of tracks beside a picture that is not is a comparison the eye has
     // to correct for before it can start (§16).
-    this.laneListener?.({
-      top: next.top === 0 ? 0 : next.top + LANE_GAP,
-      right: next.right === 0 ? 0 : next.right + LANE_GAP,
-      bottom: next.bottom === 0 ? 0 : next.bottom + LANE_GAP,
-      left: next.left === 0 ? 0 : next.left + LANE_GAP,
-    })
+    this.reportGeometry()
     // Re-measure *now*, in the same frame, rather than waiting for the resize
     // observer. The observer watches the grid, and the grid's width is the wider
     // of the plot and the lane below it — so a plot that has just shrunk under a

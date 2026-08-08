@@ -178,7 +178,7 @@ Reported as bugs, and three of them were architecture rather than bugs.
 | The key inside the map, in the reader's units | `src/render/legend.ts`, `src/ui/MapKey.ts` |
 | The scale menu in the map's corner | `MatrixPanelOptions.cornerControls` |
 | Grip, drop-to-swap, the tiling | `MapPanel.grip`, `PanelDeck.watchArranging`, `swapItems` |
-| Lane room reserved on every panel | `MatrixPanel.setLaneListener`, `PanelDeck.alignTo` |
+| Lane room reserved, and the plot size handed over | `MatrixPanel.setLaneListener`, `PanelDeck.alignTo` |
 | One figure of the whole deck | `PanelDeck.saveDeck` |
 
 Three things worth knowing before touching any of it:
@@ -192,6 +192,13 @@ Three things worth knowing before touching any of it:
   draw for exports) plus `ui/MapKey.ts` (the DOM one, whose two numbers are
   editable). Its values are **transform-space** — the same numbers as the clip
   boxes — which is the opposite of the old bar's rule and is the whole point.
+- **Alignment is a measured number, not a shared rule.** Two panels given the
+  same custom properties still came out different sizes: their cells hold
+  different content, so one plot's `clamp` bottomed out at its 20 rem floor
+  while the other was capped by its column. The lead now *reports* its plot
+  width and every companion is given it as `--deck-plot`. Reserving the lane
+  room needs both halves — the custom properties for the height budget the
+  square is computed from, and a padding for the space it actually stands in.
 - **`cornerControls`, not `detachedControls`.** Every view sets the latter, to
   move its cards into the Aesthetics column; only a companion sets the former.
   Inferring one from the other put a second scale menu on the session's own map.
