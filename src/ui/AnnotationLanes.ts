@@ -75,6 +75,7 @@ import {
   type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
+import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
 import {
@@ -342,7 +343,7 @@ export class AnnotationLanes {
   /** The four canvases, mounted by the panel. Hidden when their stack is empty. */
   readonly canvases: Record<LaneEdge, HTMLCanvasElement>
 
-  private axes: { rows: LocusAxis | null; cols: LocusAxis | null } = { rows: null, cols: null }
+  private axes: OverlayAxes = { rows: null, cols: null }
   /**
    * The sample cache, or `null` on a file with no annotation worker.
    *
@@ -429,9 +430,25 @@ export class AnnotationLanes {
    * mean the same thing in every view, so opening a region inside a
    * whole-genome view reuses what the whole-genome view already fetched.
    */
-  setAxes(axes: { rows: LocusAxis | null; cols: LocusAxis | null }): void {
+  setAxes(axes: OverlayAxes): void {
     this.axes = axes
     this.layouts.clear()
+  }
+
+  /**
+   * `true` while the map is turned 45°, which collapses the four stacks to one.
+   *
+   * A turned map has one genomic axis, along the bottom, and up its side is
+   * distance from the diagonal — which is not a place, so there is nothing for a
+   * vertical lane to be drawn against. Every track therefore falls into the
+   * stack below the rectangle for as long as the turn lasts.
+   *
+   * Read from the axes rather than held as a flag of its own, because the axes
+   * are what a turn actually *is* here and a second copy of the fact is a second
+   * thing to keep in step.
+   */
+  private get turned(): boolean {
+    return (this.axes.turn ?? null) !== null
   }
 
   destroy(): void {
@@ -476,7 +493,18 @@ export class AnnotationLanes {
    * block on screen, which every block has, so it draws wherever it is put.
    */
   private drawnOn(edge: LaneEdge): AnnotationEntry[] {
-    const entries = this.options.store.drawnOnMap(this.options.map ?? LEAD_MAP, edge)
+    const map = this.options.map ?? LEAD_MAP
+    // Turned, every track is in the stack below the rectangle whatever edge it
+    // was put on, and the other three stacks are empty. A *presentation* of the
+    // placement rather than a rewrite of it: the turn is something the reader
+    // switches on and off, and a track that came back from it on the bottom
+    // edge because it happened to be turned when they pressed the button would
+    // be the picture editing their settings behind them. Which means "back
+    // where it came from on the way home" costs nothing — the store never moved.
+    if (this.turned && edge !== 'bottom') return []
+    const entries = this.turned
+      ? this.options.store.drawnAnywhereOn(map)
+      : this.options.store.drawnOnMap(map, edge)
     if (this.axisFor(edge) !== null) return entries
     return entries.filter((entry) => entry.kind === 'viewpoint')
   }
