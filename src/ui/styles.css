@@ -5196,10 +5196,38 @@ p {
 /* The room the *lead's* tracks take, reserved on every panel beside it — see
    `PanelDeck.alignTo`. A companion has no lanes of its own, so without this its
    plot is as wide as its cell while the lead's is inset by a stack, and two
-   pictures of one place come out at two sizes. */
+   pictures of one place come out at two sizes.
+
+   Two mechanisms, because a lane above or below the map does not cost the same
+   thing as one beside it. **Left and right** come out of the grid's middle
+   column, so a padding takes the same width away. **Top and bottom** come out
+   of the plot's own height *budget* — `.heatmap-wrap` is square and sized off
+   `100vh` minus its furniture — so the same room has to arrive as the same two
+   custom properties the lead's own grid writes, or the two squares are computed
+   from two different heights and come out different sizes. Written on the wrap
+   itself, which is inside `.panel-grid`: a companion's grid writes `0px` there
+   for stacks it does not have, and an inherited value would lose to it. */
 .deck-panel:not(.is-lead) .panel-grid {
+  /* The padding is where the room *is*, which is what puts every picture at the
+     same height in its cell; the two properties below are what makes them the
+     same size. Both are needed: a bottom stack takes 94 px out of the lead's
+     height budget **and** stands 94 px below its map, and a companion that
+     matched only the first drew the same square 94 px lower. */
   padding: var(--deck-lane-top, 0px) var(--deck-lane-right, 0px) var(--deck-lane-bottom, 0px)
     var(--deck-lane-left, 0px);
+}
+
+/* And the size itself, from the lead's own measurement rather than from the
+   rules that produced it. Two panels given the same variables still came out
+   different: the cells hold different content, so one plot's `clamp` bottomed
+   out at its 20rem floor while the other was capped by its column. A number is
+   the only thing that cannot be derived two ways. */
+.deck-panel:not(.is-lead) .heatmap-wrap {
+  --lane-top: var(--deck-lane-top, 0px);
+  --lane-bottom: var(--deck-lane-bottom, 0px);
+  width: var(--deck-plot, 100%);
+  max-width: 100%;
+  flex: 0 0 auto;
 }
 
 /* The lead is the session's own view — its heading, its search box, its lanes,

@@ -56,7 +56,12 @@ import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
-import type { DerivePresentation, MatrixPanel, TurnPresentation } from '../ui/MatrixPanel'
+import type {
+  DerivePresentation,
+  MatrixPanel,
+  PanelGeometry,
+  TurnPresentation,
+} from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
 import { downloadBlob, fileStamp, readPageBackground } from '../ui/export'
@@ -381,7 +386,7 @@ export class PanelDeck {
     panel?.setLaneListener((budget) => this.alignTo(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
     if (panel === null) {
-      this.alignTo({ top: 0, right: 0, bottom: 0, left: 0 })
+      this.alignTo({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
       // is about the lead and there is now nothing for it to hold.
       this.paintBar()
@@ -536,10 +541,17 @@ export class PanelDeck {
    * lead's stacks take out of its own, and leave every map the same size at the
    * same place in its cell.
    */
-  private alignTo(budget: Record<'top' | 'right' | 'bottom' | 'left', number>): void {
+  private alignTo(geometry: PanelGeometry): void {
     for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
-      this.grid.style.setProperty(`--deck-lane-${edge}`, `${Math.max(0, budget[edge])}px`)
+      this.grid.style.setProperty(`--deck-lane-${edge}`, `${Math.max(0, geometry.lanes[edge])}px`)
     }
+    // The lead's plot size, **measured**, not derived a second time from the
+    // same variables. A companion sized by the same stylesheet still lands
+    // somewhere else — its cell holds different content, so one `clamp` bottoms
+    // out where the other is capped by its column — and there is no reading of
+    // the rules that fixes that, only a number both can be given.
+    const plot = Math.round(geometry.plot)
+    this.grid.style.setProperty('--deck-plot', plot > 0 ? `${plot}px` : '')
     for (const slot of this.slots) slot.panel?.remeasure()
   }
 
