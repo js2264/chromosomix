@@ -18,6 +18,19 @@
  */
 
 import { laneStartsFlipped } from '../render/lane'
+import {
+  laneOf,
+  mapsOf,
+  place,
+  propagate,
+  pruneLanes,
+  resolveStyle,
+  unplace,
+  withdraw,
+  type Lane,
+  type MapId,
+} from './placement'
+import { LEAD_MAP } from './placement' 
 import { recall, remember } from '../state/UiMemory'
 import type {
   AnnotationCard,
@@ -97,6 +110,116 @@ export class AnnotationStore {
     return this.items
   }
 
+  // -------------------------------------------------------------------------
+  // Where each track is drawn (`annotations/placement.ts`)
+  // -------------------------------------------------------------------------
+
+  /**
+   * One lane per track per map. Empty until a track is placed, which is what
+   * {@link begin} does for the session's own map on import.
+   *
+   * The *entries* above are the imported tracks and are one list however many
+   * maps are on screen; this says which of them each map draws, and on which of
+   * its four edges. See `annotations/placement.ts` for why the two are separate
+   * things rather than one entry per map.
+   */
+  private lanes: Lane[] = []
+
+  /** Every placement, for the card that lists where a track is drawn. */
+  get placements(): readonly Lane[] {
+    return this.lanes
+  }
+
+  /**
+   * The rows one map draws, with each lane's own patch resolved over its track.
+   *
+   * This is what a panel is handed instead of {@link entries}: the same tracks,
+   * carrying the placement and the style *that map* draws them with. A panel
+   * given this needs to know nothing about lanes at all, which is what let the
+   * whole of `ui/AnnotationLanes.ts` stay as it was.
+   */
+  entriesOn(map: MapId): AnnotationEntry[] {
+    const out: AnnotationEntry[] = []
+    // In the **track list's** order, not the lane list's. Two reasons, and the
+    // second is why it is not merely convenient: `moveTo` reorders the tracks,
+    // so a stack that read its order off the lanes would not follow a reorder at
+    // all — and a deck whose stacks are in different orders is a set of pictures
+    // the eye has to re-index before it can compare them, which is the thing a
+    // deck exists to avoid.
+    for (const track of this.items) {
+      const lane = laneOf(this.lanes, track.id, map)
+      if (lane === undefined) continue
+      out.push({ ...track, placement: lane.placement, style: resolveStyle(track.style, lane) })
+    }
+    return out
+  }
+
+  /** Which maps a track is drawn on. */
+  mapsDrawing(track: string): MapId[] {
+    return mapsOf(this.lanes, track)
+  }
+
+  /** The patch one map holds over a track, if any. */
+  laneFor(track: string, map: MapId): Lane | undefined {
+    return laneOf(this.lanes, track, map)
+  }
+
+  /** Draw a track on a map, or move it to different edges of one it is on. */
+  placeOn(track: string, map: MapId, placement: Placement): void {
+    this.lanes = place(this.lanes, track, map, placement)
+    this.changed()
+  }
+
+  /** Take a track off one map, keeping the import and every other placement. */
+  unplaceFrom(track: string, map: MapId): void {
+    const before = this.lanes.length
+    this.lanes = unplace(this.lanes, track, map)
+    if (this.lanes.length !== before) this.changed()
+  }
+
+  /** Put a track on every map named, at the edges it is already drawn on. */
+  propagateTo(track: string, maps: readonly MapId[]): void {
+    this.lanes = propagate(this.lanes, track, maps)
+    this.changed()
+  }
+
+  /** Take a track off every map, keeping the import. */
+  withdrawFrom(track: string): void {
+    const before = this.lanes.length
+    this.lanes = withdraw(this.lanes, track)
+    if (this.lanes.length !== before) this.changed()
+  }
+
+  /** Give one map's copy of a track a patch of its own, or hand a field back. */
+  overrideOn(track: string, map: MapId, patch: Lane['style']): void {
+    const held = laneOf(this.lanes, track, map)
+    if (held === undefined) return
+    const merged = { ...held.style, ...patch }
+    for (const key of Object.keys(merged) as Array<keyof typeof merged>) {
+      if (merged[key] === undefined) delete merged[key]
+    }
+    const next: Lane =
+      Object.keys(merged).length === 0
+        ? { track: held.track, map: held.map, placement: held.placement }
+        : { ...held, style: merged }
+    this.lanes = this.lanes.map((lane) => (lane === held ? next : lane))
+    this.changed()
+  }
+
+  /**
+   * Drop lanes whose map is gone.
+   *
+   * Reconciled against the deck rather than driven by an event, for the reason
+   * `SampleCache.prune` gives: an event that is not sent leaks a lane for the
+   * life of the session, and doing it once per render cannot go stale. Tracks
+   * are pruned by {@link remove}, which is the only way one leaves.
+   */
+  keepMaps(maps: ReadonlySet<MapId>): void {
+    const before = this.lanes.length
+    this.lanes = pruneLanes(this.lanes, new Set(this.items.map((entry) => entry.id)), maps)
+    if (this.lanes.length !== before) this.changed()
+  }
+
   /** The rows one card shows, in load order. */
   forCard(card: AnnotationCard): AnnotationEntry[] {
     return this.items.filter((entry) => entry.card === card)
@@ -110,12 +233,19 @@ export class AnnotationStore {
    * not a loaded file, and it is a lane in every other respect (§8.1).
    */
   drawnOn(edge: LaneEdge): AnnotationEntry[] {
-    return this.items.filter(
-      (entry) =>
-        entry.card !== 'overlay' &&
-        entry.visible &&
-        entry.status === 'ready' &&
-        entry.placement[edge],
+    return this.drawnOnMap(LEAD_MAP, edge)
+  }
+
+  /**
+   * The same question asked of any map: what does it draw on this edge.
+   *
+   * {@link drawnOn} is this one with the session's own map filled in, so there
+   * is one rule and not two — the lead is a map like the others and its
+   * placements live in the same list (`annotations/placement.ts`).
+   */
+  drawnOnMap(map: MapId, edge: LaneEdge): AnnotationEntry[] {
+    return this.entriesOn(map).filter(
+      (entry) => entry.card !== 'overlay' && entry.visible && entry.status === 'ready' && entry.placement[edge],
     )
   }
 
@@ -248,6 +378,11 @@ export class AnnotationStore {
     this.items = held
       ? this.items.map((row) => (row.id === entry.id ? entry : row))
       : [...this.items, entry]
+    // An imported track is drawn on the session's own map, which is what it has
+    // always meant. The entry's own `placement` is the *default* a new lane is
+    // given — on this map now, and on any other map the reader puts it on later
+    // — and the lane is where it is actually drawn.
+    this.lanes = place(this.lanes, entry.id, LEAD_MAP, entry.placement)
     this.changed()
     return entry
   }
@@ -296,6 +431,10 @@ export class AnnotationStore {
       placement: whole,
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
     })
+    // The lead's own lane follows, because this control *is* the lead's. A
+    // companion's placement is its own and is moved from the track's row in the
+    // Tracks card, not from here.
+    this.lanes = place(this.lanes, id, LEAD_MAP, whole)
   }
 
   /** Merge a patch into one row's style. */
@@ -361,6 +500,9 @@ export class AnnotationStore {
       for (const entry of next) gone.add(entry.id)
     }
     this.items = this.items.filter((entry) => !gone.has(entry.id))
+    // A lane naming a track that has gone would draw nothing and hold a slot in
+    // every stack it was in, so the placements go with the import.
+    this.lanes = this.lanes.filter((lane) => !gone.has(lane.track))
     if (this.items.length !== before) this.changed()
   }
 
@@ -422,6 +564,7 @@ export class AnnotationStore {
   clear(): void {
     if (this.items.length === 0) return
     this.items = []
+    this.lanes = []
     this.changed()
   }
 

@@ -33,7 +33,7 @@ import {
   withdraw,
   type Lane,
 } from '@/annotations/placement'
-import { defaultStyle } from '@/annotations/types'
+import { defaultStyle, placementOn } from '@/annotations/types'
 
 const track = () => defaultStyle('track', '#336699')
 
@@ -45,7 +45,7 @@ describe('the cascade', () => {
   it('lets a lane win on the fields it has been given, and only those', () => {
     const base = track()
     const lane: Lane = {
-      track: 't', map: LEAD_MAP, edge: 'bottom',
+      track: 't', map: LEAD_MAP, placement: placementOn('bottom'),
       style: { limits: { min: 0, max: 50, auto: false } },
     }
     const resolved = resolveStyle(base, lane)
@@ -60,7 +60,7 @@ describe('the cascade', () => {
   it('follows the track when the track changes, wherever it was not overridden', () => {
     // The claim `propagate` rests on. A lane holding a *copy* would pass every
     // assertion above and fail this one.
-    const lane: Lane = { track: 't', map: 'p1', edge: 'bottom' }
+    const lane: Lane = { track: 't', map: 'p1', placement: placementOn('bottom') }
     const before = resolveStyle({ ...track(), colour: '#111111' }, lane)
     const after = resolveStyle({ ...track(), colour: '#eeeeee' }, lane)
     expect(before.colour).toBe('#111111')
@@ -71,7 +71,7 @@ describe('the cascade', () => {
     // Two representations of "no override" would compare unequal in a store
     // that reconciles by structure.
     const lane: Lane = {
-      track: 't', map: 'p1', edge: 'bottom',
+      track: 't', map: 'p1', placement: placementOn('bottom'),
       style: { limits: { min: 0, max: 9, auto: false } },
     }
     expect(isOverridden(lane, 'limits')).toBe(true)
@@ -83,7 +83,7 @@ describe('the cascade', () => {
 
   it('keeps the other overrides when one is handed back', () => {
     const lane: Lane = {
-      track: 't', map: 'p1', edge: 'bottom',
+      track: 't', map: 'p1', placement: placementOn('bottom'),
       style: { limits: { min: 0, max: 9, auto: false }, flip: true },
     }
     const cleared = clearOverride(lane, 'limits')
@@ -101,59 +101,70 @@ describe('what a placement may differ on', () => {
 })
 
 describe('placing and taking away', () => {
-  it('adds a placement once, however many times it is asked for', () => {
-    let lanes = place([], 't', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 't', LEAD_MAP, 'bottom')
+  it('gives a track one lane per map, however often it is placed', () => {
+    let lanes = place([], 't', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 't', LEAD_MAP, placementOn('right'))
     expect(lanes).toHaveLength(1)
-    expect(isPlaced(lanes, 't', LEAD_MAP, 'bottom')).toBe(true)
+    expect(isPlaced(lanes, 't', LEAD_MAP)).toBe(true)
+  })
+
+  it('moves a track between edges without losing what was set on it', () => {
+    // Placing again replaces the edges and keeps the patch: dragging a lane from
+    // the bottom to the right must not throw away the range somebody typed.
+    const held: Lane = {
+      track: 't', map: LEAD_MAP, placement: placementOn('bottom'),
+      style: { limits: { min: 0, max: 7, auto: false } },
+    }
+    const moved = place([held], 't', LEAD_MAP, placementOn('right'))
+    expect(moved[0].placement.right).toBe(true)
+    expect(moved[0].placement.bottom).toBe(false)
+    expect(moved[0].style).toEqual(held.style)
   })
 
   it('puts a new lane at the foot of the stack it lands in', () => {
-    let lanes = place([], 'a', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 'b', LEAD_MAP, 'bottom')
-    expect(lanesOn(lanes, LEAD_MAP, 'bottom').map((l) => l.track)).toEqual(['a', 'b'])
+    let lanes = place([], 'a', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'b', LEAD_MAP, placementOn('bottom'))
+    expect(lanesOn(lanes, LEAD_MAP).map((l) => l.track)).toEqual(['a', 'b'])
   })
 
-  it('takes a track off one edge without touching its other edges', () => {
-    let lanes = place(place([], 't', LEAD_MAP, 'bottom'), 't', LEAD_MAP, 'right')
-    lanes = unplace(lanes, 't', LEAD_MAP, 'bottom')
-    expect(lanes.map((l) => l.edge)).toEqual(['right'])
-  })
-
-  it('takes a track off a whole map when no edge is named', () => {
-    let lanes = place(place([], 't', LEAD_MAP, 'bottom'), 't', LEAD_MAP, 'right')
-    lanes = place(lanes, 't', 'p1', 'bottom')
+  it('takes a track off one map and leaves it on the others', () => {
+    let lanes = place([], 't', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 't', 'p1', placementOn('bottom'))
     expect(unplace(lanes, 't', LEAD_MAP).map((l) => l.map)).toEqual(['p1'])
   })
 
-  it('separates the stacks of two maps and of two edges', () => {
-    let lanes = place([], 't', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 't', 'p1', 'bottom')
-    lanes = place(lanes, 't', 'p1', 'top')
-    expect(lanesOn(lanes, 'p1', 'bottom')).toHaveLength(1)
-    expect(lanesOn(lanes, 'p1', 'top')).toHaveLength(1)
-    expect(lanesOn(lanes, 'p2', 'bottom')).toHaveLength(0)
+  it('keeps each map’s stack to itself', () => {
+    let lanes = place([], 't', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 't', 'p1', placementOn('top'))
+    expect(lanesOn(lanes, LEAD_MAP)).toHaveLength(1)
+    expect(lanesOn(lanes, 'p1')[0].placement.top).toBe(true)
+    expect(lanesOn(lanes, 'p2')).toHaveLength(0)
     expect(mapsOf(lanes, 't')).toEqual([LEAD_MAP, 'p1'])
   })
 })
 
 describe('one track across every map', () => {
-  it('puts it at the same edges it is already on', () => {
-    const lanes = propagate(place([], 't', LEAD_MAP, 'top'), 't', [LEAD_MAP, 'p1', 'p2'])
-    expect(lanes.filter((l) => l.track === 't')).toHaveLength(3)
-    expect(new Set(lanes.map((l) => l.edge))).toEqual(new Set(['top']))
+  it('puts it at the edges it is already on', () => {
+    const lanes = propagate(place([], 't', LEAD_MAP, placementOn('top')), 't', [LEAD_MAP, 'p1', 'p2'])
+    expect(lanes).toHaveLength(3)
+    for (const lane of lanes) expect(lane.placement.top).toBe(true)
   })
 
-  it('mirrors every edge it is on, not just the first', () => {
-    let lanes = place(place([], 't', LEAD_MAP, 'bottom'), 't', LEAD_MAP, 'right')
-    lanes = propagate(lanes, 't', [LEAD_MAP, 'p1'])
-    expect(lanesOn(lanes, 'p1', 'bottom')).toHaveLength(1)
-    expect(lanesOn(lanes, 'p1', 'right')).toHaveLength(1)
+  it('mirrors every edge it is on, not just one of them', () => {
+    const both: Lane = {
+      track: 't', map: LEAD_MAP,
+      placement: { ...placementOn('bottom'), right: true },
+    }
+    const lanes = propagate([both], 't', [LEAD_MAP, 'p1'])
+    const copy = lanesOn(lanes, 'p1')[0]
+    expect(copy.placement.bottom).toBe(true)
+    expect(copy.placement.right).toBe(true)
   })
 
   it('serves a freshly imported track with nowhere to be yet', () => {
     const lanes = propagate([], 't', [LEAD_MAP, 'p1'])
-    expect(lanes.map((l) => `${l.map}:${l.edge}`)).toEqual([`${LEAD_MAP}:bottom`, 'p1:bottom'])
+    expect(lanes.map((l) => l.map)).toEqual([LEAD_MAP, 'p1'])
+    for (const lane of lanes) expect(lane.placement.bottom).toBe(true)
   })
 
   it('creates no patch, so the copies cannot drift from the track', () => {
@@ -164,7 +175,7 @@ describe('one track across every map', () => {
 
   it('leaves a lane that already exists exactly as it was, patch and all', () => {
     const kept: Lane = {
-      track: 't', map: 'p1', edge: 'bottom',
+      track: 't', map: 'p1', placement: placementOn('right'),
       style: { limits: { min: 0, max: 3, auto: false } },
     }
     const lanes = propagate([kept], 't', [LEAD_MAP, 'p1'])
@@ -177,37 +188,37 @@ describe('taking a track back', () => {
     // The reason a track and its lanes are different things: this leaves
     // something in the list to put back without reading the file again.
     let lanes = propagate([], 't', [LEAD_MAP, 'p1', 'p2'])
-    lanes = place(lanes, 'other', 'p1', 'bottom')
+    lanes = place(lanes, 'other', 'p1', placementOn('bottom'))
     const left = withdraw(lanes, 't')
     expect(left.map((l) => l.track)).toEqual(['other'])
   })
 
   it('drops lanes whose track or map has gone', () => {
-    let lanes = place([], 'a', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 'b', 'p1', 'bottom')
-    lanes = place(lanes, 'a', 'p9', 'bottom')
+    let lanes = place([], 'a', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'b', 'p1', placementOn('bottom'))
+    lanes = place(lanes, 'a', 'p9', placementOn('bottom'))
     const kept = pruneLanes(lanes, new Set(['a', 'b']), new Set([LEAD_MAP, 'p1']))
     expect(kept.map((l) => `${l.track}@${l.map}`)).toEqual([`a@${LEAD_MAP}`, 'b@p1'])
   })
 })
 
 describe('order within a stack', () => {
-  it('moves one lane and leaves the other edges where they were', () => {
-    let lanes = place([], 'a', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 'x', LEAD_MAP, 'right')
-    lanes = place(lanes, 'b', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 'c', LEAD_MAP, 'bottom')
-    const moved = reorderLane(lanes, lanesOn(lanes, LEAD_MAP, 'bottom')[2], 0)
-    expect(lanesOn(moved, LEAD_MAP, 'bottom').map((l) => l.track)).toEqual(['c', 'a', 'b'])
-    // The other edge is untouched, and still in the same absolute slot.
-    expect(lanesOn(moved, LEAD_MAP, 'right').map((l) => l.track)).toEqual(['x'])
+  it('moves one lane and leaves the rest of the map where it was', () => {
+    let lanes = place([], 'a', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'x', 'p1', placementOn('bottom'))
+    lanes = place(lanes, 'b', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'c', LEAD_MAP, placementOn('bottom'))
+    const moved = reorderLane(lanes, lanesOn(lanes, LEAD_MAP)[2], 0)
+    expect(lanesOn(moved, LEAD_MAP).map((l) => l.track)).toEqual(['c', 'a', 'b'])
+    // The other map is untouched, and still in the same absolute slot.
+    expect(lanesOn(moved, 'p1').map((l) => l.track)).toEqual(['x'])
     expect(moved[1].track).toBe('x')
   })
 
   it('clamps a drop past either end rather than throwing', () => {
-    let lanes = place([], 'a', LEAD_MAP, 'bottom')
-    lanes = place(lanes, 'b', LEAD_MAP, 'bottom')
-    const first = lanesOn(lanes, LEAD_MAP, 'bottom')[0]
+    let lanes = place([], 'a', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'b', LEAD_MAP, placementOn('bottom'))
+    const first = lanesOn(lanes, LEAD_MAP)[0]
     expect(reorderLane(lanes, first, 99).map((l) => l.track)).toEqual(['b', 'a'])
     expect(reorderLane(lanes, first, -5).map((l) => l.track)).toEqual(['a', 'b'])
   })
