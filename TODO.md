@@ -146,41 +146,46 @@ because the chain between them is real.
       edge booleans and a patch of almost nothing. A lane given no patch cannot
       drift from its track, which is what makes "put it on every map" different
       from "copy it".
-- [ ] The room a stack takes is reserved from the *largest* on that edge rather
+- [x] The room a stack takes is reserved from the *largest* on that edge rather
       than from the first map's, or a companion carrying three tracks under a
       lead carrying one pushes its own picture up and the maps stop lining up.
       Attempted and reverted once: a companion reports before the lead does, so
-      the obvious version reserves nothing for anybody.
-- [ ] Look at the track's settings on screen. The location control is written and
-      the store under it is tested, and the disclosure that opens it would not
-      open in a browser — which is either the test's fault or a real one.
-- [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
+      the obvious version reserves nothing for anybody. Answered by asking every
+      panel at the moment of use rather than accumulating as they report.
+- [x] Look at the track's settings on screen. The disclosure opened all along —
+      the run that said otherwise had clicked a row with no track in it. What was
+      genuinely broken was the control's shape: a label column and four edge
+      buttons cannot share a sidebar row, so `bottom` read as `bott` and two map
+      names read alike. It turns on its side beside a deck.
+- [x] Tracks per map, the stacks reconciled so the maps still line up when two of
       them carry different numbers, and a track sent to every map or taken off
       every map in one gesture.
 
 
-The 45° turn is half landed — the geometry and the toggle are in and tested, the
-marks drawn over it are not. `HANDOFF.md` is the full account; these are the
-items, in the order they are worth doing.
+The 45° turn is landed but for one item. `SPECS.md` §17 is the account of what
+it is and `HANDOFF.md` §3.2 of what is left.
 
-- [ ] Overlays turned. Lines, crosshairs, loops, hand-drawn marks and pairs are
-      still drawn at square-map coordinates, so on a turned map they land in the
-      wrong place — the one item here that is *wrong* rather than absent. A
-      vertical line becomes a ray, a diagonal feature a horizontal line, and a
-      loop becomes a single dot at the height of its own span, which is better
-      than the box it is now.
-- [ ] Every track to one stack below the rectangle on a turn, and back where it
-      came from on the way home — the rule a lane moved beside the map already
-      follows.
-- [ ] A drag on the top edge of the rectangle sets how far from the diagonal it
+- [x] Overlays turned. Every one of them bailed out where there was no row axis,
+      so a turned map had no marks on it at all — the reader's own vanished when
+      they pressed the toggle. Placed by the pair of loci each mark was always
+      about: a line stays a line at the same place on the genome, a domain
+      becomes a triangle standing on the axis, a loop one dot at the height of
+      its own span, an arrowhead a glyph standing over that dot.
+- [x] Every track to one stack below the rectangle on a turn, and back where it
+      came from on the way home — which costs nothing, the placement never having
+      been rewritten.
+- [x] A drag on the top edge of the rectangle sets how far from the diagonal it
       reaches, the way a drag across a lane's body sets its ceiling.
+- [x] A ruler up the side, in distance.
+- [x] The turn in the spec and the changelog: `SPECS.md` §17.
 - [ ] Two compared files as two rectangles meeting at one genomic axis, the
-      second growing downward, with the tracks below both.
-- [ ] A ruler up the side, in distance.
-- [ ] The turn in the spec and the changelog. §16 now says what a turn means to a
-      *deck* — shared like the derivations, and what the lock measures a band in —
-      but the geometry itself still has no section of its own, and the changelog
-      has the fixes rather than the feature.
+      second growing downward, with the tracks below both. The only item of the
+      turn still open, and it is open on a *decision* rather than on work:
+      `RotateDirection` will draw a `down` band today, but the two halves'
+      diagonals are adjacent rows rather than one, so the combined block's y axis
+      is two affine lines meeting in the middle — and `AxisCoords`, which every
+      ruler in the app is, is one line. `SPECS.md` §17.6 sets out the three ways
+      out and what each costs.
 
 
 

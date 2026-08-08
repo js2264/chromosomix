@@ -14,6 +14,65 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The map turns 45°.** A contact map is symmetric about its diagonal and the
+  diagonal is where all the signal is, so a square map spends most of its area on
+  empty corners and draws the part anybody reads as a thin band across the
+  middle. Turned, that band is the whole picture: a domain is a triangle standing
+  on the axis, a loop is a dot at the height of its own span, and the x axis
+  becomes genomic position — the same axis a track is drawn against, so a profile
+  under the map lines up with the *picture* rather than with one edge of it. A
+  true rotation, so a base pair up the side is the same length as one along the
+  bottom and the plot can be measured with one ruler; a half-bin lattice, each
+  source cell filling two adjacent columns, so what the renderer gets is an
+  ordinary uniform matrix and pan, zoom, pooling, clip, colourbar and export are
+  the code they always were. Offered only where the block has a diagonal — one
+  sequence against itself, at bin level — and greyed rather than hidden where it
+  does not, so the answer to "can this viewer do that" is *yes, from a map*.
+  Shared by a whole deck, like the derivations, because a bar claiming one
+  navigation over a band and four squares is not a comparison.
+
+- **A ruler up the side of a turned map, in distance.** The axis that is the
+  whole reason to turn the picture was the one axis with no numbers on it: the
+  row ruler was switched off under a turn, since labelling a distance with
+  coordinates would name places that are not there. It is the same affine line
+  and the same 1–2–5 ladder as every other ruler, with a negative gradient —
+  separation grows towards the top of the picture while a row index grows towards
+  the bottom. The tick *spacing* could not be shared: the default is the width of
+  a base-pair label, and a band a hundred pixels tall fits one tick at it.
+
+- **Drag the top edge of the band to set how far from the diagonal it reaches.**
+  A bar along the edge, visible on approach rather than only under the pointer,
+  and hidden while the map is square. The band gains exactly the pixels the hand
+  travelled; arrow keys move it by a tenth, Shift by a half, and a double-click
+  puts the default quarter back. The rate is taken once at the press, because the
+  band is redrawn deeper on every step and a rate read live would make the second
+  half of one movement slower than the first.
+
+- **Marks on a turned map, placed by the loci they name.** Every overlay used to
+  bail out where there was no row axis, so a reader's own marks vanished when they
+  pressed the toggle and came back when they pressed it again. A line stays a line
+  at the same place on the genome, joining up with the same line in the lane below
+  it — including one drawn as horizontal, whose axis is gone but whose locus is
+  not. A domain becomes a triangle standing on the axis, a loop one dot at the
+  height of its own span, an arrowhead a glyph standing over that dot with its tip
+  pointing back at it. A call further out than the band shows is not drawn at all:
+  that is outside the data, not off the edge of the picture.
+
+- **Every track in one stack below a turned map**, whichever edge it was put on,
+  and once even if it was on two. A presentation of the placement rather than a
+  rewrite of it, so everything is back where it came from the moment the turn is
+  switched off — a track that returned on the bottom edge because it happened to
+  be turned when the button was pressed would be the picture editing the reader's
+  settings behind them.
+
+- **A track goes on any edge of any map in a deck**, from one list. A track is
+  the import and the style true of it everywhere; a lane is one placement of it,
+  carrying four edge booleans and almost nothing else. A lane given no patch of
+  its own cannot drift from its track, which is what makes *put it on every map*
+  different from *copy it* — recolour the row and every copy moves. One press
+  sends a track to every map at the edges it is already on, and one takes it off
+  all of them while leaving it in the list, with its settings, ready to put back.
+
 - **The session's heading leaves the deck's first cell.** The title, the locus
   box, the back link and the block summary answer *what am I looking at*, which
   is one question however many pictures are on screen, so a deck hoists them
@@ -252,6 +311,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   each one would have put the pixel scan back behind its button.
 
 ### Fixed
+
+- **The maps in a deck line up again when they carry different tracks.** The room
+  a stack takes was reserved from the *lead's* geometry, on companions assumed to
+  have none of their own — so a strip above one map and none above another drew
+  the same window at two heights. Every panel now leaves room for the deepest
+  stack on each edge across the whole deck and pads out the difference. Asked of
+  every panel at the moment it is used, not accumulated as they report: they
+  announce in whatever order they finish reading, and a running maximum is a
+  maximum over whoever has spoken so far, which on the first pass reserved
+  nothing at all.
+
+- **The location control reads.** A label column and four edge buttons cannot
+  share a sidebar row, so `bottom` came out as `bottc` — the single thing the
+  segmented control was laid out to avoid — and beside a deck both map names came
+  out as the shared `Ecoli.mcool…` prefix, truncated at exactly the point where
+  they stop being the same file. The field turns on its side.
 
 - **A deck survives the navigations of the file it is beside.** Every navigation
   builds a fresh state, which is right for the region and the level and wrong for
