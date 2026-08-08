@@ -82,6 +82,26 @@
 
 ## FOR NOW
 
+The 45° turn is half landed — the geometry and the toggle are in and tested, the
+marks drawn over it are not. `HANDOFF.md` is the full account; these are the
+items, in the order they are worth doing.
+
+- [ ] Overlays turned. Lines, crosshairs, loops, hand-drawn marks and pairs are
+      still drawn at square-map coordinates, so on a turned map they land in the
+      wrong place — the one item here that is *wrong* rather than absent. A
+      vertical line becomes a ray, a diagonal feature a horizontal line, and a
+      loop becomes a single dot at the height of its own span, which is better
+      than the box it is now.
+- [ ] Every track to one stack below the rectangle on a turn, and back where it
+      came from on the way home — the rule a lane moved beside the map already
+      follows.
+- [ ] A drag on the top edge of the rectangle sets how far from the diagonal it
+      reaches, the way a drag across a lane's body sets its ceiling.
+- [ ] Two compared files as two rectangles meeting at one genomic axis, the
+      second growing downward, with the tracks below both.
+- [ ] A ruler up the side, in distance.
+- [ ] The turn in the spec and the changelog.
+
 
 
 ## FOR LATER
