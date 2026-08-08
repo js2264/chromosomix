@@ -285,6 +285,11 @@ export function noPlacement(): Placement {
 }
 
 /** A placement drawn on exactly one edge. */
+/** Nothing drawn on any edge — the base every placement is built from. */
+export function emptyPlacement(): Placement {
+  return { top: false, right: false, bottom: false, left: false }
+}
+
 export function placementOn(edge: LaneEdge): Placement {
   return { ...noPlacement(), [edge]: true }
 }

@@ -22,6 +22,7 @@
  * behind the chevron is what genuinely wants a form.
  */
 
+import { LEAD_MAP } from '../annotations/placement'
 import {
   TRACK_OPS,
   TRACK_OP_LABELS,
@@ -32,6 +33,7 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import {
   LANE_EDGES,
+  emptyPlacement,
   type AnnotationEntry,
   type ContigOverlap,
   type LaneEdge,
@@ -56,6 +58,14 @@ const MAX_SIZE = 400
 
 export interface AnnotationCardProps {
   store: AnnotationStore
+  /**
+   * Every map a track could be drawn on, in the order they are on screen.
+   *
+   * Absent, or one entry, is a session with a single map, and the location
+   * control keeps the shape it has always had. The labels are the deck's, since
+   * naming a panel is the deck's business and not this card's.
+   */
+  maps?(): Array<{ id: string; label: string }>
   loader: AnnotationLoader
   /**
    * A one-click offer, when the open map has annotations published beside it.
@@ -744,36 +754,112 @@ export class AnnotationCard {
    * disappeared; the eye beside the name is what hides a track, and it says so.
    */
   private placement(entry: AnnotationEntry): HTMLElement {
-    const only = LANE_EDGES.filter((edge) => entry.placement[edge])
+    const maps = this.props.maps?.() ?? [{ id: LEAD_MAP, label: '' }]
+    // One map is the case this control has always been, and it keeps exactly the
+    // shape it had: four edges, unlabelled, because "which map" is not a
+    // question a session with one map has. The row per map appears only when
+    // there is more than one to choose between.
+    const rows = maps.map((map) => this.edgeRow(entry, map, maps.length > 1))
+    return el(
+      'div',
+      { class: 'field ann-field ann-field-places' },
+      el('span', { class: 'field-label', text: 'location' }),
+      el(
+        'div',
+        { class: 'ann-place-maps' },
+        ...rows,
+        ...(maps.length > 1 ? [this.everyMapRow(entry, maps)] : []),
+      ),
+    )
+  }
+
+  /**
+   * The four edges of one map, and whether this track is on them.
+   *
+   * Reads the *lane*, not the entry: the entry's own placement is the default a
+   * new lane is given, and where a track is actually drawn on a given map is
+   * that map's lane (`annotations/placement.ts`).
+   */
+  private edgeRow(
+    entry: AnnotationEntry,
+    map: { id: string; label: string },
+    named: boolean,
+  ): HTMLElement {
+    const store = this.props.store
+    const lane = store.laneFor(entry.id, map.id)
+    const placement = lane?.placement ?? emptyPlacement()
+    const only = LANE_EDGES.filter((edge) => placement[edge])
     const button = (edge: LaneEdge): HTMLElement => {
-      const on = entry.placement[edge]
+      const on = placement[edge]
       const last = on && only.length === 1
       const node = el('button', {
         class: 'btn btn-toggle ann-place',
         type: 'button',
         text: edge,
         title: last
-          ? `Drawn on the ${edge} edge, and the only edge it is on — use the eye to hide it`
+          ? `Drawn on the ${edge} edge${named ? ` of ${map.label}` : ''} — pressing it again takes ` +
+            'the track off this map, and leaves it in the list to put back'
           : on
-            ? `Stop drawing this on the ${edge} edge`
-            : `Draw this on the ${edge} edge as well`,
+            ? `Stop drawing this on the ${edge} edge${named ? ` of ${map.label}` : ''}`
+            : `Draw this on the ${edge} edge${named ? ` of ${map.label}` : ''} as well`,
       })
       node.setAttribute('aria-pressed', String(on))
       node.addEventListener('click', () => {
-        if (last) return
-        // Through `place`, not `update`: moving between two stacks turns the
-        // value axis round so it grows towards the map on either side, and that
-        // rule belongs to every path that moves a track rather than to the one
-        // that happens to be a button.
-        this.props.store.place(entry.id, { ...entry.placement, [edge]: !on })
+        const next = { ...placement, [edge]: !on }
+        // Off its last edge is off *this map* — the track stays in the list with
+        // its settings, which is what makes putting it back cost nothing. On the
+        // session's own map this goes through `place`, whose job is turning a
+        // lane round when it crosses between a horizontal stack and a vertical
+        // one; that rule belongs to every path that moves a track.
+        if (LANE_EDGES.every((side) => !next[side])) store.unplaceFrom(entry.id, map.id)
+        else if (map.id === LEAD_MAP) store.place(entry.id, next)
+        else store.placeOn(entry.id, map.id, next)
       })
       return node
     }
+    const edges = el('div', { class: 'ann-places' }, ...LANE_EDGES.map(button))
+    return named
+      ? el(
+          'div',
+          { class: 'ann-place-map' },
+          el('span', { class: 'ann-place-name', text: map.label, attrs: { title: map.label } }),
+          edges,
+        )
+      : edges
+  }
+
+  /**
+   * One track, the same place on every map — and the way back.
+   *
+   * The gesture a deck is for: a feature read straight across a row of pictures
+   * needs the track under each of them at the same edge. The copies carry no
+   * settings of their own, so recolouring the track moves all of them for good
+   * (`annotations/placement.ts`); "no map" takes them all away and keeps the
+   * import, which is why it is not the same button as remove.
+   */
+  private everyMapRow(
+    entry: AnnotationEntry,
+    maps: ReadonlyArray<{ id: string; label: string }>,
+  ): HTMLElement {
+    const store = this.props.store
+    const drawn = store.mapsDrawing(entry.id).length
     return el(
       'div',
-      { class: 'field ann-field' },
-      el('span', { class: 'field-label', text: 'location' }),
-      el('div', { class: 'ann-places' }, ...LANE_EDGES.map(button)),
+      { class: 'ann-place-all' },
+      button('every map', () => store.propagateTo(entry.id, maps.map((map) => map.id)), {
+        class: 'btn btn-quiet',
+        title:
+          'Draw this on every map, at the edges it is already on. The copies keep following this ' +
+          'row — recolour it here and they all move.',
+      }),
+      button('no map', () => store.withdrawFrom(entry.id), {
+        class: 'btn btn-quiet',
+        title: 'Take it off every map. It stays in this list, with its settings, ready to put back.',
+      }),
+      el('span', {
+        class: 'ann-place-count',
+        text: drawn === maps.length ? 'on every map' : `on ${drawn} of ${maps.length}`,
+      }),
     )
   }
 

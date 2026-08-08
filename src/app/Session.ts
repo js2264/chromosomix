@@ -54,6 +54,7 @@ import {
 import type { CompareOp, Transform, ViewState } from '../types'
 import type { Normalisation } from '../render/derive'
 import type { RotateDirection } from '../render/rotate'
+import { LEAD_MAP } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
@@ -1811,7 +1812,7 @@ export class Session {
    * through the routing rather than around it: a `.cool` aimed at the bottom of
    * the map is still a map, not a track drawn along the bottom.
    */
-  private dropped(file: File, placement?: Placement): void {
+  private dropped(file: File, placement?: Placement, map?: string): void {
     // A saved session, before anything else looks at it: it is not a track, it
     // is the tab it was exported from.
     if (looksLikeConfig(file.name)) {
@@ -1833,7 +1834,19 @@ export class Session {
     // A metacool carries no annotations (§8.5) and has no assembly to replace,
     // so there is nothing a dropped track could join.
     if (held === null) return
+    const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addFiles([file], placement)
+    // Everything `begin` just created belongs to the map it was dropped on. The
+    // import itself is the session's, as it always was — only the placement
+    // moves, so the track is in the one list with every other and simply drawn
+    // somewhere other than cell 0.
+    if (map !== undefined && map !== LEAD_MAP) {
+      for (const entry of held.store.entries) {
+        if (before.has(entry.id)) continue
+        held.store.unplaceFrom(entry.id, LEAD_MAP)
+        held.store.placeOn(entry.id, map, entry.placement)
+      }
+    }
   }
 
   /**
@@ -2263,6 +2276,10 @@ export class Session {
       new AnnotationCard({
         store,
         loader,
+        // Every map a track could be drawn on. A session with no deck answers
+        // with itself, so the location control keeps the shape it has always
+        // had until there is more than one map to choose between.
+        maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
         ...(published.length === 0
           ? {}
           : {
@@ -2675,6 +2692,8 @@ export class Session {
         const { onExpectedChange: _own, ...shared } = this.derivePresentation(state)
         return shared
       },
+      annotations: (map) => this.annotationContext(map),
+      leadLabel: () => fileLabel(this.file?.uri ?? ''),
       // Stripped the same way and for the same two reasons. `onChange` would be
       // a sixth copy of a control over something the deck shares; `onAvailable`
       // would let a companion whose block has no diagonal un-turn the whole
@@ -2803,12 +2822,13 @@ export class Session {
   }
 
   /** The context a heatmap view hands to its panel, or `undefined`. */
-  private annotationContext(): AnnotationContext | undefined {
+  private annotationContext(map?: string): AnnotationContext | undefined {
     const held = this.annotations
     return held === null
       ? undefined
       : {
           store: held.store,
+          ...(map === undefined ? {} : { map }),
           manual: held.manual,
           client: held.client,
           groups: held.groups,
@@ -2819,8 +2839,13 @@ export class Session {
           // file dropped anywhere else — so the edge is carried through it
           // rather than around it, and only reaches the loader for the files
           // that actually become tracks.
+          // Dropped on a *companion's* edge, the track belongs to that map and
+          // not to the session's own: the lane is moved the moment the import
+          // exists, because `begin` places every new track on the lead — which
+          // is what importing has always meant and is right for every drop but
+          // this one.
           loadOnEdge: (files, edge) => {
-            for (const file of files) this.dropped(file, placementOn(edge))
+            for (const file of files) this.dropped(file, placementOn(edge), map)
           },
         }
   }

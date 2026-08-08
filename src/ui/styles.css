@@ -5429,3 +5429,44 @@ p {
   background: transparent;
   border-style: dashed;
 }
+
+/* One row of four edges per map, for a track that can be drawn on any of them
+   (`annotations/placement.ts`). A session with one map gets the bare row of
+   edges it has always had, so none of this applies until a deck exists. */
+.ann-place-maps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.ann-place-map {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* The name is allowed to run out of room before the buttons are: which edges a
+   track is on is the answer being read, and the map's name is the label on it. */
+.ann-place-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.ann-place-all {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.ann-place-count {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
