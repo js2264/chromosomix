@@ -3539,9 +3539,14 @@ export class MatrixPanel {
    * frame, because a redraw is a redraw; the lock recognises its own broadcast
    * coming back rather than this pretending it did not happen (`panels/lock.ts`).
    */
-  showViewport(rows: [number, number], cols: [number, number]): void {
-    if (this.data === null) return
+  showViewport(rows: [number, number], cols: [number, number]): boolean {
+    // The return is what the lock needs, not a convenience. A panel with no
+    // block cannot move and therefore will never report, and a lock that had
+    // already recorded a report as owed would wait for it forever — swallowing
+    // this panel's *first* genuine gesture when its block finally arrives.
+    if (this.data === null) return false
     this.heatmap.showCellWindow(rows, cols)
+    return true
   }
 
   /**

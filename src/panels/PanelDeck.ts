@@ -155,6 +155,8 @@ export class PanelDeck {
    * to have published and has to be told apart from "never published".
    */
   private published: { value: string | undefined } | null = null
+  /** Which block the deck was last showing, so a move to another resets the lock. */
+  private place: string | null = null
   private destroyed = false
 
   constructor(private readonly props: PanelDeckProps) {
@@ -244,6 +246,15 @@ export class PanelDeck {
    * its own file.
    */
   apply(state: ViewState): void {
+    // A different block is a different place, and the lock's currency is base
+    // pairs *from each block's own first cell* — so a window carried across a
+    // navigation still parses and means somewhere else. Cleared before anything
+    // is pushed, so a companion that finishes reading before the lead catches up
+    // to nothing rather than to the previous region's window.
+    const place = placeKey(state)
+    if (this.place !== null && this.place !== place) this.lock.reset()
+    this.place = place
+
     this.state = state
     if (this.published === null || this.published.value !== state.maps) {
       const wanted = parseMaps(state.maps)
@@ -252,6 +263,26 @@ export class PanelDeck {
     }
     for (const slot of this.slots) slot.panel?.apply(state)
     this.paintBar()
+  }
+
+  /**
+   * Push the lead's clip down to every companion, where "one scale" is on.
+   *
+   * Called by the session *after* it has applied a colour change to the lead,
+   * which is the whole of why this is a method rather than part of
+   * {@link apply}: the deck is reconciled before the lead is recoloured — a
+   * colour-only change is still a view its panels have to be handed — so reading
+   * the lead's scale during `apply` reads the one it is about to stop having.
+   *
+   * Without this the setting worked once, when it was switched on, and every
+   * later nudge of the lead's clip left the companions on the old one while the
+   * toolbar went on claiming the same colour is the same number of contacts
+   * across the deck — a claim a reader acts on when reading the figure.
+   */
+  syncSharedLook(): void {
+    if (!this.shareLook) return
+    const look = this.leadLook()
+    for (const slot of this.slots) slot.panel?.applyLook(look)
   }
 
   /** Show the add row and put the caret in it — the shell's "add a map". */
@@ -682,4 +713,28 @@ export class PanelDeck {
 function splitPath(uri: string): string {
   const index = uri.indexOf('::')
   return index < 0 ? uri : uri.slice(0, index)
+}
+
+/**
+ * What identifies the *block* a state selects, for the lock's purposes.
+ *
+ * The keys that choose data, and none of the ones that choose how it is drawn:
+ * a clip nudge must not reset the deck's window, and a change of region must.
+ * `level` is in it because a contig-level cell is a whole sequence rather than a
+ * stretch of one, so the two grids are not the same grid however similar the
+ * request looks.
+ */
+function placeKey(state: ViewState): string {
+  return JSON.stringify([
+    state.uri,
+    state.view,
+    state.genome,
+    state.genome2,
+    state.genomes,
+    state.region,
+    state.region2,
+    state.regions,
+    state.locus,
+    state.level,
+  ])
 }

@@ -170,8 +170,11 @@ export interface LockMember {
   /**
    * Show this cell window. Implementations must not report back synchronously;
    * the frame-later echo is expected and is handled by {@link windowsAgree}.
+   *
+   * @returns `false` where the panel could not move — it has no block yet — so
+   * that no report is recorded as owed for a report that will never come.
    */
-  show(rows: CellSpan, cols: CellSpan): void
+  show(rows: CellSpan, cols: CellSpan): boolean
 }
 
 /**
@@ -214,6 +217,25 @@ export class ViewportLock {
   /** Where the deck is looking, for a panel that has just finished loading. */
   get window(): LockWindow | null {
     return this.current
+  }
+
+  /**
+   * Forget where the deck was looking, because it is no longer a place.
+   *
+   * The currency is base pairs **from each block's own first cell**, which makes
+   * a window a statement about one block rather than about the genome. Navigate
+   * from a 100 kb contig to a 3 Mb one and `20,000–60,000` still parses, still
+   * pushes, and means somewhere else entirely — so a companion that finished
+   * reading before the lead would be scrolled to a window nobody asked for, and
+   * with a table mounted there is no lead report to correct it.
+   *
+   * Called by the deck when the state selects a different block. Deliberately
+   * not inferred from a panel's own extent changing: the first panel to settle
+   * would then reset a window the others are already following.
+   */
+  reset(): void {
+    this.current = null
+    this.pending.clear()
   }
 
   /**
@@ -260,11 +282,15 @@ export class ViewportLock {
         if (!member.locked()) continue
         const bpPerCell = member.bpPerCell()
         const extent = member.cells()
-        this.pending.add(member.id)
-        member.show(
+        // A report is owed only where the panel actually moved. A panel whose
+        // block has not arrived cannot, and never reports — so recording the
+        // debt anyway left it owed forever and threw away that panel's first
+        // real gesture once its block landed.
+        const moved = member.show(
           bpToCells(window.rows, bpPerCell, extent.rows),
           bpToCells(window.cols, bpPerCell, extent.cols),
         )
+        if (moved) this.pending.add(member.id)
       }
     } finally {
       this.driving = false
