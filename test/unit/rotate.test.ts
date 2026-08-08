@@ -33,8 +33,11 @@ import {
   rotateBlock,
   rowForSeparation,
   separationAt,
+  separationBp,
+  separationCoords,
   type RotatableBlock,
 } from '@/render/rotate'
+import { bpTicks } from '@/render/heatmap'
 
 function block(
   n: number,
@@ -217,5 +220,62 @@ describe('what may be turned at all', () => {
   it('refuses a level where a cell is a whole sequence', () => {
     expect(isTurnable({ ...square, level: 'contig' })).toBe(false)
     expect(isTurnable({ ...square, level: 'genome' })).toBe(false)
+  })
+})
+
+describe('the ruler up the side', () => {
+  it('reads zero on the diagonal and grows towards the top', () => {
+    // The gradient is negative because separation grows up the picture while a
+    // row index grows down it — the one thing about this ruler that is not the
+    // same as every other one.
+    const coords = separationCoords({ maxSeparation: 40, direction: 'up' }, 1000)
+    expect(coords.bpPerCell).toBe(-1000)
+    // Row 40 is the diagonal, and its centre is at 40.5.
+    expect(coords.bpAtOrigin + 40.5 * coords.bpPerCell).toBeCloseTo(0, 9)
+    // Row 0 is the top of the band: 40 bins of separation, in base pairs.
+    expect(coords.bpAtOrigin + 0.5 * coords.bpPerCell).toBeCloseTo(40_000, 9)
+  })
+
+  it('grows downward on the mirrored half of a comparison', () => {
+    const coords = separationCoords({ maxSeparation: 40, direction: 'down' }, 1000)
+    expect(coords.bpPerCell).toBe(1000)
+    expect(coords.bpAtOrigin + 0.5 * coords.bpPerCell).toBeCloseTo(0, 9)
+    expect(coords.bpAtOrigin + 40.5 * coords.bpPerCell).toBeCloseTo(40_000, 9)
+  })
+
+  it('agrees with the separation the readout names, row for row', () => {
+    // Two answers to "how far from the diagonal is this row", derived
+    // separately: the ruler's line and `separationAt`'s index arithmetic. A
+    // ruler that disagreed with the readout under the pointer would be the
+    // worst kind of wrong, because each on its own looks right.
+    const rotated = { maxSeparation: 25, direction: 'up' as const }
+    const coords = separationCoords(rotated, 2000)
+    for (const row of [0, 1, 7, 24, 25]) {
+      expect(coords.bpAtOrigin + (row + 0.5) * coords.bpPerCell).toBeCloseTo(
+        separationBp(separationAt(rotated, row), 2000),
+        9,
+      )
+    }
+  })
+})
+
+describe('ticks on a descending axis', () => {
+  it('are the same round steps as on an ascending one', () => {
+    const up = separationCoords({ maxSeparation: 40, direction: 'up' }, 1000)
+    const down = separationCoords({ maxSeparation: 40, direction: 'down' }, 1000)
+    const ofUp = bpTicks(up, [0, 41], 6).map((t) => t.bp).sort((a, b) => a - b)
+    const ofDown = bpTicks(down, [0, 41], 6).map((t) => t.bp).sort((a, b) => a - b)
+    expect(ofUp).toEqual(ofDown)
+    expect(ofUp[0]).toBe(0)
+  })
+
+  it('puts each tick back on the row that carries it', () => {
+    const coords = separationCoords({ maxSeparation: 40, direction: 'up' }, 1000)
+    for (const tick of bpTicks(coords, [0, 41], 6)) {
+      expect(coords.bpAtOrigin + tick.unit * coords.bpPerCell).toBeCloseTo(tick.bp, 6)
+      // …and inside the band, rather than off the top of it.
+      expect(tick.unit).toBeGreaterThanOrEqual(0)
+      expect(tick.unit).toBeLessThanOrEqual(41)
+    }
   })
 })

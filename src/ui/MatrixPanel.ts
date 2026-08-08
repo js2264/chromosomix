@@ -86,6 +86,7 @@ import {
   cellAt,
   isTurnable,
   rotateBlock,
+  separationCoords,
   turnedAxis,
   type RotateDirection,
   type RotatedBlock,
@@ -3238,12 +3239,13 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords({
-      // Under a turn the column ruler is a genomic one at half the bin size, and
-      // there is no row ruler at all: the vertical axis is a distance, and
-      // labelling it with positions would name places that are not there.
+      // Under a turn the column ruler is a genomic one at half the bin size,
+      // and the row ruler is a *distance* rather than a position: a turned map's
+      // vertical axis answers "how far apart", so labelling it with coordinates
+      // would name places that are not there. See {@link separationCoords}.
       rows: turned === null
         ? axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize)
-        : null,
+        : separationCoords(turned, this.options.binsize),
       cols: turned === null
         ? axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize)
         : axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize * BIN_FRACTION),

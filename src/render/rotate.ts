@@ -303,6 +303,45 @@ export function turnedAxis(
 }
 
 /**
+ * The vertical ruler of a turned map, as the same line every other ruler is.
+ *
+ * A turned map's y axis answers "how far apart", not "where", so the number
+ * beside a row is a *distance*: labelling it with coordinates would name places
+ * that are not on the picture. But it is still an affine function of the row
+ * index, which is all `AxisCoords` has ever been — so the turned ruler needs no
+ * machinery of its own, only the right two numbers.
+ *
+ * The gradient is **negative** for an ordinary turned map, and that is the whole
+ * of what is unusual here: separation grows towards the top of the picture while
+ * a row index grows towards the bottom. It is positive on the mirrored half of a
+ * comparison, where the two grow together.
+ *
+ * The half is the cell centre. Row `r` covers `[r, r + 1)`, and the separation
+ * it stands for is the one at its middle — without it every label would be off
+ * by half a bin, which at whole-genome zoom is invisible and at bin zoom is the
+ * difference between a tick on a cell and a tick between two.
+ */
+export function separationCoords(
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  binsize: number,
+): { bpPerCell: number; bpAtOrigin: number; tickGapPx: number } {
+  const gap = { tickGapPx: SEPARATION_TICK_GAP_PX }
+  return rotated.direction === 'up'
+    ? { ...gap, bpPerCell: -binsize, bpAtOrigin: (rotated.maxSeparation + 0.5) * binsize }
+    : { ...gap, bpPerCell: binsize, bpAtOrigin: -0.5 * binsize }
+}
+
+/**
+ * How much room a distance label wants above the next one, in CSS pixels.
+ *
+ * A turned band is a hundred pixels tall against a square map's five hundred,
+ * and the default spacing — which is the *width* of a base-pair label, because
+ * a horizontal ruler is what it was chosen for — fits one tick in it. A label
+ * read bottom to top needs its own height and some air, and this is that.
+ */
+const SEPARATION_TICK_GAP_PX = 26
+
+/**
  * How far from the diagonal a band of `rows` rows reaches, in base pairs.
  *
  * The reader's number, and the one the y axis is labelled with: a row is one bin
