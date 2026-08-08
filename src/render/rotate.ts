@@ -303,6 +303,37 @@ export function turnedAxis(
 }
 
 /**
+ * The fraction of a block a turned map shows before anybody says otherwise.
+ *
+ * A whole triangle is always twice as wide as it is tall — that is what the
+ * half-bin lattice makes it — so turning a map and fitting it produces a
+ * triangle that fills the panel and touches nothing. Which is a fine picture and
+ * is not the one the turn is for: the reading is the band near the diagonal, and
+ * the far apex is the part of a contact map that has least in it.
+ */
+export const DEFAULT_TURN_FRACTION = 0.25
+
+/**
+ * How far from the diagonal to reach, in bins, given a block and a request.
+ *
+ * `asked` is `null` until the reader drags the band's top edge, and then it is
+ * whatever they dragged it to — clamped here rather than at the gesture, so the
+ * one place that decides is the one place that knows how big the block is. A
+ * band cannot be deeper than the block has cells to fill, and cannot be nothing:
+ * zero rows is a picture with no picture in it, and a reader who drags the edge
+ * onto the diagonal means "as shallow as it goes", not "gone".
+ *
+ * A *fraction* rather than a distance in base pairs, deliberately: a default of
+ * "500 kb" is most of a bacterial chromosome and a rounding error on a human
+ * one, and this viewer opens on both.
+ */
+export function turnDepthFor(block: { nrows: number; ncols: number }, asked: number | null): number {
+  const span = Math.max(1, Math.min(block.nrows, block.ncols))
+  const wanted = asked ?? Math.ceil(span * DEFAULT_TURN_FRACTION)
+  return Math.max(1, Math.min(span - 1, wanted))
+}
+
+/**
  * The vertical ruler of a turned map, as the same line every other ruler is.
  *
  * A turned map's y axis answers "how far apart", not "where", so the number
