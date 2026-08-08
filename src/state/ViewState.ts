@@ -299,6 +299,30 @@ export const DERIVED_KEYS = ['oe', 'flip'] as const
 export const DECK_KEYS = ['maps'] as const
 
 /**
+ * The keys that name what is on screen **beside** the view, and outlive it.
+ *
+ * A navigation builds a fresh state — `{ uri, view: 'contigs' }` and nothing
+ * else — because that is what a navigation *is*: the region, the genome, the
+ * level and the pair all belong to the picture being left behind. These two do
+ * not. `maps` is a deck of other files (§16) and `uri2` is a file blended into
+ * the lower triangle (§5.7); both are things the reader put on screen *around*
+ * this session, and neither has anything to do with which block is showing.
+ *
+ * Left out, every navigation silently took them away: clicking Chromosomes and
+ * then a contig — the plainest way there is to look at another chromosome —
+ * came back with the deck gone, its workers released and its link key deleted,
+ * because the state that arrived had no `maps` in it and the deck reconciled
+ * itself to nothing. The same for a second file blended into the square.
+ *
+ * Carried by {@link Session.navigate} rather than by the store, and that
+ * distinction is the whole of it: the *session* carries its companions across
+ * its own navigations, and the **address bar is obeyed exactly as written**. A
+ * link with no `maps` in it means a deck of one, and a store that helpfully put
+ * the last one back would make a pasted link show something nobody sent.
+ */
+export const COMPANION_KEYS = ['maps', 'uri2'] as const
+
+/**
  * `true` when two states select the same block and differ only in how it is
  * painted, what arithmetic is done to it, or what is drawn beside it — the
  * things a mounted view can be *told*, rather than rebuilt for.

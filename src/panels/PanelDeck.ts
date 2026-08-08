@@ -111,6 +111,18 @@ export interface PanelDeckProps {
    * bar claiming otherwise.
    */
   turn?(): TurnPresentation | undefined
+  /**
+   * The bin size the session's own file is at, or `undefined`.
+   *
+   * Only for a companion that turns out to be a **collection** rather than a
+   * map: an `.mcool` is a ladder of complete coolers and the rung to land on is
+   * the lead's, because two files with the same ladder are comparable at any of
+   * them and the finest-regardless rule would put a 1 kb map beside a 16 kb one
+   * (§3.4, `MapPanelProps.preferBinsize`). The *file's* bin size and not the
+   * lead panel's effective resolution: pooling is a fact about how much of the
+   * block is on screen, and it is not what a resolution ladder is indexed by.
+   */
+  binsize?(): number | undefined
 }
 
 /**
@@ -452,14 +464,36 @@ export class PanelDeck {
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
-      initialLook: () => {
-        const look = this.leadBaseLook()
-        return this.shareLook ? look : { transform: look.transform, colormap: look.colormap }
-      },
+      // The lead's scale, clip included. A map opened beside another is opened
+      // to be compared with it, and a comparison whose two halves are on two
+      // clips is one the eye has to correct for before it can read anything —
+      // so the honest default is the one that makes the same colour the same
+      // number, and the reader who knows their libraries differ in depth takes
+      // this panel off it with one nudge of its own clip. Not the *live* scale
+      // but `baseScale`, which is the same thing minus whatever a derivation
+      // borrowed: a lead under a two-file `ratio` is on `log2` and a diverging
+      // ramp, and a companion drawing plain counts must not inherit that.
+      initialLook: () => this.leadBaseLook(),
+      preferBinsize: () => this.props.binsize?.(),
+      onResolved: (uri) => this.resolveRef(slot, uri),
       onMove: (delta) => this.move(slot, delta),
     })
     slot.panel.syncLock()
     return slot
+  }
+
+  /**
+   * A companion descended into an entry of a collection: publish what it opened.
+   *
+   * The link has to name the map rather than the `.mcool` it lives in, and not
+   * as a nicety: a recipient's deck resolves the root the same way, but against
+   * *their* lead's bin size, so the same link would show a different rung of
+   * the ladder to the two people looking at it (§3.4, §16.6).
+   */
+  private resolveRef(slot: Slot, uri: string): void {
+    if (slot.ref.kind === 'vacant' || slot.ref.uri === uri) return
+    slot.ref = { kind: slot.ref.kind, uri }
+    this.publish()
   }
 
   /**

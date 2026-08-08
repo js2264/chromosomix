@@ -31,8 +31,9 @@ import { MatrixPanel, type DerivePresentation, type TurnPresentation } from '../
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
+import { firstEntry } from '../ui/FilePicker'
 import { icon, iconButton } from '../ui/icons'
-import { fileLabel } from '../ui/labels'
+import { fileLabel, splitUri } from '../ui/labels'
 
 /**
  * What block a view state asks a companion for, before any file has been
@@ -154,6 +155,26 @@ export interface MapPanelProps {
    * diagonal is not a reason to un-turn the deck (`ui/MatrixPanel.ts`).
    */
   turn(): TurnPresentation | undefined
+  /**
+   * The bin size the lead is at, for a companion that turns out to be a
+   * *collection* rather than a map (§3.4).
+   *
+   * An `.mcool` is a stack of complete coolers under `/resolutions` and is not
+   * a map at its root, so opening one by name is a `KeyError` — the reader is
+   * handed a sentence about a URI syntax they never typed, in a rectangle where
+   * they expected their file. Somebody who dropped an `.mcool` on a deck meant
+   * *this data, beside that*, and the resolution to land on is the lead's: two
+   * files with the same ladder are comparable at any rung, and opening the
+   * finest regardless would put a 1 kb map beside a 16 kb one and call it a
+   * comparison. Where the collection has no such rung, its finest is the
+   * fallback and the deck's own gate says so if the blocks then disagree.
+   *
+   * The same rule, from the same function, as the second file of a blend
+   * (`Session.openCompare`) and as a collection dropped on the picker.
+   */
+  preferBinsize(): number | undefined
+  /** Rewrite this panel's URI after it resolved a collection to one of its entries. */
+  onResolved(uri: string): void
   /** Move this panel one place along the deck; absent at either end. */
   onMove(delta: number): void
 }
@@ -189,6 +210,15 @@ export class MapPanel {
   private read: string | null = null
   /** Colour scale, per panel; see {@link applyLook}. */
   private look: ScaleState = {}
+  /**
+   * The entry this panel descended into, when it was handed a collection.
+   *
+   * Held rather than pushed back into `props.uri`, which is the deck's copy and
+   * is what the link is written from — the deck is told through `onResolved`
+   * and rewrites its own ref, so the URI a reader shares names the map they are
+   * looking at rather than the collection they dropped.
+   */
+  private resolved: string | null = null
 
   constructor(private readonly props: MapPanelProps) {
     this.nameEl = el('span', {
@@ -230,8 +260,9 @@ export class MapPanel {
     this.say('opening…')
   }
 
+  /** What this panel is actually reading — the entry, where it descended into one. */
   get uri(): string {
-    return this.props.uri
+    return this.resolved ?? this.props.uri
   }
 
   /** The map, for the deck's lock; `null` until this panel has read a block. */
@@ -307,12 +338,47 @@ export class MapPanel {
   // -------------------------------------------------------------------------
 
   private async open(): Promise<OpenResult> {
-    this.opening ??= this.client.request<'open'>({
-      kind: 'open',
-      uri: this.props.uri,
-      source: this.props.source,
-    })
+    this.opening ??= this.openOrDescend()
     return this.opening
+  }
+
+  /**
+   * Open the file, or open one of the maps inside it (§3.4).
+   *
+   * A collection — an `.mcool` of resolutions, an `.mmetacool` of entries — is
+   * not a map at its root, and the reader mirrors Python's `KeyError` for it
+   * faithfully. Faithful is right for the reader and wrong here: somebody who
+   * dropped an `.mcool` on a deck meant *this data beside that*, and answering
+   * with a sentence about `::` syntax in the rectangle where their map should
+   * be is an error message standing in for a feature.
+   *
+   * One hop, never two. `firstEntry` only answers for a collection root, and
+   * the URI it produces names an entry, so a second refusal is a real one —
+   * looping on it would hammer the worker with the same failing open.
+   */
+  private async openOrDescend(): Promise<OpenResult> {
+    try {
+      return await this.client.request<'open'>({
+        kind: 'open',
+        uri: this.uri,
+        source: this.props.source,
+      })
+    } catch (err) {
+      const landing = firstEntry(err, this.props.preferBinsize())
+      if (landing === null) throw err
+      // The *path* with a group on it, so a local file keeps the handle it was
+      // dropped with: `source` is unchanged because it is the same bytes, and
+      // only the address inside them has moved.
+      this.resolved = `${splitUri(this.uri).path}::${landing.group}/${landing.entry}`
+      this.nameEl.textContent = fileLabel(this.resolved)
+      this.nameEl.title = this.resolved
+      this.props.onResolved(this.resolved)
+      return this.client.request<'open'>({
+        kind: 'open',
+        uri: this.resolved,
+        source: this.props.source,
+      })
+    }
   }
 
   private async load(state: ViewState): Promise<void> {
@@ -462,7 +528,7 @@ export class MapPanel {
         ...(turn === undefined ? {} : { turn }),
         detachedControls: true,
         hideTitle: true,
-        caption: { file: fileLabel(this.props.uri) },
+        caption: { file: fileLabel(this.uri) },
         // The clip a companion arrives at is its own — see {@link applyLook}.
         onScaleChange: (scale) => {
           this.look = scale
@@ -486,9 +552,9 @@ export class MapPanel {
     }
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
-    this.panel.setData(result, fileLabel(this.props.uri))
+    this.panel.setData(result, fileLabel(this.uri))
     this.nameEl.title =
-      `${this.props.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
+      `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
       `${fmt.int(result.nrows)}×${fmt.int(result.ncols)} cells` +
       (state.view === 'whole' ? ' (whole file)' : '')
   }
