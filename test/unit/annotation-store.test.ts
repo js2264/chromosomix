@@ -558,3 +558,60 @@ describe('style defaults', () => {
     expect(defaultStyle('track', '#000').limits.auto).toBe(true)
   })
 })
+
+/**
+ * What a turned map asks the store for: it has one stack, below the rectangle,
+ * and every track has to arrive in it exactly once whichever edge of the square
+ * it was put on (`ui/AnnotationLanes.ts`).
+ */
+describe('everything one map draws', () => {
+  const ready = (store: AnnotationStore, name: string, placement: Placement): string => {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name },
+      placement,
+    })
+    store.update(entry.id, { status: 'ready' })
+    return entry.id
+  }
+
+  it('gives a track on two edges once, not twice', () => {
+    // The failure the method exists to prevent: asking edge by edge and
+    // concatenating draws a track placed on the bottom *and* the right as two
+    // lanes, one above the other, in a stack that has no right edge to explain
+    // the second one.
+    const store = freshStore()
+    const both = ready(store, 'a.bw', { ...placementOn('bottom'), right: true })
+    expect(store.drawnAnywhereOn('lead').map((row) => row.id)).toEqual([both])
+  })
+
+  it('keeps the list’s own order rather than grouping by edge', () => {
+    // A reader orders the list to order the stack. Four edges concatenated puts
+    // every bottom track above every right one however the list reads.
+    const store = freshStore()
+    const a = ready(store, 'a.bw', placementOn('right'))
+    const b = ready(store, 'b.bw', placementOn('bottom'))
+    const c = ready(store, 'c.bw', placementOn('top'))
+    expect(store.drawnAnywhereOn('lead').map((row) => row.id)).toEqual([a, b, c])
+  })
+
+  it('leaves out what is hidden, unread, or on no edge at all', () => {
+    const store = freshStore()
+    const shown = ready(store, 'a.bw', placementOn('bottom'))
+    const hidden = ready(store, 'b.bw', placementOn('bottom'))
+    store.update(hidden, { visible: false })
+    ready(store, 'c.bw', { top: false, right: false, bottom: false, left: false })
+    store.begin({ card: 'linear', kind: 'track', source: { ...localSource, name: 'd.bw' } })
+    expect(store.drawnAnywhereOn('lead').map((row) => row.id)).toEqual([shown])
+  })
+
+  it('answers for one map without reading another’s placements', () => {
+    const store = freshStore()
+    const a = ready(store, 'a.bw', placementOn('bottom'))
+    store.placeOn(a, 'p1', placementOn('top'))
+    const b = ready(store, 'b.bw', placementOn('bottom'))
+    expect(store.drawnAnywhereOn('p1').map((row) => row.id)).toEqual([a])
+    expect(store.drawnAnywhereOn('lead').map((row) => row.id)).toEqual([a, b])
+  })
+})

@@ -5460,36 +5460,37 @@ p {
   color: var(--muted);
 }
 
-/* With more than one map the field cannot stay on one line. The label column is
-   3.6rem and a map's name wants most of what is left, which took the four edges
-   down to about 190px between them: `bottom` came out as `bott` — the single
-   thing the segmented control was laid out to avoid — and both names came out
-   as `Ecoli.mcool…`, truncated at exactly the point where they stop being the
-   same file. Two labels that read alike are worse than none.
+/* The one field in the body that does not put its label in the 3.6rem column
+   the others share, because four edges and a label cannot both have the width
+   they need in a sidebar this narrow. `bottom` came out as `bottc` — the single
+   thing `.ann-place` was laid out to avoid — and beside a deck, where each row
+   also carries a map's name, both names came out as `Ecoli.mcool…`, truncated
+   at exactly the point where they stop being the same file. Two labels that
+   read alike are worse than none.
 
-   So the field turns on its side: `location` over the rows, each map's name
-   over its own edges. A session with one map has no name to show and keeps the
-   single row it has always had. */
-.ann-field-places.is-stacked {
+   So the field turns on its side: `location` over the rows, and each map's name
+   over its own edges. A session with one map has no name to show and gets the
+   bare row of edges, now with the whole body to spell them out in. */
+.ann-field-places {
   flex-direction: column;
   align-items: stretch;
   gap: 0.2rem;
 }
 
-.ann-field-places.is-stacked > .field-label {
+.ann-field-places > .field-label {
   flex: 0 0 auto;
 }
 
-.ann-field-places.is-stacked .ann-place-maps {
+.ann-field-places .ann-place-maps {
   gap: 0.4rem;
 }
 
-.ann-field-places.is-stacked .ann-place-map {
+.ann-field-places .ann-place-map {
   flex-direction: column;
   align-items: stretch;
   gap: 0.1rem;
 }
 
-.ann-field-places.is-stacked .ann-place-name {
+.ann-field-places .ann-place-name {
   flex: 0 0 auto;
 }

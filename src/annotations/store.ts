@@ -250,6 +250,24 @@ export class AnnotationStore {
   }
 
   /**
+   * Everything this map draws, on whichever edge, once each and in list order.
+   *
+   * What a turned map needs: it has one stack, below the rectangle, and a track
+   * put on two edges of the square has to arrive in it once rather than twice
+   * (`ui/AnnotationLanes.ts`). Asking edge by edge and merging is the same
+   * question asked four times and then repaired; asking it once is the question.
+   */
+  drawnAnywhereOn(map: MapId): AnnotationEntry[] {
+    return this.entriesOn(map).filter(
+      (entry) =>
+        entry.card !== 'overlay' &&
+        entry.visible &&
+        entry.status === 'ready' &&
+        LANE_EDGES.some((edge) => entry.placement[edge]),
+    )
+  }
+
+  /**
    * The feature set the browser's search reads.
    *
    * The one marked, or — until anything is marked — the first loaded, which is

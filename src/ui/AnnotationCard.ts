@@ -762,10 +762,10 @@ export class AnnotationCard {
     const rows = maps.map((map) => this.edgeRow(entry, map, maps.length > 1))
     return el(
       'div',
-      // Beside a deck the field turns on its side; see `.is-stacked` in the
-      // stylesheet for why a label column and four edges cannot share a row
-      // this narrow.
-      { class: `field ann-field ann-field-places${maps.length > 1 ? ' is-stacked' : ''}` },
+      // The one field in the body that does not put its label in a column; see
+      // the stylesheet for why four edges cannot share a row this narrow with
+      // one.
+      { class: 'field ann-field ann-field-places' },
       el('span', { class: 'field-label', text: 'location' }),
       el(
         'div',
