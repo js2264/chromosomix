@@ -2462,12 +2462,14 @@ p {
   font-family: var(--mono);
 }
 
-/* Two squares against each other, which is the whole ramp a two-number key
-   needs: the gradient between them was never information a reader takes out of
-   the legend rather than out of the picture. */
+/* Two squares, which is the whole ramp a two-number key needs: the gradient
+   between them was never information a reader takes out of the legend rather
+   than out of the picture. Set apart rather than butted together — touching,
+   the pair reads as one two-toned block and the eye has to find the seam before
+   it can tell which end is which. */
 .map-key-ramp {
   display: flex;
-  border: 1px solid var(--border);
+  gap: 3px;
   flex: 0 0 auto;
 }
 
@@ -2475,6 +2477,7 @@ p {
   display: block;
   width: 12px;
   height: 12px;
+  border: 1px solid var(--border);
 }
 
 .map-key-value {

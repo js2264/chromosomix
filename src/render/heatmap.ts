@@ -684,6 +684,14 @@ export interface PlotOptions {
  */
 export const CROSSHAIR_COLOR = '#1f5fa9'
 
+/**
+ * Half the length of the cross another panel's pointer leaves, in CSS pixels.
+ *
+ * About the size of a cursor: big enough to find at a glance on a busy map,
+ * small enough that five of them are five marks rather than a grid.
+ */
+const ECHO_ARM = 5
+
 export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   text: true,
   fills: true,
@@ -1101,6 +1109,17 @@ export class HeatmapView {
   private colorScale: ColorScale
   private dirtyRaster = false
   private plot: PlotOptions
+  /**
+   * A cell being pointed at on **another** map, for a deck (§16).
+   *
+   * Drawn as a short cross rather than as two rules across the picture, and the
+   * asymmetry is the point: exactly one map has a pointer over it, and five
+   * full crosshairs claim five pointers. What the others owe the reader is
+   * *where that place is on me* — which a mark the size of a cursor answers,
+   * and two lines the width of the panel answer by covering the data being
+   * compared.
+   */
+  private echoCell: { row: number; col: number } | null = null
   /** The cell under the pointer, for the crosshair. `null` when outside. */
   private hoverCell: Cell | null = null
   /** What the owner draws on the data; see {@link setOverlayPainter}. */
@@ -2069,7 +2088,10 @@ export class HeatmapView {
     this.drawLabels()
     this.drawOverlay()
     if (this.plot.ticks) this.drawTicks()
-    if (this.plot.crosshair) this.drawCrosshair()
+    if (this.plot.crosshair) {
+      this.drawCrosshair()
+      this.drawEcho()
+    }
     this.drawSelection()
     this.drawPlotBorder()
   }
@@ -2506,6 +2528,58 @@ export class HeatmapView {
    * beside the cell rather than a mark on it. Clipped to the plot so the lines
    * never run through the labels they are helping you find.
    */
+  /**
+   * Mark where another map's pointer is, as a small cross.
+   *
+   * Same colour and same weight as the crosshair — it is the same instrument
+   * seen from another panel, and a mark in a second colour would read as a
+   * second kind of thing. Under the same preference, for the same reason: a
+   * reader who has turned the crosshair off has said they do not want a mark
+   * following their pointer, and one that appears only on the maps they are
+   * *not* pointing at is that answered backwards.
+   */
+  private drawEcho(): void {
+    const cell = this.echoCell
+    if (cell === null || this.matrix === null) return
+    const plot = this.dataRect
+    if (plot.width <= 0 || plot.height <= 0) return
+    const origin = this.plotRect
+    const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
+    const y = this.snap(origin.y + this.rowScale.toPixel(cell.row + 0.5))
+    if (x < plot.x || x > plot.x + plot.width || y < plot.y || y > plot.y + plot.height) return
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.strokeStyle = this.opts.crosshairColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.beginPath()
+    ctx.moveTo(x - ECHO_ARM, y)
+    ctx.lineTo(x + ECHO_ARM, y)
+    ctx.moveTo(x, y - ECHO_ARM)
+    ctx.lineTo(x, y + ECHO_ARM)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
+   * Point at a cell from another panel, or stop.
+   *
+   * Repaints on a change like {@link setHover}, and unlike it repaints whatever
+   * the crosshair preference says — a reader who has moved onto another map of
+   * the deck is making the gesture this answers.
+   */
+  setEchoCell(cell: { row: number; col: number } | null): void {
+    const held = this.echoCell
+    const same =
+      (cell === null && held === null) ||
+      (cell !== null && held !== null && cell.row === held.row && cell.col === held.col)
+    if (same) return
+    this.echoCell = cell
+    this.changed()
+  }
+
   private drawCrosshair(): void {
     const cell = this.hoverCell
     if (cell === null || this.matrix === null) return

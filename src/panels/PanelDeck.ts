@@ -374,10 +374,12 @@ export class PanelDeck {
     if (this.lead !== null && this.lead !== panel) {
       this.lead.setViewportListener(null)
       this.lead.setLaneListener(null)
+      this.lead.setHoverListener(null)
     }
     this.lead = panel
     this.lock.leave(LEAD)
     panel?.setLaneListener((budget) => this.alignTo(budget))
+    panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
     if (panel === null) {
       this.alignTo({ top: 0, right: 0, bottom: 0, left: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
@@ -475,7 +477,52 @@ export class PanelDeck {
     // nothing can reach, once per frame, for as long as that view is on screen.
     this.lead?.setViewportListener(null)
     this.lead?.setLaneListener(null)
+    this.lead?.setHoverListener(null)
     this.lead = null
+  }
+
+  /**
+   * Put a small mark where one panel's pointer is on every *other* panel.
+   *
+   * The full crosshair stays where the pointer is, and that asymmetry is the
+   * whole design: exactly one map has a pointer over it, and five sets of rules
+   * across five pictures claim five pointers while covering the data the deck
+   * exists to compare. What the others owe the reader is *where is that here*,
+   * which a cross the size of a cursor answers.
+   *
+   * Converted through **base pairs from each block's own start**, as the lock
+   * is and for the same reason: a 1 kb file and a 5 kb file answer one name with
+   * blocks of different cell counts, and a mark placed by cell index would land
+   * five times too far along the coarse one. Cheap enough to run per pointer
+   * move — two divisions per panel, and each panel repaints only when its own
+   * cell actually changed.
+   */
+  private echoHover(
+    from: string,
+    source: MatrixPanel,
+    cell: { row: number; col: number } | null,
+  ): void {
+    const bpPerCell = source.bpPerCell()
+    const at =
+      cell === null ? null : { rows: (cell.row + 0.5) * bpPerCell, cols: (cell.col + 0.5) * bpPerCell }
+    const show = (id: string, panel: MatrixPanel | null): void => {
+      if (panel === null || id === from) return
+      if (at === null) {
+        panel.showHoverEcho(null)
+        return
+      }
+      const theirs = panel.bpPerCell()
+      const extent = panel.cellCount()
+      const row = Math.floor(at.rows / (theirs > 0 ? theirs : 1))
+      const col = Math.floor(at.cols / (theirs > 0 ? theirs : 1))
+      // Off the end of a shorter block is *nothing here*, not the last cell: a
+      // mark clamped to the edge would say the pointer is over a place this
+      // file has, which is the one thing a deck must not claim.
+      const inside = row >= 0 && col >= 0 && row < extent.rows && col < extent.cols
+      panel.showHoverEcho(inside ? { row, col } : null)
+    }
+    show(LEAD, this.lead)
+    for (const slot of this.slots) show(slot.id, slot.panel?.map ?? null)
   }
 
   /**
@@ -638,6 +685,7 @@ export class PanelDeck {
       show: (rows, cols) => map.showViewport(rows, cols),
     })
     map.setViewportListener((rows, cols) => this.lock.report(slot.id, rows, cols))
+    map.setHoverListener((cell) => this.echoHover(slot.id, map, cell))
     slot.panel?.syncLock()
     this.lock.catchUp(slot.id)
     this.paintBar()
