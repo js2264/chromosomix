@@ -47,7 +47,13 @@ import {
 } from '../annotations/types'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { LABEL_MIN_SPAN_BP, MAX_CATEGORICAL_TICKS } from '../constants'
-import { ColorbarView, DEFAULT_COLORBAR_FONT, formatCount } from '../render/colorbar'
+import {
+  drawKey,
+  formatCount,
+  keyContent,
+  keyTitle,
+  type KeyContent,
+} from '../render/legend'
 import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
 import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
 import { formatLocus } from '../genome/assembly'
@@ -138,7 +144,8 @@ import {
   smallestLaneSize,
   trackHeightField,
 } from './trackControls'
-import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt } from './dom'
+import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt, trimNumber } from './dom'
+import { MapKey } from './MapKey'
 import {
   EXPORT_DPI_CHOICES,
   EXPORT_FORMATS,
@@ -513,20 +520,22 @@ export class MatrixPanel {
   private unsubscribeViewpoint: () => void = () => {}
 
   private readonly canvas: HTMLCanvasElement
-  private readonly barCanvas: HTMLCanvasElement
+  /** The key in the map's top-right corner; two of them under a comparison. */
+  private readonly key: MapKey
+  private readonly key2: MapKey
+  private readonly keySlot: HTMLElement
   /**
-   * The second file's legend, beside the first.
+   * What the numbers in the cells are called, before the transform is added.
    *
-   * One colormap, two value axes. The colours are shared — that is what makes
-   * the picture one picture — so the only thing a second bar can add is what
-   * those colours are worth in the other file's counts, which after a
-   * normalisation is a different number at every position.
+   * The *outermost* operation, written when the block is derived: `O/E`, a
+   * comparison's own phrase, or empty for cells as they were read. The score
+   * itself is not in it — that is read from the picker, which is where the
+   * reader chose it (see {@link keyFor}).
    */
-  private readonly barCanvas2: HTMLCanvasElement
+  private units = ''
+  /** Whether the window is too narrow for a key over the picture. */
+  private narrow = false
   private readonly heatmap: HeatmapView
-  private readonly colorbar: ColorbarView
-  private readonly colorbar2: ColorbarView
-  private readonly barSlot: HTMLElement
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
   private readonly clip: ClipRange
@@ -761,8 +770,6 @@ export class MatrixPanel {
     this.level = options.initial?.level ?? 'bin'
 
     this.canvas = el('canvas', { class: 'heatmap-canvas' })
-    this.barCanvas = el('canvas', { class: 'colorbar-canvas' })
-    this.barCanvas2 = el('canvas', { class: 'colorbar-canvas hidden' })
     // A tooltip follows the pointer with the same three facts as the readout.
     // Both exist on purpose: the tooltip answers "what is under my cursor"
     // without a glance away from the matrix, and the readout keeps the last
@@ -856,20 +863,19 @@ export class MatrixPanel {
     })
     this.heatmap.attach()
     this.watchContextMenu()
-    // The two bars share a colormap and therefore a units word; what differs is
-    // which triangle each measures, and the mark says so in the width a file
-    // name would not fit into. The names themselves are on the compare card and
-    // on the two File cards, both of which carry the same two marks.
-    this.colorbar = new ColorbarView(this.barCanvas, {
-      caption: 'count',
-      font: scaleFont(DEFAULT_COLORBAR_FONT),
-      ...(options.compare === undefined ? {} : { prefix: '◥ ' }),
+    // The reader's two bounds are editable *here*, in the corner of the map,
+    // and not only in the clip card: somebody who can read a bound off a legend
+    // will try to change it there. The second file's key is not editable — it
+    // describes the first file's clip converted into the second's counts, and a
+    // caret in it would be a control over an arithmetic result.
+    this.key = new MapKey({
+      onChange: (bound, value) => {
+        if (bound === 'lo') this.manualVmin = value ?? undefined
+        else this.manualVmax = value ?? undefined
+        this.rescale()
+      },
     })
-    this.colorbar2 = new ColorbarView(this.barCanvas2, {
-      caption: 'count',
-      prefix: '◣ ',
-      font: scaleFont(DEFAULT_COLORBAR_FONT),
-    })
+    this.key2 = new MapKey()
 
     const transformSelect = el('select', { class: 'select' })
     this.transformSelect = transformSelect
@@ -1110,10 +1116,7 @@ export class MatrixPanel {
     // has two and updating one leaves the other at the old size.
     this.unsubscribeTextScale = subscribeTextScale(() => {
       this.heatmap.setLabelFont(scaleFont(DEFAULT_LABEL_FONT))
-      this.colorbar.setFont(scaleFont(DEFAULT_COLORBAR_FONT))
-      this.colorbar2.setFont(scaleFont(DEFAULT_COLORBAR_FONT))
-      this.colorbar.draw()
-      this.colorbar2.draw()
+      this.painted = null
       this.schedule()
     })
     // A change of anchor is a different picture *and* a different name for the
@@ -1336,11 +1339,13 @@ export class MatrixPanel {
     // Built on every file, not only where annotations can be loaded: the
     // rectangles are also where a lane already drawn is dragged to move it to
     // another edge, and that gesture needs no loader — the 4C lane is one.
+    this.keySlot = el('div', { class: 'map-key-slot' }, this.key.el, this.key2.el)
     const wrap = el(
       'div',
       { class: 'heatmap-wrap' },
       this.canvas,
       this.overlay,
+      this.keySlot,
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     )
 
@@ -1401,11 +1406,12 @@ export class MatrixPanel {
       this.laneListeners.push(options.annotations.manual.subscribe(() => this.schedule()))
     }
 
-    // The colourbar sits immediately right of the plot and is deliberately
-    // short: it is a legend, and a legend as tall as the figure reads as a
-    // second panel competing with it.
-    this.barSlot = el('div', { class: 'colorbar-slot' }, this.barCanvas, this.barCanvas2)
-    const body = el('div', { class: 'panel-body' }, this.grid, this.barSlot)
+    // Inside the picture, in its top-right corner, where every figure in the
+    // literature puts a key — and where it costs the map none of its width. The
+    // strip that used to stand beside the plot took between 5.5 and 7 rem of
+    // the column it was next to, which in a deck of four is four such margins
+    // and maps a third narrower than the window could have drawn them.
+    const body = el('div', { class: 'panel-body' }, this.grid)
 
     // The same card the 1D browser's column has, built from the same class:
     // beside a map a group could be *made* — from the row's own select, or the
@@ -1453,13 +1459,13 @@ export class MatrixPanel {
       this.schedule()
     })
 
-    // The legend turns on its side when the plot is as wide as the screen and
-    // the only room left is underneath it. Same breakpoint as the stylesheet's,
-    // stated once here because the canvas cannot read a media query.
+    // The key hides itself on a phone, where the plot is as wide as the screen
+    // and a box in its corner covers a real fraction of the data. Same
+    // breakpoint as the stylesheet's, stated once here because what the export
+    // draws cannot read a media query.
     this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
-      this.colorbar.setOrientation(narrow ? 'horizontal' : 'vertical')
-      this.colorbar2.setOrientation(narrow ? 'horizontal' : 'vertical')
-      this.resizeBars()
+      this.narrow = narrow
+      this.keySlot.classList.toggle('hidden', narrow)
       this.schedule()
     })
 
@@ -1472,7 +1478,7 @@ export class MatrixPanel {
             // appears — which the plot's own size does not.
             this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
             this.heatmap.resize()
-            this.resizeBars()
+            this.placeKey()
             this.schedule()
           })
     this.observer?.observe(this.grid)
@@ -1484,7 +1490,7 @@ export class MatrixPanel {
       this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
-      this.resizeBars()
+      this.placeKey()
       this.schedule()
     })
   }
@@ -1824,22 +1830,24 @@ export class MatrixPanel {
   remeasure(): void {
     this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
     this.heatmap.resize()
-    this.resizeBars()
+    this.placeKey()
     this.schedule()
   }
 
   /**
-   * Re-measure the legend, and the second one when two files are open.
+   * Put the key in the top-right corner of the *plot frame*.
    *
-   * `painted` is cleared with it: the bars are only redrawn when the resolved
-   * scale changes, and a resize changes neither — but it does throw away what
-   * was on the canvas, so the guard has to be told the picture is gone.
+   * Not of the wrapper: the canvas is inset by however much its axis labels
+   * need, and a key flush with the wrapper's corner floats in the margin above
+   * the picture rather than sitting inside it. Read from the frame rather than
+   * from the data rectangle, so the key does not walk about as the reader pans
+   * a block smaller than its window.
    */
-  private resizeBars(): void {
-    this.colorbar.resize()
-    if (this.second === null) return
-    this.colorbar2.resize()
-    this.painted = null
+  private placeKey(): void {
+    const plot = this.heatmap.plotRect
+    const size = this.heatmap.cssSize
+    this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
+    this.keySlot.style.right = `${Math.round(size.width - plot.x - plot.width + KEY_INSET)}px`
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -1861,19 +1869,17 @@ export class MatrixPanel {
   exportCanvas(dpi: number, now = new Date()): HTMLCanvasElement {
     const scale = scaleForDpi(dpi)
     const plot = this.heatmap.cssSize
-    const bar = this.colorbar.cssSize
-    const gap = 10
     // The lanes are part of the figure, so they are part of its box. A track
     // exported without them is a picture of a claim with its evidence cropped
     // off. The two that come *before* the map also move it: everything else on
     // the page is placed against `origin` rather than against the canvas.
     const stacks = this.laneStacks()
     const origin = { x: stacks.left, y: stacks.top }
-    // A compared figure carries both legends, side by side, because the two
-    // value axes are the only thing distinguishing whose counts a colour is.
-    const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
-    const width = stacks.left + plot.width + stacks.right + gap + bar.width + bar2.width
-    const body = Math.max(stacks.top + plot.height + stacks.bottom, bar.height, bar2.height)
+    // No column for a legend any more: the key is drawn *in* the map's corner,
+    // exactly where it is on screen, so an exported figure is the same picture
+    // at a different resolution rather than a rearrangement of it.
+    const width = stacks.left + plot.width + stacks.right
+    const body = stacks.top + plot.height + stacks.bottom
 
     const out = document.createElement('canvas')
     const ctx = out.getContext('2d')
@@ -1919,31 +1925,7 @@ export class MatrixPanel {
     // screen canvases, so a 300 dpi figure has 300 dpi track names.
     this.lanes.renderInto(ctx, this.figureGeometry(), scale, origin)
 
-    // The legend renders into a canvas of its own and is then placed, because
-    // `renderTo` also draws from the origin — there is nowhere to pass an
-    // offset, and giving it one would be a second coordinate system for the
-    // benefit of this one caller.
-    const barCanvas = document.createElement('canvas')
-    barCanvas.width = Math.max(1, Math.round(bar.width * scale))
-    barCanvas.height = Math.max(1, Math.round(bar.height * scale))
-    const barCtx = barCanvas.getContext('2d')
-    if (barCtx !== null) this.colorbar.renderTo(barCtx, scale)
-    // In device pixels: `renderTo` leaves the heatmap's own scale on the
-    // context, and drawing the legend through that would put it at 3× its
-    // offset, which is off the canvas entirely.
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    const barLeft = stacks.left + plot.width + stacks.right + gap
-    ctx.drawImage(barCanvas, Math.round(barLeft * scale), 0)
-
-    if (this.second !== null) {
-      const second = document.createElement('canvas')
-      second.width = Math.max(1, Math.round(bar2.width * scale))
-      second.height = Math.max(1, Math.round(bar2.height * scale))
-      const secondCtx = second.getContext('2d')
-      if (secondCtx !== null) this.colorbar2.renderTo(secondCtx, scale)
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.drawImage(second, Math.round((barLeft + bar.width) * scale), 0)
-    }
+    this.renderKeys(ctx, scale, origin)
 
     if (lines.length > 0) {
       const palette = readCanvasPalette(this.canvas)
@@ -1993,13 +1975,10 @@ export class MatrixPanel {
    */
   private async vectorFigure(now: Date): Promise<Blob> {
     const plot = this.heatmap.cssSize
-    const bar = this.colorbar.cssSize
-    const bar2 = this.second === null ? { width: 0, height: 0 } : this.colorbar2.cssSize
-    const gap = 10
     const stacks = this.laneStacks()
     const origin = { x: stacks.left, y: stacks.top }
-    const width = stacks.left + plot.width + stacks.right + gap + bar.width + bar2.width
-    const body = Math.max(stacks.top + plot.height + stacks.bottom, bar.height, bar2.height)
+    const width = stacks.left + plot.width + stacks.right
+    const body = stacks.top + plot.height + stacks.bottom
 
     const measure = document.createElement('canvas').getContext('2d')
     if (measure === null) throw new Error('Could not measure the caption.')
@@ -2018,18 +1997,7 @@ export class MatrixPanel {
     this.heatmap.renderTo(ctx, 1, origin)
     this.lanes.renderInto(ctx, this.figureGeometry(), 1, origin)
 
-    // Each legend where the grid puts it. `renderTo` draws from the origin and
-    // sets an absolute transform, so an offset has to be applied under it —
-    // which is what `setOrigin` is for, and why this is not the intermediate
-    // canvas the raster path needs.
-    const barLeft = stacks.left + plot.width + stacks.right + gap
-    page.setOrigin(barLeft, 0)
-    this.colorbar.renderTo(ctx, 1)
-    if (this.second !== null) {
-      page.setOrigin(barLeft + bar.width, 0)
-      this.colorbar2.renderTo(ctx, 1)
-    }
-    page.setOrigin(0, 0)
+    this.renderKeys(ctx, 1, origin)
 
     if (lines.length > 0) {
       const palette = readCanvasPalette(this.canvas)
@@ -3310,7 +3278,7 @@ export class MatrixPanel {
     // existed and the commonest picture in the app should not have its legend
     // reworded by a feature it is not using.
     const barLabel = this.derivedLabel() ?? this.derived?.label ?? 'counts'
-    this.colorbar.setCaption(barLabel === 'counts' ? 'count' : barLabel)
+    this.units = barLabel === 'counts' ? '' : barLabel
     return { dense: out, presentationMoved, turned }
   }
 
@@ -3380,12 +3348,83 @@ export class MatrixPanel {
    * derived field: the exact misreading the rule below exists to prevent, put
    * back by the path that recomputes without re-reading.
    */
+  /**
+   * Whether the second file's key is on screen.
+   *
+   * Only under the **split**, where the square really does hold two files'
+   * counts and a colour is worth a different number in each. Under a ratio or a
+   * difference there is one derived field over the whole square — `neutral` is
+   * what says so — and a second key would be a second scale for numbers that no
+   * longer exist.
+   */
   private syncLegendSlots(): void {
-    this.barCanvas2.classList.toggle('hidden', this.second === null || this.neutral !== null)
-    // Two legends need more room than one: each caption gains a triangle and
-    // there are two of them side by side, and a clipped caption on a legend is
-    // worse than a narrower plot.
-    this.barSlot.classList.toggle('is-compare', this.second !== null)
+    this.key2.el.classList.toggle('hidden', this.second === null || this.neutral !== null)
+  }
+
+  /**
+   * What the key says about a scale.
+   *
+   * The title is **composed**, because a cell has been through up to three
+   * things and a reader needs all of them: what was read — the score picker's
+   * own word, `count` or `balanced` or `ICE` or a column name — what was then
+   * done to it (`O/E`, a ratio against a second file), and how it is drawn. A
+   * legend reading `O/E (log2)` over a map whose O/E was measured on balanced
+   * counts describes a different picture from the same words over raw ones.
+   *
+   * The **bounds are the reader's own**, in transformed units, formatted by the
+   * same trimmer the clip boxes use — so the two can never print one bound two
+   * ways, and a reader who typed `[-1, 1]` reads `-1` and `1` rather than the
+   * `0.5` and `2` an inverse transform would have shown them.
+   */
+  private keyFor(scale: ColorScale, prefix = ''): KeyContent {
+    const scores = this.options.scores
+    const choice = scores?.choices.find((entry) => entry.id === scores.current)
+    // The picker's word where there is a picker; otherwise the one fact about
+    // the read that is always known. A derived field that has taken over the
+    // square — a ratio, a difference — names itself and nothing else, because
+    // there is no longer one file's score in the cells to name.
+    const base = this.comparisonLabel() !== null ? '' : (choice?.label ?? (this.options.balance === true ? 'balanced' : 'count'))
+    const title = keyTitle([base, this.units], scale.transform, prefix)
+    return keyContent(scale, title, (value) => trimNumber(value, 3))
+  }
+
+  /**
+   * Draw the keys into an export, where the screen draws DOM.
+   *
+   * Over the picture and inset from its frame, which is where they are on
+   * screen — so an exported figure is the same picture at another resolution
+   * rather than a rearrangement of it. Skipped where the key is hidden, so a
+   * phone exports what a phone shows.
+   */
+  private renderKeys(
+    ctx: CanvasRenderingContext2D,
+    scale: number,
+    origin: { x: number; y: number },
+  ): void {
+    if (this.narrow) return
+    const painted = this.painted
+    if (painted === null) return
+    const palette = readCanvasPalette(this.canvas)
+    const plot = this.heatmap.plotRect
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    const style = {
+      font: 'system-ui, sans-serif',
+      textColor: readPageText(this.canvas),
+      background: readPageBackground(),
+      borderColor: palette.labelColor,
+    }
+    const right = origin.x + plot.x + plot.width - KEY_INSET
+    const box = drawKey(ctx, right, origin.y + plot.y + KEY_INSET, this.keyFor(painted), style)
+    if (this.second !== null && this.neutral === null) {
+      drawKey(
+        ctx,
+        right,
+        box.y + box.height + 4,
+        this.keyFor(rescaledBy(painted, this.second.gain), '◣'),
+        style,
+      )
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
   }
 
   /**
@@ -3727,16 +3766,15 @@ export class MatrixPanel {
       const effective = this.heatmap.effectiveScale
       if (!sameColorScale(effective, this.painted)) {
         this.painted = { ...effective }
-        this.colorbar.setScale(effective)
-        this.colorbar.draw()
-        // The second file's legend measures the same colours in *its* counts.
-        // With no gain the two bars carry identical numbers, and the second is
-        // still worth drawing: what it says then is that the two are on one
-        // scale, which is exactly the claim the reader is relying on.
+        this.key.set(this.keyFor(effective))
+        // The second file's key measures the same colours in *its* counts. With
+        // no gain the two carry identical numbers, and the second is still
+        // worth drawing: what it says then is that the two are on one scale,
+        // which is exactly the claim the reader is relying on.
         if (this.second !== null) {
-          this.colorbar2.setScale(rescaledBy(effective, this.second.gain))
-          this.colorbar2.draw()
+          this.key2.set(this.keyFor(rescaledBy(effective, this.second.gain), '◣'))
         }
+        this.placeKey()
       }
       if (Number.isFinite(effective.vmin) && Number.isFinite(effective.vmax)) {
         this.clip.setValues(
@@ -4546,6 +4584,9 @@ function readPageBackground(): string {
 
 /** The width below which the plot takes the whole column; `styles.css` agrees. */
 const NARROW_QUERY = '(max-width: 34rem)'
+
+/** How far inside the plot frame the key sits, in CSS pixels. */
+const KEY_INSET = 6
 
 /**
  * Watch a media query, calling back with its state now and on every change.

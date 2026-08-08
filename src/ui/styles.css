@@ -713,15 +713,6 @@ p {
    tracks, and the tracks themselves are one gesture asked three times, and
    three shaded variations of it in one column read as three applications. */
 
-/* Two legends stand side by side, which is what the export does too. */
-.colorbar-slot {
-  display: flex;
-}
-
-.colorbar-slot.is-compare .colorbar-canvas {
-  width: calc(7rem * var(--text-scale, 1));
-}
-
 /* --- the 1D genome browser ---------------------------------------------- */
 
 /* The whole content area is a drop target, which is what makes "drop a .cool to
@@ -2417,21 +2408,100 @@ p {
   outline: none;
 }
 
-/* A legend, not a second figure: short, and level with the top of the plot. */
-.colorbar-slot {
-  padding-top: 0.25rem;
+/* ---------------------------------------------------------------------------
+   The key, in the top-right corner of the map.
+
+   Inside the picture rather than in a column beside it, which is where every
+   figure in the literature puts one and what stops a legend costing the map
+   5.5rem of the width it was standing next to — four such margins in a deck of
+   four. Positioned by the panel against the *plot frame*, not this box: the
+   canvas is inset by whatever its axis labels need, and a key flush with the
+   wrapper's corner floats in the margin above the picture.
+   --------------------------------------------------------------------------- */
+
+.map-key-slot {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  /* The map underneath keeps every gesture it has — a drag here is a pan, not a
+     dead spot — and the two numbers turn their own pointer events back on. */
+  pointer-events: none;
+  z-index: 2;
 }
 
-/* Multiplied by the canvas text scale, because everything in this box except
-   the strip of colour itself is *words* — the caption above it and the value at
-   each tick — and unlike every other canvas in the app this one has a fixed CSS
-   box rather than one it fills. Grown text does not reflow here, it is clipped,
-   which turns `≤ 0.00006` into `≤ 0.0000`: a legend off by a factor of ten. See
-   `ui/textScale.ts` -> publish for where the variable comes from. */
-.colorbar-canvas {
+.map-key {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* Not `--bg`: the key sits over data, and a reader has to be able to tell
+     that what is under it is covered rather than empty. */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.2;
+  max-width: 14rem;
+}
+
+.map-key-title {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: var(--mono);
+}
+
+/* Two squares against each other, which is the whole ramp a two-number key
+   needs: the gradient between them was never information a reader takes out of
+   the legend rather than out of the picture. */
+.map-key-ramp {
+  display: flex;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.map-key-swatch {
   display: block;
-  width: calc(5.5rem * var(--text-scale, 1));
-  height: 11rem;
+  width: 12px;
+  height: 12px;
+}
+
+.map-key-value {
+  pointer-events: auto;
+  cursor: text;
+  white-space: nowrap;
+  border-bottom: 1px dotted transparent;
+}
+
+.map-key-value:hover,
+.map-key-value:focus-visible {
+  border-bottom-color: var(--text-faint);
+  outline: none;
+}
+
+.map-key-input {
+  width: 5rem;
+  font: inherit;
+  font-family: var(--mono);
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  background: transparent;
+  color: inherit;
+}
+
+.map-key-input:focus {
+  outline: none;
 }
 
 /* --- view controls ----------------------------------------------------- */
@@ -4075,16 +4145,6 @@ p {
   .panel-body {
     flex-direction: column;
     align-items: center;
-  }
-
-  .colorbar-slot {
-    width: 100%;
-    max-width: 20rem;
-  }
-
-  .colorbar-canvas {
-    width: 100%;
-    height: 3.2rem;
   }
 
   /* The region box and its button share a line instead of taking one each. */
