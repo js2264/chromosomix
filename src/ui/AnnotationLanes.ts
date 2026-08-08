@@ -140,6 +140,15 @@ export interface LaneGeometry {
   hover: { row: number; col: number } | null
   crosshair: boolean
   /**
+   * A cell being pointed at on **another** map of a deck (§16.3).
+   *
+   * A short tick across this lane rather than the full hairline {@link hover}
+   * draws, and for the same reason the map's mark is a small cross: exactly one
+   * picture has a pointer over it, and a rule through every stack of every
+   * panel claims otherwise while covering the profiles being compared.
+   */
+  echo: { row: number; col: number } | null
+  /**
    * A pointer over one of the lane stacks, in that stack's own canvas pixels
    * along the shared axis.
    *
@@ -1103,6 +1112,15 @@ export class AnnotationLanes {
         const unit = (laneIsHorizontal(edge) ? geometry.hover.col : geometry.hover.row) + 0.5
         hairline(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
       }
+      // ...and another map's, as a tick off the near edge rather than a rule
+      // through the profile. Under the same preference as the crosshair it is
+      // an echo of: a reader who turned that off has said they want no mark
+      // following their pointer, and one that appears only where they are *not*
+      // pointing is that answered backwards.
+      if (geometry.crosshair && geometry.echo !== null) {
+        const unit = (laneIsHorizontal(edge) ? geometry.echo.col : geometry.echo.row) + 0.5
+        laneTick(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+      }
       // ...and the reader's own, from pointing at this stack. Not under the
       // crosshair preference: that option is about what the *map* draws while
       // you move over it, and this line is the direct answer to a gesture being
@@ -1665,6 +1683,35 @@ function hairline(
     laneX(frame, snapped, frame.thickness),
     laneY(frame, snapped, frame.thickness),
   )
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * A short tick off the near edge of a lane, where another map's pointer is.
+ *
+ * The same weight and colour as {@link hairline} — it is the same instrument
+ * seen from another panel of a deck — but a fifth of the way across rather than
+ * the whole way, so the profile it is marking stays readable underneath. Off
+ * the *near* edge, the one facing the map, because that is the side the eye is
+ * already crossing between the picture and the track.
+ */
+function laneTick(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  along: number,
+  colour: string,
+  dpr: number,
+): void {
+  if (along < frame.alongFrom || along > frame.alongTo) return
+  const reach = Math.min(frame.thickness, Math.max(4, frame.thickness * 0.2))
+  ctx.save()
+  ctx.strokeStyle = colour
+  ctx.lineWidth = Math.max(1 / dpr, 0.75)
+  ctx.beginPath()
+  const snapped = (Math.round(along * dpr - 0.5) + 0.5) / dpr
+  ctx.moveTo(laneX(frame, snapped, 0), laneY(frame, snapped, 0))
+  ctx.lineTo(laneX(frame, snapped, reach), laneY(frame, snapped, reach))
   ctx.stroke()
   ctx.restore()
 }

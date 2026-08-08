@@ -544,6 +544,9 @@ export class MatrixPanel {
    * reader chose it (see {@link keyFor}).
    */
   private laneListener: ((budget: Record<LaneEdge, number>) => void) | null = null
+  private hoverListener: ((cell: { row: number; col: number } | null) => void) | null = null
+  /** Where another panel's pointer is, in this panel's cells. */
+  private echo: { row: number; col: number } | null = null
   private units = ''
   /** What the score is called, where nothing here chose it. */
   private scoreLabel = ''
@@ -2548,6 +2551,7 @@ export class MatrixPanel {
       },
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       crosshair: getPlotOptions().crosshair,
+      echo: this.echo,
       guide: this.laneHover,
       border: this.laneBorder,
       handles: true,
@@ -3913,6 +3917,33 @@ export class MatrixPanel {
   }
 
   /**
+   * Report which cell the pointer is over, whenever it moves.
+   *
+   * For a deck, which puts a small mark at the same place on every other panel
+   * (§16.3): exactly one map has a pointer over it, and five full crosshairs
+   * claim five pointers. Reported in *cells*, as the viewport is, so the deck
+   * converts through the same base pairs the lock does.
+   */
+  setHoverListener(listener: ((cell: { row: number; col: number } | null) => void) | null): void {
+    this.hoverListener = listener
+  }
+
+  /**
+   * Show where another panel's pointer is, or stop showing it.
+   *
+   * A short cross on the map and a short tick in the lanes, rather than the
+   * rules the panel under the pointer draws — see `HeatmapView.setEchoCell`.
+   */
+  showHoverEcho(cell: { row: number; col: number } | null): void {
+    if (this.echo === null && cell === null) return
+    this.echo = cell
+    this.heatmap.setEchoCell(cell)
+    // The lanes are a second canvas and take their geometry from here, so they
+    // have to be asked; the map repaints itself off `setEchoCell`.
+    this.schedule()
+  }
+
+  /**
    * Report how much room this panel's lane stacks take, whenever it changes.
    *
    * For a deck, which reserves the same room on every panel beside this one so
@@ -4243,6 +4274,10 @@ export class MatrixPanel {
       (cell !== null && this.hoverCell !== null && (cell.row !== this.hoverCell.row || cell.col !== this.hoverCell.col))
     this.hoverCell = cell
     if (moved && this.lanes !== null && getPlotOptions().crosshair) this.schedule()
+    // The deck puts a small mark at the same place on every other panel, so it
+    // has to be told on every move — including the move off the edge, which is
+    // what takes the other panels' marks away with the pointer.
+    if (moved) this.hoverListener?.(cell === null ? null : { row: cell.row, col: cell.col })
 
     if (cell === null || this.data === null) {
       setReadout('')

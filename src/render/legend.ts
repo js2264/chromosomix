@@ -151,6 +151,8 @@ export function keyContent(
 /** How the key is drawn, in CSS pixels, so screen and export agree. */
 export const KEY_METRICS = {
   swatch: 12,
+  /** Between the two squares. Touching, the pair reads as one two-toned block. */
+  swatchGap: 3,
   gap: 4,
   padding: 5,
   titleSize: 10,
@@ -188,7 +190,8 @@ export function drawKey(
   ctx.font = `${m.valueSize}px ${options.font}`
   const loWidth = ctx.measureText(content.loLabel).width
   const hiWidth = ctx.measureText(content.hiLabel).width
-  const rowWidth = loWidth + m.gap + m.swatch * 2 + m.gap + hiWidth
+  const rampWidth = m.swatch * 2 + m.swatchGap
+  const rowWidth = loWidth + m.gap + rampWidth + m.gap + hiWidth
   const width = Math.max(titleWidth, rowWidth) + m.padding * 2
   const height = m.titleSize + m.lineGap + Math.max(m.swatch, m.valueSize) + m.padding * 2
   const x = right - width
@@ -212,12 +215,15 @@ export function drawKey(
   ctx.fillText(content.loLabel, cursor, mid)
   cursor += loWidth + m.gap
   const swatchY = mid - m.swatch / 2
-  ctx.fillStyle = content.loColor
-  ctx.fillRect(cursor, swatchY, m.swatch, m.swatch)
-  ctx.fillStyle = content.hiColor
-  ctx.fillRect(cursor + m.swatch, swatchY, m.swatch, m.swatch)
-  ctx.strokeRect(cursor + 0.5, swatchY + 0.5, m.swatch * 2 - 1, m.swatch - 1)
-  cursor += m.swatch * 2 + m.gap
+  for (const [offset, colour] of [
+    [0, content.loColor],
+    [m.swatch + m.swatchGap, content.hiColor],
+  ] as const) {
+    ctx.fillStyle = colour
+    ctx.fillRect(cursor + offset, swatchY, m.swatch, m.swatch)
+    ctx.strokeRect(cursor + offset + 0.5, swatchY + 0.5, m.swatch - 1, m.swatch - 1)
+  }
+  cursor += rampWidth + m.gap
   ctx.fillStyle = options.textColor
   ctx.fillText(content.hiLabel, cursor, mid)
   ctx.restore()
