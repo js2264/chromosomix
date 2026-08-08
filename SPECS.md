@@ -1120,11 +1120,20 @@ session with companions costs the session it would have been, plus the companion
 | Which region, genome, pair or selection | yes | |
 | Aggregation level (`bin` / `contig`) | yes | |
 | Score column and balancing | yes | |
+| Derived values and the 45° turn (§7.5) | yes | |
 | Pan and zoom | yes (§16.3) | opt out |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | opt in | yes |
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
+
+The derivations sit on the shared side of it and the turn sits beside them, which is the rule read
+carefully rather than an exception to it. A normalisation, an O/E baseline and a 45° rotation each
+change what the numbers *are* or what shape they are in, so one panel drawing O/E beside four
+drawing raw counts is four wrong comparisons rather than a choice, and a lead drawn as a band along
+its diagonal beside four squares is five pictures in two coordinate systems under a bar claiming one
+navigation. Each is applied by every panel and offered by exactly one: a companion is handed the
+setting without the handler, so it draws the same thing and carries no second copy of the control.
 
 The selection has to be shared, or a deck showing four files at four regions is four unrelated
 pictures that happen to be adjacent. It is shared **by name** — `chrI:20,000-80,000`, `MAG_7`, a list
@@ -1156,6 +1165,15 @@ running off the end of a shorter block is **slid back inside it, keeping its spa
 whatever overlaps — truncating would answer a 40 kb view with a one-bin view, which is a wildly
 different zoom in a deck whose whole promise is that the panels are showing the same thing. It is the
 rule `HeatmapView.clampView` already follows for a pan against the edge of one map.
+
+Both ends of the conversion read the grid **actually drawn**, which on a turned map (§16.2) is the
+band and not the square it was rotated out of. A rotated cell is half a bin on both axes, and the
+band is `2n − 1` columns wide; answering with the square's bin size and the square's column count
+while reporting the band's window converts a whole-band view into twice the base pairs it covers and
+then clamps it back to half the columns at the far end — every turned panel of a deck showing half of
+what the one beside it shows. Up the side a turned panel's cells are half-bins of *separation*, so
+two turned panels lock to each other in distance from the diagonal, which is the only thing they
+could honestly share there.
 
 There is one owner. Panels never speak to each other: each reports where it is and the lock decides.
 With N panels each echoing to N−1 others there are N² conversations and no frame in which the deck is
@@ -1199,9 +1217,10 @@ wrong, and a still map reads as data.
 
 ### 16.5 Layout, and the three side panels
 
-The panels are a CSS grid of equal columns — `row`, `column`, or a near-square `grid` — chosen in the
-deck's own bar. Equal always: a comparison whose halves are different sizes is one the eye has to
-correct for. Panels are addable, removable and reorderable one place at a time.
+The panels are a CSS grid of equal columns — `row`, `column`, or a near-square `grid` from the deck's
+own bar, or the column count the reader drew with a `+` (§16.9), which overrides them. Equal always:
+a comparison whose halves are different sizes is one the eye has to correct for. Panels are
+addable, removable and reorderable one place at a time.
 
 The deck's controls ride **above the grid**, and each panel's colour card rides **inside that panel**.
 They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
@@ -1228,12 +1247,17 @@ A **local** companion is written as `~`, not omitted. `uri2` omits its local sec
 right when there is one slot: its absence says *nothing here*, which is true. With N slots omission
 moves every companion after it one place to the left, so a deck of `[remote, local, remote]` arrives
 as a deck of two with nothing anywhere saying a map is missing. The placeholder keeps the count and
-the order, and the recipient gets a drop rectangle where the sender's file was.
+the order, and the recipient gets a drop rectangle where the sender's file was. A cell the sender
+drew empty (§16.9) is the same `~` and travels the same way, so an arrangement nobody has filled yet
+is a link like any other.
 
-Nothing else is in the hash. The lock, the layout and "one scale" live in the per-file session memory
-(§8.6) beside the table filters, on the same grounds: the hash has never carried a pan or a zoom, so
-there is nothing there for a lock to be consistent with, and how many columns the grid has is
-furniture in the sense the width of a side panel is.
+Nothing else is in the hash. The lock, the layout, the drawn column count and "one scale" live in the
+per-file session memory (§8.6) beside the table filters, on the same grounds: the hash has never
+carried a pan or a zoom, so there is nothing there for a lock to be consistent with, and how many
+columns the grid has is furniture in the sense the width of a side panel is. Which cells are empty is
+*not* furniture and is in the hash, because it is part of the list of maps rather than part of how
+they are arranged — a deck of three with a gap in the middle is a different deck from a deck of
+three.
 
 ### 16.7 Cost
 
@@ -1260,3 +1284,55 @@ hidden, so the answer to "can this viewer do that" is *yes, from a map*.
 A companion also carries no tracks. §8's contig-naming contract is between a track and one file's
 `/contigs`, and a lane beside a companion would be a fourth thing keyed on a third assembly. The
 lead's tracks are untouched and stay where they are.
+
+### 16.9 Drawing the deck
+
+A `+` down the right-hand edge of the map, and another along the bottom. Pressing one opens a
+**cell**, not a map: what comes back is the arrangement the reader asked for, with their own map in
+the first of it and every other cell standing empty as a drop target. The empty cells are filled in
+any order, from a drop, a file chooser or a URL, or never.
+
+This is the feature's only entry point that a reader can *find*. Before it, the first companion was
+reachable only through the command palette, so nothing on screen said several maps side by side was
+a thing this viewer did — and the one gesture a reader would try, dropping a second cooler on the
+map, means *load a track* (§8.3).
+
+**Cells before maps, and that is the design rather than an ordering.** Adding maps one at a time
+makes the arrangement a consequence of the order the files arrived in, and the arrangement is what
+somebody assembling a figure is composing: two conditions across and two timepoints down is a
+statement about the experiment, and reaching it by dropping four files into a row and then pressing
+`◀` twice is repairing a layout rather than drawing one. So the shape is drawn first and is a thing
+the reader states, not a thing that happens to them.
+
+**The shape is a rectangle, filled in reading order.** `+` beside adds a column, `+` below adds a
+row, and both add the whole edge — a single extra cell on the right of a two-row grid is not
+expressible without pushing every map after it one place along, and a press must never move a map
+that has already been placed. A ragged last row, which is what closing a map out of the middle
+leaves, is squared up by the next press for the same reason: the holes are drop targets and the
+rectangle is the shape that was drawn.
+
+The column count a `+` sets is remembered per file beside the layout presets (§8.6) and **overrides
+them**. The two answer different questions — a preset arranges however many maps are here, a drawn
+count says what shape the deck is — and a deck that reflowed into a row the moment a map was closed
+would not be an arrangement at all. Exactly one of the two is in force, so a lit preset never
+disagrees with the grid.
+
+**An empty cell is a real cell.** It takes a slot in `maps`, travels through a link as `~`, counts
+towards the six-panel ceiling, and can be moved and closed like any other. It does **not** count
+towards the memory budget (§16.7): an empty card has no worker and no block, and dividing the
+allowance by it would read the two maps of a 2 × 2 deck at a quarter each while half went to
+rectangles.
+
+The `~` it is written with is the same one §16.6 introduced for a local companion, and the two are
+deliberately not told apart in the hash: to the recipient they are the same thing, a position with
+no file in it and a rectangle where the map goes. Within the session that drew them they are told
+apart in words only — a cell a reader drew says *drop a map here*, and one a link left says a map
+was here — because telling somebody a map used to be in a cell they drew empty a moment ago is a
+small lie about their own deck.
+
+A file **dropped on an edge** opens the cell that edge names and fills it in one movement, which is
+the gesture a reader tries first. It goes into the first cell that press opened rather than the
+first empty cell in the deck: the two differ only when the deck already had a hole somewhere, and
+there the aim is the tie-breaker. A map arriving by any other road — the bar's URL box, the file
+chooser, the command palette — takes the first empty cell instead, because those name no position
+and the empty cells are the reader's own instruction about where the next map goes.

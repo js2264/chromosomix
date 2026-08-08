@@ -14,6 +14,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A deck is drawn before it is filled** (§16.9). A `+` down the right-hand edge
+  of the map and another along the bottom. Pressing one opens a *cell* rather
+  than a map: what comes back is the arrangement asked for, with the reader's own
+  map in the first of it and every other cell standing empty as its own drop
+  target. Drop a cooler on one, click it to choose a file, or type a URL in the
+  bar — in any order, or never.
+
+  This is the feature's first entry point a reader can find. The first companion
+  used to be reachable only through the command palette, so nothing on screen
+  said the viewer could put several maps side by side at all — and the one
+  gesture anybody would try, dropping a second cooler on the map, means *load a
+  track* here.
+
+  **Cells before maps** is the design and not an ordering. Adding maps one at a
+  time makes the arrangement a consequence of the order the files arrived in, and
+  the arrangement is exactly what somebody assembling a figure is composing: two
+  conditions across and two timepoints down is a statement about an experiment,
+  and reaching it by dropping four files into a row and then pressing `◀` twice
+  is repairing a layout rather than drawing one.
+
+  The shape is a rectangle filled in reading order, and a press adds a whole edge
+  — a column beside, a row below. One extra cell on the right of a two-row grid
+  cannot be expressed without pushing every map after it one place along, and a
+  press must never move a map that has already been placed. The column count a
+  `+` sets overrides the three layout presets, because the two answer different
+  questions and a deck that reflowed into a row the moment a map was closed would
+  not be an arrangement at all.
+
+  An empty cell is a real cell: it takes a slot in `maps`, travels through a link
+  as the same `~` a local companion uses, counts towards the six-panel ceiling,
+  and moves and closes like any other. It does *not* count towards the memory
+  budget — an empty card has no worker and no block, and dividing the allowance
+  by it would read the two maps of a 2 × 2 deck at a quarter each while half went
+  to rectangles. A file dropped on an edge opens the cell that edge names and
+  fills it in one movement.
+
 - **N maps side by side, navigating together** (§16). Several contact maps on
   screen at once, each with its own file, its own reader worker and its own
   colour scale, all showing the same place. Addable, removable, reorderable,
@@ -171,6 +207,41 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `score`, and resolves through the same list the picker is built from, so a hash
   naming one this build cannot serve lands on counts rather than on a read that
   cannot be answered.
+
+- Adding or closing a map no longer rebuilds the one beside it. `maps` names what
+  is on screen *beside* this view, and the deck reconciles itself from it before
+  the render path decides anything — so the lead has nothing to be rebuilt for.
+  Left out of that list, every press of `+` cost a worker round trip and threw
+  away the reader's pan and zoom for a change that happened in another panel;
+  drawing a 2 × 2 deck paid it four times, and on a gated whole-genome map (§7.3)
+  each one would have put the pixel scan back behind its button.
+
+### Fixed
+
+- **The 45° turn reaches every map in a deck.** A companion was never handed the
+  setting, so flipping a deck put the lead on its diagonal and left the maps
+  beside it square — under a bar still saying one navigation. The turn joins the
+  derivations as something the deck shares and a companion applies without
+  offering a second copy of the control.
+
+- **The turn's own control is a switch rather than a latch.** It read whether the
+  map was turned from the presentation object captured when the panel was built,
+  and the session replaces that object on every render — so the button asked for
+  a flip that was already on, could never ask for it to come off, and never lit
+  up to say the map was turned.
+
+- **Two turned maps in a deck show the same window.** The navigation lock was
+  told the square block's bin size and column count while being reported the
+  turned band's window. A rotated cell is half a bin and the band is `2n − 1`
+  columns wide, so a whole-band view came back as twice the base pairs it covers
+  and was clamped to half the columns at the other end: every turned panel drew
+  half of what the panel beside it was drawing.
+
+- **A cooler dropped on a deck's empty cell is not also imported.** The content
+  area's own file handler took the same drop, so one gesture opened the companion
+  the reader aimed at *and* loaded the file over the lead. The deck's cells and
+  its `+` edges now answer for themselves, as the landing page's drop zone and
+  the map's lane edges already did.
 
 ## [0.9.0] - 2026-08-07
 

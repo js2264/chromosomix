@@ -355,7 +355,15 @@ export interface MatrixPanelOptions {
 export interface TurnPresentation {
   /** Whether the reader has asked for the turned view. */
   on: boolean
-  onChange(on: boolean): void
+  /**
+   * Absent where this panel draws the turn but does not own it.
+   *
+   * A companion panel of a deck (§16) is that case, and it is the same rule
+   * {@link DerivePresentation.onExpectedChange} states: the turn is one of the
+   * things the deck shares, every panel has to draw it, and only one may offer
+   * the control. No handler, no button, and the map is still turned.
+   */
+  onChange?(on: boolean): void
   /**
    * Which way distance grows: `up` for a lone map and for the first file of a
    * comparison, `down` for the second, so the pair meets at one genomic axis.
@@ -1206,13 +1214,22 @@ export class MatrixPanel {
     // the picture and not what is in it — the same category as "fit", which
     // leads that row for the same reason.
     const turn = options.turn
-    if (turn !== undefined) {
+    if (turn !== undefined && turn.onChange !== undefined) {
       const button = iconButton(
         'triangle',
         'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
           'Available on one sequence against itself, which is the only block that has a diagonal ' +
           'to measure from.',
-        () => turn.onChange(!turn.on),
+        // Read back through `this.options` rather than through the object
+        // captured here. The session builds a fresh presentation on every
+        // render and {@link setTurn} swaps it in, so a closure over the
+        // construction-time one answers "is it turned?" with the state the
+        // panel opened in — and the control becomes a one-way switch that asks
+        // for a flip that is already on and can never ask for it to come off.
+        () => {
+          const held = this.options.turn
+          held?.onChange?.(held.on !== true)
+        },
         { class: 'btn btn-icon', size: 15 },
       )
       button.classList.toggle('is-on', turn.on)
@@ -3420,6 +3437,32 @@ export class MatrixPanel {
   }
 
   /**
+   * Record which way this panel is turned, without redrawing.
+   *
+   * {@link setDerive}'s counterpart and its twin in every respect: a panel about
+   * to be handed a fresh block needs the setting in place before
+   * {@link setData} reads it, and turning the outgoing block first would rotate
+   * cells that are being replaced.
+   *
+   * `undefined` is **nothing said**, not "square". The turn is a shared fact
+   * about the deck and a panel is handed it by a thunk that can only fail to
+   * produce one before the session has any state at all; reading that as a
+   * request to unturn would flatten a companion for one frame on every mount.
+   *
+   * @returns `true` when the setting was already what was asked for.
+   */
+  setTurn(turn: TurnPresentation | undefined): boolean {
+    if (turn === undefined) return true
+    const same = (this.options.turn?.on === true) === (turn.on === true)
+    this.options.turn = turn
+    // The one piece of the control that is not rebuilt with the picture. It is
+    // made once, in the constructor, so without this the button never lights up
+    // — the map turns and the thing that turned it looks untouched.
+    this.turnButton?.classList.toggle('is-on', turn.on)
+    return same
+  }
+
+  /**
    * Recompute the picture from the block already in hand.
    *
    * What a change of derivation is: the same cells, in different units. Reading
@@ -3439,11 +3482,9 @@ export class MatrixPanel {
     compare?: ComparePresentation,
     turn?: TurnPresentation,
   ): void {
-    const turnMoved =
-      turn !== undefined && (this.options.turn?.on === true) !== (turn.on === true)
+    const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
     if (compare !== undefined) this.options.compare = compare
-    if (turn !== undefined) this.options.turn = turn
     const data = this.data
     // Nothing to recompute, but the setting is recorded either way: the session
     // builds a fresh presentation object on every render and hands it over
@@ -3737,14 +3778,37 @@ export class MatrixPanel {
     return this.data === null ? null : this.heatmap.cellWindow()
   }
 
-  /** How many cells each axis of the block has — the lock's clamp. */
+  /**
+   * How many cells each axis of the **drawn** grid has — the lock's clamp.
+   *
+   * The band, on a turned map, and not the square it was rotated out of. Both
+   * this and {@link bpPerCell} answer questions about the grid a viewport is
+   * expressed in (`panels/lock.ts`), and the viewport this panel reports is the
+   * one the reader is looking at. Answering with the square while reporting the
+   * band mixes two grids in one conversion: a band is `2n − 1` columns wide, so
+   * a whole-band window came back as `2n` cells, was multiplied by a whole bin
+   * into twice the base pairs it covers, and was then clamped back to `n` cells
+   * at the far end — every turned panel of a deck showing half of what the one
+   * beside it was showing, under a bar that says one navigation.
+   */
   cellCount(): { rows: number; cols: number } {
+    const turned = this.turned
+    if (turned !== null) return { rows: turned.nrows, cols: turned.ncols }
     return { rows: this.data?.nrows ?? 1, cols: this.data?.ncols ?? 1 }
   }
 
-  /** Base pairs one cell covers, after whatever pooling the read chose. */
+  /**
+   * Base pairs one cell covers, after whatever pooling the read chose.
+   *
+   * Half a bin under a turn, on both axes, because that is what the rotated
+   * lattice *is* rather than a scale chosen for it: `b1 + b2` advances by one
+   * whenever either end moves by one bin (`render/rotate.ts`). The vertical
+   * half-bin is a half-bin of *separation*, which is the axis a turned panel
+   * has up its side — so two turned panels lock to each other in distance from
+   * the diagonal, which is the only thing they could honestly share there.
+   */
   bpPerCell(): number {
-    return this.options.binsize
+    return this.turned === null ? this.options.binsize : this.options.binsize * BIN_FRACTION
   }
 
   /**

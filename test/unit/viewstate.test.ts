@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  differsOnlyInPresentation,
   differsOnlyInScale,
   matrixLevel,
   overviewLevel,
@@ -303,5 +304,35 @@ describe('differsOnlyInScale', () => {
       const patched = { ...base, [key]: 'x' } as unknown as ViewState
       expect(differsOnlyInScale(base, patched)).toBe(false)
     }
+  })
+})
+
+/**
+ * What a mounted view can be *told* rather than rebuilt for.
+ *
+ * `maps` is in it and that is the whole of §16.9's affordability: drawing a
+ * 2 × 2 deck is four changes to this key in a row, and each one rebuilding the
+ * lead would mean four worker round trips and four discarded pans for changes
+ * that happened in other panels entirely. The companions are reconciled from
+ * the key before this is consulted, so there is nothing left for a rebuild to
+ * do.
+ */
+describe('differsOnlyInPresentation', () => {
+  const base: ViewState = { uri: 'a.cool', view: 'region', region: 'chrI:1-1000' }
+
+  it('lets the deck change without rebuilding the map beside it', () => {
+    expect(differsOnlyInPresentation(base, { ...base, maps: 'b.cool' })).toBe(true)
+    expect(differsOnlyInPresentation({ ...base, maps: 'b.cool|~' }, base)).toBe(true)
+  })
+
+  it('still rebuilds for a key that chooses the block', () => {
+    expect(differsOnlyInPresentation(base, { ...base, region: 'chrII' })).toBe(false)
+    expect(differsOnlyInPresentation(base, { ...base, uri2: 'b.cool' })).toBe(false)
+  })
+
+  /** The colour and the derivations were already here; `maps` joins them. */
+  it('keeps the scale and the derivations on the repaint road', () => {
+    expect(differsOnlyInPresentation(base, { ...base, vmax: 12 })).toBe(true)
+    expect(differsOnlyInPresentation(base, { ...base, flip: true })).toBe(true)
   })
 })

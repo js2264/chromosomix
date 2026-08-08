@@ -66,7 +66,8 @@ import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { PanelDeck } from '../panels/PanelDeck'
-import { MAX_PANELS, parseMaps } from '../panels/deck'
+import { DeckFrame } from '../panels/DeckFrame'
+import { MAX_PANELS, parseMaps, type GrowDirection } from '../panels/deck'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
@@ -519,6 +520,20 @@ export class Session {
    * lock, no toolbar.
    */
   private deck: PanelDeck | null = null
+  /**
+   * The `+` edges round a map that has no deck yet (§16.9).
+   *
+   * The session holds one because the gesture has to exist *before* the feature
+   * does: a reader with one map has nothing on screen telling them this viewer
+   * can put another beside it, and the command palette is not a place anybody
+   * looks for a thing they do not know exists. Once a deck is built it grows its
+   * own edges round its grid and this one goes back to holding nothing — the
+   * same component either way, so pressing `+` on a deck of four is visibly the
+   * same act as pressing it on a map of one.
+   */
+  private readonly deckEdges = new DeckFrame({
+    onGrow: (direction, file) => this.growDeck(direction, file),
+  })
   /**
    * The genome this session is browsing, when there is no contact map.
    *
@@ -2592,10 +2607,29 @@ export class Session {
     deck.destroy()
     this.deck = null
     // The frame has gone with it, so the mounted view has to be put back on its
-    // own. Directly rather than through a re-render: the view is intact and
-    // re-reading its block to change what it is parented into would make
+    // own — back inside the `+` edges, which is where it was before anybody
+    // pressed one. Directly rather than through a re-render: the view is intact
+    // and re-reading its block to change what it is parented into would make
     // closing the last companion cost a fetch.
-    if (this.contentNode !== null) this.contentEl.replaceChildren(this.contentNode)
+    if (this.contentNode !== null) this.contentEl.replaceChildren(this.framed(this.contentNode))
+  }
+
+  /**
+   * What actually goes in the content area: the view, and one frame round it.
+   *
+   * Exactly one, and which one is the whole of the logic here. A view a
+   * companion cannot answer gets neither — a table or an overview is of *this
+   * file* and nothing else, so framing one put a genomes table into a sixth of
+   * the column beside five rectangles each saying they had nothing to draw
+   * (§16.8), and offering a `+` there would offer to open a cell for a picture
+   * nothing can fill. A view with a **deck** gets the deck, which grows its own
+   * edges round its grid. A view with neither gets the bare edges, so the
+   * gesture that builds the first deck is on screen from the first map.
+   */
+  private framed(node: HTMLElement): HTMLElement {
+    if (!this.deckIsPossible) return node
+    const deck = this.deck
+    return deck === null ? this.deckEdges.hold(node) : deck.frame(node)
   }
 
   /**
@@ -2624,6 +2658,17 @@ export class Session {
         const { onExpectedChange: _own, ...shared } = this.derivePresentation(state)
         return shared
       },
+      // Stripped the same way and for the same two reasons. `onChange` would be
+      // a sixth copy of a control over something the deck shares; `onAvailable`
+      // would let a companion whose block has no diagonal un-turn the whole
+      // deck, which is a fact about that one file deciding what every other one
+      // is drawn as.
+      turn: () => {
+        const state = this.store.state
+        if (state === null) return undefined
+        const { onChange: _own, onAvailable: _grey, ...shared } = this.turnPresentation(state)
+        return shared
+      },
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in
@@ -2631,7 +2676,7 @@ export class Session {
     // outgoing picture on screen inside a grid, one frame before the incoming
     // one arrives through `showContent` and does it properly.
     if (this.contentNode !== null && this.contentNode.isConnected && this.deckIsPossible) {
-      this.contentEl.replaceChildren(deck.frame(this.contentNode))
+      this.contentEl.replaceChildren(this.framed(this.contentNode))
       deck.setLead(this.current?.panel ?? null)
     }
     return deck
@@ -2641,6 +2686,21 @@ export class Session {
   private addMap(): void {
     if (this.file === null) return
     this.ensureDeck().promptAdd()
+  }
+
+  /**
+   * The `+` on an edge of the map: draw the deck, or make the one there bigger.
+   *
+   * The entry point §16.9 exists to provide, and it deliberately opens **cells**
+   * rather than maps: what comes back from one press is the arrangement the
+   * reader asked for with their own map in the first cell of it, every other
+   * cell standing empty and taking a drop. A file arriving with the press — one
+   * dropped on the edge rather than a click — goes straight into the first of
+   * them, so the impatient gesture and the deliberate one reach the same deck.
+   */
+  private growDeck(direction: GrowDirection, file?: File): void {
+    if (this.file === null || !this.deckIsPossible) return
+    this.ensureDeck().grow(direction, file)
   }
 
   /**
@@ -3773,8 +3833,7 @@ export class Session {
     // to draw. The deck is kept — navigating back to a map must not cost five
     // files reopened — it simply stops being a frame while there is nothing for
     // it to be a frame around.
-    const framed = this.deckIsPossible ? (this.deck?.frame(node) ?? node) : node
-    this.contentEl.replaceChildren(framed)
+    this.contentEl.replaceChildren(this.framed(node))
     this.deck?.setLead(view?.panel ?? null)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes

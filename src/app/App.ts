@@ -266,14 +266,18 @@ export class App implements SessionHost {
     })
     this.content.addEventListener('drop', (event) => {
       this.content.classList.remove('over')
-      // Two targets answer for themselves. The landing page's drop zone answers
-      // differently — it opens a file rather than adding one to what is open —
-      // and the map's edge zones answer *more specifically*: the same file, and
-      // the stack of lanes the reader aimed at. Both still bubble here, so this
-      // handler is what takes the highlight off.
+      // Three targets answer for themselves. The landing page's drop zone
+      // answers differently — it opens a file rather than adding one to what is
+      // open — and the map's edge zones answer *more specifically*: the same
+      // file, and the stack of lanes the reader aimed at. The deck's empty cells
+      // and its `+` edges (§16.9) are the third: a cooler dropped on one is a
+      // map for *that cell*, and without this line it was also imported here, so
+      // one drop opened the companion the reader aimed at and loaded the same
+      // file over the lead as a track. All three still bubble, so this handler
+      // is what takes the highlight off.
       if (
         event.target instanceof HTMLElement &&
-        event.target.closest('.dropzone, .lane-drop') !== null
+        event.target.closest('.dropzone, .lane-drop, .deck-drop') !== null
       ) {
         return
       }

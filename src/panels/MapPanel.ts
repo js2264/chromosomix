@@ -27,7 +27,7 @@ import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { MatrixResult, OpenResult, SourceSpec } from '../worker/protocol'
-import { MatrixPanel, type DerivePresentation } from '../ui/MatrixPanel'
+import { MatrixPanel, type DerivePresentation, type TurnPresentation } from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
@@ -141,6 +141,19 @@ export interface MapPanelProps {
    * over it (`ui/MatrixPanel.ts`'s `DerivePresentation`).
    */
   derive(): DerivePresentation | undefined
+  /**
+   * Whether the deck is turned 45°, as a thunk so it is never stale.
+   *
+   * Shared for the same reason the derivation is, and more visibly: a flip
+   * changes the *shape* of the picture, so a deck whose lead is a triangular
+   * band beside four squares is not four maps of one place with one of them
+   * emphasised — it is a bar that says "one navigation" over five pictures that
+   * are no longer in the same coordinates. Carries no `onChange`, which is what
+   * makes a companion apply the turn without offering a sixth copy of the
+   * control, and no `onAvailable`, because whether *this* file's block has a
+   * diagonal is not a reason to un-turn the deck (`ui/MatrixPanel.ts`).
+   */
+  turn(): TurnPresentation | undefined
   /** Move this panel one place along the deck; absent at either end. */
   onMove(delta: number): void
 }
@@ -255,11 +268,12 @@ export class MapPanel {
    * because they answer to different owners (§16.2).
    */
   apply(state: ViewState): void {
-    // The derivation first, and separately from the read: it is a transform over
-    // cells that are already here, so `keyFor` deliberately does not carry it
-    // and a change to it would otherwise short-circuit against an unchanged key
-    // and leave this companion drawing counts beside a lead drawing a ratio.
-    this.panel?.rederive(this.props.derive())
+    // The derivation and the turn first, and separately from the read: both are
+    // transforms over cells that are already here, so `keyFor` deliberately
+    // carries neither and a change to either would otherwise short-circuit
+    // against an unchanged key — leaving this companion drawing counts beside a
+    // lead drawing a ratio, or square beside a lead on its diagonal.
+    this.panel?.rederive(this.props.derive(), undefined, this.props.turn())
     void this.load(state)
   }
 
@@ -430,17 +444,22 @@ export class MapPanel {
   private show(result: MatrixResult, info: OpenResult, state: ViewState): void {
     // Recorded before `setData` reads it and on every block, because a panel
     // outlives the derivation it was constructed with: the reader may have
-    // turned O/E on while this companion was fetching.
+    // turned O/E on, or flipped the deck, while this companion was fetching.
+    // Recorded rather than applied — `rederive` would rebuild the picture from
+    // the block that is about to be replaced.
     this.panel?.setDerive(this.props.derive())
+    this.panel?.setTurn(this.props.turn())
     if (this.panel === null) {
       // Read once, here, rather than held from construction: a companion is
       // built before its file has been opened and the lead may have been
       // recoloured in between.
       this.look = { ...this.props.initialLook(), ...this.look }
+      const turn = this.props.turn()
       this.panel = new MatrixPanel({
         binsize: info.binsize ?? 1,
         initial: this.look,
         ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
+        ...(turn === undefined ? {} : { turn }),
         detachedControls: true,
         hideTitle: true,
         caption: { file: fileLabel(this.props.uri) },
@@ -486,8 +505,11 @@ export class MapPanel {
   }
 }
 
+/** Why a cell of the deck is empty — see {@link VacantPanel}. */
+export type VacancyOrigin = 'drawn' | 'link'
+
 /**
- * The rectangle a link left where a local companion was.
+ * Where a link left an empty cell, or where a reader drew one.
  *
  * Its own small class rather than a state of {@link MapPanel}, because it has
  * no worker, no reader and nothing to read: it is a sentence and a drop target.
@@ -497,7 +519,27 @@ export class MapPanel {
 export class VacantPanel {
   readonly el: HTMLElement
 
-  constructor(props: { onOpen(file: File): void; onClose(): void; onMove(delta: number): void }) {
+  constructor(props: {
+    /**
+     * Whether this cell was **drawn** by the reader looking at it, or arrived
+     * in a link.
+     *
+     * Only the words change, and they have to: the two are the same cell to
+     * every line of code that touches it — the same `~` in the hash, the same
+     * drop target, the same slot in the grid — but they are not the same fact
+     * about the deck. One is a space somebody left for a file they are about to
+     * choose; the other is a position that *had* a map in it, which no page can
+     * re-open by name (§11), and telling a reader that a map "was here" when
+     * they drew the empty cell themselves ten seconds ago is a small lie about
+     * their own deck. The distinction lives only in this session: a reload
+     * cannot tell them apart, which is why the link's wording covers both.
+     */
+    origin: VacancyOrigin
+    onOpen(file: File): void
+    onClose(): void
+    onMove(delta: number): void
+  }) {
+    const drawn = props.origin === 'drawn'
     const input = el('input', { class: 'hidden-input', type: 'file' })
     input.addEventListener('change', () => {
       const file = input.files?.[0]
@@ -505,18 +547,22 @@ export class VacantPanel {
     })
     const zone = el(
       'div',
-      { class: 'ann-drop deck-vacant', attrs: { tabindex: '0', role: 'button' } },
-      el('span', { class: 'ann-drop-label', text: 'A local map was here' }),
-      el(
-        'span',
-        {
-          class: 'ann-drop-hint',
-          text:
-            'The link that opened this deck had a file at this position that no page can fetch ' +
-            'by name (§11). Drop it here, or click to choose it, and the panel fills in where it ' +
-            'was — the maps either side keep their order.',
-        },
-      ),
+      { class: 'ann-drop deck-drop deck-vacant', attrs: { tabindex: '0', role: 'button' } },
+      el('span', {
+        class: 'ann-drop-label',
+        text: drawn ? 'Drop a map here' : 'A map was here',
+      }),
+      el('span', {
+        class: 'ann-drop-hint',
+        text: drawn
+          ? 'An empty cell of the deck you drew. Drop a cooler on it, or click to choose one, and ' +
+            'it opens in this position under the same navigation as the maps beside it — same ' +
+            'region, same level, its own colour scale. Leaving it empty is fine; the link keeps it.'
+          : 'The link that opened this deck has a cell here with no file a page can fetch by name ' +
+            '(§11) — either a local map the sender had open, or a cell they left empty on ' +
+            'purpose. Drop a file here, or click to choose one, and the panel fills in where it ' +
+            'was; the maps either side keep their order.',
+      }),
       input,
     )
     zone.addEventListener('click', (event) => {
@@ -543,16 +589,16 @@ export class VacantPanel {
       el(
         'header',
         { class: 'deck-head' },
-        el('span', { class: 'deck-name deck-name-vacant', text: 'empty slot' }),
-        iconButton('chevron-left', 'Move this slot one place earlier', () => props.onMove(-1), {
+        el('span', { class: 'deck-name deck-name-vacant', text: 'empty' }),
+        iconButton('chevron-left', 'Move this cell one place earlier', () => props.onMove(-1), {
           class: 'btn btn-icon deck-move',
           size: 14,
         }),
-        iconButton('chevron-right', 'Move this slot one place later', () => props.onMove(1), {
+        iconButton('chevron-right', 'Move this cell one place later', () => props.onMove(1), {
           class: 'btn btn-icon deck-move',
           size: 14,
         }),
-        iconButton('x', 'Drop this slot from the deck', () => props.onClose(), {
+        iconButton('x', 'Close this cell — the deck loses a place', () => props.onClose(), {
           class: 'btn-close',
           size: 14,
         }),
