@@ -35,6 +35,7 @@ import {
   separationAt,
   separationBp,
   separationCoords,
+  turnDepthFor,
   type RotatableBlock,
 } from '@/render/rotate'
 import { bpTicks } from '@/render/heatmap'
@@ -277,5 +278,43 @@ describe('ticks on a descending axis', () => {
       expect(tick.unit).toBeGreaterThanOrEqual(0)
       expect(tick.unit).toBeLessThanOrEqual(41)
     }
+  })
+})
+
+describe('how deep the band opens', () => {
+  it('is a quarter of the block until somebody says otherwise', () => {
+    expect(turnDepthFor({ nrows: 500, ncols: 500 }, null)).toBe(125)
+    // A fraction, not a distance: the same rule has to serve a 4.6 Mb bacterial
+    // chromosome and a 250 Mb human one.
+    expect(turnDepthFor({ nrows: 40, ncols: 40 }, null)).toBe(10)
+  })
+
+  it('takes the shorter axis, so a rectangle cannot ask for rows it has not got', () => {
+    expect(turnDepthFor({ nrows: 500, ncols: 60 }, null)).toBe(15)
+  })
+
+  it('gives the reader what they dragged to, inside the block', () => {
+    expect(turnDepthFor({ nrows: 500, ncols: 500 }, 300)).toBe(300)
+    expect(turnDepthFor({ nrows: 500, ncols: 500 }, 9_000)).toBe(499)
+  })
+
+  it('bottoms out at one row rather than at none', () => {
+    // Dragging the edge onto the diagonal means "as shallow as it goes", not
+    // "gone" — and a band of zero rows is a picture with no picture in it.
+    expect(turnDepthFor({ nrows: 500, ncols: 500 }, 0)).toBe(1)
+    expect(turnDepthFor({ nrows: 500, ncols: 500 }, -40)).toBe(1)
+  })
+
+  it('has something to draw even for a block two bins across', () => {
+    expect(turnDepthFor({ nrows: 2, ncols: 2 }, null)).toBe(1)
+    expect(turnDepthFor({ nrows: 1, ncols: 1 }, null)).toBe(1)
+  })
+
+  it('produces a block whose rows are the depth, plus the diagonal', () => {
+    // The join between the two: `watchDepth` reads a band's depth back as
+    // `maxSeparation + 1`, and a drag that did not agree with what the rotation
+    // produced would creep by a row per press.
+    const depth = turnDepthFor({ nrows: 40, ncols: 40 }, 12)
+    expect(rotateBlock(block(40, () => 1), { maxSeparation: depth }).nrows).toBe(depth + 1)
   })
 })

@@ -87,6 +87,7 @@ import {
   isTurnable,
   rotateBlock,
   separationCoords,
+  turnDepthFor,
   turnedAxis,
   type RotateDirection,
   type RotatedBlock,
@@ -189,16 +190,6 @@ const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
  * the spec already use for this, and a control that renamed it would leave a
  * reader looking for the feature they read about.
  */
-/**
- * How much of the block a turned map opens on, as a fraction of the window.
- *
- * A quarter: enough that a domain and the loops at its corners are all on
- * screen, little enough that the band fills the panel rather than tapering to an
- * apex. Not a distance in base pairs, because a default of "500 kb" is most of a
- * bacterial chromosome and a rounding error on a human one.
- */
-const DEFAULT_TURN_FRACTION = 0.25
-
 const COMPARE_OP_LABELS: Record<CompareOp, string> = {
   split: 'split',
   ratio: 'ratio',
@@ -560,6 +551,24 @@ export class MatrixPanel {
   private readonly key2: MapKey
   private readonly keySlot: HTMLElement
   /**
+   * The top edge of the turned band, as something a hand can take hold of.
+   *
+   * A bar rather than a strip of live canvas, and visible on approach rather
+   * than only under the pointer, because how far from the diagonal the picture
+   * reaches is the one number a turned map has that a square one does not —
+   * and a gesture nobody can see is a gesture nobody finds. Hidden entirely
+   * while the map is square, where there is no such number.
+   */
+  private readonly depthGrip = el('div', {
+    class: 'turn-depth hidden',
+    attrs: {
+      title: 'Drag to set how far from the diagonal this map reaches',
+      role: 'separator',
+      'aria-orientation': 'horizontal',
+      tabindex: '0',
+    },
+  })
+  /**
    * What the numbers in the cells are called, before the transform is added.
    *
    * The *outermost* operation, written when the block is derived: `O/E`, a
@@ -654,7 +663,7 @@ export class MatrixPanel {
   /**
    * How deep the turned band is, in bins of separation, once a reader has said.
    *
-   * `null` is "nobody has", which takes {@link DEFAULT_TURN_FRACTION}. Held on
+   * `null` is "nobody has", which takes `rotate.ts`'s default. Held on
    * the panel rather than in the view state because it is the same kind of fact
    * as a pan or a zoom, and §11's hash has never carried one of those.
    */
@@ -1449,9 +1458,11 @@ export class MatrixPanel {
       this.canvas,
       this.overlay,
       this.keySlot,
+      this.depthGrip,
       ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     )
+    this.watchDepth()
 
     for (const edge of LANE_EDGES) {
       const layer = el('div', { class: 'lane-overlays' })
@@ -1953,6 +1964,126 @@ export class MatrixPanel {
     const size = this.heatmap.cssSize
     this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
     this.keySlot.style.right = `${Math.round(size.width - plot.x - plot.width + KEY_INSET)}px`
+    this.placeDepthGrip()
+  }
+
+  /**
+   * Lay the depth handle along the top edge of the turned band.
+   *
+   * The **data** rectangle, not the plot: the band is as wide as the block and
+   * the plot is as wide as the panel, so a bar across the plot would run out
+   * past the picture at every zoom that does not fill it. Placed from the
+   * measured rectangle on every frame, exactly as the key is, so it follows a
+   * pan and a zoom with nothing to keep in step.
+   */
+  private placeDepthGrip(): void {
+    const turned = this.turned
+    this.depthGrip.classList.toggle('hidden', turned === null)
+    if (turned === null) return
+    const data = this.heatmap.dataRect
+    // `down` is the mirrored half of a comparison, where separation grows
+    // towards the bottom of the picture and the far edge is the bottom one.
+    const top = turned.direction === 'up' ? data.y : data.y + data.height
+    this.depthGrip.style.top = `${Math.round(top)}px`
+    this.depthGrip.style.left = `${Math.round(data.x)}px`
+    this.depthGrip.style.width = `${Math.round(data.width)}px`
+  }
+
+  /**
+   * A drag on that handle sets how far from the diagonal the map reaches.
+   *
+   * In **bins of separation per pixel of band**, taken from the band as it is
+   * drawn rather than from the zoom: the reader is dragging an edge, and what
+   * they mean by moving it fifty pixels is "fifty pixels more picture". Working
+   * in bins is also what makes the gesture survive the re-read it causes — the
+   * band is redrawn at a new height, and a factor derived from the old one
+   * would make the second half of a single drag a different speed from the
+   * first.
+   *
+   * Keyboard too, because this is the only way to reach the number without a
+   * pointer and a `role="separator"` that answers no keys is a control that
+   * says it is one.
+   */
+  private watchDepth(): void {
+    const grip = this.depthGrip
+    /** Bins of separation per CSS pixel, from the band on screen. */
+    const perPixel = (): number => {
+      const turned = this.turned
+      const height = this.heatmap.dataRect.height
+      if (turned === null || !(height > 0)) return 0
+      return (turned.maxSeparation + 1) / height
+    }
+    // Taken once, at the press. The band is redrawn deeper on every step of the
+    // drag, so a rate read from the band *now* falls as the picture grows — and
+    // the second half of one continuous movement would travel less than the
+    // first, which is a control that fights the hand holding it.
+    let from: { y: number; rows: number; rate: number } | null = null
+
+    const onDown = (event: PointerEvent): void => {
+      if (event.button !== 0) return
+      const turned = this.turned
+      if (turned === null) return
+      event.preventDefault()
+      event.stopPropagation()
+      from = { y: event.clientY, rows: turned.maxSeparation + 1, rate: perPixel() }
+      grip.setPointerCapture(event.pointerId)
+      grip.classList.add('is-dragging')
+    }
+    const onMove = (event: PointerEvent): void => {
+      if (from === null) return
+      const turned = this.turned
+      // Up the screen is *more* on an ordinary turned map and less on the
+      // mirrored half, where the band hangs below its own axis.
+      const away = turned?.direction === 'down' ? 1 : -1
+      const moved = (event.clientY - from.y) * away * from.rate
+      this.setTurnDepth(from.rows + moved)
+    }
+    const onUp = (event: PointerEvent): void => {
+      if (from === null) return
+      from = null
+      grip.releasePointerCapture(event.pointerId)
+      grip.classList.remove('is-dragging')
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      const turned = this.turned
+      if (turned === null) return
+      const rows = turned.maxSeparation + 1
+      // A tenth of the band per press, a half with Shift — the step the map's
+      // own arrow keys pan by, so one hand learns one rule.
+      const step = Math.max(1, Math.round(rows * (event.shiftKey ? 0.5 : 0.1)))
+      if (event.key === 'ArrowUp') this.setTurnDepth(rows + step)
+      else if (event.key === 'ArrowDown') this.setTurnDepth(rows - step)
+      else if (event.key === 'Home' || event.key === '0') this.setTurnDepth(null)
+      else return
+      event.preventDefault()
+    }
+
+    grip.addEventListener('pointerdown', onDown)
+    grip.addEventListener('pointermove', onMove)
+    grip.addEventListener('pointerup', onUp)
+    grip.addEventListener('pointercancel', onUp)
+    grip.addEventListener('keydown', onKey)
+    // A double-click puts the depth back to the default, which is the way out of
+    // a band dragged somewhere useless.
+    grip.addEventListener('dblclick', () => this.setTurnDepth(null))
+  }
+
+  /**
+   * Ask for a band this many rows deep, and redraw at it.
+   *
+   * `null` hands the decision back to {@link turnDepth}'s default. Clamped and
+   * compared *after* rounding, so the many sub-pixel moves of one drag do not
+   * each cost a re-read of the block.
+   */
+  private setTurnDepth(rows: number | null): void {
+    const next = rows === null ? null : Math.max(1, Math.round(rows))
+    if (next === this.turnRows) return
+    this.turnRows = next
+    // A deeper band is a different *grid*, not different numbers in the same
+    // one — more rows, a different height per bin, a different vertical ruler —
+    // so it goes through the same path a turn does. One pass over a block
+    // already in memory, and no read.
+    if (this.data !== null) this.setData(this.data, this.lastTitle, this.second?.data)
   }
 
   /**
@@ -3477,22 +3608,12 @@ export class MatrixPanel {
   /**
    * How far from the diagonal the turned band reaches, in **bins**.
    *
-   * A whole triangle is always twice as wide as it is tall — that is what the
-   * half-bin lattice makes it — so turning a map and fitting it produces a
-   * triangle that fills the panel and touches nothing. Which is a fine picture
-   * and is not the one the turn is for: the reading is the band near the
-   * diagonal, and the far apex is the part of a contact map that has least in it.
-   *
-   * So the default is a *fraction* of the block, and the reader moves it. The
-   * fraction is deliberately not a distance in base pairs: a default of "500 kb"
-   * is most of a bacterial chromosome and a rounding error on a human one, and
-   * this viewer opens on both.
+   * The rule itself is `render/rotate.ts`'s, because it is about the geometry
+   * rather than about this panel; what is here is the reader's answer, which
+   * {@link watchDepth} writes and which is `null` until they give one.
    */
   private turnDepth(data: MatrixResult): number {
-    const span = Math.max(1, Math.min(data.nrows, data.ncols))
-    const asked = this.turnRows
-    if (asked !== null) return Math.max(1, Math.min(span - 1, asked))
-    return Math.max(1, Math.min(span - 1, Math.ceil(span * DEFAULT_TURN_FRACTION)))
+    return turnDepthFor(data, this.turnRows)
   }
 
 
