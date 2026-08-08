@@ -733,6 +733,20 @@ export interface AxisCoords {
   bpPerCell: number
   /** Base-pair position of the first cell of the block. */
   bpAtOrigin: number
+  /**
+   * On-screen room one label needs before another may be placed, in CSS pixels.
+   *
+   * {@link TICK_MIN_GAP_PX} unless given, which is the width of a bp label plus
+   * air — the right figure for a ruler read left to right, and four times too
+   * coarse for one read bottom to top, where a label is a line of type and
+   * fifteen pixels apart is legible.
+   *
+   * It matters for exactly one ruler and it matters completely: a turned map's
+   * band is a hundred pixels tall, which at the horizontal spacing is one tick,
+   * on the diagonal, in the corner the column labels have already claimed — so
+   * the axis that is the whole reason to turn the picture came out blank.
+   */
+  tickGapPx?: number
 }
 
 export interface AxisCoordSet {
@@ -776,12 +790,23 @@ export function bpTicks(
   domain: readonly [number, number],
   maxTicks: number,
 ): Array<{ bp: number; unit: number }> {
-  const lo = coords.bpAtOrigin + domain[0] * coords.bpPerCell
-  const hi = coords.bpAtOrigin + domain[1] * coords.bpPerCell
-  const step = chooseBpStep(hi - lo, maxTicks, coords.bpPerCell)
+  const near = coords.bpAtOrigin + domain[0] * coords.bpPerCell
+  const far = coords.bpAtOrigin + domain[1] * coords.bpPerCell
+  // A **descending** axis is not a special case so much as a turned one: up the
+  // side of a turned map, distance from the diagonal grows towards the top of
+  // the picture while a row index grows towards the bottom, so `bpPerCell` is
+  // negative and the two ends arrive the other way round. Order them and the
+  // ladder below is the ladder it always was; `unit` inverts the same line
+  // either way.
+  const lo = Math.min(near, far)
+  const hi = Math.max(near, far)
+  const step = chooseBpStep(hi - lo, maxTicks, Math.abs(coords.bpPerCell))
   if (!Number.isFinite(step) || step <= 0) return []
   const out: Array<{ bp: number; unit: number }> = []
-  const first = Math.ceil(lo / step) * step
+  // `+ 0` normalises the negative zero `Math.ceil` returns for a `lo` just
+  // below the origin — which a turned map's ruler has, its band reaching half a
+  // bin past the diagonal.
+  const first = Math.ceil(lo / step) * step + 0
   for (let bp = first; bp <= hi; bp += step) {
     out.push({ bp, unit: (bp - coords.bpAtOrigin) / coords.bpPerCell })
     // The ladder bounds this at `maxTicks + 1`; the guard is against a
@@ -2872,7 +2897,8 @@ export class HeatmapView {
     const hi = Math.min(d1, n)
     if (!(hi > lo)) return []
     const pixels = (hi - lo) * scale.pixelsPerUnit
-    const maxTicks = Math.min(MAX_POSITION_TICKS, Math.max(1, Math.floor(pixels / TICK_MIN_GAP_PX)))
+    const gap = coords.tickGapPx ?? TICK_MIN_GAP_PX
+    const maxTicks = Math.min(MAX_POSITION_TICKS, Math.max(1, Math.floor(pixels / gap)))
     return bpTicks(coords, [lo, hi], maxTicks)
   }
 
