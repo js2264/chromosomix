@@ -8,8 +8,9 @@ everything below is new since that tag. All of it is committed and pushed.
 
 **Since the first handoff:** §3.1's **A1**, **A2**, **B1**, **B3**, **D1** and
 **B4** are done, and **B2** is closed as a decision rather than as work — see §3.3
-and §3.4, which also list the defects found on the way. **C** (tracks) is
-untouched and is now the whole of what is left.
+and §3.4. **C1** and **C2** (the track model, and companions that can carry a
+track) are done; **C3** is attempted and reverted, and **C4** is built but has
+never been seen on screen. §3.1's C table is the detail.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
 with "Cannot find type definition file for 'node'" until you do, which looks
@@ -122,15 +123,16 @@ change. Ordered within each group by what I would do first.
 | ~~B3~~ | **Decided and built.** The deck is a **rectangle of cells filled in reading order**, with an explicit column count the reader draws with a `+` or picks in the bar, and empty cells as first-class members of the list. No layout *tree*, and there should not be one until something needs a cell two columns wide. | `PanelDeck.columnsNow`, `deck.grownDeck` |
 | ~~B4~~ | **Done.** The maps line up to the pixel — the lead's lane room is reserved on every panel and every picture is pushed to the foot of its cell — and the view's own heading is *hoisted above the grid*, so cell 0 is a cell like the others. Moved rather than rebuilt, and given back when the deck is put down. | `PanelDeck.hoistHead`, `.deck-lead-head` |
 
-#### C. Tracks — the largest gap
+#### C. Tracks
 
+The model is decided and built; two of the four are done.
 
 | # | Gap | Where |
 |---|---|---|
-| C1 | **Companions have no tracks at all.** `MapPanel` builds its `MatrixPanel` with no `annotations` context, so a companion has no lanes, no track stacks, no 4C. Only the lead can carry a track. Everything else in this group follows from that. | `MapPanel.show` |
-| C2 | **The annotation store is a session singleton.** `Session.annotations` is one store and one worker for the whole session. Per-map tracks needs a decision: *one store per panel* (simple, N workers, no sharing) or *one store with per-entry map membership* (one worker, sharing is natural, every consumer must learn to filter). **Nothing should be built here until that is chosen** — it is the single decision the rest of C depends on. | `Session.annotations`, `annotations/store.ts` |
-| C3 | **No cross-map alignment by track stacks.** Two maps with different numbers of tracks would have their plots start at different heights, so the maps stop lining up — the thing the deck exists for. Needs a per-edge stack height reconciled across panels (a shared max, or explicit spacers). | `MatrixPanel.syncLaneMetrics`, `--lane-*` custom properties |
-| C4 | **No "send this track to every map"** and no "remove it from every map". Depends entirely on C2: under per-panel stores this is a copy of an `AnnotationEntry` plus a re-fetch per panel; under one store it is a change to a membership set. | `AnnotationCard` row menu, `annotations/store.ts` |
+| ~~C1~~ | **Done.** A companion is handed an annotation context of its own — the session's one store, plus the id of the map whose lanes it draws — so a panel of a deck carries tracks. `ui/AnnotationLanes.ts` needed no change: it is still given a list of entries keyed by id and never learns lanes exist. A file dropped on a companion's edge is placed on *that* map. | `MapPanel.show`, `Session.annotationContext` |
+| ~~C2~~ | **Decided, built and tested** (`src/annotations/placement.ts`, `test/unit/placement.test.ts`, 20). A **track** is the import and the style true of it everywhere; a **lane** is one placement — a map, four edge booleans, and a *sparse* patch. `resolveStyle` is one spread, and the property that matters is what a lane omits: a lane with no patch cannot drift from its track. `LANE_OVERRIDES` is two fields (`limits`, `flip`) on purpose — every field a lane can differ on is a field two maps can no longer be compared on, which is why **height is shared**. | `annotations/placement.ts`, `AnnotationStore` |
+| C3 | **Alignment is still the lead's stack, not the deck's.** `PanelDeck.alignTo` reserves what the *lead's* lanes take on each edge, which was right while only the lead could carry a track and is wrong the moment a companion does: a companion with three tracks under a lead with one pushes its own picture up and the maps stop lining up. `MapPanel.laneRoom(edge)` and `MatrixPanel.laneExtent(edge)` are in place and correct — nothing reads them yet. **Attempted and reverted**: driving the reservation from the per-panel maximum needs a companion's report folded in without a re-align loop, and a companion's first report arrives long before the lead's, so an unguarded version reserves nothing at all and every map loses its stack room. Verify with `--deck-lane-bottom` on `.deck-grid`: it must be non-zero once the lead has a lane. | `PanelDeck.alignTo`, `MapPanel.laneRoom` |
+| C4 | **Built, not verified.** The location control is one row of four edges *per map*, with `every map` (propagate, no patch) and `no map` (withdraw, keeps the import). A session with one map keeps exactly the row it always had. It typechecks and the store beneath it is unit-tested, but **the control has never been seen on screen**: in an automated browser run the track row's settings disclosure would not open — one `.ann-body` in the DOM, `hidden`, no children, unmoved by a real click or a dispatched one. That is the next thing to look at, and it may well be a live bug rather than a test artefact. | `AnnotationCard.placement`, `edgeRow`, `everyMapRow` |
 
 #### D. Defects — wrong, not missing
 

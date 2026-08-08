@@ -141,9 +141,19 @@ and giving them tracks. `HANDOFF.md` §3.1 is the itemised account with the code
 beside each one; these are the same items in the order they are worth doing,
 because the chain between them is real.
 
-- [ ] Decide who owns a track when there are N maps — one store per panel, or one
-      store that knows which maps each track is on. Everything else about tracks
-      waits on that sentence being written down.
+- [x] Decide who owns a track when there are N maps. A track is the import and
+      the style true of it everywhere; a lane is one placement, carrying four
+      edge booleans and a patch of almost nothing. A lane given no patch cannot
+      drift from its track, which is what makes "put it on every map" different
+      from "copy it".
+- [ ] The room a stack takes is reserved from the *largest* on that edge rather
+      than from the first map's, or a companion carrying three tracks under a
+      lead carrying one pushes its own picture up and the maps stop lining up.
+      Attempted and reverted once: a companion reports before the lead does, so
+      the obvious version reserves nothing for anybody.
+- [ ] Look at the track's settings on screen. The location control is written and
+      the store under it is tested, and the disclosure that opens it would not
+      open in a browser — which is either the test's fault or a real one.
 - [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
       them carry different numbers, and a track sent to every map or taken off
       every map in one gesture.
