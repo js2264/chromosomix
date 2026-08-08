@@ -69,7 +69,7 @@ diverging ramp's centre colour across 96% of drawn pixels.
 
 ---
 
-## 3. The deck of panels (§16) — **complete, with caveats**
+## 3. The deck of panels (§16) — **skeleton only; see §3.1 for the real state**
 
 Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 
@@ -80,21 +80,84 @@ Spec section `SPECS.md` §16. Built by a subagent, merged in `d37f7c5`.
 | One companion: worker, panel, frame | `src/panels/MapPanel.ts` | — |
 | The grid, toolbar, layout | `src/panels/PanelDeck.ts` | — |
 
-- **Panels are orthogonal to `view`**, not a new `ViewKind`. `maps=a|b|~` names
-  companions; every panel renders the same view state against its own file. The
-  lead is the session's existing view, re-parented into cell 0.
-- **The lock's currency is base pairs**, which is what lets a 1 kb and a 5 kb file
-  sync honestly — and why side-by-side needs none of `compareRefusal`'s gate.
-- **Shared:** region, level, score, balance, *and the derivation* (see §4).
-  **Per-panel:** the clip, because `vmax` is a count and two depths don't share
-  one. Transform and colormap are seeded from the lead then owned per panel.
+**What genuinely works, verified in a browser at three panels and two bin sizes:**
 
-**Caveat: the deck's DOM was never verified in a browser by its author,** and
-only lightly by me (a two-panel deck with O/E on). `PanelDeck`/`MapPanel` layout
-is the least-exercised code on this branch. A visual pass at several panel counts
-and layouts is the first thing worth doing if you touch it.
+- N files open at once, each with its own worker, block and colour scale.
+- One navigation across all of them. The lock's currency is base pairs, which is
+  what lets a 2 kb and a 5 kb file follow each other — and why side-by-side needs
+  none of `compareRefusal`'s gate.
+- `maps=a|b|~` round-trips through the hash; `~` holds a local file's slot.
+- Shared: region, level, score, balance, the derivation. Per-panel: the clip,
+  because `vmax` is a count and two depths do not share one.
+- Memory: `panelBudgetBytes` divides one block's allowance across N, so a deck
+  cannot exceed the single map it replaced. `MAX_PANELS = 6`.
 
----
+**Everything below is what it does not do.** The honest summary is that the deck
+is a *data* feature that works and an *interaction* feature that barely exists.
+
+### 3.1 Gap analysis
+
+Grouped by what a reader is trying to do. Each item names the code that would
+change. Ordered within each group by what I would do first.
+
+#### A. Getting a map in
+
+| # | Gap | Where |
+|---|---|---|
+| A1 | **No drop area in single-map view.** The first companion can only be added through the command palette (`Ctrl+P` → "Add a map beside this one"), because the deck — and therefore its toolbar — does not exist until then. Nothing on screen says the feature exists. Wanted: an always-visible drop strip down the far right of the centre panel, taking a dropped file straight into a new map. | `Session.showContent` / a new always-mounted strip; `Session.addMap` is the existing entry |
+| A2 | Adding by URL is a text input behind a `+ add a map` toggle. A dropped *file* is only accepted by a `VacantPanel` (a `~` slot from a link) — there is no drop target for a *new* map anywhere. | `PanelDeck.addRow`, `MapPanel.VacantPanel` |
+
+#### B. Arranging maps
+
+| # | Gap | Where |
+|---|---|---|
+| B1 | **No drag and drop at all.** Reordering is `◀` `▶` buttons on each companion's heading. Wanted: drag a map onto another to place it left/right/above/below. | `MapPanel` heading, `PanelDeck.move` |
+| B2 | **The lead cannot be moved or closed.** `leadCell` is grid cell 0, always, and carries no per-panel controls — the session's own view is re-parented into it. So the first map is permanently first. This is the structural blocker for B1: a general reorder needs the lead to be *a panel like any other*, which today it is not. | `PanelDeck.leadCell`, `setLead` |
+| B3 | **The layout is a uniform grid, not an arrangement.** `--deck-columns` with `row \| column \| grid`; there is no model for "this map below that one". Dropping onto an edge (B1) implies either a real layout tree or, more cheaply, insert-at-index plus a column count. Decide which before building B1. | `PanelDeck.applyLayout`, `deck.columnsFor` |
+| B4 | **The lead's cell is much bigger than a companion's** — it keeps the view heading, the locus box, the back link and the block summary, while a companion has a one-line heading. At three panels the lead's map is visibly smaller than the maps beside it. Asymmetric and cramped. | `.deck-panel.is-lead` in `styles.css`; what `setLead` re-parents |
+
+#### C. Tracks — the largest gap
+
+| # | Gap | Where |
+|---|---|---|
+| C1 | **Companions have no tracks at all.** `MapPanel` builds its `MatrixPanel` with no `annotations` context, so a companion has no lanes, no track stacks, no 4C. Only the lead can carry a track. Everything else in this group follows from that. | `MapPanel.show` |
+| C2 | **The annotation store is a session singleton.** `Session.annotations` is one store and one worker for the whole session. Per-map tracks needs a decision: *one store per panel* (simple, N workers, no sharing) or *one store with per-entry map membership* (one worker, sharing is natural, every consumer must learn to filter). **Nothing should be built here until that is chosen** — it is the single decision the rest of C depends on. | `Session.annotations`, `annotations/store.ts` |
+| C3 | **No cross-map alignment by track stacks.** Two maps with different numbers of tracks would have their plots start at different heights, so the maps stop lining up — the thing the deck exists for. Needs a per-edge stack height reconciled across panels (a shared max, or explicit spacers). | `MatrixPanel.syncLaneMetrics`, `--lane-*` custom properties |
+| C4 | **No "send this track to every map"** and no "remove it from every map". Depends entirely on C2: under per-panel stores this is a copy of an `AnnotationEntry` plus a re-fetch per panel; under one store it is a change to a membership set. | `AnnotationCard` row menu, `annotations/store.ts` |
+
+#### D. Defects — wrong, not missing
+
+| # | Defect | Where |
+|---|---|---|
+| D1 | **The 45° turn does not reach companions.** `MapPanel` never passes `turn` to its `MatrixPanel` (grep `turn:` in that file — no hits). Flipping a deck therefore flips the lead only, and the panels beside it stay square while claiming to be one navigation. Small fix — pass it through exactly as `derive` is, including the `setDerive`-style refresh on every `show` — deliberately left out of the documentation pass rather than mixed into it. | `MapPanel.show`, `MapPanel.apply` |
+| D2 | The deck's DOM was never verified by its author and only lightly by me. `PanelDeck`/`MapPanel` layout is the least-exercised code on the branch, and B4 was found the first time anybody looked at three panels. Assume more of the same. | — |
+
+#### E. Smaller, and deliberate-or-not is worth deciding
+
+- **No deck-wide export.** Each panel exports itself; there is no "one figure of
+  all of them", which is what somebody assembling a paper figure wants.
+- **Companions never get the two-file compare** (`uri2`). Reasonable — a blended
+  square inside a panel of a deck is two claims at once — but it is undocumented
+  as a decision.
+- **A vacancy cannot be made deliberately.** `VacantPanel` only ever arrives from
+  a `~` in a link; there is no "leave a gap here".
+- **No promote-to-lead.** With B2 fixed this becomes free; without it, a reader
+  who wants a different map driving the deck has to rebuild the deck.
+
+### 3.2 Suggested order
+
+The dependency chain is real, and doing these out of order means doing them
+twice:
+
+1. **D1** — a defect, minutes, unblocks nothing but should not ship.
+2. **C2** — decide the track ownership model. Write the decision down before any
+   code. Everything in C waits on it.
+3. **B2** — make the lead a panel like the others. Blocks B1 and E's promote.
+4. **A1** — the drop strip; it is what makes the feature discoverable at all, and
+   it is independent of B and C.
+5. **B3 → B1** — pick the layout model, then build drag and drop onto it.
+6. **C1 → C3 → C4** — tracks per map, then alignment, then broadcast.
+7. **B4** and the rest of E.
 
 ## 4. Where the two features meet
 
@@ -234,10 +297,11 @@ before editing.
 
 Reported honestly rather than quietly left:
 
-- The deck's DOM is under-verified (§3).
+- **The deck is a skeleton.** §3.1 is the full account; it is the largest body of
+  remaining work on this branch by a wide margin.
 - Panel layout at 4–6 panels in `column`/`grid` has never been looked at.
-- Turned maps and the deck compose in principle (both are state-driven) but a
-  turned *deck* has not been tried.
+- The turn reaches only the lead of a deck — §3.1 D1.
+- The turn's own remaining work is §5.
 
 ---
 

@@ -82,6 +82,34 @@
 
 ## FOR NOW
 
+The deck of maps (§16) reads as a finished feature and is not one: N files open,
+navigate together and share a scale, and almost nothing about *arranging* them
+exists. `HANDOFF.md` §3.1 is the itemised account with the code beside each one;
+these are the same items in the order they are worth doing, because the chain
+between them is real.
+
+- [ ] The turn reaches only the lead of a deck. A companion is never handed the
+      toggle, so flipping puts one map on its diagonal and leaves the rest square
+      while the bar still says one navigation. The smallest thing on this list.
+- [ ] Decide who owns a track when there are N maps — one store per panel, or one
+      store that knows which maps each track is on. Everything else about tracks
+      waits on that sentence being written down.
+- [ ] The first map is a panel like the others: movable, closable, and able to
+      hand the deck over to another. Today it is the session's own view
+      re-parented into cell 0 and it cannot leave.
+- [ ] A drop area down the right-hand edge of the map, always there, that takes a
+      dropped file into a new map beside the ones already open. Today the first
+      companion can only be reached through the command palette, so nothing on
+      screen says the feature exists at all.
+- [ ] Maps dragged onto each other to arrange them — left, right, above, below —
+      which needs the grid to become an arrangement rather than a column count.
+- [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
+      them carry different numbers, and a track sent to every map or taken off
+      every map in one gesture.
+- [ ] The first map's cell is bigger than the rest, because it keeps the heading,
+      the locus box and the summary the others have no copy of.
+
+
 The 45° turn is half landed — the geometry and the toggle are in and tested, the
 marks drawn over it are not. `HANDOFF.md` is the full account; these are the
 items, in the order they are worth doing.
