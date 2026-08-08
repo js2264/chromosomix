@@ -14,6 +14,7 @@ import { el, fmt } from './dom'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type DerivePresentation,
+  type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox } from './SearchBox'
@@ -56,6 +57,8 @@ export interface GenomeViewProps {
    * and a default decided in each is a default that comes to differ.
    */
   derive?: DerivePresentation
+  /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
+  turn?: TurnPresentation
   onLevelChange(level: 'bin' | 'contig'): void
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
@@ -121,6 +124,7 @@ export class GenomeView {
       initial: { ...props.scale, level: props.level },
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
+      ...(props.turn === undefined ? {} : { turn: props.turn }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

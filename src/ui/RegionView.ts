@@ -33,6 +33,7 @@ import {
   blockSummary,
   type AnnotationContext,
   type DerivePresentation,
+  type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -79,6 +80,8 @@ export interface RegionViewProps {
    * and a default decided in each is a default that comes to differ.
    */
   derive?: DerivePresentation
+  /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
+  turn?: TurnPresentation
   /**
    * A new selection. The second region makes the block rectangular — the
    * contacts *between* two contigs rather than within one (§5.3).
@@ -172,6 +175,7 @@ export class RegionView {
       hideTitle: true,
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
+      ...(props.turn === undefined ? {} : { turn: props.turn }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

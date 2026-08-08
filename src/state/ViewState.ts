@@ -57,6 +57,7 @@ const KEY_ORDER = [
   'score',
   'oe',
   'op',
+  'flip',
 ] as const
 
 /** The keys a patch may remove; `uri` and `view` always exist. */
@@ -79,6 +80,7 @@ const OPTIONAL_KEYS = [
   'score',
   'oe',
   'op',
+  'flip',
 ] as const
 
 /**
@@ -203,6 +205,9 @@ export function parseViewState(hash: string): ViewState | null {
   const op = raw.get('op')
   if (op !== undefined && isCompareOp(op)) state.op = op
 
+  const flip = raw.get('flip')
+  if (flip !== undefined) state.flip = flip === '1' || flip === 'true'
+
   // A clip bound may legitimately be negative — `log10` of a balanced matrix is
   // negative throughout — so the only thing rejected here is a non-number.
   const vmin = raw.get('vmin')
@@ -271,7 +276,7 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * force decides which controls the panel draws — the depth tickbox is offered
  * under one and not the others — and controls are built once, at construction.
  */
-export const DERIVED_KEYS = ['oe'] as const
+export const DERIVED_KEYS = ['oe', 'flip'] as const
 
 /**
  * `true` when two states select the same block and differ only in how it is

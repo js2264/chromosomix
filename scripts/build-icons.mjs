@@ -54,6 +54,9 @@ const LUCIDE = [
   'align-end-horizontal',
   'chevrons-up-down',
   'flip-vertical',
+  // The turn: a map on its diagonal is a triangle standing on a genomic axis,
+  // which is what the control produces and what it therefore shows.
+  'triangle',
   'eye',
   'eye-off',
   'align-right',

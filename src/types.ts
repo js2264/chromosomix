@@ -366,6 +366,17 @@ export interface ViewState {
    */
   op?: CompareOp
   /**
+   * Whether the map is turned 45° — position along the bottom, distance from the
+   * diagonal up the side (`render/rotate.ts`).
+   *
+   * Part of what is being looked at rather than how it is shaded, so §11's rule
+   * applies and a link carries it. Ignored by any view whose block has no
+   * diagonal to measure from, which is what `isTurnable` decides and what the
+   * toggle is greyed by: a hash naming it on a whole-metagenome map lands on the
+   * square, the way `op` lands on one file.
+   */
+  flip?: boolean
+  /**
    * The window a `browser` view is open at: `chrI:1,001-20,000`, 1-based
    * inclusive, as every genome browser writes one and as the locus box accepts
    * one. Absent means the whole genome, which is where a browser opens.
