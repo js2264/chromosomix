@@ -24,7 +24,7 @@ import {
   colormapIndex,
   isColormap,
 } from '@/render/colormaps'
-import { colorbarTicks, formatCount } from '@/render/colorbar'
+import { formatCount, keyContent, keyTitle } from '@/render/legend'
 import { rasterize, separatorBlocks } from '@/render/heatmap'
 import {
   Scale,
@@ -430,42 +430,7 @@ describe('Scale', () => {
   })
 })
 
-describe('colorbar', () => {
-  it('labels ticks in untransformed units', () => {
-    const ticks = colorbarTicks({
-      vmin: 0,
-      vmax: Math.log1p(3000),
-      transform: 'log1p',
-      colormap: 'afmhot_r',
-    })
-    expect(ticks[0].value).toBeCloseTo(0, 9)
-    expect(ticks[ticks.length - 1].value).toBeCloseTo(3000, 6)
-    expect(ticks.map((t) => t.label)).toContain('100')
-    // Positions are the transform made visible: not evenly spaced.
-    expect(ticks[0].position).toBe(0)
-    expect(ticks[ticks.length - 1].position).toBeCloseTo(1, 12)
-  })
-
-  it('marks the log10 floor as clamped', () => {
-    const ticks = colorbarTicks({
-      vmin: 0,
-      vmax: 3,
-      transform: 'log10',
-      colormap: 'afmhot_r',
-    })
-    expect(ticks[0].label).toBe('≤ 1')
-  })
-
-  it('uses round steps for an untransformed scale', () => {
-    const ticks = colorbarTicks({
-      vmin: 0,
-      vmax: 3000,
-      transform: 'none',
-      colormap: 'afmhot_r',
-    })
-    expect(ticks.map((t) => t.label)).toEqual(['0', '1000', '2000', '3000'])
-  })
-
+describe('the key in the corner of a map', () => {
   it('formats counts without a locale', () => {
     expect(formatCount(0)).toBe('0')
     expect(formatCount(7)).toBe('7')
@@ -473,6 +438,48 @@ describe('colorbar', () => {
     expect(formatCount(12_500)).toBe('12.5k')
     expect(formatCount(3_000_000)).toBe('3M')
     expect(formatCount(0.25)).toBe('0.25')
+  })
+
+  /**
+   * A cell has been through up to three things and the title names all of them.
+   * `O/E (log2)` over a map whose O/E was measured on balanced counts describes
+   * a different picture from the same words over raw ones.
+   */
+  it('names what was read, what was done to it, and how it is drawn', () => {
+    expect(keyTitle(['', 'balanced', 'O/E'], 'log2')).toBe('Balanced O/E (log2)')
+    expect(keyTitle(['', 'count', ''], 'log1p')).toBe('Count (log1p)')
+    expect(keyTitle(['balanced', ''], 'log10', '◣')).toBe('◣ Balanced (log10)')
+  })
+
+  /** "No transform" is not a fact a figure needs to carry on every raw map. */
+  it('leaves `none` off', () => {
+    expect(keyTitle(['', 'count', ''], 'none')).toBe('Count')
+  })
+
+  /**
+   * The whole of what changed. The clip boxes and the hash have always been in
+   * transformed units, so a reader who typed `[-1, 1]` on a `log2` O/E map must
+   * read `-1` and `1` — the old bar inverse-transformed them into `0.5` and `2`
+   * and left them to invert it back in their head.
+   */
+  it('shows the bounds in the units the reader typed them in', () => {
+    const key = keyContent(
+      { vmin: -1, vmax: 1, transform: 'log2', colormap: 'RdBu_r' },
+      'Balanced O/E (log2)',
+      (v) => String(v),
+    )
+    expect([key.loLabel, key.hiLabel]).toEqual(['-1', '1'])
+    expect(key.loColor).not.toBe(key.hiColor)
+  })
+
+  /** `NaN` is how a `ColorScale` asks for the default; it must not be printed. */
+  it('survives an unclipped bound', () => {
+    const key = keyContent(
+      { vmin: Number.NaN, vmax: Number.NaN, transform: 'none', colormap: 'afmhot_r' },
+      'Count',
+      (v) => String(v),
+    )
+    expect([key.loLabel, key.hiLabel]).toEqual(['0', '1'])
   })
 })
 
