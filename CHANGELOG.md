@@ -14,7 +14,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **A deck is drawn before it is filled** (§16.9). A `+` down the right-hand edge
+- **A deck's bar holds only what is shared**: the master chain, one scale for
+  all, how many maps across, and one figure of the whole deck at 300 dpi. Adding
+  a map is the `+` on an edge and rearranging is the grip, so neither is a button
+  there — a bar that repeats what the pictures already offer is a second place to
+  look for the same thing.
+
+- **Maps are rearranged by dragging them.** Every companion has a grip before its
+  name; taking hold of one shows the deck's tiling, and dropping a map on a cell
+  exchanges the two. `◀` `▶` could only ever say *one place along a list*, which
+  describes a 2 × 2 poorly: moving the bottom-left map to the top-right was three
+  presses, each shuffling everything in between. The lead has a name like every
+  other cell and no grip — the first map is always the lead.
+
+- **A companion's scale controls are on its picture**, in a menu that opens
+  upward from a button in the map's bottom-left corner: the score, the baseline,
+  the transform, the ramp and the clip, and nothing else. What was there was a
+  `colour and export` fold *under* the map, which pushed every other panel of the
+  deck down by the height of whatever was open in it.
+
+- - **A deck is drawn before it is filled** (§16.9). A `+` down the right-hand edge
   of the map and another along the bottom. Pressing one opens a *cell* rather
   than a map: what comes back is the arrangement asked for, with the reader's own
   map in the first of it and every other cell standing empty as its own drop
@@ -224,6 +243,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   each one would have put the pixel scan back behind its button.
 
 ### Fixed
+
+- **A deck survives the navigations of the file it is beside.** Every navigation
+  builds a fresh state, which is right for the region and the level and wrong for
+  the two keys that name what is on screen *beside* the view — so clicking
+  Chromosomes and then a contig came back with the deck gone and its workers
+  released. `maps` and `uri2` are now carried across a navigation within one
+  file, by path, so changing the resolution keeps the deck and opening a
+  different file does not.
+
+- **An `.mcool` can be a companion.** A collection is not a map at its root, so
+  it opened as an error about `::` syntax the reader never typed, in the
+  rectangle where their map should have been. A companion now descends into an
+  entry the way the compare card and the picker already do, preferring the lead's
+  bin size, and publishes what it opened so the link names the map rather than
+  the collection.
+
+- **A new companion opens on the lead's score and clip.** The score is shared as
+  a *resolved* choice rather than as the hash key that named it: a balanced file
+  opens balanced and that default is nowhere in the URL, so two panels each
+  applying their own put a balanced lead beside a companion drawing raw counts.
+  A panel that has to fall back to counts — no weight column — keeps the ramp and
+  finds its own bounds, since a clip measured in balanced units would draw it
+  black.
+
+- **The maps in a deck line up to the pixel, tracks or no tracks.** The room the
+  lead's lane stacks take is reserved on every panel beside it and every picture
+  is pushed to the foot of its cell, so a map inset by a stack no longer stands
+  beside one that is not.
+
+- **The `+` along the bottom of a map is above the fold.** It comes out of the
+  plot's own vertical budget now; on a map sized to the window it needed a scroll
+  to reach, which is a poor place for the one gesture that says this viewer can
+  show two maps.
 
 - **The 45° turn reaches every map in a deck.** A companion was never handed the
   setting, so flipping a deck put the lead on its diagonal and left the maps

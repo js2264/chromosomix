@@ -142,19 +142,24 @@ export function sameRefs(a: readonly PanelRef[], b: readonly PanelRef[]): boolea
 }
 
 /**
- * Move the item at `from` to `to`, returning a new list.
+ * Exchange two cells of a deck, returning a new list.
  *
- * Generic because the deck reorders two lists that must never disagree — the
- * refs it publishes to the hash and the live slots it holds — and one function
- * over both is the only way that is structurally true rather than promised. An
- * out-of-range move is a copy, so a `◀` on the first panel is inert rather than
- * an error.
+ * A **swap** and not an insert, which is the arrangement model (§16.9) showing
+ * through: the deck is a rectangle the reader drew, and sliding a map into a
+ * cell by shifting every map between here and there would rearrange three
+ * pictures to move one. Dropping a map on a cell puts it there and puts
+ * whatever was there where it came from — an exchange of two, whatever the
+ * distance between them, and a shape that cannot change under the gesture.
+ *
+ * Out of range is a copy, so a drop that lands nowhere is inert rather than an
+ * error.
  */
-export function moveItem<T>(items: readonly T[], from: number, to: number): T[] {
+export function swapItems<T>(items: readonly T[], a: number, b: number): T[] {
   const next = [...items]
-  if (from < 0 || from >= next.length || to < 0 || to >= next.length || from === to) return next
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved)
+  if (a < 0 || b < 0 || a >= next.length || b >= next.length || a === b) return next
+  const held = next[a]
+  next[a] = next[b]
+  next[b] = held
   return next
 }
 
@@ -210,6 +215,16 @@ export function columnsFor(count: number, layout: DeckLayout): number {
  * where the reader last saw it.
  */
 export type GrowDirection = 'beside' | 'below'
+
+/**
+ * The MIME-ish type a map being dragged between cells is carried under.
+ *
+ * Its own type rather than `text/plain`, so the grid can tell a map apart from
+ * a *file* being dropped on it — the two land on the same cells and mean
+ * different things, and a `dragover` that cannot tell them apart either
+ * highlights a drop target for a track or refuses one for a map.
+ */
+export const DECK_DRAG_TYPE = 'application/x-metacooler-deck-panel'
 
 /**
  * A deck's shape: how many cells it has, and how many of them are in a row.

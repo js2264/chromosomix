@@ -2666,6 +2666,7 @@ export class Session {
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
       memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
+      leadName: () => (this.file === null ? undefined : fileLabel(this.file.uri)),
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.
       derive: () => {
@@ -2686,6 +2687,10 @@ export class Session {
         return shared
       },
       binsize: () => this.file?.info.binsize ?? undefined,
+      score: () => {
+        const state = this.store.state
+        return state === null ? undefined : this.scoreOf(state).id
+      },
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in

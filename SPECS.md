@@ -1142,7 +1142,19 @@ the feature affordable, and it is also what makes its failures well worded: a fi
 refused by `parse_metacooler_range`'s own error, listing its own sequences (§5.4). No gate had to be
 written for that case and none could have phrased it better.
 
-The clip has to be per panel. `vmax` is a number of contacts, and two libraries sequenced to
+The score is shared as a **resolved choice**, not as the hash key that named it. A file somebody
+balanced opens balanced and that default is nowhere in the URL, so two panels each applying their
+own default disagreed silently — a balanced lead beside a companion drawing raw counts, under a bar
+saying the score is one of the things a deck shares. Each panel still resolves the id against its
+*own* columns, so a file that cannot serve it falls back to counts rather than to a read it has no
+answer for.
+
+A companion **opens on the lead's scale, clip included**: a map put beside another is put there to
+be compared with it. The exception is that fallback — a panel drawing counts because it has no
+weights must not inherit a clip measured in balanced units, which would draw a perfectly good map as
+a black rectangle. There it takes the transform and the ramp and finds its own bounds.
+
+The clip is still the panel's own from then on. `vmax` is a number of contacts, and two libraries sequenced to
 different depths do not have the same one — one clip across a deck draws the shallower file as an
 empty rectangle. This is §5.7's argument reached from the other side: there, one grid forces one
 scale and the second file is rescaled onto it with **match depth**; here, two grids allow two scales,
@@ -1225,12 +1237,38 @@ wrong, and a still map reads as data.
 
 ### 16.5 Layout, and the three side panels
 
-The panels are a CSS grid of equal columns — `row`, `column`, or a near-square `grid` from the deck's
-own bar, or the column count the reader drew with a `+` (§16.9), which overrides them. Equal always:
-a comparison whose halves are different sizes is one the eye has to correct for. Panels are
-addable, removable and reorderable one place at a time.
+The panels are a CSS grid of equal columns, as many across as the reader asked for — with a `+` on an
+edge (§16.9) or with the picker in the deck's bar. Equal always: a comparison whose halves are
+different sizes is one the eye has to correct for.
 
-The deck's controls ride **above the grid**, and each panel's colour card rides **inside that panel**.
+**The maps are aligned to the pixel, tracks or no tracks.** A companion carries no lanes of its own
+(§16.8), so the room the lead's stacks take is *reserved* on every panel beside it, and each panel's
+picture is pushed to the foot of its cell — the cells being equal, the plots are then the same size
+at the same height whatever heading sits above them. Without it a map inset by a stack of tracks
+stood beside a map that was not, which is a comparison the eye has to correct for before it can
+begin, in the one widget whose entire purpose is that adjacent pictures are comparable.
+
+**Rearranging is a drag, not a pair of arrows.** Every panel has a grip before its name; taking hold
+of one shows the tiling, and dropping a map on a cell **exchanges** the two. `◀` `▶` could only say
+*one place along a list*, which describes a 2 × 2 poorly: moving the bottom-left map to the top-right
+was three presses, each shuffling everything in between. The lead has a name like every other cell
+and **no grip** — it is the session's own view re-parented into cell 0, and which file a session is
+of is not a thing that should change by dragging.
+
+The deck's bar holds only what is shared: the master chain, one scale for all, how many across, and
+one figure of the whole deck. Adding a map is the `+` on an edge and rearranging is the grip, so
+neither is a button here — a bar that repeats what the pictures already offer is a second place to
+look for the same thing.
+
+A companion's scale controls ride **on its picture**: a button in the bottom-left corner of the map,
+opening a menu upward over it, holding the five fields that say what the numbers are and how they
+are drawn — the score, the baseline, the transform, the ramp and the clip. Not the overlay marks,
+which act on a picture the reader is already pointing at and are slower to reach through a menu than
+through the row they came from; and not an export, which the deck's bar now offers for all of them
+at once. A fold *under* each panel — what this replaces — pushed every other panel of the deck down
+by the height of whatever was open in it.
+
+The deck's controls ride **above the grid**, and each panel's scale controls ride **inside that panel**.
 They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
 furniture and each describes the one file the session is of; and one of them — Annotations — does not
 exist at all on a file with a genome layer (§8.5), which is exactly the kind of file a deck is most
@@ -1259,7 +1297,16 @@ the order, and the recipient gets a drop rectangle where the sender's file was. 
 drew empty (§16.9) is the same `~` and travels the same way, so an arrangement nobody has filled yet
 is a link like any other.
 
-Nothing else is in the hash. The lock, the layout, the drawn column count and "one scale" live in the
+`maps` **survives a navigation within one file**, and so does `uri2`. A navigation builds a fresh
+state — `{ uri, view: 'contigs' }` and nothing else — which is right for the region, the genome, the
+level and the pair, and wrong for the two keys that name what is on screen *beside* the view.
+Without carrying them, clicking Chromosomes and then a contig, the plainest way there is to look at
+another chromosome, arrived with no `maps`: the deck reconciled itself to nothing and released its
+workers on the way past a table. Same file **by path**, so changing the resolution keeps the deck
+and opening a different file does not. The carrying is the session's and not the store's — the
+address bar is obeyed exactly as written, or a pasted link would show a deck nobody sent.
+
+Nothing else is in the hash. The lock, the drawn column count and "one scale" live in the
 per-file session memory (§8.6) beside the table filters, on the same grounds: the hash has never
 carried a pan or a zoom, so there is nothing there for a lock to be consistent with, and how many
 columns the grid has is furniture in the sense the width of a side panel is. Which cells are empty is
@@ -1337,6 +1384,14 @@ no file in it and a rectangle where the map goes. Within the session that drew t
 apart in words only — a cell a reader drew says *drop a map here*, and one a link left says a map
 was here — because telling somebody a map used to be in a cell they drew empty a moment ago is a
 small lie about their own deck.
+
+A **collection** dropped into a cell opens one of its maps rather than refusing. An `.mcool` is a
+ladder of complete coolers and is not a map at its root (§3.4), so opening one by name is an error
+about `::` syntax the reader never typed, standing where their picture should be. The rung to land
+on is the **lead's bin size**: two files with the same ladder are comparable at any of them, and the
+finest-regardless rule would put a 1 kb map beside a 16 kb one and call it a comparison. What was
+opened is written back into `maps`, so the link names the map rather than the collection — resolved
+against a recipient's own lead it could otherwise be a different rung.
 
 A file **dropped on an edge** opens the cell that edge names and fills it in one movement, which is
 the gesture a reader tries first. It goes into the first cell that press opened rather than the

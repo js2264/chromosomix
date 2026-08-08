@@ -157,6 +157,7 @@ import {
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
+  readPageBackground,
   scaleForDpi,
 } from './export'
 import { openMenu, type MenuItem } from './Menu'
@@ -311,6 +312,16 @@ export interface MatrixPanelOptions {
    * the contig list. The panel still owns them; only their mount point moves.
    */
   detachedControls?: boolean
+  /**
+   * Put the scale controls **on the picture** rather than in a card.
+   *
+   * For a panel with no sidebar to put a card in — a companion in a deck (§16).
+   * Deliberately not inferred from {@link detachedControls}, which every view
+   * in the app sets: those views detach their cards only to move them into the
+   * Aesthetics column, and a second copy of the same five fields in the corner
+   * of the map would be two controls over one scale.
+   */
+  cornerControls?: boolean
   /**
    * Suppress the panel's own title line.
    *
@@ -532,7 +543,18 @@ export class MatrixPanel {
    * itself is not in it — that is read from the picker, which is where the
    * reader chose it (see {@link keyFor}).
    */
+  private laneListener: ((budget: Record<LaneEdge, number>) => void) | null = null
   private units = ''
+  /** What the score is called, where nothing here chose it. */
+  private scoreLabel = ''
+  /**
+   * The scale menu on the picture, for a panel with no card in a sidebar.
+   *
+   * `null` on the session's own map, which has the Aesthetics column: one
+   * control over one scale, or the two disagree about which of them the reader
+   * last touched.
+   */
+  private readonly settingsEl: HTMLElement | null
   /** Whether the window is too narrow for a key over the picture. */
   private narrow = false
   private readonly heatmap: HeatmapView
@@ -915,6 +937,16 @@ export class MatrixPanel {
       format: (value) => formatCount(inverseTransform(value, this.transform)),
     })
 
+    /**
+     * The fields that answer *what are these numbers, and how are they drawn* —
+     * the score, the baseline, the transform, the ramp and the clip.
+     *
+     * Collected apart from the rest because a panel with no card to put a card
+     * in carries exactly these and none of the others (see {@link settingsEl}).
+     * The same nodes, not copies: a second set of widgets over one scale is two
+     * controls that drift.
+     */
+    const valueFields: HTMLElement[] = []
     const controls: HTMLElement[] = [
       field('transform', transformSelect, 'Value transform, matching `metacooler show --transform`.'),
       field('colormap', colormapSelect, '`afmhot_r` is what `metacooler show` draws (§7.1).'),
@@ -932,6 +964,7 @@ export class MatrixPanel {
         this.clip.el,
       ),
     ]
+    valueFields.push(...controls)
 
     /**
      * One overlay toggle. It *writes* to the shared store and *reads* from the
@@ -1158,7 +1191,7 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      controls.unshift(
+      valueFields.push(
         field(
           'score',
           select,
@@ -1168,6 +1201,7 @@ export class MatrixPanel {
             'this file carries in /pixels, under its own name.',
         ),
       )
+      controls.unshift(valueFields[valueFields.length - 1])
     }
 
     if (options.compare !== undefined) {
@@ -1251,7 +1285,7 @@ export class MatrixPanel {
       const expected = el('input', { class: 'checkbox', type: 'checkbox' })
       expected.checked = derive.expected
       expected.addEventListener('change', () => onExpectedChange(expected.checked))
-      controls.unshift(
+      valueFields.push(
         field(
           'O/E',
           expected,
@@ -1262,6 +1296,7 @@ export class MatrixPanel {
             'it the picture. Drawn on a scale centred at 1.',
         ),
       )
+      controls.unshift(valueFields[valueFields.length - 1])
     }
 
     if (options.levels && options.levels.length > 1) {
@@ -1313,6 +1348,23 @@ export class MatrixPanel {
       ),
     )
 
+    // A panel with no sidebar of its own carries its scale controls **on the
+    // picture**: a button in the bottom-left corner of the map, and a menu that
+    // opens up over it. What used to be there was a `colour and export` fold
+    // *under* the map, which pushed every panel of a deck down by the height of
+    // whatever was open in the one beside it and put a second export control on
+    // screen for a figure nobody had asked to save. The menu holds the five
+    // fields that say what the numbers are and how they are drawn, and nothing
+    // else — the overlay marks act on a picture the reader is pointing at, and
+    // reaching them through a menu is slower than the row they came from.
+    this.settingsEl =
+      options.cornerControls !== true
+        ? null
+        : el(
+            'div',
+            { class: 'map-settings hidden', attrs: { role: 'dialog' } },
+            ...valueFields,
+          )
     this.controlsEl = el(
       'div',
       { class: 'controls-card' },
@@ -1346,6 +1398,7 @@ export class MatrixPanel {
       this.canvas,
       this.overlay,
       this.keySlot,
+      ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     )
 
@@ -1848,6 +1901,47 @@ export class MatrixPanel {
     const size = this.heatmap.cssSize
     this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
     this.keySlot.style.right = `${Math.round(size.width - plot.x - plot.width + KEY_INSET)}px`
+  }
+
+  /**
+   * The corner button and the menu it opens, as one box in the map's foot.
+   *
+   * Closed by a click anywhere else and by Escape, because it covers the
+   * picture: a menu left open over a map is a map the reader cannot read, and
+   * the gesture that dismisses it has to be the one they would try first.
+   */
+  private settingsCorner(menu: HTMLElement): HTMLElement {
+    const toggle = iconButton(
+      'sliders-horizontal',
+      'Colour and values: the score, the baseline, the transform, the ramp and the clip',
+      () => {
+        const open = menu.classList.toggle('hidden')
+        toggle.setAttribute('aria-expanded', String(!open))
+      },
+      { class: 'btn btn-icon map-settings-toggle', size: 15 },
+    )
+    toggle.setAttribute('aria-expanded', 'false')
+    const box = el('div', { class: 'map-settings-corner' }, menu, toggle)
+    const close = (): void => {
+      menu.classList.add('hidden')
+      toggle.setAttribute('aria-expanded', 'false')
+    }
+    // On the document, because the thing a reader clicks to dismiss a menu over
+    // a map is usually the map — and the map's own handlers stop nothing.
+    const onPointer = (event: PointerEvent): void => {
+      if (event.target instanceof Node && box.contains(event.target)) return
+      close()
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    this.laneListeners.push(() => {
+      document.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    })
+    return box
   }
 
   /** Refit the block to the canvas, undoing every pan and zoom. */
@@ -3383,7 +3477,14 @@ export class MatrixPanel {
     // the read that is always known. A derived field that has taken over the
     // square — a ratio, a difference — names itself and nothing else, because
     // there is no longer one file's score in the cells to name.
-    const base = this.comparisonLabel() !== null ? '' : (choice?.label ?? (this.options.balance === true ? 'balanced' : 'count'))
+    const base =
+      this.comparisonLabel() !== null
+        ? ''
+        : (choice?.label ?? this.scoreLabel ?? '') !== ''
+          ? (choice?.label ?? this.scoreLabel)
+          : this.options.balance === true
+            ? 'balanced'
+            : 'count'
     const title = keyTitle([base, this.units], scale.transform, prefix)
     return keyContent(scale, title, (value) => trimNumber(value, 3))
   }
@@ -3811,9 +3912,37 @@ export class MatrixPanel {
     this.viewportListener = listener
   }
 
+  /**
+   * Report how much room this panel's lane stacks take, whenever it changes.
+   *
+   * For a deck, which reserves the same room on every panel beside this one so
+   * the maps line up (§16.5) — including the room a *gap* takes, since a gap
+   * the arithmetic did not know about is a picture pushed down by it. Reported
+   * rather than read, because it changes when a track is added and nothing
+   * outside this panel can know when that was.
+   */
+  setLaneListener(listener: ((budget: Record<LaneEdge, number>) => void) | null): void {
+    this.laneListener = listener
+    if (listener !== null) listener({ ...this.laneBudget })
+  }
+
   /** What this panel is showing, in its own cells, or `null` with no block. */
   viewport(): { rows: [number, number]; cols: [number, number] } | null {
     return this.data === null ? null : this.heatmap.cellWindow()
+  }
+
+  /**
+   * Name the score this panel is drawing, for a panel with no picker of its own.
+   *
+   * A companion in a deck reads whatever the deck resolved and offers no
+   * control over it (§16.2), so the word for it has to arrive from outside —
+   * without this the key called a balanced map `Count`, which is a legend
+   * describing the wrong quantity beside numbers that are right.
+   */
+  setScoreLabel(label: string): void {
+    if (this.scoreLabel === label) return
+    this.scoreLabel = label
+    this.painted = null
   }
 
   /**
@@ -3911,6 +4040,16 @@ export class MatrixPanel {
       `${thickness === 0 ? 0 : thickness + LANE_GAP}px`
     this.grid.style.setProperty('--lane-top', room(next.top))
     this.grid.style.setProperty('--lane-bottom', room(next.bottom))
+    // …and to whoever is laying this panel out beside others. A deck exists so
+    // that N pictures of one place can be compared, and a picture inset by a
+    // stack of tracks beside a picture that is not is a comparison the eye has
+    // to correct for before it can start (§16).
+    this.laneListener?.({
+      top: next.top === 0 ? 0 : next.top + LANE_GAP,
+      right: next.right === 0 ? 0 : next.right + LANE_GAP,
+      bottom: next.bottom === 0 ? 0 : next.bottom + LANE_GAP,
+      left: next.left === 0 ? 0 : next.left + LANE_GAP,
+    })
     // Re-measure *now*, in the same frame, rather than waiting for the resize
     // observer. The observer watches the grid, and the grid's width is the wider
     // of the plot and the lane below it — so a plot that has just shrunk under a
@@ -4574,12 +4713,6 @@ function captionLines(
   }
   if (line !== '') lines.push({ text: line, strong: false })
   return lines
-}
-
-/** The page colour an export is flattened onto — the theme in force. */
-function readPageBackground(): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
-  return value === '' ? '#ffffff' : value
 }
 
 /** The width below which the plot takes the whole column; `styles.css` agrees. */

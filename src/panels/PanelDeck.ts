@@ -59,22 +59,20 @@ import type { SourceSpec } from '../worker/protocol'
 import type { DerivePresentation, MatrixPanel, TurnPresentation } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
-import { icon, iconButton } from '../ui/icons'
+import { downloadBlob, fileStamp, readPageBackground } from '../ui/export'
+import { iconButton } from '../ui/icons'
 import { DeckFrame } from './DeckFrame'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
-  DECK_LAYOUTS,
+  DECK_DRAG_TYPE,
   MAX_PANELS,
-  columnsFor,
   grownDeck,
   grownPlacement,
-  isDeckLayout,
-  moveItem,
   panelBudgetBytes,
   parseMaps,
   sameRefs,
   serialiseMaps,
-  type DeckLayout,
+  swapItems,
   type GrowDirection,
   type PanelRef,
 } from './deck'
@@ -92,6 +90,16 @@ export interface PanelDeckProps {
   onMapsChange(maps: string | undefined): void
   /** Where the per-file preferences are remembered — the session's memory key. */
   memoryKey(): string
+  /**
+   * What to call the session's own map, for the heading over its cell.
+   *
+   * Every cell of a deck says which file it is, the first one included. Without
+   * it the reader has four labelled rectangles and one that is simply *the
+   * page*, and telling which of five conditions the unlabelled one is means
+   * reading the breadcrumb — which is on the other side of the window and says
+   * a region rather than a file.
+   */
+  leadName?(): string | undefined
   /**
    * The derivation every panel of the deck draws (§7.5), or `undefined`.
    *
@@ -123,6 +131,16 @@ export interface PanelDeckProps {
    * block is on screen, and it is not what a resolution ladder is indexed by.
    */
   binsize?(): number | undefined
+  /**
+   * The score the session's own map resolved to — `count`, `balanced`, `ICE`, a
+   * column name.
+   *
+   * Shared as a resolved id, because the *default* is a fact about a file and
+   * is not in the hash: a cooler somebody balanced opens balanced. Two panels
+   * each applying their own default disagreed silently, which is the one thing
+   * a deck must not do about a quantity.
+   */
+  score?(): string | undefined
 }
 
 /**
@@ -154,6 +172,16 @@ interface Slot {
  * In the deck's own bar and on the `+` edges rather than on an error screen: a
  * refusal to open a *seventh* map is not a reason to take the six away.
  */
+/**
+ * What a deck-wide figure is rasterised at, and the air between its cells.
+ *
+ * A fixed 300 dpi rather than a picker of its own: the per-panel export already
+ * has one, and a second dpi control in the deck's bar would be a shared setting
+ * that is not shared with anything. 300 is what a figure is for.
+ */
+const DECK_EXPORT_DPI = 300
+const DECK_EXPORT_GAP = 0.02
+
 const NO_ROOM =
   `${MAX_PANELS} maps is the limit for one deck. Every panel is a worker and, for a ` +
   'whole-file view, a block held in memory — and each one added makes every panel’s share of ' +
@@ -166,7 +194,8 @@ export class PanelDeck {
   readonly el: HTMLElement
   private readonly toolbar: HTMLElement
   private readonly grid: HTMLElement
-  private readonly leadCell = el('div', { class: 'deck-panel is-lead' })
+  private readonly leadHead = el('header', { class: 'deck-head deck-head-lead hidden' })
+  private readonly leadCell = el('div', { class: 'deck-panel is-lead' }, this.leadHead)
   private readonly addRow: HTMLElement
   private readonly urlInput: HTMLInputElement
   /** A refusal about the deck as a whole, rather than about one panel. */
@@ -179,19 +208,19 @@ export class PanelDeck {
   private readonly lock = new ViewportLock()
   private lead: MatrixPanel | null = null
   private leadLocked = true
-  private layout: DeckLayout = 'row'
   /**
-   * The column count the reader **drew**, or `null` to follow {@link layout}.
+   * How many cells are in a row, or `null` for one row of everything.
    *
-   * Two ways of saying the same thing, and both are needed. The three preset
-   * buttons answer "arrange what is here", which is a function of how many maps
-   * there are — `row` of four stays a row when a fifth arrives. A `+` answers
-   * "make it this shape", which is a number, and it has to survive a map being
-   * added or closed or it is not a shape at all: draw a 2 × 2, close one map,
-   * and a preset would silently reflow the remaining three into a row.
+   * The deck's whole shape, as one number. It used to be three preset buttons —
+   * row, column, near-square — which answered "arrange however many maps are
+   * here" and were therefore a function of the count: a `row` of four stayed a
+   * row when a fifth arrived. A drawn deck (§16.9) needs the other thing, a
+   * shape that *survives* the count changing, or closing one map out of a 2 × 2
+   * silently reflows the other three into a row.
    *
-   * A preset click clears this and a `+` sets it, so exactly one of the two is
-   * in charge at any moment and no lit button ever disagrees with the grid.
+   * Set by a `+` on an edge and by the columns picker in the bar, which is the
+   * preset row's honest replacement: it says the same thing the three buttons
+   * said, in the vocabulary the grid is actually in.
    */
   private columns: number | null = null
   /** Whether the lead's clip is pushed down to every companion (§16.2). */
@@ -214,7 +243,6 @@ export class PanelDeck {
   private destroyed = false
 
   constructor(private readonly props: PanelDeckProps) {
-    this.layout = this.recallLayout()
     this.columns = this.recallColumns()
     this.shareLook = recall<boolean>(props.memoryKey(), 'deck:share-look') === true
 
@@ -242,6 +270,7 @@ export class PanelDeck {
     })
 
     this.grid = el('div', { class: 'deck-grid' }, this.leadCell)
+    this.watchArranging()
     this.toolbar = el('div', { class: 'deck-bar' })
     // The same edges the session was showing a moment ago, now round the grid
     // instead of round one map — which is the whole reason they are a component
@@ -272,7 +301,8 @@ export class PanelDeck {
    * been without a deck, one grid cell further in.
    */
   frame(lead: HTMLElement): HTMLElement {
-    this.leadCell.replaceChildren(lead)
+    this.paintLeadHead()
+    this.leadCell.replaceChildren(this.leadHead, lead)
     return this.el
   }
 
@@ -284,10 +314,15 @@ export class PanelDeck {
    * previous one would drive a canvas nobody can see.
    */
   setLead(panel: MatrixPanel | null): void {
-    if (this.lead !== null && this.lead !== panel) this.lead.setViewportListener(null)
+    if (this.lead !== null && this.lead !== panel) {
+      this.lead.setViewportListener(null)
+      this.lead.setLaneListener(null)
+    }
     this.lead = panel
     this.lock.leave(LEAD)
+    panel?.setLaneListener((budget) => this.alignTo(budget))
     if (panel === null) {
+      this.alignTo({ top: 0, right: 0, bottom: 0, left: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
       // is about the lead and there is now nothing for it to hold.
       this.paintBar()
@@ -378,7 +413,26 @@ export class PanelDeck {
     // mounted view, so a listener left on it would go on reporting into a lock
     // nothing can reach, once per frame, for as long as that view is on screen.
     this.lead?.setViewportListener(null)
+    this.lead?.setLaneListener(null)
     this.lead = null
+  }
+
+  /**
+   * Reserve, on every companion, the room the lead's tracks take.
+   *
+   * The deck's whole promise is that the pictures in it are of one place and
+   * can be read against each other, and a map inset by a stack of tracks beside
+   * a map that is not is a comparison the eye has to correct for first. A
+   * companion carries no lanes of its own (§16.8), so the room is *reserved*
+   * rather than filled: four paddings on its grid, which take exactly what the
+   * lead's stacks take out of its own, and leave every map the same size at the
+   * same place in its cell.
+   */
+  private alignTo(budget: Record<'top' | 'right' | 'bottom' | 'left', number>): void {
+    for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
+      this.grid.style.setProperty(`--deck-lane-${edge}`, `${Math.max(0, budget[edge])}px`)
+    }
+    for (const slot of this.slots) slot.panel?.remeasure()
   }
 
   // -------------------------------------------------------------------------
@@ -442,7 +496,6 @@ export class PanelDeck {
         origin,
         onOpen: (file) => this.fill(slot, file),
         onClose: () => this.remove(slot),
-        onMove: (delta) => this.move(slot, delta),
       })
       return slot
     }
@@ -464,6 +517,7 @@ export class PanelDeck {
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
+      score: () => this.props.score?.(),
       // The lead's scale, clip included. A map opened beside another is opened
       // to be compared with it, and a comparison whose two halves are on two
       // clips is one the eye has to correct for before it can read anything —
@@ -476,7 +530,7 @@ export class PanelDeck {
       initialLook: () => this.leadBaseLook(),
       preferBinsize: () => this.props.binsize?.(),
       onResolved: (uri) => this.resolveRef(slot, uri),
-      onMove: (delta) => this.move(slot, delta),
+      onDragChange: (dragging) => this.setArranging(dragging),
     })
     slot.panel.syncLock()
     return slot
@@ -591,11 +645,76 @@ export class PanelDeck {
     if (slot.locked) this.lock.catchUp(slot.id)
   }
 
-  private move(slot: Slot, delta: number): void {
-    const from = this.slots.indexOf(slot)
-    const to = from + delta
-    if (from < 0 || to < 0 || to >= this.slots.length) return
-    this.slots = moveItem(this.slots, from, to)
+  /**
+   * The grid's half of the grip gesture: every cell but the lead's is a target.
+   *
+   * Delegated to the grid rather than wired per cell, because the cells are
+   * rebuilt on every change to the deck and a listener per cell is a listener
+   * per rebuild. The **lead is excluded** — it is the session's own view
+   * re-parented into cell 0, and which file a session is of is not a thing that
+   * should change by dragging (§16.9).
+   */
+  private watchArranging(): void {
+    const cellAt = (target: EventTarget | null): HTMLElement | null => {
+      if (!(target instanceof Node)) return null
+      const node = target instanceof Element ? target : target.parentElement
+      const cell = node?.closest('.deck-panel') ?? null
+      if (cell === null || cell.classList.contains('is-lead')) return null
+      return this.grid.contains(cell) ? (cell as HTMLElement) : null
+    }
+    const indexOf = (cell: HTMLElement): number =>
+      Array.prototype.indexOf.call(this.grid.children, cell) - 1
+    this.grid.addEventListener('dragover', (event) => {
+      // Only a map. A *file* dropped on a cell is a different gesture with a
+      // different answer, and it is the cell's own (`MapPanel.VacantPanel`).
+      if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true) return
+      const cell = cellAt(event.target)
+      if (cell === null) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      for (const other of this.grid.children) other.classList.toggle('is-target', other === cell)
+    })
+    this.grid.addEventListener('drop', (event) => {
+      if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE) !== true) return
+      const cell = cellAt(event.target)
+      this.setArranging(false)
+      if (cell === null) return
+      event.preventDefault()
+      const from = this.slots.findIndex((slot) => slot.panel?.el.classList.contains('is-dragging') === true)
+      if (from >= 0) this.swap(from, indexOf(cell))
+    })
+    this.grid.addEventListener('dragleave', (event) => {
+      if (event.relatedTarget instanceof Node && this.grid.contains(event.relatedTarget)) return
+      for (const other of this.grid.children) other.classList.remove('is-target')
+    })
+  }
+
+  /**
+   * Show the tiling while a map is being dragged, and hide it after.
+   *
+   * The cells are only worth seeing as *cells* while something is looking for
+   * one: a permanent outline round every panel would be a grid drawn over four
+   * pictures for the benefit of a gesture nobody is making.
+   */
+  private setArranging(on: boolean): void {
+    this.grid.classList.toggle('is-arranging', on)
+    if (!on) for (const cell of this.grid.children) cell.classList.remove('is-target')
+  }
+
+  /**
+   * Exchange two cells — the drop half of the grip gesture.
+   *
+   * A swap rather than an insert; see {@link swapItems}. The lead is not in
+   * `slots` and cannot be either end of one, which is §16.9's rule showing
+   * through: the first map is the session's own view re-parented into cell 0,
+   * and "which file is this session of" is not a thing that should change by
+   * dragging.
+   */
+  private swap(from: number, to: number): void {
+    if (from === to) return
+    const next = swapItems(this.slots, from, to)
+    if (next === this.slots) return
+    this.slots = next
     this.paintGrid()
     this.publish()
   }
@@ -775,6 +894,31 @@ export class PanelDeck {
     this.applyLayout()
   }
 
+  /**
+   * The heading over the session's own cell: its name, and no grip.
+   *
+   * No grip because the first map is always the lead (§16.9) — it is the
+   * session's view re-parented into cell 0, it owns the breadcrumb and the
+   * tables and the tracks, and "which file is this session of" is not a thing
+   * that should change by dragging. A name, because every other cell has one.
+   */
+  private paintLeadHead(): void {
+    const name = this.props.leadName?.()
+    if (name === undefined) {
+      this.leadHead.replaceChildren()
+      this.leadHead.classList.add('hidden')
+      return
+    }
+    this.leadHead.classList.remove('hidden')
+    this.leadHead.replaceChildren(
+      el('span', {
+        class: 'deck-name',
+        text: name,
+        title: `${name} — the map this session is of, and the one the others follow`,
+      }),
+    )
+  }
+
   private applyLayout(): void {
     const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
     this.grid.style.setProperty('--deck-columns', String(shape.columns))
@@ -803,7 +947,10 @@ export class PanelDeck {
    */
   private columnsNow(): number {
     const cells = this.slots.length + 1
-    if (this.columns === null) return columnsFor(cells, this.layout)
+    // One row of everything until somebody says otherwise, which is what a deck
+    // assembled a file at a time — through the palette, or from a link — has
+    // always been: side by side is how a figure compares conditions.
+    if (this.columns === null) return cells
     return Math.min(Math.max(1, this.columns), cells)
   }
 
@@ -823,34 +970,6 @@ export class PanelDeck {
     const cells = this.slots.length + 1
     const filled = this.filled
     const empty = cells - filled
-    const add = button('', () => this.toggleAdd(), {
-      class: 'btn deck-plus',
-      title:
-        empty === 0
-          ? 'Open another map beside these'
-          : 'Open a map in the first empty cell of the deck',
-    })
-    add.replaceChildren(icon('plus', { size: 14 }), el('span', { text: 'add a map' }))
-
-    // Lit only where the reader has not drawn a shape of their own. A `+` sets
-    // a column count that is generally none of the three, and a preset left
-    // glowing under it would claim the grid is an arrangement it is not.
-    const chosen = this.columns === null
-    const layoutButtons = DECK_LAYOUTS.map((name) => {
-      const on = chosen && this.layout === name
-      const control = iconButton(
-        name === 'row' ? 'columns-2' : name === 'column' ? 'rows-3' : 'grid-2x2',
-        name === 'row'
-          ? 'Side by side, which is how a figure compares conditions'
-          : name === 'column'
-            ? 'Stacked, for a narrow window'
-            : 'A near-square grid, which is what keeps four maps large enough to read',
-        () => this.setLayout(name),
-        { class: `btn btn-icon deck-layout${on ? ' is-on' : ''}`, size: 14 },
-      )
-      control.setAttribute('aria-pressed', String(on))
-      return control
-    })
 
     const share = button(this.shareLook ? 'one scale' : 'own scales', () => this.toggleShare(), {
       class: `btn btn-quiet deck-share${this.shareLook ? ' is-on' : ''}`,
@@ -874,6 +993,24 @@ export class PanelDeck {
       { class: `btn btn-icon deck-lock${this.leadLocked ? '' : ' is-off'}`, size: 14 },
     )
 
+    // The preset row's honest replacement, and the only control here that is
+    // about the deck's *shape*. Without it a deck that arrived in a link could
+    // never be reshaped at all: a `+` only ever grows one.
+    const columns = el('select', { class: 'select select-tiny deck-columns' })
+    for (let n = 1; n <= cells; n++) {
+      columns.appendChild(el('option', { value: String(n), text: `${n} across` }))
+    }
+    columns.value = String(this.columnsNow())
+    columns.title = 'How many maps in a row. A `+` on an edge opens cells; this arranges them.'
+    columns.addEventListener('change', () => this.setColumns(Number(columns.value)))
+
+    const save = iconButton(
+      'download',
+      'Save the whole deck as one figure, laid out as it is on screen',
+      () => void this.saveDeck(),
+      { class: 'btn btn-icon deck-save', size: 14 },
+    )
+
     this.toolbar.replaceChildren(
       el('span', {
         class: 'deck-count',
@@ -889,10 +1026,59 @@ export class PanelDeck {
       }),
       leadLock,
       el('span', { class: 'deck-spacer' }),
-      ...layoutButtons,
+      columns,
       share,
-      add,
+      save,
     )
+  }
+
+  /**
+   * Save the whole deck as one figure, laid out as it is on screen.
+   *
+   * The thing somebody assembling a figure actually wants, and the one export
+   * no panel can produce for itself. Each panel draws its own — the same
+   * `exportCanvas` the single map has always had, at the same dpi, with its own
+   * key in its own corner — and they are placed into the grid the reader drew,
+   * every cell the size of the largest so the columns line up. An empty cell is
+   * left empty rather than closed up: it is part of the arrangement, and a
+   * figure that silently reflowed on the way to disk would not be the picture
+   * that was on screen.
+   */
+  private async saveDeck(): Promise<void> {
+    const now = new Date()
+    const maps = [this.lead, ...this.slots.map((slot) => slot.panel?.map ?? null)]
+    const drawn = maps.map((panel) => {
+      try {
+        return panel === null ? null : panel.exportCanvas(DECK_EXPORT_DPI, now)
+      } catch {
+        // One panel past what a browser will rasterise must not take the other
+        // five with it; the gap says which one, and every other cell is right.
+        return null
+      }
+    })
+    const cellWidth = Math.max(1, ...drawn.map((canvas) => canvas?.width ?? 0))
+    const cellHeight = Math.max(1, ...drawn.map((canvas) => canvas?.height ?? 0))
+    const columns = this.columnsNow()
+    const rows = Math.ceil(drawn.length / columns)
+    const gap = Math.round(cellWidth * DECK_EXPORT_GAP)
+
+    const out = document.createElement('canvas')
+    out.width = columns * cellWidth + (columns - 1) * gap
+    out.height = rows * cellHeight + (rows - 1) * gap
+    const ctx = out.getContext('2d')
+    if (ctx === null) return
+    ctx.fillStyle = readPageBackground()
+    ctx.fillRect(0, 0, out.width, out.height)
+    drawn.forEach((canvas, cell) => {
+      if (canvas === null) return
+      const column = cell % columns
+      const row = Math.floor(cell / columns)
+      ctx.drawImage(canvas, column * (cellWidth + gap), row * (cellHeight + gap))
+    })
+
+    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+    if (blob === null) return
+    downloadBlob(blob, `deck-${fileStamp(now)}-${DECK_EXPORT_DPI}dpi.png`)
   }
 
   private warn(message: string): void {
@@ -900,26 +1086,14 @@ export class PanelDeck {
     this.warning.classList.toggle('hidden', message === '')
   }
 
-  private toggleAdd(): void {
-    this.addRow.classList.toggle('hidden')
-    if (!this.addRow.classList.contains('hidden')) this.urlInput.focus()
-  }
-
   /** Rows the grid needs for the cells it has, at the current column count. */
   private rows(): number {
     return Math.ceil((this.slots.length + 1) / this.columnsNow())
   }
 
-  private setLayout(layout: DeckLayout): void {
-    this.layout = layout
-    // A preset is the reader saying "arrange what is here", which is the answer
-    // to a different question from the one a `+` answers — so it takes the
-    // drawn column count off rather than fighting it. Forgotten as well as
-    // cleared: a shape that came back on the next reload while the bar showed a
-    // preset lit is the one state these two settings must never be in together.
-    this.columns = null
-    remember(this.props.memoryKey(), 'deck:layout', layout)
-    remember(this.props.memoryKey(), 'deck:columns', null)
+  private setColumns(columns: number): void {
+    this.columns = columns
+    remember(this.props.memoryKey(), 'deck:columns', columns)
     this.applyLayout()
     this.paintBar()
   }
@@ -970,11 +1144,6 @@ export class PanelDeck {
       ...(base.vmin === undefined ? {} : { vmin: base.vmin }),
       ...(base.vmax === undefined ? {} : { vmax: base.vmax }),
     }
-  }
-
-  private recallLayout(): DeckLayout {
-    const stored = recall<string>(this.props.memoryKey(), 'deck:layout')
-    return isDeckLayout(stored) ? stored : 'row'
   }
 
   /**

@@ -277,3 +277,15 @@ export function largestDpiThatFits(
   const ok = [...choices].sort((a, b) => b - a).find(fits)
   return ok ?? null
 }
+
+/**
+ * The page colour an export is flattened onto — the theme in force.
+ *
+ * Here rather than beside the one figure that used to draw it, because a deck
+ * flattens its cells onto the same ground and two readings of `--bg` are two
+ * chances for a figure and the figure beside it to disagree about what white is.
+ */
+export function readPageBackground(): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+  return value === '' ? '#ffffff' : value
+}
