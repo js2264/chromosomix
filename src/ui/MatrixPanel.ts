@@ -808,6 +808,16 @@ export class MatrixPanel {
   private readonly laneListeners: Array<() => void> = []
   /** The stack thicknesses the stylesheet was last told about, per edge. */
   private laneBudget: Record<LaneEdge, number> = { top: -1, right: -1, bottom: -1, left: -1 }
+  /**
+   * Room to leave on each edge whether or not this panel has a stack there.
+   *
+   * Zero on its own, and set by a deck to the largest any of its panels needs
+   * (§16.8). Kept apart from {@link laneBudget} rather than folded into it, so
+   * that {@link reportGeometry} keeps answering with what this panel's *own*
+   * tracks take: a deck that was told the reserved figure back would raise the
+   * floor to its own floor for ever.
+   */
+  private laneFloor: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(private readonly options: MatrixPanelOptions) {
     this.transform = options.initial?.transform ?? 'log1p'
@@ -4013,17 +4023,16 @@ export class MatrixPanel {
    * because a stack of one still needs the space between it and the map.
    */
   laneExtent(edge: LaneEdge): number {
-    const room = this.laneBudget[edge]
-    return room === 0 ? 0 : room + LANE_GAP
+    return this.roomOn(edge)
   }
 
   private reportGeometry(): void {
     this.laneListener?.({
       lanes: {
-        top: this.laneBudget.top === 0 ? 0 : this.laneBudget.top + LANE_GAP,
-        right: this.laneBudget.right === 0 ? 0 : this.laneBudget.right + LANE_GAP,
-        bottom: this.laneBudget.bottom === 0 ? 0 : this.laneBudget.bottom + LANE_GAP,
-        left: this.laneBudget.left === 0 ? 0 : this.laneBudget.left + LANE_GAP,
+        top: this.roomOn('top'),
+        right: this.roomOn('right'),
+        bottom: this.roomOn('bottom'),
+        left: this.roomOn('left'),
       },
       plot: this.heatmap.cssSize.width,
     })
@@ -4152,13 +4161,7 @@ export class MatrixPanel {
     }
     if (LANE_EDGES.every((edge) => next[edge] === this.laneBudget[edge])) return
     this.laneBudget = next
-    // The gap the grid keeps between a stack and the map is part of the budget:
-    // it is arithmetic in a stylesheet, and a gap the arithmetic did not know
-    // about is a gap the map is pushed down by.
-    const room = (thickness: number): string =>
-      `${thickness === 0 ? 0 : thickness + LANE_GAP}px`
-    this.grid.style.setProperty('--lane-top', room(next.top))
-    this.grid.style.setProperty('--lane-bottom', room(next.bottom))
+    this.writeLaneMetrics()
     // …and to whoever is laying this panel out beside others. A deck exists so
     // that N pictures of one place can be compared, and a picture inset by a
     // stack of tracks beside a picture that is not is a comparison the eye has
@@ -4172,6 +4175,67 @@ export class MatrixPanel {
     // the one forced layout in the draw path, and it happens only when a lane is
     // added, removed or resized.
     this.heatmap.resize()
+  }
+
+  /**
+   * Reserve room on each edge that this panel's own tracks do not fill.
+   *
+   * A deck's promise is that its pictures are of one place and can be read
+   * against each other, and that survives only if every map is the same size at
+   * the same height in its cell. Once a track can be placed on one map and not
+   * on the next (§16.8) that stops being free: a companion with a strip above it
+   * and a lead without one draw the same window at two heights, and the eye has
+   * to correct for the offset before it can start.
+   *
+   * So the deck reserves the *largest* stack any of its panels has on each edge
+   * and hands the figure to all of them; each pads out the difference between
+   * that and its own. A panel on its own is never given one, and nothing about
+   * its layout changes.
+   */
+  setLaneFloor(floor: Record<LaneEdge, number>): void {
+    if (LANE_EDGES.every((edge) => floor[edge] === this.laneFloor[edge])) return
+    this.laneFloor = { ...floor }
+    this.writeLaneMetrics()
+    // The floor changes the plot's height budget, and the observer on the grid
+    // will not see it: the grid's box is unchanged, only what is inside it.
+    this.heatmap.resize()
+  }
+
+  /**
+   * What this panel's own stack takes on one edge, gap included.
+   *
+   * Zero for an empty edge, because a stack that is not there needs no air
+   * between itself and the map.
+   */
+  private roomOn(edge: LaneEdge): number {
+    const thickness = this.laneBudget[edge]
+    return thickness <= 0 ? 0 : thickness + LANE_GAP
+  }
+
+  /**
+   * Tell the stylesheet what the stacks cost, this panel's own and the deck's.
+   *
+   * Two mechanisms, because room above the map does not cost the same thing as
+   * room beside it. The **padding** is where the reserved room physically is,
+   * which is what puts every picture at the same height in its cell. The two
+   * custom properties are the *height budget* the square is computed from —
+   * `.heatmap-wrap` is `100vh` minus its furniture — and they carry the deck's
+   * figure rather than this panel's, because two squares computed from two
+   * different budgets come out two different sizes however they are padded.
+   */
+  private writeLaneMetrics(): void {
+    for (const edge of LANE_EDGES) {
+      const pad = Math.max(0, this.laneFloor[edge] - this.roomOn(edge))
+      this.grid.style.setProperty(`--lane-pad-${edge}`, `${pad}px`)
+    }
+    this.grid.style.setProperty(
+      '--lane-top',
+      `${Math.max(this.roomOn('top'), this.laneFloor.top)}px`,
+    )
+    this.grid.style.setProperty(
+      '--lane-bottom',
+      `${Math.max(this.roomOn('bottom'), this.laneFloor.bottom)}px`,
+    )
   }
 
   /**

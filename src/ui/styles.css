@@ -5193,28 +5193,19 @@ p {
   margin-top: auto;
 }
 
-/* The room the *lead's* tracks take, reserved on every panel beside it — see
-   `PanelDeck.alignTo`. A companion has no lanes of its own, so without this its
-   plot is as wide as its cell while the lead's is inset by a stack, and two
-   pictures of one place come out at two sizes.
+/* The difference between what this panel's own tracks take on an edge and what
+   the deepest stack in the deck takes there — see `MatrixPanel.writeLaneMetrics`,
+   which is what writes these. Without it a map with a strip above it and a map
+   without one draw the same window at two heights, and two pictures of one place
+   have to be corrected for before they can be read against each other.
 
-   Two mechanisms, because a lane above or below the map does not cost the same
-   thing as one beside it. **Left and right** come out of the grid's middle
-   column, so a padding takes the same width away. **Top and bottom** come out
-   of the plot's own height *budget* — `.heatmap-wrap` is square and sized off
-   `100vh` minus its furniture — so the same room has to arrive as the same two
-   custom properties the lead's own grid writes, or the two squares are computed
-   from two different heights and come out different sizes. Written on the wrap
-   itself, which is inside `.panel-grid`: a companion's grid writes `0px` there
-   for stacks it does not have, and an inherited value would lose to it. */
-.deck-panel:not(.is-lead) .panel-grid {
-  /* The padding is where the room *is*, which is what puts every picture at the
-     same height in its cell; the two properties below are what makes them the
-     same size. Both are needed: a bottom stack takes 94 px out of the lead's
-     height budget **and** stands 94 px below its map, and a companion that
-     matched only the first drew the same square 94 px lower. */
-  padding: var(--deck-lane-top, 0px) var(--deck-lane-right, 0px) var(--deck-lane-bottom, 0px)
-    var(--deck-lane-left, 0px);
+   `--deck-lane-*` on the grid is the reserved figure itself, kept for anything
+   that wants to know how much room a deck is holding; the padding is per panel,
+   because how much of that figure is already filled is per panel. Zero outside a
+   deck, where nothing sets a floor and the property never resolves. */
+.panel-grid {
+  padding: var(--lane-pad-top, 0px) var(--lane-pad-right, 0px) var(--lane-pad-bottom, 0px)
+    var(--lane-pad-left, 0px);
 }
 
 /* And the size itself, from the lead's own measurement rather than from the
@@ -5223,8 +5214,6 @@ p {
    out at its 20rem floor while the other was capped by its column. A number is
    the only thing that cannot be derived two ways. */
 .deck-panel:not(.is-lead) .heatmap-wrap {
-  --lane-top: var(--deck-lane-top, 0px);
-  --lane-bottom: var(--deck-lane-bottom, 0px);
   width: var(--deck-plot, 100%);
   max-width: 100%;
   flex: 0 0 auto;
@@ -5469,4 +5458,38 @@ p {
 .ann-place-count {
   font-size: 0.7rem;
   color: var(--muted);
+}
+
+/* With more than one map the field cannot stay on one line. The label column is
+   3.6rem and a map's name wants most of what is left, which took the four edges
+   down to about 190px between them: `bottom` came out as `bott` — the single
+   thing the segmented control was laid out to avoid — and both names came out
+   as `Ecoli.mcool…`, truncated at exactly the point where they stop being the
+   same file. Two labels that read alike are worse than none.
+
+   So the field turns on its side: `location` over the rows, each map's name
+   over its own edges. A session with one map has no name to show and keeps the
+   single row it has always had. */
+.ann-field-places.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.ann-field-places.is-stacked > .field-label {
+  flex: 0 0 auto;
+}
+
+.ann-field-places.is-stacked .ann-place-maps {
+  gap: 0.4rem;
+}
+
+.ann-field-places.is-stacked .ann-place-map {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.1rem;
+}
+
+.ann-field-places.is-stacked .ann-place-name {
+  flex: 0 0 auto;
 }

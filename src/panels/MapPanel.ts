@@ -234,6 +234,8 @@ export class MapPanel {
    * that say what they are doing.
    */
   private panel: MatrixPanel | null = null
+  /** The deck's reserved lane room, held until there is a panel to give it to. */
+  private laneFloor: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
   private readonly client = new ReaderClient()
   private readonly body = el('div', { class: 'deck-body' })
   private readonly note = el('p', { class: 'deck-note' })
@@ -401,6 +403,18 @@ export class MapPanel {
    */
   laneRoom(edge: LaneEdge): number {
     return this.panel?.laneExtent(edge) ?? 0
+  }
+
+  /**
+   * Room to leave on each edge, whatever this panel's own tracks take.
+   *
+   * Held here as well as pushed down, because the matrix panel is built lazily —
+   * the first block is what creates it — and a floor set while a companion was
+   * still reading would otherwise be lost.
+   */
+  setLaneFloor(floor: Record<LaneEdge, number>): void {
+    this.laneFloor = { ...floor }
+    this.panel?.setLaneFloor(this.laneFloor)
   }
 
   remeasure(): void {
@@ -657,6 +671,8 @@ export class MapPanel {
       // Reported for the deck's benefit, not this panel's: a companion lays
       // nothing out, but the room its stack takes is the deck's business.
       this.panel.setLaneListener(() => this.props.onLanes?.())
+      // Whatever the deck reserved while this panel was still reading its file.
+      this.panel.setLaneFloor(this.laneFloor)
       this.body.replaceChildren(this.panel.el)
     }
     // After the panel exists, and on every block. `readBlock` runs *before* the

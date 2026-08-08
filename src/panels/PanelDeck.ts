@@ -75,6 +75,7 @@ import {
   grownDeck,
   grownPlacement,
   panelBudgetBytes,
+  deepestStacks,
   parseMaps,
   sameRefs,
   serialiseMaps,
@@ -84,6 +85,7 @@ import {
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
 import { LEAD_MAP } from '../annotations/placement'
+import { LANE_EDGES } from '../annotations/types'
 import { fileLabel } from '../ui/labels'
 
 /** The id the lock knows the session's own map by. */
@@ -242,6 +244,19 @@ export class PanelDeck {
   private lead: MatrixPanel | null = null
   private leadLocked = true
   /**
+   * The lead's last report, kept because the alignment is recomputed without it.
+   *
+   * A companion whose stack changes has to raise the deck's floor, and it has
+   * no way to ask the lead what its own geometry is — that arrives as a push.
+   * So the last one is held rather than the figures derived from it.
+   */
+  private leadGeometry: PanelGeometry = {
+    lanes: { top: 0, right: 0, bottom: 0, left: 0 },
+    plot: 0,
+  }
+  /** Guards {@link align} against the reports its own writes provoke. */
+  private aligning = false
+  /**
    * How many cells are in a row, or `null` for one row of everything.
    *
    * The deck's whole shape, as one number. It used to be three preset buttons —
@@ -396,10 +411,10 @@ export class PanelDeck {
     }
     this.lead = panel
     this.lock.leave(LEAD)
-    panel?.setLaneListener((budget) => this.alignTo(budget))
+    panel?.setLaneListener((budget) => this.align(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
     if (panel === null) {
-      this.alignTo({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0 })
+      this.align({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
       // is about the lead and there is now nothing for it to hold.
       this.paintBar()
@@ -512,6 +527,9 @@ export class PanelDeck {
     this.lead?.setViewportListener(null)
     this.lead?.setLaneListener(null)
     this.lead?.setHoverListener(null)
+    // …and the room it was holding for maps that are no longer beside it, or the
+    // last panel put down would leave the first one padded out for ever.
+    this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
     this.lead = null
   }
 
@@ -560,28 +578,59 @@ export class PanelDeck {
   }
 
   /**
-   * Reserve, on every companion, the room the lead's tracks take.
+   * Reserve, on every panel, the room the *deepest* stack on each edge takes.
    *
    * The deck's whole promise is that the pictures in it are of one place and
    * can be read against each other, and a map inset by a stack of tracks beside
-   * a map that is not is a comparison the eye has to correct for first. A
-   * companion carries no lanes of its own (§16.8), so the room is *reserved*
-   * rather than filled: four paddings on its grid, which take exactly what the
-   * lead's stacks take out of its own, and leave every map the same size at the
-   * same place in its cell.
+   * a map that is not is a comparison the eye has to correct for first.
+   *
+   * This used to be the lead's own geometry pushed onto companions that had no
+   * lanes at all. They can have them now — a track goes on any edge of any map
+   * (§16.8) — so the figure is the largest across the deck, and every panel
+   * including the lead pads out the difference between that and its own stack.
+   *
+   * **Pulled, not accumulated.** Each panel announces its stacks whenever they
+   * change, and the announcements arrive in no particular order — a companion
+   * that finishes reading first reports before the lead has drawn anything. A
+   * maximum kept as panels report is therefore a maximum over whoever has
+   * spoken so far, which reserved nothing at all on the first pass; asking all
+   * of them at the moment of use has no such order to get wrong.
    */
-  private alignTo(geometry: PanelGeometry): void {
-    for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
-      this.grid.style.setProperty(`--deck-lane-${edge}`, `${Math.max(0, geometry.lanes[edge])}px`)
+  private align(geometry: PanelGeometry | null): void {
+    if (geometry !== null) this.leadGeometry = geometry
+    // A floor set on a panel resizes its plot, which is a report, which lands
+    // back here. The floors are idempotent, so the second pass changes nothing
+    // and stops — but it is still a layout per panel per pass, and this runs
+    // from a resize observer.
+    if (this.aligning) return
+    this.aligning = true
+    try {
+      const held = this.leadGeometry
+      const floor = deepestStacks([
+        held.lanes,
+        ...this.slots.map((slot) => ({
+          top: slot.panel?.laneRoom('top') ?? 0,
+          right: slot.panel?.laneRoom('right') ?? 0,
+          bottom: slot.panel?.laneRoom('bottom') ?? 0,
+          left: slot.panel?.laneRoom('left') ?? 0,
+        })),
+      ])
+      for (const edge of LANE_EDGES) {
+        this.grid.style.setProperty(`--deck-lane-${edge}`, `${floor[edge]}px`)
+      }
+      this.lead?.setLaneFloor(floor)
+      for (const slot of this.slots) slot.panel?.setLaneFloor(floor)
+      // The lead's plot size, **measured**, not derived a second time from the
+      // same variables. A companion sized by the same stylesheet still lands
+      // somewhere else — its cell holds different content, so one `clamp`
+      // bottoms out where the other is capped by its column — and there is no
+      // reading of the rules that fixes that, only a number both can be given.
+      const plot = Math.round(held.plot)
+      this.grid.style.setProperty('--deck-plot', plot > 0 ? `${plot}px` : '')
+      for (const slot of this.slots) slot.panel?.remeasure()
+    } finally {
+      this.aligning = false
     }
-    // The lead's plot size, **measured**, not derived a second time from the
-    // same variables. A companion sized by the same stylesheet still lands
-    // somewhere else — its cell holds different content, so one `clamp` bottoms
-    // out where the other is capped by its column — and there is no reading of
-    // the rules that fixes that, only a number both can be given.
-    const plot = Math.round(geometry.plot)
-    this.grid.style.setProperty('--deck-plot', plot > 0 ? `${plot}px` : '')
-    for (const slot of this.slots) slot.panel?.remeasure()
   }
 
   // -------------------------------------------------------------------------
@@ -667,6 +716,9 @@ export class PanelDeck {
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
       annotations: () => this.props.annotations?.(slot.id),
+      // A track placed on this panel alone changes what every other panel has
+      // to leave room for, so its own stacks are the deck's business (§16.8).
+      onLanes: () => this.align(null),
       score: () => this.props.score?.(),
       // The lead's scale, clip included. A map opened beside another is opened
       // to be compared with it, and a comparison whose two halves are on two

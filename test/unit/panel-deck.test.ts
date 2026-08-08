@@ -19,6 +19,7 @@ import {
   MAX_PANELS,
   VACANT,
   columnsFor,
+  deepestStacks,
   grownDeck,
   grownPlacement,
   swapItems,
@@ -485,5 +486,39 @@ describe('a member that carries the separator', () => {
     // And the separator is still legible for the ordinary case it exists for.
     expect(serialiseMaps([{ kind: 'remote', uri: 'a.cool' }, { kind: 'remote', uri: 'b.cool' }]))
       .toBe('a.cool|b.cool')
+  })
+})
+
+describe('the room every panel leaves', () => {
+  const stack = (edges: Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>) => ({
+    top: 0, right: 0, bottom: 0, left: 0, ...edges,
+  })
+
+  it('is the deepest stack on that edge, whichever panel has it', () => {
+    // Not the lead's, which is what it used to be. A companion can carry tracks
+    // of its own now, and a lead with none would have reserved nothing.
+    expect(deepestStacks([stack({}), stack({ top: 24 }), stack({ top: 12, left: 40 })]))
+      .toEqual({ top: 24, right: 0, bottom: 0, left: 40 })
+  })
+
+  it('does not depend on the order the panels report in', () => {
+    // The bug this shape exists to prevent: a companion finishes reading before
+    // the lead has drawn anything, so a maximum kept as reports arrive is a
+    // maximum over one panel.
+    const reports = [stack({ bottom: 94 }), stack({ bottom: 20 }), stack({ top: 30 })]
+    const forwards = deepestStacks(reports)
+    expect(deepestStacks([...reports].reverse())).toEqual(forwards)
+    expect(forwards.bottom).toBe(94)
+  })
+
+  it('reserves nothing for a deck whose panels have no tracks', () => {
+    expect(deepestStacks([stack({}), stack({})])).toEqual(stack({}))
+    expect(deepestStacks([])).toEqual(stack({}))
+  })
+
+  it('never reserves a negative, whatever a panel that has not drawn reports', () => {
+    // A panel's budget starts at a placeholder rather than at a thickness, and
+    // a floor below zero would pull the maps it lines up *out* of line.
+    expect(deepestStacks([stack({ top: -1, right: -1, bottom: -1, left: -1 })])).toEqual(stack({}))
   })
 })

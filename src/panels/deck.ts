@@ -18,6 +18,8 @@
  * is *of*, or the breadcrumb has no subject.
  */
 
+import { LANE_EDGES, type LaneEdge } from '../annotations/types'
+
 /**
  * How many maps may be on screen at once, lead included.
  *
@@ -337,4 +339,38 @@ function clampShape(shape: DeckShape): DeckShape {
  */
 export function panelBudgetBytes(count: number, deviceBudgetBytes: number): number {
   return deviceBudgetBytes / Math.max(1, Math.floor(count))
+}
+
+// ---------------------------------------------------------------------------
+// Alignment (§16.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * The room a deck must leave on each edge, given what every panel takes there.
+ *
+ * The deck's promise is that its pictures are of one place and can be read
+ * against each other, which holds only while they are the same size at the same
+ * height in their cells. Once a track can be placed on one map and not the next
+ * that stops being free: a map with a strip above it stands lower than a map
+ * without one, and the eye has to correct for the offset before it can compare
+ * anything. So every panel leaves room for the deepest stack in the deck and
+ * pads out whatever its own tracks do not fill.
+ *
+ * A **fold over all the reports at once**, rather than a running maximum kept
+ * as they arrive. Panels announce their stacks whenever they change, in
+ * whatever order they finish reading their files, and a maximum accumulated in
+ * that order is a maximum over whoever has spoken so far — which on the first
+ * pass is one panel, and reserves nothing.
+ */
+export function deepestStacks(
+  reports: ReadonlyArray<Readonly<Record<LaneEdge, number>>>,
+): Record<LaneEdge, number> {
+  const room: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
+  for (const report of reports) {
+    // Clamped at nothing: a panel that has not laid anything out yet reports a
+    // placeholder rather than a thickness, and a negative floor would pull the
+    // maps it is meant to line up *out* of line.
+    for (const edge of LANE_EDGES) room[edge] = Math.max(room[edge], report[edge] ?? 0)
+  }
+  return room
 }
