@@ -80,29 +80,47 @@
 
 - [x] Values the file does not contain, on the map and in the lanes. Normalisation in the score picker — VC, VC √, ICE, computed from the block, so a file nobody balanced has an answer to "can I see this normalised". O/E on a toggle of its own, because it composes with every entry in that list rather than being one more of them. The comparison becomes split, ratio or difference: past a certain similarity the eye cannot get "where do they differ" out of two triangles. `log2`, a symmetric auto range and `RdBu_r` are what make a quantity with a middle drawable at all, and pooling by departure from neutral is what keeps the second file's half of it on screen at fit zoom. The same three operations for two bigWigs, combined on the common refinement of their intervals rather than on a grid that would smear every boundary.
 
+- [x] A deck is drawn before it is filled. A `+` down the right-hand edge of the map and another
+      along the bottom, and pressing one opens a *cell* rather than a map: back comes the
+      arrangement that was asked for, with the reader's own map in the first of it and every other
+      cell standing empty as its own drop area — as many drop areas as they asked for, each in the
+      position the map will occupy. Filling them is in any order, from a drop, a chooser or a URL,
+      or never. Cells before maps, because adding files one at a time makes the layout a consequence
+      of the order they arrived in, and the layout is the thing somebody assembling a figure is
+      actually composing. A press adds a whole edge, so nothing already placed ever moves; an empty
+      cell is a real cell, with a slot in the link, a place in the six, and none of the memory the
+      maps divide between them. A file dropped on an edge opens the cell and fills it in one
+      movement — and is no longer *also* imported over the map it was dropped beside.
+
+- [x] The turn reaches every map in a deck rather than only the lead, which had a bar claiming one
+      navigation over a band and four squares. The button that turns it is a switch rather than a
+      latch now, and lights up while it is on. Two turned maps show the same window: the lock was
+      being told about the square while being reported the band, and a rotated cell is half a bin —
+      so every turned panel was drawing half of what the one beside it drew.
+
+- [x] Adding or closing a map leaves the map beside it alone. `maps` names what is on screen
+      *beside* a view, so there was never anything for the lead to be rebuilt for; without that
+      written down, every press of `+` cost a read and the reader's pan and zoom.
+
 ## FOR NOW
 
-The deck of maps (§16) reads as a finished feature and is not one: N files open,
-navigate together and share a scale, and almost nothing about *arranging* them
-exists. `HANDOFF.md` §3.1 is the itemised account with the code beside each one;
-these are the same items in the order they are worth doing, because the chain
-between them is real.
+The deck of maps (§16) is a data feature that works and an interaction feature
+that is now half there: N files open and navigate together, the arrangement can
+be drawn before it is filled, and what is left is moving maps around inside it
+and giving them tracks. `HANDOFF.md` §3.1 is the itemised account with the code
+beside each one; these are the same items in the order they are worth doing,
+because the chain between them is real.
 
-- [ ] The turn reaches only the lead of a deck. A companion is never handed the
-      toggle, so flipping puts one map on its diagonal and leaves the rest square
-      while the bar still says one navigation. The smallest thing on this list.
 - [ ] Decide who owns a track when there are N maps — one store per panel, or one
       store that knows which maps each track is on. Everything else about tracks
       waits on that sentence being written down.
 - [ ] The first map is a panel like the others: movable, closable, and able to
       hand the deck over to another. Today it is the session's own view
       re-parented into cell 0 and it cannot leave.
-- [ ] A drop area down the right-hand edge of the map, always there, that takes a
-      dropped file into a new map beside the ones already open. Today the first
-      companion can only be reached through the command palette, so nothing on
-      screen says the feature exists at all.
-- [ ] Maps dragged onto each other to arrange them — left, right, above, below —
-      which needs the grid to become an arrangement rather than a column count.
+- [ ] Maps dragged onto each other to arrange them — left, right, above, below.
+      The grid is a rectangle with a column count now rather than a bare list,
+      which is the model a drag can drop onto; what is missing is the gesture and
+      a swap between two occupied cells.
 - [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
       them carry different numbers, and a track sent to every map or taken off
       every map in one gesture.
@@ -128,7 +146,10 @@ items, in the order they are worth doing.
 - [ ] Two compared files as two rectangles meeting at one genomic axis, the
       second growing downward, with the tracks below both.
 - [ ] A ruler up the side, in distance.
-- [ ] The turn in the spec and the changelog.
+- [ ] The turn in the spec and the changelog. §16 now says what a turn means to a
+      *deck* — shared like the derivations, and what the lock measures a band in —
+      but the geometry itself still has no section of its own, and the changelog
+      has the fixes rather than the feature.
 
 
 

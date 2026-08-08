@@ -279,12 +279,32 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
 export const DERIVED_KEYS = ['oe', 'flip'] as const
 
 /**
+ * The keys that name what is on screen **beside** this view (§16).
+ *
+ * A fourth category, and the one that is not about this block at all. `maps`
+ * lists the *companions*, which have their own workers, their own blocks and
+ * their own pictures — nothing in it can change what the lead is reading. The
+ * deck reconciles itself from this key before the render path reaches the
+ * short-circuit below, so by the time this is consulted the companions are
+ * already right and the only question left is whether the lead has to be
+ * rebuilt for them. It does not.
+ *
+ * Left out, every press of `+` and every panel closed rebuilt the lead: a
+ * worker round trip, a refitted view, and the reader's pan and zoom thrown
+ * away — for a change that happened in another panel. §16.9's whole gesture is
+ * several of these in a row, so the cost arrived four times while a reader drew
+ * a 2 × 2, and on a gated whole-genome map (§7.3) each one would have put the
+ * pixel scan back behind its button.
+ */
+export const DECK_KEYS = ['maps'] as const
+
+/**
  * `true` when two states select the same block and differ only in how it is
- * painted or what arithmetic is done to it — the two things a mounted view can
- * be *told*, rather than rebuilt for.
+ * painted, what arithmetic is done to it, or what is drawn beside it — the
+ * things a mounted view can be *told*, rather than rebuilt for.
  */
 export function differsOnlyInPresentation(a: ViewState, b: ViewState): boolean {
-  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS])
+  return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS, ...DECK_KEYS])
 }
 
 function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {

@@ -19,6 +19,7 @@ import {
   MAX_PANELS,
   VACANT,
   columnsFor,
+  grownDeck,
   moveItem,
   panelBudgetBytes,
   parseMaps,
@@ -163,6 +164,121 @@ describe('columnsFor', () => {
   /** `ceil`, not `floor`: three in two columns leaves one alone on a second row. */
   it('rounds a grid up to the near square', () => {
     expect([1, 2, 3, 4, 5, 6].map((n) => columnsFor(n, 'grid'))).toEqual([1, 2, 2, 2, 3, 3])
+  })
+})
+
+/**
+ * Drawing the deck (§16.9).
+ *
+ * The `+` on either edge of the map opens **cells**, not maps, and this is the
+ * arithmetic that decides how many. It is worth pinning for one reason above
+ * the others: growing must never move a map the reader has already placed, and
+ * the only way that is structurally true is if a press adds a whole row or a
+ * whole column and appends it. Anything that inserts in the middle of a
+ * reading-order grid shifts every cell after it.
+ */
+describe('growing a deck by an edge', () => {
+  const shape = (cells: number, columns: number) => ({ cells, columns })
+
+  it('turns one map into two cells, in the direction that was pressed', () => {
+    expect(grownDeck(shape(1, 1), 'beside')).toEqual({ cells: 2, columns: 2 })
+    expect(grownDeck(shape(1, 1), 'below')).toEqual({ cells: 2, columns: 1 })
+  })
+
+  /** The 2 × 2 a figure of two conditions by two timepoints wants, in two presses. */
+  it('reaches a square in two presses, whichever order they come in', () => {
+    expect(grownDeck(grownDeck(shape(1, 1), 'beside'), 'below')).toEqual({ cells: 4, columns: 2 })
+    expect(grownDeck(grownDeck(shape(1, 1), 'below'), 'beside')).toEqual({ cells: 4, columns: 2 })
+  })
+
+  it('adds a whole edge rather than one cell', () => {
+    // Two rows of two, widened: a column is two cells, not one.
+    expect(grownDeck(shape(4, 2), 'beside')).toEqual({ cells: 6, columns: 3 })
+    // Three across, deepened: a row is three.
+    expect(grownDeck(shape(3, 3), 'below')).toEqual({ cells: 6, columns: 3 })
+  })
+
+  /**
+   * Closing a map out of the middle leaves the last row short. The next press
+   * squares the grid up rather than preserving the gap, because the hole is a
+   * drop target and a rectangle is the shape the reader drew.
+   */
+  it('fills a ragged last row on the way', () => {
+    expect(grownDeck(shape(3, 2), 'beside')).toEqual({ cells: 6, columns: 3 })
+    expect(grownDeck(shape(3, 2), 'below')).toEqual({ cells: 6, columns: 2 })
+  })
+
+  it('never takes a cell away, and always leaves a rectangle', () => {
+    for (let cells = 1; cells <= MAX_PANELS; cells++) {
+      for (let columns = 1; columns <= cells; columns++) {
+        for (const direction of ['beside', 'below'] as const) {
+          const next = grownDeck(shape(cells, columns), direction)
+          expect(next.cells).toBeGreaterThan(cells)
+          expect(next.cells % next.columns).toBe(0)
+        }
+      }
+    }
+  })
+
+  /**
+   * The ceiling is the deck's to enforce, not this function's — it is the same
+   * `MAX_PANELS` a hand-edited hash meets — but the arithmetic has to make the
+   * refusal reachable rather than land exactly on six for ever.
+   */
+  it('grows past the limit, for the deck to refuse', () => {
+    expect(grownDeck(shape(4, 2), 'beside').cells).toBe(MAX_PANELS)
+    expect(grownDeck(shape(MAX_PANELS, 3), 'below').cells).toBeGreaterThan(MAX_PANELS)
+  })
+
+  /**
+   * Why the two edges are lit separately. A row of four has room for a fifth
+   * beside it and no room at all for a second row of four, and one answer for
+   * both edges would either grey the edge that works or offer the one that
+   * refuses.
+   */
+  it('runs out of room on one edge before the other', () => {
+    expect(grownDeck(shape(4, 4), 'beside').cells).toBeLessThanOrEqual(MAX_PANELS)
+    expect(grownDeck(shape(4, 4), 'below').cells).toBeGreaterThan(MAX_PANELS)
+  })
+
+  /** A shape that came back from an older build's session memory (§8.6). */
+  it('survives a nonsense column count', () => {
+    expect(grownDeck(shape(4, 0), 'beside')).toEqual({ cells: 8, columns: 2 })
+    expect(grownDeck(shape(4, 9), 'below')).toEqual({ cells: 8, columns: 4 })
+  })
+})
+
+/**
+ * A drawn deck is a deck like any other, and its empty cells travel.
+ *
+ * The `~` §16.6 introduced for a local companion is the same character an empty
+ * cell is written with, and that is not an economy: to the recipient the two
+ * are the same thing — a position with no file in it and a rectangle where the
+ * map goes. What must not happen is the empty cells being dropped on the way
+ * out, which would send a 2 × 2 arrangement as a map and a half.
+ */
+describe('a deck drawn before it is filled', () => {
+  it('carries its empty cells through a link', () => {
+    const drawn: PanelRef[] = [remote('https://b.example.org/b.cool'), { kind: 'vacant' }, { kind: 'vacant' }]
+    const encoded = serialiseMaps(drawn)
+    expect(encoded).toBe(`https://b.example.org/b.cool${MAPS_SEPARATOR}${VACANT}${MAPS_SEPARATOR}${VACANT}`)
+    expect(parseMaps(encoded)).toEqual(drawn)
+  })
+
+  it('sends an arrangement nobody has filled yet', () => {
+    const empty: PanelRef[] = [{ kind: 'vacant' }, { kind: 'vacant' }, { kind: 'vacant' }]
+    expect(parseMaps(serialiseMaps(empty))).toEqual(empty)
+  })
+
+  /**
+   * The budget divides between the cells that hold a **file**. An empty card has
+   * no worker and no block, and counting it would read the two maps of a 2 × 2
+   * deck at a quarter of the allowance each while half of it went to
+   * rectangles.
+   */
+  it('lends nothing to a cell with no file in it', () => {
+    const DEVICE = 4e9
+    expect(panelBudgetBytes(2, DEVICE)).toBe(DEVICE / 2)
   })
 })
 

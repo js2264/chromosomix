@@ -56,15 +56,17 @@ import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
-import type { DerivePresentation, MatrixPanel } from '../ui/MatrixPanel'
+import type { DerivePresentation, MatrixPanel, TurnPresentation } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
-import { MapPanel, VacantPanel } from './MapPanel'
+import { DeckFrame } from './DeckFrame'
+import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
   DECK_LAYOUTS,
   MAX_PANELS,
   columnsFor,
+  grownDeck,
   isDeckLayout,
   moveItem,
   panelBudgetBytes,
@@ -72,6 +74,7 @@ import {
   sameRefs,
   serialiseMaps,
   type DeckLayout,
+  type GrowDirection,
   type PanelRef,
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
@@ -97,6 +100,16 @@ export interface PanelDeckProps {
    * comparisons rather than a choice.
    */
   derive?(): DerivePresentation | undefined
+  /**
+   * Whether the deck is turned 45°, or `undefined`.
+   *
+   * A thunk and shared, on the derivation's argument taken one step further: a
+   * turn changes the geometry rather than the values, so a lead drawn as a band
+   * along its diagonal beside four squares is not one navigation over five
+   * pictures of a place — it is five pictures in two coordinate systems under a
+   * bar claiming otherwise.
+   */
+  turn?(): TurnPresentation | undefined
 }
 
 /**
@@ -122,6 +135,17 @@ interface Slot {
   locked: boolean
 }
 
+/**
+ * What a reader is told when the deck will not open another cell.
+ *
+ * In the deck's own bar and on the `+` edges rather than on an error screen: a
+ * refusal to open a *seventh* map is not a reason to take the six away.
+ */
+const NO_ROOM =
+  `${MAX_PANELS} maps is the limit for one deck. Every panel is a worker and, for a ` +
+  'whole-file view, a block held in memory — and each one added makes every panel’s share of ' +
+  'this tab’s memory smaller. Close one to open another.'
+
 let nextSlotId = 1
 
 export class PanelDeck {
@@ -135,11 +159,28 @@ export class PanelDeck {
   /** A refusal about the deck as a whole, rather than about one panel. */
   private readonly warning = el('p', { class: 'inline-error deck-warning hidden' })
 
+  /** The `+` edges, wrapped round the grid — see {@link DeckFrame}. */
+  private readonly edges: DeckFrame
+
   private slots: Slot[] = []
   private readonly lock = new ViewportLock()
   private lead: MatrixPanel | null = null
   private leadLocked = true
   private layout: DeckLayout = 'row'
+  /**
+   * The column count the reader **drew**, or `null` to follow {@link layout}.
+   *
+   * Two ways of saying the same thing, and both are needed. The three preset
+   * buttons answer "arrange what is here", which is a function of how many maps
+   * there are — `row` of four stays a row when a fifth arrives. A `+` answers
+   * "make it this shape", which is a number, and it has to survive a map being
+   * added or closed or it is not a shape at all: draw a 2 × 2, close one map,
+   * and a preset would silently reflow the remaining three into a row.
+   *
+   * A preset click clears this and a `+` sets it, so exactly one of the two is
+   * in charge at any moment and no lit button ever disagrees with the grid.
+   */
+  private columns: number | null = null
   /** Whether the lead's clip is pushed down to every companion (§16.2). */
   private shareLook = false
   private state: ViewState | null = null
@@ -161,6 +202,7 @@ export class PanelDeck {
 
   constructor(private readonly props: PanelDeckProps) {
     this.layout = this.recallLayout()
+    this.columns = this.recallColumns()
     this.shareLook = recall<boolean>(props.memoryKey(), 'deck:share-look') === true
 
     this.urlInput = el('input', {
@@ -188,7 +230,18 @@ export class PanelDeck {
 
     this.grid = el('div', { class: 'deck-grid' }, this.leadCell)
     this.toolbar = el('div', { class: 'deck-bar' })
-    this.el = el('div', { class: 'deck' }, this.toolbar, this.addRow, this.warning, this.grid)
+    // The same edges the session was showing a moment ago, now round the grid
+    // instead of round one map — which is the whole reason they are a component
+    // and not a pair of buttons in each place (`panels/DeckFrame.ts`).
+    this.edges = new DeckFrame({ onGrow: (direction, file) => this.grow(direction, file) })
+    this.el = el(
+      'div',
+      { class: 'deck' },
+      this.toolbar,
+      this.addRow,
+      this.warning,
+      this.edges.hold(this.grid),
+    )
     this.paintBar()
     this.applyLayout()
   }
@@ -369,10 +422,11 @@ export class PanelDeck {
     this.paintGrid()
   }
 
-  private build(ref: PanelRef, source?: SourceSpec): Slot {
+  private build(ref: PanelRef, source?: SourceSpec, origin: VacancyOrigin = 'link'): Slot {
     const slot: Slot = { id: `p${nextSlotId++}`, ref, panel: null, vacancy: null, locked: true }
     if (ref.kind === 'vacant') {
       slot.vacancy = new VacantPanel({
+        origin,
         onOpen: (file) => this.fill(slot, file),
         onClose: () => this.remove(slot),
         onMove: (delta) => this.move(slot, delta),
@@ -382,13 +436,21 @@ export class PanelDeck {
     slot.panel = new MapPanel({
       uri: ref.uri,
       source: source ?? { kind: 'remote', url: splitPath(ref.uri) },
-      budgetBytes: () => panelBudgetBytes(this.slots.length + 1, deviceDenseBudgetBytes()),
+      // Divided between the cells that hold a **file**, not between the cells.
+      // An empty card has no worker and no block, so counting it would shrink
+      // every real panel's allowance to pay for rectangles that cost nothing —
+      // and under §16.9 a reader draws the empty ones first, so a 2 × 2 deck
+      // with two maps in it would read both at a quarter of the allowance
+      // instead of a half. Still a live count, so filling the third cell still
+      // makes the fourth read smaller (§16.7).
+      budgetBytes: () => panelBudgetBytes(this.filled, deviceDenseBudgetBytes()),
       onSettled: () => this.settle(slot),
       onClose: () => this.remove(slot),
       onToggleLock: () => this.toggleLock(slot),
       isLocked: () => slot.locked,
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
+      turn: () => this.props.turn?.(),
       initialLook: () => {
         const look = this.leadBaseLook()
         return this.shareLook ? look : { transform: look.transform, colormap: look.colormap }
@@ -490,12 +552,17 @@ export class PanelDeck {
     this.publish()
   }
 
-  /** Turn a vacancy back into a map, in the position the link put it. */
+  /** Turn a vacancy into a map, in the position it was standing in. */
   private fill(slot: Slot, file: File): void {
+    this.occupy(slot, { kind: 'local', uri: file.name }, { kind: 'local', file })
+  }
+
+  /** Put a file in a cell that had none, leaving every other cell alone. */
+  private occupy(slot: Slot, ref: PanelRef, source?: SourceSpec): void {
     const index = this.slots.indexOf(slot)
     if (index < 0) return
     slot.vacancy?.destroy()
-    const built = this.build({ kind: 'local', uri: file.name }, { kind: 'local', file })
+    const built = this.build(ref, source)
     this.slots[index] = built
     this.paintGrid()
     this.publish()
@@ -513,19 +580,30 @@ export class PanelDeck {
     this.add({ kind: 'local', uri: file.name }, { kind: 'local', file })
   }
 
-  /** Open one more map beside the others. */
+  /**
+   * Open one more map: in the first empty cell if there is one, else at the end.
+   *
+   * The empty cell comes first because under §16.9 it is *the reader's own
+   * instruction*. They drew the arrangement before they had the files, so a map
+   * arriving by any road — the bar's URL box, the file chooser, the command
+   * palette — belongs in the next place they left for it, and appending past
+   * their empty cards to a cell they never asked for would make the two ways of
+   * adding a map disagree about what the deck is.
+   */
   add(ref: PanelRef, source?: SourceSpec): void {
+    const empty = this.slots.find((slot) => slot.ref.kind === 'vacant')
+    if (empty !== undefined) {
+      this.warn('')
+      this.addRow.classList.add('hidden')
+      this.occupy(empty, ref, source)
+      return
+    }
     if (this.slots.length + 1 >= MAX_PANELS) {
-      // In the deck's own bar, not on an error screen. A refusal to open a
-      // *seventh* map is not a reason to take the six away, and every other
-      // refusal a reader meets here — a name this file has not got, a block
-      // this share of the budget will not lend — is already a line beside the
-      // panel it is about.
-      this.warn(
-        `${MAX_PANELS} maps is the limit for one deck. Every panel is a worker and, for a ` +
-          'whole-file view, a block held in memory — and each one added makes every panel’s ' +
-          'share of this tab’s memory smaller. Close one to open another.',
-      )
+      // In the deck's own bar, not on an error screen — see {@link NO_ROOM}.
+      // Every other refusal a reader meets here (a name this file has not got,
+      // a block this share of the budget will not lend) is already a line
+      // beside the panel it is about.
+      this.warn(NO_ROOM)
       return
     }
     this.warn('')
@@ -535,6 +613,54 @@ export class PanelDeck {
     this.paintGrid()
     this.publish()
     if (this.state !== null) slot.panel?.apply(this.state)
+  }
+
+  /**
+   * Open a column of empty cells beside the maps, or a row below them (§16.9).
+   *
+   * The deck's own half of the `+` gesture, and the only place the shape is
+   * written down as a number: every other control here arranges the cells that
+   * exist, and this one is how a reader says how many there should be.
+   *
+   * A file arrives with the press when it was **dropped** on the edge rather
+   * than clicked, and it goes into the first cell that press opened — not into
+   * the first empty cell in the deck, which is where {@link add} would put it.
+   * The two rules differ only when the deck already had a hole somewhere, and
+   * there the gesture is the tie-breaker: a reader who drops on the right edge
+   * of a deck has aimed at the right edge of it.
+   */
+  grow(direction: GrowDirection, file?: File): void {
+    const cells = this.slots.length + 1
+    const next = grownDeck({ cells, columns: this.columnsNow() }, direction)
+    if (next.cells > MAX_PANELS) {
+      // A file that came with the press is not lost with it. There is no room
+      // for a cell, but there may be an empty one already — and dropping a
+      // cooler on a full deck to be told a number is a worse answer than
+      // opening it where the deck has space.
+      if (file !== undefined) this.addLocal(file)
+      else this.warn(NO_ROOM)
+      return
+    }
+    this.warn('')
+    this.columns = next.columns
+    remember(this.props.memoryKey(), 'deck:columns', next.columns)
+    // Drawn, not left by a link, and that is all the difference amounts to: the
+    // card says "drop a map here" rather than telling the reader that a map they
+    // never had used to be there (`panels/MapPanel.ts`).
+    const opened = this.slots.length
+    for (let i = cells; i < next.cells; i++) {
+      this.slots.push(this.build({ kind: 'vacant' }, undefined, 'drawn'))
+    }
+    const first = this.slots[opened]
+    if (file === undefined || first === undefined) {
+      this.paintGrid()
+      this.publish()
+    } else {
+      // Paints and publishes on its way through, with the cell already filled,
+      // so the hash is written once rather than as a vacancy and then a map.
+      this.fill(first, file)
+    }
+    this.paintBar()
   }
 
   /**
@@ -564,10 +690,40 @@ export class PanelDeck {
   }
 
   private applyLayout(): void {
-    const columns = columnsFor(this.slots.length + 1, this.layout)
-    this.grid.style.setProperty('--deck-columns', String(columns))
-    this.grid.classList.toggle('is-column', this.layout === 'column')
+    const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
+    this.grid.style.setProperty('--deck-columns', String(shape.columns))
+    // Asked of the same arithmetic the press will run, rather than of the panel
+    // count, so an edge is lit exactly when pressing it would do something. A
+    // deck of two rows has room for another row of two and not for another
+    // column of two at five cells, and one answer for both edges would either
+    // grey an edge that works or offer one that refuses.
+    this.edges.setRoom(
+      {
+        beside: grownDeck(shape, 'beside').cells <= MAX_PANELS,
+        below: grownDeck(shape, 'below').cells <= MAX_PANELS,
+      },
+      NO_ROOM,
+    )
     for (const slot of this.slots) slot.panel?.remeasure()
+  }
+
+  /**
+   * Cells in a row, right now.
+   *
+   * Clamped to the number of cells, because a `repeat(3, 1fr)` grid holding two
+   * items draws them two thirds of the way across and leaves a third of the
+   * width empty — which reads as a map that failed to load rather than as a
+   * deck with a column fewer than it had.
+   */
+  private columnsNow(): number {
+    const cells = this.slots.length + 1
+    if (this.columns === null) return columnsFor(cells, this.layout)
+    return Math.min(Math.max(1, this.columns), cells)
+  }
+
+  /** Cells with a file in them, lead included — the budget's divisor. */
+  private get filled(): number {
+    return 1 + this.slots.filter((slot) => slot.ref.kind !== 'vacant').length
   }
 
   /**
@@ -578,14 +734,24 @@ export class PanelDeck {
    * addition; the panels below it are the expensive things and they are kept.
    */
   private paintBar(): void {
-    const count = this.slots.length + 1
+    const cells = this.slots.length + 1
+    const filled = this.filled
+    const empty = cells - filled
     const add = button('', () => this.toggleAdd(), {
       class: 'btn deck-plus',
-      title: 'Open another map beside these',
+      title:
+        empty === 0
+          ? 'Open another map beside these'
+          : 'Open a map in the first empty cell of the deck',
     })
     add.replaceChildren(icon('plus', { size: 14 }), el('span', { text: 'add a map' }))
 
+    // Lit only where the reader has not drawn a shape of their own. A `+` sets
+    // a column count that is generally none of the three, and a preset left
+    // glowing under it would claim the grid is an arrangement it is not.
+    const chosen = this.columns === null
     const layoutButtons = DECK_LAYOUTS.map((name) => {
+      const on = chosen && this.layout === name
       const control = iconButton(
         name === 'row' ? 'columns-2' : name === 'column' ? 'rows-3' : 'grid-2x2',
         name === 'row'
@@ -594,9 +760,9 @@ export class PanelDeck {
             ? 'Stacked, for a narrow window'
             : 'A near-square grid, which is what keeps four maps large enough to read',
         () => this.setLayout(name),
-        { class: `btn btn-icon deck-layout${this.layout === name ? ' is-on' : ''}`, size: 14 },
+        { class: `btn btn-icon deck-layout${on ? ' is-on' : ''}`, size: 14 },
       )
-      control.setAttribute('aria-pressed', String(this.layout === name))
+      control.setAttribute('aria-pressed', String(on))
       return control
     })
 
@@ -625,9 +791,14 @@ export class PanelDeck {
     this.toolbar.replaceChildren(
       el('span', {
         class: 'deck-count',
-        text: `${count} maps`,
+        // The empty cells are counted separately rather than folded into the
+        // total, because "4 maps" over a 2 × 2 grid with two rectangles in it is
+        // the deck telling the reader something they can see is untrue.
+        text: empty === 0 ? `${filled} maps` : `${filled} of ${cells}`,
         title:
-          'One navigation across every panel: the region, the level and the score are shared, ' +
+          `${this.rows()} × ${this.columnsNow()}` +
+          (empty === 0 ? '' : `, ${empty} empty — drop a file on one to open it there`) +
+          '. One navigation across every panel: the region, the level and the score are shared, ' +
           'and each panel keeps its own colour scale. The chain on a panel takes it off the lead.',
       }),
       leadLock,
@@ -648,9 +819,21 @@ export class PanelDeck {
     if (!this.addRow.classList.contains('hidden')) this.urlInput.focus()
   }
 
+  /** Rows the grid needs for the cells it has, at the current column count. */
+  private rows(): number {
+    return Math.ceil((this.slots.length + 1) / this.columnsNow())
+  }
+
   private setLayout(layout: DeckLayout): void {
     this.layout = layout
+    // A preset is the reader saying "arrange what is here", which is the answer
+    // to a different question from the one a `+` answers — so it takes the
+    // drawn column count off rather than fighting it. Forgotten as well as
+    // cleared: a shape that came back on the next reload while the bar showed a
+    // preset lit is the one state these two settings must never be in together.
+    this.columns = null
     remember(this.props.memoryKey(), 'deck:layout', layout)
+    remember(this.props.memoryKey(), 'deck:columns', null)
     this.applyLayout()
     this.paintBar()
   }
@@ -706,6 +889,19 @@ export class PanelDeck {
   private recallLayout(): DeckLayout {
     const stored = recall<string>(this.props.memoryKey(), 'deck:layout')
     return isDeckLayout(stored) ? stored : 'row'
+  }
+
+  /**
+   * The drawn column count, if this file's deck had one.
+   *
+   * Validated rather than trusted: stored state outlives the code that wrote it
+   * (§8.6), and a `columns` of `0` or `NaN` coming back from a session written
+   * by an older build would divide the grid into no columns at all.
+   */
+  private recallColumns(): number | null {
+    const stored = recall<number>(this.props.memoryKey(), 'deck:columns')
+    if (typeof stored !== 'number' || !Number.isFinite(stored) || stored < 1) return null
+    return Math.min(Math.floor(stored), MAX_PANELS)
   }
 }
 

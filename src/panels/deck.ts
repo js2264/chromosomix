@@ -197,6 +197,63 @@ export function columnsFor(count: number, layout: DeckLayout): number {
 }
 
 // ---------------------------------------------------------------------------
+// Drawing a deck (§16.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Which edge of the maps a reader pressed `+` on.
+ *
+ * Two words rather than four compass points, because the grid is filled in
+ * reading order and those are the only two edges that can grow it without
+ * moving what is already in it: a cell opened *beside* the maps is a new
+ * column, a cell opened *below* them is a new row, and both leave every map
+ * where the reader last saw it.
+ */
+export type GrowDirection = 'beside' | 'below'
+
+/**
+ * A deck's shape: how many cells it has, and how many of them are in a row.
+ *
+ * **Cells**, not maps. That distinction is the whole of §16.9: the reader draws
+ * the arrangement first and fills it afterwards, so a deck of one map and three
+ * empty cards is a real, publishable, four-cell deck rather than a deck of one
+ * with some furniture round it. The empty cards are `vacant` refs
+ * ({@link PanelRef}), which is why the same `~` that a link already used for a
+ * local companion also carries a cell nobody has dropped anything into yet.
+ */
+export interface DeckShape {
+  /** Cells, lead included, filled and empty alike. */
+  cells: number
+  /** Cells in a row; the last row may be short after a map is closed. */
+  columns: number
+}
+
+/**
+ * The shape one press of `+` produces.
+ *
+ * A deck grows by a whole **row or column**, and the arithmetic says why: the
+ * grid is a rectangle laid out in reading order, so a single extra cell on the
+ * right of a two-row deck is not expressible — it would have to go at the end
+ * of the first row, which pushes every map after it one place along. Growing by
+ * a full edge is the only move that adds space without rearranging what the
+ * reader has already placed.
+ *
+ * A ragged last row — what closing a map out of the middle leaves behind — is
+ * filled in by the same rule rather than preserved: `rows` is counted with
+ * `ceil`, so the row that was short becomes a whole one, and the deck is a
+ * rectangle again. That is the shape the reader drew, and the holes are drop
+ * targets rather than gaps.
+ */
+export function grownDeck(shape: DeckShape, direction: GrowDirection): DeckShape {
+  const cells = Math.max(1, Math.floor(shape.cells))
+  const columns = Math.min(Math.max(1, Math.floor(shape.columns)), cells)
+  const rows = Math.ceil(cells / columns)
+  return direction === 'beside'
+    ? { cells: rows * (columns + 1), columns: columns + 1 }
+    : { cells: (rows + 1) * columns, columns }
+}
+
+// ---------------------------------------------------------------------------
 // Cost (§2, §16.7)
 // ---------------------------------------------------------------------------
 

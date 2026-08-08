@@ -3,8 +3,13 @@
 Working document for whoever picks this up. Branched from **`001715f` (0.9.0)**;
 everything below is new since that tag. All of it is committed and pushed.
 
-**Green as of the last commit (`0d1ccbf`):** `npm run typecheck`,
-`npm run test:nofixtures` (1123 passed, 25 skipped), `npm run build`.
+**Green as of the last commit:** `npm run typecheck`,
+`npm run test:nofixtures` (1136 passed, 25 skipped), `npm run build`.
+
+**Since the first handoff:** §3.1's **D1** and **A1** are done, A1 in the shape
+the user asked for rather than the one it was written in — see §3.3. Three
+defects found while doing them are fixed and are listed there too. Everything
+else in §3.1 stands.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
 with "Cannot find type definition file for 'node'" until you do, which looks
@@ -104,8 +109,8 @@ change. Ordered within each group by what I would do first.
 
 | # | Gap | Where |
 |---|---|---|
-| A1 | **No drop area in single-map view.** The first companion can only be added through the command palette (`Ctrl+P` → "Add a map beside this one"), because the deck — and therefore its toolbar — does not exist until then. Nothing on screen says the feature exists. Wanted: an always-visible drop strip down the far right of the centre panel, taking a dropped file straight into a new map. | `Session.showContent` / a new always-mounted strip; `Session.addMap` is the existing entry |
-| A2 | Adding by URL is a text input behind a `+ add a map` toggle. A dropped *file* is only accepted by a `VacantPanel` (a `~` slot from a link) — there is no drop target for a *new* map anywhere. | `PanelDeck.addRow`, `MapPanel.VacantPanel` |
+| ~~A1~~ | **Done, and not as written** — see §3.3. The `+` edges are the entry point; the drop strip is not what was built. | `panels/DeckFrame.ts` |
+| ~~A2~~ | **Done.** A dropped file is taken by an empty cell, by either `+` edge, and by a `~` slot from a link. Adding by URL is still the text input behind `+ add a map`, which now fills the first empty cell rather than appending. | `PanelDeck.add`, `MapPanel.VacantPanel` |
 
 #### B. Arranging maps
 
@@ -113,7 +118,7 @@ change. Ordered within each group by what I would do first.
 |---|---|---|
 | B1 | **No drag and drop at all.** Reordering is `◀` `▶` buttons on each companion's heading. Wanted: drag a map onto another to place it left/right/above/below. | `MapPanel` heading, `PanelDeck.move` |
 | B2 | **The lead cannot be moved or closed.** `leadCell` is grid cell 0, always, and carries no per-panel controls — the session's own view is re-parented into it. So the first map is permanently first. This is the structural blocker for B1: a general reorder needs the lead to be *a panel like any other*, which today it is not. | `PanelDeck.leadCell`, `setLead` |
-| B3 | **The layout is a uniform grid, not an arrangement.** `--deck-columns` with `row \| column \| grid`; there is no model for "this map below that one". Dropping onto an edge (B1) implies either a real layout tree or, more cheaply, insert-at-index plus a column count. Decide which before building B1. | `PanelDeck.applyLayout`, `deck.columnsFor` |
+| B3 | **Half decided, by §3.3.** The cheap option won: the deck is a **rectangle of cells filled in reading order**, with an explicit column count the reader draws and empty cells as first-class members of the list. That is the model B1 drops onto — a drop between two cells is an index, and a drop on an occupied cell is a swap. There is still no layout *tree*, and there should not be one until something needs a cell two columns wide. | `PanelDeck.columnsNow`, `deck.grownDeck` |
 | B4 | **The lead's cell is much bigger than a companion's** — it keeps the view heading, the locus box, the back link and the block summary, while a companion has a one-line heading. At three panels the lead's map is visibly smaller than the maps beside it. Asymmetric and cramped. | `.deck-panel.is-lead` in `styles.css`; what `setLead` re-parents |
 
 #### C. Tracks — the largest gap
@@ -129,8 +134,8 @@ change. Ordered within each group by what I would do first.
 
 | # | Defect | Where |
 |---|---|---|
-| D1 | **The 45° turn does not reach companions.** `MapPanel` never passes `turn` to its `MatrixPanel` (grep `turn:` in that file — no hits). Flipping a deck therefore flips the lead only, and the panels beside it stay square while claiming to be one navigation. Small fix — pass it through exactly as `derive` is, including the `setDerive`-style refresh on every `show` — deliberately left out of the documentation pass rather than mixed into it. | `MapPanel.show`, `MapPanel.apply` |
-| D2 | The deck's DOM was never verified by its author and only lightly by me. `PanelDeck`/`MapPanel` layout is the least-exercised code on the branch, and B4 was found the first time anybody looked at three panels. Assume more of the same. | — |
+| ~~D1~~ | **Done**, and it was not small — see §3.3, which lists the three further defects it uncovered. | `MapPanel`, `MatrixPanel.setTurn` |
+| D2 | The deck's DOM was never verified by its author and only lightly by me. `PanelDeck`/`MapPanel` layout is the least-exercised code on the branch, and B4 was found the first time anybody looked at three panels. **Still true, and D1's three follow-ons are the evidence** — every one of them was invisible until somebody drove a browser. Assume more of the same. | — |
 
 #### E. Smaller, and deliberate-or-not is worth deciding
 
@@ -139,25 +144,96 @@ change. Ordered within each group by what I would do first.
 - **Companions never get the two-file compare** (`uri2`). Reasonable — a blended
   square inside a panel of a deck is two claims at once — but it is undocumented
   as a decision.
-- **A vacancy cannot be made deliberately.** `VacantPanel` only ever arrives from
-  a `~` in a link; there is no "leave a gap here".
+- ~~**A vacancy cannot be made deliberately.**~~ Done by §3.3: a `+` makes as
+  many as the shape needs, and they are the feature's entry point rather than a
+  corner of it.
 - **No promote-to-lead.** With B2 fixed this becomes free; without it, a reader
   who wants a different map driving the deck has to rebuild the deck.
 
 ### 3.2 Suggested order
 
 The dependency chain is real, and doing these out of order means doing them
-twice:
+twice. **1 and 4 are done**; the rest stands as written.
 
-1. **D1** — a defect, minutes, unblocks nothing but should not ship.
+1. ~~**D1**~~ — done, and see §3.3 for what it turned out to be attached to.
 2. **C2** — decide the track ownership model. Write the decision down before any
    code. Everything in C waits on it.
 3. **B2** — make the lead a panel like the others. Blocks B1 and E's promote.
-4. **A1** — the drop strip; it is what makes the feature discoverable at all, and
-   it is independent of B and C.
-5. **B3 → B1** — pick the layout model, then build drag and drop onto it.
+4. ~~**A1**~~ — done as the `+` edges (§3.3).
+5. **B3 → B1** — the layout model is settled (a rectangle with a drawn column
+   count); what is left is the drag and the drop onto it.
 6. **C1 → C3 → C4** — tracks per map, then alignment, then broadcast.
 7. **B4** and the rest of E.
+
+### 3.3 What landed after the first handoff
+
+**The entry point is `+` edges, not a drop strip** (§16.9 in the spec). The
+brief changed on the way in and the new one is better: rather than a strip that
+takes files one at a time, a `+` down the right of the map and another along the
+bottom open a **cell**, and what comes back is the deck the reader drew with
+their own map in the first cell and every other one standing empty as a drop
+target. The argument is in `panels/DeckFrame.ts`'s head and is worth reading
+before changing any of it — in one line, adding maps one at a time makes the
+arrangement a consequence of the order the files arrived in, and the arrangement
+is what somebody assembling a figure is composing.
+
+| Piece | Where |
+|---|---|
+| The `+` edges, one component, two owners | `src/panels/DeckFrame.ts` |
+| `grownDeck`, the shape arithmetic | `src/panels/deck.ts`, `test/unit/panel-deck.test.ts` |
+| The drawn column count, `grow`, filling the first empty cell | `src/panels/PanelDeck.ts` |
+| Drawn-vs-link wording on an empty cell | `MapPanel.VacantPanel` |
+| The edges round a view with no deck | `Session.framed`, `Session.growDeck` |
+
+Three things worth knowing:
+
+- **One component, two owners.** The session wraps its view in the edges while
+  there is no deck; the deck wraps its own grid once there is. Two
+  implementations would drift, and the gesture has to be visibly the same act in
+  both places.
+- **The grid is a rectangle** and a press adds a whole edge, because a single
+  extra cell on the right of a two-row grid pushes every map after it one place
+  along. That is the constraint that decided B3.
+- **An empty cell is a real cell** — a slot in `maps`, a place in `MAX_PANELS`,
+  movable and closable — but it is *not* in the memory budget's divisor. It has
+  no worker and no block, and dividing by it read the two maps of a 2 × 2 deck at
+  a quarter of the allowance each.
+
+**D1, and the three defects behind it.** Passing `turn` through to companions
+was five lines. What it exposed was not:
+
+1. **The turn control was a latch.** The button closed over the presentation
+   object captured when the panel was built, and the session replaces that
+   object on every render — so after one press `turn.on` was permanently the
+   value the panel opened at. It asked for a flip that was already on, could
+   never ask for it to come off, and never lit up. Now read back through
+   `this.options.turn`, with `setTurn` syncing the `is-on` class.
+2. **The lock measured the wrong grid.** `cellCount()` and `bpPerCell()`
+   answered about the square block while the viewport being reported was the
+   *band*. A rotated cell is half a bin and a band is `2n − 1` columns, so a
+   whole-band window came back as twice the base pairs it covers and was clamped
+   to half the columns at the far end: **every turned panel of a deck drew half
+   of what the panel beside it drew.** Both now answer about the drawn grid.
+3. **A drop on a deck cell was taken twice.** `App.ts`'s content-area handler
+   exempts `.dropzone, .lane-drop` and nothing else, so a cooler dropped on a
+   vacancy opened the companion *and* was imported over the lead. `.deck-drop`
+   joins the exemption; the `+` edges carry it too.
+
+**And one that was not the turn's.** `maps` was not in
+`differsOnlyInPresentation`'s allowed keys, so **every add and every close
+rebuilt the lead** — a worker round trip and the reader's pan and zoom thrown
+away, for a change that happened in another panel. It is now `DECK_KEYS` in
+`state/ViewState.ts`. This mattered little when a deck was built once through
+the palette and matters a great deal when drawing a 2 × 2 is four changes to that
+key in a row.
+
+**Browser-verified** on `demo/ecoli` at 1700 × 1050, driven with
+`playwright-core`: `+` beside a single map gives `1 of 2` and `maps=~`; `+` below
+gives `1 of 4` and a 2 × 2; a URL typed in the bar fills the first empty cell; the
+turn puts *both* maps on their diagonals showing the same window, and unturns;
+a file dropped on either an edge or an empty card opens there and leaves the
+lead's heading and lanes untouched; closing every cell puts the deck down and
+brings back the single map with its scale and its edges intact.
 
 ## 4. Where the two features meet
 
@@ -205,6 +281,8 @@ purpose is that adjacent pictures are comparable.
 
 - The geometry, tested: `rotateBlock`, `cellAt` (inverse), `separationAt`,
   `turnedAxis`, `isTurnable`.
+- **Deck-wide for real**, not only by construction — see §3.3's D1 and the three
+  defects it was hiding. The lock now measures a turned panel in half-bins.
 - `flip` in the view state and the hash; in `DERIVED_KEYS`, so it takes the
   repaint road rather than the mount switch.
 - The toggle (a `triangle` icon beside the overlay marks), greyed via
@@ -213,10 +291,8 @@ purpose is that adjacent pictures are comparable.
   ratio cost one extra pass and no special case.
 - x becomes an ordinary genomic axis; y's locus axis is `null`; separators
   suppressed; the readout maps back through the inverse.
-- Deck-wide by construction — `turnPresentation` is built from the state and
-  every panel is handed the same state.
 - **Browser-verified** on `demo/ecoli`: the band draws with a correct Mb ruler
-  along its bottom edge.
+  along its bottom edge, and a deck of two draws two bands over the same window.
 
 ### Three things that turned out to be free
 
@@ -260,8 +336,10 @@ Roughly in the order I'd do it.
 6. **Empty corners.** A cell at the edge of the window and high up needs a partner
    off the end of the block. Honest as `NaN` today; filling them means reading
    wider than the window, which is a change to view read-planning.
-7. **Docs.** A `SPECS.md` section and a `CHANGELOG.md` entry, plus the shipped
-   items into `TODO.md`'s DONE list in that file's voice.
+7. **Docs.** A `SPECS.md` section for the geometry and a `CHANGELOG.md` entry for
+   the feature. §16.2 and §16.3 now say what a turn means to a *deck* — shared
+   like the derivations, and measured in half-bins by the lock — and the
+   changelog has the three fixes; the turn itself is still undocumented.
 
 ---
 
@@ -290,6 +368,19 @@ before editing.
   offset in `expectedModel` and silently produced garbage. Tests caught it.
 - **`git add -A` at the repo root will commit an agent worktree** as an embedded
   gitlink. `.gitignore` now covers `.claude/worktrees/`.
+- **A control built in the constructor cannot read the presentation.** The panel
+  keeps `this.options` and the session *replaces* the object on it on every
+  render, so a closure over the one that was there at construction answers with
+  the state the panel opened in — for ever. The turn's button was a one-way
+  switch for exactly this reason, and the O/E checkbox escapes it only because it
+  reads its own DOM. Read back through `this.options` in the handler.
+- **A new drop target has to be added to `App.ts`'s exemption list.** The content
+  area imports any file dropped in it, and a target that only calls
+  `preventDefault` still bubbles — so one drop is acted on twice. `stopPropagation`
+  is not the fix: the same handler is what takes the drag highlight off.
+- **A key that is neither data nor presentation defaults to a full rebuild**, and
+  the default is right — but `maps` sat there for a whole feature, silently
+  re-reading the lead's block every time a companion was added.
 
 ---
 
@@ -297,11 +388,21 @@ before editing.
 
 Reported honestly rather than quietly left:
 
-- **The deck is a skeleton.** §3.1 is the full account; it is the largest body of
-  remaining work on this branch by a wide margin.
-- Panel layout at 4–6 panels in `column`/`grid` has never been looked at.
-- The turn reaches only the lead of a deck — §3.1 D1.
-- The turn's own remaining work is §5.
+- **The deck is still mostly skeleton.** §3.1 minus A1, A2 and D1 is the full
+  account, and it is still the largest body of remaining work on this branch:
+  nothing about tracks (C), nothing about moving a map with the pointer (B1), and
+  the lead is still not a panel (B2).
+- Panel layout at 4–6 panels has been looked at once, at 2 × 2 with two maps and
+  two empty cells. Five and six cells, and any of it in a narrow window, have
+  not.
+- **An empty cell's card is `aspect-ratio: 1 / 1`**, which is a guess that looked
+  right at two columns. It has not been seen at one column or at three.
+- A companion whose block cannot be turned stays square while the deck is
+  turned. It should be unreachable — every panel is asked for the same block by
+  name — and if it happens the lock refuses the panel rather than mixing a
+  separation axis with a position one, which is the safe failure. Not tested,
+  because I could not construct it.
+- The turn's own remaining work is §5, and the overlays are still the long pole.
 
 ---
 

@@ -5106,6 +5106,94 @@ p {
   padding: 0.15rem 0;
 }
 
+/* An empty cell is a *card the size of a map*, not a slot in a list. Its whole
+   job is to say "a picture goes here" before there is one, and a 2rem strip
+   would say "a control goes here" instead. `aspect-ratio` with a floor, so a
+   row of four narrow cells does not collapse into letterboxes. */
 .deck-vacant {
-  min-height: 8rem;
+  min-height: 10rem;
+  aspect-ratio: 1 / 1;
+  max-height: 60vh;
+}
+
+/* ---------------------------------------------------------------------------
+   The `+` edges, which draw a deck before there is one (§16.9).
+
+   Round the session's own view while there is no deck and round the grid once
+   there is, from one component, so the gesture is visibly the same in both.
+   --------------------------------------------------------------------------- */
+
+/* `auto` rows, not `1fr`: the body is a view or a grid of canvases that has
+   already decided how tall it is, and a fractional row would stretch it to
+   whatever height the content area happens to have. The right-hand edge takes
+   its height from the body's row, which is what makes it a rail down the map
+   rather than a button beside it. */
+.deck-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.deck-frame-body {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+/* Quiet by default and lit on approach. A permanent bright rail down the side
+   of every map would be a control competing with the picture on every view
+   this app has; a dashed edge that answers the pointer is the same promise the
+   lane drop rectangles already make. */
+.deck-grow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.deck-grow.is-beside {
+  grid-area: 1 / 2;
+  width: 1.5rem;
+  min-height: 6rem;
+}
+
+.deck-grow.is-below {
+  grid-area: 2 / 1;
+  height: 1.5rem;
+}
+
+.deck-grow:hover,
+.deck-grow:focus-visible,
+.deck-grow.over {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  border-style: solid;
+}
+
+/* Greyed rather than gone at six maps: an affordance that vanishes at the limit
+   reads as a fault in the map before it. Not `disabled`, because the edge is
+   still a drop target there — see `panels/DeckFrame.ts` — so the cursor and the
+   flat hover are what say the press will not open a cell. */
+.deck-grow.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deck-grow.is-disabled:hover,
+.deck-grow.is-disabled:focus-visible {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: transparent;
+  border-style: dashed;
 }
