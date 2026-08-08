@@ -42,7 +42,7 @@
  * every picture beside it at a different height.
  */
 
-import type { AnnotationStyle, LaneEdge } from './types'
+import { placementOn, type AnnotationStyle, type LaneEdge, type Placement } from './types'
 
 /**
  * The map a lane is on. Opaque here — the session's own map answers to
@@ -64,12 +64,26 @@ export const LANE_OVERRIDES = ['limits', 'flip'] as const
 
 export type LaneOverride = (typeof LANE_OVERRIDES)[number]
 
-/** One placement of one track: a map, an edge, and what it does differently there. */
+/**
+ * One track's presence on one map: which of its four edges, and what it does
+ * differently there.
+ *
+ * One lane per *map*, carrying a `Placement`, rather than one per edge. Two
+ * reasons, and the second is the one that decided it:
+ *
+ * - it is the shape the model already had — an entry has always held four
+ *   booleans saying which edges it is drawn on, and a deck makes that four
+ *   booleans *per map* rather than something new;
+ * - it keeps a track's entry unique within a map. The lanes are drawn from a
+ *   list of entries keyed by id, and a track on two edges of one map splitting
+ *   into two entries with one id would break every hit box, every restyle and
+ *   every reorder that resolves a lane by identity.
+ */
 export interface Lane {
   /** The track's id — an `AnnotationEntry.id`. */
   track: string
   map: MapId
-  edge: LaneEdge
+  placement: Placement
   /**
    * Only the fields set *on this lane*. Absent or empty is the common case and
    * the good one: a lane with no patch follows its track for good.
@@ -108,13 +122,14 @@ export function clearOverride(lane: Lane, field: LaneOverride): Lane {
   return Object.keys(rest).length === 0 ? bare : { ...bare, style: rest }
 }
 
-/** The lanes of one map, on one edge, in the order they are stacked. */
-export function lanesOn(
-  lanes: readonly Lane[],
-  map: MapId,
-  edge: LaneEdge,
-): Lane[] {
-  return lanes.filter((lane) => lane.map === map && lane.edge === edge)
+/** The lanes of one map, in the order they are stacked. */
+export function lanesOn(lanes: readonly Lane[], map: MapId): Lane[] {
+  return lanes.filter((lane) => lane.map === map)
+}
+
+/** The one lane a track has on a map, if it is drawn there at all. */
+export function laneOf(lanes: readonly Lane[], track: string, map: MapId): Lane | undefined {
+  return lanes.find((lane) => lane.track === track && lane.map === map)
 }
 
 /** Every map a track is currently drawn on, in the order its lanes were made. */
@@ -127,14 +142,9 @@ export function mapsOf(lanes: readonly Lane[], track: string): MapId[] {
   return seen
 }
 
-/** `true` when this exact placement already exists. */
-export function isPlaced(
-  lanes: readonly Lane[],
-  track: string,
-  map: MapId,
-  edge: LaneEdge,
-): boolean {
-  return lanes.some((lane) => lane.track === track && lane.map === map && lane.edge === edge)
+/** `true` when a track is drawn on a map at all. */
+export function isPlaced(lanes: readonly Lane[], track: string, map: MapId): boolean {
+  return laneOf(lanes, track, map) !== undefined
 }
 
 /**
@@ -144,9 +154,17 @@ export function isPlaced(
  * rule a newly imported track has always followed, and the one that never moves
  * a lane a reader has already positioned.
  */
-export function place(lanes: readonly Lane[], track: string, map: MapId, edge: LaneEdge): Lane[] {
-  if (isPlaced(lanes, track, map, edge)) return [...lanes]
-  return [...lanes, { track, map, edge }]
+export function place(
+  lanes: readonly Lane[],
+  track: string,
+  map: MapId,
+  placement: Placement,
+): Lane[] {
+  const held = laneOf(lanes, track, map)
+  if (held === undefined) return [...lanes, { track, map, placement }]
+  // Already here: the edges are replaced and the patch is kept. Moving a track
+  // from one edge to another must not throw away the range somebody set on it.
+  return lanes.map((lane) => (lane === held ? { ...lane, placement } : lane))
 }
 
 /**
@@ -155,16 +173,8 @@ export function place(lanes: readonly Lane[], track: string, map: MapId, edge: L
  * The track itself is untouched: it stays in the list, with its style and its
  * data, ready to be put back without being read again.
  */
-export function unplace(
-  lanes: readonly Lane[],
-  track: string,
-  map: MapId,
-  edge?: LaneEdge,
-): Lane[] {
-  return lanes.filter(
-    (lane) =>
-      lane.track !== track || lane.map !== map || (edge !== undefined && lane.edge !== edge),
-  )
+export function unplace(lanes: readonly Lane[], track: string, map: MapId): Lane[] {
+  return lanes.filter((lane) => lane.track !== track || lane.map !== map)
 }
 
 /**
@@ -184,11 +194,14 @@ export function propagate(
   maps: readonly MapId[],
   fallback: LaneEdge = 'bottom',
 ): Lane[] {
-  const edges = [...new Set(lanes.filter((lane) => lane.track === track).map((lane) => lane.edge))]
-  const wanted = edges.length === 0 ? [fallback] : edges
+  const first = lanes.find((lane) => lane.track === track)
+  const wanted = first?.placement ?? placementOn(fallback)
   let next = [...lanes]
   for (const map of maps) {
-    for (const edge of wanted) next = place(next, track, map, edge)
+    // Left exactly as it is where the track is already on that map — a
+    // propagate must not silently move a lane somebody positioned, nor drop the
+    // range they set on it.
+    if (!isPlaced(next, track, map)) next = place(next, track, map, wanted)
   }
   return next
 }
@@ -227,7 +240,7 @@ export function pruneLanes(
  * make a list-local index land a slot early.
  */
 export function reorderLane(lanes: readonly Lane[], lane: Lane, to: number): Lane[] {
-  const stack = lanesOn(lanes, lane.map, lane.edge)
+  const stack = lanesOn(lanes, lane.map)
   const from = stack.indexOf(lane)
   if (from < 0) return [...lanes]
   const target = Math.max(0, Math.min(stack.length - 1, Math.trunc(to)))
