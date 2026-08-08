@@ -102,6 +102,30 @@
       *beside* a view, so there was never anything for the lead to be rebuilt for; without that
       written down, every press of `+` cost a read and the reader's pan and zoom.
 
+- [x] A deck survives the file it is beside being navigated. Every navigation built a fresh state
+      and quietly dropped the two keys that name what is on screen *beside* the view, so clicking
+      Chromosomes and then a contig came back with the deck gone and its workers released. Carried
+      by path, so changing the resolution keeps it and opening another file does not.
+
+- [x] An `.mcool` can be a companion: a collection descends into one of its maps at the lead's bin
+      size, the way the compare card and the picker already do, and the link names the map it
+      opened rather than the collection it was dropped as.
+
+- [x] The key is in the corner of the map, in the units the reader is using. Two squares and two
+      numbers, top right, inside the picture — the strip beside it cost between 5.5 and 7 rem of
+      the column, four times over in a deck of four. The numbers are the ones in the clip boxes,
+      not their inverse transform, and clicking one sets it. The title names all three things a
+      cell has been through: `Balanced O/E (log2)`.
+
+- [x] The deck's bar holds only what is shared — the chain, one scale for all, how many across, one
+      figure of the whole deck. Maps are rearranged by a grip before each name, dropping one on a
+      cell to exchange the two; the first map is always the lead, has a name like the others, and
+      has no grip. A companion's colour controls are a menu opening over its own picture from the
+      bottom-left corner, and the fold under each panel is gone.
+
+- [x] The maps line up to the pixel, tracks or no tracks, and the `+` along the bottom of a single
+      map is above the fold.
+
 ## FOR NOW
 
 The deck of maps (§16) is a data feature that works and an interaction feature
@@ -114,18 +138,14 @@ because the chain between them is real.
 - [ ] Decide who owns a track when there are N maps — one store per panel, or one
       store that knows which maps each track is on. Everything else about tracks
       waits on that sentence being written down.
-- [ ] The first map is a panel like the others: movable, closable, and able to
-      hand the deck over to another. Today it is the session's own view
-      re-parented into cell 0 and it cannot leave.
-- [ ] Maps dragged onto each other to arrange them — left, right, above, below.
-      The grid is a rectangle with a column count now rather than a bare list,
-      which is the model a drag can drop onto; what is missing is the gesture and
-      a swap between two occupied cells.
+- [ ] The first map's cell still holds the view's heading, its locus box and its
+      block summary, which the others have no copy of. The maps line up now — the
+      pictures are pushed to the foot of their cells — but the lead's cell is
+      taller than it needs to be, and hoisting that furniture above the grid is
+      the structural fix the spacer stands in for.
 - [ ] Tracks per map, the stacks reconciled so the maps still line up when two of
       them carry different numbers, and a track sent to every map or taken off
       every map in one gesture.
-- [ ] The first map's cell is bigger than the rest, because it keeps the heading,
-      the locus box and the summary the others have no copy of.
 
 
 The 45° turn is half landed — the geometry and the toggle are in and tested, the

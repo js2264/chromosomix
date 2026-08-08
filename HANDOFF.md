@@ -4,12 +4,12 @@ Working document for whoever picks this up. Branched from **`001715f` (0.9.0)**;
 everything below is new since that tag. All of it is committed and pushed.
 
 **Green as of the last commit:** `npm run typecheck`,
-`npm run test:nofixtures` (1144 passed, 25 skipped), `npm run build`.
+`npm run test:nofixtures` (1146 passed, 25 skipped), `npm run build`.
 
-**Since the first handoff:** §3.1's **D1** and **A1** are done, A1 in the shape
-the user asked for rather than the one it was written in — see §3.3. Three
-defects found while doing them are fixed and are listed there too. Everything
-else in §3.1 stands.
+**Since the first handoff:** §3.1's **A1**, **A2**, **B1**, **B3** and **D1** are
+done, and **B2** is closed as a decision rather than as work — see §3.3 and §3.4,
+which also list the seven defects found on the way. **C** (tracks) is untouched
+and is now the whole of what is left.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
 with "Cannot find type definition file for 'node'" until you do, which looks
@@ -116,12 +116,13 @@ change. Ordered within each group by what I would do first.
 
 | # | Gap | Where |
 |---|---|---|
-| B1 | **No drag and drop at all.** Reordering is `◀` `▶` buttons on each companion's heading. Wanted: drag a map onto another to place it left/right/above/below. | `MapPanel` heading, `PanelDeck.move` |
-| B2 | **The lead cannot be moved or closed.** `leadCell` is grid cell 0, always, and carries no per-panel controls — the session's own view is re-parented into it. So the first map is permanently first. This is the structural blocker for B1: a general reorder needs the lead to be *a panel like any other*, which today it is not. | `PanelDeck.leadCell`, `setLead` |
-| B3 | **Half decided, by §3.3.** The cheap option won: the deck is a **rectangle of cells filled in reading order**, with an explicit column count the reader draws and empty cells as first-class members of the list. That is the model B1 drops onto — a drop between two cells is an index, and a drop on an occupied cell is a swap. There is still no layout *tree*, and there should not be one until something needs a cell two columns wide. | `PanelDeck.columnsNow`, `deck.grownDeck` |
-| B4 | **The lead's cell is much bigger than a companion's** — it keeps the view heading, the locus box, the back link and the block summary, while a companion has a one-line heading. At three panels the lead's map is visibly smaller than the maps beside it. Asymmetric and cramped. | `.deck-panel.is-lead` in `styles.css`; what `setLead` re-parents |
+| ~~B1~~ | **Done** — see §3.4. A grip before each companion's name, the tiling shown while one is held, and a drop that *exchanges* two cells. A swap and not an insert: sliding a map into a distant cell by shifting everything between here and there rearranges three pictures to move one. | `MapPanel.grip`, `PanelDeck.watchArranging` |
+| ~~B2~~ | **Closed as a decision, not as work.** The first map is always the lead, by the reader's own instruction: it is the session's view re-parented into cell 0, it owns the breadcrumb and the tables and the tracks, and which file a session is *of* is not a thing that should change by dragging. It has a name like every other cell and no grip. What survives of B2 is E's promote, which is not wanted either. | `PanelDeck.leadCell`, `setLead` |
+| ~~B3~~ | **Decided and built.** The deck is a **rectangle of cells filled in reading order**, with an explicit column count the reader draws with a `+` or picks in the bar, and empty cells as first-class members of the list. No layout *tree*, and there should not be one until something needs a cell two columns wide. | `PanelDeck.columnsNow`, `deck.grownDeck` |
+| B4 | **Half done.** The maps line up to the pixel now — the lead's lane room is reserved on every panel and every picture is pushed to the foot of its cell — but the lead's *cell* is still taller, because it keeps the view heading, the locus box, the back link and the block summary. Hoisting those above the grid is the structural fix the spacer stands in for. | `.deck-panel` in `styles.css`; what `setLead` re-parents |
 
 #### C. Tracks — the largest gap
+
 
 | # | Gap | Where |
 |---|---|---|
@@ -158,12 +159,46 @@ twice. **1 and 4 are done**; the rest stands as written.
 1. ~~**D1**~~ — done, and see §3.3 for what it turned out to be attached to.
 2. **C2** — decide the track ownership model. Write the decision down before any
    code. Everything in C waits on it.
-3. **B2** — make the lead a panel like the others. Blocks B1 and E's promote.
+3. ~~**B2**~~ — closed as a decision: the first map is always the lead.
 4. ~~**A1**~~ — done as the `+` edges (§3.3).
-5. **B3 → B1** — the layout model is settled (a rectangle with a drawn column
-   count); what is left is the drag and the drop onto it.
+5. ~~**B3 → B1**~~ — done: a rectangle with a drawn column count, and a grip
+   that swaps two cells.
 6. **C1 → C3 → C4** — tracks per map, then alignment, then broadcast.
 7. **B4** and the rest of E.
+
+### 3.4 The second batch
+
+Reported as bugs, and three of them were architecture rather than bugs.
+
+| What | Where |
+|---|---|
+| `maps`/`uri2` carried across a navigation | `Session.navigate`, `COMPANION_KEYS` |
+| A collection descends to the lead's rung | `MapPanel.openOrDescend`, `PanelDeck.resolveRef` |
+| The score shared as a **resolved id** | `PanelDeckProps.score`, `MapPanel.scoreOf` |
+| The key inside the map, in the reader's units | `src/render/legend.ts`, `src/ui/MapKey.ts` |
+| The scale menu in the map's corner | `MatrixPanelOptions.cornerControls` |
+| Grip, drop-to-swap, the tiling | `MapPanel.grip`, `PanelDeck.watchArranging`, `swapItems` |
+| Lane room reserved on every panel | `MatrixPanel.setLaneListener`, `PanelDeck.alignTo` |
+| One figure of the whole deck | `PanelDeck.saveDeck` |
+
+Three things worth knowing before touching any of it:
+
+- **A navigation is a fresh state.** That is right for the region and the level
+  and wrong for `maps` and `uri2`, which name what is on screen *beside* the
+  view. Carrying them is `Session.navigate`'s and not the store's: the address
+  bar is obeyed as written, or a pasted link shows a deck nobody sent. Every
+  `store.set` inside `Session` goes through it; `App`'s hash listener does not.
+- **`ColorbarView` is gone.** The key is `render/legend.ts` (content and a canvas
+  draw for exports) plus `ui/MapKey.ts` (the DOM one, whose two numbers are
+  editable). Its values are **transform-space** — the same numbers as the clip
+  boxes — which is the opposite of the old bar's rule and is the whole point.
+- **`cornerControls`, not `detachedControls`.** Every view sets the latter, to
+  move its cards into the Aesthetics column; only a companion sets the former.
+  Inferring one from the other put a second scale menu on the session's own map.
+
+Still open from this batch: the lead's cell is taller than the others (B4 above),
+and a companion still re-reads its block after a trip through a table, because a
+view a companion cannot answer tears its `MatrixPanel` down.
 
 ### 3.3 What landed after the first handoff
 
