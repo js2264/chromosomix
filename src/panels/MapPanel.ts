@@ -28,6 +28,7 @@ import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { MatrixResult, OpenResult, SourceSpec } from '../worker/protocol'
+import type { LaneEdge } from '../annotations/types'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -157,6 +158,15 @@ export interface MapPanelProps {
    * screen — and what makes it *this* panel's is the map id inside.
    */
   annotations(): AnnotationContext | undefined
+  /**
+   * This panel's own stack changed thickness.
+   *
+   * The deck reserves the *largest* stack on each edge across every panel
+   * (§16.8), so a companion gaining a track moves a number the whole grid is
+   * laid out from — and the lead, which is the only panel that used to report,
+   * knows nothing about it.
+   */
+  onLanes?(): void
   /**
    * Whether the deck is turned 45°, as a thunk so it is never stale.
    *
@@ -380,6 +390,17 @@ export class MapPanel {
   applyLook(look: ScaleState): void {
     this.look = look
     this.panel?.applyScale(look)
+  }
+
+  /**
+   * How much room this panel's own stack takes on one edge.
+   *
+   * Asked of every panel so the deck can reserve the largest (§16.8). Zero
+   * before the map exists, which is right: a panel with no picture yet has no
+   * stack to make room for.
+   */
+  laneRoom(edge: LaneEdge): number {
+    return this.panel?.laneExtent(edge) ?? 0
   }
 
   remeasure(): void {
@@ -633,6 +654,9 @@ export class MapPanel {
       // panel of the deck down by the height of whatever was open in it. Not
       // the Tracks card and not Groups either: both are about annotations and a
       // companion carries none.
+      // Reported for the deck's benefit, not this panel's: a companion lays
+      // nothing out, but the room its stack takes is the deck's business.
+      this.panel.setLaneListener(() => this.props.onLanes?.())
       this.body.replaceChildren(this.panel.el)
     }
     // After the panel exists, and on every block. `readBlock` runs *before* the

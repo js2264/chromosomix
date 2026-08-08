@@ -4004,6 +4004,19 @@ export class MatrixPanel {
    * through CSS is chasing a derivation with four inputs. A number the deck can
    * hand to every other panel has one.
    */
+  /**
+   * The room this panel's own stack takes on one edge, in CSS pixels.
+   *
+   * The same figure {@link reportGeometry} sends, asked one edge at a time —
+   * what a deck needs from a *companion*, which reports nothing because it is
+   * not laying anything out. Zero for an empty edge, gap included otherwise,
+   * because a stack of one still needs the space between it and the map.
+   */
+  laneExtent(edge: LaneEdge): number {
+    const room = this.laneBudget[edge]
+    return room === 0 ? 0 : room + LANE_GAP
+  }
+
   private reportGeometry(): void {
     this.laneListener?.({
       lanes: {
