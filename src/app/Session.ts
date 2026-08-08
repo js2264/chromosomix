@@ -29,6 +29,7 @@ import { AnnotationClient } from '../annotations/worker/client'
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import {
+  COMPANION_KEYS,
   ViewStore,
   differsOnlyInPresentation,
   landingState,
@@ -946,7 +947,7 @@ export class Session {
         keys: KEYS.genomes,
         enabled: file !== null && isMetacool,
         run: () => {
-          if (state !== null) this.store.set({ uri: state.uri, view: 'genomes' })
+          if (state !== null) this.navigate({ uri: state.uri, view: 'genomes' })
         },
       },
       {
@@ -956,7 +957,7 @@ export class Session {
         keys: KEYS.contigs,
         enabled: file !== null,
         run: () => {
-          if (state !== null) this.store.set({ uri: state.uri, view: 'contigs' })
+          if (state !== null) this.navigate({ uri: state.uri, view: 'contigs' })
         },
       },
       {
@@ -975,7 +976,7 @@ export class Session {
         enabled: file !== null,
         run: () => {
           if (state !== null) {
-            this.store.set({ uri: state.uri, view: isMetacool ? 'overview' : 'whole' })
+            this.navigate({ uri: state.uri, view: isMetacool ? 'overview' : 'whole' })
           }
         },
       },
@@ -1086,8 +1087,8 @@ export class Session {
     const state = this.store.state
     const target = this.stepTarget(delta)
     if (state === null || target === null) return
-    if (state.view === 'genome') this.store.set({ uri: state.uri, view: 'genome', genome: target })
-    else this.store.set({ ...state, region: target })
+    if (state.view === 'genome') this.navigate({ uri: state.uri, view: 'genome', genome: target })
+    else this.navigate({ ...state, region: target })
   }
 
   /** Contig names, if the contigs table has already been read. */
@@ -1428,7 +1429,7 @@ export class Session {
         entries,
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
         ...(currentEntry === undefined ? {} : { currentEntry }),
-        onNavigate: (state) => this.store.set(state),
+        onNavigate: (state) => this.navigate(state),
         onOpenFile: () => this.host.openFileDialog(this),
         onSelectEntry: (entry) =>
           void this.open(
@@ -1465,12 +1466,15 @@ export class Session {
         wanted !== null && wanted.uri === uri && wanted.view !== 'browser'
           ? wanted
           : landingState(uri, rootView)
-      const willNotify = !viewStateEquals(target, this.store.state)
-      this.store.set(target, { replace: true })
-      // `set` is a no-op when the state is already exactly `target`, so render
-      // explicitly in that case — and only in that case, to avoid mounting the
-      // same view twice.
-      if (!willNotify) void this.render(target)
+      // Asked of {@link navigate} rather than compared here, because what lands
+      // in the store is the target *plus whatever it carried* — so a comparison
+      // against the bare target says "this is a move" for a re-drop of the file
+      // already open under a deck, and nothing renders at all.
+      const moved = this.navigate(target, { replace: true })
+      // `set` is a no-op when the state is already exactly what arrived, so
+      // render explicitly in that case — and only in that case, to avoid
+      // mounting the same view twice.
+      if (!moved) void this.render(this.store.state)
     } catch (err) {
       // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
       // reader mirrors that faithfully (§3.4). But a *user* who dropped a
@@ -1640,7 +1644,7 @@ export class Session {
         ...(locus === undefined ? {} : { locus }),
       }
       const willNotify = !viewStateEquals(target, this.store.state)
-      this.store.set(target, { replace: true })
+      this.navigate(target, { replace: true })
       if (!willNotify) void this.render(target)
     } catch (err) {
       client.destroy()
@@ -1963,7 +1967,7 @@ export class Session {
       ...(locus === undefined ? {} : { locus }),
     }
     const willNotify = !viewStateEquals(target, this.store.state)
-    this.store.set(target)
+    this.navigate(target)
     if (!willNotify) void this.render(target)
     this.host.sessionChanged(this)
   }
@@ -1983,7 +1987,7 @@ export class Session {
     this.syncCompareCard()
     this.mounted = null
     const willNotify = !viewStateEquals(target, this.store.state)
-    this.store.set(target)
+    this.navigate(target)
     if (!willNotify) void this.render(target)
     this.host.sessionChanged(this)
   }
@@ -2140,7 +2144,7 @@ export class Session {
     // a `view=browser` link to a cooler got here by opening the map for its
     // `/chroms` — so render explicitly in that case, and only in that case.
     const willNotify = !viewStateEquals(target, this.store.state)
-    this.store.set(target)
+    this.navigate(target)
     if (!willNotify) void this.render(target)
   }
 
@@ -2681,6 +2685,7 @@ export class Session {
         const { onChange: _own, onAvailable: _grey, ...shared } = this.turnPresentation(state)
         return shared
       },
+      binsize: () => this.file?.info.binsize ?? undefined,
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in
@@ -3105,12 +3110,12 @@ export class Session {
     // A link can carry `balance=true` to a file with no weight column; every
     // read would then be refused for a reason the recipient did not choose.
     if (state.balance === true && !this.file.info.hasWeights) {
-      this.store.set({ ...state, balance: undefined }, { replace: true })
+      this.navigate({ ...state, balance: undefined }, { replace: true })
       return
     }
 
     if (state.view === 'genomes' && !this.file.info.hasGenomes) {
-      this.store.set({ uri: state.uri, view: 'contigs' }, { replace: true })
+      this.navigate({ uri: state.uri, view: 'contigs' }, { replace: true })
       return
     }
 
@@ -3119,7 +3124,7 @@ export class Session {
     // none — but it does have the other half of the same menu entry, the whole
     // map in one bounded read, which is what "Whole genome" means there.
     if (state.view === 'overview' && !this.file.info.hasGenomes) {
-      this.store.set({ uri: state.uri, view: 'whole' }, { replace: true })
+      this.navigate({ uri: state.uri, view: 'whole' }, { replace: true })
       return
     }
 
@@ -3363,16 +3368,16 @@ export class Session {
     const view = new GenomesTable({
       data: file.genomes,
       persistence: this.tableMemory(state.uri, 'genomes'),
-      onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
+      onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenSelection: (names) =>
-        this.store.set({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
-      onOpenWhole: () => this.store.set({ uri: state.uri, view: this.wholeFileView() }),
+        this.navigate({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
+      onOpenWhole: () => this.navigate({ uri: state.uri, view: this.wholeFileView() }),
       // Straight to the window, past the two whole-something doors beside it.
       // No `genome` on the state: the reader resolves a genome name, a contig
       // name and either with coordinates on it, so what was typed decides which
       // of those it was — guessing here would be this method answering a
       // question `parseMetacoolerRange` is about to answer properly.
-      onOpenRegion: (region) => this.store.set({ uri: state.uri, view: 'region', region }),
+      onOpenRegion: (region) => this.navigate({ uri: state.uri, view: 'region', region }),
     })
     this.showContent(view.el, view)
   }
@@ -3403,20 +3408,20 @@ export class Session {
         : undefined,
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
-        this.store.set({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
+        this.navigate({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
       // The same destination a click on a row reaches, with coordinates on it —
       // and offered on a MAG's contig list too, where "open the whole contig
       // first" is exactly as expensive a detour as it is at the top level.
       onOpenRegion: (region: string) =>
-        this.store.set({ uri: state.uri, view: 'region', region, genome: state.genome }),
+        this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
       // Neither while this table is one genome's contigs: "the whole file" is
       // not the question someone reading a MAG's contigs is asking, and the map
       // of *those* contigs is the genome view one crumb up.
       ...(state.genome === undefined
         ? {
-            onOpenWhole: () => this.store.set({ uri: state.uri, view: this.wholeFileView() }),
+            onOpenWhole: () => this.navigate({ uri: state.uri, view: this.wholeFileView() }),
             onOpenSelection: (names: string[]) =>
-              this.store.set({ uri: state.uri, view: 'selection', regions: names.join(',') }),
+              this.navigate({ uri: state.uri, view: 'selection', regions: names.join(',') }),
           }
         : {}),
     })
@@ -3470,7 +3475,7 @@ export class Session {
           turn: this.turnPresentation(state),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
-            this.store.set({
+            this.navigate({
               uri: state.uri,
               view: 'region',
               region,
@@ -3496,7 +3501,7 @@ export class Session {
     if (file === null) return
     const selection = selectionOf(state)
     if (selection === null) {
-      this.store.set({ uri: state.uri, view: this.wholeFileView() }, { replace: true })
+      this.navigate({ uri: state.uri, view: this.wholeFileView() }, { replace: true })
       return
     }
     // A contig selection is measured against the contigs table, and a pasted
@@ -3541,7 +3546,7 @@ export class Session {
       turn: this.turnPresentation(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region, region2) =>
-        this.store.set({
+        this.navigate({
           uri: state.uri,
           view: 'region',
           region,
@@ -3613,7 +3618,7 @@ export class Session {
 
   private mountGenome(state: ViewState): void {
     if (state.genome === undefined) {
-      this.store.set({ uri: state.uri, view: 'genomes' }, { replace: true })
+      this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
     const view = new GenomeView({
@@ -3634,9 +3639,9 @@ export class Session {
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       onOpenRegion: (region) =>
-        this.store.set({ uri: state.uri, view: 'region', region, genome: state.genome }),
+        this.navigate({ uri: state.uri, view: 'region', region, genome: state.genome }),
       onOpenContigPair: (region, region2) =>
-        this.store.set({ uri: state.uri, view: 'region', region, region2, genome: state.genome }),
+        this.navigate({ uri: state.uri, view: 'region', region, region2, genome: state.genome }),
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
@@ -3646,7 +3651,7 @@ export class Session {
     const file = this.file
     if (file === null) return
     if (state.genome === undefined || state.genome2 === undefined) {
-      this.store.set({ uri: state.uri, view: 'genomes' }, { replace: true })
+      this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
     const mapSwitch = this.mapToggleButton()
@@ -3666,12 +3671,12 @@ export class Session {
       colGenome: state.genome2,
       level: matrixLevel(state),
       scale: this.scaleOf(state),
-      onChangeGenomes: (genome, genome2) => this.store.set({ ...state, genome, genome2 }),
+      onChangeGenomes: (genome, genome2) => this.navigate({ ...state, genome, genome2 }),
       onLevelChange: (level) => this.store.patch({ level }, { replace: true }),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
-      onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
+      onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenContig: (region, region2) =>
-        this.store.set({
+        this.navigate({
           uri: state.uri,
           view: 'region',
           region,
@@ -3684,7 +3689,7 @@ export class Session {
 
   private async mountRegion(state: ViewState): Promise<void> {
     if (state.region === undefined) {
-      this.store.set({ uri: state.uri, view: 'genomes' }, { replace: true })
+      this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
     // The contigs table is what "next contig" steps through. It is read once
@@ -3719,10 +3724,10 @@ export class Session {
       // has no undefined-valued keys for a strict deep-equal to trip on.
       onChangeRegion: (region, region2) => {
         const { region2: _dropped, ...rest } = state
-        this.store.set({ ...rest, region, ...(region2 === undefined ? {} : { region2 }) })
+        this.navigate({ ...rest, region, ...(region2 === undefined ? {} : { region2 }) })
       },
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
-      onOpenGenome: (genome) => this.store.set({ uri: state.uri, view: 'genome', genome }),
+      onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onError: (err) => this.showError(err),
     })
     this.showContent(view.el, view)
@@ -3752,10 +3757,10 @@ export class Session {
           onLevelChange: (next) => this.store.patch({ level: next }, { replace: true }),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
-            this.store.set({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
-          onOpenGenome: (genome) => this.store.set({ uri: file.uri, view: 'genome', genome }),
+            this.navigate({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
+          onOpenGenome: (genome) => this.navigate({ uri: file.uri, view: 'genome', genome }),
           onOpenContig: (region, region2) =>
-            this.store.set({
+            this.navigate({
               uri: file.uri,
               view: 'region',
               region,
@@ -3798,6 +3803,66 @@ export class Session {
   }
 
   // -------------------------------------------------------------------------
+  // Navigating
+  // -------------------------------------------------------------------------
+
+  /**
+   * Go somewhere in this session, keeping what is on screen beside the view.
+   *
+   * Every navigation builds a **fresh** state — `{ uri, view: 'contigs' }` and
+   * nothing else — and that is right for what a navigation is: the region, the
+   * genome, the level and the pair are all facts about the picture being left
+   * behind. {@link COMPANION_KEYS} are not. A deck of other files (§16) and a
+   * second file in the lower triangle (§5.7) are things the reader put on
+   * screen *around* this session, and no navigation within one file is a
+   * request to take them away.
+   *
+   * Left to `store.set` alone they were taken away by every one of them.
+   * Clicking Chromosomes and then a contig — the plainest way there is to look
+   * at another chromosome — arrived with no `maps`, the deck reconciled itself
+   * to nothing, and five workers were released on the way past a table. The
+   * companions are held *in the state* rather than in a field precisely so a
+   * link carries them, which is what made the loss silent: nothing was left
+   * holding them once the key had gone.
+   *
+   * **Same file, by path and not by URI.** A resolution is a group inside one
+   * `.mcool` (§3.4), so `…::resolutions/1000` and `…::resolutions/2000` are one
+   * file at two levels and a deck spans them — changing the resolution is the
+   * case this most obviously must survive. A different *path* is a different
+   * file, this session is now of something else, and a deck assembled beside
+   * the old one has no claim on it.
+   *
+   * Deliberately **not** in the store: the address bar is obeyed exactly as
+   * written. A pasted link with no `maps` in it means a deck of one, and a
+   * store that helpfully put the last one back would show the recipient
+   * something nobody sent (`App.render`).
+   */
+  /** @returns whether the store actually moved, so a caller can render by hand. */
+  private navigate(next: ViewState | null, options: { replace?: boolean } = {}): boolean {
+    const carried = next === null ? null : this.withCompanions(next)
+    const moved = !viewStateEquals(carried, this.store.state)
+    this.store.set(carried, options)
+    return moved
+  }
+
+  /** {@link navigate}'s carrying rule, as a value. */
+  private withCompanions(next: ViewState): ViewState {
+    const held = this.store.state
+    if (held === null || splitUri(held.uri).path !== splitUri(next.uri).path) return next
+    const out = { ...next }
+    for (const key of COMPANION_KEYS) {
+      // `in`, not `!== undefined`: a caller that has said something about a key
+      // is believed, including having said it is gone. That is what lets the
+      // deck put itself down (`onMapsChange(undefined)`) and the compare card
+      // close its file, without either having to know this rule exists.
+      if (key in next) continue
+      const value = held[key]
+      if (value !== undefined) out[key] = value
+    }
+    return out
+  }
+
+  // -------------------------------------------------------------------------
   // Mounting
   // -------------------------------------------------------------------------
 
@@ -3812,7 +3877,7 @@ export class Session {
    */
   toPicker(): void {
     if (this.store.state === null) void this.render(null)
-    else this.store.set(null)
+    else this.navigate(null)
   }
 
   private showContent(
