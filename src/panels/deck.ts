@@ -243,14 +243,59 @@ export interface DeckShape {
  * `ceil`, so the row that was short becomes a whole one, and the deck is a
  * rectangle again. That is the shape the reader drew, and the holes are drop
  * targets rather than gaps.
+ *
+ * This says only how many cells and how wide. **Where the maps go is
+ * {@link grownPlacement}**, and the two have to be read together: the shape
+ * alone is not enough to grow a deck without rearranging it, which is the trap
+ * the first attempt at this fell into.
  */
 export function grownDeck(shape: DeckShape, direction: GrowDirection): DeckShape {
-  const cells = Math.max(1, Math.floor(shape.cells))
-  const columns = Math.min(Math.max(1, Math.floor(shape.columns)), cells)
+  const { cells, columns } = clampShape(shape)
   const rows = Math.ceil(cells / columns)
   return direction === 'beside'
     ? { cells: rows * (columns + 1), columns: columns + 1 }
     : { cells: (rows + 1) * columns, columns }
+}
+
+/**
+ * Which cell each map moves to when the deck grows: old index per new cell.
+ *
+ * Indices are **flat, in reading order, lead included** — cell 0 is the lead's
+ * cell, and `null` is a cell this press opened. Say a 2 × 2 deck grows beside:
+ * `[0, 1, null, 2, 3, null]`, which reads as *the first row keeps its two maps
+ * and gains a cell, and so does the second*.
+ *
+ * This exists because {@link grownDeck} is not enough on its own, and the way
+ * that goes wrong is worth stating. A deck is one flat list of cells laid into
+ * `grid-template-columns: repeat(n, …)`, so a cell's position is *derived* from
+ * its index and the column count — cell `k` sits at row `⌊k/n⌋`, column `k mod
+ * n`. Raising `n` therefore re-maps every index at once. Growing **below**
+ * changes no column count and appending is exactly right; growing **beside**
+ * changes it, and appending the new cells at the end reflows the whole deck: a
+ * 2 × 2 of four maps becomes a 3-wide row of three with the fourth alone
+ * underneath, and the "column of empty cards" the reader pressed for appears
+ * along the bottom. A new column has to be *spliced* into the end of each row,
+ * which is what this computes.
+ *
+ * The lead never moves — it is at row 0, column 0, and both growths insert only
+ * after a row's existing cells — so `out[0]` is always `0`.
+ */
+export function grownPlacement(shape: DeckShape, direction: GrowDirection): (number | null)[] {
+  const { cells, columns } = clampShape(shape)
+  const next = grownDeck({ cells, columns }, direction)
+  const out: (number | null)[] = new Array<number | null>(next.cells).fill(null)
+  for (let from = 0; from < cells; from++) {
+    const row = Math.floor(from / columns)
+    const column = from % columns
+    out[row * next.columns + column] = from
+  }
+  return out
+}
+
+/** A shape as the two functions above agree to read it, however it arrived. */
+function clampShape(shape: DeckShape): DeckShape {
+  const cells = Math.max(1, Math.floor(shape.cells))
+  return { cells, columns: Math.min(Math.max(1, Math.floor(shape.columns)), cells) }
 }
 
 // ---------------------------------------------------------------------------

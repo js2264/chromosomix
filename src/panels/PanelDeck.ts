@@ -67,6 +67,7 @@ import {
   MAX_PANELS,
   columnsFor,
   grownDeck,
+  grownPlacement,
   isDeckLayout,
   moveItem,
   panelBudgetBytes,
@@ -517,6 +518,30 @@ export class PanelDeck {
       { spanBp: theirs.cols * lead.bpPerCell(), bpPerCell: lead.bpPerCell() },
     )
     if (rows && cols) return null
+
+    // A turned panel's rows are **separation**, not position, so a row
+    // disagreement there is a different fact from a column one and must not
+    // borrow its sentence. The depth each band opens at is a fraction of its
+    // own block rounded up to a whole bin (`MatrixPanel.turnDepth`), so two
+    // files at different resolutions round it differently and the two bands
+    // reach different distances from the diagonal — which is a real reason not
+    // to share a row window, and is nothing whatever to do with the sequences
+    // agreeing. Telling a reader their files resolved one name against
+    // different sequences when they did not is worse than not telling them
+    // anything: it is a claim they may act on. A cell is half a bin under a
+    // turn and height is half of separation, so the number a reader wants is
+    // twice the lock's (`render/rotate.ts`).
+    if (map.isTurned() && lead.isTurned() && cols) {
+      return (
+        'not following while turned: this band reaches ' +
+        `${fmt.bp(mine.rows * map.bpPerCell() * 2)} from the diagonal where the first map ` +
+        `reaches ${fmt.bp(theirs.rows * lead.bpPerCell() * 2)}. Each map opens on a fraction of ` +
+        'its own block and rounds that to a whole bin, so two files at different resolutions do ' +
+        'not turn to the same depth — and one row window would be two distances. Turning the ' +
+        'deck back off puts this panel in step.'
+      )
+    }
+
     return (
       'not following: this block spans ' +
       `${fmt.bp(mine.rows * map.bpPerCell())} × ${fmt.bp(mine.cols * map.bpPerCell())} where the ` +
@@ -622,6 +647,14 @@ export class PanelDeck {
    * written down as a number: every other control here arranges the cells that
    * exist, and this one is how a reader says how many there should be.
    *
+   * The maps are **re-seated**, not appended to, and that distinction is the
+   * whole of {@link grownPlacement}: a cell's position is derived from its index
+   * and the column count, so widening the deck re-maps every index at once and
+   * pushing the new cells onto the end turns a 2 × 2 into a 3-wide row with one
+   * map stranded underneath. Nothing here rebuilds a panel — the slots are the
+   * same objects in a new order, so re-seating a deck of five costs a
+   * `replaceChildren` and no reads.
+   *
    * A file arrives with the press when it was **dropped** on the edge rather
    * than clicked, and it goes into the first cell that press opened — not into
    * the first empty cell in the deck, which is where {@link add} would put it.
@@ -630,8 +663,8 @@ export class PanelDeck {
    * of a deck has aimed at the right edge of it.
    */
   grow(direction: GrowDirection, file?: File): void {
-    const cells = this.slots.length + 1
-    const next = grownDeck({ cells, columns: this.columnsNow() }, direction)
+    const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
+    const next = grownDeck(shape, direction)
     if (next.cells > MAX_PANELS) {
       // A file that came with the press is not lost with it. There is no room
       // for a cell, but there may be an empty one already — and dropping a
@@ -642,16 +675,35 @@ export class PanelDeck {
       return
     }
     this.warn('')
+
+    // Cell 0 is the lead's and is not in `slots`, so the placement is walked
+    // from 1. `grownPlacement` guarantees cell 0 keeps the lead — both growths
+    // insert only *after* a row's existing cells — which is what lets the lead
+    // stay a re-parented view rather than a panel that can be moved (§3.1 B2).
+    const places = grownPlacement(shape, direction)
+    const held = this.slots
+    const seated: Slot[] = []
+    let opened = -1
+    for (let cell = 1; cell < places.length; cell++) {
+      const from = places[cell]
+      if (from === null) {
+        // Drawn, not left by a link, and that is all the difference amounts to:
+        // the card says "drop a map here" rather than telling the reader that a
+        // map they never had used to be there (`panels/MapPanel.ts`).
+        if (opened < 0) opened = seated.length
+        seated.push(this.build({ kind: 'vacant' }, undefined, 'drawn'))
+      } else {
+        seated.push(held[from - 1])
+      }
+    }
+
     this.columns = next.columns
     remember(this.props.memoryKey(), 'deck:columns', next.columns)
-    // Drawn, not left by a link, and that is all the difference amounts to: the
-    // card says "drop a map here" rather than telling the reader that a map they
-    // never had used to be there (`panels/MapPanel.ts`).
-    const opened = this.slots.length
-    for (let i = cells; i < next.cells; i++) {
-      this.slots.push(this.build({ kind: 'vacant' }, undefined, 'drawn'))
-    }
-    const first = this.slots[opened]
+    this.slots = seated
+    // The first cell the press opened, in reading order — which for `beside` is
+    // the top of the new column and for `below` the left of the new row, both
+    // being the near end of the edge that was pressed.
+    const first = opened < 0 ? undefined : this.slots[opened]
     if (file === undefined || first === undefined) {
       this.paintGrid()
       this.publish()

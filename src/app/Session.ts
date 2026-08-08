@@ -2627,9 +2627,21 @@ export class Session {
    * gesture that builds the first deck is on screen from the first map.
    */
   private framed(node: HTMLElement): HTMLElement {
-    if (!this.deckIsPossible) return node
+    // Released on both of the paths that leave the edges off screen, because
+    // they hold the last view they framed until told otherwise — a *destroyed*
+    // view, whose canvas is still a full-resolution backing store. Re-parenting
+    // into the deck empties them for free (a node has one parent); a bare mount
+    // does not, so a reader who opens a genomes table pins the map they left.
     const deck = this.deck
-    return deck === null ? this.deckEdges.hold(node) : deck.frame(node)
+    if (!this.deckIsPossible) {
+      this.deckEdges.release()
+      return node
+    }
+    if (deck !== null) {
+      this.deckEdges.release()
+      return deck.frame(node)
+    }
+    return this.deckEdges.hold(node)
   }
 
   /**

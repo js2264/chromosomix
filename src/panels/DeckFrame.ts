@@ -82,6 +82,19 @@ export class DeckFrame {
   }
 
   /**
+   * Let go of whatever is being held, for a frame that is going off screen.
+   *
+   * The frame outlives what it frames — the session keeps one for the whole of
+   * its life — so a view mounted without it (a table, §16.8) leaves the frame
+   * detached with the *previous* view still parented inside it. That view has
+   * been destroyed, but its subtree has not been dropped, and a heatmap's
+   * subtree is a canvas with a full-resolution backing store in it.
+   */
+  release(): void {
+    this.body.replaceChildren()
+  }
+
+  /**
    * Which edges can still open a cell (§16.7's ceiling), and what to say if not.
    *
    * **Per edge**, because the two do not run out together: a deck of two rows

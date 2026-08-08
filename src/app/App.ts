@@ -275,8 +275,16 @@ export class App implements SessionHost {
       // one drop opened the companion the reader aimed at and loaded the same
       // file over the lead as a track. All three still bubble, so this handler
       // is what takes the highlight off.
+      //
+      // `Element`, not `HTMLElement`. An inline `<svg>` is an `SVGElement` and
+      // is a live hit target across its whole box, so a drop on the `+` glyph
+      // in the middle of a deck edge — the most obvious pixel on it — failed
+      // the test, skipped the exemption entirely, and was imported here on top
+      // of being opened there. `closest` is on `Element`, so nothing else has
+      // to change; the two older targets never showed it because their children
+      // are all `<div>` and `<span>`.
       if (
-        event.target instanceof HTMLElement &&
+        event.target instanceof Element &&
         event.target.closest('.dropzone, .lane-drop, .deck-drop') !== null
       ) {
         return

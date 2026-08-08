@@ -3779,6 +3779,18 @@ export class MatrixPanel {
   }
 
   /**
+   * Whether the block on screen is a turned band rather than a square.
+   *
+   * What the panel *found*, not what it was asked for: a block with no diagonal
+   * is drawn square however the toggle is set, so the deck has to read this
+   * rather than the shared setting when it is deciding what the row axis of
+   * this panel means (`panels/PanelDeck.ts`).
+   */
+  isTurned(): boolean {
+    return this.turned !== null
+  }
+
+  /**
    * How many cells each axis of the **drawn** grid has — the lock's clamp.
    *
    * The band, on a turned map, and not the square it was rotated out of. Both
