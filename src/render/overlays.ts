@@ -20,6 +20,7 @@ import type { ManualArrowhead, ManualLine } from '../annotations/manual'
 import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
 import type { Rect } from './heatmap'
 import type { LocusAxis } from './locus'
+import { rowForSeparation, type RotateDirection } from './rotate'
 import type { Scale } from './scale'
 
 /** The plot geometry an overlay is drawn against. */
@@ -31,10 +32,89 @@ export interface OverlayFrame {
   dpr: number
 }
 
+/**
+ * What a mark needs to place itself on a map that has been turned 45°.
+ *
+ * A turned map has one genomic axis and one that is not: x is position and y is
+ * distance from the diagonal (`render/rotate.ts`). So the row axis is `null`,
+ * and a mark cannot be placed by asking both axes where a locus is — the
+ * question has no answer up the side. What it is placed by instead is the pair
+ * of loci it was always *about*: a mark on a contact map names one position or
+ * two, and the turn is a function of those two.
+ *
+ * Which means every mark changes shape, and each change is the useful one:
+ *
+ * - a **line** stays a line, at the same place on the genome, joining up with
+ *   the same line drawn in the lane below it — the whole reason to turn a map is
+ *   that its x axis becomes the tracks' axis;
+ * - a **domain** becomes a triangle standing on the axis, its apex over its own
+ *   midpoint at the height of its own span;
+ * - a **loop** becomes a dot at the height of its own span, which is the single
+ *   clearest thing a turned map does — a row of loops at one separation reads as
+ *   a row, where on the square it is a smear parallel to the diagonal.
+ */
+export interface OverlayTurn {
+  /** Separation, in bins, of the row furthest from the axis. */
+  maxSeparation: number
+  direction: RotateDirection
+  /** Base pairs per bin, for turning a distance into a row. */
+  binsize: number
+}
+
 /** The two axes an overlay places itself on. */
 export interface OverlayAxes {
   rows: LocusAxis | null
   cols: LocusAxis | null
+  /** Set while the map is turned; the row axis is `null` whenever it is. */
+  turn?: OverlayTurn | null
+}
+
+/**
+ * Where a pair of loci lands on a turned map, in matrix units.
+ *
+ * The rotation, in the axis's own coordinates rather than in bins: x is the
+ * midpoint of the two positions and y is their separation, which is what the
+ * rows of a turned block count. Both ends have to be on the same sequence —
+ * between two of them there is no distance to plot, which is the same condition
+ * `isTurnable` gates the whole picture on.
+ *
+ * `null` past the band. A contact further from the diagonal than the reader
+ * asked to see is not off the edge of the picture, it is *outside the data*, and
+ * a mark for it hovering at the top of the plot would claim a depth the map is
+ * not showing.
+ */
+function turnedPlace(
+  axes: OverlayAxes,
+  turn: OverlayTurn,
+  a: { contig: string; bp: number },
+  b: { contig: string; bp: number },
+): { col: number; row: number } | null {
+  if (axes.cols === null || a.contig !== b.contig) return null
+  const one = axes.cols.locusToUnit(a.contig, a.bp)
+  const two = axes.cols.locusToUnit(b.contig, b.bp)
+  if (one === null || two === null) return null
+  const separation = Math.abs(a.bp - b.bp) / turn.binsize
+  if (!(separation <= turn.maxSeparation)) return null
+  return { col: (one + two) / 2, row: rowForSeparation(turn, separation) + 0.5 }
+}
+
+/** The row the diagonal itself is drawn on: everything turned stands on it. */
+function axisRow(turn: OverlayTurn): number {
+  return rowForSeparation(turn, 0) + 0.5
+}
+
+/**
+ * Keep a turned mark inside the picture.
+ *
+ * The square's marks are each at one point and are guarded by
+ * {@link insideX}/{@link insideY}, but a turned domain is an *extent* whose apex
+ * is a consequence of its own width — a domain wider than the band on screen has
+ * its apex above the plot, and unclipped it would be drawn over the ruler.
+ */
+function clipToData(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
+  ctx.beginPath()
+  ctx.rect(frame.data.x, frame.data.y, frame.data.width, frame.data.height)
+  ctx.clip()
 }
 
 /** Canvas x for a column-axis matrix coordinate. */
@@ -99,9 +179,13 @@ export function drawDiagonalFeatures(
   paint: OverlayPaint,
 ): void {
   const { rows, cols } = axes
-  if (rows === null || cols === null) return
+  const turn = axes.turn ?? null
+  // A turned map has no row axis, and needs none: both ends of a feature are on
+  // the axis that survived, and the height is what the two of them are apart.
+  if (cols === null || (turn === null && rows === null)) return
 
   ctx.save()
+  if (turn !== null) clipToData(ctx, frame)
   ctx.globalAlpha = paint.opacity
   ctx.strokeStyle = paint.colour
   ctx.lineWidth = Math.max(1 / frame.dpr, paint.shape === 'border' ? 1.25 : 1)
@@ -118,9 +202,41 @@ export function drawDiagonalFeatures(
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue
       const colFrom = cols.locusToUnit(window.contig, set.start[i])
       const colTo = cols.locusToUnit(window.contig, set.end[i])
-      const rowFrom = rows.locusToUnit(window.contig, set.start[i])
-      const rowTo = rows.locusToUnit(window.contig, set.end[i])
-      if (colFrom === null || colTo === null || rowFrom === null || rowTo === null) continue
+      if (colFrom === null || colTo === null) continue
+
+      if (turn !== null) {
+        const base = toY(frame, axisRow(turn))
+        // Away from the diagonal, which is up the screen on an ordinary turned
+        // map and down the screen on the mirrored half of a comparison.
+        const away = turn.direction === 'up' ? -1 : 1
+        const mid = toX(frame, (colFrom + colTo) / 2)
+        if (!insideX(frame, mid)) continue
+        if (paint.shape === 'border') {
+          // A tick standing on the axis rather than a cross over it: the whole
+          // of a turned map's signal is in the first few rows above the
+          // diagonal, and a cross centred there covers what it is pointing at.
+          // Snapped, because it is a hairline; the triangle below is not.
+          const x = snap(mid, frame.dpr)
+          ctx.moveTo(x, base)
+          ctx.lineTo(x, base + away * 9)
+          continue
+        }
+        // The square `[start, end]²` a domain occupies, turned: its two corners
+        // on the diagonal stay on the axis, and the two off it meet over the
+        // midpoint at the height of the domain's own width. A triangle standing
+        // on the axis, which is the shape a reader of a turned map is looking
+        // for and the reason the picture is worth turning.
+        const apart = Math.abs(set.end[i] - set.start[i]) / turn.binsize
+        ctx.moveTo(toX(frame, colFrom), base)
+        ctx.lineTo(mid, toY(frame, rowForSeparation(turn, apart) + 0.5))
+        ctx.lineTo(toX(frame, colTo), base)
+        ctx.closePath()
+        continue
+      }
+
+      const rowFrom = rows?.locusToUnit(window.contig, set.start[i]) ?? null
+      const rowTo = rows?.locusToUnit(window.contig, set.end[i]) ?? null
+      if (rowFrom === null || rowTo === null) continue
 
       if (paint.shape === 'border') {
         // A cross on the diagonal at the feature's midpoint: it marks the place
@@ -189,7 +305,8 @@ export function drawPairs(
   paint: { colour: string; opacity: number; radius: number },
 ): void {
   const { rows, cols } = axes
-  if (rows === null || cols === null) return
+  const turn = axes.turn ?? null
+  if (cols === null || (turn === null && rows === null)) return
   const radius = Math.max(2.5, paint.radius)
 
   /** One placement of a pair, or `null` where it is off this view entirely. */
@@ -199,7 +316,17 @@ export function drawPairs(
     colContig: string,
     colBp: number,
   ): { x: number; y: number; upper: boolean } | null => {
-    const row = rows.locusToUnit(rowContig, rowBp)
+    // Turned, a call is one dot rather than two: the pair and its mirror rotate
+    // to the same point, so the "which half" question below never arises.
+    if (turn !== null) {
+      const at = turnedPlace(axes, turn, { contig: rowContig, bp: rowBp }, { contig: colContig, bp: colBp })
+      if (at === null) return null
+      const x = toX(frame, at.col)
+      const y = toY(frame, at.row)
+      if (!insideX(frame, x) || !insideY(frame, y)) return null
+      return { x, y, upper: true }
+    }
+    const row = rows?.locusToUnit(rowContig, rowBp) ?? null
     const col = cols.locusToUnit(colContig, colBp)
     if (row === null || col === null) return null
     const x = toX(frame, col)
@@ -209,6 +336,7 @@ export function drawPairs(
   }
 
   ctx.save()
+  if (turn !== null) clipToData(ctx, frame)
   ctx.globalAlpha = paint.opacity
   ctx.strokeStyle = paint.colour
   ctx.lineWidth = Math.max(1 / frame.dpr, 1.25)
@@ -245,13 +373,19 @@ export function drawManualLines(
   lines: readonly ManualLine[],
 ): void {
   if (lines.length === 0) return
+  const turn = axes.turn ?? null
   ctx.save()
   ctx.lineWidth = Math.max(1 / frame.dpr, 1)
   for (const line of lines) {
     ctx.strokeStyle = line.colour
     ctx.fillStyle = line.colour
-    const wantsVertical = line.axis !== 'horizontal'
-    const wantsHorizontal = line.axis !== 'vertical'
+    // A mark names one locus and stores which axis it was drawn against. On a
+    // turned map only one of those axes is still a place, so every line is drawn
+    // against it — including the ones that were horizontal, which would
+    // otherwise be marks the reader put down and can no longer find. This is
+    // also what keeps a line joined to the same line in the lane below it.
+    const wantsVertical = turn !== null || line.axis !== 'horizontal'
+    const wantsHorizontal = turn === null && line.axis !== 'vertical'
 
     if (wantsVertical && axes.cols !== null) {
       const unit = axes.cols.locusToUnit(line.at.contig, line.at.bp)
@@ -308,27 +442,41 @@ export function drawArrowheads(
   halo: string,
 ): void {
   const { rows, cols } = axes
-  if (marks.length === 0 || rows === null || cols === null) return
+  const turn = axes.turn ?? null
+  if (marks.length === 0 || cols === null || (turn === null && rows === null)) return
 
   ctx.save()
+  if (turn !== null) clipToData(ctx, frame)
   ctx.lineJoin = 'round'
   for (const mark of marks) {
-    const row = rows.locusToUnit(mark.a.contig, mark.a.bp)
-    const col = cols.locusToUnit(mark.b.contig, mark.b.bp)
-    if (row === null || col === null) continue
-    const x = toX(frame, col)
-    const y = toY(frame, row)
+    const at =
+      turn !== null
+        ? turnedPlace(axes, turn, mark.a, mark.b)
+        : ((): { row: number; col: number } | null => {
+            const row = rows?.locusToUnit(mark.a.contig, mark.a.bp) ?? null
+            const col = cols.locusToUnit(mark.b.contig, mark.b.bp)
+            return row === null || col === null ? null : { row, col }
+          })()
+    if (at === null) continue
+    const x = toX(frame, at.col)
+    const y = toY(frame, at.row)
     if (!insideX(frame, x) || !insideY(frame, y)) continue
 
     // Which side of the diagonal the cell is on. On the diagonal itself, and on
     // a rectangular block where there is no diagonal to be on a side of, the
     // upper-triangle placement is the default — up and to the right, pointing
     // down and to the left, which is where a reader of a symmetric map looks.
-    const above = row <= col
+    //
+    // Turned, "away from the diagonal" is straight up rather than at 45°: the
+    // diagonal is now the bottom edge of the picture, so the glyph stands over
+    // the dot it names with its tip pointing down at it. Straight down instead
+    // on the mirrored half of a comparison, where separation grows downward.
+    const above = turn !== null || at.row <= at.col
     const side = above ? 1 : -1
     // Unit vector pointing away from the diagonal, at 45°.
-    const dx = side * Math.SQRT1_2
-    const dy = -side * Math.SQRT1_2
+    const dx = turn === null ? side * Math.SQRT1_2 : 0
+    const dy =
+      turn === null ? -side * Math.SQRT1_2 : turn.direction === 'up' ? -1 : 1
     const tipX = x + dx * ARROW_GAP
     const tipY = y + dy * ARROW_GAP
     const baseX = x + dx * (ARROW_GAP + ARROW_LENGTH)

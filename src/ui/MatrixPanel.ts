@@ -62,6 +62,7 @@ import {
   drawDiagonalFeatures,
   drawManualLines,
   drawPairs,
+  type OverlayAxes,
   type OverlayFrame,
 } from '../render/overlays'
 import { AnnotationLanes, LANE_GAP, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
@@ -773,7 +774,7 @@ export class MatrixPanel {
    * the click-to-place picker need them too — and three copies of the same
    * mapping is exactly what §8.4 exists to prevent.
    */
-  private locusAxes: { rows: LocusAxis | null; cols: LocusAxis | null } = { rows: null, cols: null }
+  private locusAxes: OverlayAxes = { rows: null, cols: null }
   /** A picking mode in progress; see {@link armPicking}. */
   private picking: {
     /** Called once per click, for as long as the mode is on. */
@@ -3272,7 +3273,18 @@ export class MatrixPanel {
             rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
             cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
           }
-        : { rows: null, cols: this.turnedLocus(turned, data) }
+        : {
+            rows: null,
+            cols: this.turnedLocus(turned, data),
+            // What an overlay is placed by once there is no row axis to ask: a
+            // mark names one locus or two, and the turn is a function of those
+            // two (`render/overlays.ts`).
+            turn: {
+              maxSeparation: turned.maxSeparation,
+              direction: turned.direction,
+              binsize: this.options.binsize,
+            },
+          }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
