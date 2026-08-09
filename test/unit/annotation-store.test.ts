@@ -615,3 +615,58 @@ describe('everything one map draws', () => {
     expect(store.drawnAnywhereOn('lead').map((row) => row.id)).toEqual([a, b])
   })
 })
+
+/**
+ * A row that has been here before brings back every decision made about it —
+ * **including having been turned off**.
+ *
+ * `begin` is the door a row comes back through as well as the door a new one
+ * arrives by, and the two want opposite defaults: a track nobody has said
+ * anything about is drawn, and a track that was hidden is hidden. Left to the
+ * new-row default, the hidden ones came back drawn — which on an `.mcool` is
+ * every change of resolution, since the same file at another level is a fresh
+ * open with the tracks restored around it, and the reader's "not this one" was
+ * undone by a menu they used for something else entirely.
+ */
+describe('what a row brings back with it', () => {
+  const restored = (store: AnnotationStore, visible: boolean) =>
+    store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'a.bw' },
+      id: `kept-${Math.random()}`,
+      visible,
+    })
+
+  it('is drawn when nobody has said otherwise', () => {
+    const store = freshStore(`vis-new-${Math.random()}.cool`)
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'a.bw' },
+    })
+    expect(store.byId(entry.id)?.visible).toBe(true)
+  })
+
+  it('comes back hidden when it was hidden', () => {
+    const store = freshStore(`vis-${Math.random()}.cool`)
+    const entry = restored(store, false)
+    expect(store.byId(entry.id)?.visible).toBe(false)
+  })
+
+  it('stays hidden when the same row is begun again', () => {
+    // Two roads bring a row back — storage and the file that was open before —
+    // and nothing stops both arriving. The second must not undraw the answer.
+    const store = freshStore(`vis-twice-${Math.random()}.cool`)
+    const entry = restored(store, false)
+    store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name: 'a.bw' },
+      id: entry.id,
+      visible: false,
+    })
+    expect(store.byId(entry.id)?.visible).toBe(false)
+    expect(store.entries.filter((row) => row.id === entry.id)).toHaveLength(1)
+  })
+})

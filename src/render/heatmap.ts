@@ -823,17 +823,55 @@ export function bpTicks(
 /**
  * `0 bp`, `120 kb`, `1.5 Mb` — `_format_bp` in `ops/show.py`, digit for digit,
  * so the same position is written the same way in a figure and on screen.
+ *
+ * **A ruler passes the gap between its ticks**, and that is what stops a zoom
+ * running out of digits. Two decimals of a megabase is ten kilobases, so on a
+ * 4.6 Mb chromosome every tick of a twenty-kilobase window read `4.60 Mb` — a
+ * column of identical numbers under a picture whose whole purpose at that zoom
+ * is to say *where*. Given the step, the unit is chosen so that two decimals
+ * can tell one tick from the next and the unit steps down when they cannot:
+ * `4.6 Mb` at whole-chromosome zoom, `4605 kb` at five-kilobase ticks,
+ * `4601520 bp` at ten. Without it the spelling is unchanged, which is what the
+ * paragraph above promises about a lone position.
  */
-export function formatBpTick(position: number): string {
+export function formatBpTick(position: number, step?: number): string {
   for (const [scale, unit] of [
     [1e6, 'Mb'],
     [1e3, 'kb'],
   ] as const) {
-    if (Math.abs(position) >= scale) {
-      return `${(position / scale).toFixed(2).replace(/\.?0+$/, '')} ${unit}`
-    }
+    if (Math.abs(position) < scale) continue
+    if (step === undefined) return `${trimZeros((position / scale).toFixed(2))} ${unit}`
+    // How many decimals of this unit the gap between two ticks needs. A step of
+    // 5 kb is 0.005 Mb and wants three, which is a number nobody reads off an
+    // axis — so the unit gives way rather than the precision.
+    const decimals = step > 0 ? Math.max(0, Math.ceil(-Math.log10(step / scale))) : 2
+    if (decimals > 2) continue
+    return `${trimZeros((position / scale).toFixed(decimals))} ${unit}`
   }
   return `${Math.round(position)} bp`
+}
+
+/**
+ * The gap between two ticks, or `undefined` where there is only one.
+ *
+ * Measured off the ticks that were produced rather than asked of the ladder a
+ * second time: they are what is on screen, and a step recomputed from the domain
+ * can disagree with them by a rounding.
+ */
+function stepOf(ticks: ReadonlyArray<{ bp: number }>): number | undefined {
+  return ticks.length < 2 ? undefined : Math.abs(ticks[1].bp - ticks[0].bp)
+}
+
+/**
+ * `4.60` → `4.6`, `4.00` → `4`, and `4600` → `4600`.
+ *
+ * The last one is the whole reason this is a function. Stripping trailing zeros
+ * with one expression over a string that may have no decimal point at all turns
+ * a round number into a tenth of itself, silently, and only at the zooms where
+ * the step happens to come out whole.
+ */
+function trimZeros(text: string): string {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
 }
 
 /**
@@ -3357,9 +3395,13 @@ export class HeatmapView {
     const bottom = data.y + data.height
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
+    // The gap between two ticks, which is what decides how many digits each one
+    // needs — see {@link formatBpTick}. Taken from the ticks themselves rather
+    // than recomputed, so it is the step that was actually used.
+    const colStep = stepOf(cols)
     for (const tick of cols) {
       const x = this.snap(plot.x + this.colScale.toPixel(tick.unit))
-      const text = formatBpTick(tick.bp)
+      const text = formatBpTick(tick.bp, colStep)
       const half = ctx.measureText(text).width / 2 + 2
       const at = clamp(x, data.x + half, data.x + data.width - half)
       ctx.strokeText(text, at, bottom - TICK_LENGTH - 3)
@@ -3374,12 +3416,13 @@ export class HeatmapView {
     const corner = cols.length === 0 ? bottom : bottom - 20
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
+    const rowStep = stepOf(rows)
     for (const tick of rows) {
       const y = this.snap(plot.y + this.rowScale.toPixel(tick.unit))
       this.tickMark(data.x, y, data.x + TICK_LENGTH, y)
       const at = clamp(y, data.y + 8, data.y + data.height - 8)
       if (at > corner) continue
-      const text = formatBpTick(tick.bp)
+      const text = formatBpTick(tick.bp, rowStep)
       ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
       ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
     }
@@ -3737,12 +3780,19 @@ export class HeatmapView {
       if (this.drag === null) showCursor({ selecting: false, grabbing: false })
     }
     const onWheel = (e: WheelEvent): void => {
-      // A sideways two-finger scroll is the browser's back/forward gesture, and
-      // it works everywhere on the page except here, because this handler used
-      // to swallow every wheel event it saw. A gesture that navigates outside
-      // the plot and does nothing inside it reads as the app being broken, so
-      // the horizontal ones are left alone: no `preventDefault`, no zoom.
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+      // **A sideways scroll slides along the map**, which is what a trackpad's
+      // two fingers mean in every genome browser there is — and what they
+      // already meant over the 1D browser's tracks, so a reader who learned the
+      // gesture on one surface found it doing nothing on the other. It used to
+      // be left alone so the browser's back/forward gesture would work here as
+      // it does over the rest of the page; that is the wrong trade over a
+      // picture you navigate by sliding. Back and forward are still a sideways
+      // swipe *outside* the picture, which is where a page gesture belongs.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault()
+        this.panBy(-e.deltaX, 0)
+        return
+      }
       e.preventDefault()
       const [x, y] = local(e)
       // Exponential in the wheel delta so a trackpad's many small events and a

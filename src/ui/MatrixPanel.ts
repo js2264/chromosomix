@@ -1987,6 +1987,23 @@ export class MatrixPanel {
    * it: the bottom stack's budget is a height and the right stack's is a width
    * taken out of the map's own column.
    */
+  /**
+   * Show the tracks beside this map, or draw the map on its own.
+   *
+   * The third stop of the map/tracks cycle, and the only one of the three that
+   * does not change which view is mounted: hiding the map swaps a browser in for
+   * a panel, and hiding the *tracks* is this panel drawing fewer things. Nothing
+   * is edited — see `AnnotationLanes.setBare` — so the stacks come back exactly
+   * as they were.
+   */
+  showLanes(shown: boolean): void {
+    this.lanes.setBare(!shown)
+    // The stacks' thickness is what the grid reserves for them, and it is
+    // written from the same measurement the map's own size comes out of, so this
+    // has to go all the way round rather than only asking for a repaint.
+    this.remeasure()
+  }
+
   fitTracks(): void {
     const box = this.grid.getBoundingClientRect()
     // Per axis rather than per edge: the stacks above and below the map take
@@ -3177,13 +3194,14 @@ export class MatrixPanel {
     const onMove = (event: PointerEvent): void => {
       const box = canvas.getBoundingClientRect()
       if (drag === null) {
-        // Not dragging, and the cursor does not change. The arrowhead is what
-        // points *at* a base pair, and it is the same shape over the map, over
-        // the lanes and over the 1D browser — a hand appearing on the way from
-        // one to the other would be saying they are different surfaces, which is
-        // the one thing they are not. What a draggable border gets instead is
-        // the accent rule the browser draws for it, which is an affordance the
-        // reader can see rather than one they have to discover.
+        // Not dragging, and the cursor stays the pointer everywhere it is still
+        // pointing *at* a base pair: it is the same shape over the map, over the
+        // lanes and over the 1D browser, and a hand appearing on the way from
+        // one to the other would say they are different surfaces, which is the
+        // one thing they are not. It changes only where the thing under it is
+        // not a coordinate — a handle to take hold of, a number to type into, a
+        // border to drag — and each of those says which by its own shape,
+        // alongside the accent rule drawn for it.
         const x = event.clientX - box.left
         const y = event.clientY - box.top
         const hit = lanes.laneAt(edge, x, y)
@@ -3200,6 +3218,12 @@ export class MatrixPanel {
         // hold of, and the open hand is what says so.
         const onHandle = !onRange && lanes.gripAt(edge, x, y, this.laneGeometry()) !== null
         canvas.classList.toggle('is-grab', onHandle)
+        // The far border, where a drag resizes the lane. The same double arrow
+        // the map's own box handles carry, on the axis this border moves on:
+        // there is a rule drawn under the pointer already, and a rule with no
+        // cursor to go with it is a mark the reader has to guess is a control.
+        canvas.classList.toggle('is-resize-across', border !== null && horizontal)
+        canvas.classList.toggle('is-resize-along', border !== null && !horizontal)
         // The name is a caret too, and last in the same order the press reads.
         const onLabel = !onRange && !onHandle && lanes.nameAt(edge, x, y) !== null
         canvas.classList.toggle('is-text', onRange || onLabel)
@@ -3468,6 +3492,8 @@ export class MatrixPanel {
     const onLeave = (): void => {
       this.tooltip.classList.add('hidden')
       canvas.classList.remove('is-grab')
+      canvas.classList.remove('is-resize-across')
+      canvas.classList.remove('is-resize-along')
       if (this.laneBorder !== null || this.laneHandle !== null) {
         this.laneBorder = null
         this.laneHandle = null
@@ -3543,10 +3569,17 @@ export class MatrixPanel {
         return
       }
       // The same two rules the map's own wheel handler follows: a sideways
-      // two-finger scroll is the browser's back gesture and is left alone, and
-      // the factor is exponential in the delta so a trackpad's many small events
-      // and a wheel's few large ones compose to the same total zoom.
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+      // scroll slides along the picture, and the zoom factor is exponential in
+      // the delta so a trackpad's many small events and a wheel's few large ones
+      // compose to the same total zoom. A stack is *on* the map's axis, so a
+      // gesture over one has to mean what it means over the other — the map
+      // moving under the pointer while the profile above it did not would read
+      // as the two coming apart.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        event.preventDefault()
+        this.heatmap.panBy(-event.deltaX, 0)
+        return
+      }
       event.preventDefault()
       const at = middle()
       if (laneIsHorizontal(edge)) at.x = x

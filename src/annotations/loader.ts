@@ -191,7 +191,17 @@ export class AnnotationLoader {
       kind: stored?.kind ?? guess.kind,
       source,
       ...(placement === undefined ? {} : { placement }),
-      ...(stored === undefined ? {} : { id: stored.id, placement: stored.placement, style: stored.style }),
+      ...(stored === undefined
+        ? {}
+        : {
+            id: stored.id,
+            placement: stored.placement,
+            style: stored.style,
+            // Including whether it is drawn. A restored or carried row brings
+            // every decision the reader made about it, and "not this one" is
+            // one of them.
+            visible: stored.visible,
+          }),
       ...(label === undefined ? {} : { label }),
     })
     // `stored === undefined` is what makes the style a *guess*: a restored row

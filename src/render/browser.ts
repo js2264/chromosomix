@@ -226,7 +226,11 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
   }
   ctx.stroke()
   for (let bp = Math.ceil(from / step) * step; bp <= to; bp += step) {
-    ctx.fillText(formatBpTick(bp), frame.toPixel(segment.unitStart + bp), top + 5)
+    // The step goes with it: two decimals of a megabase is ten kilobases, so
+    // without it every tick of a twenty-kilobase window on a 4.6 Mb chromosome
+    // read `4.60 Mb` — a row of identical numbers under a picture zoomed in to
+    // answer exactly the question they were there to answer.
+    ctx.fillText(formatBpTick(bp, step), frame.toPixel(segment.unitStart + bp), top + 5)
   }
 }
 

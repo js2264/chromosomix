@@ -482,36 +482,67 @@ describe('a diagonal selection', () => {
   })
 })
 
-describe('a sideways gesture belongs to the browser', () => {
-  it('zooms on a vertical wheel and stands aside for a horizontal one', () => {
+/**
+ * The wheel's two axes, which mean two different things.
+ *
+ * Up and down is the zoom, and sideways **slides along the picture** — which is
+ * what two fingers mean over every genome browser there is, and what they
+ * already meant over this app's own 1D tracks. It used to be left to the page,
+ * so the platform's back-and-forward swipe would work over the map as it does
+ * everywhere else; that is the wrong trade over the one element a reader
+ * navigates *by* sliding, and the swipe still works outside the picture.
+ */
+describe('the two axes of a wheel', () => {
+  function wheeled(): {
+    heatmap: HeatmapView
+    wheel: (deltaX: number, deltaY: number) => void
+    prevented: () => number
+  } {
     const { canvas, fire } = harness(400)
     const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
     heatmap.setMatrix(block(100), [])
     heatmap.attach()
+    let count = 0
+    return {
+      heatmap,
+      prevented: () => count,
+      wheel: (deltaX, deltaY) =>
+        fire('wheel', {
+          clientX: 200,
+          clientY: 200,
+          deltaX,
+          deltaY,
+          preventDefault: () => {
+            count++
+          },
+        }),
+    }
+  }
 
-    let prevented = 0
-    const wheel = (deltaX: number, deltaY: number): void =>
-      fire('wheel', {
-        clientX: 200,
-        clientY: 200,
-        deltaX,
-        deltaY,
-        preventDefault: () => {
-          prevented++
-        },
-      })
-
+  it('zooms on a vertical wheel', () => {
+    const { heatmap, wheel, prevented } = wheeled()
     const fitted = heatmap.zoomLevel
     wheel(0, -200)
     expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
-    expect(prevented).toBe(1)
+    expect(prevented()).toBe(1)
+  })
 
-    // Two fingers sideways is the browser's back gesture. It works everywhere
-    // else on the page, so it must not die on the one element that fills it.
-    const zoomed = heatmap.zoomLevel
+  it('slides along the picture on a horizontal one, without zooming', () => {
+    const { heatmap, wheel, prevented } = wheeled()
+    // Zoomed in first, or there is nowhere to slide to: a fitted block already
+    // shows every column, and a pan is clamped to the data.
+    wheel(0, -400)
+    const zoom = heatmap.zoomLevel
+    const plot = heatmap.plotRect
+    const columnAt = (): number | undefined =>
+      heatmap.cellAt(plot.x + 1, plot.y + plot.height / 2)?.col
+    const before = columnAt()
     wheel(-180, 4)
-    expect(heatmap.zoomLevel).toBe(zoomed)
-    expect(prevented).toBe(1)
+    expect(heatmap.zoomLevel).toBe(zoom)
+    expect(columnAt()).not.toBe(before)
+    // Taken from the page, which is the half of this that keeps the map from
+    // sliding *and* the tab from going back at the same time.
+    expect(prevented()).toBe(2)
   })
 })
 

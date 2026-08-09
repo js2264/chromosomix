@@ -2448,6 +2448,21 @@ p {
   cursor: text;
 }
 
+/* Over a lane's far border, where a drag resizes it. The same double arrow the
+   map's own box handles show, and deliberately the same: it is the same
+   gesture — take an edge, move it, the thing gets taller — and a reader who has
+   met one has met both. Across the lane rather than along it, so a stack under
+   the map resizes with the up-down arrow and one beside it with the left-right,
+   which is the axis the border actually moves on. */
+.lane-canvas.is-resize-across,
+.browser-canvas.is-resize-across {
+  cursor: ns-resize;
+}
+
+.lane-canvas.is-resize-along {
+  cursor: ew-resize;
+}
+
 /* Over a sequence's name in the chromosome bar, which goes to that sequence.
    The pointing hand is the one shape that says "this is a link" without a word
    of explanation, and a name in a band is the only part of this canvas that is
