@@ -201,6 +201,37 @@ describe('the corners nothing reaches', () => {
     expect(turned.nrows).toBe(1)
     expect(turned.ncols).toBe(1)
   })
+
+  /**
+   * The band is *not* blanked before it is filled — a second pass over the
+   * largest array a turned map allocates, to set values the loop is about to
+   * overwrite — so the emptiness of the corners is arithmetic rather than a
+   * fallback. Which makes this the assertion that arithmetic has to earn: a
+   * `Float32Array` arrives zeroed, so a corner the fill misses does not come out
+   * blank, it comes out as a **contact count of nothing**, in the one place on a
+   * contact map where "no data" and "no contacts" look most alike.
+   */
+  it('has no cell it neither filled nor emptied, at any depth or either way up', () => {
+    const n = 11
+    // Every value non-zero, so a zero in the output can only be a cell that was
+    // never written at all.
+    const ones = block(n, () => 1)
+    for (const direction of ['up', 'down'] as const) {
+      for (let depth = 0; depth < n; depth++) {
+        const turned = rotateBlock(ones, { maxSeparation: depth, direction })
+        for (let row = 0; row < turned.nrows; row++) {
+          const separation = separationAt(turned, row)
+          for (let column = 0; column < turned.ncols; column++) {
+            const value = turned.values[row * turned.ncols + column]
+            // The reach of a row, from `rotateBlock`: a cell `s` apart at the
+            // left edge needs a partner `s` before the block began.
+            const inside = column >= separation && column <= 2 * n - separation - 1
+            expect(inside ? value === 1 : Number.isNaN(value)).toBe(true)
+          }
+        }
+      }
+    }
+  })
 })
 
 describe('what may be turned at all', () => {

@@ -140,7 +140,15 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
   const maxSeparation = Math.max(0, Math.min(Math.trunc(options.maxSeparation), Math.max(0, n - 1)))
   const width = Math.max(1, 2 * n - 1)
   const height = maxSeparation + 1
-  const values = new Float32Array(width * height).fill(Number.NaN)
+  // Not filled with `NaN` up front, and that is worth a line: the loop below
+  // writes every cell of the band except the two corner triangles, so a blanket
+  // fill is a second pass over the whole array to set values that are about to
+  // be overwritten — and this array is the largest thing a turned map allocates.
+  // The corners are filled per row instead, which is exactly the part nothing
+  // reaches. `Float32Array` arrives zeroed, and a zero left showing would be a
+  // contact count of nothing rather than an absence of data, which is the one
+  // distinction `rotateBlock`'s header insists on.
+  const values = new Float32Array(width * height)
 
   for (let separation = 0; separation <= maxSeparation; separation++) {
     // Rows are emitted in the order they are drawn, so the renderer needs no
@@ -149,6 +157,11 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
     // bottom edge.
     const row = direction === 'up' ? maxSeparation - separation : separation
     const base = row * width
+    // A row of separation `s` reaches from column `s` to `2n - s - 1`: the
+    // further from the diagonal, the more of both ends needs a partner off the
+    // end of the block. Those are the two triangles that come back empty.
+    values.fill(Number.NaN, base, base + Math.min(separation, width))
+    values.fill(Number.NaN, base + Math.max(0, 2 * n - separation - 1), base + width)
     for (let i = 0; i + separation < n; i++) {
       const j = i + separation
       const value = block.values[i * block.ncols + j]

@@ -779,4 +779,41 @@ describe('fitting a band', () => {
     // …and the deeper band still stands on its own diagonal.
     expect(heatmap.cellAt(plot.x + 1, plot.y + plot.height - 1)?.row).toBe(239)
   })
+
+  /**
+   * **A band deeper than the box is the same picture**, and this is the licence
+   * for the panel not to re-cut one on the way in. Zooming in asks for less
+   * distance at every notch; re-cutting for each of them is a rotation and a
+   * fresh pooling of the whole band per wheel event, which on a chromosome-wide
+   * view at a fine resolution is seconds of blocked main thread for a picture
+   * that was already correct. It is only correct because of what is asserted
+   * here: the band stands on the box's floor either way, so the rows on screen
+   * are the same rows and the ones the extra depth adds are off the top, where
+   * the same clip that takes the columns past either end takes them.
+   */
+  it('shows the same rows however much deeper than the box the band was cut', () => {
+    const shallow = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    const deep = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    for (const view of [shallow, deep]) {
+      view.setFitAxis('cols')
+      view.setAnchor('end')
+    }
+    // 200 columns in 400 px is 2 px a cell, so the box holds 200 rows. One band
+    // is cut to exactly that and the other to four times it.
+    shallow.setMatrix(band(200, 200), [])
+    deep.setMatrix(band(800, 200), [])
+    expect(shallow.zoomLevel).toBeCloseTo(deep.zoomLevel, 6)
+
+    const plot = shallow.plotRect
+    // Separation is counted from the floor up, which is what makes the two
+    // comparable: row indices differ by the extra depth and distances do not.
+    const separationAt = (view: HeatmapView, y: number): number | undefined => {
+      const cell = view.cellAt(plot.x + plot.width / 2, y)
+      return cell === null ? undefined : view.block!.nrows - 1 - cell.row
+    }
+    for (const dy of [1, 20, 100, 199]) {
+      const y = plot.y + plot.height - dy
+      expect(separationAt(deep, y)).toBe(separationAt(shallow, y))
+    }
+  })
 })
