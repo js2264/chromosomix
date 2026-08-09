@@ -794,6 +794,14 @@ export class MatrixPanel {
   private readonly lanes: AnnotationLanes
   /** The grid holding the map and its lanes; the tooltip's positioning parent. */
   private readonly grid: HTMLElement
+  /**
+   * The map's own box inside that grid — the canvas, the key and the handles.
+   *
+   * Held for {@link measureRoom}, which reads the height a square map would have
+   * claimed off this element's `max-height`: the one place the layout writes
+   * that number as a length rather than as the `clamp()` it comes from.
+   */
+  private readonly wrap: HTMLElement
   /** The cell under the pointer, so the lanes can continue the crosshair. */
   private hoverCell: Cell | null = null
   /**
@@ -1563,7 +1571,7 @@ export class MatrixPanel {
     // rectangles are also where a lane already drawn is dragged to move it to
     // another edge, and that gesture needs no loader — the 4C lane is one.
     this.keySlot = el('div', { class: 'map-key-slot' }, this.key.el, this.key2.el)
-    const wrap = el(
+    const wrap = (this.wrap = el(
       'div',
       { class: 'heatmap-wrap' },
       this.canvas,
@@ -1574,7 +1582,7 @@ export class MatrixPanel {
       this.widthGrips.right,
       ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
-    )
+    ))
     this.watchDepth()
 
     for (const edge of LANE_EDGES) {
@@ -3746,6 +3754,17 @@ export class MatrixPanel {
   private derive(
     data: MatrixResult,
     second: MatrixResult | undefined,
+    /**
+     * How deep to cut the band, when the caller needs the shape it already has.
+     *
+     * The band on screen need not be as shallow as the box wants — it is re-cut
+     * only when it is too *shallow* (see {@link syncTurnDepth}), so zooming in
+     * leaves a deeper one standing. A **derivation** is different numbers in the
+     * same grid and is swapped in as one, so a caller on that path has to ask
+     * for the grid that is there rather than for the one the box would cut now.
+     * Absent, the depth is the box's, which is right for a block being read.
+     */
+    depth?: number,
   ): {
     dense: DenseMatrix
     /**
@@ -3831,7 +3850,7 @@ export class MatrixPanel {
         ? rotateBlock(
             { ...data, values: dense.values },
             {
-              maxSeparation: this.turnDepth(data),
+              maxSeparation: depth ?? this.turnDepth(data),
               ...(this.options.turn.direction === undefined
                 ? {}
                 : { direction: this.options.turn.direction }),
@@ -3963,10 +3982,12 @@ export class MatrixPanel {
     const beside =
       this.lanes.canvasFor('left').clientWidth + this.lanes.canvasFor('right').clientWidth
     const width = (body?.clientWidth ?? this.hostSize.width) - beside
-    // `min-height` rather than the custom property it is written from: a custom
-    // property comes back as the `clamp()` that was written, unresolved, and the
-    // number wanted here is the one the browser worked out from it.
-    const budget = Number.parseFloat(getComputedStyle(this.grid).minHeight)
+    // The wrap's `max-height` rather than the custom property it is written
+    // from: a custom property comes back as the `clamp()` that was written,
+    // unresolved, and the number wanted here is the one the browser worked out
+    // from it. It is the height a square map would have claimed, which is the
+    // point past which a band has stopped being one.
+    const budget = Number.parseFloat(getComputedStyle(this.wrap).maxHeight)
     const height = Number.isFinite(budget) ? budget : this.hostSize.height
     this.room = {
       width: Math.max(MIN_TURN_WIDTH, Math.round(width)),
@@ -4359,7 +4380,14 @@ export class MatrixPanel {
       this.setData(data, this.lastTitle, this.second?.data)
       return
     }
-    const { dense, gauge, presentationMoved } = this.derive(data, this.second?.data)
+    // At the depth the band already has, not the one the box would cut now: this
+    // is the in-place swap, and an array of another length read with the grid's
+    // stride is rows of the wrong separation with unwritten memory under them.
+    const { dense, gauge, presentationMoved } = this.derive(
+      data,
+      this.second?.data,
+      this.turned?.maxSeparation,
+    )
     this.syncLegendSlots()
     this.heatmap.setValues(dense.values, gauge?.values)
     // The colourbar is a function of the scale *and* of what the numbers are, and

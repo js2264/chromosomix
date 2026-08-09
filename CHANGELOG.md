@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A map with a diagonal opens turned.** The band along a genomic axis with its
+  tracks under it is what a contact map is *for* at this scale, and what every
+  published figure of one looks like; the square is the special view — wanted for
+  the far corners and for reading a comparison across the diagonal — so it is
+  what a reader asks for rather than what they are given. The box opens as wide
+  as the panel allows and a quarter as tall. Only the "no" is written to the
+  link, so an ordinary view's hash stays short, and a block with no diagonal
+  draws square without recording anything — a metagenome you passed through can
+  no longer switch the turn off for every map after it. And the setting now
+  survives a navigation, as the deck and the second file already did: dragging a
+  box on the map to open a region, or clicking through Chromosomes to another
+  sequence, used to come back square, which is exactly the gesture a turned map
+  is for.
+
 - **The map turns 45°.** A contact map is symmetric about its diagonal and the
   diagonal is where all the signal is, so a square map spends most of its area on
   empty corners and draws the part anybody reads as a thin band across the
@@ -398,6 +412,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it did.
 
 ### Fixed
+
+- **A derivation over a turned map is drawn at the depth the band has.** Turning
+  a map and then switching on O/E painted the near-diagonal half of the band a
+  solid navy block. The band is re-cut behind the picture as the zoom moves, so
+  it is not always as deep as the box would cut it now — and a derivation is
+  swapped in as *new numbers in the same grid*, so one computed at the box's
+  depth arrived at a grid of another and was read with the wrong stride: every
+  row a different separation from the one it was drawn at, and a tail of memory
+  nothing wrote beneath them, which colours as a solid block of the scale's
+  floor. The swap now asks for the grid that is there, and the renderer treats a
+  length that does not fit as the reshape it is rather than drawing it.
 
 - **Zooming a turned map is a zoom again, not a stall.** On a whole chromosome
   at a fine resolution every wheel notch blocked the main thread for about a

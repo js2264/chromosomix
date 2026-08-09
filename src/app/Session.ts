@@ -30,6 +30,7 @@ import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
+  READING_KEYS,
   ViewStore,
   differsOnlyInPresentation,
   landingState,
@@ -2791,19 +2792,22 @@ export class Session {
    */
   private turnPresentation(state: ViewState, direction?: RotateDirection): TurnPresentation {
     return {
-      on: state.flip === true,
+      // Absent is *on*: a block with a diagonal opens as a band along a genomic
+      // axis, and the square is what a reader asks for rather than what they are
+      // given. Only an explicit `false` turns it back, which is what keeps the
+      // hash of an ordinary view short and a link with no `flip` in it opening
+      // the way this viewer opens.
+      on: state.flip !== false,
       ...(direction === undefined ? {} : { direction }),
       onChange: (on) => {
-        this.store.patch({ flip: on ? true : undefined })
+        this.store.patch({ flip: on ? undefined : false })
         this.rederive()
       },
-      // A block with no diagonal cannot be turned, and the reader is told by the
-      // control going flat rather than by the key being ignored in silence.
-      onAvailable: (possible) => {
-        if (!possible && this.store.state?.flip === true) {
-          this.store.patch({ flip: undefined }, { replace: true })
-        }
-      },
+      // Nothing to write back where the block has no diagonal. The control goes
+      // flat and the picture is square, both decided by `isTurnable` at the
+      // moment of drawing; recording the refusal in the state would make a
+      // metagenome the reader passed through switch the turn off for every map
+      // after it, which is a preference edited by a navigation.
     }
   }
 
@@ -3902,15 +3906,20 @@ export class Session {
     const held = this.store.state
     if (held === null || splitUri(held.uri).path !== splitUri(next.uri).path) return next
     const out = { ...next }
-    for (const key of COMPANION_KEYS) {
-      // `in`, not `!== undefined`: a caller that has said something about a key
-      // is believed, including having said it is gone. That is what lets the
-      // deck put itself down (`onMapsChange(undefined)`) and the compare card
-      // close its file, without either having to know this rule exists.
-      if (key in next) continue
+    // `in`, not `!== undefined`: a caller that has said something about a key is
+    // believed, including having said it is gone. That is what lets the deck put
+    // itself down (`onMapsChange(undefined)`) and the compare card close its
+    // file, without either having to know this rule exists — and what lets a
+    // reader who asked for the square keep it, `flip: false` being a thing said.
+    const carry = <K extends (typeof COMPANION_KEYS)[number] | (typeof READING_KEYS)[number]>(
+      key: K,
+    ): void => {
+      if (key in next) return
       const value = held[key]
       if (value !== undefined) out[key] = value
     }
+    for (const key of COMPANION_KEYS) carry(key)
+    for (const key of READING_KEYS) carry(key)
     return out
   }
 
