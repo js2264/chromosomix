@@ -119,6 +119,8 @@ import { rasterStride } from '../render/heatmap'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
+import type { AnalysisFraming } from '../analysis/types'
+import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
@@ -2565,6 +2567,71 @@ export class MatrixPanel {
     parts.push(this.transform === 'none' ? 'linear' : this.transform)
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
+  }
+
+  /**
+   * The framing an analysis would run on, taken **now** (§18.4).
+   *
+   * A snapshot and not a live view, which is the whole discipline: a finished
+   * pileup is a record of the picture it was computed from, so panning
+   * afterwards must not quietly change what a figure claims. The drawer prints
+   * this back and offers to take a new one; nothing here follows the map.
+   *
+   * `binsPerCell` is *reported*, not applied. A task that reads for itself reads
+   * at the file's native resolution and ignores it; a task that borrows the
+   * block below must not pretend the block is finer than it is. Recording it is
+   * what lets each of them be right.
+   */
+  analysisFraming(uri: string): AnalysisFraming | null {
+    const data = this.data
+    if (data === null) return null
+    const binsPerCell = data.binsPerCell ?? 1
+    const value = this.options.scores?.current ?? 'count'
+    const parts = [this.framedSubject()]
+    if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize * binsPerCell)} bins`)
+    if (this.level === 'contig') parts.push('contig level')
+    if (this.options.balance === true) parts.push('balanced')
+    parts.push(value)
+    return {
+      uri,
+      rows: [data.rowExtent[0], data.rowExtent[1]],
+      cols: [data.colExtent[0], data.colExtent[1]],
+      binsize: this.options.binsize,
+      binsPerCell,
+      balance: this.options.balance === true,
+      value,
+      level: data.level,
+      label: parts.join(' · '),
+    }
+  }
+
+  /**
+   * A copy of the block on screen, when copying it is cheap (§18.3).
+   *
+   * **Copied, never transferred.** `Transferable` is the optimisation that looks
+   * free here and is the one that blanks the map: the buffer handed away is the
+   * one the heatmap draws from, and what is left behind is a neutered array and
+   * a blank canvas several frames from the cause.
+   *
+   * So the size is checked *before* the copy rather than after. A yeast
+   * chromosome at 1 kb is 9 MB and clones in a few milliseconds; a whole yeast
+   * genome at 1 kb is 586 MB, where the copy is itself the expensive operation
+   * and would stall the main thread performing it — which is exactly the frame
+   * this whole arrangement exists to protect. Past the limit the answer is
+   * `null` and the worker reads for itself, which is what its own mount is for.
+   */
+  analysisBlock(): BlockInput | null {
+    const data = this.data
+    if (data === null) return null
+    if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
+    return {
+      nrows: data.nrows,
+      ncols: data.ncols,
+      values: data.values.slice(),
+      rowExtent: [data.rowExtent[0], data.rowExtent[1]],
+      colExtent: [data.colExtent[0], data.colExtent[1]],
+      binsPerCell: data.binsPerCell ?? 1,
+    }
   }
 
   /** Save the figure. The status line under the row reports what happened. */

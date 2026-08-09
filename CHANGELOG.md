@@ -390,6 +390,120 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is one command: with a deck up it is the deck, and without one it is the map it
   always was.
 
+- **Analysis, in the browser.** A fourth panel, outermost on the right (`j`), lists what can be
+  computed from what is open, and clicking a row opens a drawer to run it in.
+  Fourteen tasks: contact probability P(s) with its log–log slope, coverage and
+  marginals, diamond insulation with boundary calls, a virtual 4C profile,
+  compartments with their correlation matrix, eigenvectors and saddle, metaplots
+  over feature sets, aggregate peak analysis, chromosome interaction domains,
+  a track correlation matrix, interval-set overlap and Jaccard, and four that
+  only a metagenome has — per-MAG contact QC, contig purity and contamination
+  calls, split-MAG detection, and the inter-MAG contact network.
+
+  Everything about them is a parameter, because the useful version of any of
+  these is the one run three ways: insulation over a doubling ladder of window
+  widths rather than one, an APA normalised against distance-matched shifted
+  controls *or* against observed/expected *or* not at all, a metaplot in fixed
+  windows or over scaled regions, a 4C anchor with cis-only or trans included.
+  Every parameter is one entry in a task's descriptor, and one renderer draws
+  them all — a new task is a descriptor and a function, not a form.
+
+  What it is *not* is a modal. The drawer is a peer of the map: it takes width
+  from it rather than covering it, drags to any width you like, and the map keeps
+  drawing at that width. A plot you are reading and the region it came from are
+  worth having on screen together.
+
+- **A job never blocks the view.** The analysis runs in a fourth worker with a
+  mount of its own, so a whole-file scan over tens of millions of pixels — P(s)
+  on a 26 MB MetaTOR output, say — leaves pan, zoom and navigation exactly as
+  responsive as they were. The reader worker is not asked for anything while a
+  job is running, and a job started from one view survives moving to another:
+  the **framing is an input, captured when you press the button**, and is
+  reported back in the result's provenance rather than tracking wherever you
+  wandered to since. Progress and cancel are on every scan, the same way §7.3's
+  overview has always had them.
+
+- **Results come back as tracks.** A task that produces one value per bin —
+  insulation, 4C, coverage, an eigenvector — lands in the Annotations panel as a
+  **synthetic track**, and from there it is indistinguishable from a bigWig you
+  loaded: it has a colour chip, an editable range, autoscale, a height, a place
+  in the stack, a group, and it can be dragged to any of the four edges. It is
+  the same store and the same renderer, so nothing about lanes had to learn what
+  a computed track is.
+
+  A task that produces *intervals* — insulation's boundaries, CID's domains —
+  lands there too, as an **overlay** on the map it was called from, with the same
+  colour, shape and opacity controls any dropped BED gets. Running the task again
+  replaces that row rather than adding another, because the second run is the one
+  you wanted. And it exports as **BED** (or BEDPE for a paired set), through the
+  same writer the hand-drawn marks use — one opinion about half-open ends in this
+  repository, not two — so a called boundary set goes into bedtools, into IGV, and
+  back into this app as an overlay. That last is the property the test asserts;
+  the text is only how it gets there.
+
+- **A bigWig writer, in this repository.** Header, zoom levels, total summary,
+  chromosome B+ tree, data sections and R-tree index, written byte by byte, with
+  `CompressionStream('deflate')` doing the zlib framing the format wants — no
+  dependency, no `bedGraphToBigWig` step, no server. Any per-bin result exports
+  as a bigWig that IGV, deepTools and pyBigWig open, and the ones that are not
+  per-bin export as bedGraph, BED, or TSV. Plots export as PNG and as **true
+  vector PDF**, through the same `VectorPage` the 1D browser has used since 0.6.
+
+  Its tests read every file back with `@gmod/bbi` — the same library the app
+  reads other people's bigWigs with — and then walk the B+ tree byte by byte at
+  depth 3, because no reader in existence compares an internal node's keys
+  against its subtree and a wrong key is invisible until somebody else's tool
+  opens the file.
+
+- **Compartments can be phased by GC content**, not only by a gene model. Which
+  end of an eigenvector is "A" is arbitrary until something outside the matrix
+  decides, and a FASTA is the signal available when no annotation is — so
+  choosing one now fixes the sign, and the drawer says which signal did it and
+  how convincingly.
+
+  How it gets there is the interesting part. The residues live in the
+  annotations worker and are megabytes; the task runs in the analysis worker.
+  Rather than give one parameter a third venue, the main thread asks the
+  annotations worker for a *sample* at the file's own bin size — the same
+  request its GC lane is already drawn from — and ships one number per bin with
+  the job. `run/compartments.ts` never learns a FASTA was involved. The same
+  path resolves a chosen bigWig, which had been declared since the first
+  milestone and never implemented.
+
+- **`coolwarm`**, matplotlib's diverging blue–white–red, for the signed things:
+  an eigenvector, a log ratio, an observed/expected matrix. Deliberately *not*
+  added to the colour-vision-safe list — a diverging red/blue ramp is exactly
+  what deuteranopia collapses, and the picker should keep saying so.
+
+- **Goldens for the analysis, against four other tools.** Eight of them, built by
+  `npm run fixtures:analysis` from the demo micro-C map with **cooltools**,
+  **coolpuppy**, **pyBigWig** and **numpy**, and committed. Each carries two
+  oracles: this repo's own definition recomputed in numpy, compared to equality,
+  and the other tool's number under *its* definition, compared to whatever
+  relation actually holds.
+
+  Three of those relations turned out to be exact and are asserted as such. P(s)
+  equals `expected_cis` cell for cell. Coverage satisfies
+  `cooltools_cis == ours + diagonal` — cooltools sums the pixel table by both
+  ends so a diagonal pixel counts twice, and this repo counts it once on purpose,
+  which the identity now proves rather than asserts. APA equals coolpuppy's
+  pileup once the loops whose window would cross the main diagonal are left out.
+
+  **Insulation is not one of them**, and that is recorded rather than smoothed
+  over: cooltools' diamond is offset by a row, drops two diagonals, divides by a
+  count instead of summing, normalises by a median instead of a mean, and masks
+  near dropped bins. Both definitions are published; what is left between them is
+  a correlation of 0.61–0.85 on budding yeast at 1 kb, which has little domain
+  structure. The golden records the measured figure per chromosome and window and
+  the test asserts it has not degraded, which is a true statement where an
+  equality would have been a false one.
+
+- **`TASKS_PLAN.md`**, and **SPECS §18**. The plan is the build document; §18 is
+  the specification the source cites, and it now carries the ten analysis rows of
+  §12's budget table, the first of which is the one that mattered most: *any
+  analysis task, effect on the view — 0 dropped frames, 0 blocked reader
+  requests*.
+
 ### Changed
 
 - A shared link carries the two new readings, because both are part of what is
@@ -438,6 +552,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   right-hand edge — on a wide window, a screen apart, so reading the bar meant
   looking in two places and which half a control was in said nothing about what
   it did.
+
+- **The README no longer says balancing is unavailable.** It has been built since
+  0.2 — `/bins/weight`, two bounded slices for the bins on screen, `raw · wᵢ · wⱼ`,
+  and a control that became the score picker in 0.9 — and the paragraph claiming
+  otherwise had outlived the divergence it described by seven releases. Since
+  every analysis task wants balanced input, a stale line saying it cannot be had
+  was one misreading away from someone concluding these numbers are computed on
+  raw counts. The layering rule above it is corrected in the same way: no
+  *coordinate* ever comes from `/bins`, which is what §3.3 says and what
+  `bins-guard.test.ts` proves, and the weight column is the one bounded exception.
+
+- **"No write access" now says what it always meant.** The viewer has produced
+  files since 0.2 — PNG and PDF, then a saved session, then a BED of hand-drawn
+  marks in 0.5 — and a bigWig is one more of them: new bytes handed to the
+  browser as a download, needing no server, touching nothing that was opened. The
+  non-feature is *editing an input*, never *authoring an output*, and SPECS §13
+  says so now rather than leaving a reader to reconcile the two. Which is also
+  why there is still no writing of `.cool`, `.mcool` or `.metacool` — h5wasm
+  could create one, so that is a decision and not a limitation.
 
 ### Fixed
 

@@ -15,6 +15,7 @@ import type {
   AnnotationEntry,
   AnnotationKind,
   AnnotationSource,
+  ComputedSource,
   Placement,
   StoredEntry,
 } from './types'
@@ -107,10 +108,32 @@ export class AnnotationLoader {
         )
         continue
       }
+      // A **computed** row keeps its own source across a reload, and that is the
+      // whole point of persisting one. There is no file to re-open — the values
+      // are not stored, only the recipe is (§18.5) — so replacing the source with
+      // a `detached` placeholder would throw away the one thing that could bring
+      // the row back and leave a Recompute button with nothing to recompute.
+      const computed =
+        row.source.kind === 'computed' &&
+        row.source.task !== undefined &&
+        row.source.recipe !== undefined
+          ? ({
+              kind: 'computed',
+              name: row.source.name,
+              task: row.source.task,
+              recipe: row.source.recipe,
+              framing: row.source.framing ?? '',
+            } satisfies ComputedSource)
+          : null
+      const source = computed ?? ({ kind: 'detached', name: row.source.name } as const)
+      const summary =
+        computed === null
+          ? 'dropped file — re-open it to draw it again'
+          : `computed by ${computed.task} · recompute to draw it again`
       this.store.begin({
         card: row.card,
         kind: row.kind,
-        source: { kind: 'detached', name: row.source.name } as never,
+        source: source as never,
         id: row.id,
         label: row.label,
         placement: row.placement,
@@ -118,8 +141,8 @@ export class AnnotationLoader {
       })
       this.store.update(row.id, {
         status: 'detached',
-        source: { kind: 'detached', name: row.source.name },
-        summary: 'dropped file — re-open it to draw it again',
+        source,
+        summary,
         visible: row.visible,
       })
     }
@@ -152,11 +175,20 @@ export class AnnotationLoader {
    * `File` handle is still open, because the tab never went away.
    */
   carry(entry: AnnotationEntry): void {
-    // Nothing without a file behind it. `detached` has lost its handle and the
-    // 4C profile never had one: it is a reading of the map that is being put
-    // away, so carrying it to the next file would be carrying a picture of
-    // somewhere the reader never pointed at.
-    if (entry.source.kind === 'detached' || entry.source.kind === 'derived') return
+    // Nothing without a file behind it. `detached` has lost its handle, the 4C
+    // profile never had one, and a **computed** row is an answer about the file
+    // being closed: it is a reading of the map that is being put away, so
+    // carrying it to the next file would be carrying a picture of somewhere the
+    // reader never pointed at. `computed` also has no bytes for {@link toWire}
+    // to describe, so carrying one would not merely be wrong — it would throw
+    // on the way out, which is the failure this line is here to prevent.
+    if (
+      entry.source.kind === 'detached' ||
+      entry.source.kind === 'derived' ||
+      entry.source.kind === 'computed'
+    ) {
+      return
+    }
     this.begin(entry.source, entry.label, {
       id: entry.id,
       card: entry.card,
@@ -269,11 +301,20 @@ export class AnnotationLoader {
   }
 }
 
-/** A `File` is structured-cloneable, so a local file crosses by reference (§11). */
+/**
+ * A `File` is structured-cloneable, so a local file crosses by reference (§11).
+ *
+ * A **computed** source has no bytes anywhere — it is a recipe, and the lane it
+ * belongs to is filled by the analysis worker rather than read from a file
+ * (§18.5) — so one arriving here is a routing mistake rather than a file that
+ * failed to load. It says so instead of being quietly coerced into a remote
+ * source with an `undefined` URL, which is what the previous two-case ternary
+ * would have done the moment the third case existed.
+ */
 function toWire(source: AnnotationSource): WireSource {
-  return source.kind === 'local'
-    ? { kind: 'local', file: source.file, name: source.name }
-    : { kind: 'remote', url: source.url, name: source.name }
+  if (source.kind === 'local') return { kind: 'local', file: source.file, name: source.name }
+  if (source.kind === 'remote') return { kind: 'remote', url: source.url, name: source.name }
+  throw new Error(`${source.name} is a computed track and has no file to load.`)
 }
 
 /**

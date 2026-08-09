@@ -1046,6 +1046,22 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 
+And for the analysis tasks (§18), where the first row is the one the whole threading design exists to
+satisfy and is therefore the one that is tested first:
+
+| Operation | Budget |
+|---|---|
+| **Any analysis task, effect on the view** | **0 dropped frames, 0 blocked reader requests** — pan and zoom stay live for the whole run, however long it is |
+| Insulation / coverage / P(s), block already loaded | 0 range requests |
+| Insulation, block not loaded (remote) | ≤ 5 range requests per contig |
+| 4C, cis (remote) | ≤ 5 range requests |
+| 4C, with trans | one streaming pass over pixels with `bin1 < anchor_end`; progress, cancel, and a pre-flight estimate before it starts |
+| APA, k windows, local file | 0 network; ≤ k bounded reads after coalescing |
+| APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
+| Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
+| Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
+| Analysis worker mount | opened on first use, never at session open |
+
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;
 `hdf5-indexed-reader` addresses it with a pre-built path → offset index and was built for `.cndb`
 chromatin files. Held in reserve — adopting it would not change any file format, only the reader.
@@ -1060,6 +1076,17 @@ than `genome-then-length`; whole-genome views that do not fit in memory (§9 —
 not a category); write access of any kind, in either target; an auto-update service; and a desktop
 build with a feature set of its own — the package is a delivery mechanism, and the formats, views
 and operations are the same in both targets.
+
+**"Write access" means the app never modifies a file it opened**, and §18 makes that worth spelling
+out rather than leaving to be inferred. The viewer has always *produced* files — a PNG, a PDF, a BED
+of hand-drawn marks, a saved session — and §18 adds a bigWig to that list. All of them are new bytes
+handed to the browser as a download; none of them touches the thing that was opened, and nothing about
+them needs a server. The distinction is between authoring an output and editing an input, and only the
+second is refused.
+
+Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
+contact-based contig reordering or scaffolding; **no writing of `.cool`, `.mcool` or `.metacool`** —
+a decision rather than a limitation, since h5wasm could create one; and no differential APA.
 
 There is exactly **one** observable difference between them, and it is a host-compatibility
 difference rather than a feature: the desktop build can ask a host not to compress, which a page is
@@ -1805,3 +1832,448 @@ piecewise, which is a second tick mechanism beside the one §17.5 uses; or label
 negative distance, which makes one affine line serve both and asks the reader to read `-100 kb` as
 "100 kb, in the other file". Until one of those is chosen the compare stays square under a turn,
 which is correct and is not what it should be.
+
+---
+
+## 18. Analysis
+
+Last rather than beside §8, where it arguably belongs, because source files cite these numbers at the
+point where a decision is not obvious from the code and there are over three hundred such citations. A
+section that reads slightly out of order costs nothing; renumbering §7.4 and §8.5 costs every one of
+them. It was drafted as §16 and is §18 because §16 and §17 landed first — which is the same argument
+made against this section's own author, and taken.
+
+Everything before this section is a **reading of a file**. This one is a **computation over one**, and
+the difference that matters is time. A reading is a frame: it happens between two paints, it is thrown
+away when the view moves, and if it is slow the app is broken. A computation is a job: it takes as long
+as it takes, it outlives the view that started it, it can fail halfway, and the only honest response to
+a slow one is a progress bar and a cancel. Nothing in §5 through §9 was built for that, which is why
+this is a section and not a paragraph.
+
+One constraint has not moved and does not bend here. **C1 still holds: no server-side computation of
+any kind.** Every number below is computed in the reader's own browser, from bytes the reader's own
+machine already has. cooltools, coolpuppy, deeptools and pyBigWig appear in this section exactly once,
+in §18.10, as dependencies of `scripts/make_golden.py` — a developer's tool that produces the oracle
+files the test suite compares against. They are not shipped, not fetched, not invoked, and not
+required by anyone running the app.
+
+### 18.1 Three surfaces, and why it is three
+
+**The Analysis panel** is a fourth column, right of Aesthetics, folded with `j`. It is a *list*: one row
+per task, each with a title, a line of description and a state — never run, running, done, failed. It
+carries no controls, because a panel that both lists twenty tasks and configures them is a panel that
+does neither.
+
+**A task that means nothing on the open file is absent, not disabled.** This is §8.5's doctrine applied
+a second time and for the same reason: a disabled row is a promise the file cannot keep, and the reader
+spends their attention discovering why rather than reading what is there. A `.metacool` carries no gene
+models, so it offers no metaplot; a `.cool` has no genomes, so it offers no MAG tasks; and both offer
+insulation, because both have a diagonal.
+
+**The Analysis drawer** is the workspace: parameters, a **Run** button with the price beside it,
+progress, results, exports. It is anchored to the right of the body, full height, resizable by its left
+edge with its width remembered, and it overlays the content and the two right columns rather than
+squeezing them — at three quarters of the window there is nothing left to squeeze.
+
+**It is deliberately not a modal.** The dialogs in §5 are questions; this is a place to work. A modal
+here would take the keyboard (which is how the app is driven), would dismiss on a stray click outside
+it (after a forty-second scan), and would answer Escape by destroying the thing the reader is reading.
+The drawer does none of those: every shortcut keeps working behind it, an outside click does nothing,
+and Escape returns focus to the map and leaves the drawer up.
+
+The panel's fold is a **window** preference, like the other three columns. Which task is open is a
+**session** fact, because it is about this file — so switching tabs shows the drawer exactly when that
+tab had one open, and the content re-parents exactly as the other three columns' does.
+
+**The Synthetic tracks card** is the third surface and the least obvious, and it exists because of a
+mistake that was already made once and corrected: the virtual 4C profile started as a strip of its own
+and became an entry in the `AnnotationStore` (§8.9), which is what gave it renaming, limits, colour,
+edges, reordering, the tooltip and the exported figure for free. A per-bin analysis result is the same
+object. It is therefore an ordinary track on an ordinary card in the **Annotations** panel — not a
+picture in the drawer — and nothing downstream of it knows it was computed rather than loaded.
+
+### 18.2 Every task is a descriptor, and every task is parametrised
+
+A task is data: an id, a title, a predicate saying which files it applies to, a list of parameters, a
+list of outputs, a cost estimate and a function. One generic form renderer turns the parameter list
+into controls. **Adding a task is adding a descriptor**, never adding a screen — the same arrangement
+`ui/plotOptions.ts` already uses for the overlay toggles, where one table drives the labels, the marks,
+the tooltips and the commands, and the copy that goes stale is the one that does not exist.
+
+**A hard-coded analysis parameter is a bug.** The window of a diamond insulation, the flank of a
+metaplot, the number of controls in a distance-matched pileup, the quantile count of a saddle: each of
+these is the thing a reader changes to answer their actual question, and a task that fixes one is a
+task somebody has to leave the app to redo. Where a parameter is a length it is offered in **base
+pairs** and the resolved bin count is shown beneath it, because bins are a property of the file and
+base pairs are a property of the question.
+
+Four parameter kinds refer to what is already loaded rather than to a number, and all four **default to
+the starred entry** where the concept exists — the same star the 1D browser's feature search is keyed
+on (§5.8): a feature set, a pair set, a track — bigWig *or* synthetic — and a sequence. This is what
+lets a task like compartment phasing (§18.8) be a dropdown rather than a second file drop.
+
+Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
+a figure is opening the session and pressing Run.
+
+### 18.3 The map stays live: a third worker
+
+**A long analysis must not stop the reader from panning.** This is a requirement, not a preference, and
+it is the reason the threading arrangement is what it is.
+
+The reader worker owns the HDF5 mount and answers `matrix` requests; a scan inside it makes the next
+pan wait behind minutes of arithmetic. The annotations worker already exists for precisely this
+argument one level down — a `sample` behind a whole-genome pixel scan would wait, so tracks got a
+thread of their own. Analysis is the same argument a third time, with a longer job.
+
+So: **a third worker, with its own mount of the same source.**
+
+- **No analysis ever runs on the main thread.** Not even a cheap one — a rule with an exception is a
+  rule a frame gets dropped through.
+- **The reader worker is never given analysis work.** This is what makes §12's first analysis budget
+  row — *0 dropped frames, 0 blocked reader requests* — true by construction rather than by care.
+- A local `File` is cloneable by reference, so a second handle on a local file costs nothing. A remote
+  source costs a second range cache, and that cost is now **measured rather than expected**:
+  `test/budgets/analysis.test.ts` compares one source doing the view's read and then a four-chromosome
+  analysis against two independent sources doing the same two things, and the difference — the bytes
+  genuinely fetched twice — is **one 1 MiB chunk**, 9 % of what a shared cache would have moved. It is
+  bounded by where the two access patterns overlap at chunk granularity, not by the length of the scan.
+- The mount is **opened on the first task that needs it** and closed with the session, so a reader who
+  never opens the panel pays nothing at all.
+- **One job at a time per session**, queued. Two scans over one byte source thrash it and both finish
+  later than they would in sequence.
+- **Every job reports progress and can be cancelled**, through the same hooks the genome × genome scan
+  (§7.3) already uses.
+- **A job survives navigation and tab switches** and is bound to the session rather than to the mounted
+  view. Pan, zoom, open a chromosome, switch tabs, come back: it is still running, and the panel row
+  says so. It does not survive the session, which cancels it.
+
+Input reaches the worker one of two ways, and the task says which: a **copy** of a block the view
+already holds, where that block is small enough for the copy to be free — a yeast chromosome at 1 kb is
+9 MB — or the worker's **own reads**, bounded or streaming. The view's block is never *transferred*,
+which would neuter the array the heatmap is drawing from.
+
+### 18.4 The framing is an input, and it is a snapshot
+
+**What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
+row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
+is on.
+
+It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
+change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
+against the new one. This is the same discipline `render/viewpoint.ts` already keeps for the on-the-fly
+4C lane, whose docstring is careful to say it is a reading of what is on screen — and it is exactly why
+the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
+version of it. The panel is what makes the two obviously different, which is a good reason for the
+panel to exist.
+
+**Provenance travels with the numbers.** Every result carries its task and task version, every
+parameter, the framing snapshot, the file URI, the app's version and commit, and a timestamp. It is
+shown in the drawer, copyable in one click, and written into every export whose format has a comment
+syntax — TSV, bedGraph and BED, the same `#` provenance line `annotations/export.ts` already writes for
+hand-drawn marks. A bigWig carries none, because BBI has nowhere to put one; writing it into the
+`autoSql` offset would technically work and is refused, since a file that misuses a structural field to
+carry a comment is worse than a file without the comment. That is a reason to offer the TSV beside the
+bigWig, not a reason to abuse the header.
+
+**A figure must come out the same twice.** Every task that samples — distance-matched controls,
+bootstrap intervals — takes a **seed** with a stable default and uses a seeded generator, never
+`Math.random()`. The seed is part of the provenance, and identical seeds with identical parameters
+produce bit-identical output.
+
+### 18.5 A synthetic track is a track
+
+Any result that is one value per bin becomes an `AnnotationEntry` with `kind: 'track'` on a new
+`synthetic` card, and from that moment it is indistinguishable from a loaded bigWig: the same colour
+chip, rename, limits, autoscale, ceiling drag, four edges, reordering, autoscale groups, hairline,
+tooltip, 1D browser and vector figure — because it is the same implementation and not a second one.
+Its `source` is a new `computed` case carrying the task and its parameters, so the row can say what made
+it.
+
+Mechanically, a finished vector is **registered with the annotations worker as a bin-vector source**,
+and the lane then asks for samples over a window exactly as it does of a bigWig. One new request kind,
+and no renderer changes anywhere.
+
+**A gap and a measured zero are not the same thing, and the difference is the
+file's to declare.** `NaN` means *no value here* throughout, and the temptation
+is to call every bin nothing landed in a gap. That is wrong for a cooler: it
+stores only its non-zeros, so an absent pixel is a zero the file asserts rather
+than a measurement it is missing. A bin is a genuine gap for exactly one reason —
+the balancer dropped it (§6.4) — and a task that conflates the two produces two
+different answers for one file depending on whether it read a dense block or
+walked the pixels. The ratios are the exception and go the other way: a bin with
+no contact at all has no cis *fraction*, because zero of zero is not zero and
+drawing it at the floor would put a bin that never touched anything in the same
+place as one that only ever reaches other sequences.
+
+**Values are not persisted; the recipe is.** A vector is megabytes and session storage is not for that.
+What survives a reload is the task, its parameters and its framing, and the row comes back in the
+`detached` state with a **Recompute** button — which is precisely the state a dropped local file returns
+in, for precisely the same reason (§8.6). An exported session therefore hands a colleague the analysis
+rather than a number they have to take on trust.
+
+### 18.6 Cost, and the three gates
+
+Analysis makes it possible to ask for something expensive, so the cost model is part of the contract.
+Every task declares its cost as one of three, and the drawer shows an estimate beside **Run** before
+anything is read.
+
+**Free** — computed from a block already in memory. Insulation, coverage, P(s) and the correlation
+chain over a loaded genome are all of these, and cost no I/O whatever.
+
+**Bounded** — a few range requests. The cis 4C profile is the row band and nothing else; a diamond
+insulation on an unloaded contig is one diagonal band; an APA window is one small block.
+
+**Scan** — a streaming pass, and therefore gated exactly as the genome × genome overview is (§7.3):
+explicit action, a progress bar, a cancel, and a pre-flight figure in requests and bytes. Two tasks are
+in this class, and both are honest about being so.
+
+Three specific gates, each stated because each is a place the naive implementation is wrong:
+
+1. **Whole-genome 4C is not a bounded read, and the read planner says so.** With rows set to the anchor
+   band and columns to everything, the two ranges overlap, so `planRead` resolves to `symmetric` over
+   the whole pixel table — because an upper-triangular store keeps every column *before* the anchor in
+   other rows (§5.3, §6.2). Done properly it is one streaming pass over the pixels with
+   `bin1 < anchor_end`, on average half the file, accumulating into a band of `|anchor|` rows and
+   materialising nothing large. **Cis is the default** and is bounded; trans is a toggle that says what
+   it costs.
+
+2. **The correlation matrix is N², and there is a bin-count gate.** A whole yeast genome at 1 kb is
+   12,100 bins and a 586 MB correlation matrix; human chr1 at 10 kb is 24,900 bins and 2.5 GB. The gate
+   mirrors `checkDenseSize` (§6.2) in form and in voice: it names the bin count, the bytes and the way
+   out, and it refuses rather than quietly coarsening. Per-contig is the default scope, which is both
+   the affordable choice and the conventional one.
+
+3. **An aggregate pileup reads one small block per feature, at the file's native bin size, and never a
+   bounding box.** This is a deliberate reversal of the obvious optimisation, and the reason is
+   resolution: a whole-genome or bounding-box read is pooled at `RASTER_MAX_DIM` (§7.2), so a pileup
+   taken from it silently inherits a coarsened bin on any sizeable genome, and the reader would have no
+   way to know. `k` windows inherit nothing. Where the block is already loaded the reads are free; where
+   it is not, adjacent windows are **coalesced** — the pixel-band merging the selection read already
+   performs — and the resulting request count is shown before **Run**, so an expensive pileup is the
+   reader's decision and not a surprise. On a local file it is not a question at all: a read is a
+   `slice()`.
+
+### 18.7 What comes out
+
+Five output kinds, and a task may produce several: a **profile** (one value per bin → a synthetic
+track), a **matrix** (a pileup, a saddle, a correlation heatmap → drawn with the app's existing
+rasteriser and colormaps), a **curve** (with an optional band), a **table** (through the existing
+virtual table, sortable and filterable) and **intervals** (a feature or pair set, offered as a new row
+on the Annotations panel so a called boundary becomes an overlay on the map immediately).
+
+Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
+them a true vector figure rather than a photograph of a chart.
+
+**The files this app writes gain one format, and it is bigWig.** A bigWig is what a reader wants at the
+end of the day — it is what a genome browser opens and what a colleague expects — and telling them to
+run `bedGraphToBigWig` is a command-line dependency in an application whose entire claim is that it has
+none. The writer is native, has no new npm dependency, and is affordable because the input is never
+arbitrary: one value per bin, over a known assembly, at a fixed bin size.
+
+Three properties of that writer are contract rather than implementation detail:
+
+- **A bin with no value is omitted, never written as `NaN` — and `±Infinity` goes the same way.**
+  Every downstream tool would report a `NaN` as a value, and BBI has nowhere to put an infinity at
+  all: one reaches the total summary and every zoom record over it, where `sumData` becomes `NaN`
+  and the bounds become infinite. That is a file which opens cleanly in every reader with its
+  autoscale and its mean destroyed — and which, with only `+Infinity` present, is not even visibly
+  broken, because `min` stays finite. A task that produces an infinity has a bug of its own; the
+  writer is the backstop that keeps it out of the file. This is also why the sections are
+  bedGraph-typed rather than fixed-step: gaps, dropped values and the partial final bin of a contig
+  — which is shorter than the bin size, since a sequence length is not a multiple of it — are all
+  expressed exactly, at four extra bytes per value that nothing notices.
+- **Compression is zlib through the platform's own `CompressionStream`**, already used by the PDF
+  writer; where it is unavailable the file is written uncompressed, which is a legal bigWig and beats
+  refusing to export.
+- **It round-trips through this app's own reader.** `@gmod/bbi` is already a dependency, so a written
+  file is read back and compared value for value in the test suite, and cross-checked against pyBigWig
+  in the goldens. A writer nobody reads back is a writer that is wrong.
+
+**Four header facts were settled by measurement rather than by reading a table**, against the six real
+bigWigs in `demo/yeast/`, because they are where writers most commonly disagree and because neither
+`@gmod/bbi` nor libBigWig reads two of them at all — so a round-trip test cannot settle them, and did
+not:
+
+| Field | What it actually holds |
+|---|---|
+| the u64 at `fullDataOffset` | the number of **sections**, not of data items. `Yeast_ChIP_Pol2-vs-input.bw` reads 658, which is its R-tree leaf count, against 1,771,581 items on disk |
+| `itemsPerSlot` in the unzoomed R-tree | **1** — one section per leaf slot — not the 1,024 items a section happens to hold. The zoom indexes carry 1,024, which is *their* records per block |
+| total-summary `validCount` | **bases covered**, not items, with `sumData` and `sumSquares` weighted by each interval's span |
+| the count before a zoom level's data | a **u32** block count, not a record count. The asymmetry with the u64 above is real |
+
+One further thing no reader in this repo can check, and which is therefore asserted on the bytes:
+**every internal node of the chromosome B+ tree carries the first key of the subtree beneath it.**
+`@gmod/bbi` steps over an internal key and recurses into every child, and libBigWig walks the tree
+eagerly too, so both find every contig whatever those keys say — while the UCSC tools binary-search on
+exactly them. A writer that filled them with rubbish would pass a round trip and produce a file
+`bigWigInfo` cannot navigate.
+
+Interval outputs go out as BED and BEDPE, and they go out through `annotations/export.ts` — the module
+the hand-drawn marks already used. It gained a `FeatureSet`/`PairSet` writer rather than one being added
+under `analysis/write/`, and that is the whole of the decision: two BED writers in one repository is two
+opinions about half-open ends waiting to diverge, and what varies between a hand-drawn mark and a called
+boundary is the *row*, not the format. Both round-trip through this app's own parser, which is what the
+tests assert rather than the text.
+
+**Every** output additionally offers TSV, and that is the most important of them: it is what makes a
+number in a figure checkable by the person reading the figure. Where an output has both, the two are not
+alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
+them, which is a header a BED consumer would choke on and a reader needs.
+
+### 18.8 The catalogue
+
+Sixteen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each one
+must be.
+
+**On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
+producing the **expected** curve three later tasks consume. *Coverage and marginals* — total, cis, trans
+and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
+artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
+minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
+*4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig.
+*Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
+per contig, behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
+FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
+correlation is too weak to decide a sign. *Saddle*, which follows from the two above.
+*CID*, which is insulation plus boundary calls plus a pileup over those calls, and is offered on
+metacools because it is the domain concept that applies to bacterial chromosomes where compartments do
+not.
+
+**Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
+**scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
+of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature heatmap — because the
+mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis*, likewise in both
+**fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
+resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
+normalised by **distance-matched controls by default**, or by observed/expected, or not at all; with
+the P2LL enrichment reported under it and a per-feature score table that can leave the app.
+*Track correlation* across any set of tracks, over fixed bins or over a feature set's intervals.
+*Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
+on a boundary" is the question that follows every domain call.
+
+Both aggregation tasks carry the same **ranking and subsetting** control: sort the features by any
+numeric column and take a top-N, a quantile band, or K equal groups aggregated separately. This is what
+turns *here are four hundred calls* into *the strongest fifty look like this and the weakest fifty look
+like nothing*, and it is what makes a boundary set or a loop set falsifiable rather than decorative.
+
+**On the metagenome**, and offered only on a `.metacool`, because these are the tasks nothing else can
+do and the reason the panel is not nearly empty on this app's primary format. *MAG contact QC*: per
+genome, its bins, its covered bins, its intra- and inter-MAG contacts and their ratio. *MAG purity*: per
+contig, the fraction of its contacts landing outside its own MAG and which MAG they land in, flagging
+the contigs whose plurality partner is somebody else — a direct read on binning quality, exported as a
+BED and as a per-contig track. *Split-MAG detection*: the contig-level matrix of one MAG, split
+spectrally in two, flagged when the cross-block contacts are too few for it to be one organism.
+*Inter-MAG network*: the genome × genome matrix as a ranked edge table, written in the column order
+`metacooler network --level genome` uses so the two are interchangeable downstream, and instant wherever
+that sidecar is already advertised (§7.3).
+
+`__unbinned__` appears in none of them as a row, exactly as §7.4 requires — and its contacts are
+dropped from every metagenome accumulation rather than counted as inter-MAG, because counting them
+would make every real MAG look leakier in proportion to how badly the *rest* of the file was binned,
+which is the opposite of a per-MAG diagnostic.
+
+**Three things about this catalogue are settled differently from how they are described above**, and
+the reasons are worth recording where the descriptions are:
+
+- **Aggregate peak analysis is not a composite**, despite needing an expected curve for one of its
+  three normalisations. `requires` is resolved before every run, so declaring it would compute a
+  whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
+  pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
+  span, which it accumulates from squares it is already reading. **CID and the inter-MAG network
+  are** genuine composites, and for the mirror-image reason: their upstream is the whole input,
+  unconditionally.
+- **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
+  needs a free-text control the parameter model does not have, and a parser with failure modes of its
+  own, to express what a base and a count express exactly. A genuinely irregular set of widths is two
+  runs, which leaves two provenance lines rather than one.
+- **Compartment phasing by GC content is built, and it is built through `TaskInputs`.** The sequence
+  is held by the annotations worker and the task runs in the analysis one, so the main thread asks
+  that worker to `sample` the FASTA at `basesPerPixel = binsize` — the same request its GC *lane* is
+  drawn from, so this is one implementation and not a second GC path — maps the intervals onto the
+  bin grid area-weighted, and ships the vector under the parameter's own key. A `sequence` parameter
+  and a `track` parameter are therefore resolved identically, and `run/compartments.ts` never learns
+  that a FASTA was involved. The vector is fetched for the **analysis venue only**: a task running in
+  the annotations worker is holding the file it would be sent a copy of.
+
+### 18.9 Explicitly not built
+
+In the spirit of §13, and for reasons rather than for lack of time.
+
+**No loop or dot calling.** A HiCCUPS-class caller needs false-discovery control across several local
+backgrounds, and a half-good one inside a viewer is a liability precisely because its output looks like
+a result. Scoring a loop set that already exists is the aggregate pileup, and that is the honest version
+of the same want.
+
+**No contact-based contig reordering or scaffolding.** It would only be useful if the reordering could
+be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
+with nowhere to go.
+
+**No writing of `.cool`, `.mcool` or `.metacool`.** This is a decision and not a limitation: h5wasm can
+create a file in its virtual filesystem, and the app declines to. A derived contact matrix is a format
+contract, and owning one means owning every question about what its provenance, its balancing and its
+bin table mean. §13's rule is therefore read as covering files the app *derives* and not only the file
+it opened.
+
+**No differential APA**, and **no differential insulation task**. Two insulation tracks from two files
+are two synthetic tracks, and comparing tracks is something the app already does; a task that only
+subtracts one from the other would be a worse version of a picture the reader can already make.
+
+**And, restating C1 because this is the section most likely to erode it:** no analysis runs anywhere but
+in the reader's own browser. There is no compute service, no offloading of the expensive cases, and no
+"upload it and we'll do the scan". A task that could only be done on a server is a task this app does
+not have.
+
+### 18.10 Correctness
+
+This is the largest cost in §18 and the one that decides whether any of it should be believed. An
+insulation score three per cent away from cooltools is worse than no insulation score, because somebody
+will put it in a figure.
+
+The bar in §14's spirit — goldens exported from a reference implementation, compared cell by cell —
+carries over, and only its arithmetic changes, since these outputs are floats rather than counts:
+
+- **`scripts/make_golden.py` gains an analysis section**, guarded so that a machine without the extra
+  packages still produces every existing golden. The new developer-side Python dependencies are
+  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups), **deeptools**
+  (`computeMatrix`, for the 1D metaplots) and **pyBigWig** (the writer cross-check).
+- **The tolerance is recorded per task in the golden file**, not written into the test, so it is data
+  that can be tightened: relative `1e-6` for anything that is a sum or a ratio of sums, `1e-4` for
+  eigenvectors, where solvers legitimately differ, and exact for counts, bin indices and interval
+  bounds.
+- **An eigenvector is compared up to a sign before phasing and exactly after it**, since phasing is the
+  step that makes the sign mean anything.
+- **The fixture is the published demo data.** `demo/yeast/` already carries a real 1 kb micro-C cooler,
+  a real loop table, a real anchor set, a real GTF, a FASTA and five real bigWigs, which is every input
+  every task above needs — so the goldens are against real data and cost no new fixtures.
+- **Determinism is tested directly**: the same seed and the same parameters, twice, byte for byte.
+- **Every writer round-trips**: a bigWig back through `@gmod/bbi`, a BED back through this app's own
+  parser.
+- **Every remote task gets a budget test**, in the shape `test/budgets/` already has, and the first of
+  them asserts §12's first analysis row — that the reader worker served its requests on time while a
+  scan was running.
+
+**Two of these were settled differently once the goldens were actually built**, and the record is here
+rather than left to be inferred from the code.
+
+**It is a second script, `scripts/make_analysis_golden.py`, not a section of the first.** The two prove
+different layers, against different references, to different bars, on different inputs — the reader
+against metacooler and cooler on the synthetic fixtures, the analysis against cooltools and friends on
+the published demo data. Folded together they would produce a run that half-succeeds on a machine
+missing one package and a manifest that has to say which half. `npm run fixtures:analysis` invokes it,
+and every golden it cannot build is *named* in its manifest, because an absent golden and an unwritten
+one look identical from the JS side. `deeptools` is not among the dependencies after all: the metaplot
+oracle is pyBigWig, which reads the same file the app reads with `@gmod/bbi` and therefore proves the
+two readers agree as well as proving the kernel.
+
+**Each golden carries two oracles rather than one, and the distinction is load-bearing.** `direct` is
+this repo's own definition recomputed in numpy from the same file, compared to equality; `reference` is
+the other tool's number under *its* definition, compared to whatever relation actually holds. Writing
+only the second would force a choice between a tolerance loose enough to cover a difference of
+definition and a test that fails on a difference that is correct. `direct` asks whether the code
+computes what it says; `reference` asks whether what it says is the quantity the field means by that
+name. Three of the relations are exact — P(s) against `expected_cis`, coverage against `coverage` up to
+the diagonal being counted once here and twice there, APA against coolpuppy once the diagonal-crossing
+windows are excluded. **Insulation is not**, and cannot be: the two diamonds differ by a row, by two
+diagonals, by a sum against a mean, by a median against a mean, and by a bad-bin mask. The golden lists
+all five, records the correlation *measured* per chromosome and window, and the test asserts that it has
+not degraded — which is a claim that is true, where equality would have been a claim that is false.

@@ -1,0 +1,74 @@
+{
+ "chroms": [
+  "I",
+  "III",
+  "VI",
+  "IV"
+ ],
+ "coverage": {
+  "apa": "a raw loop pileup, against numpy and coolpuppy",
+  "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
+  "coverage": "cis marginals, against numpy and cooltools.coverage",
+  "expected": "P(s) per chromosome, raw and balanced, against numpy and cooltools.expected_cis",
+  "insulation": "diamond sums and scores at three windows, against numpy and cooltools.insulation",
+  "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
+  "overlap": "Jaccard and hit counts, against a per-base boolean mask",
+  "viewpoint": "a virtual 4C profile, against numpy \u2014 the diagonal counted once"
+ },
+ "generator": "scripts/make_analysis_golden.py",
+ "goldens": [
+  {
+   "bytes": 404339,
+   "golden": "expected.json",
+   "name": "expected"
+  },
+  {
+   "bytes": 568804,
+   "golden": "insulation.json",
+   "name": "insulation"
+  },
+  {
+   "bytes": 157253,
+   "golden": "coverage.json",
+   "name": "coverage"
+  },
+  {
+   "bytes": 44983,
+   "golden": "viewpoint.json",
+   "name": "viewpoint"
+  },
+  {
+   "bytes": 202160,
+   "golden": "compartments.json",
+   "name": "compartments"
+  },
+  {
+   "bytes": 42116,
+   "golden": "apa.json",
+   "name": "apa"
+  },
+  {
+   "bytes": 22568,
+   "golden": "metaplot.json",
+   "name": "metaplot"
+  },
+  {
+   "bytes": 487,
+   "golden": "overlap.json",
+   "name": "overlap"
+  }
+ ],
+ "source": "demo/yeast/Yeast_microC_G2M_1kb.cool",
+ "tolerances": {
+  "eigenvectors": 0.0001,
+  "float32": 2e-06,
+  "sums": 1e-06
+ },
+ "versions": {
+  "cooler": "0.10.4",
+  "coolpuppy": "1.1.0",
+  "cooltools": "0.7.1",
+  "numpy": "2.4.6",
+  "pyBigWig": "0.3.25"
+ }
+}

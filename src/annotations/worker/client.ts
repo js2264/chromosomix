@@ -24,6 +24,8 @@ import type {
 interface Pending {
   resolve(value: unknown): void
   reject(reason: unknown): void
+  /** Only an analysis task reports; every other request is over too fast. */
+  onProgress?: (done: number, total: number, note?: string) => void
 }
 
 export class AnnotationClient {
@@ -57,6 +59,13 @@ export class AnnotationClient {
     }
     const entry = this.pending.get(response.id)
     if (entry === undefined) return
+    // Progress does not settle the promise — it is a report on a request still
+    // running, and only an analysis task sends one (§18.3). Handled before the
+    // delete below, which every other response performs.
+    if (response.type === 'progress') {
+      entry.onProgress?.(response.done, response.total, response.note)
+      return
+    }
     this.pending.delete(response.id)
     if (response.type === 'error') entry.reject(new Error(response.message))
     else entry.resolve(response.payload)
@@ -69,6 +78,7 @@ export class AnnotationClient {
 
   request<K extends AnnotationRequestKind>(
     payload: AnnotationRequestOf<K>,
+    onProgress?: (done: number, total: number, note?: string) => void,
   ): Promise<AnnotationResultMap[K]> {
     const worker = this.ensure()
     const id = this.nextId++
@@ -83,7 +93,11 @@ export class AnnotationClient {
     // of their callers.
     const message = withCredential({ ...payload, id }) as unknown as AnnotationRequest
     return new Promise<AnnotationResultMap[K]>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
+      this.pending.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        ...(onProgress === undefined ? {} : { onProgress }),
+      })
       worker.postMessage(message)
     })
   }

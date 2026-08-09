@@ -13,6 +13,15 @@ is how they differ. And a plain 1D genome browser for when there is no contact m
 same tab into its map. Tick a few chromosomes and the axis becomes those chromosomes; open a FASTA
 and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in.
 
+And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fourteen tasks:
+P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, metaplots and APA
+with bootstrap confidence bands, loop ranking, track correlation, interval overlap, and four that
+only a metagenome has — per-MAG contact QC, contig-level contamination calls, chimera detection and
+the inter-MAG network. Each runs in a worker of its own, so the map stays live and pannable while a
+whole-file scan is running. Results land in a resizable drawer, and every one of them exports:
+bigWig for a signal, bedGraph, BED, TSV, PNG, and true vector PDF. The bigWig is written here, byte
+by byte — no `bedGraphToBigWig` step, because a bigWig is what you actually wanted.
+
 There is no server. There is no upload. There is no preprocessing step. A file straight out of
 `metacooler create` opens and works.
 
@@ -111,10 +120,13 @@ src/
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
                  the 1D browser, its vector-PDF page, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
+  analysis/      the fourteen tasks (§18): descriptors, pure kernels, a worker of its
+                 own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
+                 and a bigWig writer with no dependency behind it
   app/           App (the window, the tabs, the address bar) and Session (one file)
   main.ts        three lines of bootstrap
 scripts/
-  make_fixtures.py  make_golden.py  gen_luts.py
+  make_fixtures.py  make_golden.py  make_analysis_golden.py  gen_luts.py
 test/
   fixtures/ (generated)   golden/ (committed)   unit/
 docs/
@@ -122,6 +134,7 @@ docs/
   deploy.md      publishing the app itself to GitHub Pages
 SPECS.md         the specification — section numbers are cited throughout the source
 IMPLEMENTATION.md  the build plan, and nine corrections where the docs were wrong
+TASKS_PLAN.md    the build plan for §18, the Analysis panel
 ```
 
 Three layering rules are enforced rather than encouraged, because breaking any of them is silent:
@@ -130,10 +143,13 @@ Three layering rules are enforced rather than encouraged, because breaking any o
   identical everywhere downstream.
 - **`@gmod/bbi` is imported only by the annotations worker.** Same rule, same reason: no file parser
   belongs in the main-thread bundle, and the demo GTF alone is ~310 ms of parsing.
-- **`/bins` is never read.** With fixed bins the entire coordinate model is arithmetic over
-  `indexes/chrom_offset` and `contigs/length`, so one of the four large tables in the file is never
-  touched — not on open, not per view, not over the network. `test/unit/real-file.test.ts` records
-  every dataset path the reader touches while loading a MAG and fails if `/bins` appears.
+- **No coordinate ever comes from `/bins`.** With fixed bins the entire coordinate model is
+  arithmetic over `indexes/chrom_offset` and `contigs/length`, so one of the four large tables in the
+  file is never touched — not on open, not per view, not over the network.
+  `test/unit/real-file.test.ts` records every dataset path the reader touches while loading a MAG and
+  fails if `/bins` appears. There is exactly one read of it in the whole reader: two bounded slices of
+  `/bins/weight`, for the bins on screen, and only when balancing was asked for (§6.4).
+  `test/unit/bins-guard.test.ts` proves the rule for every other path.
 
 ---
 
@@ -154,6 +170,7 @@ not the plan.
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 | — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA or a feature file (§5.8) |
+| — | Analysis (§18) | **done** — every task in `TASKS_PLAN.md`'s catalogue, in a fourth worker so a whole-file scan never blocks the view; a resizable drawer; results that come back as synthetic tracks in the Annotations panel, indistinguishable from a loaded bigWig; and a bigWig writer of this repo's own. Goldened against cooltools, coolpuppy, pyBigWig and numpy on the demo micro-C map |
 
 Other gaps worth naming rather than discovering:
 
@@ -162,10 +179,6 @@ Other gaps worth naming rather than discovering:
   suite checks that, and that the levels nest by exact integer ratios), but the entries are not yet
   wired to a zoom control. Today both a ladder and a sample collection present the same entry
   picker, with different explanatory text.
-- **Balancing is unavailable, deliberately.** SPECS §6.4 offers a weights toggle "if a weight column
-  exists in `/bins`"; SPECS §3.3 says `/bins` is never read. The two cannot both hold, and the
-  implementation keeps §3.3 — a balance request is refused with a message pointing at
-  `metacooler show`. This is a real divergence from the spec text and should be resolved there.
 - **The genome × genome overview** is implemented and correctly gated (explicit action, progress,
   cancellable; refused over HTTP above a size threshold; instant when a `metacooler network
   --level genome` edge list is advertised), but has not been exercised end-to-end on a large remote
@@ -174,7 +187,11 @@ Other gaps worth naming rather than discovering:
 Tests currently live in `test/unit/`: `reader-core`, `render`, `viewstate`, `real-file`,
 `mmetacool`, and — for §8 — `annotation-parse`, `annotation-store`, `locus-axis` and `track-lanes`.
 The annotation parsers are run against the *published demo files* rather than against three lines
-written to pass: a real Ensembl GTF, two real MACS narrowPeaks and a real loop table.
+written to pass: a real Ensembl GTF, two real MACS narrowPeaks and a real loop table. The §18
+kernels have a file each (`analysis-insulation`, `analysis-apa`, `analysis-compartments`, …), and
+`bigwig-write` reads every file it writes back with `@gmod/bbi` — the same library the app reads
+other people's bigWigs with — then walks the B+ tree byte by byte, because no reader in existence
+checks an internal node's keys and a wrong one is invisible until someone else's tool opens the file.
 
 ---
 
@@ -230,7 +247,16 @@ concept of — not a general Hi-C browser.
 Stated as decisions so they are not mistaken for omissions: no tile server; no user accounts; no
 file upload; no server-side computation of any kind; no required companion files; no required
 preprocessing; no support for orderings other than `genome-then-length`; no whole-genome views of
-eukaryotic coolers; **no write access of any kind** — the viewer never modifies a file.
+eukaryotic coolers; **no write access of any kind** — the viewer never modifies a file it opened.
+
+That last one is worth spelling out now that the app writes bigWigs. It has always *produced* files
+— a PNG, a PDF, a BED of hand-drawn marks, a saved session — and a bigWig is one more of them: new
+bytes handed to the browser as a download, needing no server, touching nothing that was opened. The
+line is between authoring an output and editing an input, and only the second is refused. Which is
+also why there is **no writing of `.cool`, `.mcool` or `.metacool`**: h5wasm could create one, so
+that is a decision and not a limitation. Three more arrive with the analysis panel, for the reasons
+given in SPECS §18.9: no loop or dot calling, no contact-based contig reordering or scaffolding, and
+no differential APA.
 
 ---
 
@@ -252,6 +278,33 @@ than as a bug).
 4,395-MAG MetaTOR output and asserts numbers that were read out of the file with `h5py` before any
 of this code existed.
 
+**The analysis has goldens of its own**, on the same principle and against different tools.
+`scripts/make_analysis_golden.py` (`npm run fixtures:analysis`) builds eight of them from
+`demo/yeast/Yeast_microC_G2M_1kb.cool` — a real 1 kb micro-C map, the one the app opens in the demo —
+using **cooltools**, **coolpuppy**, **pyBigWig** and **numpy**, and `test/unit/analysis-golden.test.ts`
+runs the kernels against them.
+
+Each golden carries two oracles, and the split is the design rather than a convenience. `direct` is
+this repo's own definition recomputed in numpy and is compared to **equality**: it is what catches a
+transposed index or a doubled diagonal. `reference` is the other tool's number under *its* definition,
+compared to whatever relation actually holds — and three of those relations are exact:
+
+- **P(s)** equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the
+  first two offsets. The mirrored dense block doubles both the sum and the count, and the mean is
+  what survives.
+- **Coverage** satisfies `cooltools_cis == ours + diagonal`, exactly. cooltools sums the pixel table
+  by both ends so a diagonal pixel counts twice; this repo counts it once, deliberately, and the
+  identity is the proof that the difference is the one intended and not an off-by-something.
+- **APA** equals coolpuppy's pileup, once the loops whose window would cross the main diagonal are
+  left out. With them in the two differ by about 1 %, and every differing cell is below the diagonal.
+
+**Insulation is not one of them, and the golden says so in five clauses.** cooltools' diamond is
+offset by a row, drops the first two diagonals, divides by a count of valid positions, normalises by
+the region median rather than the contig mean, and masks positions near a dropped bin. Both are
+published definitions of the same thing; what is left between them is a correlation of 0.61–0.85 on
+this dataset, and the golden records the measured value per chromosome and window so the test can
+assert the correspondence has not degraded rather than pretend to an equality that was never true.
+
 ---
 
 ## Documents
@@ -262,6 +315,11 @@ of this code existed.
   disagreed with the metacooler source. Those corrections are load-bearing; the one most likely to
   be re-broken is that `bin-size` can be the *string* `"null"`, so it must go through a verbatim
   port of Python's `_int_attr` rather than `Number()`.
+- `TASKS_PLAN.md` — the build plan for the Analysis panel and drawer (SPECS §18): the task model, the
+  worker that keeps the map live while a job runs, the native bigWig writer with its byte layout
+  written out, the catalogue of tasks, and the goldens each of them has to match. Its milestones
+  carry a *Changed during the build* note wherever the code diverged from the plan, which is most of
+  what a reader of both documents needs.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
 - `docs/deploy.md` — how the site is built and published, how it works offline, how past builds

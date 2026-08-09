@@ -1,0 +1,934 @@
+/**
+ * The workspace: parameters, a price, a Run, progress, results and exports.
+ *
+ * **It is not a modal and must not become one** (§18.1). The dialogs in §5 are
+ * questions; this is a place to work, and the three things `Modal` does are
+ * three ways of getting in the way of one. It would take the keyboard, which is
+ * how this app is driven; it would dismiss on a stray click outside itself,
+ * after a forty-second scan; and it would answer Escape by destroying the thing
+ * the reader is reading. So this class listens for no key, watches for no
+ * outside click, and never touches `App.modal` — every shortcut keeps working
+ * behind it, which is what makes panning the map while reading a pileup an
+ * ordinary thing to do rather than a mode to leave first.
+ *
+ * It **overlays** the content and the two right columns rather than joining the
+ * flex row, and that is arithmetic rather than taste: at three quarters of the
+ * window there is nothing left to squeeze, so a fourth flex item would push the
+ * map to a sliver and then have to push it back. The stylesheet does the
+ * positioning; what is left here is the width, which is dragged from the left
+ * edge through the same `resizeHandle` the columns use and remembered like
+ * theirs.
+ *
+ * Two things about a result are contract rather than presentation, and both are
+ * visible in this file:
+ *
+ * **A result is a record, and its framing is a snapshot** (§18.4). Panning after
+ * a run does not change a finished pileup, so the header states the framing the
+ * numbers belong to, marks it when the view has moved away from it, and offers
+ * to take a new snapshot rather than quietly recomputing against one the reader
+ * did not ask for.
+ *
+ * **A per-bin result is a lane, not a picture** (§18.5). A profile is therefore
+ * not drawn here at all: it goes to the Synthetic tracks card, where it inherits
+ * colour, rename, limits, autoscale, four edges, the tooltip, the 1D browser and
+ * the vector figure by being the same object a bigWig is. What this drawer shows
+ * for one is a sentence saying where it went, because a drawer that appeared to
+ * produce nothing would be a bug report.
+ *
+ * Every figure here draws through a `CanvasRenderingContext2D` and nothing else,
+ * which is the whole reason the PDF export below is four lines: the same `draw`
+ * that filled the canvas fills a {@link VectorPage}, so the file a reader
+ * downloads is the figure that was on screen by construction rather than by
+ * care.
+ */
+
+import { sameRecipe, type AnalysisRunner, type JobState } from '../analysis/runner'
+import {
+  defaultParams,
+  type AnalysisContext,
+  type AnalysisFraming,
+  type AnalysisTask,
+  type CostEstimate,
+  type IntervalsOutput,
+  type ParamValue,
+  type Params,
+  type Provenance,
+  type TaskOutput,
+  type TaskResult,
+} from '../analysis/types'
+import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
+import { formatIntervals } from '../annotations/export'
+import { recall, remember } from '../state/UiMemory'
+import { durationText } from './AnalysisPanelCard'
+import {
+  curveFigure,
+  matrixFigure,
+  tableFigure,
+  type PlotFigure,
+  type TableFigure,
+} from './analysisPlots'
+import { button, el, fmt } from './dom'
+import { canvasToPng, downloadBlob, fileStamp, scaleForDpi } from './export'
+import { iconButton } from './icons'
+import { ParamForm } from './ParamForm'
+import { resizeHandle } from './resizeHandle'
+import { VectorPage } from './vector'
+
+/**
+ * Where the dragged width is kept.
+ *
+ * `localStorage` and not `UiMemory`, for the reason `SidePanel` gives about the
+ * three columns: how wide a reader likes their workspace is a preference about
+ * this window, not a train of thought about this file.
+ */
+const WIDTH_KEY = 'metacooler-viewer:analysis-drawer:width'
+
+/** Below this there is no room for a figure and its axis labels at once. */
+const MIN_WIDTH = 380
+const DEFAULT_FRACTION = 0.75
+/** Not 1: a sliver of the map showing is what says this is a drawer. */
+const MAX_FRACTION = 0.95
+
+/**
+ * The resolution an exported figure is *redrawn* at.
+ *
+ * 300 dpi because that is what a journal asks for, and redrawn rather than
+ * scaled up because these plots are paths — the same argument `ui/export.ts`
+ * makes for the map. There is no chooser beside it as there is for the map: a
+ * drawer figure is a few hundred rectangles and some text, so the file is small
+ * at print resolution and a control asking a reader to think about dots per inch
+ * would be a control earning nothing.
+ */
+const FIGURE_EXPORT_DPI = 300
+
+/** Distinguishes the ids of two drawers mounted at once — a session, and a test. */
+let drawers = 0
+
+export interface AnalysisDrawerOptions {
+  runner: AnalysisRunner
+  context(): AnalysisContext | null
+  /** The framing a run started now would be a record of (§18.4). */
+  framing(): AnalysisFraming | null
+  /** The close button was pressed. The owner clears its own idea of what is open. */
+  onClose(): void
+}
+
+// ---------------------------------------------------------------------------
+// Width
+// ---------------------------------------------------------------------------
+
+/**
+ * The stored width, or `null`.
+ *
+ * Read exactly as `SidePanel` reads a column's, because a stored width outlives
+ * the build that wrote it and is untrusted input like the URL hash. The one
+ * difference is where the clamp happens: a column's bounds are constants and can
+ * be applied on the way in, while this one's maximum is a fraction of a window
+ * that has since been resized — so the raw number is kept and clamped at every
+ * paint.
+ */
+function readStoredWidth(): number | null {
+  try {
+    const raw = window.localStorage.getItem(WIDTH_KEY)
+    if (raw === null) return null
+    const value = Number(raw)
+    return Number.isFinite(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredWidth(width: number | null): void {
+  try {
+    if (width === null) window.localStorage.removeItem(WIDTH_KEY)
+    else window.localStorage.setItem(WIDTH_KEY, String(Math.round(width)))
+  } catch {
+    /* a browser that refuses storage still resizes correctly for this session */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Small readings
+// ---------------------------------------------------------------------------
+
+/** Parameters are remembered per file and per task (§18.2); this is the per-task half. */
+function paramScope(task: AnalysisTask): string {
+  return `analysis:${task.id}`
+}
+
+/** Whether a recalled value is something a parameter may legally hold. */
+function isParamValue(value: unknown): value is ParamValue {
+  if (value === null) return true
+  const kind = typeof value
+  if (kind === 'number' || kind === 'string' || kind === 'boolean') return true
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+/**
+ * What this file and this task were last run with, over the descriptor's defaults.
+ *
+ * Key by key rather than wholesale, because what comes back is untrusted: it was
+ * written by whichever build was open when the reader last pressed Run, and a
+ * task that has since gained, lost or retyped a parameter must not be handed the
+ * old shape. A key the descriptor no longer has is dropped; one it has gained
+ * keeps its default.
+ */
+function recallParams(task: AnalysisTask, uri: string): Params {
+  const out: Record<string, ParamValue> = { ...defaultParams(task.params) }
+  const held = recall<Record<string, unknown>>(uri, paramScope(task))
+  if (held === null || typeof held !== 'object' || Array.isArray(held)) return out
+  for (const spec of task.params) {
+    const value = held[spec.key]
+    if (isParamValue(value)) out[spec.key] = value
+  }
+  return out
+}
+
+/**
+ * The price, as one line beside **Run**.
+ *
+ * The note is already worded for a human, and the two numbers are appended
+ * rather than folded into it because §18.6 asks for the pre-flight figure in
+ * *requests and bytes* — the same two numbers the genome × genome scan states
+ * before it starts. `null` means there are none to state, which is what a local
+ * file answers, and a `0 requests` beside a free task would be an answer to a
+ * question nobody asked.
+ */
+function costText(estimate: CostEstimate): string {
+  const parts = [estimate.note]
+  if (estimate.requests !== null && estimate.requests > 0) {
+    parts.push(`${fmt.int(estimate.requests)} request${estimate.requests === 1 ? '' : 's'}`)
+  }
+  if (estimate.bytes !== null && estimate.bytes > 0) parts.push(fmt.bytes(estimate.bytes))
+  return parts.join(' · ')
+}
+
+/** Whether a shown result was computed over the framing the view has now. */
+function framingHolds(provenance: Provenance, framing: AnalysisFraming): boolean {
+  // Through `sameRecipe`, with the result's own parameters on both sides so that
+  // only the framing half of the comparison can fail. The runner exports it for
+  // exactly this: two spellings of "is this the same question" would eventually
+  // disagree, and the one that is wrong would be the one nobody tests.
+  return sameRecipe(provenance, { params: provenance.params, framing })
+}
+
+/**
+ * Whether a figure can be redrawn into a raster or onto a page.
+ *
+ * A table is DOM and a plot is a canvas, so only one of the two has a `draw` to
+ * hand a different context to. Asked of the figure rather than of the output
+ * kind that produced it, so the day a third figure kind appears the compiler
+ * asks the question at the one place that has to answer it.
+ */
+function isDrawable(figure: PlotFigure | TableFigure): figure is PlotFigure {
+  return 'draw' in figure
+}
+
+/**
+ * The line under the run row: which step is running, or why the last one
+ * stopped.
+ *
+ * A composite runs several things in sequence and the honest answer to "why is
+ * this taking so long" is which of them is running — the runner's note already
+ * says so, and this is where it is read. A **cancelled** job says nothing at
+ * all: the reader pressed the button, and a sentence telling them what they just
+ * did is the kind of message that trains people to stop reading messages.
+ */
+function runNote(state: JobState): Array<HTMLElement | string> {
+  switch (state.status) {
+    case 'running':
+      return [el('span', { class: 'analysis-spinner' }), state.note === '' ? 'working' : state.note]
+    case 'queued':
+      return ['waiting for the job in front of it']
+    case 'failed':
+      return [el('span', { class: 'inline-error', text: state.message })]
+    default:
+      return []
+  }
+}
+
+/** A figure's box on screen, in CSS pixels — what the export redraws into. */
+function figureBox(host: HTMLElement): { width: number; height: number } {
+  const rect = host.getBoundingClientRect()
+  return {
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height)),
+  }
+}
+
+/**
+ * The export filename, with the extension swapped.
+ *
+ * `tsvName` owns the rule — which parts, in which order, and when the output
+ * segment is dropped because it would repeat the task's own name — and it is
+ * called rather than copied. A PNG of the same output must land beside its TSV
+ * in a directory listing, and two implementations of one naming rule is how one
+ * of them stops doing that.
+ */
+function exportName(output: TaskOutput, provenance: Provenance, stamp: string, ext: string): string {
+  return tsvName(provenance.task, output, stamp).replace(/\.tsv$/, `.${ext}`)
+}
+
+// ---------------------------------------------------------------------------
+// The drawer
+// ---------------------------------------------------------------------------
+
+export class AnalysisDrawer {
+  /** The drawer itself, to be parented into the shell's drawer slot. */
+  readonly el: HTMLElement
+
+  private readonly titleEl = el('h2', { class: 'analysis-drawer-title' })
+  private readonly framingEl = el('span', { class: 'analysis-framing' })
+  private readonly recomputeButton: HTMLButtonElement
+  private readonly formSlot = el('div', { class: 'analysis-form' })
+  private readonly runButton: HTMLButtonElement
+  private readonly cancelButton: HTMLButtonElement
+  private readonly costEl = el('span', { class: 'analysis-cost' })
+  private readonly progressFill = el('div', { class: 'analysis-progress-fill' })
+  private readonly progressEl: HTMLElement
+  private readonly noteEl = el('div', { class: 'analysis-note hidden' })
+  private readonly recordEl: HTMLElement
+  private readonly recordNote = el('span', { class: 'analysis-note' })
+  private readonly notesEl = el('ul', { class: 'analysis-notes hidden' })
+  private readonly outputsEl = el('div', {
+    // The body is a flex column with a gap and these blocks want the same one,
+    // but they are replaced as a group and so need a parent of their own to be
+    // replaced inside. Stated here rather than as a class, because a rule whose
+    // whole content is "the same as the box around it" is a rule that will be
+    // read as meaning something.
+    style: { display: 'flex', flexDirection: 'column', gap: '0.8rem' },
+  })
+  /** Where an export that could not be written says so. */
+  private readonly statusEl = el('div', { class: 'analysis-note hidden' })
+
+  private readonly unsubscribe: () => void
+  private current: AnalysisTask | null = null
+  private form: ParamForm | null = null
+  private params: Params = {}
+  private figures: Array<{ destroy(): void }> = []
+  /** The result the output blocks were built from, compared by identity. */
+  private drawn: TaskResult | null = null
+  /** The dragged width, or `null` for "however wide the default says". */
+  private width: number | null = readStoredWidth()
+
+  constructor(private readonly options: AnalysisDrawerOptions) {
+    const id = `analysis-drawer-${drawers++}`
+    this.titleEl.id = `${id}-title`
+
+    this.recomputeButton = button('recompute here', () => this.run(), {
+      class: 'btn btn-quiet',
+      title:
+        'Take a new snapshot of the framing and run again. The result on screen is a record of ' +
+        'the view it was computed from, so it is left as it is until this finishes (§18.4).',
+    })
+    this.runButton = button('run', () => this.run(), { class: 'btn' })
+    this.cancelButton = button('cancel', () => this.cancel(), {
+      class: 'btn btn-quiet',
+      title: 'Stop this job. The worker checks between chunks, so it stops at the next one.',
+    })
+    this.progressEl = el('div', { class: 'analysis-progress' }, this.progressFill)
+    this.recordEl = el(
+      'div',
+      { class: 'plot-icon-row hidden' },
+      this.recordNote,
+      button('copy provenance', () => this.copyProvenance(), {
+        class: 'btn btn-quiet',
+        title:
+          'The task, its version, every parameter, the framing, the file and the build — the ' +
+          'same lines every export carries at its head (§18.4).',
+      }),
+    )
+
+    this.el = el(
+      'div',
+      {
+        // `collapsed` is the stylesheet's own word for a column that is not
+        // there, and it is reused rather than renamed: one class means one thing
+        // across the four surfaces beside the map.
+        class: 'analysis-drawer collapsed',
+        attrs: { role: 'region', 'aria-labelledby': this.titleEl.id },
+      },
+      el(
+        'div',
+        { class: 'analysis-drawer-head' },
+        this.titleEl,
+        this.framingEl,
+        this.recomputeButton,
+        iconButton(
+          'x',
+          'Close the drawer. Anything running keeps running — the panel row says so.',
+          () => this.close(),
+          { class: 'btn-close', size: 14 },
+        ),
+      ),
+      el(
+        'div',
+        { class: 'analysis-drawer-body' },
+        this.formSlot,
+        el(
+          'div',
+          { class: 'analysis-run' },
+          this.runButton,
+          // The price beside the button and before the controls that only exist
+          // while it is running (§18.6): what a task costs is what decides
+          // whether to press Run, so it is read on the way to the button and not
+          // after it.
+          this.costEl,
+          this.cancelButton,
+          this.progressEl,
+        ),
+        this.noteEl,
+        this.recordEl,
+        this.notesEl,
+        this.outputsEl,
+        this.statusEl,
+      ),
+      this.handle(),
+    )
+
+    this.unsubscribe = options.runner.subscribe(() => this.refresh())
+  }
+
+  // -------------------------------------------------------------------------
+  // Opening and closing
+  // -------------------------------------------------------------------------
+
+  /**
+   * Show one task, or nothing.
+   *
+   * Re-showing the task already open is a refresh rather than a rebuild: the
+   * panel calls this on every click, and a reader who clicks the row they are
+   * already reading should not lose the form they were half way through filling
+   * in.
+   */
+  show(task: AnalysisTask | null): void {
+    if (task !== null && this.current !== null && task.id === this.current.id) {
+      this.refresh()
+      return
+    }
+    this.teardown()
+    this.current = task
+    if (task === null) {
+      this.el.classList.add('collapsed')
+      return
+    }
+    this.params = defaultParams(task.params)
+    this.el.classList.remove('collapsed')
+    this.paintWidth()
+    this.refresh()
+  }
+
+  get task(): AnalysisTask | null {
+    return this.current
+  }
+
+  get isOpen(): boolean {
+    return this.current !== null
+  }
+
+  /** Re-read the runner, the context and the framing, and repaint from them. */
+  refresh(): void {
+    const task = this.current
+    if (task === null) return
+    const context = this.options.context()
+    this.titleEl.textContent = task.title
+    this.syncForm(task, context)
+    const result = this.options.runner.resultOf(task.id)
+    this.syncOutputs(result)
+    this.syncFraming(result)
+    this.syncRun(task, context)
+  }
+
+  /**
+   * The window or a column moved.
+   *
+   * Only the width needs saying: the figures inside own `ResizeObserver`s of
+   * their own and redraw themselves, which is why they are wrappers around a
+   * canvas rather than canvases.
+   */
+  relayout(): void {
+    if (this.current !== null) this.paintWidth()
+  }
+
+  destroy(): void {
+    this.unsubscribe()
+    this.teardown()
+    this.el.remove()
+  }
+
+  /**
+   * Close, and say so.
+   *
+   * Both, and in that order: which task is open is the owner's fact — it is what
+   * the panel's `active()` reads — but a close button that only reported the
+   * press and left the drawer up would be a button whose effect depends on
+   * somebody else's bookkeeping.
+   */
+  private close(): void {
+    this.show(null)
+    this.options.onClose()
+  }
+
+  private teardown(): void {
+    this.form?.destroy()
+    this.form = null
+    this.clearFigures()
+    this.outputsEl.replaceChildren()
+    this.notesEl.replaceChildren()
+    this.notesEl.classList.add('hidden')
+    this.recordEl.classList.add('hidden')
+    this.formSlot.replaceChildren()
+    this.setStatus('')
+    this.drawn = null
+    this.params = {}
+  }
+
+  /**
+   * The one line an export writes when it could not.
+   *
+   * Hidden when empty rather than left as an empty box: the drawer's body is a
+   * flex column with a gap, so an element with no text is still a gap, and three
+   * of those between the run row and the first figure read as a layout mistake.
+   */
+  private setStatus(text: string): void {
+    this.statusEl.textContent = text
+    this.statusEl.classList.toggle('hidden', text === '')
+  }
+
+  private clearFigures(): void {
+    for (const figure of this.figures) figure.destroy()
+    this.figures = []
+  }
+
+  // -------------------------------------------------------------------------
+  // Width
+  // -------------------------------------------------------------------------
+
+  private handle(): HTMLElement {
+    return resizeHandle({
+      // A right-sider, so dragging left widens it. The drawer is not a column,
+      // but the question the sign answers is the same one.
+      side: 'right',
+      what: 'Analysis drawer',
+      width: () => this.widthNow(),
+      resize: (px) => {
+        this.width = px
+        this.paintWidth()
+      },
+      // The *effective* width, not the raw one the pointer asked for. A drag
+      // that ran past the right edge of the window would otherwise store a
+      // number this window never honoured, and the drawer would jump to it on a
+      // wider screen months later.
+      commit: () => writeStoredWidth(this.widthNow()),
+      reset: () => {
+        this.width = null
+        writeStoredWidth(null)
+        this.paintWidth()
+      },
+    })
+  }
+
+  /** The body the drawer is laid over, which is what the fractions are of. */
+  private bodyWidth(): number {
+    const host = this.el.closest('.app-body') ?? this.el.parentElement
+    const width = host?.getBoundingClientRect().width ?? 0
+    return width > 0 ? width : window.innerWidth
+  }
+
+  private widthNow(): number {
+    const body = this.bodyWidth()
+    const max = Math.round(body * MAX_FRACTION)
+    // The floor gives way to the ceiling rather than the other way round: on a
+    // window narrower than the minimum, 95% of it is the honest answer and 380
+    // pixels would hang off the edge.
+    const floor = Math.min(MIN_WIDTH, max)
+    return Math.max(floor, Math.min(max, this.width ?? Math.round(body * DEFAULT_FRACTION)))
+  }
+
+  private paintWidth(): void {
+    this.el.style.width = `${this.widthNow()}px`
+  }
+
+  // -------------------------------------------------------------------------
+  // The form
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build the form, or hand it the context it should be reading now.
+   *
+   * Rebuilt only when the *task* changes. A context change — a track dropped, a
+   * file finishing its parse — is given to the existing form, which repairs its
+   * entry dropdowns in place and leaves every number the reader typed alone.
+   */
+  private syncForm(task: AnalysisTask, context: AnalysisContext | null): void {
+    if (context === null) return
+    if (this.form !== null) {
+      this.form.setContext(context)
+      return
+    }
+    this.params = recallParams(task, context.uri)
+    const form = new ParamForm({
+      specs: task.params,
+      context,
+      value: this.params,
+      onChange: (next) => this.onParams(next),
+    })
+    this.form = form
+    // Read back what the entry resolution decided. The form deliberately fires
+    // no `onChange` from its constructor, so this is the only place the star's
+    // choices reach the estimate.
+    this.params = form.value
+    this.formSlot.replaceChildren(form.el)
+  }
+
+  private onParams(next: Params): void {
+    this.params = next
+    const task = this.current
+    const context = this.options.context()
+    if (task === null || context === null) return
+    // Remembered on every edit rather than on Run, so that reproducing a figure
+    // is opening the session and pressing Run (§18.2) — including the run the
+    // reader configured, thought better of, and came back to.
+    remember(context.uri, paramScope(task), next)
+    this.syncRun(task, context)
+  }
+
+  // -------------------------------------------------------------------------
+  // Running
+  // -------------------------------------------------------------------------
+
+  private run(): void {
+    const task = this.current
+    if (task === null) return
+    this.setStatus('')
+    this.options.runner.run(task, this.params)
+    this.refresh()
+  }
+
+  private cancel(): void {
+    if (this.current !== null) this.options.runner.cancel(this.current.id)
+  }
+
+  private syncRun(task: AnalysisTask, context: AnalysisContext | null): void {
+    const state = this.options.runner.stateOf(task.id)
+    const busy = state.status === 'running' || state.status === 'queued'
+    const estimate = context === null ? null : task.estimate(context, this.params)
+    const refusal =
+      context === null
+        ? 'This view has no contact map to run against.'
+        : estimate !== null && estimate.refusal !== undefined && estimate.refusal !== ''
+          ? estimate.refusal
+          : null
+
+    this.runButton.disabled = busy || refusal !== null
+    if (refusal !== null) {
+      // In the price's place, not beside it. A refusal names the bin count, the
+      // bytes and the way out (§18.6), and a cost estimate underneath it would
+      // be a price for something that is not going to happen.
+      this.costEl.className = 'analysis-refusal'
+      this.costEl.textContent = refusal
+    } else {
+      this.costEl.className =
+        estimate !== null && estimate.class === 'scan' ? 'analysis-cost is-scan' : 'analysis-cost'
+      this.costEl.textContent = estimate === null ? '' : costText(estimate)
+    }
+
+    this.cancelButton.classList.toggle('hidden', !busy)
+    const determinate = state.status === 'running' && state.total > 0
+    this.progressEl.classList.toggle('hidden', !determinate)
+    if (determinate && state.status === 'running') {
+      this.progressFill.style.width = `${Math.min(100, (state.done / state.total) * 100).toFixed(1)}%`
+    }
+
+    const note = runNote(state)
+    this.noteEl.replaceChildren(...note)
+    this.noteEl.classList.toggle('hidden', note.length === 0)
+  }
+
+  // -------------------------------------------------------------------------
+  // The framing
+  // -------------------------------------------------------------------------
+
+  /**
+   * Which framing the numbers belong to, and whether the view has left it.
+   *
+   * With a result on screen this is the *result's* framing and not the view's,
+   * which is the whole of §18.4 in one line of text: the picture is a record of
+   * where the reader was looking when they asked, and it does not follow them
+   * around. **Recompute here** is how they ask again, and it appears only when
+   * there is something to recompute against.
+   */
+  private syncFraming(result: TaskResult | null): void {
+    const current = this.options.framing()
+    if (result !== null) {
+      const provenance = result.provenance
+      const stale = current !== null && !framingHolds(provenance, current)
+      this.framingEl.className = stale ? 'analysis-framing is-stale' : 'analysis-framing'
+      this.framingEl.textContent = stale
+        ? `from ${provenance.framing.label} — the view has moved since`
+        : `from ${provenance.framing.label}`
+      this.framingEl.title = provenance.framing.label
+      this.recomputeButton.classList.toggle('hidden', !stale)
+      return
+    }
+    this.framingEl.className = 'analysis-framing'
+    this.framingEl.textContent =
+      current === null ? 'no contact map in this view' : `will run on ${current.label}`
+    this.framingEl.title = current?.label ?? ''
+    this.recomputeButton.classList.add('hidden')
+  }
+
+  // -------------------------------------------------------------------------
+  // Outputs
+  // -------------------------------------------------------------------------
+
+  /**
+   * Draw what the last run produced, when it is not already drawn.
+   *
+   * Compared by identity, which is enough: the runner stores a new object per
+   * run and never mutates one, so a result that is the same object is a result
+   * whose figures are already on screen. Rebuilding them anyway would throw away
+   * a scroll position in a table and re-run every canvas layout at ten hertz
+   * while the *next* job reports progress.
+   */
+  private syncOutputs(result: TaskResult | null): void {
+    if (result === this.drawn) return
+    this.drawn = result
+    this.clearFigures()
+    this.setStatus('')
+
+    if (result === null) {
+      this.outputsEl.replaceChildren()
+      this.notesEl.replaceChildren()
+      this.notesEl.classList.add('hidden')
+      this.recordEl.classList.add('hidden')
+      return
+    }
+
+    const provenance = result.provenance
+    this.recordEl.classList.remove('hidden')
+    this.recordNote.textContent = `computed in ${durationText(result.ms)} · ${provenance.createdAt}`
+
+    // The things the reader must be told that are not errors — *412 of 5,000
+    // windows dropped for missing data*. Above the pictures, because a note that
+    // changes what a number means has to be read before the number is.
+    this.notesEl.replaceChildren(
+      ...result.notes.map((note) => el('li', { text: note })),
+    )
+    this.notesEl.classList.toggle('hidden', result.notes.length === 0)
+
+    this.outputsEl.replaceChildren(
+      ...result.outputs.map((output) => this.block(output, provenance)),
+    )
+  }
+
+  private block(output: TaskOutput, provenance: Provenance): HTMLElement {
+    if (output.kind === 'profile' || output.kind === 'intervals') {
+      return this.elsewhere(output, provenance)
+    }
+    const figure: PlotFigure | TableFigure =
+      output.kind === 'curve'
+        ? curveFigure(output)
+        : output.kind === 'matrix'
+          ? matrixFigure(output)
+          : tableFigure(output)
+    this.figures.push(figure)
+    const drawable = isDrawable(figure) ? figure : null
+
+    return el(
+      'div',
+      { class: 'analysis-figure' },
+      el(
+        'div',
+        { class: 'analysis-figure-head' },
+        el('span', { class: 'analysis-figure-title', text: output.label }),
+        this.tsvButton(output, provenance),
+        ...(drawable === null
+          ? []
+          : [
+              button('PNG', () => void this.savePng(drawable, output, provenance), {
+                class: 'btn btn-quiet',
+                title: `The figure as a raster, redrawn at ${FIGURE_EXPORT_DPI} dpi`,
+              }),
+              button('PDF', () => void this.savePdf(drawable, output, provenance), {
+                class: 'btn btn-quiet',
+                title: 'The figure as a true vector page — restylable, recolourable, scalable',
+              }),
+            ]),
+      ),
+      figure.el,
+    )
+  }
+
+  /**
+   * The two outputs that are not pictures, and where they went instead.
+   *
+   * A profile is a lane and a called interval is an overlay (§18.5, §18.7), and
+   * both are ordinary rows on the Annotations panel from the moment they arrive
+   * — the same implementation a loaded bigWig or BED gets, not a second one. The
+   * line is here so the drawer does not look as though the run produced nothing,
+   * and the TSV is here because §18.7's *every output offers TSV* has no
+   * exceptions.
+   */
+  private elsewhere(output: TaskOutput, provenance: Provenance): HTMLElement {
+    const where =
+      output.kind === 'profile'
+        ? 'one value per bin, so it is a lane rather than a picture: it is on the Synthetic ' +
+          'tracks card in the Annotations panel, with the colour, limits, edges and figure ' +
+          'every other track has.'
+        : 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
+          'the map it was called from.'
+    return el(
+      'div',
+      { class: 'analysis-elsewhere' },
+      el('span', { text: `“${output.label}” is ${where}` }),
+      el(
+        'div',
+        { class: 'plot-icon-row' },
+        ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
+        this.tsvButton(output, provenance),
+      ),
+    )
+  }
+
+  // -------------------------------------------------------------------------
+  // Exports
+  // -------------------------------------------------------------------------
+
+  /**
+   * The called intervals as the file everything else reads.
+   *
+   * A boundary set is a list of coordinates, and a list of coordinates leaves
+   * this app as BED or as BEDPE — bedtools reads it, IGV reads it, and this
+   * app's own sniffer reads it back as an overlay, which is the property
+   * `analysis-bed-export.test.ts` checks rather than the text. The TSV beside it
+   * is the same rows with the provenance above them, for a reader rather than
+   * for a tool.
+   */
+  private bedButton(output: IntervalsOutput, provenance: Provenance): HTMLButtonElement {
+    const format = output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
+    return button(format, () => this.saveIntervals(output, provenance), {
+      class: 'btn btn-quiet',
+      title: `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
+    })
+  }
+
+  private saveIntervals(output: IntervalsOutput, provenance: Provenance): void {
+    const stamp = fileStamp(new Date())
+    const text = formatIntervals(output.payload, {
+      label: output.label,
+      file: provenance.framing.label,
+      created: provenance.createdAt,
+    })
+    const suffix = output.payload.kind === 'pairs' ? 'bedpe' : 'bed'
+    downloadBlob(
+      new Blob([text], { type: 'text/plain' }),
+      exportName(output, provenance, stamp, suffix),
+    )
+  }
+
+  private tsvButton(output: TaskOutput, provenance: Provenance): HTMLButtonElement {
+    return button('TSV', () => this.saveTsv(output, provenance), {
+      class: 'btn btn-quiet',
+      title:
+        'The numbers as a table, with the provenance above them — what makes a figure ' +
+        'checkable by the person reading it (§18.7).',
+    })
+  }
+
+  private saveTsv(output: TaskOutput, provenance: Provenance): void {
+    const stamp = fileStamp(new Date())
+    const blob = new Blob([outputToTsv(output, provenance)], {
+      type: 'text/tab-separated-values',
+    })
+    downloadBlob(blob, tsvName(provenance.task, output, stamp))
+  }
+
+  /**
+   * The figure as a PNG, redrawn rather than screen-grabbed.
+   *
+   * The box is the one the figure occupies on screen, because that is the layout
+   * the reader chose: widening the drawer is how a curve is given room, and an
+   * export at some other width would be a different figure. Only the density
+   * changes.
+   */
+  private async savePng(
+    figure: PlotFigure,
+    output: TaskOutput,
+    provenance: Provenance,
+  ): Promise<void> {
+    try {
+      const box = figureBox(figure.el)
+      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(box.width * scale))
+      canvas.height = Math.max(1, Math.round(box.height * scale))
+      const ctx = canvas.getContext('2d')
+      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      figure.draw(ctx, box)
+      downloadBlob(await canvasToPng(canvas), exportName(output, provenance, fileStamp(new Date()), 'png'))
+      this.setStatus('')
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * The same figure as a one-page PDF, written as *drawing* rather than as a
+   * photograph of one.
+   *
+   * This is the whole return on `analysisPlots.ts` drawing through a context and
+   * nothing else: `VectorPage` implements that context and emits PDF operators,
+   * so the export has nothing of its own to reimplement and cannot drift from
+   * what was on screen.
+   */
+  private async savePdf(
+    figure: PlotFigure,
+    output: TaskOutput,
+    provenance: Provenance,
+  ): Promise<void> {
+    try {
+      const box = figureBox(figure.el)
+      const now = new Date()
+      const page = new VectorPage(box.width, box.height)
+      figure.draw(page.ctx, box)
+      const blob = await page.toBlob({ title: output.label, created: now })
+      downloadBlob(blob, exportName(output, provenance, fileStamp(now), 'pdf'))
+      this.setStatus('')
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * The provenance on the clipboard, in the same `#` lines every export carries.
+   *
+   * Read off the *shown* result rather than rebuilt from the form: the point of
+   * it is to describe the numbers on screen, and a reader who has since changed
+   * a parameter would otherwise copy a recipe that produced something else.
+   */
+  private copyProvenance(): void {
+    const result = this.drawn
+    if (result === null) return
+    const text = provenanceLines(result.provenance).join('\n')
+    // Absent in an insecure context, which is where a colleague's `file://` copy
+    // of this app runs; the same reading `copyPngToClipboard` takes of the same
+    // API.
+    const clipboard = (navigator as { clipboard?: { writeText?(text: string): Promise<void> } })
+      .clipboard
+    const write = clipboard?.writeText?.(text)
+    if (write === undefined) {
+      this.setStatus('This browser will not let a page write to the clipboard.')
+      return
+    }
+    void write.then(
+      () => {
+        this.setStatus('Provenance copied.')
+      },
+      (err: unknown) => {
+        this.setStatus(err instanceof Error ? err.message : String(err))
+      },
+    )
+  }
+}

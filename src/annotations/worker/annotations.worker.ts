@@ -22,6 +22,11 @@ import { transfersFor } from '../../worker/protocol'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
+import { binVectorSamples, type BinVector } from './binVector'
+import { TRACK_RUNNERS } from '../../analysis/run/tracks'
+import type { TrackJobContext } from '../../analysis/job'
+import type { TaskResult } from '../../analysis/types'
+import { COMMIT, VERSION } from '../../version'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
 import {
   decodeAnnotationBytes,
@@ -61,6 +66,22 @@ const tracks = new Map<string, OpenTrack>()
  * read (§8.2).
  */
 const sequences = new Map<string, SequenceStore>()
+
+/**
+ * The computed vectors registered against this file, by the entry that owns them.
+ *
+ * A third store beside the two above, and it is the reason a synthetic lane
+ * needs no renderer of its own: `sample` looks here as well, so an analysis
+ * result answers the same request a bigWig does and everything downstream is
+ * unchanged (§18.5).
+ *
+ * Held here rather than on the main thread for a different reason from the other
+ * two, and worth stating because it is not the obvious one. A vector is *small*
+ * enough to keep on the main thread — a whole yeast genome at 1 kb is 48 kB —
+ * so this is not about size. It is about there being exactly one path from a
+ * lane to its values, and that path arriving here.
+ */
+const vectors = new Map<string, BinVector>()
 
 /**
  * How large a FASTA this reads.
@@ -133,6 +154,11 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
       return sample(request.entry, request.regions, request.basesPerPixel)
+    case 'register':
+      vectors.set(request.entry, request.vector)
+      return null
+    case 'run':
+      return runTask(request)
     case 'bases':
       return bases(request.entry, request.regions)
     case 'assembly':
@@ -146,8 +172,77 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       const store = sequences.get(request.entry)
       if (store !== undefined && recentFasta?.store === store) recentFasta = null
       sequences.delete(request.entry)
+      vectors.delete(request.entry)
       return null
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Analysis tasks that belong here (§18.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run one task against the handles this worker already holds.
+ *
+ * The second venue. A metaplot's whole input is bigWigs and feature sets, and
+ * both are already here — so the alternative is shipping the samples to a third
+ * thread that has no reader for them, which lands N × W floats on the main
+ * thread on the way past. `analysis/job.ts` sets out the split.
+ *
+ * `taskVersion` is left at zero and stamped by the main-thread runner, exactly
+ * as the analysis worker leaves it: the descriptor lives on the main thread and
+ * neither worker imports the registry.
+ */
+async function runTask(
+  request: Extract<AnnotationRequest, { kind: 'run' }>,
+): Promise<TaskResult> {
+  const runner = TRACK_RUNNERS[request.task]
+  if (runner === undefined) {
+    throw new Error(`no track analysis runner is registered for the task ${request.task}`)
+  }
+  const notes: string[] = []
+  const started = performance.now()
+  const job: TrackJobContext = {
+    params: request.params,
+    framing: request.framing,
+    inputs: request.inputs,
+    // This worker has no cancel channel of its own: every task it runs is
+    // bounded by the feature set it was given, and the ones that are not belong
+    // in the analysis worker where the scan machinery is. Stated rather than
+    // stubbed silently, so a long task added here is a decision and not a
+    // surprise.
+    cancelled: () => false,
+    throwIfCancelled: () => {},
+    progress: (done, total, note) => {
+      const response: AnnotationResponse = {
+        type: 'progress',
+        id: request.id,
+        done,
+        total,
+        ...(note === undefined ? {} : { note }),
+      }
+      ;(self as unknown as Worker).postMessage(response)
+    },
+    note: (text) => {
+      notes.push(text)
+    },
+    sample: (entry, regions, basesPerPixel) => sample(entry, regions, basesPerPixel),
+    lengthOf: (contig) => request.inputs.contigLengths?.[contig],
+  }
+  const outputs = await runner(job)
+  return {
+    outputs,
+    provenance: {
+      task: request.task,
+      taskVersion: 0,
+      params: request.params,
+      framing: request.framing,
+      app: [VERSION, COMMIT].filter((part) => part !== '').join(' '),
+      createdAt: new Date().toISOString(),
+    },
+    notes,
+    ms: performance.now() - started,
   }
 }
 
@@ -641,6 +736,13 @@ async function sample(
   // other computes its summary from the residues it is holding.
   const sequence = sequences.get(entry)
   if (sequence !== undefined) return gcSamples(sequence, regions, basesPerPixel)
+
+  // And a computed vector is the third: no file, no zoom levels, a summary
+  // built for the window it was asked about (§18.5, `binVector.ts`). It is
+  // looked up here, in the one function every lane's values come out of, which
+  // is precisely what stops a synthetic track needing a renderer of its own.
+  const vector = vectors.get(entry)
+  if (vector !== undefined) return binVectorSamples(vector, regions, basesPerPixel)
 
   const track = tracks.get(entry)
   if (track === undefined) {

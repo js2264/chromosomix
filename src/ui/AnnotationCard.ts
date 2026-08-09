@@ -350,6 +350,17 @@ export class AnnotationCard {
    * the settings with it.
    */
   private reattachNote(entry: AnnotationEntry): HTMLElement {
+    if (entry.source.kind === 'computed') {
+      // There is no file to ask for. A called interval set is the answer to a
+      // task that was run against a framing, and what survives a reload is the
+      // recipe rather than the coordinates (§18.5) — so the honest note names
+      // the task and points at the panel that can run it again, instead of
+      // opening a file picker that could never be satisfied.
+      return el('p', {
+        class: 'ann-note ann-detached',
+        text: `computed by ${entry.source.task} · run it again from the Analysis panel to redraw it`,
+      })
+    }
     const input = el('input', { class: 'hidden-input', type: 'file' })
     input.addEventListener('change', () => {
       const file = input.files?.[0]

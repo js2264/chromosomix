@@ -41,6 +41,7 @@
     "test:nofixtures": "vitest run --exclude '**/node_modules/**' --exclude 'test/budgets/**' --exclude 'test/unit/{cool,range,transpose,open,aggregate,detect,decode,matrix,pooling,bins-guard,intattr,genome-runs}.test.ts'",
     "test:watch": "vitest",
     "fixtures": "${METACOOLER_PYTHON:-python3} scripts/make_fixtures.py && ${METACOOLER_PYTHON:-python3} scripts/make_golden.py",
+    "fixtures:analysis": "${METACOOLER_PYTHON:-python3} scripts/make_analysis_golden.py",
     "icons": "node scripts/build-icons.mjs",
     "icons:app": "${METACOOLER_PYTHON:-python3} scripts/make-app-icons.py",
     "preversion": "npm run typecheck && npm run test:nofixtures",
@@ -76,7 +77,8 @@
     "engines": "The floor is Electron 43's now, not Vite's. The `^20.19.0` half had to go: it satisfies Vite and vitest, but cannot run the desktop toolchain, so leaving it in would have advertised a Node version on which half the scripts fail.",
     "build:pinned": "The archived copy of one commit, built to be served from `<base>v/<commit>/` and published beside the site by .github/workflows/deploy.yml. Needs PINNED_BASE and refuses to build without it, because the base contains a commit hash and there is nothing to guess. Same source, no service worker, no manifest, no demo data and no source maps — about 5 MB, which is what makes keeping twenty of them affordable inside the 1 GB Pages budget. Then it asserts the shape of what came out, because every way that shape goes wrong is both silent and late: an archived build is what nobody opens for months.",
     "build:desktop": "A second invocation of the bundler, never a change to the first. `build` is the command line .github/workflows/deploy.yml runs and it must keep working byte-for-byte; this one reads the same source through vite.desktop.config.ts, compiles the main process, and then asserts the shape of what came out, because every way that shape goes wrong is silent.",
-    "dist:desktop": "Builds the installers. Deliberately *not* part of `preversion`: `npm version patch` would otherwise download a 100 MB Electron binary and pack a .dmg to bump a number. In CI this is what .github/workflows/release.yml runs, once per platform, when a GitHub release is *created* — a tag alone does not mean 'ship binaries'."
+    "dist:desktop": "Builds the installers. Deliberately *not* part of `preversion`: `npm version patch` would otherwise download a 100 MB Electron binary and pack a .dmg to bump a number. In CI this is what .github/workflows/release.yml runs, once per platform, when a GitHub release is *created* — a tag alone does not mean 'ship binaries'.",
+    "fixtures:analysis": "The oracles the Analysis tasks are checked against (SPECS §16.10), from cooltools and friends over the published demo data rather than from the synthetic fixtures. A second command and not a flag on `fixtures`: the two prove different layers, against different references, to different bars, and they need different packages — folding them together would mean a run that half-succeeds on a machine missing one of them. Needs `pip install cooltools coolpuppy deeptools pyBigWig`; every golden it cannot build is named in its manifest rather than quietly omitted, because an absent golden and an unwritten one look identical from the JS side."
   },
   "overrides": {
     "rollup": "npm:@rollup/wasm-node@^4.62.0"
