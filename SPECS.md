@@ -1513,7 +1513,7 @@ needs a partner off the left-hand end of the block, which was never read. Those 
 come back `NaN` and draw as paper. Reading wider than the window would fill them and is the obvious
 later improvement; nothing pretends they are zeros.
 
-### 17.2 Where it is offered, and how deep it goes
+### 17.2 Where it is offered, and the box it is drawn in
 
 Only on a block that **has a diagonal**: the two axes must cover the same bins, it must be one
 sequence, and it must be at bin level. Each is the same condition from a different side — distance
@@ -1522,24 +1522,43 @@ from the diagonal is the whole of the y axis, so a block without one has no pict
 rather than hidden** where this is false, so a reader looking at a whole metagenome can see that the
 control exists and find out what it wants of them.
 
-How far from the diagonal the band reaches opens at a **quarter of the block** and is dragged from
-there, by a bar along the band's top edge. A fraction rather than a distance in base pairs,
-deliberately: a default of "500 kb" is most of a bacterial chromosome and a rounding error on a
-human one, and this viewer opens on both. A whole triangle is always exactly twice as wide as it is
-tall — that is what the half-bin lattice makes it — so fitting one produces a picture that fills the
-panel and touches nothing, which is a fine picture and is not the one the turn is for.
+**A turned map is a rectangle of a size the reader chose.** Its height and its width are set by
+dragging its own edges — a bar along the top, and one at each end — and neither moves when the map is
+zoomed. What the zoom changes is what is *inside* the box: more or less genome across, more or less
+distance up.
 
-The drag gives the band the pixels the hand travelled. Its rate is taken **once, at the press**:
-the band is redrawn deeper on every step, so a rate read from the band as it grows would make the
-second half of one continuous movement slower than the first.
+That is the whole of what the turn is for, and the alternative is what this used to do. A band was
+fitted like any other matrix, on whichever axis was tighter, so its height was `depth × zoom` and
+zooming in grew it until it filled the panel — at which point the picture is a square map again, with
+the far corners the turn exists to throw away back on screen. A band that stops being a band as soon
+as anybody looks closely is not a presentation, it is a starting position.
 
-The band **stands on the edge its diagonal is on**, rather than being centred in the panel. A square
-map smaller than the area reserved for it is a picture, and a picture is centred; a band is not that.
-Its bottom edge *is* the diagonal, and the tracks under the map are drawn against that same axis — so
-a band that fits vertically, which is every band short of a close zoom, floated half way up its panel
-with a stripe of paper between it and the profiles the whole turn exists to line it up with. The
-slack goes above the apex instead, which is the part of a contact map that has least in it. The
-mirrored half of a comparison stands on the top edge, by the same rule read the other way up.
+So **how far from the diagonal the band reaches follows the zoom** rather than being the number the
+reader sets. The box is so many pixels tall, a cell is so many pixels, and the deepest contact on
+screen is the quotient — which is also the honest reading: zoom in and you are looking at a shorter
+stretch of genome, so the distances that fit above it are shorter too. The band is re-cut whenever
+that quotient changes, which is a rotation over a block already in memory and costs no read.
+
+The box opens at **an eighth of its own width**. A whole triangle is exactly twice as wide as it is
+tall — that is what the half-bin lattice makes it — so an eighth shows a quarter of the block at the
+fitted zoom, which is the fraction this section has always opened at, restated in the units the box
+is now measured in. A fraction of the width rather than a distance in base pairs, deliberately: a
+default of "500 kb" is most of a bacterial chromosome and a rounding error on a human one, and this
+viewer opens on both.
+
+**Both ends widen the box about its middle.** Two handles rather than one, because the box is
+centred: with a single handle the reader has to know which end the app decided to grow from, and
+either answer is wrong half the time. The edge under the pointer stays under it and the far one goes
+out by the same amount — and the tracks follow, since a stack takes its width from the map's canvas
+and a box that narrowed only the map would leave every track pointing at the wrong base pair.
+
+**The map and its tracks are centred as a group**, in the room a square map would have taken. The
+panel therefore does not resize when the reader flips, and a track added below re-centres the map
+above it rather than pushing it up. There is nothing to align to the bottom any more: a band fills
+its box by construction, so the diagonal is on the box's own floor at every zoom — and there is no
+vertical pan at all, because a band dragged off its own diagonal has lost the axis it is measured
+from. The mirrored half of a comparison stands on the box's ceiling, by the same rule read the other
+way up.
 
 ### 17.3 The turn is the deck's, not one map's
 

@@ -88,6 +88,7 @@ import {
   isTurnable,
   rotateBlock,
   separationCoords,
+  separationForRows,
   turnDepthFor,
   turnedAxis,
   type RotateDirection,
@@ -213,6 +214,56 @@ const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
   'Available on one sequence against itself, which is the only block that has a diagonal ' +
   'to measure from.'
+
+/**
+ * How tall a turned band is drawn before anybody says otherwise, against its own
+ * width.
+ *
+ * An eighth. A whole triangle is exactly twice as wide as it is tall — that is
+ * what the half-bin lattice makes it — so a box an eighth of its width shows a
+ * quarter of the block at the fitted zoom, which is the fraction §17.2 has
+ * always opened at, restated in the units the box is now measured in.
+ */
+const DEFAULT_TURN_ASPECT = 1 / 8
+
+/**
+ * The smallest box worth drawing in, in CSS pixels.
+ *
+ * A floor rather than a limit: a handle dragged onto its own opposite edge means
+ * "as small as it goes", not "gone", and a box of no pixels is a picture with no
+ * picture in it — the same rule `turnDepthFor` follows about a band of no rows.
+ */
+const MIN_TURN_HEIGHT = 40
+const MIN_TURN_WIDTH = 160
+
+/** The band, as an ordinary dense block the renderer can be handed. */
+function turnedDense(turned: RotatedBlock): DenseMatrix {
+  return {
+    nrows: turned.nrows,
+    ncols: turned.ncols,
+    values: turned.values,
+    // The band's own extents, in the half-bin units its columns are counted in,
+    // so anything downstream that measures a span in cells measures it in the
+    // grid actually on screen.
+    rowExtent: [0, turned.nrows],
+    colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
+  }
+}
+
+/** One end of the turned band's box, as a bar a hand can take hold of. */
+function turnWidthGrip(side: 'left' | 'right'): HTMLElement {
+  return el('div', {
+    class: `turn-width turn-width-${side} hidden`,
+    attrs: {
+      title:
+        'Drag to set how wide this band is drawn. Both ends move, so the box stays centred, and ' +
+        'the tracks under it follow.',
+      role: 'separator',
+      'aria-orientation': 'vertical',
+      tabindex: '0',
+    },
+  })
+}
 
 const OE_HINT =
   'Observed over expected. Divide each cell by what its genomic distance predicts — the mean ' +
@@ -587,12 +638,27 @@ export class MatrixPanel {
   private readonly depthGrip = el('div', {
     class: 'turn-depth hidden',
     attrs: {
-      title: 'Drag to set how far from the diagonal this map reaches',
+      title:
+        'Drag to set how tall this band is drawn. The distance from the diagonal it reaches ' +
+        'follows from the zoom — the box keeps its shape and the picture fills it.',
       role: 'separator',
       'aria-orientation': 'horizontal',
       tabindex: '0',
     },
   })
+  /**
+   * The two ends of the turned band, as things a hand can take hold of.
+   *
+   * The width's counterpart to {@link depthGrip}, and there are two of them
+   * rather than one because the box is *centred*: with one handle the reader
+   * would have to know which end the app had decided to grow from. Either end
+   * widens the box about its middle, so the edge under the pointer stays under
+   * it and the other moves out by the same amount.
+   */
+  private readonly widthGrips: Record<'left' | 'right', HTMLElement> = {
+    left: turnWidthGrip('left'),
+    right: turnWidthGrip('right'),
+  }
   /**
    * What the numbers in the cells are called, before the transform is added.
    *
@@ -688,13 +754,29 @@ export class MatrixPanel {
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /**
-   * How deep the turned band is, in bins of separation, once a reader has said.
+   * How big the turned band is **drawn**, in CSS pixels, once a reader has said.
    *
-   * `null` is "nobody has", which takes `rotate.ts`'s default. Held on
-   * the panel rather than in the view state because it is the same kind of fact
-   * as a pan or a zoom, and §11's hash has never carried one of those.
+   * The box, not the data: a turned map is a rectangle of a size the reader
+   * chooses, and the zoom fills it with more or less genome across and more or
+   * less distance up rather than resizing it (§17.2). It used to be a depth in
+   * *bins*, which made the picture a function of the zoom — zoom in far enough
+   * and the band grew until it filled the panel and stopped being a band.
+   *
+   * `null` on either axis is "nobody has said", which takes the default in
+   * {@link turnBox}. Held on the panel rather than in the view state because it
+   * is the same kind of fact as a pan or a zoom, and §11's hash has never
+   * carried one of those.
    */
-  private turnRows: number | null = null
+  private turnHeight: number | null = null
+  private turnWidth: number | null = null
+  /**
+   * The square block the band is cut from, kept so a re-cut costs one rotation.
+   *
+   * The band's depth follows the zoom, so zooming out needs a deeper cut — and
+   * re-running the whole derivation for it would put a normalisation and a
+   * baseline pass behind a wheel click. Only the geometry has to be redone.
+   */
+  private square: DenseMatrix | null = null
   /** The neutral value of what is currently drawn, or `null` for a count field. */
   private neutral: number | null = null
   /**
@@ -1507,6 +1589,8 @@ export class MatrixPanel {
       this.overlay,
       this.keySlot,
       this.depthGrip,
+      this.widthGrips.left,
+      this.widthGrips.right,
       ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     )
@@ -2063,6 +2147,9 @@ export class MatrixPanel {
   private placeDepthGrip(): void {
     const turned = this.turned
     this.depthGrip.classList.toggle('hidden', turned === null)
+    for (const grip of Object.values(this.widthGrips)) {
+      grip.classList.toggle('hidden', turned === null)
+    }
     if (turned === null) return
     const data = this.heatmap.dataRect
     // `down` is the mirrored half of a comparison, where separation grows
@@ -2071,6 +2158,16 @@ export class MatrixPanel {
     this.depthGrip.style.top = `${Math.round(top)}px`
     this.depthGrip.style.left = `${Math.round(data.x)}px`
     this.depthGrip.style.width = `${Math.round(data.width)}px`
+    // The **plot**'s height for the ends, not the data's: a band fills its box
+    // vertically by construction, but a view zoomed out past the fit leaves
+    // paper either side, and a handle that stopped at the last column would sit
+    // in the middle of the picture pointing at nothing.
+    const plot = this.heatmap.plotRect
+    for (const [side, grip] of Object.entries(this.widthGrips)) {
+      grip.style.top = `${Math.round(plot.y)}px`
+      grip.style.height = `${Math.round(plot.height)}px`
+      grip.style.left = `${Math.round(side === 'left' ? plot.x : plot.x + plot.width)}px`
+    }
   }
 
   /**
@@ -2089,38 +2186,68 @@ export class MatrixPanel {
    * says it is one.
    */
   private watchDepth(): void {
-    const grip = this.depthGrip
-    /** Bins of separation per CSS pixel, from the band on screen. */
-    const perPixel = (): number => {
-      const turned = this.turned
-      const height = this.heatmap.dataRect.height
-      if (turned === null || !(height > 0)) return 0
-      return (turned.maxSeparation + 1) / height
+    // Pixels, straight through: the handle is on the edge of a box measured in
+    // them, so the edge goes exactly where the hand puts it. The rate this used
+    // to need — bins of separation per pixel, taken once at the press so the
+    // second half of a movement did not travel less than the first — went with
+    // the depth it was converting into.
+    this.dragTurnEdge(this.depthGrip, {
+      // Up the screen is *more* on an ordinary turned map and less on the
+      // mirrored half, where the band hangs below its own axis.
+      away: () => (this.turned?.direction === 'down' ? -1 : 1),
+      axis: 'y',
+      held: () => this.turnBox().height,
+      // One edge moves, so the box grows by exactly what the hand travelled.
+      gain: 1,
+      set: (value) => this.setTurnBox({ height: value }),
+      reset: () => this.setTurnBox({ height: null }),
+    })
+    for (const side of ['left', 'right'] as const) {
+      this.dragTurnEdge(this.widthGrips[side], {
+        away: () => (side === 'left' ? -1 : 1),
+        axis: 'x',
+        held: () => this.turnBox().width,
+        // Both ends move, because the box is centred: the edge under the pointer
+        // has to stay under it, and the far one goes out by the same amount.
+        gain: 2,
+        set: (value) => this.setTurnBox({ width: value }),
+        reset: () => this.setTurnBox({ width: null }),
+      })
     }
-    // Taken once, at the press. The band is redrawn deeper on every step of the
-    // drag, so a rate read from the band *now* falls as the picture grows — and
-    // the second half of one continuous movement would travel less than the
-    // first, which is a control that fights the hand holding it.
-    let from: { y: number; rows: number; rate: number } | null = null
+  }
 
+  /**
+   * One edge of the turned box, as something a hand or a keyboard can move.
+   *
+   * The four handles differ in three numbers and nothing else — which axis they
+   * travel on, which way out of the box is, and how much the box grows per pixel
+   * travelled — so they are one gesture parameterised rather than four listeners
+   * that have to be kept saying the same thing.
+   */
+  private dragTurnEdge(
+    grip: HTMLElement,
+    rule: {
+      axis: 'x' | 'y'
+      away: () => number
+      held: () => number
+      gain: number
+      set(value: number): void
+      reset(): void
+    },
+  ): void {
+    let from: { at: number; size: number } | null = null
     const onDown = (event: PointerEvent): void => {
-      if (event.button !== 0) return
-      const turned = this.turned
-      if (turned === null) return
+      if (event.button !== 0 || this.turned === null) return
       event.preventDefault()
       event.stopPropagation()
-      from = { y: event.clientY, rows: turned.maxSeparation + 1, rate: perPixel() }
+      from = { at: rule.axis === 'x' ? event.clientX : event.clientY, size: rule.held() }
       grip.setPointerCapture(event.pointerId)
       grip.classList.add('is-dragging')
     }
     const onMove = (event: PointerEvent): void => {
       if (from === null) return
-      const turned = this.turned
-      // Up the screen is *more* on an ordinary turned map and less on the
-      // mirrored half, where the band hangs below its own axis.
-      const away = turned?.direction === 'down' ? 1 : -1
-      const moved = (event.clientY - from.y) * away * from.rate
-      this.setTurnDepth(from.rows + moved)
+      const now = rule.axis === 'x' ? event.clientX : event.clientY
+      rule.set(from.size + (now - from.at) * rule.away() * rule.gain)
     }
     const onUp = (event: PointerEvent): void => {
       if (from === null) return
@@ -2129,15 +2256,16 @@ export class MatrixPanel {
       grip.classList.remove('is-dragging')
     }
     const onKey = (event: KeyboardEvent): void => {
-      const turned = this.turned
-      if (turned === null) return
-      const rows = turned.maxSeparation + 1
-      // A tenth of the band per press, a half with Shift — the step the map's
-      // own arrow keys pan by, so one hand learns one rule.
-      const step = Math.max(1, Math.round(rows * (event.shiftKey ? 0.5 : 0.1)))
-      if (event.key === 'ArrowUp') this.setTurnDepth(rows + step)
-      else if (event.key === 'ArrowDown') this.setTurnDepth(rows - step)
-      else if (event.key === 'Home' || event.key === '0') this.setTurnDepth(null)
+      if (this.turned === null) return
+      const size = rule.held()
+      // A tenth of the box per press, a half with Shift — the step the map's own
+      // arrow keys pan by, so one hand learns one rule.
+      const step = Math.max(1, Math.round(size * (event.shiftKey ? 0.5 : 0.1)))
+      const grow = rule.axis === 'x' ? 'ArrowRight' : 'ArrowUp'
+      const shrink = rule.axis === 'x' ? 'ArrowLeft' : 'ArrowDown'
+      if (event.key === grow) rule.set(size + step)
+      else if (event.key === shrink) rule.set(size - step)
+      else if (event.key === 'Home' || event.key === '0') rule.reset()
       else return
       event.preventDefault()
     }
@@ -2147,27 +2275,9 @@ export class MatrixPanel {
     grip.addEventListener('pointerup', onUp)
     grip.addEventListener('pointercancel', onUp)
     grip.addEventListener('keydown', onKey)
-    // A double-click puts the depth back to the default, which is the way out of
-    // a band dragged somewhere useless.
-    grip.addEventListener('dblclick', () => this.setTurnDepth(null))
-  }
-
-  /**
-   * Ask for a band this many rows deep, and redraw at it.
-   *
-   * `null` hands the decision back to {@link turnDepth}'s default. Clamped and
-   * compared *after* rounding, so the many sub-pixel moves of one drag do not
-   * each cost a re-read of the block.
-   */
-  private setTurnDepth(rows: number | null): void {
-    const next = rows === null ? null : Math.max(1, Math.round(rows))
-    if (next === this.turnRows) return
-    this.turnRows = next
-    // A deeper band is a different *grid*, not different numbers in the same
-    // one — more rows, a different height per bin, a different vertical ruler —
-    // so it goes through the same path a turn does. One pass over a block
-    // already in memory, and no read.
-    if (this.data !== null) this.setData(this.data, this.lastTitle, this.second?.data)
+    // A double-click puts the default back, which is the way out of an edge
+    // dragged somewhere useless.
+    grip.addEventListener('dblclick', () => rule.reset())
   }
 
   /**
@@ -3440,21 +3550,27 @@ export class MatrixPanel {
     // redraw is skipped whenever a *pinned* clip survives a navigation, and the
     // second file's ticks keep the previous block's numbers.
     this.painted = null
-    // Before `setMatrix`, which ends in a fit: a band installed under the square
-    // map's rule is centred for one frame and then jumps onto its axis.
-    //
-    // A turned band stands on the edge its diagonal is on, so the picture is
-    // flush with the tracks under it (§17.2). Centred — which is right for a
-    // square map and is what every path here did — a band that fits vertically
-    // floats half way up the panel with a stripe of paper between it and the
-    // profiles it exists to be read against. `down` is the mirrored half of a
-    // comparison, whose diagonal is its top edge.
+    // Which edge of the box the band stands on. A band fills its box by
+    // construction, so this is not slack being distributed — it is which end of
+    // the picture the diagonal is at, and therefore which end the tracks line up
+    // with (§17.2). `down` is the mirrored half of a comparison, whose diagonal
+    // is its top edge. Centring, which is right for a square map, is what left a
+    // band floating half way up its panel with a stripe of paper between it and
+    // the profiles it exists to be read against.
     this.heatmap.setAnchor(
       turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
     )
     // Both drags collapse onto the genomic axis under a turn; see
     // {@link HeatmapView.setSpanGestures}.
     this.heatmap.setSpanGestures(turned !== null)
+    // A band's rows are not a thing to fit: the block is cut to the height of
+    // the box it is drawn in, so fitting them is a tautology at every zoom and
+    // asking for it makes the zoom a function of a number derived from the zoom.
+    this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
+    // Before `setMatrix`, which measures its gutters against the canvas: the box
+    // is a CSS size and the canvas has to have it before anything is fitted into
+    // it, or the first frame of every turn is drawn at the square map's height.
+    this.writeTurnBox()
     // No separators under a turn: `isTurnable` has already refused any block
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
@@ -3682,24 +3798,16 @@ export class MatrixPanel {
             },
           )
         : null
-    if (turned !== null) {
-      out = {
-        nrows: turned.nrows,
-        ncols: turned.ncols,
-        values: turned.values,
-        // The band's own extents, in the half-bin units its columns are counted
-        // in, so anything downstream that measures a span in cells measures it
-        // in the grid actually on screen.
-        rowExtent: [0, turned.nrows],
-        colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
-      }
-    }
+    if (turned !== null) out = turnedDense(turned)
     // The **square** block's values, even under a turn, because the one reader
     // of this indexes it by square row and column ({@link derivedReading}). It
     // used to be `out`, which on a turned map is a band of a different shape
     // read with the square's stride: the ratio in the tooltip was a real number
     // from a real cell, and not the cell under the pointer.
     this.drawn = dense.values
+    // …and kept, so a re-cut of the band costs one rotation rather than the
+    // whole derivation again. See {@link syncTurnDepth}.
+    this.square = dense
     // The strip is the only place the numbers beside it are named, and a ratio
     // drawn under a caption reading `count` is worse than one with no caption.
     // `count` where nothing was derived, rather than `deriveBlock`'s own word
@@ -3745,16 +3853,154 @@ export class MatrixPanel {
   }
 
   /**
-   * How far from the diagonal the turned band reaches, in **bins**.
+   * The box a turned map is drawn in, in CSS pixels.
    *
-   * The rule itself is `render/rotate.ts`'s, because it is about the geometry
-   * rather than about this panel; what is here is the reader's answer, which
-   * {@link watchDepth} writes and which is `null` until they give one.
+   * The reader's, where they have said, and otherwise a default expressed
+   * against the width — a whole triangle is exactly twice as wide as it is tall,
+   * so a box an eighth of its own width shows a quarter of the block at the
+   * fitted zoom, which is the fraction §17.2 has always opened at, restated in
+   * the units the box is now measured in.
    */
-  private turnDepth(data: MatrixResult): number {
-    return turnDepthFor(data, this.turnRows)
+  private turnBox(): { width: number; height: number } {
+    const width = this.turnWidth ?? this.hostSize.width
+    return {
+      width: Math.max(MIN_TURN_WIDTH, width),
+      height: Math.max(MIN_TURN_HEIGHT, this.turnHeight ?? Math.round(width * DEFAULT_TURN_ASPECT)),
+    }
   }
 
+  /**
+   * How far from the diagonal the turned band reaches, in **bins**.
+   *
+   * A function of the box and the zoom rather than a number the reader sets, and
+   * that is the whole of §17.2's "the box keeps its shape and the distance
+   * follows the zoom": the picture is cut to fill the rectangle it is drawn in,
+   * so the deepest contact on screen is however many bins of separation fit in
+   * that many pixels at this many pixels per cell. Zoom in and the band shows
+   * less distance; the rectangle does not move.
+   *
+   * The rule for turning rows into a separation is `render/rotate.ts`'s, because
+   * it is about the geometry rather than about this panel, and so is the clamp:
+   * a band cannot be deeper than the block has cells to fill.
+   */
+  private turnDepth(data: MatrixResult): number {
+    const rows = this.plotRows()
+    return turnDepthFor(data, separationForRows(rows) - 1)
+  }
+
+  /**
+   * How many cells tall the plot is, at the zoom in force.
+   *
+   * Computed from the **box** rather than measured off the canvas, and that is
+   * not a shortcut: the box is a CSS size this panel has just written, and the
+   * canvas does not have it until the browser has laid out and the resize
+   * observer has fired. Measured, the first frame of every turn would be cut for
+   * the square map's height and corrected on the frame after — a band that
+   * flashes deep and then settles.
+   */
+  private plotRows(): number {
+    const zoom = this.heatmap.zoomLevel
+    const margin = this.heatmap.margin
+    const height = Math.max(1, this.turnBox().height - margin.top - margin.bottom)
+    return zoom > 0 ? Math.ceil(height / zoom) : 1
+  }
+
+  /**
+   * Re-cut the band when the zoom has changed how much of it fits the box.
+   *
+   * Run once per frame, before the draw, because the two things it depends on —
+   * the zoom and the plot's height — are both settled by then and neither
+   * announces itself. Cheap when nothing moved, which is every frame of a pan:
+   * the wanted depth is an integer function of the zoom, so it is equal to the
+   * band's own on any frame the zoom did not change.
+   *
+   * A *reshape* rather than a re-read or a re-derive: the picture is of the same
+   * place at the same zoom over the same stretch of genome, and only the number
+   * of rows behind it has changed.
+   */
+  private syncTurnDepth(): void {
+    const turned = this.turned
+    const square = this.square
+    const data = this.data
+    if (turned === null || square === null || data === null) return
+    const wanted = this.turnDepth(data)
+    if (wanted === turned.maxSeparation) return
+    const next = rotateBlock(
+      { ...data, values: square.values },
+      {
+        maxSeparation: wanted,
+        ...(turned.direction === 'up' ? {} : { direction: turned.direction }),
+      },
+    )
+    this.turned = next
+    this.heatmap.reshape(turnedDense(next))
+    // The ruler up the side is `maxSeparation`'s, so it has to be rewritten with
+    // the band — a band re-cut under a ruler measured for the previous depth is
+    // a picture labelled with somebody else's distances.
+    this.heatmap.setAxisCoords({
+      rows: separationCoords(next, this.options.binsize),
+      cols: axisCoordsFor(
+        data.colGroups,
+        data.colExtent,
+        data.level,
+        this.options.binsize * BIN_FRACTION,
+      ),
+    })
+    // The marks are placed by the pair of loci they name, and how far up the
+    // band that puts one is a function of the depth (`render/overlays.ts`), so
+    // this has to move with the ruler beside it.
+    const turn = this.locusAxes.turn
+    if (turn !== undefined && turn !== null) turn.maxSeparation = next.maxSeparation
+    this.lanes.setAxes(this.locusAxes)
+  }
+
+  /**
+   * Write the box onto the grid, and put the handles where its edges are.
+   *
+   * The size lives in CSS custom properties rather than in inline widths so that
+   * the map, the lane stacks under it and the centring are one layout decided in
+   * one place — the stacks take their width from the map's canvas, so a box that
+   * narrowed only the map would leave the tracks pointing at the wrong base
+   * pairs (`ui/AnnotationLanes.ts`).
+   */
+  private writeTurnBox(): void {
+    const turned = this.turned !== null
+    this.grid.classList.toggle('is-turned', turned)
+    if (!turned) {
+      this.grid.style.removeProperty('--turn-width')
+      this.grid.style.removeProperty('--turn-height')
+      return
+    }
+    const box = this.turnBox()
+    this.grid.style.setProperty('--turn-width', `${Math.round(box.width)}px`)
+    this.grid.style.setProperty('--turn-height', `${Math.round(box.height)}px`)
+  }
+
+  /**
+   * Resize the box, in CSS pixels. `null` on either axis puts the default back.
+   *
+   * Clamped against the panel rather than against the block: the box is a fact
+   * about the figure, so what bounds it is how much room there is to draw in.
+   */
+  private setTurnBox(next: { width?: number | null; height?: number | null }): void {
+    if (next.width !== undefined) {
+      this.turnWidth =
+        next.width === null
+          ? null
+          : Math.max(MIN_TURN_WIDTH, Math.min(this.hostSize.width, Math.round(next.width)))
+    }
+    if (next.height !== undefined) {
+      this.turnHeight =
+        next.height === null
+          ? null
+          : Math.max(MIN_TURN_HEIGHT, Math.min(this.hostSize.height, Math.round(next.height)))
+    }
+    this.writeTurnBox()
+    // The canvas has a new CSS size, and nothing else will tell the view: the
+    // resize observer watches the *grid*, whose own size need not have changed.
+    this.heatmap.resize()
+    this.schedule()
+  }
 
 
   /**
@@ -4176,6 +4422,10 @@ export class MatrixPanel {
     if (this.frame !== 0) return
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
+      // Before the metrics and the draw: a re-cut band is a different number of
+      // rows, which the stacks below it leave room against and the ruler beside
+      // it is labelled from, and both are written from here.
+      this.syncTurnDepth()
       this.syncLaneMetrics()
       this.heatmap.draw()
       // After the matrix and inside the same frame: the lanes read the scales

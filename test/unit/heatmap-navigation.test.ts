@@ -703,3 +703,80 @@ describe('what the auto range is measured on', () => {
     expect(vmaxOf(view)).toBeCloseTo(Math.log1p(1), 4)
   })
 })
+
+/**
+ * A band is drawn in a box, and the box does not move when the reader zooms.
+ *
+ * The renderer's half of §17.2. A turned map used to be fitted like any other
+ * matrix — the zoom that puts the whole block on screen, whichever axis is
+ * tighter — so zooming in grew the band's height along with its width until it
+ * filled the panel and stopped being a band at all. Its rows are not a thing to
+ * fit: the block is *cut* to the height of the box it is drawn in, so fitting
+ * them is a tautology at every zoom, and asking for it makes the zoom a function
+ * of a number that was derived from the zoom.
+ */
+describe('fitting a band', () => {
+  /** A block far wider than it is tall, as a rotation produces. */
+  function band(rows: number, cols: number): DenseMatrix {
+    return {
+      nrows: rows,
+      ncols: cols,
+      values: new Float32Array(rows * cols),
+      rowExtent: [0, rows],
+      colExtent: [0, cols],
+    }
+  }
+
+  it('takes the zoom from the columns alone', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setFitAxis('cols')
+    heatmap.setAnchor('end')
+    heatmap.setMatrix(band(20, 200), [])
+    // 400 px over 200 columns. Fitted on both axes it would have been 400/200
+    // against 400/20 — the rows would have won nothing, but a *deeper* band
+    // would have, and that is the case that stopped the picture being a band.
+    expect(heatmap.zoomLevel).toBeCloseTo(2, 6)
+    const deeper = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    deeper.setFitAxis('cols')
+    deeper.setAnchor('end')
+    deeper.setMatrix(band(300, 200), [])
+    expect(deeper.zoomLevel).toBeCloseTo(2, 6)
+  })
+
+  it('keeps the diagonal on the floor, with no vertical pan to lose it', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setFitAxis('cols')
+    heatmap.setAnchor('end')
+    // Deeper than the box: at 2 px a cell a 400 px plot holds 200 rows.
+    heatmap.setMatrix(band(300, 200), [])
+    const plot = heatmap.plotRect
+    const floor = (): number | undefined =>
+      heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height - 1)?.row
+    expect(floor()).toBe(299)
+    // A drag up the picture would pan a square map. Up the side of a band there
+    // is nothing to pan to: the diagonal is the floor at every zoom.
+    heatmap.panBy(0, -300)
+    expect(floor()).toBe(299)
+    heatmap.panBy(0, 300)
+    expect(floor()).toBe(299)
+  })
+
+  it('re-cuts without moving the window', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setFitAxis('cols')
+    heatmap.setAnchor('end')
+    heatmap.setMatrix(band(60, 200), [])
+    heatmap.zoomAt(200, 200, 4)
+    const zoom = heatmap.zoomLevel
+    const plot = heatmap.plotRect
+    const leftEdge = heatmap.cellAt(plot.x + 1, plot.y + plot.height - 1)?.col
+
+    // Zooming out asks for a deeper band; the panel hands one over.
+    heatmap.reshape(band(240, 200))
+
+    expect(heatmap.zoomLevel).toBeCloseTo(zoom, 6)
+    expect(heatmap.cellAt(plot.x + 1, plot.y + plot.height - 1)?.col).toBe(leftEdge)
+    // …and the deeper band still stands on its own diagonal.
+    expect(heatmap.cellAt(plot.x + 1, plot.y + plot.height - 1)?.row).toBe(239)
+  })
+})
