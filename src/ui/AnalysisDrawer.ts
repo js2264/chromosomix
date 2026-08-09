@@ -68,7 +68,7 @@ import {
   type TableFigure,
 } from './analysisPlots'
 import { button, el, fmt } from './dom'
-import { canvasToPng, downloadBlob, fileStamp, scaleForDpi } from './export'
+import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
 import { iconButton } from './icons'
 import { ParamForm } from './ParamForm'
 import { resizeHandle } from './resizeHandle'
@@ -927,17 +927,7 @@ export class AnalysisDrawer {
     const result = this.drawn
     if (result === null) return
     const text = provenanceLines(result.provenance).join('\n')
-    // Absent in an insecure context, which is where a colleague's `file://` copy
-    // of this app runs; the same reading `copyPngToClipboard` takes of the same
-    // API.
-    const clipboard = (navigator as { clipboard?: { writeText?(text: string): Promise<void> } })
-      .clipboard
-    const write = clipboard?.writeText?.(text)
-    if (write === undefined) {
-      this.setStatus('This browser will not let a page write to the clipboard.')
-      return
-    }
-    void write.then(
+    void copyTextToClipboard(text).then(
       () => {
         this.setStatus('Provenance copied.')
       },

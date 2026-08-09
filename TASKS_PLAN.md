@@ -92,9 +92,10 @@ one open, and the content re-parents through a `Session.analysisDrawerHost` in t
 ### 1.3 The Synthetic tracks card — where per-bin results go
 
 Anything a task produces that is **one value per bin** is a track, and a track belongs on the map, not in
-a drawer. This is not a new idea in this codebase; it is the whole of the 4C lane's design
-(`src/ui/viewpoint.ts:15-27`, §8.9). A second results surface for an object that already has one is
-exactly the drift §5.8 exists to prevent.
+a drawer. This is not a new idea in this codebase; it was the whole of the virtual 4C lane's design
+(§8.9). That lane has since been removed — the task below answers the same question from the file —
+but the argument it made is the one this card is built on. A second results surface for an object that
+already has one is exactly the drift §5.8 exists to prevent.
 
 So a fourth `AnnotationCard`, `'synthetic'`, on the **Annotations** panel, under Tracks. Its rows are
 ordinary `AnnotationEntry`s with `kind: 'track'` — which means colour, rename, limits, autoscale, ceiling
@@ -282,8 +283,9 @@ column, and whether balancing is on. Panning afterwards does not change a finish
 record, not a live view — and the drawer says which framing it is a record of, with a **Recompute here**
 button that snapshots the new one.
 
-This is the same honesty `render/viewpoint.ts:25-28` insists on for the on-the-fly 4C profile, and it is
-why the whole-genome 4C task (5.4) is a different object from that lane rather than a bigger version of it.
+This is the honesty the on-the-fly 4C profile never managed — it redrew itself from whatever block was
+loaded — and it is why the whole-genome 4C task (5.4) is a different object from that lane rather than a
+bigger version of it. Different enough, in the end, that the lane is gone (§8.9).
 
 ### 4.2 Provenance travels with the numbers
 
@@ -347,13 +349,14 @@ three other tasks need.
 - **Correctness notes:** never sum across a contig boundary — the run structure is already in
   `AxisGroup.unitStart`/`unitBin` (`worker/protocol.ts:224-287`) — and never across a MAG boundary on a
   metacool. `NaN` inside the diamond is skipped, not propagated, following `bandSums`
-  (`render/viewpoint.ts:56-60`).
+  (`analysis/viewpoint.ts`).
 
 ### 5.4 4C profile — cis by default, trans on request
 
-Distinct from the on-the-fly viewpoint lane, and the panel is what makes that obvious.
+Distinct from the on-the-fly viewpoint lane — and distinct enough that the lane has since been removed
+in its favour (§8.9), leaving the gesture that fed it as a 1D zoom.
 
-- **Params:** anchor (a locus box, pre-filled from the shift-drag anchor if one is set), **`cis only`
+- **Params:** anchor (a locus box, with a **Pick on map** button that arms the next drag), **`cis only`
   (default on)**, balanced on/off, score column, and the output bin size.
 - **Cost, and this is the whole design of the task:**
   - **cis only** — the anchor's own contig or genome. Bounded: the row band, one slice of `bin1_offset`
@@ -793,7 +796,7 @@ src/analysis/
   stats.ts                 log binning, quantiles, bootstrap, Pearson/Spearman           [done]
   expected.ts              P(s) and the expected curve                                   [done]
   linalg.ts                power iteration with deflation; Fiedler split
-  insulation.ts  viewpoint4c.ts  compartments.ts  saddle.ts
+  insulation.ts  viewpoint.ts    compartments.ts  saddle.ts
   metaplot.ts    apa.ts          overlap.ts       mags.ts
   tasks/<id>.ts            the descriptors — main-thread safe, no MetaCooler
   run/<id>.ts              the runners — worker-side

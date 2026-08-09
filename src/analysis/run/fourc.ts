@@ -2,7 +2,7 @@
  * The 4C task, run.
  *
  * Two paths, and the difference between them is the whole design of the task
- * (`analysis/tasks/fourc.ts`). The cis path borrows `bandSums` from
+ * (`analysis/tasks/fourc.ts`). The cis path shares `bandSums` with
  * `render/viewpoint.ts` — the *same function* the lane on the map uses, imported
  * rather than reimplemented, so the exported bigWig and the strip above the
  * picture cannot disagree about what a band sum is. The trans path cannot: there
@@ -17,12 +17,12 @@
  * it, which is exactly what §18.6 prices.
  */
 
-import { bandSums } from '../../render/viewpoint'
+
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseMetacoolerRange } from '../../metacooler/range'
 import { boolParam, strParam, type JobContext, type TaskRunner } from '../job'
 import type { ProfileOutput, TaskOutput } from '../types'
-import { ViewpointAccumulator } from '../viewpoint'
+import { bandSums, ViewpointAccumulator } from '../viewpoint'
 import { squareFor, usableBlock, validBins, type Span } from './blocks'
 
 /** The anchor, resolved to absolute bins, and the scope "cis" means for it. */
@@ -62,11 +62,8 @@ export const runFourC: TaskRunner = async (job) => {
   const text = strParam(job.params, 'anchor', '').trim()
   if (text === '') {
     job.note(
-      boolParam(job.params, 'fromMap', true)
-        ? 'No anchor has been picked yet. Shift-drag along either axis of the map to name one — ' +
-          'or turn “Pick on map” off and type a locus.'
-        : 'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence ' +
-          'by name.',
+      'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence by ' +
+        'name — or press “Pick on map” and Shift-drag along either axis.',
     )
     return []
   }

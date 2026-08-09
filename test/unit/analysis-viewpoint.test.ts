@@ -2,12 +2,10 @@
  * The sparse 4C accumulator, checked against the dense one it must agree with.
  *
  * There are two implementations of "sum a band of a symmetric matrix" in this
- * app and they have to give the same answer: `bandSums` in
- * `render/viewpoint.ts`, which walks a mirrored dense square and is what the
- * lane on the map draws, and `ViewpointAccumulator`, which walks stored pixels
- * and is what the exportable track is built from. A reader who sees a strip
- * above the picture and downloads a bigWig of the same anchor is entitled to the
- * same numbers.
+ * app and they have to give the same answer: `bandSums`, which walks a mirrored
+ * dense square and is what the task uses when a block is already in hand, and
+ * `ViewpointAccumulator`, which walks stored pixels and is what a profile read
+ * from the file is built from. The two paths of one task must not disagree.
  *
  * The one place they can differ is the diagonal — the only cell that is its own
  * mirror — so the last test builds one matrix, reads it both ways, and compares.
@@ -15,8 +13,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { bandSums } from '@/render/viewpoint'
-import { ViewpointAccumulator } from '@/analysis/viewpoint'
+import { ViewpointAccumulator, bandSums } from '@/analysis/viewpoint'
 
 describe('ViewpointAccumulator', () => {
   it('gives a contact to the far end of the pixel', () => {

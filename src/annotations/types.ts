@@ -35,28 +35,24 @@
  */
 import type { TrackOp } from './derived'
 
-export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence' | 'viewpoint'
+export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
 
 /**
  * Which card an entry belongs to; see §8.1.
  *
- * `viewpoint` is the odd one and it belongs to no card at all: the virtual 4C
- * profile is a *reading of the matrix* rather than a file loaded against it, so
- * it has no row in the Tracks card, no place in the 1D browser, and nothing to
- * remember across a reload. It is here so that everything else about a lane —
- * its colour, its name, its value axis, its height, which edge it is drawn on,
- * where it sits in the stack — is the one implementation the other kinds use,
- * rather than a second copy of all of it (§5.8).
+ * `synthetic` is the interesting one (§18.5). An analysis that produces one
+ * value per bin has produced a track, and a track belongs on the map rather than
+ * in the drawer it was computed in. Its rows are `kind: 'track'` and are
+ * indistinguishable from a loaded bigWig from the renderer down — what makes
+ * them their own *card* is only that they are grouped under one heading and
+ * carry an export row the loaded tracks have no use for.
  *
- * `synthetic` is the same argument made a second time and settled the same way
- * (§18.5). An analysis that produces one value per bin has produced a track, and
- * a track belongs on the map rather than in the drawer it was computed in. Its
- * rows are `kind: 'track'` and are indistinguishable from a loaded bigWig from
- * the renderer down — what makes them their own *card* is only that they are
- * grouped under one heading and carry an export row the loaded tracks have no
- * use for.
+ * There was a fourth, `viewpoint`, for the virtual 4C lane that shift-drag used
+ * to create: a reading of the picture rather than a file, belonging to no card,
+ * remembered nowhere. The 4C *task* answers the same question from the file, so
+ * the lane and its card are gone and the gesture is a 1D zoom (§18.9).
  */
-export type AnnotationCard = 'linear' | 'overlay' | 'viewpoint' | 'synthetic'
+export type AnnotationCard = 'linear' | 'overlay' | 'synthetic'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's
@@ -126,7 +122,7 @@ export const LANE_EDGES: readonly LaneEdge[] = ['top', 'right', 'bottom', 'left'
  * because at a bin per pixel a sequence can only be its GC content.
  */
 export function drawsAProfile(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'sequence' || kind === 'viewpoint'
+  return kind === 'track' || kind === 'sequence'
 }
 
 /**
@@ -138,7 +134,7 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
  * ⌘-scroll and the autoscale button all ask this.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'viewpoint'
+  return kind === 'track'
 }
 
 /** A half-open genomic interval on one contig, as every query here takes one. */
@@ -404,19 +400,7 @@ export interface AnnotationStyle {
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    // The 4C strip opens at 68 rather than at a track's 90: it is a reading of
-    // the picture beside it rather than a track in its own right, and it should
-    // not take a third of the map's height the moment it is switched on.
-    size:
-      kind === 'track'
-        ? 90
-        : kind === 'gtf'
-          ? 92
-          : kind === 'sequence'
-            ? 46
-            : kind === 'viewpoint'
-              ? 68
-              : 16,
+    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : kind === 'sequence' ? 46 : 16,
     mode: kind === 'sequence' ? 'line' : 'area',
     // GC content is a fraction, and a fraction has an axis whether or not this
     // window happens to use all of it. Autoscaling it would make the same

@@ -126,16 +126,7 @@ import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import type { MapId } from '../annotations/placement'
 import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
-import {
-  getViewpointAnchor,
-  isViewpointShown,
-  setViewpointAnchor,
-  showViewpoint,
-  subscribeViewpoint,
-  syncViewpointLabel,
-  viewpointLabel,
-  viewpointOnlyStore,
-} from './viewpoint'
+import { isArmed, locusText, pickLocus, subscribePick, type PickedLocus } from './mapPick'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import {
@@ -164,6 +155,7 @@ import {
   canvasToPng,
   captionStamp,
   copyPngToClipboard,
+  copyTextToClipboard,
   downloadBlob,
   exportBaseName,
   fileStamp,
@@ -606,13 +598,13 @@ export class MatrixPanel {
    * The store the lanes are drawn from.
    *
    * The session's, where the file has one. Where it has not — a file with a
-   * genome layer carries no annotations at all (§8.5) — a private one that
-   * nothing persists, because the 4C profile is still a lane and a lane needs
-   * somewhere to be an entry *in*. That is the whole of the fallback: no
+   * genome layer carries no annotations at all (§8.5) — an empty one that
+   * nothing persists, so that everything downstream of a store can be built
+   * unconditionally rather than behind four `null` checks. It stays empty: no
    * worker, no loader, no cards, and nothing that could load a file.
    */
   private readonly laneStore: AnnotationStore
-  private unsubscribeViewpoint: () => void = () => {}
+  private unsubscribePick: () => void = () => {}
 
   private readonly canvas: HTMLCanvasElement
   /** The key in the map's top-right corner; two of them under a comparison. */
@@ -787,11 +779,11 @@ export class MatrixPanel {
   /**
    * The lane stacks — all four of them, on every file.
    *
-   * No longer `null` on a file that carries no annotations (§8.5), because the
-   * 4C profile is a lane and every file has one to offer. What the gate decides
-   * now is what can be *put* in the stacks, not whether the stacks exist: a
-   * metacool gets no annotation worker, no loader and no cards, and its lanes
-   * hold exactly the one entry the reader can make from the map itself.
+   * Built unconditionally, including on a file that carries no annotations
+   * (§8.5), where they stay empty. The gate decides what can be *put* in the
+   * stacks, not whether the stacks exist: keeping them means the drop zones,
+   * the edge-to-edge drag and the loop marks are one code path rather than one
+   * with a hole in it.
    */
   private readonly lanes: AnnotationLanes
   /** The grid holding the map and its lanes; the tooltip's positioning parent. */
@@ -977,17 +969,14 @@ export class MatrixPanel {
     this.overlay = el('div', { class: 'panel-overlay hidden' })
 
     // The lanes and the store behind them, before anything that can *ask* about
-    // them: the 4C toggle in the Map card reads the store to know whether it is
-    // lit, and the first scheduled frame measures the stacks. Both run while the
-    // constructor is still building the cards below. Only the canvases are made
-    // here; where they are mounted and what listens to them comes later.
+    // them: the first scheduled frame measures the stacks, and it runs while
+    // the constructor is still building the cards below. Only the canvases are
+    // made here; where they are mounted and what listens to them comes later.
     //
-    // Where the file has no annotation machinery there is still a 4C lane, so
-    // there is still a store — one that persists nothing and holds nothing but
-    // that lane. It belongs to the *file* rather than to this panel, because a
-    // panel is rebuilt on every navigation and a store rebuilt with it would
-    // throw the lane away every time the reader opened a chromosome.
-    this.laneStore = options.annotations?.store ?? viewpointOnlyStore()
+    // Where the file has no annotation machinery there is still a store, empty
+    // and persisting nothing, so the lane machinery below has one object to be
+    // built against rather than a `null` to be checked at every use.
+    this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
     this.lanes = new AnnotationLanes({
       store: this.laneStore,
       ...(options.annotations?.map === undefined ? {} : { map: options.annotations.map }),
@@ -1012,15 +1001,20 @@ export class MatrixPanel {
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
       onLabelClick: (axis, block) => this.options.onLabelClick?.(axis, block.label),
-      // Shift-drag names the 4C anchor. Reported as rows of the block and turned
-      // into a *locus* here, because this is the object that knows the axis: the
-      // anchor has to outlive the block it was drawn on, and rows do not.
-      onAnchor: (axis, span) => this.setAnchorSpan(axis, span),
+      // Shift-drag names a band of one axis. Reported as indices of the block
+      // and turned into a *locus* here, because this is the object that knows
+      // the axes — and a locus is what both a clipboard and a form want. The
+      // renderer has already zoomed, or not, according to its band mode.
+      onBand: (axis, span) => this.bandDragged(axis, span),
       // Only wired when the view wants it; without it a drag zooms, which is
       // the renderer's own behaviour.
       ...(options.onSelectRegion === undefined
         ? {}
         : { onSelect: (box: SelectionBox) => this.emitSelection(box) }),
+      // Wired whichever of the two a selection does: what was framed goes on the
+      // clipboard either way, which is the 2D half of what Shift-drag does in
+      // one dimension.
+      onSelectionMade: (box: SelectionBox) => this.copySelection(box),
       // Wired whichever the drag does. The numbers are what makes a marquee
       // aimable, and a box that zooms needs them exactly as much as one that
       // opens a region — more, if anything, since a zoom leaves no address bar
@@ -1296,13 +1290,12 @@ export class MatrixPanel {
       this.painted = null
       this.schedule()
     })
-    // A change of anchor is a different picture *and* a different name for the
-    // lane drawing it, until the reader has renamed it themselves. The store
-    // subscription above turns the rename into a repaint, so this asks for one
-    // only for the anchor the label did not change.
-    this.unsubscribeViewpoint = subscribeViewpoint(() => {
-      syncViewpointLabel(this.laneStore, fmt.int)
-      this.schedule()
+    // Armed and disarmed from a form in the sidebar, and what changes here is
+    // what the next Shift-drag on the picture means — so the map has to be told
+    // rather than asked, and told at the moment the button is pressed rather
+    // than at the moment the hand moves.
+    this.unsubscribePick = subscribePick(() => {
+      this.heatmap.setBandMode(isArmed() ? 'pick' : 'zoom')
     })
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
@@ -1507,11 +1500,6 @@ export class MatrixPanel {
             { class: 'btn btn-icon', size: 15 },
           ),
           ...MATRIX_OPTIONS.map(optionToggle),
-          // The 4C strip. In this row rather than in Tracks because it is a
-          // reading *of the matrix* — the columns of the block on screen, summed
-          // over a band of its rows — and it appears attached to the map rather
-          // than in the stack beside it.
-          this.viewpointToggle(),
         ),
       ),
     )
@@ -1571,7 +1559,7 @@ export class MatrixPanel {
     //
     // Built on every file, not only where annotations can be loaded: the
     // rectangles are also where a lane already drawn is dragged to move it to
-    // another edge, and that gesture needs no loader — the 4C lane is one.
+    // another edge, and that gesture needs no loader.
     this.keySlot = el('div', { class: 'map-key-slot' }, this.key.el, this.key2.el)
     const wrap = (this.wrap = el(
       'div',
@@ -1632,9 +1620,10 @@ export class MatrixPanel {
       this.watchLane(edge, canvas)
     }
     this.watchEdgeDrops()
-    // A restyle, a rename or a move of any lane is a different picture — and on
-    // a file with no annotation machinery this is the only subscription there
-    // is, because the 4C lane lives in the private store.
+    // A restyle, a rename or a move of any lane is a different picture. Taken
+    // on the store this panel was built against, which on a file with no
+    // annotation machinery is the empty one — it never fires, and that costs
+    // nothing next to a branch here.
     this.laneListeners.push(this.laneStore.subscribe(() => this.schedule()))
     const annotations = options.annotations
     if (options.annotations !== undefined) {
@@ -2091,7 +2080,7 @@ export class MatrixPanel {
     // mode on leaves a button reading "Done" that nothing will ever answer.
     this.cancelPicking()
     this.unsubscribePlotOptions()
-    this.unsubscribeViewpoint()
+    this.unsubscribePick()
     this.unsubscribeTextScale()
     this.unsubscribeTurnBox()
     this.themeWatchers()
@@ -2907,6 +2896,112 @@ export class MatrixPanel {
   }
 
   /**
+   * A Shift-drag on the map, as a locus: onto the clipboard, or into a form.
+   *
+   * The gesture happens on a picture and the answer has to survive the picture:
+   * pan, zoom, change resolution, open the browser, and the string still names
+   * the same stretch of the same sequence. Block indices are none of that — they
+   * are an offset into whichever block was loaded when the hand moved — so they
+   * are resolved here, against the axis the drag was actually measured on. On an
+   * on-diagonal block either axis gives the same locus; on a rectangular one
+   * they are different sequences, and reading a horizontal drag through the row
+   * axis would name somewhere the reader never pointed at.
+   *
+   * The end takes the *next* bin's start rather than the last bin's, so the span
+   * covers the whole of the last bin rather than stopping at its first base.
+   */
+  private bandDragged(which: 'rows' | 'cols', span: [number, number]): void {
+    const at = this.bandLocus(which, span)
+    if (at === null) return
+    // A form is waiting for this one, so it goes there instead of to the
+    // clipboard: the reader pressed a button that said "pick on map", and
+    // silently copying a string they would then have to paste would be
+    // answering a different request.
+    if (isArmed()) {
+      pickLocus(at)
+      return
+    }
+    void copyTextToClipboard(locusText(at)).catch(() => {
+      // An insecure context, or a browser that will not have it. Not worth a
+      // dialog: the zoom the same gesture asked for has already happened, and
+      // that is the half the reader is looking at.
+    })
+  }
+
+  /**
+   * The box a selection framed, onto the clipboard.
+   *
+   * `chrI:1-10000|chrII:40001-50000` — the two axes in the order everything else
+   * in this panel names them, rows then columns, and each of them written by
+   * {@link locusText} so that one half of a 2D copy is exactly what the same
+   * stretch would produce on its own. The bar is a separator no coordinate
+   * grammar uses, so a pasted pair can be split on it without ambiguity.
+   *
+   * Nothing above bin level: a cell there *is* a contig or a genome, and a base
+   * pair inside one would be an invention — the same rule
+   * {@link describeSelection} follows.
+   */
+  private copySelection(box: SelectionBox): void {
+    const data = this.data
+    if (data === null || data.level !== 'bin') return
+    const rowGroup = groupAt(data.rowGroups, box.anchor.row)
+    const colGroup = groupAt(data.colGroups, box.anchor.col)
+    if (rowGroup === undefined || colGroup === undefined) return
+    const axes = [
+      this.axisSelection(rowGroup, box.rows, data.rowExtent[0]),
+      this.axisSelection(colGroup, box.cols, data.colExtent[0]),
+    ]
+    const written: string[] = []
+    for (const axis of axes) {
+      if (axis === null || axis.range === undefined) return
+      written.push(
+        locusText({
+          contig: axis.label,
+          start: Math.round(axis.range[0]),
+          end: Math.round(axis.range[1]),
+        }),
+      )
+    }
+    void copyTextToClipboard(written.join('|')).catch(() => {
+      // An insecure context, or a browser that will not have it. Not worth a
+      // dialog: the selection has already done the thing it was drawn for.
+    })
+  }
+
+  /**
+   * The same gesture, made on a lane stack rather than on the map.
+   *
+   * One conversion for both surfaces ({@link HeatmapView.bandAt}), because §8.4
+   * glues their pixels together along the shared axis and two conversions would
+   * be two chances to disagree about which stretch was named. Which axis is not
+   * read from the hand here — the stack decides it, since a lane along the
+   * columns can only ever name columns.
+   */
+  private bandOnLane(edge: LaneEdge, from: number, to: number): void {
+    const axis = laneIsHorizontal(edge) ? 'cols' : 'rows'
+    // Before the report, which disarms.
+    const zooming = !isArmed()
+    const span = this.heatmap.bandAt(axis, from, to)
+    if (span !== null) this.bandDragged(axis, span)
+    if (zooming) this.heatmap.zoomToBand(axis, from, to)
+  }
+
+  /** A band of one axis of the block on screen, as a locus, or `null`. */
+  private bandLocus(which: 'rows' | 'cols', span: [number, number]): PickedLocus | null {
+    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
+    if (axis === null) return null
+    const from = axis.unitToLocus(span[0])
+    const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
+    const segment = axis.segmentAt(span[0])
+    if (from === null || to === null || segment === null) return null
+    return {
+      contig: from.contig,
+      start: Math.round(from.bp),
+      end: Math.round(to.bp + segment.bpPerUnit),
+    }
+  }
+
+  /**
    * The lanes' view of the frame about to be drawn.
    *
    * Every number comes from the heatmap rather than from this panel: the scales
@@ -2914,126 +3009,6 @@ export class MatrixPanel {
    * ones it draws in. That is the whole of §8.4's "nothing computes a second
    * mapping", stated as one function.
    */
-  /**
-   * The button that shows the 4C strip, lit while it is up.
-   *
-   * A toggle and not a two-state pair, for the reason every overlay in this row
-   * is one: what it currently *is* is visible in the picture, and a control that
-   * names its own state leaves a reader guessing whether they are reading a
-   * label or an action.
-   */
-  private viewpointToggle(): HTMLElement {
-    const node = iconButton(
-      'chart-line',
-      'A virtual 4C profile, as a lane of its own: pick an anchor with Shift + drag, and this ' +
-        'is the sum over it — computed from the block on screen, at the resolution it is drawn ' +
-        'at. It is a lane like any other, so it can be renamed, recoloured, rescaled, resized, ' +
-        'reordered and dragged to any edge of the map; beside the map it reads the other way ' +
-        'round, which is the same anchor answered about rows instead of columns.',
-      () => showViewpoint(this.laneStore, !isViewpointShown(this.laneStore), fmt.int),
-      { class: 'btn btn-icon btn-toggle', size: 15 },
-    )
-    const sync = (): void =>
-      node.setAttribute('aria-pressed', String(isViewpointShown(this.laneStore)))
-    sync()
-    // Off the *store*, because that is where the lane's visibility now lives:
-    // hiding it from the lane's own right-click menu has to light this button
-    // down, and a subscription to the anchor would never hear about it.
-    this.laneListeners.push(this.laneStore.subscribe(sync))
-    return node
-  }
-
-  /**
-   * Turn a band of block rows into the locus the store keeps.
-   *
-   * The gesture happens on a picture and the answer has to survive the picture:
-   * pan, zoom, change resolution, open the browser, and the anchor still names
-   * the same stretch of the same sequence. Rows are none of that — they are an
-   * offset into whichever block was loaded when the hand moved.
-   *
-   * The end takes the *next* bin's start rather than the last bin's, so the span
-   * covers the whole of the last row rather than stopping at its first base.
-   */
-  private setAnchorSpan(which: 'rows' | 'cols', span: [number, number]): void {
-    // Resolved through the axis the drag was actually measured on. On an
-    // on-diagonal block the two axes are the same sequence and either answer is
-    // the same locus; on a rectangular one they are different sequences, and
-    // reading a horizontal drag through the row axis would name somewhere the
-    // reader never pointed at.
-    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
-    if (axis === null) return
-    const from = axis.unitToLocus(span[0])
-    const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
-    const segment = axis.segmentAt(span[0])
-    if (from === null || to === null || segment === null) return
-    setViewpointAnchor({
-      contig: from.contig,
-      start: Math.round(from.bp),
-      end: Math.round(to.bp + segment.bpPerUnit),
-    })
-    // The gesture is a deliberate one on the picture, so it puts the lane up if
-    // it was not already there: drawing nothing in response would leave a reader
-    // who had just dragged over a locus with no evidence anything had happened.
-    showViewpoint(this.laneStore, true, fmt.int)
-    syncViewpointLabel(this.laneStore, fmt.int)
-  }
-
-  /**
-   * The anchor as a band of one axis of the block on screen, or `null`.
-   *
-   * The anchor is kept as a locus (`ui/viewpoint.ts`) precisely so that this
-   * question can be asked freshly of every block *and of either axis*: pan,
-   * zoom, change resolution, open another region, and the same locus lands on
-   * different rows or on none at all. `null` is a real answer and the lane says
-   * so rather than drawing a profile of whatever happens to be at those row
-   * numbers now.
-   *
-   * Asked of both axes each frame, because a 4C lane under the map sums a band
-   * of *rows* and one beside it sums a band of *columns* — the same locus, and
-   * off the diagonal two different questions, one of which may have no answer.
-   */
-  private anchorBand(which: 'rows' | 'cols'): [number, number] | null {
-    const anchor = getViewpointAnchor()
-    const matrix = this.heatmap.block
-    const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
-    if (anchor === null || matrix === null || axis === null) return null
-    // Block-local from the start: `locusToUnit` answers in this axis's own
-    // coordinates, which are already the rows of the block it was built for.
-    const lo = axis.locusToUnit(anchor.contig, anchor.start)
-    const hi = axis.locusToUnit(anchor.contig, Math.max(anchor.start, anchor.end - 1))
-    if (lo === null || hi === null) return null
-    const extent = which === 'rows' ? matrix.nrows : matrix.ncols
-    const from = Math.floor(Math.min(lo, hi))
-    const to = Math.floor(Math.max(lo, hi)) + 1
-    // Off this block entirely — the reader has panned away from their anchor, or
-    // opened somewhere else. A real answer, and the lane says so.
-    if (to <= 0 || from >= extent) return null
-    return [Math.max(0, from), Math.min(extent, to)]
-  }
-
-  /**
-   * What an empty 4C lane says.
-   *
-   * Three states and three different sentences, because they call for three
-   * different things from the reader: there is no anchor yet, or there is one
-   * and this block does not contain it, or there is one and this view has no
-   * coordinate system to look for it in — which is what a contig-level or
-   * whole-genome block is, where a cell *is* a sequence.
-   */
-  private viewpointPrompt(): string {
-    // The level first, and that order is the point: where a cell *is* a whole
-    // sequence there is no coordinate inside one to anchor on, so the Shift-drag
-    // this would otherwise ask for is a gesture that does nothing — and a lane
-    // that asks for it says the feature is broken rather than that the view is
-    // the wrong one for it.
-    if (this.locusAxes.rows === null && this.locusAxes.cols === null) {
-      return 'No anchor at this level — open a region to read a 4C profile'
-    }
-    const anchor = getViewpointAnchor()
-    if (anchor === null) return 'Press Shift + drag on the map to define an anchor region'
-    return `${viewpointLabel(anchor, fmt.int)} is not in this view`
-  }
-
   private laneGeometry(): LaneGeometry {
     const palette = readCanvasPalette(this.canvas)
     return {
@@ -3043,12 +3018,6 @@ export class MatrixPanel {
       rowScale: this.heatmap.scaleY,
       cssWidth: this.heatmap.cssSize.width,
       cssHeight: this.heatmap.cssSize.height,
-      viewpoint: {
-        matrix: this.heatmap.block,
-        rows: this.anchorBand('rows'),
-        cols: this.anchorBand('cols'),
-        prompt: this.viewpointPrompt(),
-      },
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
       // Turned, the pointer is over a contact rather than over a column, and the
       // two places it is a contact *between* are two different columns of the
@@ -3077,19 +3046,16 @@ export class MatrixPanel {
    * The same frame, with the pointer taken out of it — what a figure is drawn
    * from.
    *
-   * The handles are controls — a column of them down the margin is furniture a
-   * reader of the figure has no use for. So is the empty 4C lane's instruction:
-   * "press Shift + drag on the map" is addressed to somebody with a map in front
-   * of them, and a saved figure is exactly the reader who has not. The lane keeps
-   * its outline, so an empty strip in a figure reads as a lane with nothing in it
-   * rather than as a gap the layout got wrong. Everything else here is the
-   * picture and stays.
+   * The handles are controls: a column of them down the margin is furniture a
+   * reader of the figure has no use for, and so is a gesture in progress. Both
+   * are addressed to somebody with a map in front of them, and a saved figure is
+   * exactly the reader who has not. Everything else here is the picture and
+   * stays.
    */
   private figureGeometry(): LaneGeometry {
     const live = this.laneGeometry()
     return {
       ...live,
-      viewpoint: { ...live.viewpoint, prompt: '' },
       handles: false,
       grip: null,
       scaling: null,
@@ -3163,7 +3129,7 @@ export class MatrixPanel {
     let drag:
       | {
           id: string
-          kind: 'size' | 'pan' | 'grip' | 'press' | 'scale'
+          kind: 'size' | 'pan' | 'grip' | 'press' | 'scale' | 'zoom'
           from: number
           along: number
           size: number
@@ -3183,7 +3149,7 @@ export class MatrixPanel {
 
     const start = (
       id: string,
-      kind: 'size' | 'grip' | 'press',
+      kind: 'size' | 'grip' | 'press' | 'zoom',
       event: PointerEvent,
       size: number,
       within = 0,
@@ -3213,6 +3179,16 @@ export class MatrixPanel {
       const box = canvas.getBoundingClientRect()
       const x = event.clientX - box.left
       const y = event.clientY - box.top
+      // Shift first, before any of the three targets below. The same gesture the
+      // map has and the 1D browser has, offered on the strip beside them: a
+      // reader who can see the peak they want to zoom to should be able to drag
+      // across it where they are looking, rather than move to the map and find
+      // the same stretch again. Deliberate enough — a held modifier — that it
+      // can outrank a caret and a handle without ever being hit by accident.
+      if (event.shiftKey) {
+        start('', 'zoom', event, 0)
+        return
+      }
       // A limit under a track's name is a text box that happens to be painted.
       // Checked before the pointer is captured, so the press never becomes the
       // start of a pan the reader did not ask for.
@@ -3318,6 +3294,19 @@ export class MatrixPanel {
       const now = horizontal ? event.clientY : event.clientX
       const alongNow = horizontal ? event.clientX : event.clientY
 
+      if (drag.kind === 'zoom') {
+        // Drawn on the *map*, because that is what the band is about: the stack
+        // has no marquee, and one drawn only inside the lane would say the band
+        // stops where the track does.
+        const origin = horizontal ? box.left : box.top
+        this.heatmap.showBandPreview(
+          horizontal ? 'cols' : 'rows',
+          drag.along0 - origin,
+          alongNow - origin,
+        )
+        return
+      }
+
       if (drag.kind === 'press') {
         const across = now - drag.from0
         const along = alongNow - drag.along0
@@ -3415,6 +3404,18 @@ export class MatrixPanel {
 
     const onUp = (event: PointerEvent): void => {
       if (drag === null) return
+      if (drag.kind === 'zoom') {
+        this.heatmap.clearBandPreview()
+        const rect = canvas.getBoundingClientRect()
+        const origin = horizontal ? rect.left : rect.top
+        const alongNow = horizontal ? event.clientX : event.clientY
+        this.bandOnLane(edge, drag.along0 - origin, alongNow - origin)
+        drag = null
+        canvas.style.cursor = ''
+        canvas.classList.remove('grabbing')
+        canvas.releasePointerCapture(event.pointerId)
+        return
+      }
       // A press that never became a gesture is a click, and a click on a lane
       // means one of two things depending on what is under it. On a *feature* it
       // means "what is this" — answered by the card, the same card the 1D
@@ -3810,15 +3811,10 @@ export class MatrixPanel {
         vmax: this.manualVmax,
       })
     }
-    // Unconditionally, because every file has lanes now: the 4C profile is one,
-    // and it is drawn against the same two axes even where no annotation can be.
     this.lanes.setAxes(this.locusAxes)
     // The caret was measured into a lane of the outgoing block, and the number
     // in it belongs to a picture that no longer exists.
     this.laneEditor?.close()
-    // The lane's name follows the anchor until the reader renames it, and a new
-    // block can put the anchor in view or take it out of it.
-    syncViewpointLabel(this.laneStore, fmt.int)
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
@@ -6114,11 +6110,11 @@ const EDGE_WORDS: Record<LaneEdge, string> = {
  * boxes: auto, and the round steps around what is on screen. A number box in a
  * context menu is a form in a menu.
  *
- * The location block and the flip are here for a reason worth stating: the 4C
- * profile is a lane with no row in any card, so a control it cannot reach from
- * the picture is a control it does not have. Offering them to every lane rather
- * than to that one is the same argument the rest of this file makes — a lane is
- * a lane — and it saves every other track a trip to the sidebar as well.
+ * The location block and the flip are here because a lane is where a reader is
+ * looking when they want them: which edge a track is drawn on and which way its
+ * signal grows are both decisions about the *picture*, and sending someone to a
+ * list in the sidebar to make one is sending them away from the thing they are
+ * deciding about.
  */
 export function openLaneMenu(
   x: number,
@@ -6211,17 +6207,12 @@ export function openLaneMenu(
   }
 
   items.push(
-    { label: entry.kind === 'viewpoint' ? 'This profile' : 'This track' },
+    { label: 'This track' },
     {
       label: entry.visible ? 'Hide' : 'Show',
       run: () => store.update(entry.id, { visible: !entry.visible }),
     },
-    // Nothing to remove on the 4C lane: there is no file to put down, and the
-    // button that made it would make a *new* one in the factory's colours,
-    // throwing away whatever the reader had styled. Hiding is what they mean.
-    ...(entry.kind === 'viewpoint'
-      ? []
-      : [{ label: 'Remove', run: (): void => store.remove(entry.id) }]),
+    { label: 'Remove', run: (): void => store.remove(entry.id) },
   )
   openMenu(x, y, items)
 }

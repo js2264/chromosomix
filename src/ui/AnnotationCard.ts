@@ -678,9 +678,7 @@ export class AnnotationCard {
    * is the one thing this card exists to show.
    */
   private fileRows(): AnnotationEntry[] {
-    return this.props.store.entries.filter(
-      (entry) => entry.card !== 'viewpoint' && entry.source.kind !== 'computed',
-    )
+    return this.props.store.entries.filter((entry) => entry.source.kind !== 'computed')
   }
 
   private clearDropMarks(): void {

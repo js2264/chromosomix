@@ -2425,6 +2425,14 @@ p {
   cursor: cell;
 }
 
+/* Armed for a pick (`ui/mapPick.ts`): the next Shift-drag names a locus for a
+   form instead of zooming, and a mode that changes what a gesture means has to
+   be visible on the surface the gesture happens on — not only on the button
+   across the window that turned it on. */
+.heatmap-canvas.picking {
+  cursor: crosshair;
+}
+
 .heatmap-canvas.grabbing,
 .lane-canvas.grabbing,
 .browser-canvas.grabbing {
@@ -6075,28 +6083,27 @@ p {
   max-height: 26rem;
 }
 
-/* A locus box that is following the map: readable, plainly not typeable, and
-   not greyed to the point of looking broken. `readOnly` already stops the caret;
-   what this adds is the reason being visible before a reader tries. */
-.param-region.is-following {
-  background: var(--bg);
-  color: var(--text-dim);
-  font-style: italic;
-  cursor: default;
-}
-
-/* The line under it — *following the map*, or *shift-drag to name one*. Tighter
-   than a hint because it sits directly above one. */
+/* The line under the locus box, while the pick is armed. Tighter than a hint
+   because it sits directly above one. */
 .param-map-note {
   margin: 0.15rem 0 0;
 }
 
-/* A locus box with the file's sequences behind it. The `<datalist>` is not
-   rendered, so the wrapper exists only to keep the two together as one child of
-   the label grid — a bare sibling would take a second grid cell and push the
-   box out of line with every other control in the form. */
+/* A locus box with the file's sequences behind it, and — where the task offers
+   it — the button that takes one off the map. The `<datalist>` is not rendered,
+   so the wrapper exists only to keep the group together as one child of the
+   label grid; `contents` dissolves it so the box and the button are laid out by
+   the field itself rather than in a cell of their own. */
 .param-locus {
   display: contents;
+}
+
+/* Never squeezed to an ellipsis by the box beside it: it is a two-word
+   instruction, and a reader has to be able to read it to know the map has
+   changed what it does. */
+.param-pick {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* A row that cannot run yet.

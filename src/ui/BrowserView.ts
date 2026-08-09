@@ -135,12 +135,14 @@ import {
   canvasToPng,
   captionStamp,
   copyPngToClipboard,
+  copyTextToClipboard,
   downloadBlob,
   exportBaseName,
   fileStamp,
   largestDpiThatFits,
   scaleForDpi,
 } from './export'
+import { locusText } from './mapPick'
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { searchKey } from './SearchBox'
@@ -1047,12 +1049,9 @@ export class BrowserView {
   private layout(): Lane[] {
     // Both *file* cards, because in one dimension there is no "on the map" to
     // be an overlay of: a BED is boxes and a BEDPE is arcs, and each takes a
-    // lane of its own like everything else here. Not the 4C profile, which is a
-    // reading of a contact map's columns and has no meaning on a surface that
-    // has no contact map — it stays in the store because the map it belongs to
-    // is one tab switch away.
+    // lane of its own like everything else here.
     const entries = this.props.store.entries.filter(
-      (entry) => entry.card !== 'viewpoint' && entry.visible && entry.status === 'ready',
+      (entry) => entry.visible && entry.status === 'ready',
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,
@@ -1089,6 +1088,35 @@ export class BrowserView {
   /** A canvas x as a position on the axis, through the name column. */
   private atUnit(x: number): number {
     return this.scale.toUnit(x - this.gutter)
+  }
+
+  /**
+   * The stretch a drag-to-zoom covered, onto the clipboard.
+   *
+   * `chr:start-stop`, the form every tool in this field takes and the same one
+   * the map's Shift-drag writes — one gesture, one string, whichever surface it
+   * was made on (`ui/mapPick.ts`).
+   *
+   * Only within one sequence. The axis here is a concatenation, so a drag can
+   * begin in one chromosome and end in another; that is a perfectly good thing
+   * to zoom to and it is not a locus, so the zoom happens and nothing is
+   * copied — better than clamping to the near end and handing back coordinates
+   * for a region the reader did not select.
+   */
+  private copyBand(from: number, to: number): void {
+    const start = this.axis.unitToLocus(from)
+    const end = this.axis.unitToLocus(to)
+    if (start === null || end === null || start.contig !== end.contig) return
+    void copyTextToClipboard(
+      locusText({
+        contig: start.contig,
+        start: Math.round(start.bp),
+        end: Math.round(end.bp),
+      }),
+    ).catch(() => {
+      // An insecure context, or a browser that will not have it. Not worth a
+      // dialog: the zoom the same gesture asked for has already happened.
+    })
   }
 
   /** Total canvas height: the ruler, every lane, and the gaps between them. */
@@ -2226,7 +2254,11 @@ export class BrowserView {
         if (Math.abs(dx) + Math.abs(dy) < DRAG_SLACK) return
         if (drag.onBorder && drag.lane !== null) {
           this.drag = { mode: 'resize', entry: drag.lane.entry, y0: drag.y0, size: drag.lane.entry.style.size }
-        } else if (event.altKey) {
+        } else if (event.altKey || event.shiftKey) {
+          // Either modifier, and Shift is the one that matters: it is what the
+          // map takes for the same gesture, so a reader who learned "hold Shift
+          // and drag across the bit you want" on one surface finds it on the
+          // other. Option stays because it is what this view has always taken.
           this.drag = { mode: 'select', x0: drag.x0, x }
         } else if (Math.abs(dy) > Math.abs(dx) && scalableLane(drag.lane) !== null) {
           // Across the lane rather than along it, which is the one direction a
@@ -2333,6 +2365,7 @@ export class BrowserView {
         const from = this.atUnit(Math.min(drag.x0, x))
         const to = this.atUnit(Math.max(drag.x0, x))
         if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) {
+          this.copyBand(from, to)
           this.scale.setDomain([from, to])
           this.afterMove(true)
           return

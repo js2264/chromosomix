@@ -659,16 +659,9 @@ export class AnnotationStore {
 
 const STORE_SCOPE = 'annotations'
 
-/**
- * An entry worth remembering: one that finished loading from a nameable source.
- *
- * Never the 4C profile. It has no file behind it, so there is nothing a reload
- * could re-read; what it *is* a picture of — the anchor — is a gesture on a
- * block, and the block is gone. Remembering its colours alone would leave a
- * strip on screen that says 4C and is a picture of nothing.
- */
+/** An entry worth remembering: one that finished loading from a nameable source. */
 function persistable(entry: AnnotationEntry): boolean {
-  return entry.kind !== 'viewpoint' && (entry.status === 'ready' || entry.status === 'detached')
+  return entry.status === 'ready' || entry.status === 'detached'
 }
 
 function toStored(entry: AnnotationEntry): StoredEntry {

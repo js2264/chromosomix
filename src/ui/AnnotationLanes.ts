@@ -47,7 +47,6 @@ import {
   BORDER_RULE,
   GRIP_ROOM,
   GROUP_BAR,
-  barPath,
   borderRuleAt,
   clipLane,
   drawGrip,
@@ -55,14 +54,10 @@ import {
   gripAcross,
   gripBox,
   groupRuns,
-  laneGrowsInward,
   laneIsHorizontal,
   laneOutward,
-  laneRect,
-  laneText,
   laneX,
   laneY,
-  valueAcross,
   withinGrip,
   type LaneFrame,
 } from '../render/lane'
@@ -98,8 +93,6 @@ import {
   type LaneEdge,
   type TrackSampleSet,
 } from '../annotations/types'
-import { bandSums, profileFromSums } from '../render/viewpoint'
-import type { DenseMatrix } from '../types'
 import { el, fmt } from './dom'
 import type { LaneMark } from './LaneControls'
 import { LANE_MIN_SIZE } from './trackControls'
@@ -117,27 +110,6 @@ export interface LaneGeometry {
   /** The heatmap canvas's CSS size, which the lane canvases match on one axis. */
   cssWidth: number
   cssHeight: number
-  /**
-   * The block on screen and the anchor's band on each axis, for the 4C lane.
-   *
-   * Handed in per frame rather than read from anywhere, because the profile is
-   * a reading of *this* picture: the same numbers the heatmap is drawing, at the
-   * same pooling, from the same score column, with the same balancing. A
-   * separately-read profile could disagree with the picture it is drawn over,
-   * and would, at every level but the finest (`render/viewpoint.ts`).
-   *
-   * `rows` is the band a lane along the *columns* sums over — the strips above
-   * and below the map — and `cols` is the band the strips beside it sum over.
-   * Either may be `null` while the other is not: an anchor names a locus, and
-   * off the diagonal the two axes are different sequences.
-   */
-  viewpoint: {
-    matrix: DenseMatrix | null
-    rows: [number, number] | null
-    cols: [number, number] | null
-    /** What an empty 4C lane says instead of a profile. */
-    prompt: string
-  }
   /** The cell under the pointer, for the crosshair. */
   hover: { row: number; col: number } | null
   /**
@@ -252,40 +224,10 @@ interface Lane {
   /** One per value track in the lane; empty for the feature kinds. */
   profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
   /**
-   * What a 4C lane says when it has no profile to draw.
-   *
-   * Not a general facility: every other lane with nothing in it is a track
-   * whose file is still loading, and a blank strip is the honest picture of
-   * that. This one is switched on by a button and filled by a gesture nobody
-   * guesses, so its empty state is where the instruction has to live — the only
-   * place a reader is certainly looking at the moment they need it.
-   */
-  prompt: string | null
-  /**
    * The canvas coordinate of the border a resize drag grabs — the lane's far
    * edge, away from the map.
-   *
-   * The **slot's**, not the frame's, and those are not always the same: a lane
-   * that keeps a gutter clear of its own signal ({@link AnnotationLanes.gutterOf})
-   * has a frame short of its slot at whichever end the gutter came off. What a
-   * reader can take hold of is the slot's edge, so that is what the rule marking
-   * it has to be drawn on.
    */
   border: number
-  /**
-   * Where the 4C anchor falls on **this lane's own axis**, in matrix units.
-   *
-   * The band the profile is summed over is on the *other* axis, so it is
-   * nowhere in this picture; this is the complementary fact, and it is the one
-   * a reader keeps asking for — where is the viewpoint on the axis I am reading
-   * along? On a map read about its diagonal that is where the self-contact peak
-   * ought to be, which is what makes the mark worth drawing beside the line
-   * rather than only in the lane's name.
-   *
-   * `null` where the anchor names a sequence this axis does not carry, which
-   * off the diagonal is the ordinary case.
-   */
-  anchor: [number, number] | null
 }
 
 /**
@@ -300,15 +242,6 @@ interface Lane {
 interface EdgeState {
   /** The value axis each lane was drawn against, by the lane's own entry id. */
   limits: Map<string, { min: number; max: number }>
-  /**
-   * The pixel profile each 4C lane was drawn from.
-   *
-   * Kept for the readout, and only for the kinds that have no finer answer than
-   * the picture: a sampled track can be asked for the file's value at a base,
-   * and this one cannot — the pixel *is* the reading, so the profile the paint
-   * built is the only honest thing to quote.
-   */
-  profiles: Map<string, PixelProfile>
   /** The line each lane's handle sits on, by the lane's own entry id. */
   gripRows: Map<string, number>
   /** Every limit box on this edge, with the tracks it belongs to. */
@@ -322,7 +255,6 @@ interface EdgeState {
 function emptyEdgeState(): EdgeState {
   return {
     limits: new Map(),
-    profiles: new Map(),
     gripRows: new Map(),
     ranges: [],
     names: [],
@@ -359,10 +291,9 @@ export class AnnotationLanes {
   /**
    * The sample cache, or `null` on a file with no annotation worker.
    *
-   * A file with a genome layer carries no annotations at all (§8.5) and still
-   * has a 4C lane, because that one is a reading of the matrix rather than a
-   * file loaded against it. Nothing there ever samples, so nothing there needs
-   * a worker — and building one would spawn a thread to answer no questions.
+   * A file with a genome layer carries no annotations at all (§8.5), so its
+   * stacks stay empty and nothing there ever samples — and building a cache
+   * would spawn a thread to answer no questions.
    */
   private readonly cache: SampleCache | null
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
@@ -523,9 +454,9 @@ export class AnnotationLanes {
    * block has not got. A contig-level or whole-genome block has no `LocusAxis`
    * — one cell is a whole sequence, and there is no base pair inside it to put
    * a bigWig sample at — so a track there would be an empty strip claiming a
-   * track's worth of height. The 4C lane is the exception and it is not a
-   * special case so much as the absence of one: its profile is columns of the
-   * block on screen, which every block has, so it draws wherever it is put.
+   * track's worth of height. There used to be one exception, the 4C lane, whose
+   * profile was columns of the block itself; it is gone (§18.9), and with it the
+   * only reason this could ever answer with a non-empty list.
    */
   private drawnOn(edge: LaneEdge): AnnotationEntry[] {
     const map = this.options.map ?? LEAD_MAP
@@ -542,8 +473,11 @@ export class AnnotationLanes {
     const entries = this.turned
       ? this.options.store.drawnAnywhereOn(map)
       : this.options.store.drawnOnMap(map, edge)
-    if (this.axisFor(edge) !== null) return entries
-    return entries.filter((entry) => entry.kind === 'viewpoint')
+    // No axis on this edge, no lane: every kind that draws here draws against
+    // genomic coordinates, and the one that did not — the 4C lane read straight
+    // off the picture — is gone (§18.9). A stack with nothing to place its
+    // signal on has nothing to say.
+    return this.axisFor(edge) === null ? [] : entries
   }
 
   /**
@@ -879,24 +813,7 @@ export class AnnotationLanes {
     return this.slotsFor(edge).map((slot) => {
       const frame = this.frameOf(edge, slot, geometry)
       const profiles: Lane['profiles'] = []
-      let prompt: string | null = null
-      let anchor: [number, number] | null = null
       for (const member of [slot.entry, ...slot.overlaid]) {
-        // The 4C profile comes from the block on screen rather than from a
-        // fetch, so it is the one lane that draws without an axis — and the one
-        // that has something to say when it has nothing to draw.
-        if (member.kind === 'viewpoint') {
-          const profile = this.viewpointProfile(edge, frame, geometry)
-          if (profile === null) prompt = geometry.viewpoint.prompt
-          else {
-            profiles.push({ entry: member, profile })
-            // Only beside a line there is: a mark on the axis under an empty
-            // lane that has just said the anchor is not in this view would be
-            // the lane contradicting itself.
-            anchor = laneIsHorizontal(edge) ? geometry.viewpoint.cols : geometry.viewpoint.rows
-          }
-          continue
-        }
         // A sequence is a value track from here: beside a map, where a pixel is
         // a whole bin, a FASTA can only ever be its GC content — the residues
         // need a base per pixel and a bin is a thousand of them.
@@ -912,45 +829,14 @@ export class AnnotationLanes {
         frame,
         border: this.nearEdgeOf(edge, slot) + laneOutward(edge) * slot.thickness,
         profiles,
-        prompt,
-        anchor,
       }
     })
   }
 
-  /**
-   * The 4C line for one lane, or `null` where there is nothing to draw.
-   *
-   * Which band is summed is decided by the lane's own axis and by nothing else:
-   * a strip along the columns sums the anchor's rows, a strip along the rows
-   * sums its columns. That is what makes moving the lane to another edge a
-   * complete answer rather than a rotated one — the profile beside the map is
-   * the transpose of the profile under it, which is what the reader put it
-   * there to see.
-   */
-  private viewpointProfile(
-    edge: LaneEdge,
-    frame: LaneFrame,
-    geometry: LaneGeometry,
-  ): PixelProfile | null {
-    const { matrix } = geometry.viewpoint
-    const along = laneIsHorizontal(edge) ? 'cols' : 'rows'
-    const band = along === 'cols' ? geometry.viewpoint.rows : geometry.viewpoint.cols
-    if (matrix === null || band === null) return null
-    return profileFromSums(bandSums(matrix, band, along), frame)
-  }
-
   private frameOf(edge: LaneEdge, slot: Slot, geometry: LaneGeometry): LaneFrame {
     const { plot, data, colScale, rowScale } = geometry
-    const gutter = this.gutterOf(slot)
-    // Taken off the **floor** end, which is the one end of a lane that never
-    // carries ink: the signal grows away from it, so the mark sits under the
-    // line rather than in it. Off the lane's own height rather than added to
-    // it, so switching the mark's lane on does not change how much of the map
-    // the stack takes — the lane pays for its own furniture.
-    const floorAtFar = laneGrowsInward(edge) !== slot.entry.style.flip
-    const acrossFrom = this.nearEdgeOf(edge, slot) + (floorAtFar ? 0 : laneOutward(edge) * gutter)
-    const thickness = slot.thickness - gutter
+    const acrossFrom = this.nearEdgeOf(edge, slot)
+    const thickness = slot.thickness
     if (laneIsHorizontal(edge)) {
       return {
         orientation: edge,
@@ -973,17 +859,6 @@ export class AnnotationLanes {
       acrossFrom,
       thickness,
     }
-  }
-
-  /**
-   * How much of a lane's thickness is kept clear for a mark on its axis.
-   *
-   * Only the 4C lane has one, and it has it whether or not an anchor is set:
-   * reserving the band only when there is something to draw in it would shrink
-   * and grow the line under the hand that had just drawn the anchor.
-   */
-  private gutterOf(slot: Slot): number {
-    return slot.entry.kind === 'viewpoint' ? ANCHOR_GUTTER : 0
   }
 
   /**
@@ -1084,10 +959,7 @@ export class AnnotationLanes {
         // ceiling gesture and the limit editor both act on the lane. The
         // *committed* pair, never the one under a drag — this is what the next
         // gesture starts from, and a half-finished one is not a decision.
-        for (const { entry: member, profile } of profiles) {
-          state.limits.set(member.id, limits)
-          if (member.kind === 'viewpoint') state.profiles.set(member.id, profile)
-        }
+        for (const { entry: member } of profiles) state.limits.set(member.id, limits)
         if (text) {
           // Mid-drag the range says where the hand is going, not where it came
           // from: the faded copy behind it is already saying that, and the
@@ -1103,14 +975,6 @@ export class AnnotationLanes {
             at: labelEndFor(frame, shown, first.entry.style.flip),
           }
         }
-      } else if (lane.prompt !== null) {
-        // A 4C lane with no profile. It is shown *and empty* on purpose: a
-        // control that turned on and drew nothing would look broken, and the
-        // gesture that fills it is one nobody guesses. So the empty state is
-        // where the instruction lives — the only place a reader is certainly
-        // looking at the moment they need it.
-        drawPrompt(ctx, frame, lane.prompt, geometry.palette)
-        if (text) label = { entries: [entry], detail: null, at: 'near' }
       } else if (entry.payload?.kind === 'features' && axis !== null) {
         // The browser's row heights, and for the browser's reason: a name goes
         // *under* its feature on both surfaces, and the band that holds it has
@@ -1143,16 +1007,6 @@ export class AnnotationLanes {
       }
       ctx.restore()
       if (label !== null) this.labelLane(ctx, lane, geometry, label, state)
-
-      // Where the 4C anchor is on this lane's own axis, in the band the lane
-      // kept clear for it. Outside the clip because it is outside the data:
-      // {@link gutterOf} took the room off the floor end, which is the one end
-      // the signal never reaches. Part of the picture rather than a control, so
-      // it goes into an exported figure — a profile whose viewpoint is not
-      // marked is a claim with its subject left off.
-      if (lane.anchor !== null) {
-        anchorBar(ctx, frame, lane.anchor, entry.style.flip, entry.style.colour)
-      }
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1525,22 +1379,18 @@ export class AnnotationLanes {
       const values = [slot.entry, ...slot.overlaid].filter((member) => drawsAProfile(member.kind))
       if (values.length > 0) {
         for (const member of values) {
-          // Two roads to one number, and which one depends on where the number
-          // came from. A sampled track is read from the samples themselves, so
-          // the answer is the file's value at that base rather than the mean the
-          // pixel was drawn at; the 4C profile *has* no finer answer — the pixel
-          // is the reading — so it is read from the profile the paint built.
+          // From the samples rather than from the paint: the answer is the
+          // file's value at that base, not the mean the pixel happened to be
+          // drawn at.
           const value =
-            member.kind === 'viewpoint'
-              ? profileAtPixel(this.state[edge].profiles.get(member.id) ?? null, along)
-              : axis === null
-                ? null
-                : valueAtPixel(
-                    this.cache?.peek(member.id, horizontal ? 'cols' : 'rows') ?? null,
-                    axis,
-                    frame,
-                    along,
-                  )
+            axis === null
+              ? null
+              : valueAtPixel(
+                  this.cache?.peek(member.id, horizontal ? 'cols' : 'rows') ?? null,
+                  axis,
+                  frame,
+                  along,
+                )
           rows.push({
             label: member.kind === 'sequence' ? `${member.label} GC` : member.label,
             colour: member.style.colour,
@@ -1583,54 +1433,6 @@ export class AnnotationLanes {
 }
 
 /**
- * What an empty 4C lane says, in a dashed box the width of the data.
- *
- * A box rather than bare words, because a lane with nothing in it and no frame
- * round it is indistinguishable from the gap between two lanes — and the whole
- * point of drawing it empty is that the reader can see there is somewhere for
- * the answer to go.
- */
-function drawPrompt(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  text: string,
-  palette: { guide: string; halo: string; crosshair: string },
-): void {
-  const span = Math.max(1, frame.alongTo - frame.alongFrom)
-  const [x, y, width, height] = laneRect(
-    frame,
-    frame.alongFrom,
-    frame.alongTo,
-    0,
-    frame.thickness,
-  )
-  ctx.save()
-  ctx.strokeStyle = palette.guide
-  ctx.globalAlpha = 0.5
-  ctx.lineWidth = 1
-  ctx.setLineDash([4, 3])
-  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1))
-  ctx.setLineDash([])
-  ctx.globalAlpha = 1
-  // Empty in a figure: the sentence is an instruction to somebody with a map in
-  // front of them, and the outline alone says what a saved figure needs — that
-  // this lane is a lane, and that there is nothing in it.
-  if (text !== '') {
-    ctx.font = scaleFont(LANE_FONT)
-    ctx.fillStyle = palette.guide
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    // In the lane's own reading direction, so a strip beside the map says it the
-    // same way up as that stack's track names do.
-    laneText(ctx, frame, text, (frame.alongFrom + frame.alongTo) / 2, frame.thickness / 2, {
-      halo: palette.halo,
-      maxWidth: Math.max(40, span - 12),
-    })
-  }
-  ctx.restore()
-}
-
-/**
  * A loop's anchor, as a small triangle in the band past the stack.
  *
  * Pointing *inwards*, towards the map: the mark it belongs to is a pixel over
@@ -1668,68 +1470,6 @@ function anchorMark(
 const ANCHOR_LENGTH = 7
 const ANCHOR_HALF = 4
 const ANCHOR_GAP = 2
-
-/**
- * The band a 4C lane keeps clear of its own signal, for the mark that says
- * where its anchor is.
- *
- * The bar itself is the width a group bar is, because it is the same kind of
- * statement — "this stretch, here" — and a reader who has learned one glyph
- * should not have to learn a second. The couple of pixels beside it are what
- * stop it reading as part of the track's own fill.
- */
-const ANCHOR_BAR = GROUP_BAR
-const ANCHOR_BAR_GAP = 2
-const ANCHOR_GUTTER = ANCHOR_BAR + ANCHOR_BAR_GAP
-
-/**
- * The shortest a mark may be along the axis.
- *
- * A one-bin anchor on a whole-chromosome view is a fifth of a pixel, and a mark
- * nobody can see is a mark that is not there. Square is the floor: past that it
- * would be claiming a stretch it does not cover.
- */
-const ANCHOR_BAR_MIN = ANCHOR_BAR
-
-/**
- * The 4C anchor, as a bar on the lane's own genomic axis.
- *
- * The band the profile is summed over is on the *other* axis and so is nowhere
- * in this picture; this is the complementary fact — where the viewpoint sits
- * along the axis being read — and on a map read about its diagonal it is where
- * the self-contact peak ought to be. Drawn in the lane's own colour, at the
- * group bar's weight, in the gutter {@link AnnotationLanes.gutterOf} reserved
- * off the floor end.
- */
-function anchorBar(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  span: readonly [number, number],
-  flip: boolean,
-  colour: string,
-): void {
-  const from = frame.toPixel(Math.min(span[0], span[1]))
-  const to = frame.toPixel(Math.max(span[0], span[1]))
-  const low = Math.max(frame.alongFrom, Math.min(from, to))
-  const high = Math.min(frame.alongTo, Math.max(from, to))
-  // Off this stretch of the axis entirely — the reader has panned past their own
-  // viewpoint, which is an ordinary thing to do and not a thing to draw.
-  if (high < frame.alongFrom || low > frame.alongTo) return
-  const short = Math.max(0, ANCHOR_BAR_MIN - (high - low)) / 2
-
-  // Outward from the floor, which is where `valueAcross` says a value of zero
-  // is — so the bar sits under the line on every edge and either way up.
-  const floor = valueAcross(frame, flip ? 1 : 0)
-  const step = floor === 0 ? -1 : 1
-  const near = floor + step * ANCHOR_BAR_GAP
-  ctx.save()
-  ctx.fillStyle = colour
-  ctx.globalAlpha = 0.85
-  ctx.beginPath()
-  barPath(ctx, ...laneRect(frame, low - short, high + short, near, near + step * ANCHOR_BAR))
-  ctx.fill()
-  ctx.restore()
-}
 
 /**
  * One hairline across a lane, at a position along its axis.
@@ -1844,15 +1584,6 @@ function laneLabelStyle(): LaneLabelStyle {
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {
   const locus = axis.unitToLocus(frame.toUnit(along))
   return locus === null ? '—' : `${locus.contig}:${fmt.bp(locus.bp)}`
-}
-
-/** What one pixel of a drawn profile holds — the 4C lane's own readout. */
-function profileAtPixel(profile: PixelProfile | null, along: number): number | null {
-  if (profile === null) return null
-  const slot = Math.round(along) - profile.from
-  if (slot < 0 || slot >= profile.mean.length) return null
-  const value = profile.mean[slot]
-  return Number.isNaN(value) ? null : value
 }
 
 /** The sampled value under a pixel, straight from the cache. */

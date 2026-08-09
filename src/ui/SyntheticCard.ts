@@ -102,9 +102,7 @@ export class SyntheticCard {
     // I just ran", and insulation's boundaries belong beside the insulation
     // profile they were called from rather than three cards away among the
     // dropped files. `source.kind` is what they actually share.
-    const rows = this.options.store.entries.filter(
-      (entry) => entry.source.kind === 'computed' && entry.card !== 'viewpoint',
-    )
+    const rows = this.options.store.entries.filter((entry) => entry.source.kind === 'computed')
     this.el.classList.toggle('hidden', rows.length === 0)
     this.list.replaceChildren(...rows.map((entry) => this.row(entry)))
   }
@@ -312,9 +310,9 @@ export class SyntheticCard {
  * everything after the first character — so an id of that shape minted anywhere
  * else can be handed to a loaded track after a reload, and two rows under one id
  * is not two tracks: `update` patches every match and `remove` deletes every
- * match, so the pair moves and dies together. `VIEWPOINT_ID` avoids the shape by
- * being `'4c'`; this avoids it by a prefix that begins with neither `a` nor a
- * digit run, and the colon means no suffix of an output id can rescue it either.
+ * match, so the pair moves and dies together. This avoids the shape by a prefix
+ * that begins with neither `a` nor a digit run, and the colon means no suffix of
+ * an output id can rescue it either.
  */
 export const SYNTHETIC_PREFIX = 'analysis:'
 

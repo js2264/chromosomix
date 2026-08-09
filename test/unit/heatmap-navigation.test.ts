@@ -483,6 +483,112 @@ describe('a diagonal selection', () => {
 })
 
 /**
+ * Shift-drag: a band of one axis, zoomed to and reported.
+ *
+ * The gesture used to name a 4C anchor for a lane that no longer exists (§18.9).
+ * What replaces it is the 1D half of the marquee — drag across the stretch you
+ * want and the view goes there — and the report is what puts the same stretch on
+ * the clipboard, which the renderer knows nothing about.
+ *
+ * Two things are worth pinning here and neither is visible in a screenshot:
+ * which axis a drag is taken to name, and that the *pick* mode reports without
+ * moving the picture. A pick that zoomed would take the thing the reader was
+ * pointing at out from under the pointer.
+ */
+describe('a band along one axis', () => {
+  function banded(): {
+    fire: (type: string, event: Record<string, unknown>) => void
+    bands: Array<{ axis: 'rows' | 'cols'; span: [number, number] }>
+    heatmap: HeatmapView
+  } {
+    const { canvas, fire } = harness(400)
+    const bands: Array<{ axis: 'rows' | 'cols'; span: [number, number] }> = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onBand: (axis, span) => bands.push({ axis, span }),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    return { fire, bands, heatmap }
+  }
+
+  it('reads a mostly-horizontal drag as columns and zooms in', () => {
+    const { fire, bands, heatmap } = banded()
+    const plot = heatmap.plotRect
+    const fitted = heatmap.zoomLevel
+    // Four pixels a cell at the fitted zoom, so 80 → 160 is cells 20 to 40.
+    dragWith(fire, [plot.x + 80, plot.y + 200], [plot.x + 160, plot.y + 210], { shiftKey: true })
+    expect(bands).toEqual([{ axis: 'cols', span: [20, 40] }])
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.col).toBeCloseTo(30, 0)
+  })
+
+  // The same stretch of genome on a map read about its diagonal, so insisting on
+  // one direction would be insisting on a gesture rather than on an answer.
+  it('reads a mostly-vertical drag as rows', () => {
+    const { fire, bands, heatmap } = banded()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 200, plot.y + 80], [plot.x + 210, plot.y + 160], { shiftKey: true })
+    expect(bands).toEqual([{ axis: 'rows', span: [20, 40] }])
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.row).toBeCloseTo(30, 0)
+  })
+
+  // One scalar drives both axes, which is what keeps a cell square. So a 1D
+  // gesture has a 2D consequence, and the axis nobody dragged keeps its centre.
+  it('keeps the other axis where it was', () => {
+    const { fire, heatmap } = banded()
+    const plot = heatmap.plotRect
+    const before = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    dragWith(fire, [plot.x + 80, plot.y + 200], [plot.x + 160, plot.y + 210], { shiftKey: true })
+    const after = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(after?.row).toBeCloseTo(before?.row ?? -1, 0)
+  })
+
+  it('reports without moving the picture while a form is waiting for a locus', () => {
+    const { fire, bands, heatmap } = banded()
+    heatmap.setBandMode('pick')
+    const plot = heatmap.plotRect
+    const fitted = heatmap.zoomLevel
+    dragWith(fire, [plot.x + 80, plot.y + 200], [plot.x + 160, plot.y + 210], { shiftKey: true })
+    expect(bands).toEqual([{ axis: 'cols', span: [20, 40] }])
+    expect(heatmap.zoomLevel).toBe(fitted)
+  })
+
+  // Option with Shift is the diagonal-locked marquee and has been since before
+  // this gesture existed; Shift must not steal it.
+  it('stands aside for a diagonal selection', () => {
+    const { fire, bands, heatmap } = banded()
+    const plot = heatmap.plotRect
+    dragWith(
+      fire,
+      [plot.x + 80, plot.y + 160],
+      [plot.x + 200, plot.y + 280],
+      { altKey: true, shiftKey: true },
+    )
+    expect(bands).toEqual([])
+  })
+
+  /**
+   * The conversion the lane stacks share (§8.4 glues their pixels to the map's
+   * along the axis they have in common), so a band dragged out beside the map
+   * names the same stretch as the same band dragged out on it.
+   */
+  it('converts pixels to cells the same way for a caller beside the map', () => {
+    const { heatmap } = banded()
+    const plot = heatmap.plotRect
+    expect(heatmap.bandAt('cols', plot.x + 80, plot.x + 160)).toEqual([20, 40])
+    expect(heatmap.bandAt('cols', plot.x + 160, plot.x + 80)).toEqual([20, 40])
+    // A tap is a band of the one bin it landed on: the finest locus this
+    // resolution can express, and a perfectly good thing to point at.
+    expect(heatmap.bandAt('rows', plot.y + 80, plot.y + 80)).toEqual([20, 21])
+    // Clamped to the block rather than run off it.
+    expect(heatmap.bandAt('rows', plot.y - 500, plot.y + 5000)).toEqual([0, 100])
+  })
+})
+
+/**
  * The wheel's two axes, which mean two different things.
  *
  * Up and down is the zoom, and sideways **slides along the picture** — which is
@@ -625,12 +731,12 @@ describe('a band, not a square', () => {
     expect(heatmap.zoomLevel).toBeCloseTo(fitted * 4, 6)
   })
 
-  it('names columns for a 4C drag whichever way the hand went', () => {
+  it('names columns for a band drag whichever way the hand went', () => {
     const { canvas, fire } = harness(400)
     const asked: Array<{ axis: string; span: [number, number] }> = []
     const heatmap = new HeatmapView(canvas, {
       devicePixelRatio: 1,
-      onAnchor: (axis, span) => asked.push({ axis, span }),
+      onBand: (axis, span) => asked.push({ axis, span }),
     })
     heatmap.setAnchor('end')
     heatmap.setSpanGestures(true)
@@ -651,7 +757,7 @@ describe('a band, not a square', () => {
     const asked: string[] = []
     const heatmap = new HeatmapView(canvas, {
       devicePixelRatio: 1,
-      onAnchor: (axis) => asked.push(axis),
+      onBand: (axis) => asked.push(axis),
     })
     heatmap.setMatrix(block(100), [])
     heatmap.attach()

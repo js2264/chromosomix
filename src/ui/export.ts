@@ -130,6 +130,27 @@ export async function copyPngToClipboard(png: Promise<Blob>): Promise<void> {
   await write.call(scope.navigator!.clipboard, [new Item({ 'image/png': png })])
 }
 
+/**
+ * Put a line of text on the system clipboard.
+ *
+ * Absent in an insecure context — which is where a colleague's `file://` copy of
+ * this app runs — and absent in some embeddings, so the API is read defensively
+ * and the failure is an ordinary rejection rather than a `TypeError` from
+ * calling `undefined`. The same reading {@link copyPngToClipboard} takes of the
+ * neighbouring method.
+ */
+export async function copyTextToClipboard(text: string): Promise<void> {
+  const write = (
+    globalThis as {
+      navigator?: { clipboard?: { writeText?(text: string): Promise<void> } }
+    }
+  ).navigator?.clipboard?.writeText
+  if (write === undefined) {
+    throw new Error('This browser will not let a page write to the clipboard.')
+  }
+  await write.call(navigator.clipboard, text)
+}
+
 /** The canvas as a PNG blob. */
 export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
