@@ -14,6 +14,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`bin × bin` in the whole-genome view.** The overview offered two levels and
+  both put one cell per *unit*: a contig cell sums a rectangle of
+  `length × length`, and a metagenome's contigs span several orders of magnitude,
+  so the axis spends its width on the shortest sequences and its colour range on
+  the longest. On the 48-MAG mock community that is 62% of the axis given to
+  contigs under 5 kb holding 4% of the sequence, one badly-assembled MAG taking
+  28% of it for 4.5% of the assembly, and a third of the diagonal coming out
+  empty — a haze where the readable picture was one click away in the genomes
+  table, as "select every row". That picture is now the third entry in the same
+  picker. It is the pooled whole-file read the app already made, so the map, the
+  resolution and the counts are identical to the selection's, down to the
+  `4,057 × 4,057 bins · effective resolution: 50.0 kb`; what is new is that it is
+  reachable from where the question is asked. `level` carries it in the hash like
+  the other two, the picker is one control shown at whichever level is mounted so
+  there is always a way back, and `contig × contig` stays the default — "does this
+  bin hold together" is a question only it answers.
+
 - **A sideways scroll slides along the map.** Two fingers across a trackpad mean
   "along the genome" in every browser there is, and already did over this app's
   own 1D tracks; over a map they did nothing, because the handler stood aside so

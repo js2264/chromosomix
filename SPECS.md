@@ -616,6 +616,21 @@ overview.
 
 Opportunistic in exactly the same way as the mmetacool ladder: used when present, never required.
 
+**Three levels, one control.** The whole-file view offers `bin × bin`, `contig × contig` and
+`genome × genome` in a single picker; `level` in the hash selects between them and the shell mounts
+whichever view draws the answer. Only the last two are accumulations over unit pairs — `bin × bin`
+is the pooled whole-file read (§9), and on a metagenome it is the same picture as selecting every
+row of the genomes table.
+
+`bin × bin` is usually the one to read. A contig cell sums a rectangle of `length × length`, and a
+metagenome's contigs span several orders of magnitude in length, so the contig axis spends its width
+on the shortest sequences and its colour range on the longest: a block is as wide as a genome is
+*fragmented* rather than as long as it is. Measured on the 48-MAG mock community, 62% of the contig
+axis goes to contigs under 5 kb holding 4% of the sequence, one badly-assembled MAG takes 28% of it
+for 4.5% of the assembly, and a third of the diagonal comes out empty. Bin cells are all the same
+size, so the scale means one thing everywhere. The contig level stays, and stays the default entry
+point, because "is this bin one organism?" is a question only it answers.
+
 ### 7.4 `__unbinned__` — never displayable
 
 Reserved, holding every contig that binning failed to assign. It breaks the small-MAG assumption

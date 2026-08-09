@@ -382,14 +382,27 @@ export function matrixLevel(state: ViewState): 'bin' | 'contig' {
 }
 
 /**
- * `level` as the overview reads it: contigs unless the state says genomes.
+ * `level` as the whole-file view of a metagenome reads it: contigs unless the
+ * state says otherwise.
  *
  * Contig × contig is the default for the reason {@link ViewState.level}'s other
- * accessor exists at all — the two levels are different accumulations of one
+ * accessor exists at all — the two scans are different accumulations of one
  * pass, and the contig picture is the one that contains the other.
+ *
+ * `bin` is the third of the three and the only one that is not a scan for pairs
+ * of *units*: it is the pooled whole-file read `WholeView` already makes, which
+ * is the same picture as ticking every genome in the table. It is a level of
+ * this view rather than a view of its own because it answers the same question
+ * on a third axis, and because a reader who switched away from contigs has to
+ * find the way back in the control they left it in — so the shell routes on it
+ * (`Session.mountOverview`) instead of the reader navigating.
+ *
+ * Which makes this the one place `level` is read whole: every value of the key
+ * means something here, so nothing is folded onto a default.
  */
-export function overviewLevel(state: ViewState): 'genome' | 'contig' {
-  return state.level === 'genome' ? 'genome' : 'contig'
+export function overviewLevel(state: ViewState): 'genome' | 'contig' | 'bin' {
+  if (state.level === 'genome') return 'genome'
+  return state.level === 'bin' ? 'bin' : 'contig'
 }
 
 /** What a `selection` view is of: several genomes, or several contigs. */
