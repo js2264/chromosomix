@@ -1532,6 +1532,25 @@ from the diagonal is the whole of the y axis, so a block without one has no pict
 rather than hidden** where this is false, so a reader looking at a whole metagenome can see that the
 control exists and find out what it wants of them.
 
+**And wherever it is offered it is on**, which is `flip` being absent meaning turned and only an
+explicit `false` meaning square (§11). A block with a diagonal is a band along a genomic axis with
+tracks under it — that is what a contact map is *for* at this scale, and it is what every published
+figure of one looks like; the square is the special view, wanted for looking at the far corners and
+for reading a comparison across the diagonal. The hash of an ordinary view stays short because only
+the reader's "no" is written down, and a link with no `flip` in it opens the way this viewer opens.
+
+A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
+metagenome a reader passed through switch the turn off for every map after it, which is a preference
+edited by a navigation.
+
+**The turn survives a navigation**, and that is the other half of it being a preference rather than a
+fact about the block. Opening a region by dragging a box on the map, or clicking through Chromosomes
+to another sequence, builds a fresh state; left to that, the band a reader had just shaped came back
+as a square every time they went to look at something in it — which is the gesture a turned map is
+for. It is carried across a navigation of the same file exactly as the deck and the second file are
+(`READING_KEYS`, beside §16's `COMPANION_KEYS`), with the same exception: a state that has said
+`false` is believed.
+
 **A turned map is a rectangle of a size the reader chose.** Its height and its width are set by
 dragging its own edges — a bar along the top, and one at each end — and neither moves when the map is
 zoomed. What the zoom changes is what is *inside* the box: more or less genome across, more or less
@@ -1566,11 +1585,11 @@ from does not change when the cut does, so the measurement survives the reshape.
 re-cut, which is what a general-purpose "the matrix changed" invalidation does, spent four fifths of
 every zoom on a turned map proving the colours were the colours they already were.
 
-The box opens at **a third of its own width**, which is the shape of the figures this is a viewer
-for. A whole triangle is exactly twice as wide as it is tall — that is what the half-bin lattice
-makes it — so a third shows two thirds of the separation the block holds at the fitted zoom: enough
-band for a domain to be a triangle rather than a smear, and short enough that the picture still
-reads as one strip along the genome rather than as a map. A fraction of the width rather than a
+The box opens **as wide as the panel allows and a quarter as tall**, which is the shape of the
+figures this is a viewer for. A whole triangle is exactly twice as wide as it is tall — that is what
+the half-bin lattice makes it — so a quarter shows half the separation the block holds at the fitted
+zoom: enough band for a domain to be a triangle rather than a smear, and short enough that the
+picture still reads as one strip along the genome rather than as a map. A fraction of the width rather than a
 distance in base pairs, deliberately: a default of "500 kb" is most of a bacterial chromosome and a
 rounding error on a human one, and this viewer opens on both.
 
@@ -1602,13 +1621,17 @@ either answer is wrong half the time. The edge under the pointer stays under it 
 out by the same amount — and the tracks follow, since a stack takes its width from the map's canvas
 and a box that narrowed only the map would leave every track pointing at the wrong base pair.
 
-**The map and its tracks are centred as a group**, in the room a square map would have taken. The
-panel therefore does not resize when the reader flips, and a track added below re-centres the map
-above it rather than pushing it up. There is nothing to align to the bottom any more: a band fills
-its box by construction, so the diagonal is on the box's own floor at every zoom — and there is no
-vertical pan at all, because a band dragged off its own diagonal has lost the axis it is measured
-from. The mirrored half of a comparison stands on the box's ceiling, by the same rule read the other
-way up.
+**No height is reserved for the square**, and that is a decision that changed with the default. The
+panel used to be held open at the height a square map would have taken so that flipping did not
+resize it; a turned map is now what a block with a diagonal opens as, so reserving a square's height
+means every ordinary view carries a screenful of paper above a band a quarter as tall — room kept for
+the exception. The panel is as tall as its picture, and it is *squaring* the map that grows it. The
+assembly is still centred across the column, where the box really can be narrower than the room.
+
+There is nothing to align to the bottom either: a band fills its box by construction, so the diagonal
+is on the box's own floor at every zoom — and there is no vertical pan at all, because a band dragged
+off its own diagonal has lost the axis it is measured from. The mirrored half of a comparison stands
+on the box's ceiling, by the same rule read the other way up.
 
 ### 17.3 The turn is the deck's, not one map's
 

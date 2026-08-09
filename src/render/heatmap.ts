@@ -1585,9 +1585,36 @@ export class HeatmapView {
     this.changed()
   }
 
+  /**
+   * The same grid, new numbers — which means the array must be the same length.
+   *
+   * One caller can hand over another: a **turned** map, whose band is re-cut
+   * behind the picture as the zoom moves and is therefore not always as deep as
+   * the box would cut it now. A derivation computed at one depth and swapped
+   * into a grid of another is read with the wrong stride — rows of the wrong
+   * separation, and a tail of memory nothing wrote under them — and it draws as
+   * a solid block of whatever the scale's floor is, which is a very convincing
+   * picture of data that does not exist.
+   *
+   * So a different length is taken at its word rather than trusted: a band's
+   * width is a property of the block and only its rows can change, so the row
+   * count follows from the length and this is a {@link reshape}. The panel does
+   * ask for the right shape (`MatrixPanel.rederive`); this is what makes it not
+   * matter if some later caller forgets.
+   */
   setValues(values: Float32Array, gauge?: Float32Array): void {
     if (this.matrix === null) return
-    this.matrix = { ...this.matrix, values }
+    const held = this.matrix
+    if (values.length !== held.nrows * held.ncols) {
+      const nrows = Math.max(1, Math.floor(values.length / Math.max(1, held.ncols)))
+      this.reshape({ ...held, nrows, values, rowExtent: [0, nrows] })
+      if (gauge !== undefined && this.gauge !== null) {
+        this.gauge = { ...this.gauge, values: gauge }
+        this.gaugeRange = null
+      }
+      return
+    }
+    this.matrix = { ...held, values }
     this.dirtyRaster = true
     // The pooling is a function of the values, so it cannot survive them. The
     // auto range hangs off it and goes with it, which is what re-measures a

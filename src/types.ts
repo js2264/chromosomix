@@ -369,11 +369,20 @@ export interface ViewState {
    * Whether the map is turned 45° — position along the bottom, distance from the
    * diagonal up the side (`render/rotate.ts`).
    *
+   * **Absent means turned**, and only an explicit `false` is a square map. That
+   * asymmetry is the default expressed in a key that has to keep round-tripping:
+   * a band along a genomic axis is what a contact map is *for* on a block that
+   * has a diagonal, and the square is the thing a reader asks for. Written down
+   * only when they do, so the hash of an ordinary view stays short and a link
+   * with no `flip` in it opens the way this viewer opens.
+   *
    * Part of what is being looked at rather than how it is shaded, so §11's rule
    * applies and a link carries it. Ignored by any view whose block has no
    * diagonal to measure from, which is what `isTurnable` decides and what the
    * toggle is greyed by: a hash naming it on a whole-metagenome map lands on the
-   * square, the way `op` lands on one file.
+   * square, the way `op` lands on one file — and quietly, without writing the
+   * refusal back, or a reader who passed through a metagenome would find the
+   * turn switched off on the next map that could take one.
    */
   flip?: boolean
   /**

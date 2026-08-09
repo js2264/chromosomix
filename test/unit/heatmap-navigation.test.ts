@@ -781,6 +781,33 @@ describe('fitting a band', () => {
   })
 
   /**
+   * A derivation is *the same grid with new numbers*, and the length is what
+   * says so.
+   *
+   * The one caller that can break that is a turned map: its band is re-cut
+   * behind the picture as the zoom moves, so a derivation computed for the depth
+   * the box wants now can arrive at a grid of another depth. Swapped in blind,
+   * it is read with the grid's stride — every row a different separation from
+   * the one it is drawn at, and a tail of memory nothing wrote beneath them,
+   * which colours as a solid block of the scale's floor. A convincing picture of
+   * data that does not exist is the worst thing this class can produce, so a
+   * length that does not fit is treated as the reshape it is.
+   */
+  it('reshapes rather than swaps when the values are a different shape', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setFitAxis('cols')
+    heatmap.setAnchor('end')
+    heatmap.setMatrix(band(60, 200), [])
+    const deeper = band(240, 200)
+    heatmap.setValues(deeper.values)
+    expect(heatmap.block?.nrows).toBe(240)
+    expect(heatmap.block?.values.length).toBe(240 * 200)
+    // …and it is still a band standing on its own diagonal.
+    const plot = heatmap.plotRect
+    expect(heatmap.cellAt(plot.x + 1, plot.y + plot.height - 1)?.row).toBe(239)
+  })
+
+  /**
    * **A band deeper than the box is the same picture**, and this is the licence
    * for the panel not to re-cut one on the way in. Zooming in asks for less
    * distance at every notch; re-cutting for each of them is a rotation and a

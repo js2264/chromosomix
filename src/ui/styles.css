@@ -2286,15 +2286,22 @@ p {
    lane canvases size themselves to the map's canvas, so a rule that narrowed
    only the map would leave every track pointing at the wrong base pair.
 
-   `min-height` on the grid, not on the wrap: the grid holds the map *and* its
-   stacks, and reserving the height a square map would have taken is what stops
-   the panel resizing when the reader flips. `align-content` and
-   `justify-content` then centre the whole assembly in that reserved space —
-   rows as a block, so a track added below re-centres the map above it rather
-   than pushing it up. */
+   **No height is reserved**, and that is a decision that changed with the
+   default. The grid used to be held open at the height a square map would have
+   taken, so that flipping did not resize the panel; a turned map is now what a
+   block with a diagonal opens as, and reserving a square's height for it means
+   every ordinary view carries a screenful of paper above a band a quarter as
+   tall — space kept for the exception. So the panel is as tall as its picture,
+   and it is *squaring* the map that grows it. `justify-content` still centres
+   the assembly across, where the box really can be narrower than the column.
+
+   The ceiling is a `max-height` on the wrap instead, and it is the same number:
+   a band taller than the height a square map would have claimed has stopped
+   being a band, and it is also the number `MatrixPanel.measureRoom` reads back
+   to bound the handle — which is why it is a *length* on an element rather than
+   the custom property it is written from. A custom property comes back from
+   `getComputedStyle` as the `clamp()` that was written, unresolved. */
 .panel-grid.is-turned {
-  min-height: var(--map-budget);
-  align-content: center;
   justify-content: center;
 }
 
@@ -2302,6 +2309,7 @@ p {
   aspect-ratio: auto;
   width: var(--turn-width);
   height: var(--turn-height);
+  max-height: var(--map-budget);
 }
 
 .heatmap-wrap {

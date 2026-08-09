@@ -44,14 +44,14 @@ const EMPTY: TurnBox = { width: null, height: null }
  * How tall a turned band is drawn before anybody says otherwise, against its own
  * width.
  *
- * A third, which is the shape of the figures this is a viewer for. A whole
+ * A quarter, which is the shape of the figures this is a viewer for. A whole
  * triangle is exactly twice as wide as it is tall — that is what the half-bin
- * lattice makes it — so a box a third of its own width shows two thirds of the
+ * lattice makes it — so a box a quarter of its own width shows half the
  * separation the block holds at the fitted zoom: enough band that a domain has
  * room to be a triangle rather than a smear, and short enough that the picture
  * still reads as one strip along the genome rather than as a map.
  */
-export const DEFAULT_TURN_ASPECT = 1 / 3
+export const DEFAULT_TURN_ASPECT = 1 / 4
 
 /**
  * The smallest box worth drawing in, in CSS pixels.

@@ -336,3 +336,41 @@ describe('differsOnlyInPresentation', () => {
     expect(differsOnlyInPresentation(base, { ...base, flip: true })).toBe(true)
   })
 })
+
+/**
+ * The turn, whose key is a **refusal** rather than a setting.
+ *
+ * A block with a diagonal opens turned (§17.2), so the state that says nothing
+ * says "turned" — and the only thing worth writing to a link is the reader
+ * having asked for the square instead. Which puts two things on this key that
+ * an ordinary boolean does not have to survive: `false` has to round-trip as
+ * `false` rather than collapsing into the absence that means the opposite, and
+ * "nothing said" has to stay nothing rather than being helpfully filled in.
+ */
+describe('the turn in the hash', () => {
+  it('says nothing at all for the ordinary case', () => {
+    const state: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
+    expect(serialiseViewState(state)).not.toContain('flip')
+    expect(parseViewState(serialiseViewState(state)).flip).toBeUndefined()
+  })
+
+  it('carries a refusal, which is the whole reason the key exists', () => {
+    const state: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: false }
+    expect(serialiseViewState(state)).toContain('flip=false')
+    expect(parseViewState(serialiseViewState(state))).toEqual(state)
+  })
+
+  it('reads the older spelling of a turn that was asked for', () => {
+    // `flip=1` and `flip=true` are what the key meant when it was a setting
+    // rather than a refusal; a link written then still means turned now.
+    expect(parseViewState('uri=a.cool&flip=1').flip).toBe(true)
+    expect(parseViewState('uri=a.cool&flip=true').flip).toBe(true)
+    expect(parseViewState('uri=a.cool&flip=0').flip).toBe(false)
+  })
+
+  it('is a presentation key, so moving it does not re-read the block', () => {
+    const square: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: false }
+    const turned: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
+    expect(differsOnlyInPresentation(square, turned)).toBe(true)
+  })
+})

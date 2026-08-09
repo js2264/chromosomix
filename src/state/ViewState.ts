@@ -323,6 +323,28 @@ export const DECK_KEYS = ['maps'] as const
 export const COMPANION_KEYS = ['maps', 'uri2'] as const
 
 /**
+ * The keys that say **how the reader reads a map**, and outlive a navigation.
+ *
+ * The turn is not a fact about the block. It is the shape of the picture this
+ * reader wants contact maps drawn in — the same kind of answer as the crosshair
+ * or the colormap, and the only reason it is in the state at all rather than in
+ * `ui/plotOptions.ts` is that it changes *what is read* and therefore has to be
+ * in a link (§11).
+ *
+ * So a navigation must not take it away. Opening a region by dragging a box on
+ * the map, or clicking through Chromosomes to another sequence, arrives with a
+ * fresh state — and left to that, the band a reader had just shaped came back
+ * as a square every time they went to look at something in it. Which is the
+ * gesture a turned map is *for*: the picture is the near-diagonal band, and
+ * everything anybody does with one is to go somewhere else along it.
+ *
+ * Carried by {@link Session.navigate} beside {@link COMPANION_KEYS}, on the same
+ * rule and with the same exception: a state that has said something about the
+ * key is believed, including having said `false`.
+ */
+export const READING_KEYS = ['flip'] as const
+
+/**
  * `true` when two states select the same block and differ only in how it is
  * painted, what arithmetic is done to it, or what is drawn beside it — the
  * things a mounted view can be *told*, rather than rebuilt for.
