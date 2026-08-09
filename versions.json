@@ -1,6 +1,13 @@
 {
-  "latest": "0cb059a",
+  "latest": "7527bbf",
   "versions": [
+    {
+      "commit": "7527bbf",
+      "version": "0.9.0",
+      "date": "2026-08-09T16:28:37+02:00",
+      "subject": "feat: the wheel slides sideways, `v` walks three pictures, and a hidden track stays hidden",
+      "tag": ""
+    },
     {
       "commit": "0cb059a",
       "version": "0.9.0",
