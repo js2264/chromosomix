@@ -622,14 +622,26 @@ whichever view draws the answer. Only the last two are accumulations over unit p
 is the pooled whole-file read (§9), and on a metagenome it is the same picture as selecting every
 row of the genomes table.
 
-`bin × bin` is usually the one to read. A contig cell sums a rectangle of `length × length`, and a
+**`bin × bin` is the default.** A contig cell sums a rectangle of `length × length`, and a
 metagenome's contigs span several orders of magnitude in length, so the contig axis spends its width
 on the shortest sequences and its colour range on the longest: a block is as wide as a genome is
 *fragmented* rather than as long as it is. Measured on the 48-MAG mock community, 62% of the contig
 axis goes to contigs under 5 kb holding 4% of the sequence, one badly-assembled MAG takes 28% of it
 for 4.5% of the assembly, and a third of the diagonal comes out empty. Bin cells are all the same
-size, so the scale means one thing everywhere. The contig level stays, and stays the default entry
-point, because "is this bin one organism?" is a question only it answers.
+area, so one scale fits the whole picture — and landing on the legible level is worth more than
+landing on the one that contains the others. The contig level stays, because "is this bin one
+organism?" is a question only it answers. Where a sidecar edge list is advertised the default gives
+way to `genome × genome`: that one is a small download rather than a pass over the file, so it is
+the cheapest thing to land on.
+
+**All three ask first, and all three are read by genome.** Being the default makes the gate
+mandatory rather than optional: the rule is not "warn when it looks expensive" but that a pass over
+every pixel never starts on its own, and a threshold would make it hold on large files and lapse on
+small ones. So the bin level is gated whatever the file declares `nnz` to be, behind the same
+sentence and the same button as the scans. It is also labelled and divided by **genome** rather than
+by contig — the axis is the whole metagenome at every level, 2,082 contig hairlines over 48 blocks
+are a grey wash, and an axis label that names a genome opens that genome. A *selection* is not
+affected: its axis names what was ticked, which is the answer to a different question.
 
 ### 7.4 `__unbinned__` — never displayable
 
