@@ -198,19 +198,16 @@ const COMPARE_OP_LABELS: Record<CompareOp, string> = {
 }
 
 /**
- * The two faces of the turn toggle.
+ * The two faces of the turn toggle: **the shape it will give you**.
  *
- * A quarter-circle arrow, pointing the way the picture is about to go rather
- * than the way it already went: left while the map is square, because pressing
- * it turns the map anticlockwise onto its diagonal, and right once it is turned,
- * because pressing it now brings the square back. It is the undo/redo pair's own
- * geometry, which is exactly the relationship the two states are in.
- *
- * A `triangle` was here before, and it was the wrong kind of icon: it drew the
- * *result* — a domain standing on the axis — which says nothing about which
- * direction the control will move things in and looks identical on and off.
+ * A triangle while the map is square, because pressing it produces one — a
+ * domain standing on a genomic axis is what a turned map looks like — and a
+ * square once it is turned, because pressing it now brings that back. The mark
+ * is the destination rather than the state, which is the one reading that never
+ * needs a second glance: a toggle showing what you already have makes you check
+ * the picture to find out what the button does.
  */
-const TURN_ICONS = { off: 'undo-2', on: 'redo-2' } as const
+const TURN_ICONS = { off: 'triangle', on: 'square' } as const
 
 const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
@@ -3431,7 +3428,7 @@ export class MatrixPanel {
     this.viewNote.textContent = ''
     this.exportName = title === '' ? this.exportName : title
     this.titleNode.textContent = title
-    const { dense, presentationMoved, turned } = this.derive(data, second)
+    const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
     this.turned = turned
     // Two legends for two files' counts — and under a ratio or a difference
     // there are no longer two sets of counts in the square but one derived
@@ -3462,7 +3459,11 @@ export class MatrixPanel {
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
     // being counted in half bins.
-    this.heatmap.setMatrix(dense, turned === null ? separatorsFor(data) : { rows: [], cols: [] })
+    this.heatmap.setMatrix(
+      dense,
+      turned === null ? separatorsFor(data) : { rows: [], cols: [] },
+      gauge,
+    )
     // A cell is a bin, so a block's span in cells is its length in base pairs:
     // the contigs worth naming in a 300-contig genome are the long ones, and
     // they are named however many short ones surround them. Above bin level a
@@ -3589,7 +3590,22 @@ export class MatrixPanel {
   private derive(
     data: MatrixResult,
     second: MatrixResult | undefined,
-  ): { dense: DenseMatrix; presentationMoved: boolean; turned: RotatedBlock | null } {
+  ): {
+    dense: DenseMatrix
+    /**
+     * The square block the band was cut out of, or `undefined` where the picture
+     * *is* the whole read.
+     *
+     * What the colour range is measured from (`render/heatmap.ts`'s
+     * {@link HeatmapView.autoRange}). A band holds the near-diagonal separations
+     * and drops the rest, so a range measured on it is a range measured on a
+     * crop — and on a diverging field the dropped separations are exactly where
+     * the extremes live, which halved the scale the moment the map was turned.
+     */
+    gauge?: DenseMatrix
+    presentationMoved: boolean
+    turned: RotatedBlock | null
+  } {
     // Every derivation is applied to each file *separately* and before the two
     // are put together, because each is a statement about one library: file 2's
     // coverage bias is file 2's, and a baseline measured across a ratio is a
@@ -3678,7 +3694,12 @@ export class MatrixPanel {
         colExtent: [turned.originBin * 2, turned.originBin * 2 + turned.ncols],
       }
     }
-    this.drawn = out.values
+    // The **square** block's values, even under a turn, because the one reader
+    // of this indexes it by square row and column ({@link derivedReading}). It
+    // used to be `out`, which on a turned map is a band of a different shape
+    // read with the square's stride: the ratio in the tooltip was a real number
+    // from a real cell, and not the cell under the pointer.
+    this.drawn = dense.values
     // The strip is the only place the numbers beside it are named, and a ratio
     // drawn under a caption reading `count` is worse than one with no caption.
     // `count` where nothing was derived, rather than `deriveBlock`'s own word
@@ -3687,7 +3708,7 @@ export class MatrixPanel {
     // reworded by a feature it is not using.
     const barLabel = this.derivedLabel() ?? this.derived?.label ?? 'counts'
     this.units = barLabel === 'counts' ? '' : barLabel
-    return { dense: out, presentationMoved, turned }
+    return { dense: out, ...(turned === null ? {} : { gauge: dense }), presentationMoved, turned }
   }
 
   /**
@@ -3948,9 +3969,9 @@ export class MatrixPanel {
       this.setData(data, this.lastTitle, this.second?.data)
       return
     }
-    const { dense, presentationMoved } = this.derive(data, this.second?.data)
+    const { dense, gauge, presentationMoved } = this.derive(data, this.second?.data)
     this.syncLegendSlots()
-    this.heatmap.setValues(dense.values)
+    this.heatmap.setValues(dense.values, gauge?.values)
     // The colourbar is a function of the scale *and* of what the numbers are, and
     // neither the transform nor the clip need have moved for a ratio to want a
     // different bar from a count.
@@ -4047,11 +4068,13 @@ export class MatrixPanel {
   /**
    * What the derived field says at one cell, or `null` where nothing is derived.
    *
-   * Read out of the matrix the heatmap is actually drawing rather than
-   * recomputed, so the number under the pointer is by construction the number
-   * under the colour. A ratio is written as a multiple (`1.8×`) rather than as
-   * its logarithm: the log is how it is *drawn*, because that is what centres
-   * the scale, and it is not how anybody says it.
+   * Read out of the block the heatmap draws *from* rather than recomputed, so
+   * the number under the pointer is by construction the number under the
+   * colour. In square-block coordinates, which is what every caller has after
+   * {@link squareCell} and what a turned band cannot be indexed by. A ratio is
+   * written as a multiple (`1.8×`) rather than as its logarithm: the log is how
+   * it is *drawn*, because that is what centres the scale, and it is not how
+   * anybody says it.
    */
   private derivedReading(row: number, col: number): string | null {
     const label = this.derivedLabel()

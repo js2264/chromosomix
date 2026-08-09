@@ -345,12 +345,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   worth, and the overlays, which change what is drawn over it. They were an icon
   button that looked identical before and after it had been pressed, and a
   tickbox beside it that made the same kind of setting look like a different kind
-  of thing. Both are now lit the way every overlay toggle is. The turn's mark is a
-  quarter-circle arrow pointing the way the picture is about to go — left while
-  the map is square, right once it is turned — rather than the triangle it used to
-  draw, which was a picture of the *result* and looked the same either way. O/E's
-  mark is the two letters, because a ratio has no shape and the nearest drawn
-  thing is a division sign that would say "divide" without saying by what.
+  of thing. Both are now lit the way every overlay toggle is. The turn's mark is
+  **the shape it will give you** — a triangle while the map is square, a square
+  once it is turned — rather than a mark for the state it is in, which is the one
+  reading that needs a second glance at the picture to interpret. O/E's mark is
+  the two letters, because a ratio has no shape and the nearest drawn thing is a
+  division sign that would say "divide" without saying by what.
 
 - **No drawn pointer where a guide line is already pointing.** The crosshair is
   the better instrument of the two — it is drawn at the cell the app has actually
@@ -499,6 +499,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   names that stretch however the hand travelled. The diagonal lock goes with
   them: on a turned map the diagonal is the bottom edge of the picture, so
   snapping a corner to it would be snapping to the frame.
+
+- **Turning the map no longer changes its colours.** The automatic range is a
+  property of the block that was read — that is already the rule for a square
+  map, where neither a pan nor a zoom re-measures it — and a band broke it by
+  being a *crop*: it keeps the near-diagonal separations and drops the rest, and
+  the ones it drops are where the extremes live. On an O/E map the effect was
+  dramatic, the range being the 99th percentile of the departure from neutral and
+  the far separations being where a small count over a small expectation produces
+  the largest departures there are: turning the map roughly halved its range, and
+  dragging the depth handle moved it again on every pixel. The band is now scaled
+  by the block it was cut from, so the turn is what it claims to be — a change of
+  geometry and nothing else. (Not, as it looks, the square counting both of its
+  triangles: a percentile does not care how many times each value appears, so
+  that costs nothing and there was nothing to halve. And §7.1 pins the square's
+  rule to `metacooler show`'s to the bit, so the two could only ever be made to
+  agree in this direction.)
+
+- **The O/E reading in the tooltip on a turned map.** It indexed the band with
+  the square's row stride, so the multiple under the pointer was a real number
+  from a real cell and not from the cell being pointed at.
 
 - **O/E leaves an unobserved cell as paper.** Zero over anything is zero, and on
   a scale centred at 1 that is the far end of the ramp — so an O/E map of a

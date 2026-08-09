@@ -630,3 +630,76 @@ describe('a band, not a square', () => {
     expect(asked).toEqual(['rows'])
   })
 })
+
+/**
+ * The automatic colour range follows the **block that was read**, not the part
+ * of it on screen.
+ *
+ * Already true of a square map — the range is measured once per read, and a pan
+ * or a zoom does not move it — and a turned band is where it stopped being true:
+ * a band is a *crop*, holding the near-diagonal separations and dropping the
+ * rest, so measuring it re-scaled the picture the moment the map was turned and
+ * again on every drag of the depth handle. On a diverging field the dropped
+ * separations are exactly where the extremes live, which is why the range
+ * roughly halved. A turn is a change of geometry; it must not recolour anything.
+ *
+ * Stated over a crop of rows rather than over a real rotation, because the
+ * mechanism is the renderer's and has nothing to do with the geometry that
+ * produced the crop: a quarter of this block carries the only large values in
+ * it, and the picture drawn is three rows that carry none.
+ */
+describe('what the auto range is measured on', () => {
+  const N = 64
+  /** A block whose last quarter holds every large value in it. */
+  function withExtremes(): DenseMatrix {
+    const values = new Float32Array(N * N).fill(1)
+    values.fill(1000, (N - N / 4) * N)
+    return { nrows: N, ncols: N, values, rowExtent: [0, N], colExtent: [0, N] }
+  }
+
+  /** The first three rows of it: a crop with none of them in it. */
+  function head(square: DenseMatrix): DenseMatrix {
+    return {
+      nrows: 3,
+      ncols: N,
+      values: square.values.slice(0, 3 * N),
+      rowExtent: [0, 3],
+      colExtent: [0, N],
+    }
+  }
+
+  function vmaxOf(view: HeatmapView): number {
+    view.draw()
+    return view.effectiveScale.vmax
+  }
+
+  it('takes the crop\u2019s own range when nothing says otherwise', () => {
+    const square = withExtremes()
+    const whole = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    whole.setMatrix(square, [])
+    const crop = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    crop.setMatrix(head(square), [])
+    expect(vmaxOf(whole)).toBeCloseTo(Math.log1p(1000), 4)
+    // The crop holds none of the large values, so on its own it scales to the
+    // background — a different picture of the very same cells.
+    expect(vmaxOf(crop)).toBeCloseTo(Math.log1p(1), 4)
+  })
+
+  it('takes the gauge\u2019s range when the picture is a crop of it', () => {
+    const square = withExtremes()
+    const crop = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    crop.setMatrix(head(square), [], square)
+    expect(vmaxOf(crop)).toBeCloseTo(Math.log1p(1000), 4)
+  })
+
+  it('re-measures the gauge when the values under it are recomputed', () => {
+    const square = withExtremes()
+    const view = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    view.setMatrix(head(square), [], square)
+    expect(vmaxOf(view)).toBeCloseTo(Math.log1p(1000), 4)
+    // A derivation recomputes both the picture and the block it was cut from;
+    // handing over only the first would scale a ratio by the counts\u2019 range.
+    view.setValues(new Float32Array(3 * N).fill(1), new Float32Array(N * N).fill(1))
+    expect(vmaxOf(view)).toBeCloseTo(Math.log1p(1), 4)
+  })
+})

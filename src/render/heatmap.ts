@@ -304,27 +304,30 @@ export function poolDisplay(
  * moves both: a `vmin` pinned at `0` beside an auto `vmax` is what made `log10`
  * of a balanced matrix come out blank.
  */
+export function autoRangeOfPooled(pooled: PooledDisplay): ValueRange {
+  // Memoised on the pooled block, because that is what it is a property of. A
+  // colormap change cannot move it, and recomputing it there was the dominant
+  // cost of the most common colour interaction there is.
+  //
+  // Symmetric about neutral where there is one. Reading a diverging field with
+  // the ordinary rule puts the colour that means "these agree" at an arbitrary
+  // point in the ramp, so a map of two identical files comes out uniformly
+  // coloured rather than uniformly neutral.
+  pooled.autoRange ??=
+    pooled.centre === null
+      ? autoRangeOfDisplay(pooled.values, pooled.transform, pooled.balanced)
+      : autoSymmetricRange(pooled.values, pooled.centre)
+  return pooled.autoRange
+}
+
 export function colorize(
   pooled: PooledDisplay,
   scale: ColorScale,
   into?: Uint8ClampedArray,
 ): Raster {
   const { width, height, values } = pooled
-  let auto: ValueRange | null = null
-  if (!Number.isFinite(scale.vmin) || !Number.isFinite(scale.vmax)) {
-    // Memoised on the pooled block, because that is what it is a property of.
-    // A colormap change cannot move it, and recomputing it there was the
-    // dominant cost of the most common colour interaction there is.
-    // Symmetric about neutral where there is one. Reading a diverging field
-    // with the ordinary rule puts the colour that means "these agree" at an
-    // arbitrary point in the ramp, so a map of two identical files comes out
-    // uniformly coloured rather than uniformly neutral.
-    pooled.autoRange ??=
-      pooled.centre === null
-        ? autoRangeOfDisplay(values, pooled.transform, pooled.balanced)
-        : autoSymmetricRange(values, pooled.centre)
-    auto = pooled.autoRange
-  }
+  const auto: ValueRange | null =
+    Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax) ? null : autoRangeOfPooled(pooled)
   const vmin = Number.isFinite(scale.vmin) ? scale.vmin : (auto?.vmin ?? 0)
   const vmax = Number.isFinite(scale.vmax) ? scale.vmax : (auto?.vmax ?? 1)
   const span = vmax - vmin
@@ -1138,6 +1141,23 @@ export class HeatmapView {
    * again. Invalidated by a new matrix, a new transform, or balancing.
    */
   private pooled: PooledDisplay | null = null
+  /**
+   * The block the **auto range** is measured from, when that is not the block on
+   * screen; see {@link setMatrix}'s `gauge`.
+   */
+  private gauge: DenseMatrix | null = null
+  /**
+   * What measuring it produced, and the colour state it was measured under.
+   *
+   * The two numbers are kept and the array they came from is not. Pooling the
+   * gauge allocates a second raster-sized `Float32Array` — up to the same tens
+   * of megabytes the drawn one takes — and every use of it is over the moment
+   * the percentile has been read, so holding it would double the panel's
+   * steady-state cost to cache a pair of numbers.
+   */
+  private gaugeRange:
+    | { transform: Transform; balanced: boolean; centre: number | null; range: ValueRange }
+    | null = null
   private offscreen: RasterCanvas | null = null
   /** Handle of a frame this view scheduled for itself; see {@link changed}. */
   private selfFrame = 0
@@ -1450,8 +1470,16 @@ export class HeatmapView {
    *
    * @param separators Either a {@link SeparatorSet}, or a single array used for
    * both axes — the symmetric case, which is every view except a genome pair.
+   * @param gauge The block the automatic colour range is measured from, when
+   * `matrix` is a *crop* of what was read rather than the whole of it — a turned
+   * band (§17). Omitted, the range is measured from the block on screen, which
+   * is the same thing wherever nothing was cropped. See {@link autoRange}.
    */
-  setMatrix(matrix: DenseMatrix, separators: Separator[] | SeparatorSet = []): void {
+  setMatrix(
+    matrix: DenseMatrix,
+    separators: Separator[] | SeparatorSet = [],
+    gauge?: DenseMatrix,
+  ): void {
     this.matrix = matrix
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
@@ -1463,6 +1491,8 @@ export class HeatmapView {
     this.axisCoords = { rows: null, cols: null }
     this.dirtyRaster = true
     this.pooled = null
+    this.gauge = gauge ?? null
+    this.gaugeRange = null
     this.hoverCell = null
     this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
     this.colScale.setFull([0, Math.max(1, matrix.ncols)])
@@ -1486,7 +1516,7 @@ export class HeatmapView {
    * checks, because the only caller is the one that just recomputed this array
    * from the block this object is holding.
    */
-  setValues(values: Float32Array): void {
+  setValues(values: Float32Array, gauge?: Float32Array): void {
     if (this.matrix === null) return
     this.matrix = { ...this.matrix, values }
     this.dirtyRaster = true
@@ -1494,6 +1524,11 @@ export class HeatmapView {
     // auto range hangs off it and goes with it, which is what re-measures a
     // ratio's scale instead of keeping the counts'.
     this.pooled = null
+    // And so does the gauge's, which is the same arithmetic over the block the
+    // crop came out of: a derivation recomputed on one and not the other would
+    // scale a ratio by the range of the counts it was made from.
+    if (this.gauge !== null && gauge !== undefined) this.gauge = { ...this.gauge, values: gauge }
+    this.gaugeRange = null
     this.changed()
   }
 
@@ -2581,6 +2616,69 @@ export class HeatmapView {
     ctx.restore()
   }
 
+  /**
+   * The colour scale with any automatic bound filled in.
+   *
+   * Resolved here rather than left to {@link colorize} for one reason: the block
+   * the range is measured from is not always the block being coloured. Where
+   * there is no {@link gauge} this is exactly what `colorize` would have worked
+   * out for itself, over the same memoised value.
+   */
+  private resolvedScale(centre: number | null): ColorScale {
+    const scale = this.colorScale
+    if (Number.isFinite(scale.vmin) && Number.isFinite(scale.vmax)) return scale
+    const auto = this.autoRange(centre)
+    return {
+      ...scale,
+      vmin: Number.isFinite(scale.vmin) ? scale.vmin : auto.vmin,
+      vmax: Number.isFinite(scale.vmax) ? scale.vmax : auto.vmax,
+    }
+  }
+
+  /**
+   * The automatic bounds: a property of **the block that was read**, not of the
+   * part of it on screen.
+   *
+   * That is already the rule for a square map — the range is measured once per
+   * read and a pan or a zoom does not move it — and the {@link gauge} is what
+   * extends it to a turned one. A band is a *crop* of the block: it holds the
+   * near-diagonal separations and drops the rest, and on a diverging field the
+   * dropped ones are exactly where the extremes are, so measuring the band
+   * halved the range the moment the map was turned and moved it again on every
+   * drag of the depth handle. A turn is a change of geometry; it must not
+   * recolour the picture.
+   *
+   * The square map's own rule is `metacooler show`'s, to the bit (§7.1), so the
+   * two can only be made to agree in this direction: the band adopts the block's
+   * range, never the other way round.
+   */
+  private autoRange(centre: number | null): ValueRange {
+    const pooled = this.pooled
+    const gauge = this.gauge
+    if (pooled === null) return { vmin: 0, vmax: 1 }
+    if (gauge === null) return autoRangeOfPooled(pooled)
+    const held = this.gaugeRange
+    if (
+      held === null ||
+      held.transform !== pooled.transform ||
+      held.balanced !== pooled.balanced ||
+      held.centre !== centre
+    ) {
+      // Pooled the same way the drawn block is, because the range has to be the
+      // one the square view would show and that one is measured over a *pooled*
+      // raster — above the cap a pooled cell is the brightest of the several it
+      // stands for, which moves a percentile.
+      const measured = poolDisplay(gauge, this.colorScale)
+      this.gaugeRange = {
+        transform: pooled.transform,
+        balanced: pooled.balanced,
+        centre,
+        range: autoRangeOfPooled(measured),
+      }
+    }
+    return (this.gaugeRange as { range: ValueRange }).range
+  }
+
   private rasterizeNow(): void {
     if (this.matrix === null) return
     const balanced = this.colorScale.balanced === true
@@ -2606,7 +2704,7 @@ export class HeatmapView {
     // `Uint8ClampedArray` and a canvas of the same size instead of allocating
     // and orphaning both — ~131 MB of churn per click on a full-size raster,
     // against a budget that is already the tightest thing in the app.
-    const raster = colorize(this.pooled, this.colorScale, this.raster?.data)
+    const raster = colorize(this.pooled, this.resolvedScale(centre), this.raster?.data)
     const reusable =
       this.offscreen !== null &&
       this.offscreen.width === raster.width &&

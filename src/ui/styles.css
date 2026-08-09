@@ -2912,22 +2912,31 @@ p {
 
 /* A toggle whose mark is a word — `O/E`, and nothing else so far.
 
-   Every other button in these rows carries a 15 px icon on a 24-unit grid, and
-   this one has to occupy the same square: a ratio has no shape to draw, the
-   nearest drawn thing being a division sign that would say "divide" without
-   saying by what, so the field is labelled with the two letters every paper
-   calls it by. The size and the weight are chosen to sit on the icons' optical
-   line rather than to be readable prose — it is a mark that happens to be
-   letters. `1` on the line height so the glyphs centre in the same box the SVGs
-   do; without it the row's baseline steps down by a pixel at this button. */
+   Every other button in these rows carries a 15 px icon, and this one has to be
+   exactly as tall: a ratio has no shape to draw, the nearest drawn thing being a
+   division sign that would say "divide" without saying by what, so the field is
+   labelled with the two letters every paper calls it by. But an inline run of
+   text is as tall as its font wants to be, so beside a 15 px SVG it made its own
+   button a different height and the row went ragged.
+
+   Hence the fixed 15 px box and the flex centring: the content of this button is
+   the same size as the content of the one next to it, so the padding, the border
+   and the height all follow. `1` on the line height for the same reason — the
+   glyphs centre inside that box rather than dragging it taller. The width is
+   free to grow past 15 px, because `O/E` is three characters and cramming them
+   into a square would be trading legibility for a symmetry nobody is measuring.
+   The size and weight are chosen to sit on the icons' optical line rather than
+   to read as prose: it is a mark that happens to be letters. */
 .btn-word-text {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
   min-width: 15px;
   font-size: 0.66rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
-  text-align: center;
 }
 
 .checkbox {
