@@ -83,10 +83,13 @@ import {
 } from '../render/derive'
 import {
   BIN_FRACTION,
+  anchorColumns,
+  anchorRays,
   binsForColumns,
   cellAt,
   isTurnable,
   rotateBlock,
+  rowForSeparation,
   separationCoords,
   separationForRows,
   turnDepthFor,
@@ -219,12 +222,14 @@ const TURN_HINT =
  * How tall a turned band is drawn before anybody says otherwise, against its own
  * width.
  *
- * An eighth. A whole triangle is exactly twice as wide as it is tall — that is
- * what the half-bin lattice makes it — so a box an eighth of its width shows a
- * quarter of the block at the fitted zoom, which is the fraction §17.2 has
- * always opened at, restated in the units the box is now measured in.
+ * A third, which is the shape of the figures this is a viewer for. A whole
+ * triangle is exactly twice as wide as it is tall — that is what the half-bin
+ * lattice makes it — so a box a third of its own width shows two thirds of the
+ * separation the block holds at the fitted zoom: enough band that a domain has
+ * room to be a triangle rather than a smear, and short enough that the picture
+ * still reads as one strip along the genome rather than as a map.
  */
-const DEFAULT_TURN_ASPECT = 1 / 8
+const DEFAULT_TURN_ASPECT = 1 / 3
 
 /**
  * The smallest box worth drawing in, in CSS pixels.
@@ -769,6 +774,8 @@ export class MatrixPanel {
    */
   private turnHeight: number | null = null
   private turnWidth: number | null = null
+  /** The room the box has, measured once per resize. See {@link measureRoom}. */
+  private room: { width: number; height: number } | null = null
   /**
    * The square block the band is cut from, kept so a re-cut costs one rotation.
    *
@@ -1737,17 +1744,23 @@ export class MatrixPanel {
             // positioning parent, and it is the box that changes when a lane
             // appears — which the plot's own size does not.
             this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+            this.measureRoom()
             this.heatmap.resize()
             this.placeKey()
             this.schedule()
           })
     this.observer?.observe(this.grid)
+    // …and the box the grid is centred in, which is what actually says how much
+    // room a turned map has. The grid is sized by its own contents, so a window
+    // widened around a map that did not change size moves this and not that.
+    this.observer?.observe(body)
     // The canvas has no size until it is in the document; size it once laid out.
     // And no *computed palette* either — the three colours it borrows come from
     // the centre column it is about to be mounted in — so read them again here,
     // rather than trust the fallbacks the constructor had to use.
     requestAnimationFrame(() => {
       this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+      this.measureRoom()
       this.heatmap.setPalette(readCanvasPalette(this.canvas))
       this.heatmap.resize()
       this.placeKey()
@@ -2192,9 +2205,12 @@ export class MatrixPanel {
     // second half of a movement did not travel less than the first — went with
     // the depth it was converting into.
     this.dragTurnEdge(this.depthGrip, {
-      // Up the screen is *more* on an ordinary turned map and less on the
-      // mirrored half, where the band hangs below its own axis.
-      away: () => (this.turned?.direction === 'down' ? -1 : 1),
+      // Out of the box, which on an ordinary turned map is *up* the screen: the
+      // handle is on the top edge, and a hand that drags it towards the top of
+      // the panel is asking for a taller band. Screen y grows the other way,
+      // hence the sign. On the mirrored half the band hangs below its own axis
+      // and the handle is its bottom edge, so out is down.
+      away: () => (this.turned?.direction === 'down' ? 1 : -1),
       axis: 'y',
       held: () => this.turnBox().height,
       // One edge moves, so the box grows by exactly what the hand travelled.
@@ -2616,6 +2632,14 @@ export class MatrixPanel {
    * an arbitrary point read as a cell being pointed at, which is exactly what is
    * not happening.
    *
+   * Turned, that one line becomes a **V** standing on the axis under the
+   * pointer, and it is the same statement rather than a second one: the reader
+   * is naming one place on the genome, and the contacts that place is in are not
+   * a column of a turned picture but the two 45° rays leaving it
+   * (`render/rotate.ts`). A vertical line there would cross the band through
+   * contacts between two *other* places, none of which is the one being pointed
+   * at except where the V's own apex is.
+   *
    * The coordinate needs no conversion: the lane canvases share the map
    * canvas's grid cell on the axis they run along, so a pixel `x` on the bottom
    * stack is the same `x` here. Clipped to the data rather than the plot, so it
@@ -2638,7 +2662,29 @@ export class MatrixPanel {
     ctx.lineWidth = Math.max(1 / dpr, 0.75)
     ctx.globalAlpha = 0.8
     ctx.beginPath()
-    if (guide.edge === 'bottom') {
+    const turned = this.turned
+    if (turned !== null && laneIsHorizontal(guide.edge)) {
+      // The apex is on the diagonal under the pointer — separation zero, which
+      // is the bottom row of an ordinary turned band and the top row of the
+      // mirrored half — and the rays go from there towards the far edge only.
+      // Both ways along the genome, because a place is an anchor of everything
+      // to its left as well as everything to its right.
+      const apex = {
+        col: frame.colScale.toUnit(guide.along - frame.plot.x),
+        row: rowForSeparation(turned, 0) + 0.5,
+      }
+      const far = turned.direction === 'up' ? 0 : turned.nrows
+      for (const ray of anchorRays(apex, [far])) {
+        ctx.moveTo(
+          frame.plot.x + frame.colScale.toPixel(ray.from.col),
+          frame.plot.y + frame.rowScale.toPixel(ray.from.row),
+        )
+        ctx.lineTo(
+          frame.plot.x + frame.colScale.toPixel(ray.to.col),
+          frame.plot.y + frame.rowScale.toPixel(ray.to.row),
+        )
+      }
+    } else if (laneIsHorizontal(guide.edge)) {
       ctx.moveTo(at, data.y)
       ctx.lineTo(at, data.y + data.height)
     } else {
@@ -2924,6 +2970,14 @@ export class MatrixPanel {
         prompt: this.viewpointPrompt(),
       },
       hover: this.hoverCell === null ? null : { row: this.hoverCell.row, col: this.hoverCell.col },
+      // Turned, the pointer is over a contact rather than over a column, and the
+      // two places it is a contact *between* are two different columns of the
+      // track below. One line there would have to be drawn half way between them,
+      // where nothing is — see {@link anchorColumns}.
+      anchors:
+        this.turned === null || this.hoverCell === null
+          ? null
+          : anchorColumns(this.turned, this.hoverCell.row, this.hoverCell.col),
       crosshair: getPlotOptions().crosshair,
       echo: this.echo,
       guide: this.laneHover,
@@ -3596,10 +3650,21 @@ export class MatrixPanel {
       rows: turned === null
         ? axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize)
         : separationCoords(turned, this.options.binsize),
-      cols: turned === null
-        ? axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize)
-        : axisCoordsFor(data.colGroups, data.colExtent, data.level, this.options.binsize * BIN_FRACTION),
+      cols: axisCoordsFor(
+        data.colGroups,
+        data.colExtent,
+        data.level,
+        this.options.binsize,
+        turned === null ? 1 : BIN_FRACTION,
+      ),
     })
+    // The guides follow the two anchors rather than the two axes while this is
+    // set, which is the whole of what the view is told about the turn.
+    this.heatmap.setTurn(
+      turned === null
+        ? null
+        : { maxSeparation: turned.maxSeparation, direction: turned.direction },
+    )
     // The annotations' view of the same two axes. Rebuilt per block rather than
     // patched, so a stale mapping can never be drawn over fresh data — the same
     // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
@@ -3862,11 +3927,73 @@ export class MatrixPanel {
    * the units the box is now measured in.
    */
   private turnBox(): { width: number; height: number } {
-    const width = this.turnWidth ?? this.hostSize.width
+    const width = this.turnWidth ?? this.turnRoom().width
     return {
       width: Math.max(MIN_TURN_WIDTH, width),
       height: Math.max(MIN_TURN_HEIGHT, this.turnHeight ?? Math.round(width * DEFAULT_TURN_ASPECT)),
     }
+  }
+
+  /**
+   * How much room there is to draw the box in, in CSS pixels.
+   *
+   * Measured against the **panel**, and never against the grid the box is in.
+   * The grid is sized by its contents, so a box narrowed by a drag narrows the
+   * grid with it — and a ceiling read from there is a ceiling that follows the
+   * box down. That is what made the ends of the band a one-way control: every
+   * drag inwards lowered the limit to wherever the edge had just got to, so the
+   * width could be given away and never taken back.
+   *
+   * Both numbers are the room a *map* has, which is not the room the panel has:
+   * a stack of tracks beside or under the picture is drawn out of the same
+   * budget, and a box sized to the whole of it would push its own tracks off the
+   * edge. What is left after them is the difference between the grid and the
+   * map's own box, which is a fact about the tracks and does not move when the
+   * box does.
+   *
+   * The height is the one a square map would have claimed — `--map-budget`, read
+   * back off the grid's `min-height`, which §17.2 already reserves so that
+   * turning the map does not resize the panel. Growing past it would push the
+   * page down, and the panel would grow again on the next drag: a ceiling that
+   * rises as you press on it is not a ceiling.
+   */
+  private turnRoom(): { width: number; height: number } {
+    return this.room ?? this.measureRoom()
+  }
+
+  /**
+   * Measure it, and keep the answer.
+   *
+   * Cached because {@link turnBox} is read on every frame — the depth the band
+   * is cut to is a function of the box and the zoom — and this is four layout
+   * reads and a `getComputedStyle`, which is a synchronous relayout of the
+   * document per frame of every pan. Refreshed where the room can actually have
+   * changed, which is a resize of the panel, and it is the resize observer that
+   * says so.
+   */
+  private measureRoom(): { width: number; height: number } {
+    const body = this.grid.parentElement
+    // The stacks themselves, rather than whatever is left of the grid once the
+    // map is taken out of it: the grid is held open at the height a square map
+    // would have claimed, so "the grid less the map" is mostly *slack*, and a
+    // ceiling computed from it would shrink by exactly as much as the box grew.
+    // Nothing to subtract on the vertical, where `--map-budget` has already
+    // taken the stacks out of the window for itself — subtracting them again is
+    // how a map with ten tracks under it got a ceiling below its own floor, and
+    // every drag of the top edge collapsed the band to the minimum.
+    const beside =
+      this.lanes.canvasFor('left').clientWidth + this.lanes.canvasFor('right').clientWidth
+    const width = (body?.clientWidth ?? this.hostSize.width) - beside
+    // `min-height` rather than the custom property it is written from: a custom
+    // property comes back as the `clamp()` that was written, unresolved, and the
+    // number wanted here is the one the browser worked out from it.
+    const budget = Number.parseFloat(getComputedStyle(this.grid).minHeight)
+    const height = Number.isFinite(budget) ? budget : this.hostSize.height
+    this.room = {
+      width: Math.max(MIN_TURN_WIDTH, Math.round(width)),
+      height: Math.max(MIN_TURN_HEIGHT, Math.round(height)),
+    }
+    return this.room
   }
 
   /**
@@ -3934,6 +4061,8 @@ export class MatrixPanel {
     )
     this.turned = next
     this.heatmap.reshape(turnedDense(next))
+    // The depth is half of where the guides go, so it moves with the band.
+    this.heatmap.setTurn({ maxSeparation: next.maxSeparation, direction: next.direction })
     // The ruler up the side is `maxSeparation`'s, so it has to be rewritten with
     // the band — a band re-cut under a ruler measured for the previous depth is
     // a picture labelled with somebody else's distances.
@@ -3943,7 +4072,8 @@ export class MatrixPanel {
         data.colGroups,
         data.colExtent,
         data.level,
-        this.options.binsize * BIN_FRACTION,
+        this.options.binsize,
+        BIN_FRACTION,
       ),
     })
     // The marks are placed by the pair of loci they name, and how far up the
@@ -3983,17 +4113,18 @@ export class MatrixPanel {
    * about the figure, so what bounds it is how much room there is to draw in.
    */
   private setTurnBox(next: { width?: number | null; height?: number | null }): void {
+    const room = this.turnRoom()
     if (next.width !== undefined) {
       this.turnWidth =
         next.width === null
           ? null
-          : Math.max(MIN_TURN_WIDTH, Math.min(this.hostSize.width, Math.round(next.width)))
+          : Math.max(MIN_TURN_WIDTH, Math.min(room.width, Math.round(next.width)))
     }
     if (next.height !== undefined) {
       this.turnHeight =
         next.height === null
           ? null
-          : Math.max(MIN_TURN_HEIGHT, Math.min(this.hostSize.height, Math.round(next.height)))
+          : Math.max(MIN_TURN_HEIGHT, Math.min(room.height, Math.round(next.height)))
     }
     this.writeTurnBox()
     // The canvas has a new CSS size, and nothing else will tell the view: the
@@ -5237,17 +5368,25 @@ export function bpWithin(
  *
  * The line itself is {@link bpWithin} at offset 0, from the same `unitStart`,
  * so a tick and the readout under the pointer cannot disagree.
+ *
+ * @param fraction How much of a bin one **cell** spans — a half under a turn,
+ * where the rotated lattice counts in half bins (`render/rotate.ts`), and one
+ * everywhere else. It scales the ruler's step and nothing else: where the block
+ * *starts* is a distance from the contig's first bin, measured in whole bins by
+ * everything that reads it, and folding the cell size into that offset put the
+ * turned map's ruler half of the way into the block behind the picture on it.
  */
 export function axisCoordsFor(
   groups: AxisGroup[],
   extent: readonly [number, number],
   level: 'bin' | 'contig' | 'genome',
   binsize: number,
+  fraction = 1,
 ): AxisCoords | null {
   if (level !== 'bin' || groups.length !== 1 || !(binsize > 0)) return null
   const group = groups[0]
   const first = group.unitStart ?? extent[0] + group.start
-  return { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize }
+  return { bpPerCell: binsize * fraction, bpAtOrigin: (extent[0] - first) * binsize }
 }
 
 /**

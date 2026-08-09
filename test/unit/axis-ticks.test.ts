@@ -150,6 +150,24 @@ describe('axisCoordsFor', () => {
     })
   })
 
+  /**
+   * The turned map's ruler, which counts in half bins and starts where the
+   * block does.
+   *
+   * Two numbers, and only one of them is a cell size. Folding the half into the
+   * origin as well put the ruler half of the way into the block: on a window
+   * opening 120 bins in, every tick read 60 kb short of the position under it,
+   * and the tooltip — which never goes through here — disagreed with the axis
+   * beneath the very cell it was describing.
+   */
+  it('counts in half bins under a turn without halving where the block starts', () => {
+    const group: AxisGroup = { label: 'NODE_1', start: 0, end: 61, unitStart: 0 }
+    expect(axisCoordsFor([group], [139, 200], 'bin', BIN, 0.5)).toEqual({
+      bpPerCell: BIN / 2,
+      bpAtOrigin: 139_000,
+    })
+  })
+
   it('refuses an axis with no single coordinate system', () => {
     const two: AxisGroup[] = [
       { label: 'c1', start: 0, end: 10, unitStart: 0 },
