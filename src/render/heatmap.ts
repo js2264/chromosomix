@@ -1004,6 +1004,21 @@ type ResolvedOptions = Required<
 const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
 
 /**
+ * Where a block too short to fill the plot area is put in it.
+ *
+ * `middle` is the square map's answer and the default: a matrix smaller than
+ * the panel is a picture, and a picture is centred. A **turned** band is not
+ * that — it is a rectangle whose bottom edge *is* the diagonal, and the tracks
+ * under the map are drawn against that same axis. Centred, a band that fits
+ * vertically floats half way up its panel with a gap between it and the
+ * profiles it is meant to be read against, which is the one arrangement the
+ * turn exists to prevent (§17). So a band asks for the edge its diagonal is on:
+ * `end` for the ordinary turn, whose separation grows upward, and `start` for
+ * the mirrored half of a comparison, where it grows down.
+ */
+export type VerticalAnchor = 'middle' | 'start' | 'end'
+
+/**
  * The square a drag describes, anchored where it began.
  *
  * A selection *resolves* to a square — the zoom it produced was
@@ -1020,6 +1035,14 @@ function squareFrom(x0: number, y0: number, x: number, y: number): { x: number; 
     y: y >= y0 ? y0 : y0 - side,
     side,
   }
+}
+
+/** The rectangle a marquee is drawn as — a square, or a full-height band. */
+interface Marquee {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 /**
@@ -1174,6 +1197,11 @@ export class HeatmapView {
   private rowScale = new Scale([0, 1], 1)
   private colScale = new Scale([0, 1], 1)
 
+  /** Where a block shorter than the plot area sits in it; see {@link setAnchor}. */
+  private anchorY: VerticalAnchor = 'middle'
+  /** Whether a drag names a span of the x axis; see {@link setSpanGestures}. */
+  private spanGestures = false
+
   /**
    * The margin in force. Equals `opts.margin` unless `autoMargin` is set, in
    * which case {@link measureMargin} recomputes it whenever the labels or the
@@ -1291,6 +1319,10 @@ export class HeatmapView {
     const labelsChanged = merged.labels !== this.plot.labels
     this.plot = merged
     if (labelsChanged) this.remeasure()
+    // The crosshair is what stands in for the pointer, so turning it off has to
+    // give the pointer back without waiting for the hand to move — a control
+    // that needs a twitch before it takes effect reads as not having worked.
+    this.syncGuidedCursor()
     this.changed()
   }
 
@@ -1561,7 +1593,57 @@ export class HeatmapView {
 
   // -- view transform ------------------------------------------------------
 
-  /** Fit the whole matrix into the plot area and centre it. */
+  /**
+   * Where a block shorter than the plot area sits in it — see
+   * {@link VerticalAnchor}.
+   *
+   * Only the vertical, because only the vertical has a case: a block narrower
+   * than the plot is narrower on both sides equally, while a turned band has a
+   * bottom edge that means something and a top edge that does not.
+   *
+   * Applied through {@link clampView}, which is the one place the pan is pinned,
+   * so every path that could leave slack — a new block, a resize, a zoom out, a
+   * gutter opening — lands the same way rather than each remembering to.
+   */
+  setAnchor(anchor: VerticalAnchor): void {
+    if (anchor === this.anchorY) return
+    this.anchorY = anchor
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
+  /**
+   * Both drags name a **span of the x axis**, not a box — what a turned map
+   * needs (§17).
+   *
+   * Up the side of a turned band is *distance from the diagonal*, which is not a
+   * place: a marquee's top and bottom edges name no coordinate, and the row band
+   * a mostly-vertical 4C drag would take is a range of separations rather than a
+   * stretch of genome. Both gestures were therefore drawing one thing and
+   * committing another — the selection came back as a box over row indices the
+   * block does not have, and a vertical anchor drag came back as nothing at all,
+   * silently, because the axis it asked for is `null`.
+   *
+   * With this on there is one axis and both gestures use it. A selection is a
+   * full-height band over a stretch of the genome and resolves the way an
+   * on-diagonal box does — the same window on both axes of the square it was
+   * turned out of — and a 4C drag names columns however the hand travelled. That
+   * is the "seamless fall-back" the two gestures already had for the square
+   * case, applied where the geometry leaves only one honest reading.
+   *
+   * The diagonal lock goes with it, and for the same reason: on a turned map the
+   * diagonal is the bottom edge of the picture, so snapping a corner onto it
+   * would be snapping to the frame.
+   */
+  setSpanGestures(on: boolean): void {
+    this.spanGestures = on
+  }
+
+  /**
+   * Fit the whole matrix into the plot area and centre it — or stand it on the
+   * edge {@link setAnchor} named, which is what a turned band asks for.
+   */
   fit(): void {
     this.recomputeBaseZoom()
     this.zoom = this.baseZoom
@@ -1692,9 +1774,23 @@ export class HeatmapView {
     // An edge is a wall, not a hint: the data cannot be dragged out of its own
     // frame, so a pan stops when the last row or column reaches the border
     // rather than sliding the map into empty space. When the whole matrix fits,
-    // there is nothing to pan and it stays centred.
+    // there is nothing to pan and it stays where {@link setAnchor} put it —
+    // centred for a square map, on the edge its diagonal is on for a band.
     this.originX = visW >= ncols ? (ncols - visW) / 2 : clamp(this.originX, 0, ncols - visW)
-    this.originY = visH >= nrows ? (nrows - visH) / 2 : clamp(this.originY, 0, nrows - visH)
+    this.originY = visH >= nrows ? this.restY(nrows, visH) : clamp(this.originY, 0, nrows - visH)
+  }
+
+  /**
+   * Where the top edge of a block that fits sits, in cells.
+   *
+   * `end` puts the block's *last* row on the plot's bottom edge, which for a
+   * turned band is its diagonal — so the picture stands on the axis its tracks
+   * are drawn against, with whatever room is left over above the apex where
+   * there is nothing to see anyway.
+   */
+  private restY(nrows: number, visH: number): number {
+    if (this.anchorY === 'start') return 0
+    return this.anchorY === 'end' ? nrows - visH : (nrows - visH) / 2
   }
 
   private syncScales(): void {
@@ -1863,8 +1959,9 @@ export class HeatmapView {
     // same stretch of genome on a map read about its diagonal, so insisting on
     // one direction would be insisting on a gesture rather than on an answer —
     // and a reader whose drag came out a few degrees the wrong side of vertical
-    // got a one-bin anchor and no idea why.
-    const vertical = Math.abs(y - y0) >= Math.abs(x - x0)
+    // got a one-bin anchor and no idea why. On a turned map there is only one
+    // axis to be about, and the hand is not asked ({@link setSpanGestures}).
+    const vertical = this.anchorIsVertical(x0, y0, x, y)
     const scale = vertical ? this.rowScale : this.colScale
     const [a, b] = vertical ? [y0 - plot.y, y - plot.y] : [x0 - plot.x, x - plot.x]
     const span = [scale.toUnit(Math.min(a, b)), scale.toUnit(Math.max(a, b))]
@@ -1877,11 +1974,39 @@ export class HeatmapView {
   private finishSelection(x0: number, y0: number, x: number, y: number): void {
     const emit = this.onSelect
     if (emit === null) {
-      this.zoomToBox(x0, y0, x, y)
+      // A band has no top and bottom to zoom to, so the zoom is the span's: the
+      // cells stay square, which means the vertical follows the horizontal, and
+      // `clampView` then stands the band back on the edge it belongs on.
+      if (this.spanGestures) this.zoomToSpan(x0, x)
+      else this.zoomToBox(x0, y0, x, y)
       return
     }
     const found = this.boxFrom(x0, y0, x, y)
     if (found !== null) emit(found.box)
+  }
+
+  /**
+   * Zoom to a stretch of the x axis, leaving the other one to follow.
+   *
+   * {@link zoomToBox} for a picture with one axis. The vertical is not ignored
+   * so much as *implied*: one zoom scalar serves both, so fitting the span
+   * horizontally fixes the vertical too, and where the block is then shorter
+   * than the plot {@link clampView} puts it back on its anchor rather than
+   * centring it.
+   */
+  private zoomToSpan(ax: number, bx: number): void {
+    const plot = this.plotRect
+    const left = Math.max(plot.x, Math.min(ax, bx))
+    const right = Math.min(plot.x + plot.width, Math.max(ax, bx))
+    const wPx = right - left
+    if (wPx < this.opts.minSelectPixels) return
+    const cols = wPx / this.zoom
+    const centreCol = this.originX + (left - plot.x) / this.zoom + cols / 2
+    this.zoom = clamp(plot.width / cols, this.minZoom(), this.maxZoom())
+    this.originX = centreCol - plot.width / this.zoom / 2
+    this.clampView()
+    this.syncScales()
+    this.changed()
   }
 
   /**
@@ -1900,12 +2025,12 @@ export class HeatmapView {
     y0: number,
     x: number,
     y: number,
-  ): { box: SelectionBox; rect: { x: number; y: number; side: number } } | null {
+  ): { box: SelectionBox; rect: Marquee } | null {
     const matrix = this.matrix
     if (matrix === null) return null
     const plot = this.plotRect
-    const rect = squareFrom(x0, y0, x, y)
-    if (rect.side < this.opts.minSelectPixels) return null
+    const rect = this.marqueeFrom(x0, y0, x, y)
+    if (rect.width < this.opts.minSelectPixels) return null
 
     // The anchor is where the drag *began*, which is the cell that says what
     // the selection is of. Clamped into the plot first: a drag that started on
@@ -1916,8 +2041,8 @@ export class HeatmapView {
     )
     if (anchor === null) return null
 
-    const cols = this.spanOf('cols', rect.x - plot.x, rect.side, matrix.ncols)
-    const rows = this.spanOf('rows', rect.y - plot.y, rect.side, matrix.nrows)
+    const cols = this.spanOf('cols', rect.x - plot.x, rect.width, matrix.ncols)
+    const rows = this.spanOf('rows', rect.y - plot.y, rect.height, matrix.nrows)
     if (cols === null || rows === null) return null
     return { box: { rows, cols, anchor }, rect }
   }
@@ -2256,14 +2381,24 @@ export class HeatmapView {
    * it as a square would be drawing the wrong claim: it would say the columns
    * outside the square are not part of the question, and every one of them is.
    */
+  /**
+   * Which axis a 4C drag names — rows across, or columns down the picture.
+   *
+   * The band follows the hand: a mostly-vertical drag names rows, a
+   * mostly-horizontal one names columns. Both the paint and the commit ask this,
+   * so what is drawn is what is taken. Under {@link setSpanGestures} the hand is
+   * not consulted — there is only one axis a band can be about.
+   */
+  private anchorIsVertical(x0: number, y0: number, x: number, y: number): boolean {
+    if (this.spanGestures) return false
+    return Math.abs(y - y0) >= Math.abs(x - x0)
+  }
+
   private drawAnchorBand(): void {
     const drag = this.drag
     if (drag === null || drag.mode !== 'anchor') return
     const plot = this.dataRect
-    // The band follows the hand: a mostly-vertical drag names rows and is drawn
-    // across, a mostly-horizontal one names columns and is drawn down. Same test
-    // `finishAnchor` decides by, so what is drawn is what is taken.
-    const vertical = Math.abs(drag.y - drag.y0) >= Math.abs(drag.x - drag.x0)
+    const vertical = this.anchorIsVertical(drag.x0, drag.y0, drag.x, drag.y)
     const from = vertical ? Math.min(drag.y0, drag.y) : Math.min(drag.x0, drag.x)
     const size = Math.max(1, vertical ? Math.abs(drag.y - drag.y0) : Math.abs(drag.x - drag.x0))
     const ctx = this.ctx
@@ -2292,6 +2427,30 @@ export class HeatmapView {
     ctx.restore()
   }
 
+  /**
+   * The rectangle a selection drag is drawn as.
+   *
+   * A square by default, anchored where the drag began — see {@link squareFrom}
+   * for why a selection that *resolves* to one range must not be drawn as a
+   * rectangle. Under {@link setSpanGestures} it is a band the full height of the
+   * plot instead, because that is what the gesture now commits: a stretch of the
+   * genome, opened on both axes. A square there would draw a top and a bottom
+   * edge over an axis that has no coordinates to bound.
+   */
+  private marqueeFrom(x0: number, y0: number, x: number, y: number): Marquee {
+    if (!this.spanGestures) {
+      const square = squareFrom(x0, y0, x, y)
+      return { x: square.x, y: square.y, width: square.side, height: square.side }
+    }
+    const plot = this.plotRect
+    return {
+      x: Math.min(x0, x),
+      y: plot.y,
+      width: Math.abs(x - x0),
+      height: plot.height,
+    }
+  }
+
   /** The rubber band, while a selection drag is in progress. */
   private drawSelection(): void {
     const drag = this.drag
@@ -2302,9 +2461,7 @@ export class HeatmapView {
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
     const plot = this.dataRect
     const ctx = this.ctx
-    const { x, y, side } = squareFrom(drag.x0, drag.y0, drag.x, drag.y)
-    const w = side
-    const h = side
+    const { x, y, width: w, height: h } = this.marqueeFrom(drag.x0, drag.y0, drag.x, drag.y)
     ctx.save()
     ctx.beginPath()
     ctx.rect(plot.x, plot.y, plot.width, plot.height)
@@ -2342,15 +2499,12 @@ export class HeatmapView {
    * different sequences, and against a short contig's clamped end they differ
    * again.
    */
-  private drawSelectionMarks(
-    rect: { x: number; y: number; side: number },
-    text: SelectionText,
-  ): void {
+  private drawSelectionMarks(rect: Marquee, text: SelectionText): void {
     const ctx = this.ctx
     const left = rect.x
-    const right = rect.x + rect.side
+    const right = rect.x + rect.width
     const top = rect.y
-    const bottom = rect.y + rect.side
+    const bottom = rect.y + rect.height
     ctx.save()
     ctx.font = SELECTION_FONT
     ctx.textBaseline = 'middle'
@@ -2393,7 +2547,7 @@ export class HeatmapView {
       // is — and only where the box is wide enough to hold it, since a chip
       // wider than the region it measures is a chip over the data.
       const span = widthOf(cols.span)
-      if (rect.side > span + 8) {
+      if (rect.width > span + 8) {
         const second = above >= 0 ? row - SELECTION_CHIP - SELECTION_GAP : row + SELECTION_CHIP + SELECTION_GAP
         chip(cols.span, (left + right) / 2 - span / 2, second)
       }
@@ -2420,7 +2574,7 @@ export class HeatmapView {
       // would land on the row the other axis is using.
       chip(rows.start, column, top)
       chip(rows.end, column, bottom - SELECTION_CHIP)
-      if (rect.side > SELECTION_CHIP * 2 + 8) {
+      if (rect.height > SELECTION_CHIP * 2 + 8) {
         chip(rows.span, column, (top + bottom) / 2 - SELECTION_CHIP / 2)
       }
     }
@@ -3145,7 +3299,11 @@ export class HeatmapView {
       // that changes nothing about where the reader is looking — see
       // `ui/viewpoint.ts`. Everything else pans.
       const mode = wantsSelect(e) ? 'select' : e.shiftKey && this.onAnchor !== null ? 'anchor' : 'pan'
-      const diagonal = mode === 'select' && e.shiftKey
+      // …except on a turned map, where the diagonal is the bottom edge of the
+      // picture and a corner snapped to it would be a corner snapped to the
+      // frame. The selection is already the on-diagonal one there, whichever
+      // modifiers are held ({@link setSpanGestures}).
+      const diagonal = mode === 'select' && e.shiftKey && !this.spanGestures
       const [ax, ay] = diagonal ? this.onDiagonal(x, y) : [x, y]
       this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal }
       this.lastX = x
@@ -3220,7 +3378,10 @@ export class HeatmapView {
      * hand put it, and the crosshair — which is what says "this is the cell I am
      * naming" — is drawn at the snapped position.
      */
-    const hoverAt = (x: number, y: number, diagonal: boolean): void => {
+    const hoverAt = (x: number, y: number, held: boolean): void => {
+      // Off on a turned map, where every reading is already measured from the
+      // diagonal and the snap would be onto the picture's own bottom edge.
+      const diagonal = held && !this.spanGestures
       const [hx, hy] = diagonal ? this.onDiagonal(x, y) : [x, y]
       const cell = this.cellAt(hx, hy)
       this.setHover(cell)
@@ -3499,7 +3660,29 @@ export class HeatmapView {
         cell.row === this.hoverCell.row &&
         cell.col === this.hoverCell.col)
     this.hoverCell = cell
+    this.syncGuidedCursor()
     if (!same && this.plot.crosshair) this.changed()
+  }
+
+  /**
+   * Hide the drawn pointer exactly where the crosshair replaces it.
+   *
+   * The guide lines are a better pointer than the arrowhead: they are drawn at
+   * the cell this view has actually resolved, they run the whole width and
+   * height of the picture, and the lanes continue them. The arrowhead beside
+   * them is a second, blunter mark for the same position — and it sits *on* the
+   * pixel it is pointing at, which on a map where a cell can be one pixel is the
+   * only thing covering the answer.
+   *
+   * Condition for condition with the line, not merely with the preference: over
+   * a label gutter there is no cell, so no crosshair is drawn, and there the
+   * arrowhead is still the only thing saying where the hand is. The transient
+   * cursors — the closed hand while panning, the crosshair while Option is held
+   * — win over this in the stylesheet, because they say what is *happening*,
+   * which no guide line does.
+   */
+  private syncGuidedCursor(): void {
+    this.canvas.classList.toggle('is-guided', this.plot.crosshair && this.hoverCell !== null)
   }
 
   /** Remove every listener {@link attach} installed. Idempotent. */

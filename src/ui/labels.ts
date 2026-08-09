@@ -19,12 +19,29 @@ export function splitUri(raw: string): { path: string; group: string } {
   return { path, group: group.startsWith('/') ? group : `/${group}` }
 }
 
+/** The last path segment of a URI: the file's own name, without any entry. */
+export function fileBaseLabel(uri: string): string {
+  const { path } = splitUri(uri)
+  return path.split(/[\\/]/).pop() ?? path
+}
+
+/**
+ * The entry a `file::group/name` URI names, or `undefined` for a plain file.
+ *
+ * The *last* segment, so `file.mcool::/resolutions/1000` and
+ * `file.mcool::resolutions/1000` both come back `1000` — the group is a fact
+ * about the format and the entry is the thing a reader picked.
+ */
+export function entryLabel(uri: string): string | undefined {
+  const { group } = splitUri(uri)
+  if (group === '/') return undefined
+  return group.split('/').filter((part) => part !== '').pop()
+}
+
 /** The last path segment of a URI, plus the entry name when there is one. */
 export function fileLabel(uri: string): string {
-  const { path, group } = splitUri(uri)
-  const base = path.split(/[\\/]/).pop() ?? path
-  if (group === '/') return base
-  const entry = group.split('/').filter((part) => part !== '').pop()
+  const base = fileBaseLabel(uri)
+  const entry = entryLabel(uri)
   return entry === undefined ? base : `${base}::${entry}`
 }
 

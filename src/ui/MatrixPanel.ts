@@ -36,7 +36,7 @@ import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
-import { cardTitle, iconButton } from './icons'
+import { cardTitle, icon, iconButton } from './icons'
 import {
   LANE_EDGES,
   drawsAProfile,
@@ -83,6 +83,7 @@ import {
 } from '../render/derive'
 import {
   BIN_FRACTION,
+  binsForColumns,
   cellAt,
   isTurnable,
   rotateBlock,
@@ -195,6 +196,33 @@ const COMPARE_OP_LABELS: Record<CompareOp, string> = {
   ratio: 'ratio',
   difference: 'difference',
 }
+
+/**
+ * The two faces of the turn toggle.
+ *
+ * A quarter-circle arrow, pointing the way the picture is about to go rather
+ * than the way it already went: left while the map is square, because pressing
+ * it turns the map anticlockwise onto its diagonal, and right once it is turned,
+ * because pressing it now brings the square back. It is the undo/redo pair's own
+ * geometry, which is exactly the relationship the two states are in.
+ *
+ * A `triangle` was here before, and it was the wrong kind of icon: it drew the
+ * *result* — a domain standing on the axis — which says nothing about which
+ * direction the control will move things in and looks identical on and off.
+ */
+const TURN_ICONS = { off: 'undo-2', on: 'redo-2' } as const
+
+const TURN_HINT =
+  'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
+  'Available on one sequence against itself, which is the only block that has a diagonal ' +
+  'to measure from.'
+
+const OE_HINT =
+  'Observed over expected. Divide each cell by what its genomic distance predicts — the mean ' +
+  'over every pair of bins that far apart, measured on this block, with one scalar between ' +
+  'sequences. Contact frequency falls by orders of magnitude from the diagonal outwards and ' +
+  'that decay is not what anybody is looking for; dividing it out makes the departures from it ' +
+  'the picture. Drawn on a scale centred at 1, with a cell of nothing observed left as paper.'
 
 /**
  * What a dragged box resolves to: one block, and how much of it.
@@ -658,6 +686,8 @@ export class MatrixPanel {
   private turned: RotatedBlock | null = null
   /** The turn control, greyed while the block on screen has no diagonal. */
   private turnButton: HTMLElement | null = null
+  /** The O/E control, lit from {@link setDerive} rather than from its own click. */
+  private expectedButton: HTMLElement | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /**
@@ -1293,32 +1323,39 @@ export class MatrixPanel {
       )
     }
 
-    // The turn. A button rather than a tickbox, and beside the overlay marks
-    // rather than among the value controls, because it changes the *shape* of
-    // the picture and not what is in it — the same category as "fit", which
-    // leads that row for the same reason.
+    // The turn and the baseline: two switches, one row, and both of them
+    // toggles rather than the button and the tickbox they used to be.
+    //
+    // They belong together because they are the two controls that change *what
+    // picture this is* — one the geometry, one the units — as against the score
+    // and the clip, which change what a number is worth, and the overlays, which
+    // change what is drawn over it. And they are toggles because they are
+    // states, not actions: an icon button that looks the same before and after
+    // it has been pressed is the one shape a reader cannot read the setting off,
+    // and a tickbox beside it made the same setting look like a different kind
+    // of thing. Same mark, same lit state, same `aria-pressed` as every overlay.
+    const picture: HTMLElement[] = []
+
     const turn = options.turn
     if (turn !== undefined && turn.onChange !== undefined) {
+      // Read back through `this.options` rather than through the object
+      // captured here. The session builds a fresh presentation on every render
+      // and {@link setTurn} swaps it in, so a closure over the construction-time
+      // one answers "is it turned?" with the state the panel opened in — and the
+      // control becomes a one-way switch that asks for a flip that is already on
+      // and can never ask for it to come off.
       const button = iconButton(
-        'triangle',
-        'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
-          'Available on one sequence against itself, which is the only block that has a diagonal ' +
-          'to measure from.',
-        // Read back through `this.options` rather than through the object
-        // captured here. The session builds a fresh presentation on every
-        // render and {@link setTurn} swaps it in, so a closure over the
-        // construction-time one answers "is it turned?" with the state the
-        // panel opened in — and the control becomes a one-way switch that asks
-        // for a flip that is already on and can never ask for it to come off.
+        TURN_ICONS.off,
+        TURN_HINT,
         () => {
           const held = this.options.turn
           held?.onChange?.(held.on !== true)
         },
-        { class: 'btn btn-icon', size: 15 },
+        { class: 'btn btn-icon btn-toggle', size: 15 },
       )
-      button.classList.toggle('is-on', turn.on)
       this.turnButton = button
-      controls.unshift(field('turn', button, ''))
+      this.paintTurn(turn.on === true)
+      picture.push(button)
     }
 
     // The baseline. A control of its own rather than an entry in the score
@@ -1329,21 +1366,35 @@ export class MatrixPanel {
     const derive = options.derive
     if (derive !== undefined && derive.onExpectedChange !== undefined) {
       const onExpectedChange = derive.onExpectedChange
-      const expected = el('input', { class: 'checkbox', type: 'checkbox' })
-      expected.checked = derive.expected
-      expected.addEventListener('change', () => onExpectedChange(expected.checked))
-      valueFields.push(
-        field(
-          'O/E',
-          expected,
-          'Divide each cell by what its genomic distance predicts — the mean over every pair of ' +
-            'bins that far apart, measured on this block, with one scalar between sequences. ' +
-            'Contact frequency falls by orders of magnitude from the diagonal outwards and that ' +
-            'decay is not what anybody is looking for; dividing it out makes the departures from ' +
-            'it the picture. Drawn on a scale centred at 1.',
+      // Two letters and a stroke, not a glyph. Every mark in these rows stands
+      // for something with a shape — a ruler, a grid, a crosshair — and a ratio
+      // has none; the nearest drawn thing is a division sign, which would say
+      // "divide" without saying by what. `O/E` is what the field is called in
+      // every paper it appears in and what the colourbar beside it already says,
+      // so the button is simply that, set to the size the marks beside it are.
+      const button = el('button', {
+        class: 'btn btn-icon btn-toggle btn-word',
+        title: OE_HINT,
+        attrs: { type: 'button', 'aria-label': OE_HINT },
+      })
+      button.append(el('span', { class: 'btn-word-text', text: 'O/E' }))
+      button.addEventListener('click', () => {
+        onExpectedChange(this.options.derive?.expected !== true)
+      })
+      this.expectedButton = button
+      this.paintExpected(derive.expected)
+      picture.push(button)
+    }
+
+    if (picture.length > 0) {
+      controls.unshift(
+        el(
+          'div',
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'picture' }),
+          el('div', { class: 'plot-icon-row' }, ...picture),
         ),
       )
-      controls.unshift(valueFields[valueFields.length - 1])
     }
 
     if (options.levels && options.levels.length > 1) {
@@ -1494,7 +1545,20 @@ export class MatrixPanel {
       shownLimits: (id) => this.lanes.shownLimits(id),
       onChange: () => this.schedule(),
     })
-    for (const edge of LANE_EDGES) this.watchLane(edge, this.lanes.canvasFor(edge))
+    for (const edge of LANE_EDGES) {
+      const canvas = this.lanes.canvasFor(edge)
+      // No drawn pointer on a stack, ever, and unconditionally rather than under
+      // the crosshair preference. A lane puts a hairline under the pointer the
+      // moment it is over the canvas at all — its own, not the map's echo, and
+      // deliberately not under that preference, because it is the direct answer
+      // to a gesture being made right now (`ui/AnnotationLanes.ts`). So there is
+      // always a line here saying where the hand is, and the arrowhead over it
+      // is a second mark for the same base pair. The map is the conditional one:
+      // it has gutters, and a gutter holds no cell to draw a crosshair at
+      // (`render/heatmap.ts`'s `syncGuidedCursor`).
+      canvas.classList.add('is-guided')
+      this.watchLane(edge, canvas)
+    }
     this.watchEdgeDrops()
     // A restyle, a rename or a move of any lane is a different picture — and on
     // a file with no annotation machinery this is the only subscription there
@@ -1888,6 +1952,29 @@ export class MatrixPanel {
     for (const edge of LANE_EDGES) {
       setTrackHeight(this.laneStore, this.lanes.lanesOn(edge), px)
     }
+  }
+
+  /**
+   * Light the turn toggle, and point its arrow the way the next press will go.
+   *
+   * Both halves matter and only one of them is decoration: `aria-pressed` is
+   * what the stylesheet colours the button by and what a screen reader says, and
+   * the arrow is what a reader sees before they have pressed anything.
+   */
+  private paintTurn(on: boolean): void {
+    const button = this.turnButton
+    if (button === null) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+    button.replaceChildren(icon(on ? TURN_ICONS.on : TURN_ICONS.off, { size: 15 }))
+  }
+
+  /** Light the O/E toggle. Its state lives in the presentation, not in the DOM. */
+  private paintExpected(on: boolean): void {
+    const button = this.expectedButton
+    if (button === null) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
   }
 
   /** Reflect the shared overlay state on the buttons. */
@@ -3356,6 +3443,21 @@ export class MatrixPanel {
     // redraw is skipped whenever a *pinned* clip survives a navigation, and the
     // second file's ticks keep the previous block's numbers.
     this.painted = null
+    // Before `setMatrix`, which ends in a fit: a band installed under the square
+    // map's rule is centred for one frame and then jumps onto its axis.
+    //
+    // A turned band stands on the edge its diagonal is on, so the picture is
+    // flush with the tracks under it (§17.2). Centred — which is right for a
+    // square map and is what every path here did — a band that fits vertically
+    // floats half way up the panel with a stripe of paper between it and the
+    // profiles it exists to be read against. `down` is the mirrored half of a
+    // comparison, whose diagonal is its top edge.
+    this.heatmap.setAnchor(
+      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
+    )
+    // Both drags collapse onto the genomic axis under a turn; see
+    // {@link HeatmapView.setSpanGestures}.
+    this.heatmap.setSpanGestures(turned !== null)
     // No separators under a turn: `isTurnable` has already refused any block
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
@@ -3457,6 +3559,22 @@ export class MatrixPanel {
    */
   setResolution(binsize: number): void {
     if (binsize > 0) this.options.binsize = binsize
+  }
+
+  /**
+   * Rename the file an exported figure says it is a picture of.
+   *
+   * For the one thing that can change it without the panel being rebuilt: a
+   * companion moving to another rung of its collection (§16.2) is still the same
+   * panel drawing the same place, and the only part of its name that moved is
+   * the `::1000` on the end. Written in place, as {@link setResolution} writes
+   * the bin size beside it, and for the same reason — the caption is read at
+   * draw time, so a stale one is only ever discovered in a figure somebody has
+   * already sent.
+   */
+  setCaptionFile(file: string): void {
+    if (this.options.caption === undefined) this.options.caption = { file }
+    else this.options.caption = { ...this.options.caption, file }
   }
 
 
@@ -3759,6 +3877,10 @@ export class MatrixPanel {
       held?.normalise === derive?.normalise &&
       (held?.expected === true) === (derive?.expected === true)
     this.options.derive = derive
+    // The toggle holds no state of its own — the setting is the session's, and
+    // it can move from the command palette or from a link as easily as from a
+    // click — so it is repainted from whatever arrives, exactly as the turn's is.
+    this.paintExpected(derive?.expected === true)
     return same
   }
 
@@ -3784,7 +3906,7 @@ export class MatrixPanel {
     // The one piece of the control that is not rebuilt with the picture. It is
     // made once, in the constructor, so without this the button never lights up
     // — the map turns and the thing that turned it looks untouched.
-    this.turnButton?.classList.toggle('is-on', turn.on)
+    this.paintTurn(turn.on === true)
     return same
   }
 
@@ -4404,9 +4526,13 @@ export class MatrixPanel {
       if (point !== null) picking.onPoint(point)
       return
     }
-    this.options.onCellClick?.(cell, {
-      row: groupAt(this.data.rowGroups, cell.row),
-      col: groupAt(this.data.colGroups, cell.col),
+    // Through the square, for the readout's reason: a turned cell's row is a
+    // separation, and a view asked to open "the block at row 3" of a band would
+    // be handed whichever sequence sits three bins from the diagonal.
+    const square = this.squareCell(cell)
+    this.options.onCellClick?.(square, {
+      row: groupAt(this.data.rowGroups, square.row),
+      col: groupAt(this.data.colGroups, square.col),
     })
   }
 
@@ -4468,11 +4594,51 @@ export class MatrixPanel {
     )
   }
 
+  /**
+   * The window a drag over a **turned** map names, in the square block's cells.
+   *
+   * A band on a turned map is a stretch of the genome and nothing else — up the
+   * side is distance from the diagonal, which bounds no window — so what the
+   * gesture asks for is the on-diagonal square that stretch cuts out: the same
+   * range on both axes, which is exactly what `Shift` gives on a square map
+   * (`render/heatmap.ts`'s diagonal lock). Turning it on is therefore not a
+   * second gesture to learn; it is the only one of the two that still means
+   * anything, and it is what the drag falls back to.
+   *
+   * The arithmetic is the rotation's, halved: a turned column is half a bin, so
+   * a column index divided by two is a bin index into the block the band came
+   * out of. `null` where the block is not turned, which is the caller's cue that
+   * the ordinary two-axis resolution applies.
+   */
+  private turnedSpan(box: SelectionBox): [number, number] | null {
+    const data = this.data
+    if (this.turned === null || data === null) return null
+    return binsForColumns(box.cols, Math.min(data.nrows, data.ncols))
+  }
+
+  /** One axis of a turned drag, resolved through the block's single sequence. */
+  private turnedAxisSelection(box: SelectionBox): SelectedAxis | null {
+    const data = this.data
+    const span = this.turnedSpan(box)
+    if (data === null || span === null) return null
+    // `isTurnable` has already refused any block spanning more than one, so the
+    // run the span starts in is the run the whole of it is in.
+    const group = groupAt(data.rowGroups, span[0])
+    return group === undefined ? null : this.axisSelection(group, span, data.rowExtent[0])
+  }
+
   private describeSelection(box: SelectionBox): SelectionText | null {
     const data = this.data
     // Above bin level a cell *is* a contig or a genome, and the axis labels
     // already name it: a base pair inside one would be an invention.
     if (data === null || data.level !== 'bin') return null
+    if (this.turned !== null) {
+      // One set of chips, on the axis that has coordinates. The band is the full
+      // height of the plot, so a second column of numbers beside it would be
+      // labelling the panel rather than the selection.
+      const only = this.turnedAxisSelection(box)
+      return only === null ? null : { rows: null, cols: spanText(only) }
+    }
     const rowGroup = groupAt(data.rowGroups, box.anchor.row)
     const colGroup = groupAt(data.colGroups, box.anchor.col)
     const rows = rowGroup === undefined ? null : this.axisSelection(rowGroup, box.rows, data.rowExtent[0])
@@ -4485,6 +4651,22 @@ export class MatrixPanel {
     const emit = this.options.onSelectRegion
     const data = this.data
     if (emit === undefined || data === null) return
+    if (this.turned !== null) {
+      const span = this.turnedAxisSelection(box)
+      if (span === null) return
+      // The same window on both axes, and `diagonal` says so: a turned map is
+      // one sequence against itself, so the region a band names is the square it
+      // was rotated out of — which is the on-diagonal selection, arrived at
+      // without the reader having to hold anything down for it.
+      emit({
+        rows: span,
+        cols: span,
+        diagonal: true,
+        level: data.level,
+        anchor: this.squareCell(box.anchor),
+      })
+      return
+    }
     const rowGroup = groupAt(data.rowGroups, box.anchor.row)
     const colGroup = groupAt(data.colGroups, box.anchor.col)
     if (rowGroup === undefined || colGroup === undefined) return
@@ -4616,8 +4798,14 @@ export class MatrixPanel {
     // the old layout printed `NODE_8524_len_441121` four times, and the number
     // the pointer is actually asking about was the last thing on the card.
     const sameBlock = rowGroup !== undefined && colGroup !== undefined && rowGroup.label === colGroup.label
-    const rowPos = positionIn(rowGroup, cell.row, data.level, this.options.binsize, rowStart)
-    const colPos = positionIn(colGroup, cell.col, data.level, this.options.binsize, colStart)
+    // `square`, like everything above: a turned cell's own row is a *separation*
+    // and its column is a half-bin, so read through the block's own arithmetic
+    // they name a position half way along the picture and a distance up it. The
+    // two names and the "apart" line were mapped back and these two were not,
+    // which is why the card could show the right sequence, the right separation
+    // and a pair of coordinates belonging to neither.
+    const rowPos = positionIn(rowGroup, square.row, data.level, this.options.binsize, rowStart)
+    const colPos = positionIn(colGroup, square.col, data.level, this.options.binsize, colStart)
 
     // Written in place rather than rebuilt. `replaceChildren` with five fresh
     // elements ran on every pointer move — 4-6 allocations and as many

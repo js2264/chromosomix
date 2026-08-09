@@ -57,6 +57,12 @@ const LUCIDE = [
   // The turn: a map on its diagonal is a triangle standing on a genomic axis,
   // which is what the control produces and what it therefore shows.
   'triangle',
+  // …and the toggle that does the turning, which is a quarter-circle arrow
+  // rather than the picture it makes: off it points left, on it points right,
+  // so the control says *which way it will go next* the way an undo and a redo
+  // do. Two icons for one button, swapped on state — see `ui/MatrixPanel.ts`.
+  'undo-2',
+  'redo-2',
   'eye',
   'eye-off',
   'align-right',

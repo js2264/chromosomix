@@ -196,6 +196,29 @@ export function cellAt(
   return { row: i, col: j, separation }
 }
 
+/**
+ * The bins a run of turned columns covers, as a half-open range into the block.
+ *
+ * The inverse of the rotation for a *band* rather than for a cell, and what
+ * turns a drag across a turned map into a window on the genome. A column is half
+ * a bin, so the arithmetic is one multiplication — but the rounding is the whole
+ * of it, and it goes outward at both ends: a reader who drags across a feature
+ * means the bins their band touched, not the bins it wholly contained, and a
+ * band narrower than one bin is still a band. Hence the floor, the ceiling, and
+ * the guarantee of at least one bin in the answer.
+ *
+ * Clamped to the block, because a drag is clamped to the *plot* and the plot is
+ * larger than the data whenever the view is zoomed out.
+ *
+ * @param bins How many bins the square block this band was turned out of has.
+ */
+export function binsForColumns(columns: readonly [number, number], bins: number): [number, number] {
+  const n = Math.max(1, Math.trunc(bins))
+  const lo = Math.max(0, Math.min(n - 1, Math.floor(columns[0] * BIN_FRACTION)))
+  const hi = Math.max(lo + 1, Math.min(n, Math.ceil(columns[1] * BIN_FRACTION)))
+  return [lo, hi]
+}
+
 /** The separation, in bins, that a row of the turned block stands for. */
 export function separationAt(
   rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,

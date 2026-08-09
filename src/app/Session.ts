@@ -898,14 +898,26 @@ export class Session {
       {
         id: 'map-copy',
         group: 'File',
-        title: 'Copy this plot to the clipboard',
+        // The key means "copy the figure", and with a deck up the figure is the
+        // deck: six maps are on screen because the reader arranged six, and
+        // handing back the first cell of the arrangement is answering a question
+        // they did not ask. One command rather than two, because there is only
+        // ever one picture in front of them — see `PanelDeck.copyDeck`.
+        title: this.deck === null ? 'Copy this plot to the clipboard' : 'Copy the deck to the clipboard',
         hint:
-          'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
-          'selected the same key still copies the text.',
+          this.deck === null
+            ? 'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
+              'selected the same key still copies the text.'
+            : 'Every panel as one PNG, laid out as it is on screen, ready to paste. With text ' +
+              'selected the same key still copies the text.',
         keys: KEYS.copyPlot,
         yieldsToText: true,
-        enabled: this.current?.panel !== undefined,
-        run: () => this.current?.panel?.copyPlot(),
+        enabled: this.current?.panel !== undefined || this.deck !== null,
+        run: () => {
+          const deck = this.deck
+          if (deck !== null) void deck.copyDeck()
+          else this.current?.panel?.copyPlot()
+        },
       },
       {
         id: 'fit-tracks',

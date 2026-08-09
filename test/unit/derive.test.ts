@@ -295,6 +295,48 @@ describe('expected, and observed over it', () => {
     const oe = observedOverExpected(b, { rows: [], cols: [] })
     for (const value of oe) expect(Number.isNaN(value)).toBe(true)
   })
+
+  it('leaves a cell of nothing observed as paper, not as maximum depletion', () => {
+    // Zero over anything is zero, and on a scale centred at 1 that is the far
+    // end of the ramp — so a sparse block came out as a wall of "maximally
+    // depleted" over every empty pixel, which is the loudest possible statement
+    // of the one thing the file does not say. `NaN` draws as paper, which is
+    // what an unmeasured cell already looks like everywhere else in the app.
+    const far = (r: number, c: number): boolean => Math.abs(r - c) === 2
+    const b = block(3, 3, (r, c) => (r === c ? 10 : far(r, c) ? 0 : 4))
+    const oe = observedOverExpected(b, { rows: [], cols: [] })
+    expect(Number.isNaN(oe[0 * 3 + 2])).toBe(true)
+    // …and its mirror, which is the same missing observation.
+    expect(Number.isNaN(oe[2 * 3 + 0])).toBe(true)
+    // Everything measured is still a number, including the cells at the same
+    // separation that pulled the baseline down.
+    expect(oe[0 * 3 + 1]).toBeGreaterThan(0)
+    expect(oe[1 * 3 + 1]).toBeCloseTo(1, 6)
+  })
+
+  it('leaves an infinite ratio as paper too', () => {
+    // The same claim from the other end: a baseline too small to divide by is a
+    // fact about the baseline, not a measurement of anything.
+    const b = block(2, 2, (r, c) => (r === c ? 1 : Number.MAX_VALUE))
+    const model = expectedModel(b, { rows: [], cols: [] })
+    // Force the pathological case rather than waiting for a file to produce it.
+    model.cis[1] = Number.MIN_VALUE
+    const oe = observedOverExpected(b, { rows: [], cols: [] }, model)
+    expect(Number.isNaN(oe[0 * 2 + 1])).toBe(true)
+    expect(oe[0]).toBeCloseTo(1, 6)
+  })
+
+  it('keeps a negative ratio, which an extra column may legitimately hold', () => {
+    // `/pixels` can carry any float column the creator wrote, and blanking the
+    // negatives would be this rule deciding what a file is allowed to contain.
+    // Separation 1 holds −2 and 6, so its baseline is 2 and the two cells are
+    // −1× and 3× it.
+    const b = block(2, 2, (r, c) => (r === c ? 4 : r === 0 ? -2 : 6))
+    const oe = observedOverExpected(b, { rows: [], cols: [] })
+    expect(oe[0 * 2 + 1]).toBeCloseTo(-1, 6)
+    expect(oe[1 * 2 + 0]).toBeCloseTo(3, 6)
+    expect(oe[0]).toBeCloseTo(1, 6)
+  })
 })
 
 describe('two files reduced to one number', () => {

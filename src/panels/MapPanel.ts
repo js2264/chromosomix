@@ -40,7 +40,7 @@ import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
 import { icon, iconButton } from '../ui/icons'
-import { fileLabel, splitUri } from '../ui/labels'
+import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
 
 /**
  * What block a view state asks a companion for, before any file has been
@@ -265,12 +265,36 @@ export class MapPanel {
    * looking at rather than the collection they dropped.
    */
   private resolved: string | null = null
+  /**
+   * The last view this panel was handed, so a change of *resolution* can re-read
+   * it without waiting for a navigation.
+   *
+   * Held rather than asked for, because there is nobody to ask: the state
+   * arrives through {@link apply} from a deck that is reconciling every panel at
+   * once, and a companion that wanted it back would have to reach up through the
+   * deck into the session for a value it was already given.
+   */
+  private state: ViewState | null = null
+  /** The sibling entries of the collection this map is inside; `[]` for a plain file. */
+  private entries: string[] = []
+  /** The group they live under — `resolutions` for an mcool, `entries` for an mmetacool. */
+  private entryGroup = ''
+  /** The `::1000` in the heading: a picker, where there is more than one rung. */
+  private readonly entryPicker: HTMLSelectElement
 
   constructor(private readonly props: MapPanelProps) {
+    // The *file's* name only. The entry beside it is the picker below, and a
+    // heading that printed `rep1.mcool::1000` and then offered `::1000` again
+    // would be saying the same thing twice, once as a fact and once as a
+    // control.
     this.nameEl = el('span', {
       class: 'deck-name',
-      text: fileLabel(props.uri),
+      text: fileBaseLabel(props.uri),
       title: props.uri,
+    })
+    this.entryPicker = el('select', { class: 'select select-tiny deck-entry hidden' })
+    this.entryPicker.addEventListener('change', () => {
+      void this.openEntry(this.entryPicker.value)
     })
     this.lockButton = iconButton(
       'link',
@@ -286,6 +310,7 @@ export class MapPanel {
         { class: 'deck-head' },
         this.grip(),
         this.nameEl,
+        this.entryPicker,
         this.lockButton,
         iconButton('x', `Close ${fileLabel(props.uri)}`, () => props.onClose(), {
           class: 'btn-close',
@@ -438,6 +463,83 @@ export class MapPanel {
   }
 
   /**
+   * Offer the other rungs of the ladder this map is on, as the `::1000` beside
+   * its name.
+   *
+   * A companion's resolution is the one thing about *what it reads* that the
+   * deck cannot share, and until now it was also the one thing a reader could
+   * not change. The deck lands an `.mcool` on the lead's bin size (§3.4,
+   * {@link MapPanelProps.preferBinsize}), which is the right guess and only a
+   * guess: two files rarely have the same ladder, and the rung that makes a
+   * comparison legible is not always the one that matches a number. So the entry
+   * is a picker rather than a fact — the same control the breadcrumb gives the
+   * session's own file (`ui/Breadcrumb.ts`), in the only place a companion has
+   * for a control, which is its heading.
+   *
+   * Hidden where there is nothing to pick: a plain cooler has no siblings, and a
+   * one-rung collection offers a choice that cannot be made.
+   */
+  private paintEntries(info: OpenResult): void {
+    this.entries = info.entries
+    this.entryGroup = info.entryGroup === '' ? 'entries' : info.entryGroup
+    const current = entryLabel(this.uri)
+    const offer = info.entries.length > 1 && current !== undefined
+    this.entryPicker.classList.toggle('hidden', !offer)
+    if (!offer) return
+    // Rebuilt only when the list itself changed, which is once per file: this
+    // runs on every read, and replacing a `<select>`'s options while its own
+    // menu is open closes it under the pointer.
+    const listed = Array.from(this.entryPicker.options).map((option) => option.value)
+    if (listed.length !== info.entries.length || listed.some((name, i) => name !== info.entries[i])) {
+      this.entryPicker.replaceChildren(
+        // `::1000`, written the way the URI writes it, because that is what the
+        // reader will paste into a link and what the tooltip on the name says.
+        ...info.entries.map((name) => el('option', { value: name, text: `::${name}` })),
+      )
+    }
+    this.entryPicker.value = current
+    this.entryPicker.title =
+      this.entryGroup === 'resolutions'
+        ? 'Which resolution this map is read at. Only this map moves — the region, the level and ' +
+          'the score stay shared, and the deck keeps navigating as one.'
+        : 'Which map of this collection is drawn here.'
+  }
+
+  /**
+   * Read this panel's file at another rung, keeping everything else.
+   *
+   * The worker is told to open a different address inside the same bytes, so a
+   * local companion keeps the handle it was dropped with and a remote one keeps
+   * its range source. `read` is cleared because the cache key is about the
+   * *view* — the block plan, the level, the score — and none of those has
+   * changed, so without this the panel would decide it had already read this and
+   * go on drawing the old grid.
+   *
+   * The choice is published through {@link MapPanelProps.onResolved}, which is
+   * what makes it stick: the deck rewrites this panel's ref, so the entry is
+   * part of what the panel *is* from then on, and every later navigation reopens
+   * at it rather than at the lead's guess.
+   */
+  private async openEntry(entry: string): Promise<void> {
+    // Compared as *entries*, not as URIs: a link may write `::/resolutions/1000`
+    // and this builds `::resolutions/1000`, which are the same address spelled
+    // two ways, and a string comparison would reopen the file to arrive back
+    // where it already was.
+    if (entry === entryLabel(this.uri) || !this.entries.includes(entry)) return
+    const uri = `${splitUri(this.uri).path}::${this.entryGroup}/${entry}`
+    this.resolved = uri
+    // Both caches, in this order: the open is memoised on the promise and the
+    // read on a key that cannot tell two resolutions apart.
+    this.opening = null
+    this.read = null
+    this.nameEl.title = uri
+    this.props.onResolved(uri)
+    this.panel?.setBusy(true)
+    this.say('')
+    if (this.state !== null) await this.load(this.state)
+  }
+
+  /**
    * Open the file, or open one of the maps inside it (§3.4).
    *
    * A collection — an `.mcool` of resolutions, an `.mmetacool` of entries — is
@@ -465,7 +567,6 @@ export class MapPanel {
       // dropped with: `source` is unchanged because it is the same bytes, and
       // only the address inside them has moved.
       this.resolved = `${splitUri(this.uri).path}::${landing.group}/${landing.entry}`
-      this.nameEl.textContent = fileLabel(this.resolved)
       this.nameEl.title = this.resolved
       this.props.onResolved(this.resolved)
       return this.client.request<'open'>({
@@ -477,6 +578,7 @@ export class MapPanel {
   }
 
   private async load(state: ViewState): Promise<void> {
+    this.state = state
     const plan = planFor(state)
     if (plan.kind === 'none') {
       this.read = null
@@ -491,6 +593,7 @@ export class MapPanel {
     try {
       const info = await this.open()
       if (this.disposed) return
+      this.paintEntries(info)
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
       this.read = key
@@ -683,6 +786,10 @@ export class MapPanel {
     this.panel.setBalanced(score.balance)
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
+    // Both on every block, not only at construction: a panel outlives a change
+    // of rung, and an exported figure captioned with the entry this map *was*
+    // at is wrong in the one place nobody re-checks.
+    this.panel.setCaptionFile(fileLabel(this.uri))
     this.panel.setData(result, fileLabel(this.uri))
     this.nameEl.title =
       `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +

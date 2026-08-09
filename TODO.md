@@ -184,7 +184,7 @@ it is and `HANDOFF.md` §3.2 of what is left.
       `RotateDirection` will draw a `down` band today, but the two halves'
       diagonals are adjacent rows rather than one, so the combined block's y axis
       is two affine lines meeting in the middle — and `AxisCoords`, which every
-      ruler in the app is, is one line. `SPECS.md` §17.6 sets out the three ways
+      ruler in the app is, is one line. `SPECS.md` §17.7 sets out the three ways
       out and what each costs.
 
 

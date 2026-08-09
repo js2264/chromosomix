@@ -293,6 +293,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the pan-and-zoom-free rule from the two it is made of, and removing an operand
   takes it with them.
 
+- **Each companion picks its own resolution, from the `::1000` beside its name.**
+  A deck lands an `.mcool` on the lead's bin size (§3.4), which is the right
+  guess and only a guess: two files rarely have the same ladder, and the rung
+  that makes a comparison legible is not always the one that matches a number.
+  The entry is a picker now rather than a fact — the same control the breadcrumb
+  gives the session's own file, in the only place a companion has for one, which
+  is its heading. The choice is written into that panel's own address, so it
+  survives every navigation, every change of chromosome and the link: the map
+  reopens at the rung the reader chose, not at the one the deck guessed. Hidden
+  on a plain cooler and on a one-rung collection, where the control could not be
+  used.
+
+- **A deck closes from its own bar**, with the × at the right-hand end of it —
+  and it takes the tracks that were only there for the companions with it. A
+  bigWig dropped on a companion's edge is an import into the session's one track
+  list, so closing the maps it was drawn on used to leave it loaded, invisible,
+  and holding a row that said it was drawn nowhere. A track that is *also* on
+  the first map is a different thing — it is being read against a picture that is
+  staying — so it keeps its lane there and loses only the companions'. Nothing
+  touches the first map, which is the session's own view: closing the deck leaves
+  exactly what closing the last companion one at a time would.
+
+- **⌘C copies the whole deck**, laid out as it is on screen, at the same 300 dpi
+  the deck's save uses. The key meant "copy the figure" and copied the lead —
+  one cell out of six, on a screen showing six, which is the answer to a question
+  nobody asked. There is only ever one picture in front of the reader, so there
+  is one command: with a deck up it is the deck, and without one it is the map it
+  always was.
+
 ### Changed
 
 - A shared link carries the two new readings, because both are part of what is
@@ -309,6 +338,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   away the reader's pan and zoom for a change that happened in another panel;
   drawing a 2 × 2 deck paid it four times, and on a gated whole-genome map (§7.3)
   each one would have put the pixel scan back behind its button.
+
+- **The turn and O/E are toggles, side by side, in one row of the Map card.** They
+  are the two controls that change *what picture this is* — one the geometry, one
+  the units — as against the score and the clip, which change what a number is
+  worth, and the overlays, which change what is drawn over it. They were an icon
+  button that looked identical before and after it had been pressed, and a
+  tickbox beside it that made the same kind of setting look like a different kind
+  of thing. Both are now lit the way every overlay toggle is. The turn's mark is a
+  quarter-circle arrow pointing the way the picture is about to go — left while
+  the map is square, right once it is turned — rather than the triangle it used to
+  draw, which was a picture of the *result* and looked the same either way. O/E's
+  mark is the two letters, because a ratio has no shape and the nearest drawn
+  thing is a division sign that would say "divide" without saying by what.
+
+- **No drawn pointer where a guide line is already pointing.** The crosshair is
+  the better instrument of the two — it is drawn at the cell the app has actually
+  resolved, it runs the width and height of the picture, and it continues into
+  every track — while the arrowhead beside it is a second, blunter mark for the
+  same position, sitting on top of the pixel it names. So it goes, exactly where
+  the line comes: on the map while the crosshair is on and the pointer is over a
+  cell, in the 1D browser while it is on and the pointer is on the axis rather
+  than in the name column, and on a lane stack always, since a lane answers a
+  pointer with a hairline whatever the preference says. The transient cursors
+  stay — the closed hand while panning, the crosshair while a selection is about
+  to be drawn — because those say what is *happening*, which no guide line does.
+
+- **The deck's bar reads from the left**, with the one control that ends the deck
+  at the far right. The spacer used to sit second, which split a row of one kind
+  of thing into a chain on the left and three controls floated against the
+  right-hand edge — on a wide window, a screen apart, so reading the bar meant
+  looking in two places and which half a control was in said nothing about what
+  it did.
 
 ### Fixed
 
@@ -408,6 +469,46 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   session keeps one frame for its whole life and it holds the last view it
   framed, so opening a genomes table left a destroyed heatmap's canvas
   referenced until the reader navigated back to a map.
+
+- **A turned band stands on the tracks it is read against.** A band is a fraction
+  of the block deep and twice it wide, so at anything short of a close zoom it
+  fits the panel's height several times over — and it was centred there, which is
+  the square map's rule and the wrong one here. The result was a rectangle
+  floating half way up its panel with a stripe of paper between its diagonal and
+  the profiles the whole turn exists to line up with. It now sits on the edge its
+  diagonal is on: the bottom for an ordinary turn, the top for the mirrored half
+  of a comparison, with whatever room is left over above the apex, which is the
+  part of a contact map that has least in it.
+
+- **The tooltip's coordinates on a turned map.** The two sequence names and the
+  distance were mapped back through the rotation and the pair of positions under
+  them was not, so the card named the right sequence, the right separation, and a
+  pair of coordinates belonging to neither: a turned cell's row is a *separation*
+  and its column is half a bin, and read as block indices they land half way
+  along the picture. Clicking a cell went the same way, and now goes through the
+  same inverse.
+
+- **Both drags on a turned map.** Up the side of a band is distance from the
+  diagonal, which bounds no window — so a marquee committed a box over rows the
+  block does not have, and a mostly-vertical 4C drag asked for a band of
+  separations and resolved to nothing at all, silently, because the axis it named
+  is `null` under a turn. Both gestures now use the axis that has coordinates,
+  which is the only honest reading left. A selection is a full-height band over a
+  stretch of the genome and opens the square it cuts out — the on-diagonal
+  window, without the reader having to hold anything down for it — and a 4C drag
+  names that stretch however the hand travelled. The diagonal lock goes with
+  them: on a turned map the diagonal is the bottom edge of the picture, so
+  snapping a corner to it would be snapping to the frame.
+
+- **O/E leaves an unobserved cell as paper.** Zero over anything is zero, and on
+  a scale centred at 1 that is the far end of the ramp — so an O/E map of a
+  sparse block came out as a wall of "maximally depleted" over every empty pixel,
+  which is the loudest possible statement of the one thing the file does not say.
+  Nothing seen is what paper means on every other map this viewer draws. An
+  infinite ratio goes the same way, being a fact about a baseline too small to
+  divide by rather than a measurement; a negative one stays, because an extra
+  `/pixels` column may legitimately hold negative numbers and blanking those
+  would be this rule deciding what a file is allowed to contain.
 
 ## [0.9.0] - 2026-08-07
 

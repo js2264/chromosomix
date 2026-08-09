@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BIN_FRACTION,
+  binsForColumns,
   cellAt,
   isTurnable,
   positionAt,
@@ -316,5 +317,46 @@ describe('how deep the band opens', () => {
     // produced would creep by a row per press.
     const depth = turnDepthFor({ nrows: 40, ncols: 40 }, 12)
     expect(rotateBlock(block(40, () => 1), { maxSeparation: depth }).nrows).toBe(depth + 1)
+  })
+})
+
+/**
+ * A drag across a turned map, read back as bins.
+ *
+ * The gesture's half of the inverse. `cellAt` answers for one cell and this
+ * answers for a *band*, which is what a selection and a 4C anchor both are — and
+ * the two have to agree, or the region a marquee opens is not the region its
+ * chips were written for.
+ */
+describe('the bins a band of turned columns covers', () => {
+  it('halves the columns, because a column is half a bin', () => {
+    expect(binsForColumns([20, 40], 100)).toEqual([10, 20])
+  })
+
+  it('rounds outward, so a band names every bin it touched', () => {
+    // Columns 21–39 lie inside bins 10–20: a reader who dragged across them
+    // meant those bins, not the ones the band wholly covered.
+    expect(binsForColumns([21, 39], 100)).toEqual([10, 20])
+  })
+
+  it('is at least one bin, however small the drag', () => {
+    expect(binsForColumns([20, 20], 100)).toEqual([10, 11])
+    expect(binsForColumns([21, 21], 100)).toEqual([10, 11])
+  })
+
+  it('stops at the block, since a drag is clamped to the plot and not to the data', () => {
+    expect(binsForColumns([0, 4_000], 100)).toEqual([0, 100])
+    // …and still hands back a band when the whole drag is past the end.
+    expect(binsForColumns([500, 600], 100)).toEqual([99, 100])
+  })
+
+  it('agrees with the cell inverse about where a column is', () => {
+    // The band from one column, against `cellAt`'s answer for the same column on
+    // the diagonal row: both must name the bin the reader is pointing at.
+    const rotated = rotateBlock(block(16, (r, c) => Math.abs(r - c)), { maxSeparation: 6 })
+    for (const column of [0, 1, 8, 9, 20, 21]) {
+      const cell = cellAt(rotated, rowForSeparation(rotated, 0), column)
+      expect(binsForColumns([column, column + 1], 16)[0]).toBe(cell?.row)
+    }
   })
 })

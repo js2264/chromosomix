@@ -318,6 +318,18 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
+**Where a guide line is drawn there is no drawn pointer**, and that is one rule across all three
+surfaces. The line is the better instrument of the two: it is at the position the app has actually
+resolved, it runs the whole height of the picture, and beside a map it continues into every track —
+while the arrowhead is a second, blunter mark for the same coordinate that sits *on* the pixel it
+names, which on a matrix where a cell can be one pixel is the only thing covering the answer. So it
+goes exactly where the line comes, condition for condition: on the map while the crosshair is on and
+the pointer is over a cell, here while it is on and the pointer is on the axis rather than in the
+strip before it, and on a lane stack always, since a lane answers a pointer with its own hairline
+whatever that preference says. The transient cursors stay — the closed hand while panning, the
+crosshair while a selection is about to be drawn — because those say what is *happening*, which no
+guide line does.
+
 Only what follows the pointer goes down there. Everything that describes the *picture* — the sequence
 boundaries, the name column's own edge — stops with the tracks: a boundary is a mark *on* the tracks,
 and a rule carrying it through a screen's worth of blank space is a divider between two things that
@@ -627,6 +639,16 @@ under `ICE` shows the same picture.
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on
 the bias, and every cell of a badly-covered bin is then compared against a baseline its own
 under-coverage helped set. This is cooltools' order, for the same reason.
+
+**The two ends of a ratio are paper, not colour.** A cell where nothing was observed is `0`, and on a
+scale centred at 1 that is the strongest depletion the ramp can draw — so an O/E map of a sparse
+block came out as a wall of "maximally depleted" over every empty pixel, which is the loudest
+possible statement of the one thing the file does not say. Zero is *nothing seen here*, which is what
+paper means on every other map this viewer draws. An infinite ratio goes the same way, being a fact
+about a baseline too small to divide by rather than a measurement of anything, and both are then out
+of the auto range they would otherwise drag. A **negative** ratio stays: an extra `/pixels` column may
+legitimately hold negative numbers, and blanking those would be this rule deciding what a file is
+allowed to contain.
 
 **Diverging values need three things to change together**, and changing fewer produces a plausible
 picture of the wrong thing:
@@ -1122,10 +1144,20 @@ session with companions costs the session it would have been, plus the companion
 | Score column and balancing | yes | |
 | Derived values and the 45° turn (§7.5) | yes | |
 | Pan and zoom | yes (§16.3) | opt out |
+| Which rung of a collection (§3.4) | seeded from the lead | yes |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | opt in | yes |
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
+
+**Resolution is the one thing on the shared side of that line that cannot be shared**, and it is why
+the lock's currency is base pairs (§16.3). Two files rarely have the same ladder, so a deck lands an
+`.mcool` on the lead's bin size where that rung exists and on its finest otherwise — the right guess,
+and only a guess: the rung that makes a comparison legible is not always the one that matches a
+number. So the entry is a picker, as the `::1000` beside the companion's name, and the choice is
+written into that panel's own address rather than held beside it. That is what makes it stick: the
+map reopens at the rung the reader chose after every navigation, every change of chromosome, and
+through the link.
 
 The derivations sit on the shared side of it and the turn sits beside them, which is the rule read
 carefully rather than an exception to it. A normalisation, an O/E baseline and a 45° rotation each
@@ -1274,9 +1306,21 @@ and **no grip** — it is the session's own view re-parented into cell 0, and wh
 of is not a thing that should change by dragging.
 
 The deck's bar holds only what is shared: the master chain, one scale for all, how many across, and
-one figure of the whole deck. Adding a map is the `+` on an edge and rearranging is the grip, so
-neither is a button here — a bar that repeats what the pictures already offer is a second place to
-look for the same thing.
+the whole deck as one figure — saved, or copied to the clipboard, which is what `⌘C` reaches while a
+deck is on. Adding a map is the `+` on an edge and rearranging is the grip, so neither is a button
+here — a bar that repeats what the pictures already offer is a second place to look for the same
+thing.
+
+It is **read from the left**, in one run, with exactly one control across the gap at the far right:
+the × that closes the deck. Everything else in the bar adjusts a deck that is staying, and a
+destructive control in among them is one a hand reaches by accident; a window's close has been at
+that end for thirty years. What it closes is every companion **and every track that was only there
+for them** — a bigWig dropped on a companion's edge is an import into the session's one track list,
+so closing the maps it was drawn on would otherwise leave it loaded, invisible, and holding a row
+that says it is drawn nowhere. A track that is also on the first map is being read against a
+picture that is staying, so it keeps its lane there and loses only the companions'. The first map is
+untouched throughout: closing the deck leaves exactly what closing the last companion one at a time
+would.
 
 A companion's scale controls ride **on its picture**: a button in the bottom-left corner of the map,
 opening a menu upward over it, holding the five fields that say what the numbers are and how they
@@ -1489,6 +1533,14 @@ The drag gives the band the pixels the hand travelled. Its rate is taken **once,
 the band is redrawn deeper on every step, so a rate read from the band as it grows would make the
 second half of one continuous movement slower than the first.
 
+The band **stands on the edge its diagonal is on**, rather than being centred in the panel. A square
+map smaller than the area reserved for it is a picture, and a picture is centred; a band is not that.
+Its bottom edge *is* the diagonal, and the tracks under the map are drawn against that same axis — so
+a band that fits vertically, which is every band short of a close zoom, floated half way up its panel
+with a stripe of paper between it and the profiles the whole turn exists to line it up with. The
+slack goes above the apex instead, which is the part of a contact map that has least in it. The
+mirrored half of a comparison stands on the top edge, by the same rule read the other way up.
+
 ### 17.3 The turn is the deck's, not one map's
 
 Like the derivations of §7.5, the turn is a property of the **session** and reaches every map in a
@@ -1533,7 +1585,33 @@ the width of a base-pair label, because a horizontal ruler is what it was chosen
 band is a hundred pixels tall, which at that spacing fits one tick, on the diagonal, in the corner
 the column labels have already claimed.
 
-### 17.6 Not yet: the butterfly
+### 17.6 What a drag means on a turned map
+
+Both gestures collapse onto the **x axis**, because it is the only one with coordinates on it.
+
+Up the side is distance from the diagonal, which bounds no window: a marquee's top and bottom edges
+name nothing, and a band of rows is a range of separations rather than a stretch of genome. Read as
+block indices they are worse than useless — a marquee committed a box over rows the block does not
+have, and a mostly-vertical 4C drag resolved to nothing at all, silently, because the row axis a turn
+leaves is `null` (§17.4).
+
+So a **selection** is a full-height band over a stretch of the genome, and it opens the square that
+stretch cuts out: the same window on both axes of the block the band was turned out of. That is the
+*on-diagonal* selection, which on a square map is what Shift adds to the selection modifier — here it
+is the only honest reading, so the reader arrives at it without holding anything down for it. A **4C
+drag** names that same stretch, whichever way the hand travelled, rather than asking the hand which
+axis it meant. And the diagonal lock is off: on a turned map the diagonal is the bottom edge of the
+picture, so snapping a corner onto it would be snapping to the frame.
+
+The arithmetic is the rotation's, halved — a column is half a bin — and the rounding goes outward at
+both ends. A reader who drags across a feature means the bins their band *touched*, not the bins it
+wholly contained, and a band narrower than one bin is still a band.
+
+The same inverse serves the readout, and has to: the two names, the separation, the pair of positions
+and the value are all questions about the square block, and anything that answers one of them from a
+turned row or a half-bin column is naming a place that is not on the picture.
+
+### 17.7 Not yet: the butterfly
 
 Two files compared under a turn should be **two rectangles meeting at one genomic axis**, the second
 growing downward — which is a better presentation of that comparison than the square, the two being

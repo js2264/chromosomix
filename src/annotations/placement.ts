@@ -148,6 +148,30 @@ export function isPlaced(lanes: readonly Lane[], track: string, map: MapId): boo
 }
 
 /**
+ * Whether a track exists *only* for a set of maps that are about to go.
+ *
+ * What "loaded for the deck" means, stated once. A bigWig dropped on a
+ * companion's edge is an import into the session's one track list, so closing
+ * the maps it was drawn on leaves it loaded, invisible, and holding a row in the
+ * Tracks card that says it is drawn nowhere. A track that is *also* on another
+ * map is a different thing — it is being read against a picture that is staying
+ * — and only loses the lanes of the maps that leave.
+ *
+ * A track on **no** map is not "only on these": "imported and undrawn" is a
+ * state this model has on purpose (see the module head), and it is what a reader
+ * has left behind when they take a track off every map and keep it. Sweeping
+ * those up here would make closing a deck delete something it never touched.
+ */
+export function onlyOn(
+  lanes: readonly Lane[],
+  track: string,
+  maps: ReadonlySet<MapId>,
+): boolean {
+  const drawn = mapsOf(lanes, track)
+  return drawn.length > 0 && drawn.every((map) => maps.has(map))
+}
+
+/**
  * Draw a track on one edge of one map, if it is not there already.
  *
  * Appended, so a new lane joins the foot of the stack it lands in — the same
