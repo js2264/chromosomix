@@ -228,10 +228,9 @@ describe('every descriptor', () => {
   })
 
   /**
-   * Three parameters point at another parameter *by key*, and a rename would
-   * break the link with no type error and no failing task — the control would
-   * simply stop following the thing it was supposed to follow, which on
-   * `fromMap` means a locus box that quietly goes back to being a text box.
+   * A `column` parameter points at another parameter *by key*, and a rename
+   * would break the link with no type error and no failing task — the control
+   * would simply stop following the thing it was supposed to follow.
    */
   it('resolves every parameter that names another one', () => {
     each((task) => {
@@ -240,29 +239,22 @@ describe('every descriptor', () => {
         if (spec.kind === 'column') {
           expect(keys, `${task.id}.${spec.key} → ${spec.from}`).toContain(spec.from)
         }
-        if (spec.kind === 'region' && spec.fromMap !== undefined) {
-          expect(keys, `${task.id}.${spec.key} → ${spec.fromMap}`).toContain(spec.fromMap)
-          const toggle = task.params.find((other) => other.key === spec.fromMap)
-          expect(toggle?.kind, `${task.id}.${spec.fromMap} is a toggle`).toBe('toggle')
-        }
       }
     })
   })
 
   /**
-   * The map's anchor gesture has existed since §8.9 and the 4C *lane* has always
-   * drawn from it; the task asked for the same locus again in a text box. On by
-   * default, because a reader who is looking at a map and wants a profile
-   * through a spot on it has already told the app where — twice would be once
-   * too many.
+   * A reader looking at a map who wants a profile through a spot on it has
+   * already got the spot in front of them, and reading coordinates off the
+   * picture to type them back in is the thing the button exists to save. The
+   * button is only offered where a map exists, which `ParamForm` decides — this
+   * checks the half the descriptor owns.
    */
-  it('has 4C picking its anchor on the map, by default', () => {
+  it('lets 4C pick its anchor on the map', () => {
     const task = TASKS.find((candidate) => candidate.id === 'fourc')
     expect(task).toBeDefined()
-    const toggle = task?.params.find((spec) => spec.key === 'fromMap')
-    expect(toggle?.kind).toBe('toggle')
-    expect(toggle?.kind === 'toggle' && toggle.default).toBe(true)
     const anchor = task?.params.find((spec) => spec.key === 'anchor')
-    expect(anchor?.kind === 'region' && anchor.fromMap).toBe('fromMap')
+    expect(anchor?.kind).toBe('region')
+    expect(anchor?.kind === 'region' && anchor.pickable).toBe(true)
   })
 })

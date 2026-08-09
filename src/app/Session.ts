@@ -45,7 +45,7 @@ import {
 } from '../state/ViewState'
 import { recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
-import { resetViewpoint } from '../ui/viewpoint'
+import { resetPick } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
@@ -1828,9 +1828,9 @@ export class Session {
    */
   private setUpBrowserAnnotations(assembly: Assembly): void {
     const scope = this.memoryKey(assembly.uri)
-    // A new genome is a new set of sequence names; an anchor from the last one
-    // would name a place this one has never heard of. See `setUpAnnotations`.
-    resetViewpoint()
+    // A new genome is a new set of sequence names; a locus picked from the last
+    // one would name a place this one has never heard of. See `setUpAnnotations`.
+    resetPick()
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
@@ -2427,13 +2427,11 @@ export class Session {
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
-    // The 4C anchor names a sequence, and the same name in another file is
-    // another place: carrying one across would draw a profile of somewhere the
-    // reader never pointed at. The *lane* needs no clearing — it lives in the
-    // outgoing file's store, which is being replaced — but the anchor is a
-    // module-level fact about which locus is being asked about, and this is the
-    // one moment that stops being true.
-    resetViewpoint()
+    // A picked locus names a sequence, and the same name in another file is
+    // another place: carrying one across would hand a form coordinates from
+    // somewhere the reader never pointed at. A module-level fact about which
+    // locus was last asked for, and this is the one moment it stops being true.
+    resetPick()
     // The comparison belonged to the file that is being replaced. Its worker
     // goes with it — the second map was a second map *of this one*, and there is
     // no sense in which it survives the first being closed.

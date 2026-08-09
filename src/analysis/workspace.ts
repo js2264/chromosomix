@@ -306,8 +306,7 @@ export class AnalysisWorkspace {
       const entry = syntheticEntry(output, source, output.colour ?? store.nextColour())
       // `begin` is the one door every row goes through, and it opens them
       // `loading`; the vector is already in hand, so this one is ready the
-      // moment the worker has been told about it — the same two-step the 4C
-      // lane takes in `ui/viewpoint.ts`.
+      // moment the worker has been told about it.
       store.begin({
         card: 'synthetic',
         kind: 'track',

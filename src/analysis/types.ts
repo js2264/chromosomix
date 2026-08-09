@@ -205,24 +205,23 @@ export interface RegionParam extends ParamBase {
    */
   required?: boolean
   /**
-   * The key of a toggle that makes this locus **follow the map's anchor**.
+   * Offer a **Pick on map** button beside the box.
    *
-   * The map has had the gesture since §8.9 — shift-drag along either axis names
-   * a stretch of sequence, and the 4C *lane* draws from it. What was missing was
-   * the connection: the analysis task asked for the same thing again, in a text
-   * box, next to a map the reader had already pointed at.
+   * Shift-drag on the map names a stretch of one axis; ordinarily that zooms,
+   * and while the button is lit it fills this box instead — once, and then the
+   * button goes out (`ui/mapPick.ts`). What the reader is doing is answering a
+   * question the form asked, so the form is where the asking is visible.
    *
-   * A toggle rather than a mode of the control, and a *parameter* rather than
-   * form state, because it belongs in the provenance: "the anchor was picked on
-   * the map" and "the anchor was typed" are different claims about where a
-   * number came from, and §18.4 exists to record exactly that kind of thing. It
-   * also means the choice is remembered per file and per task like every other.
+   * Not recorded as a parameter of its own, and that is a deliberate change from
+   * the toggle this replaces: what belongs in the provenance is the *locus*, and
+   * "typed" versus "pointed at" is a fact about the reader's hand rather than
+   * about the number. The value written is always the resolved locus.
    *
-   * While it is on, the box is read-only and mirrors the anchor. The value
-   * written into the parameter is the resolved locus, never a sentinel, so a
-   * result's record names the place rather than the gesture.
+   * Ignored where there is no map to point at — the panel exists on a
+   * tracks-only session (§18.2), and a button nothing can answer is worse than
+   * no button.
    */
-  fromMap?: string
+  pickable?: boolean
 }
 
 /**
@@ -296,9 +295,9 @@ export function paramVisible(spec: ParamSpec, params: Params): boolean {
  * A **snapshot**, and that is the whole point (§18.4). A finished result is a
  * record rather than a live view: panning afterwards does not change a pileup,
  * the drawer states which framing the numbers belong to, and a **Recompute
- * here** button takes a new snapshot. This is the discipline
- * `render/viewpoint.ts` already keeps for the on-the-fly 4C lane, and it is why
- * the 4C *task* is a different object from that *lane* rather than a bigger
+ * here** button takes a new snapshot. It is the discipline the on-the-fly 4C
+ * *lane* never kept — it redrew itself from whatever block was loaded, which is
+ * one of the reasons it is gone (§18.9) and the 4C **task** is not a bigger
  * version of it.
  */
 export interface AnalysisFraming {

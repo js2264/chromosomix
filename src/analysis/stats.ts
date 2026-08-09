@@ -4,7 +4,7 @@
  * The rule is the one this whole codebase keeps: **`NaN` means *no value here***
  * — a bin the balancer dropped (§6.4), a feature that fell off the end of a
  * contig, a window with no reads under it. It is skipped, it never enters a
- * total, and it is never quietly read as zero. `render/viewpoint.ts` makes the
+ * total, and it is never quietly read as zero. `analysis/viewpoint.ts` makes the
  * same point about band sums and gives the same reason: turning "this row was
  * filtered" into "this row touches nothing" is not a rounding error, it is the
  * opposite claim, and it is the claim that ends up in the figure.
@@ -20,7 +20,7 @@
  * compartment call is the entire result.
  *
  * The second is that **totals accumulate in `Float64Array` even when the input
- * is `Float32Array`.** `render/viewpoint.ts` lines 50–56 says why that is not
+ * is `Float32Array`.** `analysis/viewpoint.ts`'s `bandSums` says why that is not
  * fussiness: a sum over a thousand rows of a deep map runs past what float32
  * adds without drift, and the drift arrives as a curve whose peaks are a few per
  * cent short — plausible, and wrong.

@@ -2,7 +2,7 @@
  * Diamond insulation, and the boundaries its minima call.
  *
  * The arithmetic a reader can do by eye and cannot do accurately, which is the
- * same sentence `render/viewpoint.ts` opens with and the same reason both exist:
+ * same sentence `analysis/viewpoint.ts` opens with and the same reason both exist:
  * slide a square window along the diagonal, and at every bin ask how much
  * contact crosses it. Where a domain boundary sits, very little does.
  *
@@ -56,7 +56,7 @@ export interface DiamondOptions {
  * on both sides of the boundary, which is the thing a boundary does *not*
  * suppress, and it is the difference between a dip and a smear.
  *
- * Accumulated in `Float64Array`, for `render/viewpoint.ts`'s reason: a sum over
+ * Accumulated in `Float64Array`, for `analysis/viewpoint.ts`'s reason: a sum over
  * a thousand rows of a deep map runs past what float32 adds without drift, and
  * the drift shows up as a track whose peaks are a few per cent short — plausible,
  * and wrong.

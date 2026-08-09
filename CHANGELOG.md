@@ -445,17 +445,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the analysis worker is never mounted because nothing asks it for a pixel, and a
   result's provenance names the assembly rather than a block.
 
-- **A 4C anchor is picked on the map.** The gesture was already there — shift-drag
-  along either axis of a map names a stretch of sequence, and the 4C lane has drawn
-  from it since 0.9 — but the analysis task asked for the same locus again, in a
-  text box, beside a map the reader had just pointed at. **Pick on map** is on by
-  default: the box mirrors the anchor, follows it as it moves, and says so. Turn it
-  off and the picked locus is left behind as the starting point for an edit rather
-  than an empty box, so switching between the two never loses the answer.
+- **A 4C anchor is picked on the map.** Reading coordinates off a picture in order
+  to type them back in beside it is asking twice, so the Anchor box carries a
+  **Pick on map** button: press it, Shift-drag along either axis, and the box
+  fills. An *arm* rather than a mode left on — one drag answers it and the button
+  goes out, so a reader who wanted one anchor does not find their next three
+  attempts to zoom quietly redefining it. Escape is the way out, and it works from
+  wherever the focus happens to be, since the button that armed it is across the
+  window from the plot.
 
   What is written into the parameter is the resolved locus, never a "from the map"
   sentinel — so the record of a run names the place it was a reading of, which is
-  the whole of what the provenance is for.
+  the whole of what the provenance is for. The box stays editable throughout: a
+  picked locus is a starting point for a typed correction rather than a
+  replacement for one.
 
 - **Results come back as tracks.** A task that produces one value per bin —
   insulation, 4C, coverage, an eigenvector — lands in the Annotations panel as a
@@ -539,6 +542,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   requests*.
 
 ### Changed
+
+- **The virtual 4C lane is gone, and Shift-drag is a zoom.** Shift-dragging on a
+  map used to conjure a strip beside it summing that band of the matrix. Every
+  part of that the **4C task** now does better: it reads the pixel table rather
+  than whatever block happened to be loaded, it produces a track with a row on a
+  card and a bigWig to export, and it carries a provenance line saying what it
+  is. A dimmer second copy of the same answer, appearing without being asked for
+  and redrawing itself on every pan, is worth removing even when it works — and
+  the two disagreed at every level but the finest.
+
+  What replaces it is the gesture the picture was missing. **Shift-drag names a
+  band of one axis and zooms to it**, on the map, on the track lanes beside it,
+  and in the 1D browser — one conversion from pixels to bins behind all three, so
+  a stretch dragged out next to the map is the stretch the map goes to. The axis
+  follows the hand, so a drag a few degrees off vertical still means what it
+  plainly meant, and the axis nobody dragged keeps its centre.
+
+  **And every one of these gestures copies what it framed.** Shift-drag writes
+  `chrIV:500001-510000`: no thousands separators, a plain hyphen, 1-based
+  inclusive — the difference between a string that pastes into samtools,
+  bedtools, IGV and this app's own locus boxes and one that only looks right.
+  Option-drag, which selects a box, writes both axes as
+  `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what
+  that stretch would produce on its own.
+
+  Nothing else about lanes changed, because the lane was never the point: the
+  `viewpoint` kind and card are gone from the store, and the four edges, the
+  drag-to-another-edge, the tooltip and the exported figure are the code they
+  already were.
 
 - A shared link carries the two new readings, because both are part of what is
   being looked at rather than how it is shaded: `oe` for the baseline and `op`

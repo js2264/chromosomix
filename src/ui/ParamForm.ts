@@ -47,8 +47,8 @@ import type {
 } from '../analysis/types'
 import { DETAIL_SEP } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
-import { el, fmt } from './dom'
-import { getViewpointAnchor, subscribeViewpoint } from './viewpoint'
+import { button, el, fmt } from './dom'
+import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
 import { iconButton } from './icons'
 
 /**
@@ -1189,21 +1189,24 @@ export class ParamForm {
 
   /**
    * A locus: a box, with the file's sequences offered beside it — and, where the
-   * descriptor says so, following the map instead.
+   * descriptor says so, a button that takes one off the map.
    *
-   * The box stays because a span is the point: a 4C anchor is a window, and a
+   * The box stays because a span is the point: an anchor is a window, and a
    * dropdown of sequence names could not express one. The `<datalist>` turns the
    * common case back into a pick — type nothing and the sequences are there, pick
    * one and then add `:500,000-510,000` if that is what was meant.
    *
-   * **{@link RegionParam.fromMap} is the interesting half.** The map has had the
-   * anchor gesture since §8.9 and the 4C lane already draws from it; what was
-   * missing was that a task asked for the same locus again, in a text box, beside
-   * a map the reader had just pointed at. While the named toggle is on this box
-   * mirrors `ui/viewpoint.ts`'s anchor and is read-only, and the *resolved* locus
-   * is what gets written into the parameter — so the provenance names the place
-   * rather than the gesture, and turning the toggle off leaves the picked locus
-   * behind as the starting point for an edit rather than an empty box.
+   * **{@link RegionParam.pickable} is the interesting half.** Shift-drag on the
+   * map names a stretch of one axis; ordinarily that zooms, and while this
+   * button is lit it fills this box instead. An *arm* rather than a mode the
+   * form leaves on: the button lights, the next drag answers it, and it goes
+   * out — so a reader who wanted one anchor does not find their next three
+   * attempts to zoom quietly redefining it.
+   *
+   * What is written into the parameter is the **resolved locus**, never a
+   * sentinel, so a result's record names the place rather than the gesture — and
+   * the box stays editable throughout, because a picked locus is a starting
+   * point for a typed correction rather than a replacement for one.
    */
   private locusControl(spec: RegionParam): Control {
     const id = `${this.id}-${spec.key}`
@@ -1222,8 +1225,18 @@ export class ParamForm {
     })
     const note = el('p', { class: 'hint param-map-note hidden' })
 
-    const following = (): boolean =>
-      spec.fromMap !== undefined && this.params[spec.fromMap] === true
+    // Offered only where there is a map to point at: on a tracks-only session
+    // the gesture has no surface, and a button that cannot be answered is worse
+    // than no button.
+    const pickable = spec.pickable === true && this.context.hasMap
+    const arm = !pickable
+      ? null
+      : button('Pick on map', () => (isArmed() ? disarmPick() : armPick()), {
+          class: 'btn btn-toggle param-pick',
+          title:
+            'Then Shift-drag along either axis of the map. That gesture normally zooms; while ' +
+            'this is lit it names this locus instead, once.',
+        })
 
     const refill = (): void => {
       options.replaceChildren(
@@ -1237,38 +1250,37 @@ export class ParamForm {
     })
 
     const sync = (): void => {
-      const follow = following()
-      box.readOnly = follow
-      box.classList.toggle('is-following', follow)
-      note.classList.toggle('hidden', !follow)
-      if (follow) {
-        const at = getViewpointAnchor()
-        note.textContent =
-          at === null
-            ? 'Shift-drag along either axis of the map to name the anchor.'
-            : 'Following the map. Shift-drag to move it.'
+      if (arm !== null) {
+        const armed = isArmed()
+        arm.setAttribute('aria-pressed', String(armed))
+        arm.textContent = armed ? 'Pointing…' : 'Pick on map'
+        note.classList.toggle('hidden', !armed)
+        note.textContent = armed
+          ? 'Shift-drag along either axis of the map. Escape to stop.'
+          : ''
       }
-      if (document.activeElement === box && !follow) return
+      if (document.activeElement === box) return
       box.value = stringOr(this.params[spec.key], '')
-      box.placeholder = follow
-        ? 'nothing picked yet'
-        : framingRegion(this.context)
     }
 
-    // Written into the parameter rather than read at Run time, so a *record* of
-    // the run names the locus. The runner never learns that a map was involved,
-    // which is what keeps the anchor one concept rather than two.
-    const takeAnchor = (): void => {
-      if (!following()) return
-      const at = getViewpointAnchor()
-      this.commit(spec.key, at === null ? '' : `${at.contig}:${at.start + 1}-${at.end}`)
-      // `commit` is a no-op when the value has not moved, and the note still has
-      // to answer "is there an anchor yet" — so the repaint is unconditional.
-      sync()
-    }
-    if (spec.fromMap !== undefined) {
-      this.teardown.push(subscribeViewpoint(() => takeAnchor()))
-      takeAnchor()
+    // Written into the parameter rather than held as form state, so a *record*
+    // of the run names the locus. The runner never learns a map was involved,
+    // which is what keeps an anchor one concept rather than two.
+    if (pickable) {
+      let seen = lastPick()
+      this.teardown.push(
+        subscribePick(() => {
+          const at = lastPick()
+          // Only a *new* pick writes. Arming and disarming announce on the same
+          // channel, and a disarm that re-committed the last locus would undo a
+          // correction the reader had just typed over it.
+          if (at !== null && at !== seen) {
+            seen = at
+            this.commit(spec.key, locusText(at))
+          }
+          sync()
+        }),
+      )
     }
 
     refill()
@@ -1277,7 +1289,11 @@ export class ParamForm {
       spec,
       wrapper: this.wrap(
         spec,
-        this.labelled(spec, el('div', { class: 'param-locus' }, box, options), id),
+        this.labelled(
+          spec,
+          el('div', { class: 'param-locus' }, box, options, ...(arm === null ? [] : [arm])),
+          id,
+        ),
         undefined,
         note,
       ),
@@ -1285,9 +1301,6 @@ export class ParamForm {
       sync,
       refill: () => {
         refill()
-        // Following the map is a live connection, not a value copied once: a new
-        // file has new sequences and the anchor may name none of them.
-        takeAnchor()
         sync()
       },
     }

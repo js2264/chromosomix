@@ -1,18 +1,19 @@
 /**
- * The virtual 4C profile, as arithmetic.
+ * Summing a band of a dense block — the arithmetic under the 4C task.
  *
- * Two properties carry it and both fail quietly. The **sum** has to skip the
+ * One property carries it and it fails quietly: the sum has to **skip** the
  * `NaN` a balancer leaves behind rather than propagate it, or one filtered row
- * inside an anchor turns every column into "touches nothing" — a claim the
- * picture above the lane visibly contradicts, but only if you look. And the
- * **projection** onto canvas pixels has to average rather than total, or the
- * height of the line depends on the zoom and the value axis is meaningless.
+ * inside an anchor turns every column into "touches nothing", which is the
+ * opposite claim from the one the data supports.
+ *
+ * The lane that used to draw these sums beside the map is gone (§18.9) and the
+ * projection onto canvas pixels went with it; what is left is the number, which
+ * the task reads from a dense square when it has one on hand.
  */
 
 import { describe, expect, it } from 'vitest'
 
-import { bandSums, profileFromSums } from '@/render/viewpoint'
-import type { LaneFrame } from '@/render/lane'
+import { bandSums } from '@/analysis/viewpoint'
 import type { DenseMatrix } from '@/types'
 
 /** A block whose cell (r, c) is a distinct, checkable number. */
@@ -22,25 +23,6 @@ function block(nrows: number, ncols: number, at: (row: number, col: number) => n
     for (let col = 0; col < ncols; col++) values[row * ncols + col] = at(row, col)
   }
   return { nrows, ncols, values, rowExtent: [0, nrows], colExtent: [0, ncols] }
-}
-
-/**
- * A lane over `pixels` canvas pixels showing `units` matrix columns.
- *
- * Only the four members the profile reads are real; the rest of `LaneFrame` is
- * the drawing code's, and nothing here draws.
- */
-function frame(pixels: number, units: number): LaneFrame {
-  return {
-    orientation: 'bottom',
-    toPixel: (unit) => (unit * pixels) / units,
-    toUnit: (pixel) => (pixel * units) / pixels,
-    domain: [0, units],
-    alongFrom: 0,
-    alongTo: pixels,
-    acrossFrom: 0,
-    thickness: 40,
-  }
 }
 
 describe('summing a band of rows', () => {
@@ -67,10 +49,10 @@ describe('summing a band of rows', () => {
 })
 
 /**
- * The other way round, which is what a 4C lane drawn *beside* the map is a
- * picture of: the same anchor, summed over a band of columns, answered per row.
+ * The other way round: the same anchor, summed over a band of columns, answered
+ * per row.
  *
- * It is a separate description rather than a parameterised copy of the one above
+ * A separate description rather than a parameterised copy of the one above,
  * because the failure it guards against is a transposed index — a bug that
  * produces a plausible profile of the wrong axis, and that a test sharing the
  * loop under test could not see.
@@ -98,40 +80,5 @@ describe('summing a band of columns', () => {
   it('skips a filtered bin rather than propagating it', () => {
     const matrix = block(2, 3, (row, col) => (col === 1 ? Number.NaN : row + 1))
     expect([...bandSums(matrix, [0, 3], 'rows')]).toEqual([2, 4])
-  })
-})
-
-describe('projecting the sums onto the lane', () => {
-  // The property that keeps the value axis meaningful: the same data at two
-  // zooms must put the line at the same height.
-  it('averages the columns in a pixel rather than totalling them', () => {
-    const sums = Float64Array.from([10, 10, 10, 10, 10, 10, 10, 10])
-    const coarse = profileFromSums(sums, frame(4, 8))
-    const fine = profileFromSums(sums, frame(8, 8))
-    expect([...coarse.mean]).toEqual([10, 10, 10, 10])
-    expect([...fine.mean]).toEqual([10, 10, 10, 10, 10, 10, 10, 10])
-  })
-
-  it('puts a peak under the column it came from', () => {
-    const sums = new Float64Array(8)
-    sums[5] = 100
-    const profile = profileFromSums(sums, frame(8, 8))
-    expect(profile.mean[5]).toBe(100)
-    expect(profile.mean[4]).toBe(0)
-    expect(profile.mean[6]).toBe(0)
-  })
-
-  // Zero is a reading — "nothing touches here" — and a floor at the minimum
-  // would draw the emptiest column in view sitting on the axis.
-  it('scales from zero, and gives an empty window a readable ceiling', () => {
-    const peaky = profileFromSums(Float64Array.from([3, 9, 3, 3]), frame(4, 4))
-    expect(peaky.extent).toEqual({ min: 0, max: 9 })
-    const empty = profileFromSums(new Float64Array(4), frame(4, 4))
-    expect(empty.extent).toEqual({ min: 0, max: 1 })
-  })
-
-  it('reports an envelope only where a pixel really covered several columns', () => {
-    expect(profileFromSums(new Float64Array(64), frame(8, 64)).envelope).toBe(true)
-    expect(profileFromSums(new Float64Array(8), frame(8, 8)).envelope).toBe(false)
   })
 })

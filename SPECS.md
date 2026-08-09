@@ -883,7 +883,7 @@ mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarte
 figure, so it must stay inside `VectorPage`'s op list, while anything that is a *control* must stay
 in the DOM layer, which the figure geometry does not build.
 
-### 8.9 Four edges, and the 4C lane that proves it
+### 8.9 Four edges, and one gesture in one dimension
 
 A lane may be drawn on **any of the map's four edges**, and the four are peers. `top` and `bottom`
 follow the map's columns; `left` and `right` follow its rows. One rule covers all of them and it is
@@ -907,31 +907,51 @@ Exactly one edge therefore turns a lane's axis on arrival, which is what it was 
 two. Moving a lane between two edges turns it again exactly when that answer changes, so a reader who
 deliberately hung a track from its ceiling keeps that decision through the move.
 
-**The virtual 4C profile is a lane.** A 4C experiment fixes one locus and asks what it touches; a
-contact map already contains the answer for every locus at once, and extracting one is a band of the
-matrix summed (`render/viewpoint.ts`). Shift-dragging on the map names the anchor, as a locus rather
-than as rows, so it survives a pan, a zoom, a change of resolution and a change of view.
+#### The lane that used to be here
 
-What makes it a *lane* rather than a strip of its own is the whole of the design: it is a synthetic
-entry in the same `AnnotationStore`, so renaming it, typing its limits, handing its axis back to the
-data, dragging its ceiling, dragging its floor to resize it, dragging its handle to reorder it or to
-move it to another edge, reading it in the tooltip and drawing it into an exported figure are all the
-one implementation every other lane uses. It carries no file, so it is on no card, is never
-persisted, and is not drawn in the 1D browser — and because it is computed from the block already on
-screen rather than fetched, it is the one lane that draws on a block with no coordinate system at
-all.
+There was a **virtual 4C lane**: shift-drag on the map named an anchor, and a strip appeared summing
+that band of the matrix, computed from the block on screen. It was a synthetic entry in the same
+`AnnotationStore` as everything else, which is what made renaming it, restyling it, rescaling it and
+dragging it to another edge one implementation rather than a second copy — and that argument still
+holds and is now made by the **synthetic tracks** of §18.5.
 
-Moving it to another edge is not a rotation but a different question. A strip above or below the map
-sums a band of **rows** and answers per column; a strip beside it sums a band of **columns** and
-answers per row. Same anchor, same block, the transpose — which off the diagonal may have an answer
-on one axis and none on the other, and the lane says so.
+It is gone, and the reason is not the lane, it is the **second answer**. §18.9's 4C *task* asks the
+same question of the *file* rather than of the picture: it reads the pixel table, so it is not
+bounded by what happens to be loaded; it produces a track that is a track like any other, with a row
+on a card and a bigWig to export; and it carries a provenance line saying what it is. A dimmer copy
+of that appearing beside the map without being asked for, redrawing itself on every pan, is a worse
+version of the same claim in the same session — and the two would disagree at every level but the
+finest.
 
-The lane also marks **where its anchor is on its own axis**, as a short bar in a gutter it keeps
-clear off its floor — the one end of a lane the signal never reaches. The band being summed is on the
-other axis and is therefore nowhere in the picture; this is the complementary fact, and it is the one
-a reader keeps asking for, because on a map read about its diagonal it is where the self-contact peak
-ought to be. Off the diagonal the anchor may name a sequence this axis does not carry, and then there
-is no mark.
+What is kept is one sentence: *the reader can point at a locus.* The 4C task's **Pick on map** button
+arms `ui/mapPick.ts`; the next drag on a map names a locus for that form and the button goes out. It
+is a mode on a picture, so it disarms after **one** pick and it disarms on Escape, and both rules are
+in the module rather than in the map — the map's whole job is to ask `isArmed` before it decides what
+a drag means.
+
+#### Shift-drag is a zoom, in one dimension, everywhere
+
+Freed of the anchor, **Shift-drag names a band of one axis and zooms to it**. Which axis is decided
+by which way the hand went, so a drag a few degrees off vertical still means what it plainly meant.
+Zoom is one scalar for both axes, because that is what keeps a cell square (`imshow(aspect="equal")`),
+so a 1D gesture has a 2D consequence: the axis nobody dragged keeps its centre and takes the same
+zoom. On a map read about its diagonal that is the square the reader wanted anyway.
+
+The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
+the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
+lane canvases to the map's along their shared axis, and two conversions would be two chances to name
+different stretches. A band dragged out on a stack is drawn across the *map*: a stack has no marquee,
+and one drawn only inside the track would say the band stops where the track does.
+
+**Every one of these gestures copies what it framed.** Shift-drag writes `chrIV:500001-510000` — no
+thousands separators, a plain hyphen, 1-based inclusive, which is the difference between a string
+that pastes into samtools, bedtools, IGV and this app's own locus boxes and one that only looks
+right. The app's *display* format uses an en dash and grouped digits, and that one is for reading.
+Option-drag, which selects a box, writes both axes in the order this app always names them —
+`chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what that stretch would
+produce on its own, separated by a character no coordinate grammar uses. In the browser a drag
+crossing two sequences zooms and copies nothing: that is a fine thing to look at and it is not a
+locus, and clamping it to one end would hand back coordinates for a region nobody selected.
 
 ---
 
@@ -1885,16 +1905,22 @@ the tracks and not the matrix. There the map tasks are `waiting` on *open a cont
 tasks run, the analysis worker is never mounted because nothing asks it for a pixel, and a result's
 provenance names the assembly rather than a block.
 
-**A locus a reader can point at is picked on the map, not typed.** The map has had
-the anchor gesture since §8.9 — shift-drag along either axis names a stretch of
-sequence — and the 4C *lane* has always drawn from it. A task that asked for the
-same locus again, in a text box, beside a map the reader had just pointed at, was
-asking twice. So `RegionParam.fromMap` names a toggle that makes the box follow
-`ui/viewpoint.ts`'s anchor, it is **on by default** on 4C, and while it is on the
-box is read-only and mirrors what the map says. What gets written into the
-parameter is the *resolved locus* rather than a sentinel: the record of a run
-names the place, and turning the toggle off leaves the picked locus behind as the
-starting point for an edit rather than an empty box.
+**A locus a reader can point at is picked on the map, not typed.** Reading
+coordinates off a picture in order to type them back in beside it is asking
+twice. So `RegionParam.pickable` puts a **Pick on map** button next to the locus
+box; pressing it arms `ui/mapPick.ts`, the next Shift-drag on the map fills the
+box instead of zooming, and the button goes out (§8.9). An *arm* rather than a
+mode the form leaves on: a reader who wanted one anchor should not find their
+next three attempts to zoom quietly redefining it.
+
+What gets written into the parameter is the **resolved locus**, never a sentinel,
+and the pick is not a parameter of its own — which is a deliberate change from
+the toggle this replaces. What belongs in a provenance line is the *place*;
+"typed" versus "pointed at" is a fact about the reader's hand rather than about
+the number. The box stays editable throughout, so a picked locus is a starting
+point for a typed correction rather than a replacement for one. The button is
+offered only where there is a map to point at, since the panel exists without
+one.
 
 **The Analysis drawer** is the workspace: parameters, a **Run** button with the price beside it,
 progress, results, exports. It is anchored to the right of the body, full height, resizable by its left
@@ -1913,9 +1939,9 @@ tab had one open, and the content re-parents exactly as the other three columns'
 
 **The Synthetic tracks card** is the third surface and the least obvious, and it exists because of a
 mistake that was already made once and corrected: the virtual 4C profile started as a strip of its own
-and became an entry in the `AnnotationStore` (§8.9), which is what gave it renaming, limits, colour,
-edges, reordering, the tooltip and the exported figure for free. A per-bin analysis result is the same
-object. It is therefore an ordinary track on an ordinary card in the **Annotations** panel — not a
+and became an entry in the `AnnotationStore`, which is what gave it renaming, limits, colour, edges,
+reordering, the tooltip and the exported figure for free. That lane is gone (§8.9) and the argument it
+made is not: a per-bin analysis result is the same object. It is therefore an ordinary track on an ordinary card in the **Annotations** panel — not a
 picture in the drawer — and nothing downstream of it knows it was computed rather than loaded.
 
 ### 18.2 Every task is a descriptor, and every task is parametrised
@@ -1986,8 +2012,8 @@ is on.
 
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
-against the new one. This is the same discipline `render/viewpoint.ts` already keeps for the on-the-fly
-4C lane, whose docstring is careful to say it is a reading of what is on screen — and it is exactly why
+against the new one. This is the discipline the on-the-fly 4C lane never kept — it redrew itself from
+whatever block happened to be loaded, which is one of the reasons it is gone (§8.9) — and it is why
 the genome-wide 4C **task** (§18.8) is a different object from that **lane** rather than a bigger
 version of it. The panel is what makes the two obviously different, which is a good reason for the
 panel to exist.

@@ -960,13 +960,23 @@ export interface HeatmapOptions {
    */
   onSelect?: (selection: SelectionBox) => void
   /**
-   * A Shift-drag named a band of rows — the 4C anchor (`ui/viewpoint.ts`).
+   * A selection was made, whatever it then did.
    *
-   * Block-local row indices, half-open. Absent turns the gesture off entirely:
-   * with no `onAnchor` a Shift-drag is a pan, which is what every drag on a map
-   * without a viewpoint lane should be.
+   * Distinct from {@link onSelect}, which *replaces* the zoom: this fires either
+   * way, so a listener that only wants to know what was framed — to put it on
+   * the clipboard, say — does not have to take over the gesture to hear about
+   * it. Fired before the zoom or the emit, so the report is of the box as drawn.
    */
-  onAnchor?: (axis: 'rows' | 'cols', span: [number, number]) => void
+  onSelectionMade?: (selection: SelectionBox) => void
+  /**
+   * A Shift-drag named a band of one axis.
+   *
+   * Block-local indices on the named axis, half-open. What the renderer does
+   * with the band is {@link HeatmapView.setBandMode}'s business; this is only
+   * the report, and it fires in both modes — the owner is the one object that
+   * can turn indices into a locus, and both a zoom and a pick want one.
+   */
+  onBand?: (axis: 'rows' | 'cols', span: [number, number]) => void
   /**
    * What the two spans of a drag say, per axis, already formatted.
    *
@@ -1008,7 +1018,7 @@ export interface HeatmapOptions {
  * correction afterwards.
  */
 interface Drag {
-  mode: 'select' | 'pan' | 'anchor'
+  mode: 'select' | 'pan' | 'band'
   /** Where the button went down, in canvas CSS pixels. */
   x0: number
   y0: number
@@ -1036,7 +1046,8 @@ type ResolvedOptions = Required<
     | 'onCellClick'
     | 'onLabelClick'
     | 'onSelect'
-    | 'onAnchor'
+    | 'onSelectionMade'
+    | 'onBand'
     | 'selectionLabel'
     | 'onHover'
     | 'plotOptions'
@@ -1177,7 +1188,20 @@ export class HeatmapView {
   private readonly onCellClick: ((cell: Cell) => void) | null
   private readonly onLabelClick: ((axis: 'rows' | 'cols', block: LabelBlock) => void) | null
   private readonly onSelect: ((selection: SelectionBox) => void) | null
-  private onAnchor: ((axis: 'rows' | 'cols', span: [number, number]) => void) | null
+  private readonly onSelectionMade: ((selection: SelectionBox) => void) | null
+  private onBand: ((axis: 'rows' | 'cols', span: [number, number]) => void) | null
+  /**
+   * What a Shift-drag does when it is let go.
+   *
+   * `'zoom'` always, except while a form has asked the reader to point at
+   * something — see `ui/mapPick.ts`. Held here rather than read from a module
+   * so that `render/` stays a renderer: the owner sets it, and the only two
+   * things that change with it are whether the release zooms and which cursor
+   * the canvas wears while the mode is on.
+   */
+  private bandMode: 'zoom' | 'pick' = 'zoom'
+  /** A band being dragged out on a lane stack; see {@link showBandPreview}. */
+  private bandPreview: { axis: 'rows' | 'cols'; from: number; to: number } | null = null
   private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
   private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
 
@@ -1340,7 +1364,8 @@ export class HeatmapView {
     this.onCellClick = options.onCellClick ?? null
     this.onLabelClick = options.onLabelClick ?? null
     this.onSelect = options.onSelect ?? null
-    this.onAnchor = options.onAnchor ?? null
+    this.onSelectionMade = options.onSelectionMade ?? null
+    this.onBand = options.onBand ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
 
@@ -2127,6 +2152,144 @@ export class HeatmapView {
   }
 
   /**
+   * What a released Shift-drag does: zoom to the band, and say what it was.
+   *
+   * A band, not a box — one axis, edge to edge — because the thing a reader is
+   * naming is a stretch of *genome*, and on a contact map that stretch is a
+   * question about everything it touches. Which axis is decided by which way the
+   * hand went, so a drag a few degrees the wrong side of vertical still means
+   * what it plainly meant.
+   *
+   * Reported as **block-local indices on a named axis**, because that is what
+   * the owner can turn into a locus: it knows the block's extents and its two
+   * coordinate axes, and this does not. The report goes out in both modes and
+   * the zoom only in `'zoom'` — a reader pointing at an anchor for a form has
+   * not asked for the picture to move, and moving it would take the thing they
+   * were pointing at out from under the pointer.
+   *
+   * A band under one row is still a band: a reader who taps rather than drags
+   * has named the bin they tapped, which is the finest locus this resolution can
+   * express. The *zoom* declines that one — {@link zoomToBand} has a floor in
+   * pixels, so a tap reports a locus and leaves the view alone.
+   */
+  private finishBand(x0: number, y0: number, x: number, y: number): void {
+    const vertical = this.bandIsVertical(x0, y0, x, y)
+    const axis = vertical ? 'rows' : 'cols'
+    const [a, b] = vertical ? [y0, y] : [x0, x]
+    const span = this.bandAt(axis, a, b)
+    if (span !== null) this.onBand?.(axis, span)
+    if (this.bandMode !== 'zoom') return
+    // A turned map has one axis and a band that stands on an edge, so the zoom
+    // is the span's — `clampView` puts the band back on its anchor rather than
+    // centring it, which {@link zoomToBand} would. Same reading the selection
+    // takes there, and for the same reason.
+    if (this.spanGestures) this.zoomToSpan(a, b)
+    else this.zoomToBand(axis, a, b)
+  }
+
+  /**
+   * A pixel run along one axis as a half-open **block-local** cell range.
+   *
+   * Public because the same gesture is made on the lane canvases beside the map
+   * (§8.4 glues their pixels to this one's along the shared axis), and one
+   * conversion serving both is what keeps a band dragged out beside the map from
+   * naming a different stretch than the same band dragged out on it.
+   *
+   * A run of no width is still one cell — a reader who tapped rather than
+   * dragged has named the bin they tapped. `null` only where there is no block.
+   */
+  bandAt(axis: 'rows' | 'cols', from: number, to: number): [number, number] | null {
+    const matrix = this.matrix
+    if (matrix === null) return null
+    const plot = this.plotRect
+    const vertical = axis === 'rows'
+    const scale = vertical ? this.rowScale : this.colScale
+    const origin = vertical ? plot.y : plot.x
+    const a = scale.toUnit(Math.min(from, to) - origin)
+    const b = scale.toUnit(Math.max(from, to) - origin)
+    const limit = vertical ? matrix.nrows : matrix.ncols
+    const lo = Math.max(0, Math.min(limit - 1, Math.floor(a)))
+    const hi = Math.max(lo + 1, Math.min(limit, Math.ceil(b)))
+    return [lo, hi]
+  }
+
+  /**
+   * A band being dragged out **on a lane stack**, drawn across the map.
+   *
+   * The gesture happens beside the picture and the answer is about the picture,
+   * so the feedback belongs on the picture: a stack has no marquee of its own,
+   * and one added there would say the band stops at the edge of the track. Set
+   * per pointer move and cleared on release.
+   */
+  showBandPreview(axis: 'rows' | 'cols', from: number, to: number): void {
+    this.bandPreview = { axis, from, to }
+    this.changed()
+  }
+
+  clearBandPreview(): void {
+    if (this.bandPreview === null) return
+    this.bandPreview = null
+    this.changed()
+  }
+
+  /**
+   * Zoom so that a stretch of **one** axis fills the plot along that axis.
+   *
+   * The other axis keeps its centre and takes the same zoom, because it has no
+   * choice: one scalar drives both, which is what keeps a cell square
+   * (`imshow(aspect="equal")`). So this is a 1D gesture with a 2D consequence,
+   * and stating it that way is the honest description — on a map read about its
+   * diagonal the consequence is the square a reader wanted anyway, and off the
+   * diagonal it is "this stretch of that sequence, against as much of the other
+   * as fits".
+   *
+   * `from` and `to` are canvas CSS pixels along the named axis, in either order.
+   */
+  zoomToBand(axis: 'rows' | 'cols', from: number, to: number): void {
+    const plot = this.plotRect
+    const vertical = axis === 'rows'
+    const origin = vertical ? plot.y : plot.x
+    const extent = vertical ? plot.height : plot.width
+    const other = vertical ? plot.width : plot.height
+    const lo = Math.max(origin, Math.min(from, to))
+    const hi = Math.min(origin + extent, Math.max(from, to))
+    if (hi - lo < this.opts.minSelectPixels) return
+
+    const cells = (hi - lo) / this.zoom
+    const near = vertical ? this.originY : this.originX
+    const far = vertical ? this.originX : this.originY
+    const centre = near + (lo - origin) / this.zoom + cells / 2
+    const centreOther = far + other / this.zoom / 2
+
+    this.zoom = clamp(extent / cells, this.minZoom(), this.maxZoom())
+    const half = extent / this.zoom / 2
+    const halfOther = other / this.zoom / 2
+    if (vertical) {
+      this.originY = centre - half
+      this.originX = centreOther - halfOther
+    } else {
+      this.originX = centre - half
+      this.originY = centreOther - halfOther
+    }
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
+  /**
+   * Whether a Shift-drag zooms or names a locus for a form that asked.
+   *
+   * A mode, and treated as one: the canvas wears the selecting cursor for as
+   * long as it is on, so the reader can see that the next drag on the picture
+   * will do something other than what it usually does.
+   */
+  setBandMode(mode: 'zoom' | 'pick'): void {
+    if (this.bandMode === mode) return
+    this.bandMode = mode
+    this.canvas.classList.toggle('picking', mode === 'pick')
+  }
+
+  /**
    * What a released selection does: hand the box to the owner, or zoom.
    *
    * The box is squared first, so what is acted on is what was drawn. Handing it
@@ -2135,40 +2298,11 @@ export class HeatmapView {
    * picture when the question was about the data. A view that wants the old
    * behaviour simply does not pass `onSelect`.
    */
-  /**
-   * Hand over the row band a Shift-drag covered — the 4C anchor.
-   *
-   * A band, not a box: a viewpoint is a stretch of the genome, and what it
-   * touches is everything else. Reported as **block-local indices on a named
-   * axis**, because that is what the owner can turn into a locus — it knows the
-   * block's extents and its two coordinate axes, and this does not.
-   *
-   * A band under one row is still a band. A reader who taps rather than drags
-   * has named the bin they tapped, which is a perfectly good viewpoint and the
-   * finest one this resolution can express.
-   */
-  private finishAnchor(x0: number, y0: number, x: number, y: number): void {
-    const emit = this.onAnchor
-    const matrix = this.matrix
-    if (emit === null || matrix === null) return
-    const plot = this.plotRect
-    // Whichever way the hand went. A band of rows and a band of columns name the
-    // same stretch of genome on a map read about its diagonal, so insisting on
-    // one direction would be insisting on a gesture rather than on an answer —
-    // and a reader whose drag came out a few degrees the wrong side of vertical
-    // got a one-bin anchor and no idea why. On a turned map there is only one
-    // axis to be about, and the hand is not asked ({@link setSpanGestures}).
-    const vertical = this.anchorIsVertical(x0, y0, x, y)
-    const scale = vertical ? this.rowScale : this.colScale
-    const [a, b] = vertical ? [y0 - plot.y, y - plot.y] : [x0 - plot.x, x - plot.x]
-    const span = [scale.toUnit(Math.min(a, b)), scale.toUnit(Math.max(a, b))]
-    const limit = vertical ? matrix.nrows : matrix.ncols
-    const lo = Math.max(0, Math.min(limit - 1, Math.floor(span[0])))
-    const hi = Math.max(lo + 1, Math.min(limit, Math.ceil(span[1])))
-    emit(vertical ? 'rows' : 'cols', [lo, hi])
-  }
-
   private finishSelection(x0: number, y0: number, x: number, y: number): void {
+    const found = this.boxFrom(x0, y0, x, y)
+    // Before either outcome, and regardless of which: what was framed is the
+    // same fact whether the box then zooms or opens a region.
+    if (found !== null) this.onSelectionMade?.(found.box)
     const emit = this.onSelect
     if (emit === null) {
       // A band has no top and bottom to zoom to, so the zoom is the span's: the
@@ -2178,7 +2312,6 @@ export class HeatmapView {
       else this.zoomToBox(x0, y0, x, y)
       return
     }
-    const found = this.boxFrom(x0, y0, x, y)
     if (found !== null) emit(found.box)
   }
 
@@ -2571,33 +2704,47 @@ export class HeatmapView {
   }
 
   /**
-   * The band a 4C anchor drag is covering: rows, edge to edge.
+   * The band a Shift-drag is covering: one axis, edge to edge.
    *
-   * A stripe rather than a box, because that is what a viewpoint *is* — a band
-   * of the genome whose contacts with every column are being asked for. Drawing
-   * it as a square would be drawing the wrong claim: it would say the columns
-   * outside the square are not part of the question, and every one of them is.
+   * A stripe rather than a box, because that is what the gesture names — a
+   * stretch of one axis, and everything it meets. Drawing it as a square would
+   * be drawing the wrong claim: it would say the far axis is bounded by the
+   * drag, and it is not.
    */
   /**
-   * Which axis a 4C drag names — rows across, or columns down the picture.
+   * Which axis a band drag names — rows across, or columns down the picture.
    *
    * The band follows the hand: a mostly-vertical drag names rows, a
    * mostly-horizontal one names columns. Both the paint and the commit ask this,
    * so what is drawn is what is taken. Under {@link setSpanGestures} the hand is
-   * not consulted — there is only one axis a band can be about.
+   * not consulted — a turned map has one axis a band can be about.
    */
-  private anchorIsVertical(x0: number, y0: number, x: number, y: number): boolean {
+  private bandIsVertical(x0: number, y0: number, x: number, y: number): boolean {
     if (this.spanGestures) return false
     return Math.abs(y - y0) >= Math.abs(x - x0)
   }
 
-  private drawAnchorBand(): void {
+  private drawBand(): void {
     const drag = this.drag
-    if (drag === null || drag.mode !== 'anchor') return
+    const preview = this.bandPreview
+    // Which axis, and between which two pixels. A drag is asked of the hand
+    // through {@link bandIsVertical}, so what is drawn is what {@link finishBand}
+    // will take; a preview from a lane stack has already been told its axis.
+    let vertical: boolean
+    let a: number
+    let b: number
+    if (drag !== null && drag.mode === 'band') {
+      vertical = this.bandIsVertical(drag.x0, drag.y0, drag.x, drag.y)
+      ;[a, b] = vertical ? [drag.y0, drag.y] : [drag.x0, drag.x]
+    } else if (preview !== null) {
+      vertical = preview.axis === 'rows'
+      ;[a, b] = [preview.from, preview.to]
+    } else {
+      return
+    }
     const plot = this.dataRect
-    const vertical = this.anchorIsVertical(drag.x0, drag.y0, drag.x, drag.y)
-    const from = vertical ? Math.min(drag.y0, drag.y) : Math.min(drag.x0, drag.x)
-    const size = Math.max(1, vertical ? Math.abs(drag.y - drag.y0) : Math.abs(drag.x - drag.x0))
+    const from = Math.min(a, b)
+    const size = Math.max(1, Math.abs(b - a))
     const ctx = this.ctx
     ctx.save()
     ctx.beginPath()
@@ -2651,8 +2798,8 @@ export class HeatmapView {
   /** The rubber band, while a selection drag is in progress. */
   private drawSelection(): void {
     const drag = this.drag
-    if (drag?.mode === 'anchor') {
-      this.drawAnchorBand()
+    if (drag?.mode === 'band' || this.bandPreview !== null) {
+      this.drawBand()
       return
     }
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
@@ -3599,11 +3746,11 @@ export class HeatmapView {
       const [x, y] = local(e)
       this.dragMoved = false
       // Three gestures on one button, told apart by the modifiers. Option
-      // selects a region to open; Option with Shift does the same on the
-      // diagonal; **Shift alone** draws the 4C anchor, which is the one gesture
-      // that changes nothing about where the reader is looking — see
-      // `ui/viewpoint.ts`. Everything else pans.
-      const mode = wantsSelect(e) ? 'select' : e.shiftKey && this.onAnchor !== null ? 'anchor' : 'pan'
+      // selects a box to open; Option with Shift does the same on the diagonal;
+      // **Shift alone** names a band of one axis and zooms to it, which is the
+      // 1D half of the same idea and the gesture the 1D browser has too.
+      // Everything else pans.
+      const mode = wantsSelect(e) ? 'select' : e.shiftKey ? 'band' : 'pan'
       // …except on a turned map, where the diagonal is the bottom edge of the
       // picture and a corner snapped to it would be a corner snapped to the
       // frame. The selection is already the on-diagonal one there, whichever
@@ -3663,14 +3810,14 @@ export class HeatmapView {
         return
       }
       this.hoverPoint = { x, y }
-      hoverAt(x, y, e.shiftKey)
+      hoverAt(x, y, wantsSelect(e) && e.shiftKey)
     }
 
     /**
-     * Report the cell under a point, snapping onto the diagonal while Shift is
-     * held.
+     * Report the cell under a point, snapping onto the diagonal while the
+     * diagonal-locked marquee's modifiers are held.
      *
-     * The same rule the Shift-locked marquee follows, applied to the pointer
+     * The same rule that marquee follows, applied to the pointer
      * before a drag has begun — so the reading a reader gets is the reading the
      * gesture would select from, and they can see *where on the diagonal* they
      * are about to start before pressing the button. It answers the question a
@@ -3755,7 +3902,7 @@ export class HeatmapView {
       // clamped, diagonal-locked one the marquee was drawn to, and a release
       // outside the canvas has no meaningful position at all.
       if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, drag.x, drag.y)
-      if (drag.mode === 'anchor') this.finishAnchor(drag.x0, drag.y0, drag.x, drag.y)
+      if (drag.mode === 'band') this.finishBand(drag.x0, drag.y0, drag.x, drag.y)
       this.changed()
     }
     const onDoubleClick = (e: MouseEvent): void => {

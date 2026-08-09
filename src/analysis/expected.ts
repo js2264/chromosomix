@@ -57,7 +57,7 @@ export interface ExpectedCurve {
  * A running P(s), fed a cell or a block at a time.
  *
  * Sums accumulate in `Float64Array` even though the pixels arrive as
- * `Float32Array`, for the reason `render/viewpoint.ts` lines 50–56 gives: the
+ * `Float32Array`, for the reason `analysis/viewpoint.ts`'s `bandSums` gives: the
  * diagonal of a deep map is millions of cells, and float32 stops adding small
  * numbers to a large total long before that. `count` is a `Float64Array` rather
  * than an integer array for the plainest possible reason — a whole-genome scan
