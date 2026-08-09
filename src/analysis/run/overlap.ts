@@ -8,21 +8,24 @@
  */
 
 import { compareSets } from '../overlap'
-import { idParam, numParam, type TrackTaskRunner } from '../job'
+import { chosenInput, numParam, type TrackTaskRunner } from '../job'
 import type { TableOutput, TaskOutput } from '../types'
 
 export const runOverlap: TrackTaskRunner = async (job) => {
-  const aId = idParam(job.params, 'a')
-  const bId = idParam(job.params, 'b')
-  const a = aId === null ? undefined : job.inputs.features?.[aId]
-  const b = bId === null ? undefined : job.inputs.features?.[bId]
+  // By the **parameter key**, `a` and `b` — see `chosenInput`.
+  const first = chosenInput(job.inputs.features, job.params, 'a')
+  const second = chosenInput(job.inputs.features, job.params, 'b')
+  const a = first.value
+  const b = second.value
   if (a === undefined || b === undefined) {
+    const short = [first, second].filter((found) => found.value === undefined)
+    const picked = short.filter((found) => found.chosen).length
     job.note(
-      'Two interval sets are needed and ' +
-        (a === undefined && b === undefined
-          ? 'neither has been chosen'
-          : 'only one has been chosen') +
-        '. Load two BED files, or a BED and a GTF, and pick one in each box.',
+      picked === short.length
+        ? // Both slots hold an id and neither set is loaded: the rows went away
+          // after the form was filled in.
+          `The interval ${short.length === 2 ? 'sets' : 'set'} chosen ${short.length === 2 ? 'are' : 'is'} no longer loaded. Re-open the file, or pick another.`
+        : `Two interval sets are needed and ${short.length === 2 && picked === 0 ? 'neither has' : 'one has not'} been chosen. Load two BED files, or a BED and a GTF, and pick one in each box.`,
     )
     return []
   }

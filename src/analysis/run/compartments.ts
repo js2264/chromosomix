@@ -28,7 +28,15 @@ import {
   type Phasing,
 } from '../compartments'
 import { ExpectedAccumulator } from '../expected'
-import { boolParam, idParam, numParam, strParam, type JobContext, type TaskRunner } from '../job'
+import {
+  boolParam,
+  chosenInput,
+  idParam,
+  numParam,
+  strParam,
+  type JobContext,
+  type TaskRunner,
+} from '../job'
 import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
@@ -207,8 +215,9 @@ function phasingSignal(
   index: Int32Array,
   offset: number,
 ): { name: string; values: Float64Array } | null {
-  const featureId = idParam(job.params, 'phaseFeatures')
-  const set = featureId === null ? undefined : job.inputs.features?.[featureId]
+  // By the **parameter key**, `phaseFeatures`, exactly as the GC vector below is
+  // read under `phaseSequence` — see `chosenInput`.
+  const set = chosenInput(job.inputs.features, job.params, 'phaseFeatures').value
   if (set !== undefined) {
     return { name: 'gene density', values: densityOf(job, set, contig, index, offset) }
   }

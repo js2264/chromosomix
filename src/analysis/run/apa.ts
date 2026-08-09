@@ -35,7 +35,9 @@ import {
 import { ExpectedAccumulator, expectedAt } from '../expected'
 import {
   boolParam,
+  chosenInput,
   idParam,
+  missingInput,
   numParam,
   strParam,
   type JobContext,
@@ -76,18 +78,24 @@ const MERGE_CAP_BINS = 512
 
 export const runApa: TaskRunner = async (job) => {
   const usingPairs = !onDiagonal(job.params)
-  const setId = idParam(job.params, usingPairs ? 'pairs' : 'features')
-  const pairs = usingPairs && setId !== null ? job.inputs.pairs?.[setId] : undefined
-  const features = !usingPairs && setId !== null ? job.inputs.features?.[setId] : undefined
+  // By the **parameter key** — `pairs` or `features`, whichever mode is in
+  // force — and never by the entry id in `params`; see `chosenInput`.
+  const heldPairs = chosenInput(job.inputs.pairs, job.params, 'pairs')
+  const heldFeatures = chosenInput(job.inputs.features, job.params, 'features')
+  const pairs = usingPairs ? heldPairs.value : undefined
+  const features = usingPairs ? undefined : heldFeatures.value
   if (pairs === undefined && features === undefined) {
     // Named rather than returned empty. A task that finishes in a millisecond
     // with no figure and no sentence is indistinguishable from one that is
     // broken, and this is the commonest way to reach that state: the drawer
     // opens on a task whose input has not been chosen yet.
     job.note(
-      usingPairs
-        ? 'No loop set was chosen. Load a BEDPE — a loop table, a set of anchor pairs — and pick it under Pairs.'
-        : 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+      missingInput(usingPairs ? heldPairs : heldFeatures, {
+        unchosen: usingPairs
+          ? 'No loop set was chosen. Load a BEDPE — a loop table, a set of anchor pairs — and pick it under Pairs.'
+          : 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+        gone: `The ${usingPairs ? 'loop' : 'feature'} set chosen is no longer loaded. Re-open the file, or pick another.`,
+      }) ?? '',
     )
     return []
   }
