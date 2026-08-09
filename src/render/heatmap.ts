@@ -15,6 +15,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
+import { anchorRays, turnedCentre, type RotateDirection } from './rotate'
 import {
   Scale,
   autoRangeOfDisplay,
@@ -1201,6 +1202,18 @@ export class HeatmapView {
   private echoCell: { row: number; col: number } | null = null
   /** The cell under the pointer, for the crosshair. `null` when outside. */
   private hoverCell: Cell | null = null
+  /**
+   * The turn the block on screen was cut with, or `null` for a square map.
+   *
+   * The one thing this view knows about the rotation, and it is here for the
+   * guides alone: everything else about a turned block really is an ordinary
+   * dense matrix, which is what `render/rotate.ts` went to the trouble of
+   * arranging. The crosshair is the exception because it is not a decoration but
+   * a *reading* — it says which cell of the square is under the pointer — and on
+   * a turned map that reading runs along two 45° rays rather than along the two
+   * axes. See {@link anchorRays}.
+   */
+  private turn: { maxSeparation: number; direction: RotateDirection } | null = null
   /** What the owner draws on the data; see {@link setOverlayPainter}. */
   private overlayPainter: OverlayPainter | null = null
 
@@ -2931,6 +2944,24 @@ export class HeatmapView {
     this.changed()
   }
 
+  /**
+   * Say which map is turned, so the guides can be drawn as the map is read.
+   *
+   * `null` for an ordinary square block, which is every map but one.
+   */
+  setTurn(turn: { maxSeparation: number; direction: RotateDirection } | null): void {
+    const held = this.turn
+    const same =
+      (turn === null && held === null) ||
+      (turn !== null &&
+        held !== null &&
+        turn.maxSeparation === held.maxSeparation &&
+        turn.direction === held.direction)
+    if (same) return
+    this.turn = turn
+    this.changed()
+  }
+
   private drawCrosshair(): void {
     const cell = this.hoverCell
     if (cell === null || this.matrix === null) return
@@ -2943,13 +2974,35 @@ export class HeatmapView {
     ctx.strokeStyle = this.opts.crosshairColor
     ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
     const origin = this.plotRect
-    const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
-    const y = this.snap(origin.y + this.rowScale.toPixel(cell.row + 0.5))
     ctx.beginPath()
-    ctx.moveTo(x, plot.y)
-    ctx.lineTo(x, plot.y + plot.height)
-    ctx.moveTo(plot.x, y)
-    ctx.lineTo(plot.x + plot.width, y)
+    const turn = this.turn
+    if (turn === null) {
+      const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
+      const y = this.snap(origin.y + this.rowScale.toPixel(cell.row + 0.5))
+      ctx.moveTo(x, plot.y)
+      ctx.lineTo(x, plot.y + plot.height)
+      ctx.moveTo(plot.x, y)
+      ctx.lineTo(plot.x + plot.width, y)
+    } else {
+      // Both edges of the band, so the pair of rays is a whole X wherever the
+      // picture has room for one — and, where it has not, exactly the part of an
+      // X that fits: a V under a pointer near the diagonal, a ∧ under one near
+      // the top. Neither is a special case here; the clip is what makes them.
+      //
+      // No snap, and that is not an oversight: a 45° line cannot be put on the
+      // device grid, and rounding its two ends would move it off the contact it
+      // is drawn through rather than sharpen it.
+      for (const ray of anchorRays(turnedCentre(turn, cell.row, cell.col), [0, this.matrix.nrows])) {
+        ctx.moveTo(
+          origin.x + this.colScale.toPixel(ray.from.col),
+          origin.y + this.rowScale.toPixel(ray.from.row),
+        )
+        ctx.lineTo(
+          origin.x + this.colScale.toPixel(ray.to.col),
+          origin.y + this.rowScale.toPixel(ray.to.row),
+        )
+      }
+    }
     ctx.stroke()
     ctx.restore()
   }

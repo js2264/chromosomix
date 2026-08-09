@@ -27,6 +27,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BIN_FRACTION,
+  anchorColumns,
+  anchorRays,
   binsForColumns,
   cellAt,
   isTurnable,
@@ -37,6 +39,7 @@ import {
   separationBp,
   separationCoords,
   turnDepthFor,
+  turnedCentre,
   type RotatableBlock,
 } from '@/render/rotate'
 import { bpTicks } from '@/render/heatmap'
@@ -358,5 +361,71 @@ describe('the bins a band of turned columns covers', () => {
       const cell = cellAt(rotated, rowForSeparation(rotated, 0), column)
       expect(binsForColumns([column, column + 1], 16)[0]).toBe(cell?.row)
     }
+  })
+})
+
+/**
+ * The guides on a turned map, as geometry rather than as canvas calls.
+ *
+ * What the picture must not do is answer "which two places is this?" with a
+ * cross. A turned map's two directions are not its two axes: hold one anchor
+ * still and the contact walks *diagonally* as the separation grows, so a
+ * vertical rule through the pointer crosses contacts between two other places
+ * at every row but its own. The assertions below are the two that make the
+ * difference visible — a ray must land on the anchor's own column when it
+ * reaches the axis, and the two rays must leave the pointer in opposite
+ * directions.
+ */
+describe('the rays a guide follows', () => {
+  it('meets the axis at each of the two anchors', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    const row = rowForSeparation(rotated, 4)
+    // Bins 3 and 7: the cell fills columns 10 and 11, so the pointer is over
+    // either of them and the answer must not depend on which.
+    for (const column of [10, 11]) {
+      const at = turnedCentre(rotated, row, column)
+      // The diagonal's own row, where separation is nothing and the picture's
+      // two anchors have become one place.
+      const axis = rowForSeparation(rotated, 0) + 0.5
+      const met = anchorRays(at, [axis]).map((ray) => ray.to.col)
+      expect(met.sort((a, b) => a - b)).toEqual(anchorColumns(rotated, row, column))
+    }
+  })
+
+  it('names the pair the readout names', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    const row = rowForSeparation(rotated, 4)
+    const cell = cellAt(rotated, row, 10)
+    // A bin is two columns wide, so its middle is `2b + 1` — the coordinate a
+    // track under the map is drawn in.
+    expect(anchorColumns(rotated, row, 10)).toEqual([2 * cell!.row + 1, 2 * cell!.col + 1])
+  })
+
+  it('answers a contact with itself with one line, not two', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    expect(anchorColumns(rotated, rowForSeparation(rotated, 0), 8)).toHaveLength(1)
+  })
+
+  it('leaves the point in both directions, at one column per row', () => {
+    const rays = anchorRays({ col: 20, row: 6.5 }, [0])
+    expect(rays.map((ray) => ray.to.col).sort((a, b) => a - b)).toEqual([13.5, 26.5])
+    for (const ray of rays) {
+      expect(Math.abs(ray.to.col - ray.from.col)).toBeCloseTo(Math.abs(ray.to.row - ray.from.row), 10)
+    }
+  })
+
+  it('reaches both edges of the band, so the X is whatever part of one fits', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    const at = turnedCentre(rotated, rowForSeparation(rotated, 3), 12)
+    const rows = anchorRays(at, [0, rotated.nrows]).map((ray) => ray.to.row)
+    expect(rows.filter((row) => row === 0)).toHaveLength(2)
+    expect(rows.filter((row) => row === rotated.nrows)).toHaveLength(2)
+  })
+
+  it('puts the contact’s middle between the two columns it fills', () => {
+    const rotated = rotateBlock(separationMatrix(16), { maxSeparation: 6 })
+    const row = rowForSeparation(rotated, 4)
+    expect(turnedCentre(rotated, row, 10)).toEqual(turnedCentre(rotated, row, 11))
+    expect(turnedCentre(rotated, row, 10).col).toBe(11)
   })
 })

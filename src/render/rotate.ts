@@ -197,6 +197,25 @@ export function cellAt(
 }
 
 /**
+ * Where a turned cell's two anchors stand on the column axis, in matrix units.
+ *
+ * The pair of positions a contact is *between*, said in the coordinate a track
+ * under the map is drawn in — which is what lets a stack answer a pointer on the
+ * map with two hairlines rather than one. A bin fills two columns, so its middle
+ * is `2b + 1`; on the diagonal the two anchors are one place and the answer is
+ * one line.
+ */
+export function anchorColumns(
+  rotated: Pick<RotatedBlock, 'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'>,
+  row: number,
+  column: number,
+): number[] | null {
+  const cell = cellAt(rotated, row, column)
+  if (cell === null) return null
+  return cell.separation === 0 ? [2 * cell.row + 1] : [2 * cell.row + 1, 2 * cell.col + 1]
+}
+
+/**
  * The bins a run of turned columns covers, as a half-open range into the block.
  *
  * The inverse of the rotation for a *band* rather than for a cell, and what
@@ -217,6 +236,71 @@ export function binsForColumns(columns: readonly [number, number], bins: number)
   const lo = Math.max(0, Math.min(n - 1, Math.floor(columns[0] * BIN_FRACTION)))
   const hi = Math.max(lo + 1, Math.min(n, Math.ceil(columns[1] * BIN_FRACTION)))
   return [lo, hi]
+}
+
+/**
+ * A point on a turned map, in the matrix units the renderer draws in.
+ *
+ * Fractional on both axes: a contact's true centre falls on the boundary
+ * between the two columns it fills, and a row's is half way down it.
+ */
+export interface TurnedPoint {
+  col: number
+  row: number
+}
+
+/**
+ * Where the contact under a turned cell truly sits, in matrix units.
+ *
+ * Not the centre of the cell the pointer is over, and the difference is the
+ * half-bin lattice: a contact fills *two* columns, so its own middle is the
+ * line between them — `i + j + 1` — while the cell under the pointer is one or
+ * the other of the two. Half a column is a quarter of a bin and invisible as a
+ * position, but it is the difference between a guide that meets the axis
+ * exactly on the bin its contact is with and one that meets it a quarter of a
+ * bin to the side, which at bin zoom is a line pointing next to the answer.
+ */
+export function turnedCentre(
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  row: number,
+  column: number,
+): TurnedPoint {
+  const separation = separationAt(rotated, row)
+  const sum = (column + separation) % 2 === 0 ? column : column - 1
+  return { col: sum + 1, row: row + 0.5 }
+}
+
+/**
+ * The rays a guide follows from a point on a turned map, in matrix units.
+ *
+ * **A turned map's two directions are not its two axes**, and this is the whole
+ * of what that means for anything drawn through a point. A cell of the square
+ * is a contact between two places; turned, the set of cells sharing one of those
+ * places is not a column of the picture but a **45° ray**, because holding `i`
+ * fixed and letting the separation grow moves the contact half a bin along for
+ * every bin further from the diagonal. In matrix units that is exactly slope
+ * one: `col + row` is constant along one anchor and `col - row` along the other.
+ *
+ * So the honest guide on a turned map is a pair of rays rather than a cross —
+ * two lines that say *these two places*, meeting at the contact between them.
+ * Where they end is the caller's: a pointer on the map is between two anchors
+ * and reaches both edges of the band (an X, which near the axis is a V and near
+ * the top a ∧, because the rest is off the picture); a pointer on a track names
+ * one place on the axis and its rays only go outwards from it (a V).
+ *
+ * @param rows Matrix rows the rays reach — one row for a V, both edges for an X.
+ */
+export function anchorRays(
+  at: TurnedPoint,
+  rows: readonly number[],
+): Array<{ from: TurnedPoint; to: TurnedPoint }> {
+  const out: Array<{ from: TurnedPoint; to: TurnedPoint }> = []
+  for (const row of rows) {
+    for (const way of [-1, 1]) {
+      out.push({ from: at, to: { col: at.col + way * (row - at.row), row } })
+    }
+  }
+  return out
 }
 
 /** The separation, in bins, that a row of the turned block stands for. */

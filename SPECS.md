@@ -1539,12 +1539,20 @@ screen is the quotient — which is also the honest reading: zoom in and you are
 stretch of genome, so the distances that fit above it are shorter too. The band is re-cut whenever
 that quotient changes, which is a rotation over a block already in memory and costs no read.
 
-The box opens at **an eighth of its own width**. A whole triangle is exactly twice as wide as it is
-tall — that is what the half-bin lattice makes it — so an eighth shows a quarter of the block at the
-fitted zoom, which is the fraction this section has always opened at, restated in the units the box
-is now measured in. A fraction of the width rather than a distance in base pairs, deliberately: a
-default of "500 kb" is most of a bacterial chromosome and a rounding error on a human one, and this
-viewer opens on both.
+The box opens at **a third of its own width**, which is the shape of the figures this is a viewer
+for. A whole triangle is exactly twice as wide as it is tall — that is what the half-bin lattice
+makes it — so a third shows two thirds of the separation the block holds at the fitted zoom: enough
+band for a domain to be a triangle rather than a smear, and short enough that the picture still
+reads as one strip along the genome rather than as a map. A fraction of the width rather than a
+distance in base pairs, deliberately: a default of "500 kb" is most of a bacterial chromosome and a
+rounding error on a human one, and this viewer opens on both.
+
+**What bounds the box is the room the panel has**, and it is measured against the panel rather than
+against the grid the box sits in. The grid is sized by its contents, so a box narrowed by a drag
+narrows the grid with it, and a ceiling read from there is a ceiling that follows the box down: every
+drag inwards lowers the limit to wherever the edge has just got to, and the width can be given away
+and never taken back. The room is the panel's own width less the stacks of tracks beside the map, and
+the height a square map would have claimed — both facts that do not move when the box does.
 
 **Both ends widen the box about its middle.** Two handles rather than one, because the box is
 centred: with a single handle the reader has to know which end the app decided to grow from, and
@@ -1628,7 +1636,37 @@ wholly contained, and a band narrower than one bin is still a band.
 
 The same inverse serves the readout, and has to: the two names, the separation, the pair of positions
 and the value are all questions about the square block, and anything that answers one of them from a
-turned row or a half-bin column is naming a place that is not on the picture.
+turned row or a half-bin column is naming a place that is not on the picture. The **ruler** under the
+map is the one thing that is not asked through it — it is an affine line in the axis's own units, and
+under a turn a cell is half a bin. Only the *step* is halved: where the block starts is a distance
+from the contig's first bin, counted in whole bins by everything else that reads it, and halving that
+too put the ruler half of the way into the block behind the picture drawn on it. A window opening 120
+bins in then labelled every tick 60 kb short, and the tooltip disagreed with the axis beneath the
+very cell it was describing.
+
+**And the guides are a pair of rays, not a cross.** A turned map's two directions are not its two
+axes: hold one end of a contact still and let the separation grow, and the contact walks *diagonally*
+across the picture — half a bin along for every bin further from the diagonal, which in matrix units
+is exactly slope one. So the lines that say *which two places is this* leave the pointer at 45°, and a
+vertical rule through it would cross contacts between two other places at every row but its own.
+
+Which gives three marks, all of them the same statement seen from different sides of the picture:
+
+- a pointer **on the map** gets an **X** centred on the contact — the two rays to both edges of the
+  band. Near the axis the upper half is all that fits and it reads as a V; near the top of the band
+  the lower half is, and it reads as a ∧. Neither is a special case: the clip is what makes them.
+- a pointer **on a track** gets a **V** standing on the axis under it. The reader is naming one
+  place, and the contacts that place is in are the two rays leaving it — both ways along the genome,
+  because a place is an anchor of everything to its left as well as everything to its right.
+- and a pointer on the map puts **two hairlines in every track**, one under each end of the contact,
+  because the column it is over is the *midpoint* of the two and no track has anything at it. On the
+  diagonal the two ends are one place and there is one line.
+
+The X and the V meet the axis at the same two columns the hairlines are drawn at, which is what makes
+them one instrument rather than three: the rays are anchored at the contact's own middle — the line
+between the two columns it fills, not the centre of whichever of them the pointer happens to be over
+— and a quarter of a bin is invisible as a position but is the difference between a guide that lands
+on its anchor and one that lands beside it.
 
 **And the colour scale does not move when the map is turned.** The automatic range is a property of
 the *block that was read*, which is already the rule for a square map — it is measured once per read,

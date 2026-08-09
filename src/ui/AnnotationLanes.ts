@@ -140,6 +140,18 @@ export interface LaneGeometry {
   }
   /** The cell under the pointer, for the crosshair. */
   hover: { row: number; col: number } | null
+  /**
+   * Where {@link hover} lands on the **column** axis, when the map is turned.
+   *
+   * Two positions, not one, and that is the whole reason this is not read off
+   * `hover.col`: a turned map's columns are midpoints between two places, so the
+   * column under the pointer is a coordinate no track has anything at. What the
+   * pointer is naming is the pair of anchors the contact is between, and the
+   * stacks answer with a hairline on each — on the diagonal the two are one
+   * place and there is one line. `null` on a square map, where the column under
+   * the pointer *is* the position and {@link hover} already says it.
+   */
+  anchors: readonly number[] | null
   crosshair: boolean
   /**
    * A cell being pointed at on **another** map of a deck (§16.3).
@@ -1138,10 +1150,16 @@ export class AnnotationLanes {
         )
       }
 
-      // The map's crosshair, continued into the lane...
+      // The map's crosshair, continued into the lane — as the two anchors of the
+      // contact under the pointer where the map is turned, and as the one column
+      // under it where it is not.
       if (geometry.crosshair && geometry.hover !== null) {
-        const unit = (laneIsHorizontal(edge) ? geometry.hover.col : geometry.hover.row) + 0.5
-        hairline(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+        const units = laneIsHorizontal(edge)
+          ? (geometry.anchors ?? [geometry.hover.col + 0.5])
+          : [geometry.hover.row + 0.5]
+        for (const unit of units) {
+          hairline(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+        }
       }
       // ...and another map's, as a tick off the near edge rather than a rule
       // through the profile. Under the same preference as the crosshair it is

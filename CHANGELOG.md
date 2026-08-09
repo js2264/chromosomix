@@ -48,13 +48,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Fitted like any other matrix, as it was at first, a band's height was `depth ×
   zoom` and zooming in grew it until it filled the panel: at which point the
   picture is a square map again with the far corners the turn exists to throw
-  away back on screen. The box opens at an eighth of its own width, which is the
-  quarter-of-the-block default restated in the units it is now measured in; both
-  ends widen it about its middle, so the edge under the pointer stays under it;
-  arrow keys move an edge by a tenth of the box, Shift by a half, and a
-  double-click puts the default back. The map and its tracks are centred as a
-  group in the room a square map would have taken, so flipping does not resize
-  the panel and a track added below re-centres the map above it.
+  away back on screen. The box opens at a third of its own width — enough band
+  for a domain to be a triangle rather than a smear, short enough that the
+  picture still reads as one strip along the genome; both ends widen it about its
+  middle, so the edge under the pointer stays under it; arrow keys move an edge
+  by a tenth of the box, Shift by a half, and a double-click puts the default
+  back. What bounds it is the room the *panel* has, measured against the panel
+  and not against the grid the box sits in — that grid is sized by its contents,
+  so a ceiling read from there follows the box down, and every drag inwards
+  lowered the limit to wherever the edge had just got to: the width could be
+  given away and never taken back. The map and its tracks are centred as a group
+  in the room a square map would have taken, so flipping does not resize the
+  panel and a track added below re-centres the map above it.
+
+- **The guides on a turned map are a pair of rays, not a cross.** Hold one end of
+  a contact still and let the separation grow and the contact walks *diagonally*
+  across the picture, so the lines that say which two places this is leave the
+  pointer at 45°: a pointer on the map gets an X centred on the contact, which
+  near the axis reads as a V and near the top of the band as a ∧, because the
+  band is all that fits of one. A pointer on a track gets a V standing on the
+  axis under it — the reader is naming one place, and the contacts that place is
+  in are the two rays leaving it, both ways along the genome. And a pointer on
+  the map now puts *two* hairlines in every track, one under each end of the
+  contact: the column it is over is the midpoint of the two, and no track has
+  anything at it. On the diagonal the two ends are one place and there is one
+  line.
 
 - **Marks on a turned map, placed by the loci they name.** Every overlay used to
   bail out where there was no row axis, so a reader's own marks vanished when they
@@ -380,6 +398,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it did.
 
 ### Fixed
+
+- **A turned map's ruler is measured in the same place as its readout.** The
+  column axis under a turn counts in half bins, and the halving was applied to
+  where the *block starts* as well as to the step — so the ruler sat half of the
+  block's own offset into the contig behind the picture drawn on it. On a window
+  opening 120 bins into a chromosome every tick read 60 kb short, and the tooltip
+  disagreed with the axis beneath the very cell it was describing. Only the step
+  is a cell size; where the block starts is a distance in whole bins, as it is for
+  everything else that reads it.
+
+- **The top edge of a turned band follows the hand that drags it.** Screen y grows
+  downward and the box does not, so dragging the top edge towards the top of the
+  panel — which is the whole gesture for "taller" — made the band shorter.
 
 - **The maps in a deck line up again when they carry different tracks.** The room
   a stack takes was reserved from the *lead's* geometry, on companions assumed to
