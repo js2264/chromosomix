@@ -438,13 +438,29 @@ export class Session {
   /**
    * Where the synthetic tracks card sits, inside the Annotations column.
    *
-   * A stable host rather than the card itself, because the two are created at
-   * different moments: the annotation cards are built when a file's assembly is
-   * known, and the workspace that owns the synthetic card is built after the
-   * *view* mounts, since it needs the framing. Putting an empty div in the list
-   * up front is what lets the later one fill it without the list being rebuilt.
+   * A **marker**, never mounted, rather than a wrapper the card goes inside.
+   *
+   * The two are created at different moments — the annotation cards when a
+   * file's assembly is known, the workspace that owns the synthetic card after
+   * the *view* mounts, since it needs the framing — so the list has to be built
+   * before the card exists. The obvious answer is an empty `.panel-host` div
+   * that the card is later dropped into, and it was the answer here, and it was
+   * wrong: `.panel-host` is `display: contents`, so a card inside one inside
+   * `annotationsHost` is a *third* DOM level, and the stylesheet's
+   * `.panel-column-body > .panel-host > .card` rule stops at the second. The
+   * card lost `flex: 0 0 auto`, was squeezed to the height of its own title, and
+   * grew a scrollbar of its own — the exact bug that rule was written to fix,
+   * one level deeper, which is what a depth-counting selector always costs.
+   *
+   * So the list carries a marker and {@link renderAnnotations} substitutes the
+   * real card for it, or drops it. No wrapper, no third level, and the position
+   * of the card in the column stays where the call site put it.
    */
-  private readonly syntheticHost = el('div', { class: 'panel-host' })
+  private readonly syntheticSlot = el('div')
+  /** The analysis card, once the workspace exists. Substituted for the marker. */
+  private syntheticCard: HTMLElement | null = null
+  /** The annotation list as its call site wrote it, marker included. */
+  private annotationNodes: readonly HTMLElement[] = []
   readonly store = new ViewStore()
 
   /**
@@ -1836,7 +1852,7 @@ export class Session {
       // Above the Tracks card, not below it: what a reader just computed is what
       // they came back to the panel to find, and a list of eight loaded files
       // between the Run button and its result is a scroll nobody should need.
-      this.syntheticHost,
+      this.syntheticSlot,
       new AnnotationCard({ store, loader, context: 'browser' }).el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
@@ -2477,7 +2493,7 @@ export class Session {
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card: see the browser path for why.
-      this.syntheticHost,
+      this.syntheticSlot,
       new AnnotationCard({
         store,
         loader,
@@ -4252,7 +4268,8 @@ export class Session {
       this.analysis = null
       this.setAnalysis([])
       this.drawerHost.replaceChildren()
-      this.syntheticHost.replaceChildren()
+      this.syntheticCard = null
+      this.renderAnnotations()
       return
     }
     if (this.analysis === null) {
@@ -4301,7 +4318,8 @@ export class Session {
     // shell's to place, which is why the two are separate hosts.
     this.setAnalysis(analysis.hasTasks ? [analysis.panelEl] : [])
     this.drawerHost.replaceChildren(analysis.drawerEl)
-    this.syntheticHost.replaceChildren(analysis.syntheticEl)
+    this.syntheticCard = analysis.syntheticEl
+    this.renderAnnotations()
   }
 
   /** The callbacks `AnalysisWorkspace` reads the session through. */
@@ -4388,8 +4406,29 @@ export class Session {
   }
 
   private setAnnotations(nodes: readonly HTMLElement[]): void {
-    this.annotationsHost.replaceChildren(...nodes)
-    this.setAvailability('annotations', nodes.length > 0)
+    this.annotationNodes = nodes
+    this.renderAnnotations()
+  }
+
+  /**
+   * The list, with the analysis card put where its marker is.
+   *
+   * Dropped rather than left empty where there is no workspace yet — a card
+   * titled *Synthetic tracks* with nothing in it and nothing on the way is a box
+   * the reader has to work out the meaning of, and the workspace arrives a frame
+   * or two later on every file.
+   */
+  private renderAnnotations(): void {
+    const out: HTMLElement[] = []
+    for (const node of this.annotationNodes) {
+      if (node !== this.syntheticSlot) {
+        out.push(node)
+        continue
+      }
+      if (this.syntheticCard !== null) out.push(this.syntheticCard)
+    }
+    this.annotationsHost.replaceChildren(...out)
+    this.setAvailability('annotations', out.length > 0)
   }
 
   private setAesthetics(nodes: readonly HTMLElement[]): void {

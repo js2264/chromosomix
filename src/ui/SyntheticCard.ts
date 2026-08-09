@@ -39,7 +39,7 @@ import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 
 /** The three formats a per-bin result can leave the app as (§18.7). */
-export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'tsv'
+export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
 
 export interface SyntheticCardOptions {
   store: AnnotationStore
@@ -96,7 +96,15 @@ export class SyntheticCard {
     }
     this.pending = false
 
-    const rows = this.options.store.forCard('synthetic')
+    // Everything **computed**, not one card's rows. A per-bin result is a
+    // synthetic *track* and a called interval set is an overlay, so the two land
+    // on different cards in the store — but to a reader they are one thing, "what
+    // I just ran", and insulation's boundaries belong beside the insulation
+    // profile they were called from rather than three cards away among the
+    // dropped files. `source.kind` is what they actually share.
+    const rows = this.options.store.entries.filter(
+      (entry) => entry.source.kind === 'computed' && entry.card !== 'viewpoint',
+    )
     this.el.classList.toggle('hidden', rows.length === 0)
     this.list.replaceChildren(...rows.map((entry) => this.row(entry)))
   }
@@ -231,24 +239,36 @@ export class SyntheticCard {
    * than a reason to abuse the header (§18.4).
    */
   private exports(entry: AnnotationEntry): HTMLElement {
-    const bigwig = el('button', {
-      class: 'btn btn-quiet',
-      type: 'button',
-      text: 'bigWig',
-      title:
-        'The bigWig writer arrives in the next milestone. bedGraph carries the same values, and ' +
-        'the TSV carries them with the provenance written above them.',
-      disabled: true,
-    })
+    // What a row can be written as depends on what it *is*. A per-bin track has
+    // a value everywhere and goes out as the two formats a browser opens; a
+    // called interval set has coordinates and goes out as the one bedtools
+    // reads. Both offer TSV, because §18.7 has no exception to that.
+    const intervals = entry.kind === 'segments' || entry.kind === 'pairs'
+    const bed = entry.kind === 'pairs' ? 'BEDPE' : 'BED'
     return el(
       'div',
       { class: 'ann-inline' },
       el('span', { class: 'field-label', text: 'export' }),
-      bigwig,
-      button('bedGraph', () => this.options.onExport(entry, 'bedgraph'), {
-        class: 'btn btn-quiet',
-        title: 'One line per bin that has a value; bins with none are omitted, never written as 0.',
-      }),
+      ...(intervals
+        ? [
+            button(bed, () => this.options.onExport(entry, 'bed'), {
+              class: 'btn btn-quiet',
+              title: `The called intervals as a ${bed} — what bedtools reads, and what this app reads back.`,
+            }),
+          ]
+        : [
+            button('bigWig', () => this.options.onExport(entry, 'bigwig'), {
+              class: 'btn btn-quiet',
+              title:
+                'Written here, byte for byte — no bedGraphToBigWig step. What IGV, deepTools and ' +
+                'pyBigWig open.',
+            }),
+            button('bedGraph', () => this.options.onExport(entry, 'bedgraph'), {
+              class: 'btn btn-quiet',
+              title:
+                'One line per bin that has a value; bins with none are omitted, never written as 0.',
+            }),
+          ]),
       button('TSV', () => this.options.onExport(entry, 'tsv'), {
         class: 'btn btn-quiet',
         title: 'The values, under the task, its parameters and its framing as ‘#’ comment lines.',

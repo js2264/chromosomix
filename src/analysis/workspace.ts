@@ -52,6 +52,7 @@ import type { BlockInput } from './worker/protocol'
 import { profileToBedGraph, type BedGraphContig } from './write/bedgraph'
 import { writeBigWig } from './write/bigwig'
 import { outputToTsv, tsvName } from './write/tsv'
+import { formatIntervals } from '../annotations/export'
 
 /** What the workspace needs from the session around it. */
 export interface AnalysisWorkspaceHost {
@@ -84,6 +85,13 @@ interface HeldProfile {
   task: string
 }
 
+/** The same, for a called interval set. */
+interface HeldIntervals {
+  output: IntervalsOutput
+  provenance: Provenance
+  task: string
+}
+
 export class AnalysisWorkspace {
   /** Goes in the Analysis column. */
   readonly panelEl: HTMLElement
@@ -106,7 +114,18 @@ export class AnalysisWorkspace {
    */
   private readonly synthetic: SyntheticCard | null
   private readonly profiles = new Map<string, HeldProfile>()
+  /**
+   * The interval outputs, for the same reason and with the same lifetime.
+   *
+   * The *coordinates* are on the entry — a `FeatureSet` is small enough to be a
+   * payload — but the `TaskOutput` and its provenance are not, and both are what
+   * a TSV export needs. Held here rather than duplicated into the store, exactly
+   * as a profile's values are.
+   */
+  private readonly intervals = new Map<string, HeldIntervals>()
   private open: AnalysisTask | null = null
+  /** What the loaded entries were last time a form was told about them. */
+  private entries = ''
   private readonly unsubscribe: () => void
 
   constructor(private readonly host: AnalysisWorkspaceHost) {
@@ -156,10 +175,37 @@ export class AnalysisWorkspace {
     // The panel shows a running job's state whether or not the drawer is open
     // (§18.1), so both surfaces follow the runner rather than the drawer
     // following the panel.
-    this.unsubscribe = this.runner.subscribe(() => {
+    const stopRunner = this.runner.subscribe(() => {
       this.panel.refresh()
       this.drawer.refresh()
     })
+
+    // …and the *store*, because a task's inputs are the loaded files and nothing
+    // else told the form when one arrived. `syncAnalysis` runs after a view
+    // mounts, and dropping a BEDPE mounts no view — so a reader who opened the
+    // panel, dropped a loop table and pressed Run got "No loop set was chosen"
+    // over a dropdown that had been empty since before the file existed. Which
+    // reads as the task being broken rather than as the panel being stale.
+    //
+    // Guarded by a signature rather than refreshed on every change: the store
+    // fires on each tick of a colour drag, and `setContext` refills every
+    // control — including a column list that reads four hundred features to do
+    // it. What a form cares about is which entries exist and what they are.
+    const stopStore =
+      store === null
+        ? () => {}
+        : store.subscribe(() => {
+            const now = entrySignature(store)
+            if (now === this.entries) return
+            this.entries = now
+            this.refresh()
+          })
+    if (store !== null) this.entries = entrySignature(store)
+
+    this.unsubscribe = () => {
+      stopRunner()
+      stopStore()
+    }
   }
 
   /**
@@ -336,6 +382,7 @@ export class AnalysisWorkspace {
       style: defaultStyle(kind, colour),
     })
     store.update(id, { status: 'ready', payload: output.payload })
+    this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
   }
 
   /**
@@ -469,10 +516,47 @@ export class AnalysisWorkspace {
   // -------------------------------------------------------------------------
 
   private async export(entry: AnnotationEntry, format: SyntheticFormat): Promise<void> {
-    const held = this.profiles.get(entry.id)
-    if (held === undefined) return
     const stamp = fileStamp(new Date())
     const base = exportBaseName(entry.label)
+
+    // A called interval set has no bin vector behind it — its numbers *are* its
+    // coordinates, and they are on the entry. Written through the same
+    // `annotations/export.ts` the hand-drawn marks use, so there is one opinion
+    // in this repository about where a half-open interval ends.
+    if (format === 'bed') {
+      const payload = entry.payload
+      if (payload === undefined) return
+      const held = this.intervals.get(entry.id)
+      downloadBlob(
+        new Blob(
+          [
+            formatIntervals(payload, {
+              label: entry.label,
+              ...(held === undefined
+                ? {}
+                : { file: held.provenance.framing.label, created: held.provenance.createdAt }),
+            }),
+          ],
+          { type: 'text/plain' },
+        ),
+        `${base}-${stamp}.${payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
+      )
+      return
+    }
+
+    const intervalHeld = this.intervals.get(entry.id)
+    if (intervalHeld !== undefined && format === 'tsv') {
+      downloadBlob(
+        new Blob([outputToTsv(intervalHeld.output, intervalHeld.provenance)], {
+          type: 'text/tab-separated-values',
+        }),
+        tsvName(base, intervalHeld.output, stamp),
+      )
+      return
+    }
+
+    const held = this.profiles.get(entry.id)
+    if (held === undefined) return
 
     if (format === 'tsv') {
       downloadBlob(
@@ -505,4 +589,23 @@ export class AnalysisWorkspace {
     downloadBlob(blob, `${base}-${stamp}.bw`)
   }
 
+}
+
+/**
+ * What a form needs to know about the loaded files, as one string.
+ *
+ * Id, kind and status, in order — the three things `candidatesFor` filters on to
+ * decide what a task may be run against. A colour, a height, an edge and a name
+ * are all absent on purpose: none of them changes the answer, and the first
+ * fires the store on every tick of a colour drag while the last fires on every
+ * keystroke of a rename.
+ *
+ * The cost of leaving the *label* out is a dropdown that goes on showing the old
+ * name until something else changes — which is a cosmetic lag measured against
+ * refilling every control, including a column list that reads four hundred
+ * features, once per keystroke. If that lag ever matters, the fix is to debounce
+ * a rename rather than to widen this.
+ */
+export function entrySignature(store: AnnotationStore): string {
+  return store.entries.map((entry) => `${entry.id}:${entry.kind}:${entry.status}`).join('|')
 }

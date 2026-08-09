@@ -120,6 +120,18 @@ export interface ChoiceOption {
   hint?: string
   /** Offered only where the file has a `/genomes` table. */
   needsGenomes?: boolean
+  /**
+   * Offered only where one of these annotation kinds is loaded.
+   *
+   * APA is the case. It is offered on any file that has *something* to aggregate
+   * over, and then its Anchors control asks whether that something is a loop set
+   * or a feature set — a question with a wrong answer available: with only ATAC
+   * peaks open, "Loop set" is a mode whose own input cannot be filled, so the
+   * task defaulted to it and refused itself. Naming the kinds an option needs is
+   * how the descriptor says which halves of itself this file can run, and
+   * `resolveChoiceDefaults` moves the value onto one that is offered.
+   */
+  needsKinds?: ReadonlyArray<'gtf' | 'segments' | 'pairs' | 'track' | 'sequence'>
 }
 
 export interface ChoiceParam extends ParamBase {

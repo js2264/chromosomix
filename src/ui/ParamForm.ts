@@ -62,8 +62,41 @@ import { iconButton } from './icons'
  * about.
  */
 function optionsFor(spec: ChoiceParam, context: AnalysisContext): readonly ChoiceOption[] {
-  if (context.hasGenomes) return spec.options
-  return spec.options.filter((option) => option.needsGenomes !== true)
+  return spec.options.filter((option) => {
+    if (option.needsGenomes === true && !context.hasGenomes) return false
+    if (option.needsKinds === undefined) return true
+    return context.entries.some(
+      (entry) =>
+        entry.status !== 'error' &&
+        (option.needsKinds as readonly string[]).includes(entry.kind),
+    )
+  })
+}
+
+/**
+ * A pick-one value moved onto an option this file offers.
+ *
+ * Only where the held one is *not* offered, and only onto the first that is —
+ * so a reader's own choice is never overwritten, and a descriptor default that
+ * this file cannot run does not become a Run that refuses itself. Where nothing
+ * is offered the value is left alone: the control shows it disabled and the
+ * estimate says why, which is better than inventing an answer.
+ */
+export function resolveChoiceDefaults(
+  specs: readonly ParamSpec[],
+  context: AnalysisContext,
+  value: Params,
+): Params {
+  const out: Record<string, ParamValue> = { ...value }
+  for (const spec of specs) {
+    if (spec.kind !== 'choice') continue
+    const offered = optionsFor(spec, context)
+    if (offered.length === 0) continue
+    const held = stringOr(out[spec.key], spec.default)
+    if (offered.some((option) => option.value === held)) continue
+    out[spec.key] = offered[0].value
+  }
+  return out
 }
 
 /**
@@ -327,7 +360,9 @@ export function resolveEntryDefaults(
   for (const spec of specs) {
     if (spec.kind === 'column') out[spec.key] = resolveColumn(spec, context, out)
   }
-  return out
+  // After the entries, because a choice can be filtered by what is loaded and
+  // the entry repair above is what decides whether anything is.
+  return resolveChoiceDefaults(specs, context, out)
 }
 
 // ---------------------------------------------------------------------------

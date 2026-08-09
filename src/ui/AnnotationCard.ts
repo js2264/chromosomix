@@ -679,7 +679,7 @@ export class AnnotationCard {
    */
   private fileRows(): AnnotationEntry[] {
     return this.props.store.entries.filter(
-      (entry) => entry.card !== 'viewpoint' && entry.card !== 'synthetic',
+      (entry) => entry.card !== 'viewpoint' && entry.source.kind !== 'computed',
     )
   }
 

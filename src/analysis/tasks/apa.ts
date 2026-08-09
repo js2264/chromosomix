@@ -41,8 +41,18 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'Anchors',
     default: 'pairs',
     options: [
-      { value: 'pairs', label: 'Loop set', hint: 'Off the diagonal, between two anchors.' },
-      { value: 'features', label: 'Feature set', hint: 'On the diagonal, at each feature.' },
+      {
+        value: 'pairs',
+        label: 'Loop set',
+        needsKinds: ['pairs'],
+        hint: 'Off the diagonal, between two anchors.',
+      },
+      {
+        value: 'features',
+        label: 'Feature set',
+        needsKinds: ['gtf', 'segments'],
+        hint: 'On the diagonal, at each feature.',
+      },
     ],
   },
   {
