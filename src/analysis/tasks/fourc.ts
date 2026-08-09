@@ -55,9 +55,17 @@ function anchorContig(context: AnalysisContext, params: Params): ContextContig |
 
 const PARAMS: readonly ParamSpec[] = [
   {
+    kind: 'toggle',
+    key: 'fromMap',
+    label: 'Pick on map',
+    default: true,
+    hint: 'Shift-drag along either axis of the map to name the anchor. Turn off to type one.',
+  },
+  {
     kind: 'region',
     key: 'anchor',
     label: 'Anchor',
+    fromMap: 'fromMap',
     hint: 'The locus the profile is a reading from. A whole sequence is allowed.',
   },
   {
@@ -85,7 +93,10 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
-      refusal: 'Name a locus to anchor the profile on.',
+      refusal:
+        params.fromMap === false
+          ? 'Name a locus to anchor the profile on.'
+          : 'Shift-drag along either axis of the map to pick an anchor.',
     }
   }
   if (contig === undefined) {

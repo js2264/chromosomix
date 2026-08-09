@@ -204,6 +204,25 @@ export interface RegionParam extends ParamBase {
    * and CID leave this off, where empty legitimately means every sequence.
    */
   required?: boolean
+  /**
+   * The key of a toggle that makes this locus **follow the map's anchor**.
+   *
+   * The map has had the gesture since §8.9 — shift-drag along either axis names
+   * a stretch of sequence, and the 4C *lane* draws from it. What was missing was
+   * the connection: the analysis task asked for the same thing again, in a text
+   * box, next to a map the reader had already pointed at.
+   *
+   * A toggle rather than a mode of the control, and a *parameter* rather than
+   * form state, because it belongs in the provenance: "the anchor was picked on
+   * the map" and "the anchor was typed" are different claims about where a
+   * number came from, and §18.4 exists to record exactly that kind of thing. It
+   * also means the choice is remembered per file and per task like every other.
+   *
+   * While it is on, the box is read-only and mirrors the anchor. The value
+   * written into the parameter is the resolved locus, never a sentinel, so a
+   * result's record names the place rather than the gesture.
+   */
+  fromMap?: string
 }
 
 /**

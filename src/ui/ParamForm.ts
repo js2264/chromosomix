@@ -48,6 +48,7 @@ import type {
 import { DETAIL_SEP } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { el, fmt } from './dom'
+import { getViewpointAnchor, subscribeViewpoint } from './viewpoint'
 import { iconButton } from './icons'
 
 /**
@@ -477,6 +478,8 @@ export class ParamForm {
   private readonly controls: Control[] = []
   /** Section heading (`''` for the top group) to the element rows live in. */
   private readonly groups = new Map<string, HTMLElement>()
+  /** Unsubscribes for the controls that listen to something outside this form. */
+  private readonly teardown: Array<() => void> = []
   private readonly id = `pf${forms++}`
 
   constructor(private readonly options: ParamFormOptions) {
@@ -547,12 +550,15 @@ export class ParamForm {
   /**
    * Take the form down.
    *
-   * Every listener here is on a node this class owns, so detaching the root is
-   * genuinely all of it — but the drawer's teardown should not have to know that,
-   * and the first control that subscribes to a store will need somewhere to
-   * unsubscribe from.
+   * Almost every listener here is on a node this class owns, so detaching the
+   * root would be most of it — {@link teardown} is for the ones that are not.
+   * The locus control that follows the map subscribes to a module-level
+   * singleton, and a form left subscribed after its drawer closed would go on
+   * committing anchors into a task nobody is looking at.
    */
   destroy(): void {
+    for (const stop of this.teardown) stop()
+    this.teardown.length = 0
     this.el.remove()
     this.controls.length = 0
     this.groups.clear()
@@ -599,12 +605,20 @@ export class ParamForm {
    * about the parameter, and a screen reader that read it as part of the field's
    * name would announce a paragraph every time the caret entered the box.
    */
-  private wrap(spec: ParamSpec, field: HTMLElement, caption?: HTMLElement): HTMLElement {
+  private wrap(
+    spec: ParamSpec,
+    field: HTMLElement,
+    caption?: HTMLElement,
+    status?: HTMLElement,
+  ): HTMLElement {
     return el(
       'div',
       { class: 'param-row' },
       field,
       caption,
+      // Above the descriptor's hint, because it is about *now* — whether an
+      // anchor has been picked yet — and the hint is about the parameter always.
+      status,
       spec.hint === undefined ? null : el('div', { class: 'hint', text: spec.hint }),
     )
   }
@@ -1174,12 +1188,22 @@ export class ParamForm {
   }
 
   /**
-   * A locus: a box, with the file's sequences offered beside it.
+   * A locus: a box, with the file's sequences offered beside it — and, where the
+   * descriptor says so, following the map instead.
    *
-   * The box stays because a span is the point — a 4C anchor is a window, and a
-   * dropdown of sequence names could not express one. The `<datalist>` is what
-   * turns the common case back into a pick: type nothing and the sequences are
-   * there, pick one and then add `:500,000-510,000` if that is what was meant.
+   * The box stays because a span is the point: a 4C anchor is a window, and a
+   * dropdown of sequence names could not express one. The `<datalist>` turns the
+   * common case back into a pick — type nothing and the sequences are there, pick
+   * one and then add `:500,000-510,000` if that is what was meant.
+   *
+   * **{@link RegionParam.fromMap} is the interesting half.** The map has had the
+   * anchor gesture since §8.9 and the 4C lane already draws from it; what was
+   * missing was that a task asked for the same locus again, in a text box, beside
+   * a map the reader had just pointed at. While the named toggle is on this box
+   * mirrors `ui/viewpoint.ts`'s anchor and is read-only, and the *resolved* locus
+   * is what gets written into the parameter — so the provenance names the place
+   * rather than the gesture, and turning the toggle off leaves the picked locus
+   * behind as the starting point for an edit rather than an empty box.
    */
   private locusControl(spec: RegionParam): Control {
     const id = `${this.id}-${spec.key}`
@@ -1196,6 +1220,11 @@ export class ParamForm {
       // width it asks for.
       style: { width: '100%' },
     })
+    const note = el('p', { class: 'hint param-map-note hidden' })
+
+    const following = (): boolean =>
+      spec.fromMap !== undefined && this.params[spec.fromMap] === true
+
     const refill = (): void => {
       options.replaceChildren(
         ...this.context.contigs.map((contig) => el('option', { value: contig.name })),
@@ -1206,20 +1235,59 @@ export class ParamForm {
     box.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') commit()
     })
+
     const sync = (): void => {
-      if (document.activeElement === box) return
+      const follow = following()
+      box.readOnly = follow
+      box.classList.toggle('is-following', follow)
+      note.classList.toggle('hidden', !follow)
+      if (follow) {
+        const at = getViewpointAnchor()
+        note.textContent =
+          at === null
+            ? 'Shift-drag along either axis of the map to name the anchor.'
+            : 'Following the map. Shift-drag to move it.'
+      }
+      if (document.activeElement === box && !follow) return
       box.value = stringOr(this.params[spec.key], '')
-      box.placeholder = framingRegion(this.context)
+      box.placeholder = follow
+        ? 'nothing picked yet'
+        : framingRegion(this.context)
     }
+
+    // Written into the parameter rather than read at Run time, so a *record* of
+    // the run names the locus. The runner never learns that a map was involved,
+    // which is what keeps the anchor one concept rather than two.
+    const takeAnchor = (): void => {
+      if (!following()) return
+      const at = getViewpointAnchor()
+      this.commit(spec.key, at === null ? '' : `${at.contig}:${at.start + 1}-${at.end}`)
+      // `commit` is a no-op when the value has not moved, and the note still has
+      // to answer "is there an anchor yet" — so the repaint is unconditional.
+      sync()
+    }
+    if (spec.fromMap !== undefined) {
+      this.teardown.push(subscribeViewpoint(() => takeAnchor()))
+      takeAnchor()
+    }
+
     refill()
     sync()
     return {
       spec,
-      wrapper: this.wrap(spec, this.labelled(spec, el('div', { class: 'param-locus' }, box, options), id)),
+      wrapper: this.wrap(
+        spec,
+        this.labelled(spec, el('div', { class: 'param-locus' }, box, options), id),
+        undefined,
+        note,
+      ),
       shown: false,
       sync,
       refill: () => {
         refill()
+        // Following the map is a live connection, not a value copied once: a new
+        // file has new sequences and the anchor may name none of them.
+        takeAnchor()
         sync()
       },
     }

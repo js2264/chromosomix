@@ -142,4 +142,43 @@ describe('every descriptor', () => {
       expect(task.outputs.length).toBeGreaterThan(0)
     })
   })
+
+  /**
+   * Three parameters point at another parameter *by key*, and a rename would
+   * break the link with no type error and no failing task — the control would
+   * simply stop following the thing it was supposed to follow, which on
+   * `fromMap` means a locus box that quietly goes back to being a text box.
+   */
+  it('resolves every parameter that names another one', () => {
+    each((task) => {
+      const keys = new Set(task.params.map((spec) => spec.key))
+      for (const spec of task.params) {
+        if (spec.kind === 'column') {
+          expect(keys, `${task.id}.${spec.key} → ${spec.from}`).toContain(spec.from)
+        }
+        if (spec.kind === 'region' && spec.fromMap !== undefined) {
+          expect(keys, `${task.id}.${spec.key} → ${spec.fromMap}`).toContain(spec.fromMap)
+          const toggle = task.params.find((other) => other.key === spec.fromMap)
+          expect(toggle?.kind, `${task.id}.${spec.fromMap} is a toggle`).toBe('toggle')
+        }
+      }
+    })
+  })
+
+  /**
+   * The map's anchor gesture has existed since §8.9 and the 4C *lane* has always
+   * drawn from it; the task asked for the same locus again in a text box. On by
+   * default, because a reader who is looking at a map and wants a profile
+   * through a spot on it has already told the app where — twice would be once
+   * too many.
+   */
+  it('has 4C picking its anchor on the map, by default', () => {
+    const task = TASKS.find((candidate) => candidate.id === 'fourc')
+    expect(task).toBeDefined()
+    const toggle = task?.params.find((spec) => spec.key === 'fromMap')
+    expect(toggle?.kind).toBe('toggle')
+    expect(toggle?.kind === 'toggle' && toggle.default).toBe(true)
+    const anchor = task?.params.find((spec) => spec.key === 'anchor')
+    expect(anchor?.kind === 'region' && anchor.fromMap).toBe('fromMap')
+  })
 })

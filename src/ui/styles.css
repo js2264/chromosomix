@@ -6075,6 +6075,22 @@ p {
   max-height: 26rem;
 }
 
+/* A locus box that is following the map: readable, plainly not typeable, and
+   not greyed to the point of looking broken. `readOnly` already stops the caret;
+   what this adds is the reason being visible before a reader tries. */
+.param-region.is-following {
+  background: var(--bg);
+  color: var(--text-dim);
+  font-style: italic;
+  cursor: default;
+}
+
+/* The line under it — *following the map*, or *shift-drag to name one*. Tighter
+   than a hint because it sits directly above one. */
+.param-map-note {
+  margin: 0.15rem 0 0;
+}
+
 /* A locus box with the file's sequences behind it. The `<datalist>` is not
    rendered, so the wrapper exists only to keep the two together as one child of
    the label grid — a bare sibling would take a second grid cell and push the

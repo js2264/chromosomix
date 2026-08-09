@@ -423,6 +423,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   wandered to since. Progress and cancel are on every scan, the same way §7.3's
   overview has always had them.
 
+- **A 4C anchor is picked on the map.** The gesture was already there — shift-drag
+  along either axis of a map names a stretch of sequence, and the 4C lane has drawn
+  from it since 0.9 — but the analysis task asked for the same locus again, in a
+  text box, beside a map the reader had just pointed at. **Pick on map** is on by
+  default: the box mirrors the anchor, follows it as it moves, and says so. Turn it
+  off and the picked locus is left behind as the starting point for an edit rather
+  than an empty box, so switching between the two never loses the answer.
+
+  What is written into the parameter is the resolved locus, never a "from the map"
+  sentinel — so the record of a run names the place it was a reading of, which is
+  the whole of what the provenance is for.
+
 - **Results come back as tracks.** A task that produces one value per bin —
   insulation, 4C, coverage, an eigenvector — lands in the Annotations panel as a
   **synthetic track**, and from there it is indistinguishable from a bigWig you
