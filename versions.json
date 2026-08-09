@@ -1,6 +1,13 @@
 {
-  "latest": "001715f",
+  "latest": "0cb059a",
   "versions": [
+    {
+      "commit": "0cb059a",
+      "version": "0.9.0",
+      "date": "2026-08-09T09:01:04+02:00",
+      "subject": "docs: the turn gets a section, and the deck's track rules get written down",
+      "tag": ""
+    },
     {
       "commit": "001715f",
       "version": "0.9.0",
