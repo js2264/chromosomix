@@ -542,6 +542,17 @@ export function expectedModel(
  * A separation nothing was observed at, and a cell whose expected value is zero,
  * both give `NaN`: there is no ratio to a baseline that does not exist, and the
  * raster already leaves `NaN` transparent.
+ *
+ * **So do the two ends of the ratio itself**, and that is the one place this
+ * departs from the arithmetic. A cell where nothing was observed is `0`, which
+ * on a scale centred at `1` is the strongest depletion the ramp can draw — so an
+ * O/E map of a sparse block came out as a wall of "maximally depleted" over
+ * every empty pixel, which is the loudest possible statement of the one thing
+ * the file does not say. Zero is *nothing seen here*, which is what paper means
+ * on every other map this viewer draws, so it is drawn as paper. An infinite
+ * ratio is the same claim from the other end — a baseline too small to divide by
+ * rather than a measurement — and it goes the same way. Neither is a number a
+ * colour could honestly stand for, and both would drag the auto range with them.
  */
 export function observedOverExpected(
   block: BlockValues,
@@ -572,7 +583,13 @@ export function observedOverExpected(
       } else {
         expected = model.trans
       }
-      out[row + c] = expected > 0 ? value / expected : Number.NaN
+      const ratio = expected > 0 ? value / expected : Number.NaN
+      // Not `> 0`: an extra `/pixels` column may legitimately hold negative
+      // numbers, and blanking those would be this rule deciding what a file is
+      // allowed to contain. Exactly the two ends go — zero (and `-0`, which
+      // `!== 0` is false for) and either infinity — with `isFinite` carrying the
+      // `NaN` case above through unchanged.
+      out[row + c] = ratio !== 0 && Number.isFinite(ratio) ? ratio : Number.NaN
     }
   }
   return out

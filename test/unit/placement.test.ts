@@ -24,6 +24,7 @@ import {
   isPlaced,
   lanesOn,
   mapsOf,
+  onlyOn,
   place,
   propagate,
   pruneLanes,
@@ -221,5 +222,45 @@ describe('order within a stack', () => {
     const first = lanesOn(lanes, LEAD_MAP)[0]
     expect(reorderLane(lanes, first, 99).map((l) => l.track)).toEqual(['b', 'a'])
     expect(reorderLane(lanes, first, -5).map((l) => l.track)).toEqual(['a', 'b'])
+  })
+})
+
+/**
+ * What "loaded for the deck" means, which is the question closing one has to
+ * answer.
+ *
+ * A track dropped on a companion's edge belongs to that map alone
+ * (`app/Session.ts` moves the lane off the lead the moment the import exists),
+ * so the deck's × has to take it with the maps. A track that is also on the lead
+ * is being read against a picture that is staying, and only loses the lanes of
+ * the maps that go.
+ */
+describe('a track that exists only for the maps that are going', () => {
+  const gone = new Set(['p1', 'p2'])
+
+  it('is one drawn on those maps and nowhere else', () => {
+    const lanes = place(place([], 'a', 'p1', placementOn('bottom')), 'a', 'p2', placementOn('bottom'))
+    expect(onlyOn(lanes, 'a', gone)).toBe(true)
+  })
+
+  it('is not one that is also on the map that stays', () => {
+    let lanes = place([], 'a', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'a', 'p1', placementOn('bottom'))
+    expect(onlyOn(lanes, 'a', gone)).toBe(false)
+  })
+
+  it('is not one that is drawn nowhere at all', () => {
+    // "Imported and undrawn" is a state on purpose: a reader who takes a track
+    // off every map has kept it, and closing a deck must not delete it.
+    expect(onlyOn(place([], 'a', LEAD_MAP, placementOn('bottom')), 'b', gone)).toBe(false)
+    expect(onlyOn(withdraw(place([], 'a', 'p1', placementOn('bottom')), 'a'), 'a', gone)).toBe(false)
+  })
+
+  it('leaves the survivors their lead lane once the rest are pruned', () => {
+    let lanes = place([], 'shared', LEAD_MAP, placementOn('bottom'))
+    lanes = place(lanes, 'shared', 'p1', placementOn('bottom'))
+    lanes = place(lanes, 'theirs', 'p2', placementOn('top'))
+    const kept = pruneLanes(lanes, new Set(['shared']), new Set([LEAD_MAP]))
+    expect(kept.map((lane) => [lane.track, lane.map])).toEqual([['shared', LEAD_MAP]])
   })
 })

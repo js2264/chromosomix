@@ -2321,6 +2321,35 @@ p {
     default;
 }
 
+/* …unless the crosshair is on, in which case there is no pointer at all.
+
+   The guide lines are already a pointer, and a better one: they are drawn at
+   the cell the app has actually resolved, they run the width and height of the
+   picture, and they continue into every track under it. The arrowhead beside
+   them is a second, blunter mark for the same position, sitting on top of the
+   pixel it is pointing at — which on a map where a cell can be one pixel is the
+   only thing covering the answer. So while the lines are on, the hardware
+   pointer goes and the drawing is the pointer.
+
+   Between the resting arrowhead and the transient shapes below, deliberately:
+   each of those is one class deep, exactly as this is, so source order decides
+   and the later rule wins. A pan still shows the closed hand and a selection
+   still shows its crosshair — those say what is *happening*, which no drawn
+   guide line does.
+
+   `is-guided` is written by whatever owns the surface, and each owns a slightly
+   different condition because each draws its line under different ones: the map
+   while the crosshair preference is on *and* the pointer is over a cell (a
+   label gutter has no cell to draw one at), the 1D browser while it is on and
+   the pointer is on the axis rather than in the name column, and a lane stack
+   always — a lane answers a pointer with its own hairline whatever the
+   preference says. */
+.heatmap-canvas.is-guided,
+.lane-canvas.is-guided,
+.browser-canvas.is-guided {
+  cursor: none;
+}
+
 /* The arrowhead stays the resting cursor — it is the one that points *at* a
    cell. The other two are transient: a crosshair while Option is held, because
    a selection is about to be drawn, and the closed hand while a pan is actually
@@ -2879,6 +2908,26 @@ p {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* A toggle whose mark is a word — `O/E`, and nothing else so far.
+
+   Every other button in these rows carries a 15 px icon on a 24-unit grid, and
+   this one has to occupy the same square: a ratio has no shape to draw, the
+   nearest drawn thing being a division sign that would say "divide" without
+   saying by what, so the field is labelled with the two letters every paper
+   calls it by. The size and the weight are chosen to sit on the icons' optical
+   line rather than to be readable prose — it is a mark that happens to be
+   letters. `1` on the line height so the glyphs centre in the same box the SVGs
+   do; without it the row's baseline steps down by a pixel at this button. */
+.btn-word-text {
+  display: block;
+  min-width: 15px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .checkbox {
@@ -5296,6 +5345,38 @@ p {
   white-space: nowrap;
   font-size: var(--step--1);
   font-weight: 600;
+}
+
+/* The `::1000` after a companion's name: which rung of the collection this map
+   is read at, and a control rather than a caption.
+
+   It reads as part of the name — same size, monospaced because it is a piece of
+   a URI, no frame until it is approached — because that is what it *is*: the
+   heading says `rep2.mcool` and this says which map inside it. A bordered select
+   sitting in a title bar would read as a setting that had wandered out of the
+   toolbar, and the toolbar is the wrong place for it: the resolution is the one
+   thing about a companion's read that the deck does not share (§16.2), so it
+   belongs on the panel it is a fact about.
+
+   `flex: 0 0 auto` so it survives the name's ellipsis: the file name is the part
+   that can afford to be cut, and cutting the resolution instead would leave a
+   control the reader cannot read the value of. */
+.deck-entry {
+  flex: 0 0 auto;
+  padding: 0.05rem 0.15rem;
+  border-color: transparent;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  cursor: pointer;
+}
+
+.deck-entry:hover,
+.deck-entry:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--text);
 }
 
 /* The handle a map is dragged by. Only the grip, not the whole heading: the

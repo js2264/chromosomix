@@ -8,7 +8,7 @@ everything below is new since that tag. All of it is committed and pushed.
 
 **State:** all three gaps in §1 are closed. The deck (§3) is complete, tracks
 included; the turn (§5) is complete but for the butterfly, which is open on a
-design decision rather than on work and is written up in `SPECS.md` §17.6. §7 is
+design decision rather than on work and is written up in `SPECS.md` §17.7. §7 is
 the honest list of what is thin rather than missing.
 
 `npm ci` first — the container starts without `node_modules`, and `tsc` fails
@@ -424,7 +424,7 @@ in the first handoff were wrong in both directions.
    ruler: the two halves' diagonals are *adjacent rows, not the same row*, so the
    combined y axis is two affine lines meeting in the middle, and `AxisCoords` —
    which every ruler in the app is — is one line. Three ways out, all with a cost,
-   set out in `SPECS.md` §17.6: share the diagonal row (loses one file's
+   set out in `SPECS.md` §17.7: share the diagonal row (loses one file's
    self-contacts at the join), give the row ruler a supplier seam (a second tick
    mechanism beside §17.5's), or label the lower half in negative distance (one
    line serves both, and the reader has to read `-100 kb` as "100 kb, other

@@ -514,3 +514,119 @@ describe('a sideways gesture belongs to the browser', () => {
     expect(prevented).toBe(1)
   })
 })
+
+/**
+ * A turned map, whose y axis is a distance rather than a place (§17).
+ *
+ * Two things follow and neither is cosmetic. A band shorter than the plot has to
+ * stand on the edge its diagonal is on, because the tracks under the map are
+ * drawn against that same axis and a centred band floats away from them. And
+ * both drags have to collapse onto the x axis, because the other one bounds no
+ * window: the box a marquee used to commit named rows that are separations, and
+ * a mostly-vertical 4C drag named a band of them, which resolved to nothing at
+ * all — silently, because the axis it asked for does not exist.
+ */
+describe('a band, not a square', () => {
+  /** A block far wider than it is tall — the shape a turn produces. */
+  function band(rows: number, cols: number): DenseMatrix {
+    return {
+      nrows: rows,
+      ncols: cols,
+      values: new Float32Array(rows * cols),
+      rowExtent: [0, rows],
+      colExtent: [0, cols],
+    }
+  }
+
+  function turned(size = 400): HeatmapView {
+    const heatmap = new HeatmapView(fakeCanvas(size), { devicePixelRatio: 1 })
+    heatmap.setAnchor('end')
+    heatmap.setSpanGestures(true)
+    // 20 rows over 200 columns: fitted on the width, it uses a tenth of the
+    // height, which is the gap this exists to close.
+    heatmap.setMatrix(band(20, 200), [])
+    return heatmap
+  }
+
+  it('stands the diagonal on the bottom edge of the plot', () => {
+    const heatmap = turned()
+    const plot = heatmap.plotRect
+    const bottom = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height - 1)
+    expect(bottom?.row).toBe(19)
+    // …and there is paper above the apex rather than under the axis.
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + 1)).toBeNull()
+  })
+
+  it('stands it on the top edge when separation grows downward', () => {
+    const heatmap = turned()
+    heatmap.setAnchor('start')
+    const plot = heatmap.plotRect
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + 1)?.row).toBe(0)
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height - 1)).toBeNull()
+  })
+
+  it('centres it again once nothing is asking for an edge', () => {
+    const heatmap = turned()
+    heatmap.setAnchor('middle')
+    const plot = heatmap.plotRect
+    // Half the slack above and half below, which is the square map's rule and
+    // the one a turn is the exception to.
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + 1)).toBeNull()
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height - 1)).toBeNull()
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)?.row).toBe(10)
+  })
+
+  it('zooms to a horizontal span, which a square marquee could not', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setAnchor('end')
+    heatmap.setSpanGestures(true)
+    heatmap.setMatrix(band(20, 200), [])
+    heatmap.attach()
+    const fitted = heatmap.zoomLevel
+
+    // Flat: no vertical travel at all, which is exactly what a drag across a
+    // band looks like. As a square it is a zero-height box and does nothing.
+    dragWith(fire, [100, 300], [200, 300], { altKey: true })
+
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+    // 100 px of a 400 px plot: a quarter of the columns, so four times the zoom.
+    expect(heatmap.zoomLevel).toBeCloseTo(fitted * 4, 6)
+  })
+
+  it('names columns for a 4C drag whichever way the hand went', () => {
+    const { canvas, fire } = harness(400)
+    const asked: Array<{ axis: string; span: [number, number] }> = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onAnchor: (axis, span) => asked.push({ axis, span }),
+    })
+    heatmap.setAnchor('end')
+    heatmap.setSpanGestures(true)
+    heatmap.setMatrix(band(20, 200), [])
+    heatmap.attach()
+
+    // Mostly vertical. On a square map this is a band of rows; on a turned one
+    // rows are separations, and the answer has to be a stretch of the genome.
+    dragWith(fire, [200, 260], [210, 380], { shiftKey: true })
+
+    expect(asked).toHaveLength(1)
+    expect(asked[0].axis).toBe('cols')
+    expect(asked[0].span[1]).toBeGreaterThan(asked[0].span[0])
+  })
+
+  it('still asks the hand on a square map', () => {
+    const { canvas, fire } = harness(400)
+    const asked: string[] = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onAnchor: (axis) => asked.push(axis),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+
+    dragWith(fire, [200, 100], [210, 300], { shiftKey: true })
+
+    expect(asked).toEqual(['rows'])
+  })
+})

@@ -65,7 +65,14 @@ import type {
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
-import { downloadBlob, fileStamp, readPageBackground } from '../ui/export'
+import {
+  canvasToPng,
+  copyPngToClipboard,
+  downloadBlob,
+  fileStamp,
+  readPageBackground,
+} from '../ui/export'
+import { KEYS, withKey } from '../ui/commands'
 import { iconButton } from '../ui/icons'
 import { DeckFrame } from './DeckFrame'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
@@ -84,7 +91,7 @@ import {
   type PanelRef,
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
-import { LEAD_MAP } from '../annotations/placement'
+import { LEAD_MAP, onlyOn } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
 import { fileLabel } from '../ui/labels'
 
@@ -1214,6 +1221,35 @@ export class PanelDeck {
       { class: 'btn btn-icon deck-save', size: 14 },
     )
 
+    // Beside the download, exactly as it is on a single map's Export card: they
+    // are the same figure going to two places, and ⌘C is the key that reaches
+    // this one (`ui/commands.ts`'s `copyPlot`, routed here by `app/Session.ts`
+    // whenever a deck is on).
+    const copy = iconButton(
+      'clipboard-copy',
+      withKey('Copy the whole deck as one PNG, laid out as it is on screen', KEYS.copyPlot),
+      () => void this.copyDeck(),
+      { class: 'btn btn-icon deck-copy', size: 14 },
+    )
+
+    // The one control that takes the deck away, and the only one on the right.
+    //
+    // Every button in this bar acts on the deck as it stands; this one ends it,
+    // and a destructive control sitting in the middle of a row of adjustments is
+    // one a hand reaches by accident. So the row is read from the left and this
+    // is at the far end of it, which is where a window's close has been for
+    // thirty years. What it closes is stated rather than implied — the maps and
+    // whatever was loaded only for them ({@link closeDeck}).
+    const close = iconButton(
+      'x',
+      'Close the deck: every companion map, and any track loaded only for them. The first map, ' +
+        'and everything drawn on it, stays exactly as it is.',
+      () => this.closeDeck(),
+      // The same bare mark a panel's own close is, so the two read as one
+      // gesture at two scales: this one takes the row, that one takes a cell.
+      { class: 'btn-close deck-close', size: 14 },
+    )
+
     // How many maps is a fact about *what is being looked at*, so it goes in the
     // line that already says that — beside the block's size and the window's
     // span, in the view's own summary — rather than in a bar of controls. The
@@ -1232,29 +1268,134 @@ export class PanelDeck {
       '. One navigation across every panel: the region, the level and the score are shared, ' +
       'and each panel keeps its own colour scale. The chain on a panel takes it off the lead.'
 
+    // One left-aligned run, and one button at the far right.
+    //
+    // The spacer used to sit second, which split the bar into a chain on the
+    // left and three controls floated over against the right-hand edge — two
+    // groups, for a row that is one group. On a wide window the two halves ended
+    // up a screen apart, so reading the bar meant looking in two places, and
+    // which half a control was in said nothing about what it did. Everything
+    // that *adjusts* the deck now reads left to right in one run, and the only
+    // thing across the gap is the one that ends it.
     this.toolbar.replaceChildren(
       leadLock,
-      el('span', { class: 'deck-spacer' }),
       columns,
       share,
       save,
+      copy,
+      el('span', { class: 'deck-spacer' }),
+      close,
     )
   }
 
   /**
-   * Save the whole deck as one figure, laid out as it is on screen.
+   * Put the whole deck down: every companion, and every track that was here
+   * only for them.
    *
-   * The thing somebody assembling a figure actually wants, and the one export
-   * no panel can produce for itself. Each panel draws its own — the same
+   * The maps are the easy half. The other half is the one a reader would
+   * otherwise be left to do by hand: a bigWig dropped on a companion's edge is
+   * an import into the *session's* one track list (`annotations/placement.ts`),
+   * so closing the maps it was drawn on leaves it loaded, invisible, and holding
+   * a row in the Tracks card that says it is drawn nowhere. A track that is also
+   * on the lead is a different thing — it is being read against the map that is
+   * staying — so it keeps its lane there and loses only the companions'.
+   *
+   * The lead is not in `slots` and is untouched throughout: §16.9's rule is that
+   * the first map is the session's own view, and closing a deck must leave the
+   * session exactly where closing the last companion one at a time would.
+   */
+  private closeDeck(): void {
+    if (this.slots.length === 0) return
+    const gone = new Set(this.slots.map((slot) => slot.id))
+    for (const slot of this.slots) {
+      this.lock.leave(slot.id)
+      slot.panel?.destroy()
+      slot.vacancy?.destroy()
+    }
+    this.slots = []
+    this.dropCompanionTracks(gone)
+    this.paintGrid()
+    // Which leaves the deck empty, so the session's next render puts it down and
+    // hands the view back its own frame (`app/Session.ts`'s `syncDeck`).
+    this.publish()
+  }
+
+  /** Forget the tracks the departing maps were the only reason for. */
+  private dropCompanionTracks(gone: ReadonlySet<string>): void {
+    const store = this.props.annotations?.(LEAD_MAP)?.store
+    if (store === undefined) return
+    // Over a copy of both lists, because `remove` rewrites them under the loop.
+    const placements = [...store.placements]
+    for (const entry of [...store.entries]) {
+      if (onlyOn(placements, entry.id, gone)) store.remove(entry.id)
+    }
+    // Then the placements of everything that survived, which is what takes a
+    // lead-and-companion track off the maps that have gone. Reconciled against
+    // the truth rather than unplaced one at a time, for `keepMaps`'s reason.
+    store.keepMaps(new Set([LEAD_MAP]))
+  }
+
+  /**
+   * Save the whole deck as one figure — the download in the bar.
+   *
+   * The picture is {@link composeDeck}'s; this is the half that names a file and
+   * hands it to the browser. Its twin is {@link copyDeck}, and the two share the
+   * drawing for the reason a single map's save and copy do: they are the same
+   * figure going to two places, and a second composition would be a second thing
+   * to keep in step.
+   */
+  private async saveDeck(): Promise<void> {
+    const now = new Date()
+    const out = this.composeDeck(now)
+    if (out === null) return
+    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+    if (blob === null) return
+    downloadBlob(blob, `deck-${fileStamp(now)}-${DECK_EXPORT_DPI}dpi.png`)
+  }
+
+  /**
+   * The same figure onto the clipboard — ⌘C, and the button beside the save.
+   *
+   * The key already copied *a* plot while a deck was on, and it copied the lead:
+   * one cell out of six, which on a screen showing six is the answer to a
+   * question nobody asked. With a deck up, "the figure" is the deck — that is
+   * what the reader arranged and what they are looking at — so the key follows
+   * the picture rather than the panel it happens to have been bound to
+   * (`app/Session.ts`).
+   *
+   * PNG, like every other clipboard export here: a clipboard holds an image, and
+   * a PDF pasted into a slide arrives as a file attachment instead of a picture.
+   */
+  async copyDeck(): Promise<void> {
+    const out = this.composeDeck(new Date())
+    if (out === null) return
+    try {
+      await copyPngToClipboard(canvasToPng(out))
+      this.warn('')
+    } catch (err) {
+      // In the deck's own bar, where its other refusals go — see {@link NO_ROOM}.
+      // A clipboard write can be refused outright by a browser that has not been
+      // given permission, and a key that silently does nothing reads as broken.
+      this.warn(err instanceof Error ? `copy failed: ${err.message}` : 'copy failed')
+    }
+  }
+
+  /**
+   * Every panel drawn into one canvas, laid out as it is on screen.
+   *
+   * The thing somebody assembling a figure actually wants, and the one export no
+   * panel can produce for itself. Each panel draws its own — the same
    * `exportCanvas` the single map has always had, at the same dpi, with its own
    * key in its own corner — and they are placed into the grid the reader drew,
    * every cell the size of the largest so the columns line up. An empty cell is
    * left empty rather than closed up: it is part of the arrangement, and a
    * figure that silently reflowed on the way to disk would not be the picture
    * that was on screen.
+   *
+   * `null` only where there is no 2d context to draw into, which is a browser
+   * that cannot export at all rather than a deck that cannot.
    */
-  private async saveDeck(): Promise<void> {
-    const now = new Date()
+  private composeDeck(now: Date): HTMLCanvasElement | null {
     const maps = [this.lead, ...this.slots.map((slot) => slot.panel?.map ?? null)]
     const drawn = maps.map((panel) => {
       try {
@@ -1275,7 +1416,7 @@ export class PanelDeck {
     out.width = columns * cellWidth + (columns - 1) * gap
     out.height = rows * cellHeight + (rows - 1) * gap
     const ctx = out.getContext('2d')
-    if (ctx === null) return
+    if (ctx === null) return null
     ctx.fillStyle = readPageBackground()
     ctx.fillRect(0, 0, out.width, out.height)
     drawn.forEach((canvas, cell) => {
@@ -1284,10 +1425,7 @@ export class PanelDeck {
       const row = Math.floor(cell / columns)
       ctx.drawImage(canvas, column * (cellWidth + gap), row * (cellHeight + gap))
     })
-
-    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
-    if (blob === null) return
-    downloadBlob(blob, `deck-${fileStamp(now)}-${DECK_EXPORT_DPI}dpi.png`)
+    return out
   }
 
   private warn(message: string): void {

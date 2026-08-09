@@ -1290,9 +1290,18 @@ export class BrowserView {
     // coordinate", and the strip before the axis — the handles' margin and the
     // name column when it is on — holds no coordinate at all: a line drawn
     // through a column of track names is pointing at a word.
-    if (this.hover !== null && this.crosshair && this.hover.x >= this.gutter) {
-      drawGuide(ctx, this.hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
+    const hover = this.hover
+    const guided = hover !== null && this.crosshair && hover.x >= this.gutter
+    if (guided) {
+      drawGuide(ctx, hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
     }
+    // Where the line is drawn, it *is* the pointer, and the drawn arrowhead
+    // beside it is a second, blunter mark for the same coordinate — sitting on
+    // top of the answer. So the hardware pointer goes exactly where the line
+    // comes, condition for condition: over the name column, where there is no
+    // coordinate and therefore no line, the arrowhead is still the only thing
+    // saying where the hand is (`ui/styles.css`).
+    this.canvas.classList.toggle('is-guided', guided)
     // The resize grip, where the pointer is on a lane's lower border. The
     // cursor is the drawn arrowhead everywhere here — it is what points at a
     // base pair — so an affordance that lives in the cursor would not exist.
