@@ -185,6 +185,15 @@ import {
   type PlotOptionKey,
 } from './plotOptions'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
+import {
+  MIN_TURN_HEIGHT,
+  MIN_TURN_WIDTH,
+  fitTurnBox,
+  getTurnBox,
+  setTurnBox as rememberTurnBox,
+  subscribeTurnBox,
+  type TurnBox,
+} from './turnBox'
 
 const TRANSFORMS: Transform[] = ['log1p', 'log10', 'log2', 'none']
 
@@ -217,29 +226,6 @@ const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
   'Available on one sequence against itself, which is the only block that has a diagonal ' +
   'to measure from.'
-
-/**
- * How tall a turned band is drawn before anybody says otherwise, against its own
- * width.
- *
- * A third, which is the shape of the figures this is a viewer for. A whole
- * triangle is exactly twice as wide as it is tall — that is what the half-bin
- * lattice makes it — so a box a third of its own width shows two thirds of the
- * separation the block holds at the fitted zoom: enough band that a domain has
- * room to be a triangle rather than a smear, and short enough that the picture
- * still reads as one strip along the genome rather than as a map.
- */
-const DEFAULT_TURN_ASPECT = 1 / 3
-
-/**
- * The smallest box worth drawing in, in CSS pixels.
- *
- * A floor rather than a limit: a handle dragged onto its own opposite edge means
- * "as small as it goes", not "gone", and a box of no pixels is a picture with no
- * picture in it — the same rule `turnDepthFor` follows about a band of no rows.
- */
-const MIN_TURN_HEIGHT = 40
-const MIN_TURN_WIDTH = 160
 
 /** The band, as an ordinary dense block the renderer can be handed. */
 function turnedDense(turned: RotatedBlock): DenseMatrix {
@@ -705,6 +691,7 @@ export class MatrixPanel {
   private readonly optionButtons = new Map<PlotOptionKey, HTMLElement[]>()
   private readonly unsubscribePlotOptions: () => void
   private readonly unsubscribeTextScale: () => void
+  private readonly unsubscribeTurnBox: () => void
   private readonly themeWatchers: () => void
   private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
@@ -758,22 +745,6 @@ export class MatrixPanel {
   private expectedButton: HTMLElement | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
-  /**
-   * How big the turned band is **drawn**, in CSS pixels, once a reader has said.
-   *
-   * The box, not the data: a turned map is a rectangle of a size the reader
-   * chooses, and the zoom fills it with more or less genome across and more or
-   * less distance up rather than resizing it (§17.2). It used to be a depth in
-   * *bins*, which made the picture a function of the zoom — zoom in far enough
-   * and the band grew until it filled the panel and stopped being a band.
-   *
-   * `null` on either axis is "nobody has said", which takes the default in
-   * {@link turnBox}. Held on the panel rather than in the view state because it
-   * is the same kind of fact as a pan or a zoom, and §11's hash has never
-   * carried one of those.
-   */
-  private turnHeight: number | null = null
-  private turnWidth: number | null = null
   /** The room the box has, measured once per resize. See {@link measureRoom}. */
   private room: { width: number; height: number } | null = null
   /**
@@ -1330,6 +1301,9 @@ export class MatrixPanel {
       // hand to twitch before it takes effect reads as not having worked.
       if (!options.tooltip) this.tooltip.classList.add('hidden')
     })
+    // Every panel, not only the one whose handle was dragged: the box is the
+    // session's, so a deck of bands is one shape (§17.3).
+    this.unsubscribeTurnBox = subscribeTurnBox(() => this.applyTurnBox())
 
     // Offered whenever there is more than one answer. A file with no weights and
     // no extra columns has exactly one thing its cells can be, and a dropdown
@@ -2092,6 +2066,7 @@ export class MatrixPanel {
     this.unsubscribePlotOptions()
     this.unsubscribeViewpoint()
     this.unsubscribeTextScale()
+    this.unsubscribeTurnBox()
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -3920,18 +3895,22 @@ export class MatrixPanel {
   /**
    * The box a turned map is drawn in, in CSS pixels.
    *
-   * The reader's, where they have said, and otherwise a default expressed
-   * against the width — a whole triangle is exactly twice as wide as it is tall,
-   * so a box an eighth of its own width shows a quarter of the block at the
-   * fitted zoom, which is the fraction §17.2 has always opened at, restated in
-   * the units the box is now measured in.
+   * The reader's, where they have said (`ui/turnBox.ts`), and otherwise a
+   * default expressed against the width — a third of it, which is the shape of
+   * the figures this is a viewer for. A rule and not a number, which is why what
+   * the store holds on an untouched axis is `null`: "as wide as there is room
+   * for" cannot be written down as a width, since the room changes with the
+   * window and the number would not.
+   *
+   * Clamped on the way **out** rather than only where the reader drags. What is
+   * stored is one box for the session and the panels drawing from it need not
+   * have the same room — a deck of four is four narrower panels — so a box the
+   * reader shaped beside one map has to be readable as "and as much of that as
+   * fits" beside the next. Which is also what makes the size survive a window
+   * resize: it is remembered whole and drawn to fit.
    */
   private turnBox(): { width: number; height: number } {
-    const width = this.turnWidth ?? this.turnRoom().width
-    return {
-      width: Math.max(MIN_TURN_WIDTH, width),
-      height: Math.max(MIN_TURN_HEIGHT, this.turnHeight ?? Math.round(width * DEFAULT_TURN_ASPECT)),
-    }
+    return fitTurnBox(getTurnBox(), this.turnRoom())
   }
 
   /**
@@ -4109,23 +4088,39 @@ export class MatrixPanel {
   /**
    * Resize the box, in CSS pixels. `null` on either axis puts the default back.
    *
-   * Clamped against the panel rather than against the block: the box is a fact
-   * about the figure, so what bounds it is how much room there is to draw in.
+   * Written to the store rather than to a field here, so it outlives this panel:
+   * a change of resolution or of chromosome destroys the panel and builds
+   * another, and a box held on the instance is one the reader loses the first
+   * time they go and look at something in it (`ui/turnBox.ts`).
+   *
+   * Clamped against the panel rather than against the block — the box is a fact
+   * about the figure, so what bounds it is how much room there is to draw in —
+   * and against *this* panel's room, which is the one the hand is in. Reading it
+   * back clamps again, for the panels the hand is not in.
    */
   private setTurnBox(next: { width?: number | null; height?: number | null }): void {
     const room = this.turnRoom()
+    const fit = (value: number, low: number, high: number): number =>
+      Math.max(low, Math.min(high, Math.round(value)))
+    const asked: Partial<TurnBox> = {}
     if (next.width !== undefined) {
-      this.turnWidth =
-        next.width === null
-          ? null
-          : Math.max(MIN_TURN_WIDTH, Math.min(room.width, Math.round(next.width)))
+      asked.width = next.width === null ? null : fit(next.width, MIN_TURN_WIDTH, room.width)
     }
     if (next.height !== undefined) {
-      this.turnHeight =
-        next.height === null
-          ? null
-          : Math.max(MIN_TURN_HEIGHT, Math.min(room.height, Math.round(next.height)))
+      asked.height = next.height === null ? null : fit(next.height, MIN_TURN_HEIGHT, room.height)
     }
+    rememberTurnBox(asked)
+  }
+
+  /**
+   * Draw the box at whatever size it now is.
+   *
+   * The subscription's half of the resize, and every panel runs it — the one the
+   * hand is in and the others of a deck, which is what keeps a deck of bands one
+   * shape (§17.3).
+   */
+  private applyTurnBox(): void {
+    if (this.turned === null) return
     this.writeTurnBox()
     // The canvas has a new CSS size, and nothing else will tell the view: the
     // resize observer watches the *grid*, whose own size need not have changed.

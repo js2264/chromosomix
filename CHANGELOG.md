@@ -399,6 +399,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A turned band keeps its size across a navigation.** The box was a field on
+  the panel, and the panel is rebuilt on every navigation — so a change of
+  resolution, a click on another chromosome or a zoom into a region put the band
+  back at its default, which is to say the reader lost it the first time they
+  went to look at something in it. It is a store now, like the 4C anchor and for
+  the same reason, shared by every map of a deck and remembered between sessions.
+  What is stored is what the hand dragged; each panel fits it to the room it has
+  on the way out, so a box shaped beside a wide map is still the box beside a
+  narrow one and a window made small and wide again comes back to the size the
+  reader chose.
+
+- **There is a pointer again where the guide lines are.** Hiding the hardware
+  pointer entirely left nothing to follow between frames — the lines are at the
+  position the app has *resolved*, and the hand is somewhere they have not got to
+  yet. It is a small open cross now: four short arms around a hole, so the pixel
+  it is about stays visible through the middle, and drawn a little heavier than
+  the hairlines it stands among, since a pointer that reads as one of the guides
+  is a pointer that has to be hunted for. The arrowhead is still the resting
+  cursor everywhere the guides are off, and the transient cursors are untouched.
+
 - **A turned map's ruler is measured in the same place as its readout.** The
   column axis under a turn counts in half bins, and the halving was applied to
   where the *block starts* as well as to the step — so the ruler sat half of the

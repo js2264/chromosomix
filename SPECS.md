@@ -318,17 +318,27 @@ the track names' column, and neither is a position — so the line stops there a
 nothing, rather than naming a base pair while the arrowhead is on a word. The height is a screen
 fact only; a figure is a picture of the tracks, and blank paper under them is not part of it.
 
-**Where a guide line is drawn there is no drawn pointer**, and that is one rule across all three
-surfaces. The line is the better instrument of the two: it is at the position the app has actually
-resolved, it runs the whole height of the picture, and beside a map it continues into every track —
-while the arrowhead is a second, blunter mark for the same coordinate that sits *on* the pixel it
-names, which on a matrix where a cell can be one pixel is the only thing covering the answer. So it
-goes exactly where the line comes, condition for condition: on the map while the crosshair is on and
-the pointer is over a cell, here while it is on and the pointer is on the axis rather than in the
-strip before it, and on a lane stack always, since a lane answers a pointer with its own hairline
-whatever that preference says. The transient cursors stay — the closed hand while panning, the
-crosshair while a selection is about to be drawn — because those say what is *happening*, which no
-guide line does.
+**Where a guide line is drawn the pointer is a small open cross**, and that is one rule across all
+three surfaces. The arrowhead is the wrong shape over a picture being measured: it points from one
+corner, so the coordinate it names is a pixel at its tip with a blunt body over everything below and
+to the right of it — which on a matrix where a cell can be one pixel is the only thing covering the
+answer. The cross is four short arms around a hole, so the pixel it is about stays visible through
+the middle of it, and it is drawn a little heavier than the hairlines it stands among, which are one
+device pixel and deliberately faint: a pointer that reads as one of the guides is a pointer that has
+to be hunted for.
+
+It is not a second copy of the guide lines, and the difference is what it is for. The lines are at
+the position the app has *resolved* — the cell, the bin, the column — and the cross is where the
+**hand** is, which between one frame and the next is somewhere the lines have not got to yet. Taking
+the pointer away entirely, which this used to do, left nothing at all to follow in that gap, and a
+surface with no pointer over it reads as a surface that is not listening.
+
+So the cross comes exactly where the line comes, condition for condition: on the map while the
+crosshair is on and the pointer is over a cell, here while it is on and the pointer is on the axis
+rather than in the strip before it, and on a lane stack always, since a lane answers a pointer with
+its own hairline whatever that preference says. The transient cursors stay — the closed hand while
+panning, the crosshair while a selection is about to be drawn — because those say what is
+*happening*, which no guide line does.
 
 Only what follows the pointer goes down there. Everything that describes the *picture* — the sequence
 boundaries, the name column's own edge — stops with the tracks: a boundary is a mark *on* the tracks,
@@ -1546,6 +1556,21 @@ band for a domain to be a triangle rather than a smear, and short enough that th
 reads as one strip along the genome rather than as a map. A fraction of the width rather than a
 distance in base pairs, deliberately: a default of "500 kb" is most of a bacterial chromosome and a
 rounding error on a human one, and this viewer opens on both.
+
+**The box is the session's, not the panel's**, and it outlives every navigation. A change of
+resolution, a click on another chromosome, a zoom that opens a region — each of those destroys the
+panel and builds another, so a box held as a field on one is a box the reader loses the first time
+they go and look at something in it, which is the gesture shaping a band is *for*. It is a store, on
+`ui/viewpoint.ts`'s rule and for `ui/viewpoint.ts`'s reason. Shared as well as remembered: the turn
+is the deck's rather than one map's (§17.3), and a deck of bands at four heights is not a comparison.
+
+What is stored is what the reader dragged, and it is fitted to each panel **on the way out** rather
+than clamped on the way in. The panels drawing from it need not have the same room — a deck of four
+is four narrower panels — and a window can be made narrow and wide again; a box clamped into storage
+would lose the reader's number the first time it did not fit, where one clamped on the way out comes
+back with the room. An untouched axis is stored as *nothing*, not as a number, because its default is
+a rule — the panel's own width, and a third of it — and "as wide as there is room for" cannot be
+written down as a width.
 
 **What bounds the box is the room the panel has**, and it is measured against the panel rather than
 against the grid the box sits in. The grid is sized by its contents, so a box narrowed by a drag
