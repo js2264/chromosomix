@@ -224,18 +224,21 @@ describe('the level, which two vocabularies share one key for', () => {
     expect(matrixLevel(state('contig'))).toBe('contig')
   })
 
-  it('gives the overview contigs unless the state says genomes', () => {
-    expect(overviewLevel(state())).toBe('contig')
-    expect(overviewLevel(state('contig'))).toBe('contig')
-    expect(overviewLevel(state('genome'))).toBe('genome')
-  })
-
   // The whole-file view of a metagenome reads all three values of the key,
   // because all three are levels of it — `bin` is the pooled map the shell
   // mounts `WholeView` for, and it has to survive the round trip or the picker
   // offers a place the back button cannot return to.
-  it('gives the overview bins when the state says bins', () => {
+  it('gives the overview each level the state names', () => {
     expect(overviewLevel(state('bin'))).toBe('bin')
+    expect(overviewLevel(state('contig'))).toBe('contig')
+    expect(overviewLevel(state('genome'))).toBe('genome')
+  })
+
+  // Bins, not contigs: a contig axis on a fragmented metagenome spends its
+  // width on the shortest sequences and its colour range on the longest, so the
+  // level to land on is the one whose cells all cover the same area.
+  it('defaults the overview to bins', () => {
+    expect(overviewLevel(state())).toBe('bin')
   })
 
   // The hash is untrusted and the key is shared, so a bin-axis view still meets

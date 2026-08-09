@@ -27,9 +27,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   resolution and the counts are identical to the selection's, down to the
   `4,057 × 4,057 bins · effective resolution: 50.0 kb`; what is new is that it is
   reachable from where the question is asked. `level` carries it in the hash like
-  the other two, the picker is one control shown at whichever level is mounted so
-  there is always a way back, and `contig × contig` stays the default — "does this
-  bin hold together" is a question only it answers.
+  the other two, and the picker is one control shown at whichever level is
+  mounted, so there is always a way back.
+
+  It is also the **default**, which makes the other two changes obligatory rather
+  than nice. Landing on a level means it must not read anything on its own: the
+  gate is now unconditional there — the scan view's sentence, the cost, and the
+  button — instead of appearing only above ten million stored pixels, since a
+  threshold makes the rule hold on large files and lapse on small ones. And
+  landing there means it has to be read the way the other two are, so the axis is
+  labelled and divided by **genome** rather than by contig, with a label click
+  opening that genome; 2,082 contig hairlines over 48 blocks were a grey wash over
+  the structure the view exists to show. `contig × contig` stays one click away —
+  "does this bin hold together" is a question only it answers — and where a
+  catalog advertises a sidecar edge list the default still gives way to
+  `genome × genome`, which is a small download rather than a pass over the file.
+
+  A map of a *chosen* set of sequences is untouched: its axis names what was
+  ticked. So is a plain cooler, which has no genomes and keeps its own view kind,
+  its own level control and its `nnz` threshold.
 
 - **A sideways scroll slides along the map.** Two fingers across a trackpad mean
   "along the genome" in every browser there is, and already did over this app's

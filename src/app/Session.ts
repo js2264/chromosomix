@@ -3749,11 +3749,13 @@ export class Session {
           ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
           ...(picker
             ? {
-                extraCards: [
-                  wholeFileLevelCard(level, (next) =>
+                wholeFileLevel: {
+                  card: wholeFileLevelCard(level, (next) =>
                     this.store.patch({ level: next }, { replace: true }),
                   ),
-                ],
+                  onOpenGenome: (genome: string) =>
+                    this.navigate({ uri: state.uri, view: 'genome', genome }),
+                },
               }
             : {}),
           binsize: file.info.binsize ?? 1,
@@ -4048,11 +4050,29 @@ export class Session {
     this.showContent(view.el, view)
   }
 
+  /**
+   * The sidecar genome edge list this file advertises, if any.
+   *
+   * A query parameter rather than view state: it describes where the file is
+   * published, not which picture of it is on screen. Read in one place because
+   * two now ask — the scan view, which offers the download, and the default
+   * level, which steps aside for it.
+   */
+  private edgeListUrl(): string | undefined {
+    return new URLSearchParams(window.location.search).get('edges') ?? undefined
+  }
+
   /** The whole-metagenome scan (§7.3), mounted like any other view. */
   private mountOverview(state: ViewState): void {
     const file = this.file
     if (file === null) return
-    const level = overviewLevel(state)
+    // A published edge list is a genome × genome overview for one small
+    // download instead of a pass over the file, so where one is advertised
+    // *that* is the cheapest thing to land on and the default gives way to it.
+    // Only the default: a link that names a level has already chosen.
+    const edgeListUrl = this.edgeListUrl()
+    const level =
+      state.level === undefined && edgeListUrl !== undefined ? 'genome' : overviewLevel(state)
     // Three levels, two classes. `bin × bin` is not an accumulation over pairs
     // of units — it is the pooled whole-file read {@link WholeView} already
     // makes, and on a metagenome it is the same picture as ticking every row of
@@ -4072,9 +4092,7 @@ export class Session {
           binsize: file.info.binsize ?? 1,
           sourceKind: file.info.sourceKind,
           sourceBytes: file.info.sourceBytes,
-          // A query parameter rather than view state: it describes where the
-          // file is published, not which picture of it is on screen.
-          edgeListUrl: new URLSearchParams(window.location.search).get('edges') ?? undefined,
+          ...(edgeListUrl === undefined ? {} : { edgeListUrl }),
           level,
           scale: this.scaleOf(state),
           genomeNames: file.displayNames,

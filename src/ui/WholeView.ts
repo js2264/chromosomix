@@ -59,15 +59,29 @@ export interface WholeViewProps {
   /** A control the session puts on the title line; see `RegionViewProps`. */
   extraControl?: HTMLElement
   /**
-   * Cards the session puts in this view's sidebar, below the panel's own.
+   * Present when this view is the `bin × bin` level of a metagenome's whole-file
+   * picker (§7.3) rather than a view of its own.
    *
-   * One caller and one card: on a metagenome this view is the `bin × bin` level
-   * of a three-way picker the scan view owns (`ui/Overview.ts`), and the picker
-   * has to be on screen at whichever level is mounted or there is no way back
-   * to the other two. Passed in for the reason {@link extraControl} is — this
-   * view does not know which of the three it is, and the shell does.
+   * Four things follow from it, and they are one thing said four ways — *this
+   * picture is of the whole metagenome*:
+   *
+   * - the picker is in the sidebar, at every level, or there is no way back to
+   *   the other two;
+   * - the read is asked about first whatever the pixel count, because it is the
+   *   landing level now and §7.3's rule is that a full pass is never automatic;
+   * - the axis is labelled and divided by **genome**, which is what the other
+   *   two levels do and what makes the three one picture at three depths;
+   * - and so a label click opens a genome, since a genome name is not a region.
+   *
+   * Passed in rather than derived for the reason {@link extraControl} is: this
+   * view does not know which of the three levels it is, and the shell does.
    */
-  extraCards?: HTMLElement[]
+  wholeFileLevel?: {
+    /** The three-way level control, built by the shell (`ui/Overview.ts`). */
+    card: HTMLElement
+    /** An axis label — a genome name here — was clicked. */
+    onOpenGenome(genome: string): void
+  }
   /** Total bins in the file, for the counts a selection is measured against. */
   nBins: number
   /**
@@ -307,7 +321,13 @@ export class WholeView {
         }
         props.onOpenRegion(groups.row.label)
       },
-      onLabelClick: (_axis, name) => props.onOpenRegion(name),
+      // A label is a contig, except at the whole-file level where the axis is
+      // divided by genome and the label is one of those — which no region
+      // parser accepts, and which the genome view is the answer to anyway.
+      onLabelClick: (_axis, name) =>
+        props.wholeFileLevel === undefined
+          ? props.onOpenRegion(name)
+          : props.wholeFileLevel.onOpenGenome(name),
       // On the diagonal a box is one region; anywhere else it is the rectangle
       // between two windows — of two chromosomes in the trans corner, or of one
       // chromosome against itself above its own diagonal, which is a picture
@@ -344,12 +364,25 @@ export class WholeView {
       this.panelHost,
     )
 
-    this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards, ...(props.extraCards ?? []))
+    this.sideEl = el(
+      'aside',
+      { class: 'side' },
+      ...this.panel.cards,
+      ...(props.wholeFileLevel === undefined ? [] : [props.wholeFileLevel.card]),
+    )
 
     // There is no longer a size that defeats this view, so there are two
     // answers rather than three: this is worth asking about first, or it opens.
-    if (this.gatePixels() === null) void this.load()
-    else this.renderGate()
+    if (this.gated()) {
+      // The scan view's sentence, in the scan view's place, because at this
+      // level the two are the same screen: a heading, what the read costs, and
+      // the button that starts it.
+      if (props.wholeFileLevel !== undefined) {
+        this.summary.textContent =
+          'One pass over every non-zero pixel, at the level chosen on the right.'
+      }
+      this.renderGate()
+    } else void this.load()
   }
 
   /**
@@ -394,18 +427,24 @@ export class WholeView {
   }
 
   /**
-   * The pixels this read will walk, when there are enough of them to ask about
-   * first, and `null` when there are not.
+   * Whether to ask before reading.
    *
-   * The cost of both levels is the same pass over the same pixels — the roll-up
+   * The cost of every level is the same pass over the same pixels — the roll-up
    * and the pooled read differ only in what they add them into — so the question
-   * is asked at either. What is no longer asked is anything about the *block*:
-   * it is bounded now, and a bounded block is not a decision.
+   * is asked at any of them. What is no longer asked is anything about the
+   * *block*: it is bounded now, and a bounded block is not a decision.
+   *
+   * Unconditional at the whole-file level, whatever the file declares. That one
+   * is the landing view of a metagenome (§7.3), and the rule there is not "warn
+   * when it looks expensive" but "a pass over every pixel never starts on its
+   * own" — a threshold would make the rule hold on large files and lapse on the
+   * small ones, which is the same as not having it. Everywhere else the
+   * threshold stands: a bounded read nobody waits for is not worth a click.
    */
-  private gatePixels(): number | null {
-    const { nnz } = this.props
-    if (nnz === null || nnz <= WHOLE_VIEW_GATE_PIXELS) return null
-    return nnz
+  private gated(): boolean {
+    const { nnz, wholeFileLevel } = this.props
+    if (wholeFileLevel !== undefined) return true
+    return nnz !== null && nnz > WHOLE_VIEW_GATE_PIXELS
   }
 
   /**
@@ -415,14 +454,19 @@ export class WholeView {
    * those are the two things a reader cannot see from here and would want:
    * how long this will take, and what the picture will be. The metagenome's
    * gate says the same two things in its own units.
+   *
+   * The count is dropped where the file does not declare one — the gate is
+   * unconditional at the whole-file level and a file with no `nnz` still gets
+   * it, so the sentence has to work without the number rather than the screen
+   * going missing when it is absent.
    */
   private renderGate(): void {
-    const pixels = this.gatePixels()
-    if (pixels === null) return
+    const { nnz } = this.props
+    const counted = nnz === null ? '' : ` — ${fmt.int(nnz)} of them —`
     this.gate.replaceChildren(
       el('p', {
         text:
-          `This reads every stored pixel of the file — ${fmt.int(pixels)} of them — and sums ` +
+          `This reads every stored pixel of the file${counted} and sums ` +
           `them into ${this.resolutionPhrase()}. It runs once: the picture is kept for as long ` +
           'as the file is open.' +
           // A selection reads the whole file too: the sequences it wants are
@@ -461,19 +505,27 @@ export class WholeView {
   }
 
   /**
-   * `3.0 kb cells`, or `cells of 2 contigs` where a cell is whole sequences.
+   * `cells of about 3.0 kb`, or `cells of 2 contigs` where a cell is whole
+   * sequences.
    *
    * The gate's half of what the summary says once the read is done — a sentence
    * fragment rather than the summary's phrase, because it is read inside "sums
    * them into …". It works from the plan rather than from a result, being the
-   * thing said *before* anything has been read; the two agree because the read
-   * only ever coarsens a plan, and the summary states what actually happened.
+   * thing said *before* anything has been read.
+   *
+   * Hence *about*. The plan is a bound the reader may coarsen: it divides the
+   * bin count by the cell budget, and the reader then has to fit whole contigs
+   * into whole cells without straddling a genome, which on a fragmented
+   * assembly costs cells and buys them back by widening. On the reference
+   * metagenome that is 41 kb planned against 50 kb read — a number the gate
+   * used to state flatly, on a screen the reader then compared with the summary
+   * a moment later.
    */
   private resolutionPhrase(): string {
     if (this.plan.contigsPerCell > 1) {
       return `cells of ${fmt.int(this.plan.contigsPerCell)} ${this.props.noun}s`
     }
-    return `${fmt.bp(this.props.binsize * this.plan.binsPerCell)} cells`
+    return `cells of about ${fmt.bp(this.props.binsize * this.plan.binsPerCell)}`
   }
 
   /**
@@ -591,7 +643,7 @@ export class WholeView {
       // every coordinate on screen is the bin size times a cell offset, so the
       // panel is told before it is given the block.
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
-      this.panel.setData(result, 'Whole genome', second)
+      this.panel.setData(this.byGenome(result), 'Whole genome', second)
       this.summary.replaceChildren(...this.summarise(result))
     } catch (err) {
       // `disposed` covers the case the others need a guard for: closing the map
@@ -616,6 +668,30 @@ export class WholeView {
         this.progressBox.classList.add('hidden')
       }
     }
+  }
+
+  /**
+   * Mark the block's genome runs as the axis, where this is the whole-file
+   * level.
+   *
+   * A presentation flag and not a second read: the reader already returns
+   * `rowGenomes`/`colGenomes` for this block (it is asked for them by
+   * `namesGenomes`, for the tooltip), and `separatorsFor` promotes them to the
+   * drawn boundaries *and* the labels when this is set. So the change is which
+   * of two run lists the picture is divided by, decided by the view that knows
+   * what it is a picture of.
+   *
+   * Left off everywhere else on purpose. A whole-genome map of a cooler has no
+   * genomes, and a map of a chosen handful of sequences is a picture of the
+   * choice — its axis names what was ticked, which is the answer to "what did I
+   * pick" and would be lost by coarsening to the genomes those contigs came
+   * from. Only here is the axis the whole metagenome, and only here are 2,082
+   * contig hairlines a grey wash over the 48 blocks that are the point.
+   */
+  private byGenome(result: MatrixResult): MatrixResult {
+    if (this.props.wholeFileLevel === undefined) return result
+    if (result.rowGenomes === undefined || result.colGenomes === undefined) return result
+    return { ...result, genomeBoundaries: true }
   }
 
   /**

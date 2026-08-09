@@ -382,27 +382,30 @@ export function matrixLevel(state: ViewState): 'bin' | 'contig' {
 }
 
 /**
- * `level` as the whole-file view of a metagenome reads it: contigs unless the
- * state says otherwise.
+ * `level` as the whole-file view of a metagenome reads it: bins unless the state
+ * says otherwise.
  *
- * Contig × contig is the default for the reason {@link ViewState.level}'s other
- * accessor exists at all — the two scans are different accumulations of one
- * pass, and the contig picture is the one that contains the other.
+ * `bin` is the odd one of the three and the default anyway. It is the only one
+ * that is not an accumulation over pairs of *units* — it is the pooled
+ * whole-file read `WholeView` already makes, the same picture as ticking every
+ * genome in the table — and it is the one that is legible on a real assembly. A
+ * contig cell sums a rectangle of `length × length` and a metagenome's contigs
+ * span several orders of magnitude, so the contig axis spends its width on the
+ * shortest sequences and its colour range on the longest; bin cells all cover
+ * the same area, so one scale fits the whole picture. Landing on the readable
+ * one is worth more than landing on the one that contains the others.
  *
- * `bin` is the third of the three and the only one that is not a scan for pairs
- * of *units*: it is the pooled whole-file read `WholeView` already makes, which
- * is the same picture as ticking every genome in the table. It is a level of
- * this view rather than a view of its own because it answers the same question
- * on a third axis, and because a reader who switched away from contigs has to
- * find the way back in the control they left it in — so the shell routes on it
- * (`Session.mountOverview`) instead of the reader navigating.
+ * It is a *level* rather than a view of its own because it answers the same
+ * question on a third axis, and because a reader who switched away from it has
+ * to find the way back in the control they left it in — so the shell routes on
+ * it (`Session.mountOverview`) instead of the reader navigating.
  *
  * Which makes this the one place `level` is read whole: every value of the key
  * means something here, so nothing is folded onto a default.
  */
 export function overviewLevel(state: ViewState): 'genome' | 'contig' | 'bin' {
   if (state.level === 'genome') return 'genome'
-  return state.level === 'bin' ? 'bin' : 'contig'
+  return state.level === 'contig' ? 'contig' : 'bin'
 }
 
 /** What a `selection` view is of: several genomes, or several contigs. */
