@@ -1022,6 +1022,17 @@ const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 }
 export type VerticalAnchor = 'middle' | 'start' | 'end'
 
 /**
+ * Which axes the fitted zoom has to get the whole block onto.
+ *
+ * `both` is a picture of a matrix: fitting means seeing all of it, so the zoom
+ * is whichever of the two axes is tighter. `cols` is a **band** (§17), where the
+ * rows are not a thing to fit at all — the block is cut to the height of the box
+ * it is drawn in, so "fit the rows" is a tautology at every zoom, and asking for
+ * it makes the zoom a function of a number that was derived from the zoom.
+ */
+export type FitAxis = 'both' | 'cols'
+
+/**
  * The square a drag describes, anchored where it began.
  *
  * A selection *resolves* to a square — the zoom it produced was
@@ -1221,6 +1232,8 @@ export class HeatmapView {
   private anchorY: VerticalAnchor = 'middle'
   /** Whether a drag names a span of the x axis; see {@link setSpanGestures}. */
   private spanGestures = false
+  /** Which axes the fitted zoom has to satisfy; see {@link setFitAxis}. */
+  private fitAxis: FitAxis = 'both'
 
   /**
    * The margin in force. Equals `opts.margin` unless `autoMargin` is set, in
@@ -1516,6 +1529,39 @@ export class HeatmapView {
    * checks, because the only caller is the one that just recomputed this array
    * from the block this object is holding.
    */
+  /**
+   * Replace the block with one of a **different shape**, keeping the view.
+   *
+   * Between {@link setMatrix}, which refits, and {@link setValues}, which
+   * requires the same shape — and it exists for exactly one caller: a turned
+   * band re-cut deeper because the reader zoomed out (§17.2). The picture is of
+   * the same place at the same zoom over the same stretch of genome; only the
+   * number of rows behind it has changed, and refitting would answer a wheel
+   * click by throwing away the window it was made in.
+   *
+   * The rows need no preserving, which is what makes this safe: a band is cut to
+   * fill its box, so where its top edge sits is decided by {@link setAnchor} and
+   * `clampView` rather than by anything a caller could carry across. The columns
+   * are preserved exactly, because those *are* the reader's window.
+   */
+  reshape(matrix: DenseMatrix, gauge?: DenseMatrix): void {
+    const held = this.originX
+    this.matrix = matrix
+    this.blockCache = { rows: null, cols: null }
+    this.dirtyRaster = true
+    this.pooled = null
+    this.hoverCell = null
+    if (gauge !== undefined) this.gauge = gauge
+    this.gaugeRange = null
+    this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
+    this.colScale.setFull([0, Math.max(1, matrix.ncols)])
+    this.recomputeBaseZoom()
+    this.originX = held
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
   setValues(values: Float32Array, gauge?: Float32Array): void {
     if (this.matrix === null) return
     this.matrix = { ...this.matrix, values }
@@ -1784,7 +1830,8 @@ export class HeatmapView {
   private recomputeBaseZoom(): void {
     const plot = this.plotRect
     const { nrows, ncols } = this.dims()
-    const k = Math.min(plot.width / ncols, plot.height / nrows)
+    const across = plot.width / ncols
+    const k = this.fitAxis === 'cols' ? across : Math.min(across, plot.height / nrows)
     this.baseZoom = k > 0 && Number.isFinite(k) ? k : 1
   }
 
@@ -1794,10 +1841,31 @@ export class HeatmapView {
 
   private maxZoom(): number {
     const plot = this.plotRect
-    return Math.max(
-      this.baseZoom,
-      Math.min(plot.width, plot.height) / this.opts.minVisibleCells
-    )
+    // The shorter side, because zooming in past a few cells across the *narrow*
+    // axis is where a map stops being a picture. Except on a band, whose narrow
+    // axis is the box's height and is not a fact about the data: a band drawn
+    // 90 px tall would otherwise cap the zoom at 22 px a cell, which on a
+    // 100 kb window is a floor the reader hits immediately.
+    const shorter = this.fitAxis === 'cols' ? plot.width : Math.min(plot.width, plot.height)
+    return Math.max(this.baseZoom, shorter / this.opts.minVisibleCells)
+  }
+
+  /**
+   * Which axes a fitted view has to satisfy — see {@link FitAxis}.
+   *
+   * Re-fits where the view was fitted, exactly as {@link resize} does: the rule
+   * for what "the whole block" means has changed, so a picture that was showing
+   * the whole block must go on showing it under the new one.
+   */
+  setFitAxis(axis: FitAxis): void {
+    if (axis === this.fitAxis) return
+    const wasFitted = this.matrix === null || Math.abs(this.zoom - this.baseZoom) < 1e-9
+    this.fitAxis = axis
+    this.recomputeBaseZoom()
+    if (wasFitted) this.zoom = this.baseZoom
+    this.clampView()
+    this.syncScales()
+    this.changed()
   }
 
   private clampView(): void {
@@ -1812,7 +1880,13 @@ export class HeatmapView {
     // there is nothing to pan and it stays where {@link setAnchor} put it —
     // centred for a square map, on the edge its diagonal is on for a band.
     this.originX = visW >= ncols ? (ncols - visW) / 2 : clamp(this.originX, 0, ncols - visW)
-    this.originY = visH >= nrows ? this.restY(nrows, visH) : clamp(this.originY, 0, nrows - visH)
+    // A band has no vertical pan at all, however deep it is cut. Up the side is
+    // distance from the diagonal, and the diagonal is the floor: a picture whose
+    // bottom edge had been dragged off the bottom of the box would be a band
+    // that had lost the axis it is measured from. So the anchor decides the row
+    // origin outright rather than only when the block happens to fit.
+    const pinned = visH >= nrows || this.fitAxis === 'cols'
+    this.originY = pinned ? this.restY(nrows, visH) : clamp(this.originY, 0, nrows - visH)
   }
 
   /**

@@ -2064,6 +2064,19 @@ p {
 .panel-grid {
   position: relative;
   display: grid;
+  /* How big a square map is, and therefore how much room this panel claims —
+     read by `.heatmap-wrap` for its side and by `.panel-grid.is-turned` for the
+     height it reserves while the map is a band. Declared here rather than on the
+     wrap because two rules need the same number and a second copy of a `clamp`
+     this long is a second copy to keep in step. */
+  --map-budget: clamp(
+    20rem,
+    calc(
+      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px) -
+        var(--deck-edge, 0px)
+    ),
+    60rem
+  );
   /* The map's column gives way to the lane stacks beside it, down to a floor.
 
      Not plain `auto`: an `auto` track will not go under its own min-content,
@@ -2265,6 +2278,32 @@ p {
    Square, because a contact map is: the width is driven by the height the
    window can spare and capped by the column, and `aspect-ratio` keeps the two
    in step through every resize. */
+/* A turned map is a **rectangle of a size the reader chose**, not a square that
+   happens to have a band in it (§17.2).
+
+   The box is written by the panel as two custom properties and read here in two
+   places, which is what keeps the map and the tracks under it one width: the
+   lane canvases size themselves to the map's canvas, so a rule that narrowed
+   only the map would leave every track pointing at the wrong base pair.
+
+   `min-height` on the grid, not on the wrap: the grid holds the map *and* its
+   stacks, and reserving the height a square map would have taken is what stops
+   the panel resizing when the reader flips. `align-content` and
+   `justify-content` then centre the whole assembly in that reserved space —
+   rows as a block, so a track added below re-centres the map above it rather
+   than pushing it up. */
+.panel-grid.is-turned {
+  min-height: var(--map-budget);
+  align-content: center;
+  justify-content: center;
+}
+
+.panel-grid.is-turned > .heatmap-wrap {
+  aspect-ratio: auto;
+  width: var(--turn-width);
+  height: var(--turn-height);
+}
+
 .heatmap-wrap {
   position: relative;
   overflow: hidden;
@@ -2275,14 +2314,7 @@ p {
      the grid keeps, since a gap the arithmetic did not know about is a gap the
      map is pushed down by — and both default to nothing, so a view with no
      lanes is sized exactly as it was before they existed. */
-  width: clamp(
-    20rem,
-    calc(
-      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px) -
-        var(--deck-edge, 0px)
-    ),
-    60rem
-  );
+  width: var(--map-budget);
   /* Of its own grid track, which the grid's cap has already taken the lane
      stacks beside it out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
@@ -2484,6 +2516,50 @@ p {
   opacity: 1;
   background: linear-gradient(
     to bottom,
+    transparent 3px,
+    var(--accent) 3px,
+    var(--accent) 6px,
+    transparent 6px
+  );
+  outline: none;
+}
+
+/* The two ends of a turned band, on the same rules as its top edge, turned
+   through a right angle.
+
+   Two of them and not one, because the box is centred: with a single handle the
+   reader would have to know which end the app had decided to grow from, and
+   either answer is wrong half the time. Each widens the box about its middle,
+   so the edge under the pointer stays under it.
+
+   Drawn *inside* their own edge — `margin-left` pulls the left one back over the
+   frame and the right one is offset by its own width — so neither bar sits out
+   in the margin where the picture is not. */
+.turn-width {
+  position: absolute;
+  z-index: 5;
+  width: 9px;
+  margin-left: -5px;
+  cursor: ew-resize;
+  touch-action: none;
+  /* The bar itself, drawn inside the hit area rather than as the whole of it. */
+  background: linear-gradient(
+    to right,
+    transparent 4px,
+    var(--border-strong) 4px,
+    var(--border-strong) 5px,
+    transparent 5px
+  );
+  opacity: 0.45;
+  transition: opacity 120ms ease;
+}
+
+.turn-width:hover,
+.turn-width:focus-visible,
+.turn-width.is-dragging {
+  opacity: 1;
+  background: linear-gradient(
+    to right,
     transparent 3px,
     var(--accent) 3px,
     var(--accent) 6px,

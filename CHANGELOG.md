@@ -40,13 +40,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the bottom. The tick *spacing* could not be shared: the default is the width of
   a base-pair label, and a band a hundred pixels tall fits one tick at it.
 
-- **Drag the top edge of the band to set how far from the diagonal it reaches.**
-  A bar along the edge, visible on approach rather than only under the pointer,
-  and hidden while the map is square. The band gains exactly the pixels the hand
-  travelled; arrow keys move it by a tenth, Shift by a half, and a double-click
-  puts the default quarter back. The rate is taken once at the press, because the
-  band is redrawn deeper on every step and a rate read live would make the second
-  half of one movement slower than the first.
+- **A turned map is a rectangle of a size you choose, and the zoom fills it.**
+  Drag the top edge for its height and either end for its width; neither moves
+  when the map is zoomed. What the zoom changes is what is *inside* the box —
+  more or less genome across, more or less distance up — which is also the honest
+  reading, since a shorter stretch of genome has shorter distances above it.
+  Fitted like any other matrix, as it was at first, a band's height was `depth ×
+  zoom` and zooming in grew it until it filled the panel: at which point the
+  picture is a square map again with the far corners the turn exists to throw
+  away back on screen. The box opens at an eighth of its own width, which is the
+  quarter-of-the-block default restated in the units it is now measured in; both
+  ends widen it about its middle, so the edge under the pointer stays under it;
+  arrow keys move an edge by a tenth of the box, Shift by a half, and a
+  double-click puts the default back. The map and its tracks are centred as a
+  group in the room a square map would have taken, so flipping does not resize
+  the panel and a track added below re-centres the map above it.
 
 - **Marks on a turned map, placed by the loci they name.** Every overlay used to
   bail out where there was no row axis, so a reader's own marks vanished when they
@@ -472,13 +480,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **A turned band stands on the tracks it is read against.** A band is a fraction
   of the block deep and twice it wide, so at anything short of a close zoom it
-  fits the panel's height several times over — and it was centred there, which is
-  the square map's rule and the wrong one here. The result was a rectangle
-  floating half way up its panel with a stripe of paper between its diagonal and
-  the profiles the whole turn exists to line up with. It now sits on the edge its
-  diagonal is on: the bottom for an ordinary turn, the top for the mirrored half
-  of a comparison, with whatever room is left over above the apex, which is the
-  part of a contact map that has least in it.
+  fitted the panel's height several times over — and it was centred there, which
+  is the square map's rule and the wrong one here: a rectangle floating half way
+  up its panel with a stripe of paper between its diagonal and the profiles the
+  whole turn exists to line it up with. A band now fills the box it is drawn in
+  (see the box, above), so its diagonal is on that box's own floor at every zoom
+  — the ceiling for the mirrored half of a comparison — and there is no vertical
+  pan to lose it with, a band dragged off its own diagonal having lost the axis
+  it is measured from.
 
 - **The tooltip's coordinates on a turned map.** The two sequence names and the
   distance were mapped back through the rotation and the pair of positions under
