@@ -30,6 +30,7 @@
 
 import { icon, type IconName } from './icons'
 import { el } from './dom'
+import { resizeHandle } from './resizeHandle'
 import { keyLabel, withKey } from './commands'
 
 export interface SidePanelSpec {
@@ -99,6 +100,34 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
   closeIcon: 'layers',
   openIcon: 'layers',
   keys: 'a',
+}
+
+/**
+ * What can be *computed* from what is open, as against what is drawn (§18.1).
+ *
+ * A list and nothing else: one row per task, each with its state, and clicking
+ * one opens the drawer. A column that both lists twenty tasks and configures
+ * them is a column that does neither, which is why the drawer is a second
+ * surface rather than this one growing a form.
+ *
+ * `j`, because `b`, `a` and `m` are the other three and the single-letter space
+ * is otherwise all but spent between `ui/commands.ts` and `ui/plotOptions.ts`.
+ *
+ * Outermost on the right — `order: 2`, past Aesthetics — because it is the
+ * column touched least often per session and the one whose absence costs the
+ * least while a reader is driving the picture.
+ */
+export const ANALYSIS_PANEL: SidePanelSpec = {
+  key: 'metacooler-viewer:analysis-collapsed',
+  title: 'Analysis',
+  side: 'right',
+  order: 2,
+  defaultWidth: 300,
+  minWidth: 240,
+  maxWidth: 520,
+  closeIcon: 'beaker',
+  openIcon: 'beaker',
+  keys: 'j',
 }
 
 /** Transform, colormap, clip, overlays and export — whatever the view offers. */
@@ -247,55 +276,22 @@ export class SidePanel {
   /**
    * The draggable inner edge.
    *
-   * Pointer events rather than mouse events, and capture on the handle: a resize
-   * drag routinely leaves the four-pixel strip it started on, and without
-   * capture the first fast movement drops it over the map — which would then
-   * take the rest of the gesture as a pan.
+   * The pointer plumbing lives in `ui/resizeHandle.ts`, because the Analysis
+   * drawer has the same edge and is not a column — see that module's header for
+   * the two details that are easy to get wrong and were, once.
    */
   private handle(): HTMLElement {
-    const node = el('div', {
-      class: 'panel-column-handle',
-      title: `Drag to resize the ${this.spec.title} panel; double-click to reset it`,
-      attrs: { role: 'separator', 'aria-orientation': 'vertical' },
+    return resizeHandle({
+      side: this.spec.side,
+      what: `${this.spec.title} panel`,
+      width: () => this.width,
+      resize: (px) => this.setWidth(px),
+      commit: () => writeWidth(this.spec, this.width),
+      reset: () => {
+        this.setWidth(this.spec.defaultWidth)
+        writeWidth(this.spec, null)
+      },
     })
-
-    let startX = 0
-    let startWidth = 0
-    let dragging = false
-
-    node.addEventListener('pointerdown', (event) => {
-      // The primary button only, for the reason the map's own press check
-      // exists: a right-press would arm a drag that the browser's menu then
-      // sits on top of, and the column would follow the pointer afterwards.
-      if (event.button !== 0) return
-      dragging = true
-      startX = event.clientX
-      startWidth = this.width
-      node.setPointerCapture(event.pointerId)
-      node.classList.add('is-dragging')
-      event.preventDefault()
-    })
-    node.addEventListener('pointermove', (event) => {
-      if (!dragging) return
-      // A left panel's handle is on its right edge, so rightward is wider; a
-      // right panel's is on its left, so the sign flips.
-      const delta = this.spec.side === 'left' ? event.clientX - startX : startX - event.clientX
-      this.setWidth(startWidth + delta)
-    })
-    const end = (event: PointerEvent): void => {
-      if (!dragging) return
-      dragging = false
-      node.releasePointerCapture(event.pointerId)
-      node.classList.remove('is-dragging')
-      writeWidth(this.spec, this.width)
-    }
-    node.addEventListener('pointerup', end)
-    node.addEventListener('pointercancel', end)
-    node.addEventListener('dblclick', () => {
-      this.setWidth(this.spec.defaultWidth)
-      writeWidth(this.spec, null)
-    })
-    return node
   }
 
   private setWidth(px: number): void {

@@ -26,6 +26,9 @@ import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
+import { buildAnalysisContext } from '../analysis/context'
+import type { AnalysisContext } from '../analysis/types'
+import type { AnalysisWorkspace, AnalysisWorkspaceHost } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import {
@@ -422,6 +425,26 @@ export class Session {
   readonly generalHost = el('div', { class: 'panel-host' })
   readonly annotationsHost = el('div', { class: 'panel-host' })
   readonly aestheticsHost = el('div', { class: 'panel-host' })
+  /** The Analysis column's body: the list of tasks this file can be asked. */
+  readonly analysisHost = el('div', { class: 'panel-host' })
+  /**
+   * Where this session's Analysis drawer lives while the tab is on screen.
+   *
+   * The drawer is per session and not per window — a folded column is a
+   * preference about the window, an open task is a fact about the file — so it
+   * is built here and the shell only lends it a slot (§18.1).
+   */
+  readonly drawerHost = el('div', { class: 'drawer-host' })
+  /**
+   * Where the synthetic tracks card sits, inside the Annotations column.
+   *
+   * A stable host rather than the card itself, because the two are created at
+   * different moments: the annotation cards are built when a file's assembly is
+   * known, and the workspace that owns the synthetic card is built after the
+   * *view* mounts, since it needs the framing. Putting an empty div in the list
+   * up front is what lets the later one fill it without the list being rebuilt.
+   */
+  private readonly syntheticHost = el('div', { class: 'panel-host' })
   readonly store = new ViewStore()
 
   /**
@@ -601,9 +624,21 @@ export class Session {
    * so the map arrived correctly and alone.
    */
   private redirectedConfig: SessionConfig | null = null
+  /**
+   * The Analysis panel, the drawer and the synthetic tracks card (§18).
+   *
+   * One object for all three, because they share a runner and a worker and are
+   * created and destroyed together with the file — see `analysis/workspace.ts`
+   * for why the wiring lives there rather than adding three hundred lines here.
+   * `null` until a file is open, and dropped with it.
+   */
+  private analysis: AnalysisWorkspace | null = null
+  /** Set while the workspace's chunk is in flight, so it is fetched once. */
+  private analysisLoading = false
   private generalOn = false
   private annotationsOn = false
   private aestheticsOn = false
+  private analysisOn = false
   private destroyed = false
   /**
    * This session holds a view state it has not acted on yet.
@@ -691,12 +726,18 @@ export class Session {
     return state.uri
   }
 
-  /** Which of the three columns have anything to show for this session. */
-  get panels(): { general: boolean; annotations: boolean; aesthetics: boolean } {
+  /** Which of the four columns have anything to show for this session. */
+  get panels(): {
+    general: boolean
+    annotations: boolean
+    aesthetics: boolean
+    analysis: boolean
+  } {
     return {
       general: this.generalOn,
       annotations: this.annotationsOn,
       aesthetics: this.aestheticsOn,
+      analysis: this.analysisOn,
     }
   }
 
@@ -730,10 +771,13 @@ export class Session {
     this.current?.panel?.remeasure()
     this.current?.remeasure?.()
     this.deck?.relayout()
+    this.analysis?.relayout()
   }
 
   destroy(): void {
     this.destroyed = true
+    this.analysis?.destroy()
+    this.analysis = null
     this.current?.destroy?.()
     this.current = null
     this.deck?.destroy()
@@ -1790,6 +1834,7 @@ export class Session {
     this.setAnnotations([
       this.compareCard.el,
       new AnnotationCard({ store, loader, context: 'browser' }).el,
+      this.syntheticHost,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
@@ -2452,6 +2497,7 @@ export class Session {
             }),
       }).el,
       this.manualCard.el,
+      this.syntheticHost,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
@@ -4124,6 +4170,10 @@ export class Session {
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.
     this.setAesthetics(view?.sideEl === undefined ? [] : [view.sideEl])
+    // After the view is mounted, because the framing and the block a task runs
+    // on are read off whatever is on screen *now* (§18.4) — and because a table
+    // view has neither, which is a state the panel has to be able to show.
+    this.syncAnalysis()
   }
 
   /** The picker, asking for the file a config describes. */
@@ -4174,6 +4224,160 @@ export class Session {
     this.showContent(view.el)
   }
 
+
+  // -------------------------------------------------------------------------
+  // Analysis (§18)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build, refresh or drop the analysis surfaces to match what is open.
+   *
+   * Called after every view mount, because two of the four things a task needs
+   * are properties of the picture rather than of the file: the framing it will
+   * be a record of, and whether there is a block in memory cheap enough to hand
+   * over instead of re-reading (§18.3, §18.4). A table view has neither, and the
+   * panel has to be able to say so.
+   *
+   * The workspace itself outlives a navigation — it holds a worker and possibly
+   * a running job, and §18.3 is explicit that a job survives clicking a
+   * chromosome — so it is built once per file and only *refreshed* here.
+   */
+  private syncAnalysis(): void {
+    if (this.file === null) {
+      this.analysis?.destroy()
+      this.analysis = null
+      this.setAnalysis([])
+      this.drawerHost.replaceChildren()
+      this.syntheticHost.replaceChildren()
+      return
+    }
+    if (this.analysis === null) {
+      void this.loadAnalysis()
+      return
+    }
+    this.paintAnalysis(this.analysis)
+  }
+
+  /**
+   * Fetch the analysis surfaces, the first time a file is open.
+   *
+   * A dynamic import, in the idiom `ui/FilePicker.ts` already uses for the S3
+   * buckets card, and for a reason §18.3 states about the *worker* and which is
+   * no less true of the *bundle*: a reader who never opens the panel should pay
+   * nothing for it. Statically imported, the drawer, the plot renderers, the
+   * form and the two writers were 75 kB of the main chunk — a quarter of it —
+   * carried by every session including the ones that only ever look at a map.
+   *
+   * The cost is that the column appears a frame or two after the view. That is
+   * the right trade here: the panel is not what a reader is looking at when a
+   * file opens, and nothing else waits on it.
+   */
+  private async loadAnalysis(): Promise<void> {
+    if (this.analysisLoading) return
+    this.analysisLoading = true
+    try {
+      const { AnalysisWorkspace } = await import('../analysis/workspace')
+      // Everything below is re-checked because an await is a gap: the tab may
+      // have been closed, or the file replaced, while the chunk was in flight.
+      if (this.destroyed || this.file === null || this.analysis !== null) return
+      this.analysis = new AnalysisWorkspace(this.analysisHost_())
+      this.paintAnalysis(this.analysis)
+    } catch {
+      // A chunk that will not load is a viewer with no Analysis column, which
+      // is a state the shell already handles — every other panel can be absent
+      // too. Not worth an error screen over a feature nothing else depends on.
+    } finally {
+      this.analysisLoading = false
+    }
+  }
+
+  private paintAnalysis(analysis: AnalysisWorkspace): void {
+    analysis.refresh()
+    // The column carries the list; the drawer floats over the body and is the
+    // shell's to place, which is why the two are separate hosts.
+    this.setAnalysis(analysis.hasTasks ? [analysis.panelEl] : [])
+    this.drawerHost.replaceChildren(analysis.drawerEl)
+    this.syntheticHost.replaceChildren(analysis.syntheticEl)
+  }
+
+  /** The callbacks `AnalysisWorkspace` reads the session through. */
+  private analysisHost_(): AnalysisWorkspaceHost {
+    return {
+      source: () => {
+        const file = this.file
+        return file === null ? null : { uri: file.uri, source: file.source }
+      },
+      context: () => this.analysisContext(),
+      // Read fresh on every call rather than cached: `Run` takes the framing at
+      // the instant it is pressed, and a cached one would be a record of
+      // wherever the reader happened to be when the drawer opened.
+      framing: () => {
+        const file = this.file
+        const panel = this.current?.panel
+        return file === undefined || file === null || panel === undefined
+          ? null
+          : panel.analysisFraming(file.uri)
+      },
+      block: () => this.current?.panel?.analysisBlock() ?? null,
+      store: () => this.annotations?.store ?? null,
+      annotations: () => this.annotations?.client ?? null,
+      contigs: () =>
+        (this.analysisContext()?.contigs ?? []).map((contig) => ({
+          name: contig.name,
+          startBin: contig.startBin,
+          bins: contig.bins,
+          length: contig.length,
+        })),
+      changed: () => {
+        this.setAnalysis(this.analysis?.hasTasks === true ? [this.analysis.panelEl] : [])
+      },
+    }
+  }
+
+  /**
+   * What the panel prices and the form fills its dropdowns from.
+   *
+   * Rebuilt per call rather than held, and cheaply: it is a walk over the contig
+   * table, and the alternative is a cached object that is wrong every time a
+   * track is loaded or the map is panned. `analysis/context.ts` does the work.
+   */
+  private analysisContext(): AnalysisContext | null {
+    const file = this.file
+    if (file === null) return null
+    // Every coordinate an analysis produces is arithmetic on a fixed bin grid
+    // (§3.3), so a file without one has nothing any task can be computed over.
+    // No context, therefore no rows, therefore no column — which is §8.5's
+    // doctrine rather than a special case: absent beats disabled. In practice a
+    // variable-bin file is refused at open long before this, and this is the
+    // type being honest about a case the reader has already excluded.
+    const binsize = file.info.binsize
+    if (binsize === null || binsize <= 0) return null
+    const panel = this.current?.panel
+    const framing = panel === undefined ? null : panel.analysisFraming(file.uri)
+    const block = panel === undefined ? null : panel.analysisBlock()
+    return buildAnalysisContext({
+      uri: file.uri,
+      layout: file.info.layout.kind,
+      binsize,
+      nBins: file.info.nBins,
+      hasGenomes: file.info.hasGenomes,
+      hasWeights: file.info.hasWeights,
+      scoreColumns: file.info.scoreColumns,
+      contigs: file.contigs?.table ?? null,
+      genomes: file.genomes.table,
+      displayGenomes: file.genomes.display,
+      entries: this.annotations?.store.entries ?? [],
+      framing,
+      blockLoaded: block !== null,
+      blockBytes: block === null ? 0 : block.values.byteLength,
+    })
+  }
+
+  private setAnalysis(nodes: readonly HTMLElement[]): void {
+    this.analysisHost.replaceChildren(...nodes)
+    this.setAvailability('analysis', nodes.length > 0)
+  }
+
   private setGeneral(nodes: readonly HTMLElement[]): void {
     this.generalHost.replaceChildren(...nodes)
     this.setAvailability('general', nodes.length > 0)
@@ -4189,8 +4393,18 @@ export class Session {
     this.setAvailability('aesthetics', nodes.length > 0)
   }
 
-  private setAvailability(which: 'general' | 'annotations' | 'aesthetics', on: boolean): void {
-    const field = which === 'general' ? 'generalOn' : which === 'annotations' ? 'annotationsOn' : 'aestheticsOn'
+  private setAvailability(
+    which: 'general' | 'annotations' | 'aesthetics' | 'analysis',
+    on: boolean,
+  ): void {
+    const field =
+      which === 'general'
+        ? 'generalOn'
+        : which === 'annotations'
+          ? 'annotationsOn'
+          : which === 'aesthetics'
+            ? 'aestheticsOn'
+            : 'analysisOn'
     if (this[field] === on) return
     this[field] = on
     this.host.panelsChanged(this)

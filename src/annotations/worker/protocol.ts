@@ -16,6 +16,9 @@
  */
 
 import type { AnnotationPayload, BaseRegion, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type { BinVector } from './binVector'
+import type { AnalysisFraming, Params, TaskResult } from '../../analysis/types'
+import type { TaskInputs } from '../../analysis/worker/protocol'
 import type { S3Credential } from '../../s3/sigv4'
 import type { AssemblyOrigin, Contig } from '../../genome/assembly'
 
@@ -93,6 +96,8 @@ export interface AnnotationResultMap {
   sample: TrackSampleSet
   bases: BaseResult
   assembly: AssemblyResult
+  register: null
+  run: TaskResult
   drop: null
 }
 
@@ -118,6 +123,23 @@ export type AnnotationRequest =
   // pixel — and because the window it is asked over is the one a screen of
   // single bases covers, never a chromosome.
   | { id: number; kind: 'bases'; entry: string; regions: Region[] }
+  // A lane whose values were computed rather than read (§18.5). Registered
+  // once, and answered by `sample` from then on exactly as a bigWig is —
+  // which is the whole of what makes a synthetic track a track. See
+  // `binVector.ts` for why this is a registration rather than a fourth kind
+  // of lane fed from the main thread every frame.
+  | { id: number; kind: 'register'; entry: string; vector: BinVector }
+  // An analysis task whose inputs are already here (§18.3). The same shape the
+  // analysis worker's own `run` takes, deliberately: two venues, one request,
+  // so the main-thread runner routes rather than translating.
+  | {
+      id: number
+      kind: 'run'
+      task: string
+      params: Params
+      framing: AnalysisFraming
+      inputs: TaskInputs
+    }
   | { id: number; kind: 'drop'; entry: string }
 
 export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
@@ -128,6 +150,10 @@ export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
 export type AnnotationResponse =
   | { type: 'result'; id: number; payload: unknown }
   | { type: 'error'; id: number; message: string }
+  // Only an analysis task reports progress from here. A `load` or a `sample` is
+  // over in milliseconds and a bar for one would flicker; a metaplot over five
+  // thousand features and four tracks is a job, and §18.3 says a job reports.
+  | { type: 'progress'; id: number; done: number; total: number; note?: string }
   // Unsolicited: how busy this thread has been, for the status bar's CPU
   // figure. No id, because it answers no request (see `perf/busy.ts`). Not
   // called `load` — that is already a *request* kind here, and one word for two

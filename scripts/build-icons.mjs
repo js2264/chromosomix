@@ -88,6 +88,11 @@ const LUCIDE = [
   'pencil',
   'scan',
   'columns-2',
+  'beaker',
+  'play',
+  'circle-stop',
+  'rotate-cw',
+  'table',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

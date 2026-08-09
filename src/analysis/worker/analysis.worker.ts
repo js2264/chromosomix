@@ -1,0 +1,250 @@
+/**
+ * The analysis worker — the thread a job runs on, and nothing else.
+ *
+ * It is the third thread of the arrangement `analysis/worker/protocol.ts`
+ * argues for: the reader worker answers the frames, the annotations worker
+ * answers the tracks, and this one takes the work that is measured in seconds
+ * and minutes, so that neither of the other two ever queues behind it (§18.3).
+ *
+ * Two things follow from that and are worth stating as properties rather than
+ * as intentions.
+ *
+ * **It is a second mount of the same file, not a second reader.** It opens the
+ * source for itself through the same `worker/sources.ts` the reader uses, so a
+ * dropped `File` costs nothing at all here and a remote object costs a second
+ * range cache. It answers no view request, holds no dense block and reports no
+ * byte statistics; everything it produces is a {@link TaskResult}.
+ *
+ * **It knows nothing about the task catalogue.** A `run` names a task id and
+ * this module looks it up in `analysis/run/index.ts` — the descriptors in
+ * `analysis/tasks/` are a main-thread concern (`analysis/job.ts` says why the
+ * split is load-bearing), and importing the registry here to read one number off
+ * a descriptor would drag the panel's half of the subtree into this bundle. The
+ * one place that costs anything is `provenance.taskVersion`, and it is paid for
+ * below.
+ *
+ * Like `worker/reader.worker.ts`, this module names `MetaCooler`; unlike it,
+ * nothing in `src/worker/` or `src/ui/` does, so the reader's claim to be the
+ * only such module *there* is untouched.
+ */
+
+import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
+import { MetaCooler } from '../../metacooler/MetaCooler'
+import type { ByteSource } from '../../types'
+import { COMMIT, VERSION } from '../../version'
+import { serialiseError } from '../../worker/protocol'
+import { createSource, releaseSources } from '../../worker/sources'
+import { abortError, type JobContext } from '../job'
+import { RUNNERS } from '../run/index'
+import type { TaskResult } from '../types'
+import {
+  analysisTransfers,
+  type AnalysisRequest,
+  type AnalysisResponse,
+  type AnalysisResultMap,
+} from './protocol'
+
+/**
+ * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
+ * One cast, at the top, rather than a cast per `postMessage`.
+ */
+const ctx = self as unknown as DedicatedWorkerGlobalScope
+
+// The reader worker starts fetching h5wasm at module scope, while the user is
+// still choosing a file, because it is certain to need it within the second.
+// This worker deliberately does not, and the difference is not an oversight: it
+// may never open anything at all. A reader who folds the Analysis panel open,
+// reads the list of tasks and folds it again has just been charged a 4.8 MB
+// async chunk — download, parse and instantiate — for a mount that was never
+// made, which is the exact opposite of the lazy mount §18.3 promises. `getH5()`
+// is reached from `MetaCooler.open` below, on the first task that needs a file,
+// and memoises from there.
+
+interface Session {
+  mc: MetaCooler
+  /**
+   * The mount's byte source, held for its lifetime.
+   *
+   * Not read by anything here — this worker publishes no statistics — but the
+   * handle `mc` closes is a lent view of it (`worker/sources.ts`), so the thing
+   * that actually owns the bytes has to be somewhere until `releaseSources`.
+   */
+  source: ByteSource
+}
+
+let session: Session | null = null
+const cancelled = new Set<number>()
+
+function requireSession(): Session {
+  // Not an implicit mount: a `run` names a task and carries no uri and no
+  // source, so there is nothing here to open a file *from*. A run before an open
+  // is a fault in the main-thread runner's ordering, and says so.
+  if (session === null) throw new Error('no file is open in the analysis worker')
+  return session
+}
+
+function post(response: AnalysisResponse, transfers: Transferable[] = []): void {
+  ctx.postMessage(response, transfers)
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+async function handleOpen(
+  request: Extract<AnalysisRequest, { kind: 'open' }>,
+): Promise<AnalysisResultMap['open']> {
+  session?.mc.close()
+  session = null
+  // A cancel that arrives after its target finished leaves its id behind, since
+  // the `finally` that would have removed it has already run. Harmless
+  // individually and unbounded over a session, so it is cleared with the file
+  // the ids belonged to.
+  cancelled.clear()
+
+  const source = await createSource(request.source)
+  const mc = await MetaCooler.open(request.uri, source)
+  session = { mc, source }
+
+  // Two numbers and no table. Everything else about the file is already on the
+  // main thread from the reader's own open, and answering with a second copy of
+  // it would be a second thing to keep in step; these two are here because
+  // `toBins` below is defined in terms of one of them and the caller has a right
+  // to check that the two mounts agree about the file.
+  return { nBins: mc.nBins, binsize: mc.binsize }
+}
+
+/**
+ * The version stamped on a result produced here.
+ *
+ * The descriptor that owns the real number lives in `analysis/registry.ts` on
+ * the main thread, and this worker does not import it (see the module docstring)
+ * — so the field is filled with a placeholder and **overwritten by the
+ * main-thread runner** as the result comes back, before anything stores it,
+ * draws it or writes it into an export. A result that reached a reader still
+ * carrying `0` would mean the runner skipped that step.
+ */
+const UNSTAMPED_TASK_VERSION = 0
+
+/**
+ * The build that produced a number, for the `#` provenance line above it.
+ *
+ * `VERSION` alone on a build with no git behind it — a source tarball, or
+ * `vitest`, which applies none of the `define` block — rather than a trailing
+ * separator with nothing after it. Not `buildLine()`: that is composed for the
+ * about dialog and carries the commit date and the target as well, which is more
+ * than a provenance header needs and one more thing to diff when comparing two
+ * results.
+ */
+const APP = [VERSION, COMMIT].filter((part) => part !== '').join(' ')
+
+async function handleRun(
+  request: Extract<AnalysisRequest, { kind: 'run' }>,
+): Promise<TaskResult> {
+  const runner = RUNNERS[request.task]
+  if (runner === undefined) {
+    // Named, because the id is the only thing that distinguishes this from a
+    // registry that is simply empty — and a task offered by the panel and absent
+    // from `RUNNERS` is exactly the mismatch `test/unit/analysis-registry.test.ts`
+    // exists to catch before a reader ever clicks the row.
+    throw new Error(`no analysis runner is registered for the task ${request.task}`)
+  }
+  const { mc } = requireSession()
+  const id = request.id
+  const notes: string[] = []
+  const started = performance.now()
+
+  const job: JobContext = {
+    mc,
+    params: request.params,
+    framing: request.framing,
+    inputs: request.inputs,
+    cancelled: () => cancelled.has(id),
+    throwIfCancelled: () => {
+      if (cancelled.has(id)) throw abortError()
+    },
+    progress: (done, total, note) => post({ type: 'progress', id, done, total, note }),
+    note: (text) => {
+      notes.push(text)
+    },
+    toBp: (bins) => bins * mc.binsize,
+    // At least one bin, because every caller of this is sizing a window, and a
+    // window of zero bins is a kernel that reads nothing and returns a clean
+    // number. A flank smaller than the bin size is a question this file cannot
+    // answer at the resolution asked for; the honest floor is the resolution it
+    // has.
+    toBins: (bp) => Math.max(1, Math.round(bp / mc.binsize)),
+  }
+
+  const outputs = await runner(job)
+  // A runner whose last loop finished just as the cancel landed would otherwise
+  // deliver a complete result to a reader who has already dismissed the drawer.
+  job.throwIfCancelled()
+
+  return {
+    outputs,
+    provenance: {
+      task: request.task,
+      taskVersion: UNSTAMPED_TASK_VERSION,
+      // The parameters and the framing as they arrived, not as the runner read
+      // them: provenance is a record of what was asked for, and a runner's
+      // fallback for a key an older session did not have is part of the answer
+      // rather than part of the question.
+      params: request.params,
+      framing: request.framing,
+      app: APP,
+      createdAt: new Date().toISOString(),
+    },
+    notes,
+    ms: performance.now() - started,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch
+// ---------------------------------------------------------------------------
+
+async function dispatch(request: AnalysisRequest): Promise<unknown> {
+  switch (request.kind) {
+    case 'open':
+      return handleOpen(request)
+    case 'run':
+      return handleRun(request)
+    case 'cancel':
+      cancelled.add(request.target)
+      return null
+    case 'close':
+      session?.mc.close()
+      session = null
+      cancelled.clear()
+      // The handle's `close` returns the *borrowed* source; this is what
+      // actually releases the mount and its chunk cache (`worker/sources.ts`).
+      releaseSources()
+      return null
+  }
+}
+
+async function handle(request: AnalysisRequest): Promise<void> {
+  try {
+    const payload = await dispatch(request)
+    post(
+      { type: 'result', id: request.id, kind: request.kind, payload },
+      analysisTransfers(payload),
+    )
+  } catch (err) {
+    post({ type: 'error', id: request.id, error: serialiseError(err) })
+  } finally {
+    cancelled.delete(request.id)
+  }
+}
+
+ctx.onmessage = (event: MessageEvent<AnalysisRequest>): void => {
+  void handle(event.data)
+}
+
+// How busy this thread has been, once a second, unasked — the same probe the
+// other two workers run. It matters most here: a job is the longest thing this
+// tab does, and it is the one stretch during which a CPU figure taken from the
+// main thread alone would read 0%.
+const probe = startBusyProbe()
+setInterval(() => post({ type: 'busy', fraction: probe.busy() }), LOAD_REPORT_MS)

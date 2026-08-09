@@ -1,0 +1,17 @@
+{
+ "a": "Yeast_ATAC.narrowPeak",
+ "b": "Yeast_ChIP_Pol2-vs-input.narrowPeak",
+ "compare": "exact",
+ "direct": {
+  "a_with_hit": 701,
+  "b_with_hit": 419,
+  "intersection_bp": 209938,
+  "jaccard": 0.12005066490540359,
+  "n_a": 5105,
+  "n_b": 527,
+  "union_bp": 1748745
+ },
+ "note": "a boolean mask per base, which is a different algorithm from the viewer's merge join and agrees only if both handle half-open ends the same way",
+ "scope": "every interval in both files",
+ "tolerance": 0
+}

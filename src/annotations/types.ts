@@ -47,8 +47,16 @@ export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
  * its colour, its name, its value axis, its height, which edge it is drawn on,
  * where it sits in the stack — is the one implementation the other kinds use,
  * rather than a second copy of all of it (§5.8).
+ *
+ * `synthetic` is the same argument made a second time and settled the same way
+ * (§18.5). An analysis that produces one value per bin has produced a track, and
+ * a track belongs on the map rather than in the drawer it was computed in. Its
+ * rows are `kind: 'track'` and are indistinguishable from a loaded bigWig from
+ * the renderer down — what makes them their own *card* is only that they are
+ * grouped under one heading and carry an export row the loaded tracks have no
+ * use for.
  */
-export type AnnotationCard = 'linear' | 'overlay' | 'viewpoint'
+export type AnnotationCard = 'linear' | 'overlay' | 'viewpoint' | 'synthetic'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's
@@ -58,6 +66,36 @@ export type AnnotationCard = 'linear' | 'overlay' | 'viewpoint'
 export type AnnotationSource =
   | { kind: 'local'; file: File; name: string }
   | { kind: 'remote'; url: string; name: string }
+  | ComputedSource
+
+/**
+ * A lane an analysis produced rather than a file (§18.5).
+ *
+ * It carries a **recipe** and not the numbers. A per-bin vector over a
+ * metagenome is megabytes and session storage is not for that, so what survives
+ * a reload is the task and everything it would need to be run again — and the
+ * row comes back `detached` with a **Recompute** button, which is precisely the
+ * state a dropped local file returns in and for precisely the same reason
+ * (§8.6). An exported session therefore hands a colleague the analysis rather
+ * than a number they have to take on trust.
+ *
+ * `recipe` is deliberately an opaque JSON record rather than the analysis
+ * layer's own `Params` and `AnalysisFraming`. Those types describe an analysis
+ * and this module describes an annotation; importing them here would make the
+ * annotation layer depend on the analysis layer, when the true dependency runs
+ * the other way. The analysis side is the one that knows the shape and is the
+ * only thing that reads it back.
+ */
+export interface ComputedSource {
+  kind: 'computed'
+  name: string
+  /** Task id, so the row can say what made it. */
+  task: string
+  /** Everything needed to run it again: parameters, framing, task version. */
+  recipe: Record<string, unknown>
+  /** `chrIV:1–1,531,933 at 1 kb, balanced` — the row's second line. */
+  framing: string
+}
 
 /**
  * Which edge of the map a lane is drawn on.
@@ -279,19 +317,14 @@ export interface TrackSampleSet {
 /** Which edge (or edges) an annotation is drawn on. Any number may be true. */
 export type Placement = Record<LaneEdge, boolean>
 
-/** Nothing drawn anywhere — the base every placement is built from. */
-export function noPlacement(): Placement {
-  return { top: false, right: false, bottom: false, left: false }
-}
-
-/** A placement drawn on exactly one edge. */
 /** Nothing drawn on any edge — the base every placement is built from. */
 export function emptyPlacement(): Placement {
   return { top: false, right: false, bottom: false, left: false }
 }
 
+/** A placement drawn on exactly one edge. */
 export function placementOn(edge: LaneEdge): Placement {
-  return { ...noPlacement(), [edge]: true }
+  return { ...emptyPlacement(), [edge]: true }
 }
 
 /**
@@ -303,7 +336,7 @@ export function placementOn(edge: LaneEdge): Placement {
  * wrong, and this is the one door those values come in through.
  */
 export function normalisePlacement(placement: Partial<Placement> | undefined): Placement {
-  const base = noPlacement()
+  const base = emptyPlacement()
   if (placement === undefined) return base
   for (const edge of LANE_EDGES) base[edge] = placement[edge] === true
   return base
@@ -489,7 +522,18 @@ export interface StoredEntry {
   card: AnnotationCard
   kind: AnnotationKind
   label: string
-  source: { kind: 'local' | 'remote'; name: string; url?: string }
+  /**
+   * `computed` carries its recipe; the other two carry only a name and a URL,
+   * because the bytes behind them are not this app's to remember (§8.6).
+   */
+  source: {
+    kind: 'local' | 'remote' | 'computed'
+    name: string
+    url?: string
+    task?: string
+    recipe?: Record<string, unknown>
+    framing?: string
+  }
   visible: boolean
   placement: Placement
   style: AnnotationStyle

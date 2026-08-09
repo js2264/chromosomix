@@ -485,6 +485,38 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M12 3v18"}],
     ],
   },
+  'beaker': {
+    shapes: [
+    ['path', {"d":"M4.5 3h15"}],
+    ['path', {"d":"M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"}],
+    ['path', {"d":"M6 14h12"}],
+    ],
+  },
+  'play': {
+    shapes: [
+    ['path', {"d":"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"}],
+    ],
+  },
+  'circle-stop': {
+    shapes: [
+    ['circle', {"cx":"12","cy":"12","r":"10"}],
+    ['rect', {"x":"9","y":"9","width":"6","height":"6","rx":"1"}],
+    ],
+  },
+  'rotate-cw': {
+    shapes: [
+    ['path', {"d":"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"}],
+    ['path', {"d":"M21 3v5h-5"}],
+    ],
+  },
+  'table': {
+    shapes: [
+    ['path', {"d":"M12 3v18"}],
+    ['rect', {"width":"18","height":"18","x":"3","y":"3","rx":"2"}],
+    ['path', {"d":"M3 9h18"}],
+    ['path', {"d":"M3 15h18"}],
+    ],
+  },
   'github': {
     filled: true,
     shapes: [

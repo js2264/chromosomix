@@ -389,10 +389,11 @@ in the first handoff were wrong in both directions.
    it at all. Absent rather than lying, which is better and is still a hole: the
    reader's own marks vanished when they pressed the toggle. What replaces the row
    axis is the pair of loci a mark was always about — see `SPECS.md` §17.4 for the
-   four shapes. `drawDiagonalFeatures` is tested but **not reachable from the UI
-   today**: `loader.cardFor` gives the overlay card to a bedpe and to nothing else,
-   so a BED is always a lane. Worth knowing before hunting for the triangle on
-   screen.
+   four shapes. `drawDiagonalFeatures` was tested but not reachable from the UI
+   when this was written — `loader.cardFor` gives the overlay card to a bedpe and
+   to nothing else, so a *dropped* BED is always a lane. The Analysis branch
+   reaches it: a task that calls intervals puts a `FeatureSet` on the overlay card
+   itself, so a boundary set draws on the diagonal, turned or square.
 2. **Tracks fall to one stack below**, and it cost less than expected because it
    is a *presentation* and not a move: `AnnotationLanes.drawnOn` asks the store for
    everything the map draws when the axes carry a turn, and the store never
@@ -498,12 +499,13 @@ before editing.
 
 Reported honestly rather than quietly left:
 
-- **`drawDiagonalFeatures` is unreachable from the UI.** `loader.cardFor` gives
-  the overlay card to a bedpe and to nothing else, so a BED is always a lane and
-  the code that draws features *on* the map — square or turned — never runs. It
-  is correct and tested either way; it is dead until something can put a feature
-  set on the overlay card. Pre-existing, not introduced here, but worth knowing
-  before hunting for a triangle on screen.
+- ~~**`drawDiagonalFeatures` is unreachable from the UI.**~~ **Reachable as of
+  the Analysis branch (§18).** `loader.cardFor` still gives the overlay card to a
+  bedpe and to nothing else, so a *dropped* BED is still always a lane — but a
+  task that calls intervals now puts a `FeatureSet` on the overlay card directly
+  (`AnalysisWorkspace.adoptIntervals`), so insulation boundaries and CID domains
+  reach `paintOverlays` and this code runs. The link is pinned in
+  `synthetic-entry.test.ts`; the drawing keeps its own tests here.
 - **The depth grip's edge drifts under the hand.** The band's *height* follows a
   drag exactly, but the plot recentres on each redraw, so the top edge moves half
   as far as the pointer. Pinning the diagonal instead is a change to the fit, and

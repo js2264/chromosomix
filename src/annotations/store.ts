@@ -680,7 +680,15 @@ function toStored(entry: AnnotationEntry): StoredEntry {
     source:
       entry.source.kind === 'remote'
         ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
-        : { kind: 'local', name: entry.source.name },
+        : entry.source.kind === 'computed'
+          ? {
+              kind: 'computed',
+              name: entry.source.name,
+              task: entry.source.task,
+              recipe: entry.source.recipe,
+              framing: entry.source.framing,
+            }
+          : { kind: 'local', name: entry.source.name },
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
@@ -689,7 +697,7 @@ function toStored(entry: AnnotationEntry): StoredEntry {
 }
 
 const KINDS: AnnotationKind[] = ['gtf', 'track', 'segments', 'pairs', 'sequence']
-const CARDS: AnnotationCard[] = ['linear', 'overlay']
+const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
   if (typeof value !== 'object' || value === null) return false
@@ -700,7 +708,14 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   const source = row['source']
   if (typeof source !== 'object' || source === null) return false
   const kind = (source as Record<string, unknown>)['kind']
-  if (kind !== 'local' && kind !== 'remote') return false
+  if (kind !== 'local' && kind !== 'remote' && kind !== 'computed') return false
+  // A computed row that lost its recipe is not a row that can be recomputed,
+  // and a Recompute button that cannot is worse than no row at all.
+  if (kind === 'computed') {
+    const row2 = source as Record<string, unknown>
+    if (typeof row2['task'] !== 'string') return false
+    if (typeof row2['recipe'] !== 'object' || row2['recipe'] === null) return false
+  }
   return typeof row['style'] === 'object' && row['style'] !== null
 }
 

@@ -26,6 +26,7 @@ import { FilePicker } from '../ui/FilePicker'
 import { Modal } from '../ui/Modal'
 import {
   AESTHETICS_PANEL,
+  ANALYSIS_PANEL,
   ANNOTATION_PANEL,
   GENERAL_PANEL,
   SidePanel,
@@ -84,6 +85,15 @@ export class App implements SessionHost {
   private readonly content: HTMLElement
   private readonly breadcrumbSlot: HTMLElement
   /**
+   * Where the active session parents its Analysis drawer.
+   *
+   * A slot rather than a drawer, for the reason the content area is a slot: an
+   * open task is a fact about a *file*, so switching tabs must show the drawer
+   * exactly when that tab had one open, and the shell has no business knowing
+   * which. It also keeps `AnalysisDrawer` out of this module entirely.
+   */
+  private readonly drawerSlot: HTMLElement
+  /**
    * The three columns beside the map, outward from it in order of how often
    * they are touched.
    *
@@ -97,6 +107,16 @@ export class App implements SessionHost {
   private readonly generalPanel: SidePanel
   private readonly annotationsPanel: SidePanel
   private readonly aestheticsPanel: SidePanel
+  /**
+   * The fourth, and the one that lists jobs rather than controls (§18.1).
+   *
+   * Furniture on the same terms as the other three: its fold is a preference
+   * about this window, and what changes on a tab switch is whose rows are
+   * parented into it. The *drawer* is not here at all — it is a per-session
+   * thing, so the session owns it and this shell only lends it a place to sit,
+   * exactly as it does for the content area.
+   */
+  private readonly analysisPanel: SidePanel
   private readonly tabs: TabStrip
   private readonly theme: ThemeToggle
   private readonly status: StatusBar
@@ -108,6 +128,7 @@ export class App implements SessionHost {
   constructor(root: HTMLElement) {
     this.breadcrumbSlot = el('div', { class: 'breadcrumb-slot' })
     this.content = el('main', { class: 'content' })
+    this.drawerSlot = el('div', { class: 'drawer-slot' })
     // Folding or dragging a column changes how much room the plot has and where
     // its centre is. A `ResizeObserver` inside the view cannot see all of that:
     // the plot is usually sized by the window's *height*, so widening its column
@@ -117,6 +138,7 @@ export class App implements SessionHost {
     this.generalPanel = new SidePanel(GENERAL_PANEL, relayout)
     this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout)
     this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout)
+    this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout)
 
     this.status = new StatusBar({ client: () => this.current?.client ?? null })
     this.theme = new ThemeToggle()
@@ -159,6 +181,7 @@ export class App implements SessionHost {
           this.generalPanel.toggle,
           this.annotationsPanel.toggle,
           this.aestheticsPanel.toggle,
+          this.analysisPanel.toggle,
           el(
             'div',
             { class: 'brand' },
@@ -212,6 +235,10 @@ export class App implements SessionHost {
         this.generalPanel.el,
         this.annotationsPanel.el,
         this.aestheticsPanel.el,
+        this.analysisPanel.el,
+        // Last, so it paints over the columns beside it without needing a
+        // stacking context of its own beyond the one its `z-index` gives it.
+        this.drawerSlot,
       ),
       this.status.el,
     )
@@ -417,6 +444,8 @@ export class App implements SessionHost {
     this.generalPanel.setContent([session.generalHost])
     this.annotationsPanel.setContent([session.annotationsHost])
     this.aestheticsPanel.setContent([session.aestheticsHost])
+    this.analysisPanel.setContent([session.analysisHost])
+    this.drawerSlot.replaceChildren(session.drawerHost)
     this.applyPanels(session)
     document.title =
       session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
@@ -427,6 +456,7 @@ export class App implements SessionHost {
     this.generalPanel.setAvailable(panels.general)
     this.annotationsPanel.setAvailable(panels.annotations)
     this.aestheticsPanel.setAvailable(panels.aesthetics)
+    this.analysisPanel.setAvailable(panels.analysis)
   }
 
   private paintTabs(): void {
@@ -712,6 +742,15 @@ export class App implements SessionHost {
         keys: AESTHETICS_PANEL.keys,
         enabled: file,
         run: () => this.aestheticsPanel.toggle.click(),
+      },
+      {
+        id: 'fold-analysis',
+        group: 'View',
+        title: 'Fold or show the Analysis panel',
+        hint: 'What can be computed from this file, as against what is drawn on it.',
+        keys: ANALYSIS_PANEL.keys,
+        enabled: file,
+        run: () => this.analysisPanel.toggle.click(),
       },
       {
         id: 'theme',

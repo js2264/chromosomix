@@ -1,0 +1,236 @@
+/**
+ * The 1D metaplot, as a descriptor.
+ *
+ * The first task in the catalogue that touches no contact matrix at all: its
+ * inputs are tracks and a feature set, both of which already live in the
+ * annotations worker, which is why it declares `venue: 'annotations'` and costs
+ * no matrix reads whatever (§18.3).
+ *
+ * It is also the first with a **ranking and subsetting** control, and that
+ * control is the reason the task is worth having rather than a convenience. A
+ * single averaged line over four thousand features asserts that they behave
+ * alike; splitting them by a column and drawing one line per group is what makes
+ * that assertion falsifiable, and is what turns *here is the average signal at
+ * my peaks* into *the strongest quartile looks like this and the weakest looks
+ * like nothing*.
+ */
+
+import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+
+const PARAMS: readonly ParamSpec[] = [
+  {
+    kind: 'track',
+    key: 'tracks',
+    label: 'Tracks',
+    hint: 'bigWigs, and anything this panel has already computed.',
+    multiple: true,
+  },
+  {
+    kind: 'featureSet',
+    key: 'features',
+    label: 'Features',
+    hint: 'The places to average over.',
+  },
+  {
+    kind: 'choice',
+    key: 'mode',
+    label: 'Mode',
+    default: 'reference',
+    options: [
+      { value: 'reference', label: 'Reference point', hint: 'A fixed flank around one point.' },
+      { value: 'scaled', label: 'Scaled region', hint: 'Every feature body resampled to one width.' },
+    ],
+  },
+  {
+    kind: 'choice',
+    key: 'at',
+    label: 'Anchor on',
+    default: 'start',
+    when: (params) => params.mode !== 'scaled',
+    options: [
+      { value: 'start', label: 'Start' },
+      { value: 'centre', label: 'Centre' },
+      { value: 'end', label: 'End' },
+    ],
+  },
+  {
+    kind: 'number',
+    key: 'flank',
+    label: 'Flank',
+    hint: 'Read this far either side.',
+    default: 2000,
+    min: 0,
+    unit: 'bp',
+  },
+  {
+    kind: 'number',
+    key: 'step',
+    label: 'Resolution',
+    hint: 'Base pairs per column of the plot.',
+    default: 50,
+    min: 1,
+    unit: 'bp',
+  },
+  {
+    kind: 'number',
+    key: 'body',
+    label: 'Body columns',
+    hint: 'Every feature body is resampled to this many columns.',
+    default: 100,
+    min: 10,
+    integer: true,
+    when: (params) => params.mode === 'scaled',
+  },
+  {
+    kind: 'toggle',
+    key: 'stranded',
+    label: 'Respect strand',
+    hint: 'A minus-strand feature is read right to left, or an asymmetric signal cancels itself.',
+    default: true,
+  },
+  {
+    kind: 'column',
+    key: 'rankBy',
+    label: 'Rank by',
+    from: 'features',
+    optional: true,
+    noneLabel: 'Do not rank',
+    hint: 'Sorts the features so they can be subset or split.',
+    section: 'Ranking',
+  },
+  {
+    kind: 'choice',
+    key: 'subset',
+    label: 'Then',
+    default: 'all',
+    when: (params) => typeof params.rankBy === 'string' && params.rankBy !== '',
+    options: [
+      { value: 'all', label: 'One line', hint: 'Rank only; still one average.' },
+      { value: 'top', label: 'Top N' },
+      { value: 'bottom', label: 'Bottom N' },
+      { value: 'groups', label: 'K groups', hint: 'One line per equal-sized group.' },
+    ],
+    section: 'Ranking',
+  },
+  {
+    kind: 'number',
+    key: 'count',
+    label: 'N',
+    default: 500,
+    min: 1,
+    integer: true,
+    when: (params) => params.subset === 'top' || params.subset === 'bottom',
+    section: 'Ranking',
+  },
+  {
+    kind: 'number',
+    key: 'groups',
+    label: 'Groups',
+    default: 4,
+    min: 2,
+    max: 10,
+    integer: true,
+    slider: true,
+    when: (params) => params.subset === 'groups',
+    section: 'Ranking',
+  },
+  {
+    kind: 'choice',
+    key: 'average',
+    label: 'Average',
+    default: 'mean',
+    options: [
+      { value: 'mean', label: 'Mean' },
+      { value: 'median', label: 'Median' },
+      { value: 'trimmed', label: 'Trimmed' },
+    ],
+    section: 'Summary',
+  },
+  {
+    kind: 'choice',
+    key: 'band',
+    label: 'Band',
+    default: 'bootstrap',
+    options: [
+      { value: 'bootstrap', label: 'Bootstrap CI' },
+      { value: 'sd', label: 'SD' },
+      { value: 'none', label: 'None' },
+    ],
+    section: 'Summary',
+  },
+  {
+    kind: 'number',
+    key: 'iterations',
+    label: 'Bootstrap draws',
+    default: 200,
+    min: 20,
+    max: 2000,
+    integer: true,
+    when: (params) => params.band === 'bootstrap',
+    section: 'Summary',
+  },
+  {
+    kind: 'seed',
+    key: 'seed',
+    label: 'Seed',
+    hint: 'The same seed gives the same band twice (§18.4).',
+    default: 1,
+    when: (params) => params.band === 'bootstrap',
+    section: 'Summary',
+  },
+  {
+    kind: 'toggle',
+    key: 'heatmap',
+    label: 'Also draw the per-feature heatmap',
+    hint: 'The mean of a bimodal set is a line that describes nothing.',
+    default: true,
+    section: 'Summary',
+  },
+]
+
+function estimate(_context: AnalysisContext, params: Params): CostEstimate {
+  const tracks = Array.isArray(params.tracks) ? params.tracks.length : params.tracks === null ? 0 : 1
+  if (tracks === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Choose at least one track to average.',
+    }
+  }
+  if (typeof params.features !== 'string' || params.features === '') {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Choose a feature set to average over.',
+    }
+  }
+  return {
+    class: 'bounded',
+    requests: null,
+    bytes: null,
+    note:
+      `No matrix reads at all: ${tracks} track${tracks === 1 ? '' : 's'} sampled in the ` +
+      'annotations worker, one batch per sequence.',
+  }
+}
+
+export const METAPLOT_TASK: AnalysisTask = {
+  id: 'metaplot',
+  title: 'Metaplot over a feature set',
+  blurb: 'Average track signal at a set of places, with a band and a heatmap.',
+  group: 'tracks',
+  venue: 'annotations',
+  version: 1,
+  // Needs something to average and somewhere to average it. Absent rather than
+  // disabled on a file with neither, which on a `.metacool` is always (§8.5).
+  appliesTo: (context) =>
+    context.entries.some((entry) => entry.kind === 'track') &&
+    context.entries.some((entry) => entry.kind === 'gtf' || entry.kind === 'segments'),
+  params: PARAMS,
+  outputs: ['curve', 'matrix'],
+  estimate,
+}

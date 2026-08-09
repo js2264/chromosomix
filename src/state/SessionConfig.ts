@@ -23,6 +23,7 @@
  */
 
 import { recall, remember } from './UiMemory'
+import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
 import type { StoredEntry } from '../annotations/types'
 import type { ManualMark } from '../annotations/manual'
@@ -66,6 +67,16 @@ export interface SessionConfig {
   /** Sort, search and column filters for the two tables. */
   tables: { genomes?: TableUiState; contigs?: TableUiState }
   /**
+   * What each analysis task was last run with, by task id (§18.2).
+   *
+   * Carried for the reason the tracks are: reproducing a figure should be
+   * opening the session and pressing Run, not remembering that the insulation
+   * window was fourteen bins. The *results* are deliberately not here — a
+   * per-bin vector over a metagenome is megabytes, and the recipe is the part
+   * worth keeping (§18.5).
+   */
+  analysis: AnalysisMemory
+  /**
    * The overlay preferences.
    *
    * A window-level setting rather than a session one — it lives in
@@ -94,6 +105,7 @@ const SCOPES = {
   normalise: 'compare:normalise',
   genomes: 'table:genomes',
   contigs: 'table:contigs',
+  analysis: ANALYSIS_SCOPE,
 } as const
 
 /**
@@ -126,6 +138,7 @@ export function buildConfig(options: {
       ...tableOf('genomes', recall<TableUiState>(key, SCOPES.genomes)),
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
     },
+    analysis: recall<AnalysisMemory>(key, SCOPES.analysis) ?? {},
     plot: options.plot,
   }
 }
@@ -153,6 +166,10 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   remember(key, SCOPES.normalise, config.compareNormalise)
   if (config.tables.genomes !== undefined) remember(key, SCOPES.genomes, config.tables.genomes)
   if (config.tables.contigs !== undefined) remember(key, SCOPES.contigs, config.tables.contigs)
+  // Absent from every config written before §18 existed, and a missing key is
+  // an empty workspace rather than a broken one — the same tolerance every
+  // field above is read with.
+  if (config.analysis !== undefined) remember(key, SCOPES.analysis, config.analysis)
 }
 
 /**
@@ -184,6 +201,13 @@ export function parseConfig(text: string): SessionConfig | null {
     typeof value === 'object' && value !== null ? (value as GroupModes) : {}
   const table = (value: unknown): TableUiState | undefined =>
     typeof value === 'object' && value !== null ? (value as TableUiState) : undefined
+  // Its own narrowing rather than `record`'s: a `GroupModes` is one level deep
+  // and this is two, so the cast the others share would be a lie that TypeScript
+  // is right to refuse.
+  const analysisRecord = (value: unknown): AnalysisMemory =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as AnalysisMemory)
+      : {}
   const tables = record(row['tables']) as Record<string, unknown>
 
   return {
@@ -196,6 +220,11 @@ export function parseConfig(text: string): SessionConfig | null {
     sequences: list<string>(row['sequences']).filter((name) => typeof name === 'string'),
     groups: record(row['groups']),
     scaling: record(row['scaling']),
+    // Absent from every config written before §18 and read as an empty
+    // workspace, which is the tolerance `CONFIG_VERSION`'s comment promises for
+    // an *added* field: an older file opens in a newer viewer with the parts it
+    // did not know about left at their defaults.
+    analysis: analysisRecord(row['analysis']),
     compareNormalise: row['compareNormalise'] === true,
     tables: {
       ...tableOf('genomes', table(tables['genomes'])),
