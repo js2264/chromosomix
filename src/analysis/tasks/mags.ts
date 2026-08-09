@@ -13,11 +13,28 @@
  * what a MAG is.
  */
 
-import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { READY, waitingFor } from '../types'
+import type {
+  AnalysisContext,
+  AnalysisTask,
+  CostEstimate,
+  ParamSpec,
+  Params,
+  TaskAvailability,
+} from '../types'
 
-/** Every one of these needs a genome layer, and a metacool is the only thing with one. */
-function isMetagenome(context: AnalysisContext): boolean {
-  return context.hasGenomes && (context.genomes?.length ?? 0) > 1
+/**
+ * Every one of these needs a genome layer, and a metacool is the only thing with
+ * one — so on a cooler they are **absent** and stay absent however many files
+ * the reader drops, which is what §18.1's doctrine is actually about.
+ *
+ * With *nothing* open the answer is different: a metagenome is one file away, so
+ * the row is listed and says so. The distinction is not "can it run now" but
+ * "can what the reader does next make it run".
+ */
+function metagenomeOnly(context: AnalysisContext): TaskAvailability {
+  if (!context.hasMap) return waitingFor('Open a metagenome — a `.metacool` with a genome layer.')
+  return context.hasGenomes && (context.genomes?.length ?? 0) > 1 ? READY : { state: 'absent' }
 }
 
 function scanCost(note: string): CostEstimate {
@@ -43,7 +60,7 @@ export const MAG_QC_TASK: AnalysisTask = {
   group: 'metagenome',
   venue: 'analysis',
   version: 1,
-  appliesTo: isMetagenome,
+  availability: metagenomeOnly,
   params: [
     BALANCE,
     {
@@ -74,7 +91,7 @@ export const MAG_NETWORK_TASK: AnalysisTask = {
   // reuses a cached QC result whose parameters and framing match rather than
   // walking the pixel table a second time for numbers it already has.
   requires: ['magqc'],
-  appliesTo: isMetagenome,
+  availability: metagenomeOnly,
   params: [
     {
       kind: 'choice',
@@ -123,7 +140,7 @@ export const MAG_PURITY_TASK: AnalysisTask = {
   group: 'metagenome',
   venue: 'analysis',
   version: 1,
-  appliesTo: isMetagenome,
+  availability: metagenomeOnly,
   params: [
     BALANCE,
     {
@@ -161,7 +178,7 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
   group: 'metagenome',
   venue: 'analysis',
   version: 1,
-  appliesTo: isMetagenome,
+  availability: metagenomeOnly,
   params: [
     BALANCE,
     {

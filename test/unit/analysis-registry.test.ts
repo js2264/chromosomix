@@ -20,12 +20,29 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildAnalysisContext } from '@/analysis/context'
-import { TASK_GROUP_LABELS, TASKS, taskById, tasksFor } from '@/analysis/registry'
+import { TASK_GROUP_LABELS, TASKS, runnableTasks, taskById, tasksFor } from '@/analysis/registry'
 import { RUNNERS } from '@/analysis/run/index'
 import { TRACK_RUNNERS } from '@/analysis/run/tracks'
 import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
+import { defaultStyle } from '@/annotations/types'
+import type { AnnotationEntry } from '@/annotations/types'
 
 /** A context for a file with nothing in it but bins — the weakest real case. */
+/** A loaded file, at the point a task could use it as an input. */
+function entry(id: string, kind: 'track' | 'segments' | 'pairs'): AnnotationEntry {
+  return {
+    id,
+    card: kind === 'pairs' ? 'overlay' : 'linear',
+    kind,
+    label: id,
+    source: { kind: 'remote', url: `https://example.invalid/${id}`, name: id },
+    status: 'ready',
+    visible: true,
+    placement: { top: false, right: false, bottom: true, left: false },
+    style: defaultStyle(kind, '#0072b2'),
+  }
+}
+
 function context(overrides: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     ...buildAnalysisContext({
@@ -99,21 +116,88 @@ describe('the analysis registry', () => {
 describe('tasksFor', () => {
   it('keeps registry order rather than any order of its own', () => {
     const offered = tasksFor(context()).map((task) => task.id)
-    const expected = TASKS.filter((task) => task.appliesTo(context())).map((task) => task.id)
+    const expected = TASKS.filter(
+      (task) => task.availability(context()).state !== 'absent',
+    ).map((task) => task.id)
     expect(offered).toEqual(expected)
   })
 
-  it('leaves a task out rather than handing it over to be disabled', () => {
-    // A mount with no bins is the one case P(s) itself declines, and it stands
-    // here for every predicate: the row is *absent*, so there is nothing for the
-    // panel to grey out and nothing for a reader to investigate.
-    expect(tasksFor(context({ nBins: 0 }))).toEqual([])
+  /**
+   * The doctrine, applied where it belongs and only there.
+   *
+   * A metagenome task on a plain cooler is `absent`, because the file has no
+   * `/genomes` table and nothing the reader does next produces one — listing it
+   * would be offering something not on the menu. A task waiting for a file the
+   * reader *can* drop is a different claim and gets a different answer.
+   */
+  it('leaves out what this file can never do', () => {
+    const offered = tasksFor(context()).map((task) => task.id)
+    expect(offered).not.toContain('magqc')
+    expect(offered).not.toContain('magpurity')
+  })
+
+  it('lists what is one drag away, rather than hiding the feature', () => {
+    // APA used to vanish on a file with no loop set, which taught a reader who
+    // had not met the app before that it does not do aggregate peak analysis.
+    const offered = tasksFor(context())
+    const apa = offered.find((task) => task.id === 'apa')
+    expect(apa, 'APA is listed').toBeDefined()
+    const state = apa?.availability(context())
+    expect(state?.state).toBe('waiting')
+    expect(state?.state === 'waiting' && state.needs).toMatch(/loop set|feature set/i)
   })
 
   it('offers P(s) on a plain cooler with nothing else loaded', () => {
     // The claim `analysis/tasks/ps.ts` opens with: every contact map has a
     // diagonal, so the panel is never empty on a file this app can open at all.
-    expect(tasksFor(context()).map((task) => task.id)).toContain('expected')
+    const ready = runnableTasks(context()).map((task) => task.id)
+    expect(ready).toContain('expected')
+  })
+})
+
+/**
+ * A 1D browser session (§5.8) has an assembly, tracks, and no matrix — and the
+ * Analysis panel belongs there too. Three tasks run entirely on loaded tracks,
+ * and hiding the column would mean a reader who came in through a bigWig never
+ * learns that comparing two of them is one click away.
+ */
+describe('a session with no contact map', () => {
+  const noMap = (entries: AnalysisContext['entries'] = []): AnalysisContext =>
+    context({ hasMap: false, binsize: 0, nBins: 0, entries })
+
+  it('still offers a panel, rather than none at all', () => {
+    expect(tasksFor(noMap()).length).toBeGreaterThan(0)
+  })
+
+  it('greys every task that reads the matrix, and says why', () => {
+    for (const id of ['expected', 'insulation', 'fourc', 'coverage', 'cid']) {
+      const task = tasksFor(noMap()).find((candidate) => candidate.id === id)
+      expect(task, id).toBeDefined()
+      const state = task?.availability(noMap())
+      expect(state?.state, id).toBe('waiting')
+      expect(state?.state === 'waiting' && state.needs).toMatch(/contact map/i)
+    }
+  })
+
+  it('runs the track tasks, which never needed a map', () => {
+    const tracks: AnalysisContext['entries'] = [
+      entry('a', 'track'),
+      entry('b', 'track'),
+      entry('c', 'segments'),
+      entry('d', 'segments'),
+    ]
+    const ready = runnableTasks(noMap(tracks)).map((task) => task.id)
+    expect(ready).toContain('trackcorr')
+    expect(ready).toContain('overlap')
+    expect(ready).toContain('metaplot')
+  })
+
+  it('does not offer a metagenome task it cannot know about yet', () => {
+    // With nothing open there is no file to say no on behalf of, so a MAG task
+    // is listed and waiting rather than absent — the reader can open one.
+    const state = tasksFor(noMap()).find((task) => task.id === 'magqc')?.availability(noMap())
+    expect(state?.state).toBe('waiting')
+    expect(state?.state === 'waiting' && state.needs).toMatch(/metagenome/i)
   })
 })
 

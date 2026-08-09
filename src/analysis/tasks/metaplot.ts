@@ -16,6 +16,7 @@
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -225,11 +226,22 @@ export const METAPLOT_TASK: AnalysisTask = {
   group: 'tracks',
   venue: 'annotations',
   version: 1,
-  // Needs something to average and somewhere to average it. Absent rather than
-  // disabled on a file with neither, which on a `.metacool` is always (§8.5).
-  appliesTo: (context) =>
-    context.entries.some((entry) => entry.kind === 'track') &&
-    context.entries.some((entry) => entry.kind === 'gtf' || entry.kind === 'segments'),
+  // Something to average, and somewhere to average it. **No map required** —
+  // this runs entirely on loaded tracks, so it is offered in a 1D browser
+  // session exactly as it is beside a map.
+  availability: (context) => {
+    const tracks = context.entries.some((entry) => entry.kind === 'track')
+    const sets = context.entries.some((entry) => entry.kind === 'gtf' || entry.kind === 'segments')
+    if (tracks && sets) return READY
+    if (!tracks && !sets) {
+      return waitingFor('Load a bigWig to average, and a BED or GTF of positions to average it at.')
+    }
+    return waitingFor(
+      tracks
+        ? 'Load a BED or a GTF — the positions to average the track at.'
+        : 'Load a bigWig — the track to average.',
+    )
+  },
   params: PARAMS,
   outputs: ['curve', 'matrix'],
   estimate,

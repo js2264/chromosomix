@@ -1837,6 +1837,16 @@ export class Session {
     const names = assembly.contigs.map((contig) => contig.name)
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
     const loader = new AnnotationLoader(store, client, names)
+    // A new store means the workspace that was watching the old one is stale.
+    // `SyntheticCard` subscribes to the store it was *built* with, while
+    // `adopt` writes through `host.store()` to whichever is current — so a
+    // workspace that outlived its store would go on filing results into a list
+    // nobody is looking at, which is exactly how the card came to be empty
+    // after a task had plainly run. Destroyed here rather than reconciled: a
+    // workspace is per-file, and so is a store.
+    this.analysis?.destroy()
+    this.analysis = null
+    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -2366,6 +2376,7 @@ export class Session {
       this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
         this.compareCard.el,
+        this.syntheticSlot,
         new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
@@ -2453,6 +2464,16 @@ export class Session {
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const loader = new AnnotationLoader(store, client, names)
+    // A new store means the workspace that was watching the old one is stale.
+    // `SyntheticCard` subscribes to the store it was *built* with, while
+    // `adopt` writes through `host.store()` to whichever is current — so a
+    // workspace that outlived its store would go on filing results into a list
+    // nobody is looking at, which is exactly how the card came to be empty
+    // after a task had plainly run. Destroyed here rather than reconciled: a
+    // workspace is per-file, and so is a store.
+    this.analysis?.destroy()
+    this.analysis = null
+    this.syntheticCard = null
     this.annotations = {
       store,
       manual,
@@ -4263,7 +4284,10 @@ export class Session {
    * chromosome — so it is built once per file and only *refreshed* here.
    */
   private syncAnalysis(): void {
-    if (this.file === null) {
+    // Keyed on the *context* rather than on a file, because a 1D browser session
+    // has no file and still has three tasks it can run (§5.8). What decides the
+    // column is whether there is anything at all to analyse.
+    if (this.analysisContext() === null) {
       this.analysis?.destroy()
       this.analysis = null
       this.setAnalysis([])
@@ -4300,7 +4324,7 @@ export class Session {
       const { AnalysisWorkspace } = await import('../analysis/workspace')
       // Everything below is re-checked because an await is a gap: the tab may
       // have been closed, or the file replaced, while the chunk was in flight.
-      if (this.destroyed || this.file === null || this.analysis !== null) return
+      if (this.destroyed || this.analysisContext() === null || this.analysis !== null) return
       this.analysis = new AnalysisWorkspace(this.analysisHost_())
       this.paintAnalysis(this.analysis)
     } catch {
@@ -4365,13 +4389,50 @@ export class Session {
    */
   private analysisContext(): AnalysisContext | null {
     const file = this.file
-    if (file === null) return null
-    // Every coordinate an analysis produces is arithmetic on a fixed bin grid
-    // (§3.3), so a file without one has nothing any task can be computed over.
-    // No context, therefore no rows, therefore no column — which is §8.5's
-    // doctrine rather than a special case: absent beats disabled. In practice a
-    // variable-bin file is refused at open long before this, and this is the
-    // type being honest about a case the reader has already excluded.
+    // **A session with no contact map still has a panel.** Three tasks run
+    // entirely on loaded tracks — metaplot, track correlation, interval overlap
+    // — and a 1D browser session (§5.8) is exactly where a reader has the tracks
+    // and not the matrix. Returning `null` here took the whole column away from
+    // them, which taught a reader who came in through a bigWig that this app
+    // does not compare two of them.
+    //
+    // The map tasks are not hidden either: they are `waiting`, with a line
+    // saying to open a contact map. `hasMap` is what tells them apart, and the
+    // zeros below never reach a runner because a waiting task cannot be run.
+    if (file === null) {
+      const assembly = this.assembly
+      if (assembly === null) return null
+      return buildAnalysisContext({
+        uri: assembly.uri,
+        layout: 'cool',
+        binsize: 0,
+        nBins: 0,
+        hasGenomes: false,
+        hasWeights: false,
+        scoreColumns: [],
+        // The assembly's own sequences, in its own shape, so a region control
+        // in a browser session lists what is actually open.
+        contigs: {
+          length: assembly.contigs.length,
+          columns: ['name', 'length'],
+          data: {
+            name: assembly.contigs.map((contig) => contig.name),
+            length: Float64Array.from(assembly.contigs.map((contig) => contig.length)),
+          },
+        },
+        genomes: null,
+        displayGenomes: null,
+        entries: this.annotations?.store.entries ?? [],
+        framing: null,
+        blockLoaded: false,
+        blockBytes: 0,
+      })
+    }
+    // Every coordinate a *map* analysis produces is arithmetic on a fixed bin
+    // grid (§3.3), so a file without one has nothing those tasks can be computed
+    // over. A variable-bin file is refused at open long before this, and this is
+    // the type being honest about a case the reader has already excluded — the
+    // track tasks still apply, so it is a mapless context rather than none.
     const binsize = file.info.binsize
     if (binsize === null || binsize <= 0) return null
     const panel = this.current?.panel

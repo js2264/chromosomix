@@ -6099,6 +6099,39 @@ p {
   display: contents;
 }
 
+/* A row that cannot run yet.
+
+   Dimmed rather than hidden, which is a reversal of what §18.1 first said and is
+   argued at `TaskAvailability`: a task one drag-and-drop away is a menu item, and
+   removing it teaches a reader that the feature does not exist. Not `opacity`
+   alone — the text under it has to stay readable, since the whole point of the
+   row is the sentence saying what to load. */
+.analysis-row.is-waiting {
+  cursor: default;
+  border-style: dashed;
+}
+
+.analysis-row.is-waiting .analysis-row-title,
+.analysis-row.is-waiting .analysis-row-blurb {
+  color: var(--text-dim);
+}
+
+.analysis-row.is-waiting:hover {
+  background: transparent;
+  border-color: var(--border);
+}
+
+/* What it is waiting for. In the accent rather than in the dim grey the blurb
+   above it takes, because it is the one line on the row that is an instruction
+   rather than a description. */
+.analysis-row-needs {
+  display: block;
+  grid-column: 1 / -1;
+  margin-top: 0.15rem;
+  font-size: var(--step--2);
+  color: var(--accent);
+}
+
 /* A per-bin result is a lane and is drawn on the map, not here (§18.5). This is
    the line that says where it went, so the drawer does not look as though it
    produced nothing. */

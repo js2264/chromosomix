@@ -263,7 +263,18 @@ export class AnalysisRunner {
    */
   run(task: AnalysisTask, params: Params): void {
     if (this.destroyed) return
-    const framing = this.host.context()?.framing ?? null
+    const context = this.host.context()
+    if (context === null) {
+      this.setState(task.id, { status: 'failed', message: 'nothing is open' })
+      return
+    }
+    // A task in the other venue reads the loaded tracks and never touches the
+    // matrix, so it runs in a session that has no matrix at all — a 1D browser
+    // (§5.8), where the reader has the bigWigs and not the map. It still needs a
+    // framing, because a result is a record and a record names what it was of
+    // (§18.4); what it names there is the assembly rather than a block.
+    const framing =
+      context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
     if (framing === null) {
       this.setState(task.id, {
         status: 'failed',
@@ -356,7 +367,13 @@ export class AnalysisRunner {
     try {
       const chain = this.plan(job.task, job.params)
       const client = this.ensureClient()
-      await this.mount(job, client, startedAt)
+      // Mounted only for a chain that reads the matrix. A track-only chain has
+      // no file for the analysis worker to open — and opening one anyway would
+      // be a wasm instance and a range cache for a job that will not ask them a
+      // question.
+      if (chain.some((step) => step.task.venue !== 'annotations')) {
+        await this.mount(job, client, startedAt)
+      }
 
       const upstream: Record<string, TaskResult> = {}
       for (let at = 0; at < chain.length; at++) {
@@ -750,4 +767,28 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
     block.colExtent[1] === framing.cols[1] &&
     block.binsPerCell === framing.binsPerCell
   )
+}
+
+/**
+ * The framing a track-only run is a record of.
+ *
+ * There is no block, so the extents are empty and the bin size is zero — and
+ * that is the honest reading rather than a placeholder: the numbers came from
+ * the tracks, over the assembly named here, and no region of any matrix was
+ * involved. A task in this venue never reads any of these fields; what reads
+ * them is the provenance line above an export, which should say so.
+ */
+function tracksFraming(context: AnalysisContext): AnalysisFraming {
+  return {
+    uri: context.uri,
+    rows: [0, 0],
+    cols: [0, 0],
+    binsize: context.binsize,
+    binsPerCell: 1,
+    balance: false,
+    value: 'count',
+    normalise: null,
+    level: 'bin',
+    label: `${context.uri} · loaded tracks, no contact map`,
+  }
 }

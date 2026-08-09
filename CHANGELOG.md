@@ -423,6 +423,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   wandered to since. Progress and cancel are on every scan, the same way §7.3's
   overview has always had them.
 
+- **The panel shows the whole catalogue, and says what each task is waiting
+  for.** A task used to vanish when its input was not loaded — APA with no loop
+  set, the metaplot with no bigWig — on the argument that a disabled row is a
+  promise the file cannot keep. That argument is right about a metagenome task on
+  a plain cooler, where nothing the reader does next produces a `/genomes` table.
+  It is wrong about a task that is one drag-and-drop away: hiding APA does not
+  spare anybody a broken promise, it teaches them the application does not do
+  aggregate peak analysis.
+
+  So there are three answers now instead of two. **Absent** where nothing the
+  reader can do would help. **Waiting** — listed, dimmed, with a line saying what
+  to load — where something would. **Ready**. A greyed row carrying an
+  instruction is not an unkept promise; it is the menu.
+
+- **The Analysis panel exists without a contact map.** Metaplot, track
+  correlation and interval overlap read only the loaded tracks, and a 1D browser
+  session is exactly where a reader has the tracks and not the matrix — so the
+  column was being taken away from the people who could use three of its tasks.
+  There the map tasks are greyed on *open a contact map*, the track tasks run,
+  the analysis worker is never mounted because nothing asks it for a pixel, and a
+  result's provenance names the assembly rather than a block.
+
 - **A 4C anchor is picked on the map.** The gesture was already there — shift-drag
   along either axis of a map names a stretch of sequence, and the 4C lane has drawn
   from it since 0.9 — but the analysis task asked for the same locus again, in a

@@ -5,7 +5,7 @@
  * both of those are the same fact: P(s) is the one analysis that applies to
  * every contact map there is. A cooler has a diagonal, a metacool has a
  * diagonal, a file with no genomes and no tracks and no annotations loaded still
- * has a diagonal — so {@link EXPECTED_TASK.appliesTo} is the only predicate in
+ * has a diagonal — so {@link EXPECTED_TASK.availability} is the only predicate in
  * the registry that is very nearly `true`, and the panel is never empty. It also
  * has a second job that decides how carefully the rest of this has to be
  * written: three later tasks consume the **expected** curve it produces, so a
@@ -28,6 +28,7 @@ import type {
   ParamSpec,
   Params,
 } from '../types'
+import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 // ---------------------------------------------------------------------------
 // Reading the form
@@ -310,7 +311,7 @@ export const EXPECTED_TASK: AnalysisTask = {
   // everything — a cooler, a metacool, a file with nothing else loaded beside
   // it. The guard is against a mount with no bins at all, which is a file the
   // panel should be empty for.
-  appliesTo: (context) => context.nBins > 0,
+  availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['curve'],
   estimate,

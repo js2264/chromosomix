@@ -18,6 +18,7 @@
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
@@ -340,11 +341,19 @@ export const APA_TASK: AnalysisTask = {
   // accumulates from the squares it is already reading. A composite that
   // recomputed a genome-wide curve to divide fifty offsets by would be paying a
   // scan for arithmetic it already had in hand.
-  appliesTo: (context) =>
-    context.nBins > 0 &&
-    context.entries.some(
+  // Two things, and the row says which is missing. It used to vanish when there
+  // was no loop set, which taught a reader who had not met this app before that
+  // it does not do aggregate peak analysis — rather than that they have not
+  // loaded the loops yet.
+  availability: (context) => {
+    if (!context.hasMap) return waitingFor(NEEDS_MAP)
+    const anchors = context.entries.some(
       (entry) => entry.kind === 'pairs' || entry.kind === 'gtf' || entry.kind === 'segments',
-    ),
+    )
+    return anchors
+      ? READY
+      : waitingFor('Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile up on it.')
+  },
   params: PARAMS,
   outputs: ['matrix', 'table'],
   estimate,

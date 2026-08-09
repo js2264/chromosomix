@@ -15,6 +15,7 @@
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
   { kind: 'track', key: 'tracks', label: 'Tracks', multiple: true },
@@ -81,7 +82,16 @@ export const TRACK_CORRELATION_TASK: AnalysisTask = {
   group: 'tracks',
   venue: 'annotations',
   version: 1,
-  appliesTo: (context) => context.entries.filter((entry) => entry.kind === 'track').length >= 2,
+  // No map required, for the reason `overlap.ts` gives.
+  availability: (context) => {
+    const tracks = context.entries.filter((entry) => entry.kind === 'track').length
+    if (tracks >= 2) return READY
+    return waitingFor(
+      tracks === 0
+        ? 'Load two or more bigWigs to correlate.'
+        : 'Load a second bigWig; a correlation needs two.',
+    )
+  },
   params: PARAMS,
   outputs: ['matrix', 'table'],
   estimate,

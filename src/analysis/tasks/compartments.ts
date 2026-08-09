@@ -32,6 +32,7 @@ import type {
   ParamSpec,
   Params,
 } from '../types'
+import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 /**
  * The largest correlation matrix this will build.
@@ -210,7 +211,15 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   // technical one: a bacterial MAG has domains and no compartments, and a row
   // offering an eigenvector of a thing that has none is an invitation to
   // over-read a picture. See the module docstring.
-  appliesTo: (context) => context.nBins > 0 && context.layout !== 'metacool',
+  // Absent on a metacool and *waiting* with no map: the first is a decision
+  // about what a compartment means on a metagenome (§18.9) and no file the
+  // reader opens next changes it; the second is one drag away from ready.
+  availability: (context) =>
+    context.layout === 'metacool'
+      ? { state: 'absent' }
+      : context.hasMap
+        ? READY
+        : waitingFor(NEEDS_MAP),
   params: PARAMS,
   outputs: ['profile', 'matrix'],
   estimate,

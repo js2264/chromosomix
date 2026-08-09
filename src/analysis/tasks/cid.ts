@@ -25,6 +25,7 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { windowLadder } from './insulation'
+import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -135,7 +136,7 @@ export const CID_TASK: AnalysisTask = {
   venue: 'analysis',
   version: 1,
   requires: ['insulation'],
-  appliesTo: (context) => context.nBins > 0,
+  availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['intervals', 'matrix', 'table'],
   estimate,

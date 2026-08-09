@@ -18,6 +18,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { AnalysisRunner, sameRecipe, type RunnerHost } from '@/analysis/runner'
+import { READY } from '@/analysis/types'
 import type {
   AnalysisContext,
   AnalysisFraming,
@@ -164,7 +165,7 @@ function task(id: string, over: Partial<AnalysisTask> = {}): AnalysisTask {
     group: 'map',
     venue: 'analysis',
     version: 3,
-    appliesTo: () => true,
+    availability: () => READY,
     params: [],
     outputs: [],
     estimate: () => ({ class: 'free', requests: null, bytes: null, note: 'free' }),
@@ -182,6 +183,7 @@ function context(framing: AnalysisFraming | null): AnalysisContext {
     binsize: 1000,
     nBins: 100,
     contigs: [],
+    hasMap: true,
     genomes: null,
     entries: [],
     framing,

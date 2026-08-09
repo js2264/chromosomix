@@ -69,9 +69,20 @@ export function taskById(id: string): AnalysisTask | undefined {
   return TASKS.find((task) => task.id === id);
 }
 
-/** The tasks this file has something for, in registry order. */
+/**
+ * The tasks worth listing, in registry order.
+ *
+ * Everything that is not `absent` — which includes the ones that cannot run yet.
+ * A row that says *load a loop set* is the menu; a row that is missing teaches a
+ * reader the feature does not exist. See {@link TaskAvailability}.
+ */
 export function tasksFor(context: AnalysisContext): AnalysisTask[] {
-  return TASKS.filter((task) => task.appliesTo(context));
+  return TASKS.filter((task) => task.availability(context).state !== 'absent');
+}
+
+/** The tasks that could be run right now — what the panel counts as usable. */
+export function runnableTasks(context: AnalysisContext): AnalysisTask[] {
+  return TASKS.filter((task) => task.availability(context).state === 'ready');
 }
 
 /**
