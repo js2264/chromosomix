@@ -1546,8 +1546,25 @@ as anybody looks closely is not a presentation, it is a starting position.
 So **how far from the diagonal the band reaches follows the zoom** rather than being the number the
 reader sets. The box is so many pixels tall, a cell is so many pixels, and the deepest contact on
 screen is the quotient — which is also the honest reading: zoom in and you are looking at a shorter
-stretch of genome, so the distances that fit above it are shorter too. The band is re-cut whenever
-that quotient changes, which is a rotation over a block already in memory and costs no read.
+stretch of genome, so the distances that fit above it are shorter too.
+
+**A band deeper than the box is the same picture**, and that is what the re-cut costs almost nothing.
+The band stands on the box's floor at every zoom, so rows past the top edge are clipped by the rule
+that already clips the columns past either end: the rows on screen are the same rows either way. So
+the band is re-cut only when it is too *shallow* — which is to say only on the way out. Zooming in
+asks for less distance at every notch and is answered by the picture already drawn, where re-cutting
+per notch is a rotation and a fresh pooling of the whole band per wheel event.
+
+And when it is too shallow it is cut **deeper than asked**, twice over, bounded by the block. Zooming
+out is a gesture rather than a step; buying twice the distance the box wants right now is one
+rotation instead of the several the rest of the gesture would have asked for.
+
+The **colour scale is not re-measured** by a re-cut, and this is the other half of the same
+sentence. The range is the square block's (§17.6) and measuring it is a pooling and a percentile
+selection over that whole block — the most expensive thing the renderer does. The block a band is cut
+from does not change when the cut does, so the measurement survives the reshape. Dropping it on every
+re-cut, which is what a general-purpose "the matrix changed" invalidation does, spent four fifths of
+every zoom on a turned map proving the colours were the colours they already were.
 
 The box opens at **a third of its own width**, which is the shape of the figures this is a viewer
 for. A whole triangle is exactly twice as wide as it is tall — that is what the half-bin lattice

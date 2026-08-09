@@ -399,6 +399,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Zooming a turned map is a zoom again, not a stall.** On a whole chromosome
+  at a fine resolution every wheel notch blocked the main thread for about a
+  second: twelve notches drew 48 frames, twelve of them over 50 ms and the worst
+  over 1.3 s. Three things, in order of what they cost. The **colour scale** was
+  re-measured on every re-cut — a pooling and a percentile selection over the
+  whole square block, four fifths of the total, spent proving the colours were
+  the colours they already were; the block a band is cut from does not change
+  when the cut does, so the measurement now survives the reshape. The band is
+  re-cut **only when it is too shallow**, since a band deeper than the box is the
+  same picture — it stands on the box's floor either way and the extra rows are
+  clipped off the top — so zooming *in* costs nothing at all; and when it is too
+  shallow it is cut twice as deep as asked, so a zoom out is one rotation rather
+  than one per notch. And the rotation itself no longer blanks the whole band
+  before filling it: only the two corner triangles are empty, so the pass that
+  emptied them is over those instead of over the largest array a turned map
+  allocates. The same twelve notches now draw 229 frames, none of them over
+  50 ms, and zooming back out is the same.
+
 - **A turned band keeps its size across a navigation.** The box was a field on
   the panel, and the panel is rebuilt on every navigation — so a change of
   resolution, a click on another chromosome or a zoom into a region put the band

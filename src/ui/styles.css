@@ -2395,7 +2395,7 @@ p {
 .lane-canvas.is-guided,
 .browser-canvas.is-guided {
   cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 19 19'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%23fff' stroke-width='3.25' opacity='.85'/%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%231f5fa9' stroke-width='1.5'/%3E%3C/g%3E%3C/svg%3E")
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 19 19'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%23fff' stroke-width='2.5' opacity='.85'/%3E%3Cpath d='M9.5 1.5V6M9.5 13V17.5M1.5 9.5H6M13 9.5H17.5' stroke='%231f5fa9' stroke-width='1.1'/%3E%3C/g%3E%3C/svg%3E")
       9 9,
     crosshair;
 }

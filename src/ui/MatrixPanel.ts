@@ -4030,14 +4030,32 @@ export class MatrixPanel {
     const data = this.data
     if (turned === null || square === null || data === null) return
     const wanted = this.turnDepth(data)
-    if (wanted === turned.maxSeparation) return
+    // Only when the band is too **shallow** for the box. A band deeper than the
+    // box needs is not a different picture: it stands on the box's floor either
+    // way, and the rows past the top edge are clipped by the same rule that
+    // clips the columns past either end. So zooming *in* — which asks for less
+    // distance, over and over, at whatever rate the wheel reports — costs
+    // nothing at all, where it used to re-cut and re-pool the whole band on
+    // every notch.
+    if (wanted <= turned.maxSeparation) return
+    // And when it is too shallow, cut deeper than asked. A re-cut is a rotation
+    // and a fresh pooling; zooming out is a *gesture* rather than a step, so
+    // buying twice the distance the box wants right now is one of those instead
+    // of the several the rest of the gesture would have asked for. Bounded by
+    // the block, which is `turnDepthFor`'s clamp and the reason this cannot run
+    // away: past the whole triangle there is nothing left to cut.
+    const cut = turnDepthFor(data, wanted * 2)
     const next = rotateBlock(
       { ...data, values: square.values },
       {
-        maxSeparation: wanted,
+        maxSeparation: cut,
         ...(turned.direction === 'up' ? {} : { direction: turned.direction }),
       },
     )
+    // Nothing to gain from a band the block could not fill: `rotateBlock` clamps
+    // to what it has cells for, so asking for more than the last cut when the
+    // last cut was already the whole triangle produces the same array again.
+    if (next.maxSeparation === turned.maxSeparation) return
     this.turned = next
     this.heatmap.reshape(turnedDense(next))
     // The depth is half of where the guides go, so it moves with the band.
