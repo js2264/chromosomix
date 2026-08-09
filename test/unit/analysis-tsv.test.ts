@@ -31,6 +31,7 @@ const PROVENANCE: Provenance = {
     binsPerCell: 1,
     balance: true,
     value: 'count',
+    normalise: null,
     level: 'bin',
     label: 'chrIV:1–1,531,933 at 1 kb, balanced, count',
   },

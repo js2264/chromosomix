@@ -506,7 +506,22 @@ export class AnalysisRunner {
     // read one field off it would drag the panel's half of the subtree into that
     // bundle. A result that reaches a reader still carrying `0` means this step
     // was skipped.
-    return { ...raw, provenance: { ...raw.provenance, taskVersion: step.task.version } }
+    // A normalisation the *view* computes is one no task can reproduce: VC, VC √
+    // and ICE are `render/derive.ts`'s arithmetic over a block already read, and
+    // nothing in the file carries them. Said here rather than in each of the
+    // fifteen runners, because none of them has any business knowing what a
+    // score picker is — and said at all because a pileup captioned `ICE` that is
+    // really counts is the kind of wrong that ends up in a figure.
+    const notes =
+      job.framing.normalise === null
+        ? raw.notes
+        : [
+            ...raw.notes,
+            `The map is drawn with ${job.framing.normalise.toUpperCase()} normalisation, which is ` +
+              'computed from the block after it is read and cannot be asked of the file. These ' +
+              'numbers are the underlying counts.',
+          ]
+    return { ...raw, notes, provenance: { ...raw.provenance, taskVersion: step.task.version } }
   }
 
   private ensureClient(): AnalysisClient {

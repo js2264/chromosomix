@@ -6075,6 +6075,14 @@ p {
   max-height: 26rem;
 }
 
+/* A locus box with the file's sequences behind it. The `<datalist>` is not
+   rendered, so the wrapper exists only to keep the two together as one child of
+   the label grid — a bare sibling would take a second grid cell and push the
+   box out of line with every other control in the form. */
+.param-locus {
+  display: contents;
+}
+
 /* A per-bin result is a lane and is drawn on the map, not here (§18.5). This is
    the line that says where it went, so the drawer does not look as though it
    produced nothing. */

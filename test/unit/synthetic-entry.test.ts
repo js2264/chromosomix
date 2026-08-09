@@ -122,7 +122,10 @@ describe('what a synthetic row is', () => {
     expect(entry.status).toBe('ready')
     expect(entry.visible).toBe(true)
     expect(entry.style.colour).toBe('#0072b2')
-    expect(entry.placement).toEqual({ top: false, right: false, bottom: true, left: false })
+    // The **left** edge, which is the one a dropped file never takes — so a
+    // computed track arrives beside the reader's own stack rather than in the
+    // middle of it. See `SYNTHETIC_EDGE`.
+    expect(entry.placement).toEqual({ top: false, right: false, bottom: false, left: true })
   })
 
   // `NaN` is *no value here* and is skipped rather than propagated: one filtered
@@ -162,7 +165,7 @@ describe('what survives a reload (§8.6, §18.5)', () => {
     // track's row keeps it.
     expect(rows[0].style.colour).toBe('#abcdef')
     expect(rows[0].style.group).toBe('insulation')
-    expect(rows[0].placement.bottom).toBe(true)
+    expect(rows[0].placement.left).toBe(true)
   })
 
   // The values are not among what comes back, and nothing in the stored shape

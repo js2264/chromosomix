@@ -125,7 +125,7 @@ import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import type { MapId } from '../annotations/placement'
-import type { ScoreChoice } from './scores'
+import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
 import {
   getViewpointAnchor,
   isViewpointShown,
@@ -2586,20 +2586,33 @@ export class MatrixPanel {
     const data = this.data
     if (data === null) return null
     const binsPerCell = data.binsPerCell ?? 1
-    const value = this.options.scores?.current ?? 'count'
+
+    // The score picker's `current` is an **id**, and an id is not a column.
+    // `balanced` is counts times two weights and `ICE` is computed here from
+    // counts; neither names anything in `/pixels`, so handing one to the reader
+    // asks for a dataset that does not exist. Unflattened through the picker's
+    // own list — the same three fields `Session.setScore` splits it into — so
+    // there is one definition of what a choice means rather than two.
+    const scores = this.options.scores
+    const choice = scores?.choices.find((entry) => entry.id === scores.current)
+    const value = choice?.value ?? DEFAULT_COUNT_COLUMN
+    const balance = choice?.balance ?? this.options.balance === true
+    const normalise = choice?.normalise ?? null
+
     const parts = [this.framedSubject()]
     if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize * binsPerCell)} bins`)
     if (this.level === 'contig') parts.push('contig level')
-    if (this.options.balance === true) parts.push('balanced')
-    parts.push(value)
+    if (balance) parts.push('balanced')
+    parts.push(choice?.label ?? value)
     return {
       uri,
       rows: [data.rowExtent[0], data.rowExtent[1]],
       cols: [data.colExtent[0], data.colExtent[1]],
       binsize: this.options.binsize,
       binsPerCell,
-      balance: this.options.balance === true,
+      balance,
       value,
+      normalise,
       level: data.level,
       label: parts.join(' · '),
     }

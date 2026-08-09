@@ -151,6 +151,7 @@ const FRAMING: AnalysisFraming = {
   binsPerCell: 1,
   balance: true,
   value: 'count',
+  normalise: null,
   level: 'bin',
   label: 'chrI · 1 kb bins · balanced · count',
 }

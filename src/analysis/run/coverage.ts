@@ -30,7 +30,10 @@ const TRACKS = {
 
 export const runCoverage: TaskRunner = async (job) => {
   const wanted = wantedTracks(job.params)
-  if (wanted.length === 0) return []
+  if (wanted.length === 0) {
+    job.note('Every output was turned off, so there is nothing to compute.')
+    return []
+  }
 
   const balance = boolParam(job.params, 'balance', false)
   const mc = job.mc

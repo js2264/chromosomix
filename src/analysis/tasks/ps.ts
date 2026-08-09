@@ -87,34 +87,50 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'Scope',
     default: 'contig',
     /**
-     * Three options, always all three, on every file.
+     * Three on a metagenome, two on a cooler, and the words differ.
      *
-     * This is the one place the descriptor model has a genuine tension in it,
-     * and it is worth naming rather than hiding: a `ParamSpec` is static data on
-     * a module-level constant shared by every open file and every tab, while
-     * "does this file have genomes" is a property of the file. Filtering the
-     * options per file would mean building the descriptor per file, which is
-     * exactly the thing §18.2's *a task is a descriptor, never a screen* refuses
-     * — and it would silently rewrite a stored session's `scope: 'genome'` into
-     * something else the moment it was opened against a plain cooler, which is
-     * worse than saying no.
+     * This used to offer all three on every file, on the argument that a
+     * `ParamSpec` is static data shared by every open file while "does this file
+     * have genomes" is a property of the file — so filtering per file would mean
+     * building the descriptor per file, which §18.2's *a task is a descriptor,
+     * never a screen* refuses.
      *
-     * So the option is always offered and {@link estimate} refuses it, naming
-     * the reason. That is §8.5's *absent, not disabled* doctrine applied at the
-     * level it can be applied at here: the *task* is absent where it means
-     * nothing, and a single meaningless *option* inside a task that otherwise
-     * applies is answered by a refusal that says which file it is looking at.
+     * The premise was right and the conclusion was not. The descriptor stays
+     * static; what it gained is a *rule* — `needsGenomes` — that the form reads.
+     * A cooler is offered "Chromosome" and "Whole genome" and nothing else,
+     * which is the honest list: it has no MAGs, and a reader shown "Genome"
+     * beside "Whole file" on a yeast cooler reasonably reads the first as the
+     * second. The case the old argument was really about — a stored session
+     * naming `genome` and reopened against a cooler — is still handled by
+     * {@link estimate} refusing it, and the form keeps showing it so the reader
+     * can see what the stored run was.
      */
     options: [
-      { value: 'contig', label: 'Contig', hint: 'One curve per sequence.' },
-      { value: 'genome', label: 'Genome', hint: 'One curve per MAG, over its own contigs.' },
-      { value: 'file', label: 'Whole file', hint: 'Every sequence pooled into one curve.' },
+      {
+        value: 'contig',
+        label: 'Contig',
+        coolLabel: 'Chromosome',
+        hint: 'One curve per sequence.',
+      },
+      {
+        value: 'genome',
+        label: 'Genome',
+        needsGenomes: true,
+        hint: 'One curve per MAG, over its own contigs.',
+      },
+      {
+        value: 'file',
+        label: 'Whole file',
+        coolLabel: 'Whole genome',
+        hint: 'Every sequence pooled into one curve.',
+      },
     ],
   },
   {
     kind: 'region',
     key: 'region',
     label: 'Sequence',
+    sequences: true,
     hint: 'Leave empty for every sequence in the file.',
     // Meaningless under the other two scopes, where the sequences are decided by
     // the genome table or by the file itself.

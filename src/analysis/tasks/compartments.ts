@@ -57,6 +57,8 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'region',
     key: 'region',
     label: 'Sequence',
+    sequences: true,
+    required: true,
     hint: 'One sequence at a time. Compartments are a property of a chromosome.',
   },
   {

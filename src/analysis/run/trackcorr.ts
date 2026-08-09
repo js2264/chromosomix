@@ -17,7 +17,14 @@ import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
 
 export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   const entries = listParam(job.params, 'tracks')
-  if (entries.length < 2) return []
+  if (entries.length < 2) {
+    job.note(
+      entries.length === 0
+        ? 'No tracks were chosen. Load two or more bigWigs and tick them under Tracks.'
+        : 'Only one track was chosen, and a correlation needs two.',
+    )
+    return []
+  }
 
   const regions = await unitsOf(job)
   if (regions.length === 0) {
@@ -89,7 +96,10 @@ async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
   if (strParam(job.params, 'over', 'bins') === 'features') {
     const setId = idParam(job.params, 'features')
     const set = setId === null ? undefined : job.inputs.features?.[setId]
-    if (set === undefined) return []
+    if (set === undefined) {
+      job.note('Correlating over features needs a feature set, and none was chosen.')
+      return []
+    }
     const out: Region[] = []
     for (let i = 0; i < set.length; i++) {
       out.push({ contig: set.contigs[set.contig[i]], start: set.start[i], end: set.end[i] })

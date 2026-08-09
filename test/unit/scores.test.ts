@@ -90,3 +90,60 @@ describe('what the cells can be', () => {
     expect(scoreFor(plain, { balance: true }).id).toBe(COUNT_SCORE)
   })
 })
+
+/**
+ * An id is not a column, and a task that confuses the two reads nothing.
+ *
+ * `MatrixPanel.analysisFraming` used to hand the picker's `current` — an **id**
+ * — to `AnalysisFraming.value`, which every analysis runner passes to
+ * `mc.matrix({ value })` as a `/pixels` column name. On the commonest file there
+ * is, a cooler somebody ran `cooler balance` over, that asked HDF5 for
+ * `/resolutions/100/pixels/balanced` and every task on the map failed with *does
+ * not exist*. `ICE`, `VC` and `VC √` did the same.
+ *
+ * The three fields below are what a choice actually means, and the invariant is
+ * that only one of them is ever a column: two of the six entries name one, and
+ * the other four are a transform, three computations and counts.
+ */
+describe('a choice unflattened, which is what an analysis needs', () => {
+  const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count', 'expected'] })
+
+  it('never lets a non-column id pass as a column', () => {
+    for (const choice of choices) {
+      if (choice.value === undefined) continue
+      // Anything that names a column names one the file said it has.
+      expect(['count', 'expected']).toContain(choice.value)
+    }
+    // The two that read like columns and are not.
+    expect(choices.find((c) => c.id === BALANCED_SCORE)?.value).toBeUndefined()
+    expect(choices.find((c) => c.id === 'ice')?.value).toBeUndefined()
+  })
+
+  it('puts balancing in `balance` and nowhere else', () => {
+    const balanced = choices.find((c) => c.id === BALANCED_SCORE)
+    expect(balanced?.balance).toBe(true)
+    expect(balanced?.normalise).toBeUndefined()
+    // …and every other entry leaves it off, so `balance` is never two things.
+    for (const choice of choices) {
+      if (choice.id === BALANCED_SCORE) continue
+      expect(choice.balance).toBe(false)
+    }
+  })
+
+  it('marks the computed ones, which no read can ask the file for', () => {
+    // These are `render/derive.ts`'s arithmetic over a block already read. A
+    // task reading the file for itself cannot reproduce them, which is why the
+    // runner notes it rather than captioning counts as ICE.
+    const computed = choices.filter((c) => c.normalise !== undefined).map((c) => c.id)
+    expect(computed).toEqual(['vc', 'vcsqrt', 'ice'])
+    for (const id of computed) {
+      expect(choices.find((c) => c.id === id)?.value).toBeUndefined()
+    }
+  })
+
+  it('resolves counts for a choice nothing recognises', () => {
+    // The path a stored session takes when it names a column this file lost.
+    expect(scoreFor(choices, { score: 'qvalue' }).id).toBe(COUNT_SCORE)
+    expect(scoreFor(choices, { score: 'qvalue' }).value).toBeUndefined()
+  })
+})

@@ -314,12 +314,19 @@ export function syntheticId(outputId: string): string {
 /**
  * The edge a computed track opens on.
  *
- * The bottom, which is where a track is read: every genome browser ever built
- * stacks them horizontally under a ruler, and it is where a dropped bigWig lands
- * too. A computed track is not a different kind of thing from a loaded one and
- * should not arrive somewhere different (§18.5).
+ * The **left**, which is the one edge a dropped file never takes. A bigWig lands
+ * at the bottom, and so does every track a reader has loaded — so a computed
+ * track arriving there is a new row in the middle of a stack somebody has
+ * already arranged, pushing the rest down. On the left it is beside them and
+ * plainly a different provenance, and it is still an ordinary lane: the reader
+ * drags it anywhere, and §18.5's claim that a synthetic track is a track is
+ * about what it *can* do, not about where it starts.
+ *
+ * Left rather than top for the reason `render/lane.ts` gives about reading
+ * direction: a vertical lane grows towards the matrix, so a left-hand lane and
+ * the map's rows share an axis and can be read across.
  */
-export const SYNTHETIC_EDGE: LaneEdge = 'bottom'
+export const SYNTHETIC_EDGE: LaneEdge = 'left'
 
 /**
  * A finished per-bin output, as a row on this card.
