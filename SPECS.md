@@ -301,13 +301,37 @@ map, tracks and all; closing the map from the File card falls back to a browser 
 `/chroms`, with the same tracks still loaded. Neither is a new session: the tab, its id and its
 memory are the same throughout.
 
+**One key walks the three pictures a file with tracks can be**: `v` goes from the map and its tracks,
+to the tracks alone, to the map alone, and home. Two of those swap what is mounted and the third does
+not, which is why it is a cycle written in one place rather than a toggle in each — a reader pressing
+`v` is asking to see the same data with less and then more furniture around it, and where the
+boundary between "another view" and "the same view drawn differently" falls is an implementation
+detail they should never meet. Tracks-only comes first because it answers "get this matrix out of my
+way", which is what a reader with six tracks open wants most often; the map alone follows because
+from there the next thing to ask is the opposite. The button offers the **next** stop rather than
+naming the current one: it is a control, and a reader reads it to find out what pressing it will do.
+
+Nothing is hidden, moved or restyled by any of it. The map alone is the stacks drawing no lanes for as
+long as it lasts, which is the same kind of presentation as the turn (§17.4) and reversible in the
+same way: three presses come home to the arrangement the reader spent ten minutes on.
+
 The gestures are the map's, deliberately (§7.2): a drag pans, Option-drag selects a range to zoom
-into, the wheel zooms about the pointer, a double click fits, a lane's border resizes it and its body
-reorders the stack. Two are the browser's own. ⌘-scroll over a lane moves *that* track's ceiling,
-because it is the adjustment a genome browser is asked for constantly and a map has no analogue for
-it. And a drag on the **ruler** selects a range to zoom into with no modifier at all: the coordinate
-strip is where a reader points to say "this much", and it is the one gesture whose meaning its
-position already settles, so spending a keystroke on it buys nothing.
+into, the wheel zooms about the pointer, a **sideways** wheel slides along the axis, a double click
+fits, a lane's border resizes it and its body reorders the stack. `[` and `]` step to the sequence
+before or after this one, as they do on a map — the plainest thing anybody does with a genome, and it
+was the one view where it had to be typed into the locus box. Two gestures are the browser's own.
+⌘-scroll over a lane moves *that* track's ceiling, because it is the adjustment a genome browser is
+asked for constantly and a map has no analogue for it. And a drag on the **ruler** selects a range to
+zoom into with no modifier at all: the coordinate strip is where a reader points to say "this much",
+and it is the one gesture whose meaning its position already settles, so spending a keystroke on it
+buys nothing.
+
+**The ruler gains digits as it is zoomed**, and it does that by being told the gap between its own
+ticks. Two decimals of a megabase is ten kilobases, so a window narrower than that on a chromosome
+measured in megabases wrote the same number under every tick — an axis of `4.60 Mb`, four times over,
+under a picture zoomed in to answer exactly the question it was there for. The unit is chosen so that
+two decimals can tell one tick from the next, and it steps down when they cannot rather than growing
+a third: `4.6 Mb`, then `4605 kb`, then `4601520 bp`. Nobody reads a fourth decimal off an axis.
 
 **The plot is the whole column, not the stack.** The canvas reaches the foot of the column rather
 than the foot of the last lane, so pointing anywhere under the tracks names a coordinate, draws the
@@ -512,6 +536,15 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to
 the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported.
+
+**The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
+Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
+is and what they already meant over this app's own tracks. It used to be left to the page so that the
+platform's back-and-forward swipe would work over a map as it does over the rest of a document; that
+is the wrong trade over the one element a reader navigates *by* sliding, and the swipe still works
+everywhere outside the picture. Over a lane stack it means the same thing as over the map, because a
+stack is drawn on the map's own axis — the map moving under the pointer while the profile above it
+stayed put would read as the two coming apart.
 
 **Touch is a first-class input**, not a fallback: one finger pans, two pinch, a tap opens what it
 lands on and a double tap refits. Below 34rem the app is one column — the plot as wide as the screen,
@@ -805,6 +838,13 @@ that arrived carrying half an annotation set would be worse than one carrying no
 
 The key is the **session** and the URI, not the URI alone (§5.6). Two tabs on one file are two
 workspaces and must not adopt each other's tracks.
+
+What comes back is **every** decision, and that includes a track being turned *off*. Whether a row is
+drawn is a setting like its colour and its height, and it used to be the one that did not survive:
+the door a row comes back through is the same one a new row arrives by, and a new row is drawn. On an
+`.mcool` that is not a rare event — the same file at another resolution is a fresh open with the
+tracks restored around it (§3.4) — so changing the resolution quietly undid a reader's "not this
+one", by way of a menu about something else entirely.
 
 ### 8.7 bigBed
 

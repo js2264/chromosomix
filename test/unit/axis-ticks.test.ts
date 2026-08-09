@@ -295,3 +295,47 @@ describe('the range a figure is framed at', () => {
     expect(v.framedRange('rows')).toBeNull()
   })
 })
+
+/**
+ * A ruler that runs out of digits.
+ *
+ * Two decimals of a megabase is ten kilobases, so on a chromosome measured in
+ * megabases every tick of a window narrower than that came out as the same
+ * number — a column of `4.60 Mb` under a picture zoomed in to answer the one
+ * question the axis is there for. The gap between two ticks is what says how
+ * many digits each of them needs, and the unit gives way before the precision
+ * does: nobody reads `4.6015 Mb` off an axis.
+ */
+describe('formatBpTick, given the gap between two ticks', () => {
+  it('keeps the megabase where two decimals can still tell ticks apart', () => {
+    expect(formatBpTick(4_600_000, 100_000)).toBe('4.6 Mb')
+    expect(formatBpTick(4_650_000, 50_000)).toBe('4.65 Mb')
+    expect(formatBpTick(5_000_000, 1_000_000)).toBe('5 Mb')
+  })
+
+  it('steps down to the kilobase rather than to a third decimal', () => {
+    expect(formatBpTick(4_605_000, 5_000)).toBe('4605 kb')
+    expect(formatBpTick(4_601_520, 10)).toBe('4601.52 kb')
+  })
+
+  it('steps down to the base pair when even that is not enough', () => {
+    expect(formatBpTick(4_601_523, 1)).toBe('4601523 bp')
+  })
+
+  it('tells one tick from the next, which is the whole of the rule', () => {
+    for (const step of [1, 10, 100, 1_000, 5_000, 100_000]) {
+      const here = formatBpTick(4_600_000, step)
+      const next = formatBpTick(4_600_000 + step, step)
+      expect(here).not.toBe(next)
+    }
+  })
+
+  it('leaves a lone position spelled the way `ops/show.py` spells it', () => {
+    expect(formatBpTick(1_500_000)).toBe('1.5 Mb')
+    expect(formatBpTick(120_000)).toBe('120 kb')
+    // …and a round number keeps its zeros, which a blanket strip would eat: a
+    // 4600 with no decimal point in it is not four thousand six hundred with
+    // trailing zeros to spare.
+    expect(formatBpTick(4_600_000, 1_000)).toBe('4600 kb')
+  })
+})

@@ -14,6 +14,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A sideways scroll slides along the map.** Two fingers across a trackpad mean
+  "along the genome" in every browser there is, and already did over this app's
+  own 1D tracks; over a map they did nothing, because the handler stood aside so
+  the platform's back-and-forward swipe would work there as it does over the rest
+  of a page. That is the wrong trade over the one element a reader navigates *by*
+  sliding — and the swipe still works everywhere outside the picture. Over a lane
+  stack it means the same thing, since a stack is drawn on the map's own axis.
+
+- **`v` cycles three pictures instead of toggling two:** the map and its tracks,
+  the tracks alone, the map alone, and home. Nothing is hidden, moved or
+  restyled on the way round — the map alone is the stacks drawing no lanes for as
+  long as it lasts — so three presses come back to the arrangement you spent ten
+  minutes on. The button offers the *next* stop rather than naming the current
+  one, because it is a control and not a status light.
+
+- **`[` and `]` step between sequences in the 1D browser**, as they already did
+  on a map. It was the one view where the plainest thing anybody does with a
+  genome had to be typed into the locus box.
+
+- **A track's floor shows the resize cursor.** The double arrow every application
+  uses for exactly that gesture, and the one the map's own box handles already
+  showed — the drawn rule stays, since it is what says which lane the border
+  belongs to, and the cursor is what says it can be dragged.
+
+- **The O/E toggle survives a navigation**, as the turn now does. Both are how a
+  reader is *reading* maps rather than facts about the block, and looking
+  somewhere else is not a request to stop reading that way.
+
 - **A map with a diagonal opens turned.** The band along a genomic axis with its
   tracks under it is what a contact map is *for* at this scale, and what every
   published figure of one looks like; the square is the special view — wanted for
@@ -412,6 +440,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it did.
 
 ### Fixed
+
+- **A track turned off stays off when the resolution changes.** Whether a row is
+  drawn is a setting like its colour and its height, and it was the one that did
+  not come back: the door a row returns through is the same one a new row arrives
+  by, and a new row is drawn. On an `.mcool` that is not a rare event — the same
+  file at another resolution is a fresh open with the tracks restored around it —
+  so changing the resolution quietly undid a reader's "not this one", by way of a
+  menu about something else entirely.
+
+- **The 1D browser's ruler gains digits as it is zoomed.** Two decimals of a
+  megabase is ten kilobases, so a window narrower than that on a chromosome
+  measured in megabases wrote the same number under every tick — an axis reading
+  `4.60 Mb` four times over, under a picture zoomed in to answer exactly the
+  question it was there for. The ruler now passes the gap between its own ticks
+  to the formatter, which picks a unit two decimals can tell them apart in and
+  steps down rather than growing a third: `4.6 Mb`, `4605 kb`, `4601520 bp`. The
+  map's own rulers go through the same call and gain the same digits.
 
 - **A derivation over a turned map is drawn at the depth the band has.** Turning
   a map and then switching on O/E painted the near-diagonal half of the band a

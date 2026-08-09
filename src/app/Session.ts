@@ -60,7 +60,7 @@ import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
-import { assemblyOf, lengthsAreExact, type Assembly } from '../genome/assembly'
+import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
@@ -562,6 +562,22 @@ export class Session {
    * over this genome too, and the largest of them.
    */
   private parkedMap: ViewState | null = null
+  /**
+   * `true` while the reader has asked for the map without its tracks.
+   *
+   * The third stop of the map/tracks cycle. A field rather than a key in the
+   * state, and that is the one thing about it worth knowing: it survives every
+   * navigation of this session and is not in a link, because it is furniture
+   * around the picture rather than any part of what the picture is *of*.
+   */
+  private mapOnly = false
+  /**
+   * The map/tracks button as it stands on screen, so it can be swapped in place.
+   *
+   * Held because one of the cycle's three steps rebuilds no view, and a control
+   * that is not rebuilt keeps the face it was given.
+   */
+  private mapSwitch: HTMLElement | null = null
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
@@ -762,6 +778,28 @@ export class Session {
           keys: KEYS.whole,
           run: () => this.store.patch({ locus: undefined }),
         },
+        // The same two keys a map has, walking the same list. They were left out
+        // of this branch, which made the browser the one view where the plainest
+        // thing anybody does with a genome — look at the next chromosome — had to
+        // be typed into the locus box.
+        {
+          id: 'go-prev',
+          group: 'Go',
+          title: 'Previous sequence',
+          hint: this.stepTarget(-1) ?? undefined,
+          keys: KEYS.previous,
+          enabled: this.stepTarget(-1) !== null,
+          run: () => this.step(-1),
+        },
+        {
+          id: 'go-next',
+          group: 'Go',
+          title: 'Next sequence',
+          hint: this.stepTarget(1) ?? undefined,
+          keys: KEYS.next,
+          enabled: this.stepTarget(1) !== null,
+          run: () => this.step(1),
+        },
         {
           id: 'fit-tracks',
           group: 'View',
@@ -831,11 +869,13 @@ export class Session {
         {
           id: 'show-map',
           group: 'View',
-          title: 'Back to the contact map',
-          hint: 'The map was never unloaded — this is the same picture, where it was left.',
+          title: 'The contact map on its own',
+          hint:
+            'The map was never unloaded — this is the same picture, where it was left, with the ' +
+            'tracks put away. The same key brings them back.',
           keys: KEYS.mapToggle,
           enabled: this.canShowMap,
-          run: () => this.showMap(),
+          run: () => this.cycleView(),
         },
         {
           id: 'browser-map',
@@ -879,13 +919,14 @@ export class Session {
       {
         id: 'hide-map',
         group: 'View',
-        title: 'Read this genome as tracks',
-        hint:
-          'Takes the matrix out of the picture and lays its chromosomes end to end. The map ' +
-          'stays open, and the same key brings it back.',
+        title: this.mapOnly ? 'The map and its tracks' : 'Read this genome as tracks',
+        hint: this.mapOnly
+          ? 'Puts the tracks back beside the map. Nothing was hidden while they were away.'
+          : 'Takes the matrix out of the picture and lays its chromosomes end to end. The map ' +
+            'stays open, and the same key comes back to it.',
         keys: KEYS.mapToggle,
         enabled: this.canHideMap,
-        run: () => this.hideMap(),
+        run: () => this.cycleView(),
       },
       {
         id: 'map-export',
@@ -1073,8 +1114,8 @@ export class Session {
     if (cached !== null && cached.state === state) return cached
     const pair = {
       state,
-      previous: this.computeStepTarget(-1),
-      next: this.computeStepTarget(1),
+      previous: this.computeStepTarget(-1) ?? this.browserStepTarget(-1),
+      next: this.computeStepTarget(1) ?? this.browserStepTarget(1),
     }
     this.stepCache = pair
     return pair
@@ -1097,11 +1138,40 @@ export class Session {
     return null
   }
 
+  /**
+   * The same two keys, in the 1D browser.
+   *
+   * Its sequences are the **assembly's**, not a contigs table's — a browser
+   * session has no map and often no cooler at all — but the gesture is the one
+   * the map has: `[` and `]` walk the file's own order, one sequence at a time.
+   * Leaving them unbound there made the browser the one view where the plainest
+   * thing anybody does with a genome had to go through the locus box.
+   *
+   * A browser with no locus is showing the whole assembly, where "the next
+   * sequence" is a step out of a picture that already holds all of them; it
+   * steps to the first (or last) instead of refusing, which is what a reader
+   * pressing a key that means "along" is asking for.
+   */
+  private browserStepTarget(delta: number): string | null {
+    const state = this.store.state
+    const assembly = this.assembly
+    if (state === null || state.view !== 'browser' || assembly === null) return null
+    const names = assembly.contigs.map((contig) => contig.name)
+    if (names.length === 0) return null
+    const here = state.locus === undefined ? null : parseLocus(state.locus, assembly)
+    // `'whole'` is the whole assembly, which is the same "nowhere in particular"
+    // an absent locus is: both step to an end rather than to a neighbour.
+    const current = here === null || here === 'whole' ? null : here.contig
+    if (current === null) return delta < 0 ? names[names.length - 1] : names[0]
+    return neighbour(names, current, delta)
+  }
+
   private step(delta: number): void {
     const state = this.store.state
     const target = this.stepTarget(delta)
     if (state === null || target === null) return
-    if (state.view === 'genome') this.navigate({ uri: state.uri, view: 'genome', genome: target })
+    if (state.view === 'browser') this.navigate({ ...state, locus: target })
+    else if (state.view === 'genome') this.navigate({ uri: state.uri, view: 'genome', genome: target })
     else this.navigate({ ...state, region: target })
   }
 
@@ -1966,6 +2036,10 @@ export class Session {
     const file = this.file
     const state = this.store.state
     if (file === null || state === null || !this.canHideMap) return
+    // A map put down while its tracks were away comes back with them: the point
+    // of the browser is the tracks, so arriving there with none would be the
+    // cycle's second stop showing nothing at all.
+    this.mapOnly = false
     const assembly = this.assemblyOfFile(file)
     if (assembly === null) return
     this.parkedMap = state
@@ -1996,6 +2070,38 @@ export class Session {
     this.navigate(target)
     if (!willNotify) void this.render(target)
     this.host.sessionChanged(this)
+  }
+
+  /**
+   * The one key that walks the three pictures a file with tracks can be.
+   *
+   * **Map and tracks → tracks → map → map and tracks.** Two of those swap what
+   * is mounted and the third does not, which is why this is a cycle written in
+   * one place rather than a toggle in each of them: a reader pressing `v`
+   * repeatedly is asking to see the same data with less and then more furniture
+   * around it, and where the boundary between "another view" and "the same view
+   * drawn differently" falls is an implementation detail they should never meet.
+   *
+   * The order is not arbitrary. Tracks-only comes first because it is the one
+   * that answers "get this matrix out of my way", which is what a reader with
+   * six tracks open wants most often; map-only follows because from there the
+   * next thing to ask is the opposite. Three presses come home.
+   */
+  private cycleView(): void {
+    if (this.canShowMap) {
+      // Coming back from the browser: the map, and only the map.
+      this.mapOnly = true
+      this.showMap()
+      return
+    }
+    if (this.mapOnly) {
+      this.mapOnly = false
+      this.current?.panel?.showLanes(true)
+      this.refreshMapToggle()
+      this.host.sessionChanged(this)
+      return
+    }
+    this.hideMap()
   }
 
   /** Bring the parked map back, exactly where it was left. */
@@ -2033,15 +2139,51 @@ export class Session {
    * the other picture.
    */
   private mapToggleButton(): HTMLElement | undefined {
+    const node = this.buildMapToggle()
+    this.mapSwitch = node ?? null
+    return node
+  }
+
+  /**
+   * Put the button's *current* face on screen, without rebuilding the view.
+   *
+   * Two of the cycle's three steps mount another view and get a fresh button
+   * with it; the third — putting the tracks back beside the map — changes
+   * nothing but this panel's furniture, so nothing would have rebuilt the
+   * control that had just been pressed. It read `map + tracks` while showing
+   * exactly that, which is a button describing the state it is in rather than
+   * the one it offers, and only on one of the three steps.
+   */
+  private refreshMapToggle(): void {
+    const held = this.mapSwitch
+    if (held === null || !held.isConnected) return
+    const next = this.buildMapToggle()
+    if (next === undefined) return
+    held.replaceWith(next)
+    this.mapSwitch = next
+  }
+
+  private buildMapToggle(): HTMLElement | undefined {
+    // What the button offers is the **next** stop of the cycle, not the one on
+    // screen: it is a control rather than a status light, and a reader reads it
+    // to find out what pressing it will do. Three stops, three faces.
     if (this.canShowMap) {
-      return keyedIconButton('grid-2x2', 'contact map', KEYS.mapToggle, () => this.showMap(), {
-        title: withKey('Back to the contact map — it was never unloaded', KEYS.mapToggle),
+      return keyedIconButton('grid-2x2', 'map only', KEYS.mapToggle, () => this.cycleView(), {
+        title: withKey(
+          'Back to the contact map on its own — it was never unloaded, and neither were the tracks',
+          KEYS.mapToggle,
+        ),
       })
     }
     if (!this.canHideMap) return undefined
-    return keyedIconButton('chart-line', 'tracks', KEYS.mapToggle, () => this.hideMap(), {
+    if (this.mapOnly) {
+      return keyedIconButton('layers', 'map + tracks', KEYS.mapToggle, () => this.cycleView(), {
+        title: withKey('Put the tracks back beside the map', KEYS.mapToggle),
+      })
+    }
+    return keyedIconButton('chart-line', 'tracks', KEYS.mapToggle, () => this.cycleView(), {
       title: withKey(
-        'Read this genome as tracks. The map stays open — the same key brings it back',
+        'Read this genome as tracks. The map stays open — the same key comes back to it',
         KEYS.mapToggle,
       ),
     })
@@ -3956,6 +4098,11 @@ export class Session {
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
+    // Whichever stop of the map/tracks cycle we are at, applied to the panel
+    // that has just been built. Here rather than in the four views that own a
+    // panel: they are handed a picture to draw, and which furniture goes round
+    // it is the session's answer — the same reason the toggle itself lives here.
+    view?.panel?.showLanes(!this.mapOnly)
     // "Click the map" is only offered while there is a map. A table view has
     // none, and a button that arms a gesture nothing can complete is worse than
     // one that is plainly unavailable.

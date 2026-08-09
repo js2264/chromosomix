@@ -2202,6 +2202,14 @@ export class BrowserView {
         const onLabel = !onRuler && !onRange && !onGrip && !onEdge && this.nameAt(x, y) !== null
         canvas.classList.toggle('is-grab', onGrip)
         canvas.classList.toggle('is-text', onRange || onLabel)
+        // …and over the floor a lane is resized by, the double arrow every
+        // application uses for exactly that, which is also what the map's own
+        // box handles show. The drawn rule stays: it is what says *which* lane
+        // the border belongs to, and the cursor is what says it can be dragged.
+        canvas.classList.toggle(
+          'is-resize-across',
+          !onRuler && !onRange && !onGrip && !onEdge && this.gripping !== null,
+        )
         // The one place this canvas shows a *system* cursor: the divider is a
         // hairline, and `col-resize` is the shape every application uses to say
         // a vertical rule can be dragged sideways.
@@ -2347,7 +2355,14 @@ export class BrowserView {
       this.hover = null
       this.gripping = null
       this.onColumn = false
-      canvas.classList.remove('is-text', 'is-link', 'is-span', 'is-grab', 'is-col')
+      canvas.classList.remove(
+        'is-text',
+        'is-link',
+        'is-span',
+        'is-grab',
+        'is-col',
+        'is-resize-across',
+      )
       this.tooltip.classList.add('hidden')
       setReadout('')
       this.schedule()

@@ -448,6 +448,26 @@ export class AnnotationLanes {
   }
 
   /**
+   * Draw no stacks at all — the map on its own.
+   *
+   * The third stop of the map/tracks cycle (§16.10), and a *presentation* like
+   * the turn rather than an edit: no track is hidden, moved or restyled, and
+   * every one of them comes back where it was when the cycle comes round. Which
+   * is why it is one flag read by {@link drawnOn} instead of a pass over the
+   * store — a reader who has spent ten minutes arranging six tracks and then
+   * asks to see the map by itself has not asked to lose the arrangement.
+   *
+   * The stacks collapse rather than hide: an edge with no lanes has no
+   * thickness, so the map takes the whole of the room they were using, which is
+   * the point of asking for the map by itself.
+   */
+  setBare(bare: boolean): void {
+    if (this.bare === bare) return
+    this.bare = bare
+    this.layouts.clear()
+  }
+
+  /**
    * `true` while the map is turned 45°, which collapses the four stacks to one.
    *
    * A turned map has one genomic axis, along the bottom, and up its side is
@@ -462,6 +482,9 @@ export class AnnotationLanes {
   private get turned(): boolean {
     return (this.axes.turn ?? null) !== null
   }
+
+  /** `true` while the reader has asked for the map without its tracks. */
+  private bare = false
 
   destroy(): void {
     this.cache?.destroy()
@@ -506,6 +529,8 @@ export class AnnotationLanes {
    */
   private drawnOn(edge: LaneEdge): AnnotationEntry[] {
     const map = this.options.map ?? LEAD_MAP
+    // The map on its own; see {@link setBare}.
+    if (this.bare) return []
     // Turned, every track is in the stack below the rectangle whatever edge it
     // was put on, and the other three stacks are empty. A *presentation* of the
     // placement rather than a rewrite of it: the turn is something the reader

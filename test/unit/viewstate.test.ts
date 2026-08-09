@@ -351,7 +351,7 @@ describe('the turn in the hash', () => {
   it('says nothing at all for the ordinary case', () => {
     const state: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
     expect(serialiseViewState(state)).not.toContain('flip')
-    expect(parseViewState(serialiseViewState(state)).flip).toBeUndefined()
+    expect(parseViewState(serialiseViewState(state))?.flip).toBeUndefined()
   })
 
   it('carries a refusal, which is the whole reason the key exists', () => {
@@ -363,9 +363,9 @@ describe('the turn in the hash', () => {
   it('reads the older spelling of a turn that was asked for', () => {
     // `flip=1` and `flip=true` are what the key meant when it was a setting
     // rather than a refusal; a link written then still means turned now.
-    expect(parseViewState('uri=a.cool&flip=1').flip).toBe(true)
-    expect(parseViewState('uri=a.cool&flip=true').flip).toBe(true)
-    expect(parseViewState('uri=a.cool&flip=0').flip).toBe(false)
+    expect(parseViewState('uri=a.cool&flip=1')?.flip).toBe(true)
+    expect(parseViewState('uri=a.cool&flip=true')?.flip).toBe(true)
+    expect(parseViewState('uri=a.cool&flip=0')?.flip).toBe(false)
   })
 
   it('is a presentation key, so moving it does not re-read the block', () => {

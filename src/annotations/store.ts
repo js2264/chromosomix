@@ -347,6 +347,18 @@ export class AnnotationStore {
     label?: string
     placement?: Partial<Placement>
     style?: AnnotationEntry['style']
+    /**
+     * Whether the row is drawn, for a row that has been here before.
+     *
+     * Absent for a new one, which is shown: a track nobody asked to hide is a
+     * track you have just added. Handed in by the two callers that are bringing
+     * a row *back* — out of storage, or across from the file that was open
+     * before — where it is a decision the reader already made. Left out, a
+     * hidden track came back drawn every time the row was begun again, which on
+     * an `.mcool` is every change of resolution: the same file at another level
+     * is a fresh open, and the tracks are restored around it.
+     */
+    visible?: boolean
   }): AnnotationEntry {
     const placement =
       options.placement === undefined
@@ -363,7 +375,7 @@ export class AnnotationStore {
       label: options.label ?? cleanLabel(options.source.name),
       source: options.source,
       status: 'loading',
-      visible: true,
+      visible: options.visible ?? true,
       // One edge and not four: four copies of one track is four times the ink
       // for no more information. The **bottom** edge, because that is where a
       // track is read: every genome browser ever built stacks them horizontally
