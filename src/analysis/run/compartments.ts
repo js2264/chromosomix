@@ -36,7 +36,12 @@ import { squareFor, usableBlock, type Span } from './blocks'
 
 export const runCompartments: TaskRunner = async (job) => {
   const region = strParam(job.params, 'region', '').trim()
-  if (region === '') return []
+  if (region === '') {
+    // Compartments are a property of one chromosome, so unlike insulation this
+    // task has no whole-file reading to fall back on.
+    job.note('No sequence was chosen. Pick the chromosome to call compartments on.')
+    return []
+  }
   const parsed = parseMetacoolerRange(job.mc, region)
   const cid = job.mc.coords.contigOfBin(parsed.extent[0])
   const [from, to] = job.mc.contigExtent(cid)

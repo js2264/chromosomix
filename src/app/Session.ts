@@ -1833,8 +1833,11 @@ export class Session {
     this.compareCard = this.newCompareCard(assembly.uri)
     this.setAnnotations([
       this.compareCard.el,
-      new AnnotationCard({ store, loader, context: 'browser' }).el,
+      // Above the Tracks card, not below it: what a reader just computed is what
+      // they came back to the panel to find, and a list of eight loaded files
+      // between the Run button and its result is a scroll nobody should need.
       this.syntheticHost,
+      new AnnotationCard({ store, loader, context: 'browser' }).el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
@@ -2473,6 +2476,8 @@ export class Session {
     // does not belong under eight track rows and a list of hand-drawn marks.
     this.setAnnotations([
       this.compareCard.el,
+      // Above the Tracks card: see the browser path for why.
+      this.syntheticHost,
       new AnnotationCard({
         store,
         loader,
@@ -2497,7 +2502,6 @@ export class Session {
             }),
       }).el,
       this.manualCard.el,
-      this.syntheticHost,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After

@@ -60,7 +60,13 @@ function resolveAnchor(job: JobContext, text: string): Anchor {
 
 export const runFourC: TaskRunner = async (job) => {
   const text = strParam(job.params, 'anchor', '').trim()
-  if (text === '') return []
+  if (text === '') {
+    job.note(
+      'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence by ' +
+        'name — or shift-drag on the map to name one.',
+    )
+    return []
+  }
   const balance = boolParam(job.params, 'balance', false)
   const cis = boolParam(job.params, 'cis', true)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value

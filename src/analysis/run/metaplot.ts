@@ -119,7 +119,16 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
   const entries = listParam(job.params, 'tracks')
   const featureId = idParam(job.params, 'features')
   const set = featureId === null ? undefined : job.inputs.features?.[featureId]
-  if (entries.length === 0 || set === undefined) return []
+  if (entries.length === 0 || set === undefined) {
+    job.note(
+      entries.length === 0 && set === undefined
+        ? 'A metaplot needs a track to read and a set of positions to read it at, and neither has been chosen.'
+        : entries.length === 0
+          ? 'No track was chosen. Load a bigWig and tick it under Tracks.'
+          : 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+    )
+    return []
+  }
 
   const stranded = boolParam(job.params, 'stranded', true)
   const rankBy = idParam(job.params, 'rankBy')

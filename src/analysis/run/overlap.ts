@@ -16,7 +16,16 @@ export const runOverlap: TrackTaskRunner = async (job) => {
   const bId = idParam(job.params, 'b')
   const a = aId === null ? undefined : job.inputs.features?.[aId]
   const b = bId === null ? undefined : job.inputs.features?.[bId]
-  if (a === undefined || b === undefined) return []
+  if (a === undefined || b === undefined) {
+    job.note(
+      'Two interval sets are needed and ' +
+        (a === undefined && b === undefined
+          ? 'neither has been chosen'
+          : 'only one has been chosen') +
+        '. Load two BED files, or a BED and a GTF, and pick one in each box.',
+    )
+    return []
+  }
 
   job.progress(0, 1, 'Comparing')
   const result = compareSets(a, b, {

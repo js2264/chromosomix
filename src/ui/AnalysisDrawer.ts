@@ -717,8 +717,23 @@ export class AnalysisDrawer {
     )
     this.notesEl.classList.toggle('hidden', result.notes.length === 0)
 
+    // A run that produced nothing says so. Every runner that returns no output
+    // now also leaves a note saying which input was missing, so this is the
+    // backstop rather than the explanation — but without it a task that finished
+    // in a millisecond and drew nothing is indistinguishable from one that
+    // crashed silently, which is exactly how this read before the notes existed.
     this.outputsEl.replaceChildren(
-      ...result.outputs.map((output) => this.block(output, provenance)),
+      ...(result.outputs.length === 0
+        ? [
+            el('p', {
+              class: 'analysis-elsewhere',
+              text:
+                result.notes.length === 0
+                  ? 'This run produced no output, and said nothing about why. That is a bug — please report it.'
+                  : 'No output was produced. The reason is above.',
+            }),
+          ]
+        : result.outputs.map((output) => this.block(output, provenance))),
     )
   }
 

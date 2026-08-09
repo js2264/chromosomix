@@ -40,6 +40,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'region',
     key: 'region',
     label: 'Sequence',
+    sequences: true,
     hint: 'Leave empty for every sequence in the file.',
   },
   {

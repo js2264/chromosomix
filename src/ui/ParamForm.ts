@@ -33,6 +33,7 @@ import { makeRandom } from '../analysis/random'
 import { paramVisible } from '../analysis/types'
 import type {
   AnalysisContext,
+  ChoiceOption,
   ChoiceParam,
   ColumnParam,
   EntryParam,
@@ -50,14 +51,32 @@ import { el, fmt } from './dom'
 import { iconButton } from './icons'
 
 /**
- * Above this many choices, a row of buttons is a wall.
+ * The options a pick-one parameter offers *this* file.
  *
- * Four fits across a folded drawer and stays readable as one row; five wraps,
- * and a wrapped segmented control reads as two unrelated groups. Past it the
- * same choice is a `<select>`, which costs a click and never lies about how many
- * options there are.
+ * A cooler has no `/genomes` table, so "per genome" is not a narrower scope on
+ * one — it is a question the file cannot answer. It used to be offered anyway
+ * and refused at Run, on the argument that filtering per file would mean
+ * building the descriptor per file. It does not: the descriptor still says which
+ * options need genomes, and this reads that rule. What is refused at Run is a
+ * *stored* session naming one, which is the case the old argument was really
+ * about.
  */
-const SEGMENTED_MAX = 4
+function optionsFor(spec: ChoiceParam, context: AnalysisContext): readonly ChoiceOption[] {
+  if (context.hasGenomes) return spec.options
+  return spec.options.filter((option) => option.needsGenomes !== true)
+}
+
+/**
+ * What to call an option on this file.
+ *
+ * "Contig" is right for a metagenome, where a sequence is a fragment of an
+ * assembly and calling it a chromosome would be a claim about biology the file
+ * does not make. On a cooler every sequence *is* a chromosome, and a reader
+ * looking at yeast should not have to translate.
+ */
+function labelOf(option: ChoiceOption, context: AnalysisContext): string {
+  return context.hasGenomes ? option.label : (option.coolLabel ?? option.label)
+}
 
 /**
  * How many features are read to discover a feature set's numeric columns.
@@ -587,12 +606,29 @@ export class ParamForm {
   // Committing
   // -------------------------------------------------------------------------
 
-  /** One edit, complete. Nothing else in this module writes `params`. */
+  /**
+   * One edit, complete. Nothing else in this module writes `params`.
+   *
+   * **Every control is re-synced, not just the one that changed**, and the
+   * omission of that line is worth a comment because of how it failed. A native
+   * `<input>` shows what was typed into it without being told, so the number and
+   * text fields looked fine; a *button* shows its state through `aria-pressed`,
+   * which only `sync()` sets — so every toggle and every segmented choice in
+   * every task read as stuck on its default, however many times it was clicked.
+   * The value underneath was changing the whole time, which is what made it look
+   * like a dead control rather than a broken one.
+   *
+   * Syncing all of them rather than one also covers the case that made this
+   * worth doing properly: a `when` clause can make one parameter's value change
+   * what another one *is*, and a control that repaints only itself cannot show
+   * that.
+   */
   private commit(key: string, value: ParamValue): void {
     if (sameValue(this.params[key], value)) return
     this.params[key] = value
     for (const control of this.controls) {
       if (control.spec.kind === 'column') control.refill?.()
+      control.sync()
     }
     this.syncVisibility()
     this.options.onChange(this.value)
@@ -793,64 +829,66 @@ export class ParamForm {
   }
 
   /**
-   * A choice: buttons at four options or fewer, a select above that.
+   * A choice: one dropdown, always.
    *
-   * The buttons are the same mark the overlay toggles are, so "this one is in
-   * force" is the accent border a reader has already learned everywhere else in
-   * the app rather than a second convention for the same fact.
+   * It was a row of segmented buttons at four options or fewer, on the argument
+   * that "this one is in force" should be the accent border a reader has already
+   * learned from the overlay toggles. Two things were wrong with that. The
+   * border was the *only* mark, so a reader who could not see the accent colour
+   * could not see the answer at all — and a row of four buttons in a 6.5 rem
+   * label grid wraps to two lines and then reads as four independent toggles
+   * rather than as one question. A `<select>` says "pick one of these" in a
+   * shape every reader already knows, shows the answer as a word, and is one
+   * line whatever the options are.
+   *
+   * The options themselves come from {@link optionsFor}, which is where a plain
+   * cooler stops being offered "Genome".
    */
   private choiceControl(spec: ChoiceParam): Control {
     const id = `${this.id}-${spec.key}`
     const held = (): string => stringOr(this.params[spec.key], spec.default)
+    const select = el('select', { class: 'select', attrs: { id } })
 
-    if (spec.options.length > SEGMENTED_MAX) {
-      const select = el('select', { class: 'select', attrs: { id } })
-      for (const option of spec.options) {
+    const refill = (): void => {
+      const options = optionsFor(spec, this.context)
+      select.replaceChildren()
+      for (const option of options) {
         select.appendChild(
           el('option', {
             value: option.value,
-            text: option.label,
+            text: labelOf(option, this.context),
             ...(option.hint === undefined ? {} : { title: option.hint }),
           }),
         )
       }
-      select.addEventListener('change', () => this.commit(spec.key, select.value))
-      const sync = (): void => {
-        select.value = held()
-      }
-      sync()
-      return {
-        spec,
-        wrapper: this.wrap(spec, this.labelled(spec, select, id)),
-        shown: false,
-        sync,
+      // A stored session can name an option this file does not offer — a
+      // `scope: 'genome'` written against a metacool and reopened on a cooler.
+      // Kept as a disabled row rather than silently rewritten, so the form shows
+      // what the run will actually be and the estimate can refuse it by name.
+      const value = held()
+      if (!options.some((option) => option.value === value)) {
+        select.appendChild(
+          el('option', {
+            value,
+            text: `${value} — not available on this file`,
+            attrs: { disabled: '' },
+          }),
+        )
       }
     }
 
-    const row = el('div', { class: 'plot-icon-row' })
-    const buttons = spec.options.map((option) => {
-      const node = el('button', {
-        class: 'btn btn-toggle',
-        type: 'button',
-        text: option.label,
-        title: option.hint ?? `${spec.label}: ${option.label}`,
-      })
-      node.addEventListener('click', () => this.commit(spec.key, option.value))
-      row.appendChild(node)
-      return { value: option.value, node }
-    })
+    select.addEventListener('change', () => this.commit(spec.key, select.value))
     const sync = (): void => {
-      const value = held()
-      for (const button of buttons) {
-        button.node.setAttribute('aria-pressed', String(button.value === value))
-      }
+      select.value = held()
     }
+    refill()
     sync()
     return {
       spec,
-      wrapper: this.wrap(spec, this.blocked(spec, row, `${id}-label`)),
+      wrapper: this.wrap(spec, this.labelled(spec, select, id)),
       shown: false,
       sync,
+      refill,
     }
   }
 
@@ -881,6 +919,11 @@ export class ParamForm {
     const sync = (): void => {
       const on = typeof this.params[spec.key] === 'boolean' ? this.params[spec.key] : spec.default
       node.setAttribute('aria-pressed', String(on))
+      // The word changes with the state as well as the colour. A button reading
+      // "on" while it is off relies entirely on a border colour to say so, which
+      // is the one channel a reader with a colour deficiency does not have — and
+      // which nobody reads on a form of twelve of them anyway.
+      node.textContent = on === true ? 'on' : 'off'
     }
     sync()
     return {
@@ -1040,11 +1083,77 @@ export class ParamForm {
 
   /** A locus, in the syntax the views' own boxes take. */
   private regionControl(spec: RegionParam): Control {
+    return spec.sequences === true ? this.sequenceControl(spec) : this.locusControl(spec)
+  }
+
+  /**
+   * One of the file's own sequences, as a dropdown.
+   *
+   * Empty first where the parameter allows it, because *every sequence* is what
+   * insulation and CID do with an empty region and is the answer most readers
+   * want first. Where it does not — compartments, which is one chromosome at a
+   * time by construction — the list opens on nothing chosen and the estimate
+   * refuses the run until one is, which is a better first frame than silently
+   * picking contig zero of a four-thousand-contig metagenome.
+   */
+  private sequenceControl(spec: RegionParam): Control {
     const id = `${this.id}-${spec.key}`
+    const select = el('select', { class: 'select', attrs: { id } })
+    const refill = (): void => {
+      select.replaceChildren()
+      select.appendChild(
+        el('option', {
+          value: '',
+          text: spec.required === true ? 'choose a sequence' : 'every sequence',
+        }),
+      )
+      for (const contig of this.context.contigs) {
+        select.appendChild(el('option', { value: contig.name, text: contig.name }))
+      }
+    }
+    select.addEventListener('change', () => this.commit(spec.key, select.value))
+    const sync = (): void => {
+      const held = stringOr(this.params[spec.key], '')
+      // A stored session can name a sequence this file does not have. Kept as a
+      // row of its own rather than snapping to empty, so the form shows what the
+      // stored run was and the reader can see why it will not run.
+      if (held !== '' && !this.context.contigs.some((contig) => contig.name === held)) {
+        select.appendChild(
+          el('option', { value: held, text: `${held} — not in this file`, attrs: { disabled: '' } }),
+        )
+      }
+      select.value = held
+    }
+    refill()
+    sync()
+    return {
+      spec,
+      wrapper: this.wrap(spec, this.labelled(spec, select, id)),
+      shown: false,
+      sync,
+      refill: () => {
+        refill()
+        sync()
+      },
+    }
+  }
+
+  /**
+   * A locus: a box, with the file's sequences offered beside it.
+   *
+   * The box stays because a span is the point — a 4C anchor is a window, and a
+   * dropdown of sequence names could not express one. The `<datalist>` is what
+   * turns the common case back into a pick: type nothing and the sequences are
+   * there, pick one and then add `:500,000-510,000` if that is what was meant.
+   */
+  private locusControl(spec: RegionParam): Control {
+    const id = `${this.id}-${spec.key}`
+    const listId = `${id}-sequences`
+    const options = el('datalist', { attrs: { id: listId } })
     const box = el('input', {
       class: 'input input-region param-region',
       type: 'text',
-      attrs: { id },
+      attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
       title: 'A contig, or a contig and a span — the same thing the locus boxes take.',
       // The locus box's own 24 rem is a width for a toolbar. In a column it
@@ -1052,6 +1161,11 @@ export class ParamForm {
       // width it asks for.
       style: { width: '100%' },
     })
+    const refill = (): void => {
+      options.replaceChildren(
+        ...this.context.contigs.map((contig) => el('option', { value: contig.name })),
+      )
+    }
     const commit = (): void => this.commit(spec.key, box.value.trim())
     box.addEventListener('change', commit)
     box.addEventListener('keydown', (event) => {
@@ -1062,13 +1176,17 @@ export class ParamForm {
       box.value = stringOr(this.params[spec.key], '')
       box.placeholder = framingRegion(this.context)
     }
+    refill()
     sync()
     return {
       spec,
-      wrapper: this.wrap(spec, this.labelled(spec, box, id)),
+      wrapper: this.wrap(spec, this.labelled(spec, el('div', { class: 'param-locus' }, box, options), id)),
       shown: false,
       sync,
-      refill: sync,
+      refill: () => {
+        refill()
+        sync()
+      },
     }
   }
 

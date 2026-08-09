@@ -79,7 +79,18 @@ export const runApa: TaskRunner = async (job) => {
   const setId = idParam(job.params, usingPairs ? 'pairs' : 'features')
   const pairs = usingPairs && setId !== null ? job.inputs.pairs?.[setId] : undefined
   const features = !usingPairs && setId !== null ? job.inputs.features?.[setId] : undefined
-  if (pairs === undefined && features === undefined) return []
+  if (pairs === undefined && features === undefined) {
+    // Named rather than returned empty. A task that finishes in a millisecond
+    // with no figure and no sentence is indistinguishable from one that is
+    // broken, and this is the commonest way to reach that state: the drawer
+    // opens on a task whose input has not been chosen yet.
+    job.note(
+      usingPairs
+        ? 'No loop set was chosen. Load a BEDPE — a loop table, a set of anchor pairs — and pick it under Pairs.'
+        : 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+    )
+    return []
+  }
 
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value

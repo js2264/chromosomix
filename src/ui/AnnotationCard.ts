@@ -669,9 +669,18 @@ export class AnnotationCard {
    * card could say about where it came from, nothing to put down, and nothing
    * to re-attach after a reload; its controls are on the lane itself and in the
    * lane's own menu (§8.9).
+   *
+   * **A synthetic track is out for the same reason and a stronger one.** It has
+   * a card of its own — with the exports and the Recompute button that only a
+   * computed lane has — and listing it here as well put every result in the
+   * panel twice, under two rows that move and rename independently while
+   * pointing at one entry. Its provenance is a recipe rather than a file, which
+   * is the one thing this card exists to show.
    */
   private fileRows(): AnnotationEntry[] {
-    return this.props.store.entries.filter((entry) => entry.card !== 'viewpoint')
+    return this.props.store.entries.filter(
+      (entry) => entry.card !== 'viewpoint' && entry.card !== 'synthetic',
+    )
   }
 
   private clearDropMarks(): void {

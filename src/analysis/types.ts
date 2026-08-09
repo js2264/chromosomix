@@ -92,10 +92,40 @@ export interface NumberParam extends ParamBase {
   integer?: boolean
 }
 
+/**
+ * One entry in a pick-one list.
+ *
+ * `label` is what a metagenome calls it and `coolLabel` is what a plain cooler
+ * does, where the two differ — "contig" against "chromosome", "whole file"
+ * against "whole genome". The words are not interchangeable to a reader: a MAG
+ * *is* a genome and a chromosome is not, so a cooler offering "Genome" beside
+ * "Contig" invites the reading that the first means the whole file, which is
+ * what the third option already means.
+ *
+ * `needsGenomes` drops an option from a file that has no `/genomes` table. This
+ * is the one place §18.2's *a task is a descriptor, never a screen* bends, and
+ * it bends by a stated rule rather than by building the descriptor per file: the
+ * option is still static data, and what varies is whether this file can answer
+ * it. The alternative — always offering it and refusing the run — was what
+ * shipped, and asking a reader to press Run to discover that a choice was never
+ * available is worse than not offering it. A *stored* session naming a dropped
+ * option still resolves, because the runner reads the parameter and falls back;
+ * only the control stops offering it.
+ */
+export interface ChoiceOption {
+  value: string
+  label: string
+  /** What to call it on a file with no genomes. Defaults to {@link label}. */
+  coolLabel?: string
+  hint?: string
+  /** Offered only where the file has a `/genomes` table. */
+  needsGenomes?: boolean
+}
+
 export interface ChoiceParam extends ParamBase {
   kind: 'choice'
   default: string
-  options: ReadonlyArray<{ value: string; label: string; hint?: string }>
+  options: ReadonlyArray<ChoiceOption>
 }
 
 export interface ToggleParam extends ParamBase {
@@ -139,6 +169,29 @@ export interface ColumnParam extends ParamBase {
 export interface RegionParam extends ParamBase {
   kind: 'region'
   default?: string
+  /**
+   * This names a **whole sequence**, so offer the file's list rather than a box.
+   *
+   * Insulation, CID and compartments all take a sequence and use the whole of it
+   * — a score taken from whatever happened to be on screen but labelled `chrIV`
+   * is a different quantity wearing the same name — so a free-text box here
+   * accepted spans it would silently ignore, and asked a reader to type a
+   * chromosome name the app already knows. A `<select>` cannot be wrong.
+   *
+   * Left off where a *locus* is meant: a 4C anchor is a window, and narrowing it
+   * to a whole sequence would remove the task's whole point. Those keep the box,
+   * with the sequence names offered as a `<datalist>` so the common case is
+   * still a pick rather than a spelling test.
+   */
+  sequences?: boolean
+  /**
+   * Empty is not an answer, so the list says *choose one* rather than *every*.
+   *
+   * Compartments is the case: a correlation matrix is a property of one
+   * chromosome, and there is no whole-file reading to fall back on. Insulation
+   * and CID leave this off, where empty legitimately means every sequence.
+   */
+  required?: boolean
 }
 
 /**
@@ -234,8 +287,27 @@ export interface AnalysisFraming {
    */
   binsPerCell: number
   balance: boolean
-  /** The `/pixels` column the view was drawn from. */
+  /**
+   * The `/pixels` column the view was drawn from.
+   *
+   * A **column**, never the score picker's id. The two look alike and are not:
+   * `balanced` and `ICE` are entries in that picker and are not columns in any
+   * file, so passing an id through here asks the reader for `/pixels/balanced`
+   * and gets "does not exist" — which is what happened, on every task, on every
+   * balanced cooler. `ui/scores.ts` is the one place that unflattens a choice
+   * into this field and {@link balance} beside it.
+   */
   value: string
+  /**
+   * A normalisation the *view* applies to the block after reading it, or `null`.
+   *
+   * VC, VC √ and ICE are computed by `render/derive.ts` on the main thread from
+   * whatever was read; nothing in the file carries them and no read can ask for
+   * one. So a task cannot reproduce the picture the reader is looking at, and
+   * this field exists to say so rather than to be applied — the runner notes it
+   * and reports the numbers it did compute, which are the underlying counts.
+   */
+  normalise: string | null
   level: 'bin' | 'contig' | 'genome'
   /** `chrIV:1–1,531,933 at 1 kb, balanced, count` — for the drawer's header. */
   label: string

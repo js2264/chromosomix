@@ -164,6 +164,7 @@ describe('framingCovers', () => {
     binsPerCell: 1,
     balance: false,
     value: 'count',
+    normalise: null,
     level: 'bin',
     label: 'demo',
   })
