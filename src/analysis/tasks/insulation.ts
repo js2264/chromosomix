@@ -25,6 +25,7 @@ import type {
   ParamSpec,
   Params,
 } from '../types'
+import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 /** The base window in base pairs, at least one bin of this file. */
 export function windowBpOf(params: Params, binsize: number): number {
@@ -211,7 +212,7 @@ export const INSULATION_TASK: AnalysisTask = {
   group: 'map',
   venue: 'analysis',
   version: 1,
-  appliesTo: (context) => context.nBins > 0,
+  availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['profile', 'intervals'],
   estimate,

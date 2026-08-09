@@ -114,6 +114,8 @@ interface Row {
   el: HTMLElement
   chip: HTMLElement
   blurb: HTMLElement
+  /** What the task is waiting for, when it cannot run yet. */
+  needs: HTMLElement
   stop: HTMLButtonElement
   /** The cell the chip and the stop share, so the stop can come and go. */
   cell: HTMLElement
@@ -195,8 +197,9 @@ export class AnalysisPanelCard {
         el('p', {
           class: 'analysis-empty',
           text:
-            'This file offers no analyses. A task that means nothing on the open file is absent ' +
-            'rather than disabled (§18.1), so what appears here is what will run.',
+            'This file offers no analyses. A task that could never mean anything here is absent ' +
+            'rather than greyed — a metagenome task on a plain cooler, say. Everything that is ' +
+            'one file away is listed, waiting, with a line saying what to load.',
         }),
       )
       return
@@ -240,6 +243,9 @@ export class AnalysisPanelCard {
 
     const cell = el('div', { class: 'plot-icon-row' }, chip)
     const blurb = el('span', { class: 'analysis-row-blurb', text: task.blurb })
+    // What the task is waiting for, under the blurb. Empty and hidden on a row
+    // that can run, so a ready panel is exactly as dense as it was.
+    const needs = el('span', { class: 'analysis-row-needs hidden' })
     const node = el(
       'div',
       {
@@ -249,16 +255,24 @@ export class AnalysisPanelCard {
       el('span', { class: 'analysis-row-title', text: task.title }),
       cell,
       blurb,
+      needs,
     )
-    node.addEventListener('click', () => this.options.onOpen(task))
+    const open = (): void => {
+      // A waiting row is a label, not a button. Opening the drawer on it would
+      // show a form whose inputs cannot be filled and a Run that refuses — which
+      // is the *disabled promise* §18.1 objects to, arriving one click later.
+      if (node.classList.contains('is-waiting')) return
+      this.options.onOpen(task)
+    }
+    node.addEventListener('click', open)
     node.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return
       // Space scrolls the column otherwise, which moves the row out from under
       // the reader at the moment they chose it.
       event.preventDefault()
-      this.options.onOpen(task)
+      open()
     })
-    return { task, el: node, chip, blurb, stop, cell }
+    return { task, el: node, chip, blurb, needs, stop, cell }
   }
 
   // -------------------------------------------------------------------------
@@ -267,7 +281,20 @@ export class AnalysisPanelCard {
 
   private paint(): void {
     const active = this.options.active()
+    const context = this.options.context()
     for (const row of this.rows) {
+      const available =
+        context === null ? { state: 'waiting' as const, needs: 'Open a file.' } : row.task.availability(context)
+      const waiting = available.state === 'waiting'
+      row.el.classList.toggle('is-waiting', waiting)
+      // Off the tab order as well as off the pointer: a row nobody can act on
+      // that still takes a Tab stop is a row every keyboard reader pages past.
+      if (waiting) row.el.setAttribute('aria-disabled', 'true')
+      else row.el.removeAttribute('aria-disabled')
+      row.el.tabIndex = waiting ? -1 : 0
+      row.needs.textContent = waiting ? available.needs : ''
+      row.needs.classList.toggle('hidden', !waiting)
+
       const state = this.options.runner.stateOf(row.task.id)
       const chip = chipFor(state)
 

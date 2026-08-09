@@ -105,6 +105,7 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     scoreColumns: input.scoreColumns,
     binsize: input.binsize,
     nBins: input.nBins,
+    hasMap: input.binsize > 0 && input.nBins > 0,
     contigs,
     genomes,
     entries: input.entries,

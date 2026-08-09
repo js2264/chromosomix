@@ -1864,11 +1864,26 @@ per task, each with a title, a line of description and a state — never run, ru
 carries no controls, because a panel that both lists twenty tasks and configures them is a panel that
 does neither.
 
-**A task that means nothing on the open file is absent, not disabled.** This is §8.5's doctrine applied
-a second time and for the same reason: a disabled row is a promise the file cannot keep, and the reader
-spends their attention discovering why rather than reading what is there. A `.metacool` carries no gene
-models, so it offers no metaplot; a `.cool` has no genomes, so it offers no MAG tasks; and both offer
-insulation, because both have a diagonal.
+**A task that could never mean anything here is absent; one that is waiting for a file is listed and
+greyed.** The first half is §8.5's doctrine and it stands: a disabled row is a promise the file cannot
+keep, and a `.cool` has no genomes, so it offers no MAG tasks — nothing the reader does next produces
+a `/genomes` table.
+
+The second half is a correction to what this section first said, and the case that forced it is APA on
+a map with no loops loaded. That task applies perfectly well to the file; it is one drag-and-drop from
+running. Hiding it does not spare the reader a broken promise — it teaches them the application does
+not do aggregate peak analysis. So a task in that state is listed, dimmed, and carries a line saying
+what to load: *Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile
+up on it.* A greyed row with an instruction on it is not an unkept promise; it is the menu.
+
+The distinction is not *can this run now* but *can what the reader does next make it run*, and
+`TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
+
+**The panel exists without a contact map.** Three tasks — metaplot, track correlation and interval
+overlap — read only the loaded tracks, and a 1D browser session (§5.8) is exactly where a reader has
+the tracks and not the matrix. There the map tasks are `waiting` on *open a contact map*, the track
+tasks run, the analysis worker is never mounted because nothing asks it for a pixel, and a result's
+provenance names the assembly rather than a block.
 
 **A locus a reader can point at is picked on the map, not typed.** The map has had
 the anchor gesture since §8.9 — shift-drag along either axis names a stretch of

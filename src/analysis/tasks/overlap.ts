@@ -11,6 +11,7 @@
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
+import { READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
   { kind: 'featureSet', key: 'a', label: 'First set' },
@@ -48,8 +49,19 @@ export const OVERLAP_TASK: AnalysisTask = {
   group: 'tracks',
   venue: 'annotations',
   version: 1,
-  appliesTo: (context) =>
-    context.entries.filter((entry) => entry.kind === 'gtf' || entry.kind === 'segments').length >= 2,
+  // No map required: two interval sets compared against each other say nothing
+  // about a matrix, and the 1D browser is where a reader most often has them.
+  availability: (context) => {
+    const sets = context.entries.filter(
+      (entry) => entry.kind === 'gtf' || entry.kind === 'segments',
+    ).length
+    if (sets >= 2) return READY
+    return waitingFor(
+      sets === 0
+        ? 'Load two interval sets — BED, narrowPeak or GTF — to compare.'
+        : 'Load a second interval set; an overlap needs two.',
+    )
+  },
   params: PARAMS,
   outputs: ['table'],
   estimate,

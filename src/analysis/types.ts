@@ -509,6 +509,50 @@ export type TaskOutput =
   | TableOutput
   | IntervalsOutput
 
+/**
+ * Whether a task can run here — and, where it cannot, whether that can change.
+ *
+ * The original rule was one boolean and §18.1's *a task that means nothing on
+ * the open file is absent, not disabled*. That is right about a disabled row
+ * being a promise a file cannot keep, and wrong about there being only one kind
+ * of "cannot". Two situations were collapsed into it:
+ *
+ * - **A metagenome task on a plain cooler.** The file has no `/genomes` table
+ *   and never will; nothing the reader does here produces one. Listing it would
+ *   be offering something that is not on the menu, which is what the doctrine is
+ *   about. Still `absent`.
+ * - **APA before a loop set is loaded.** The task applies perfectly well to this
+ *   file — it is one drag-and-drop away — and hiding it means a reader who does
+ *   not already know the app does aggregate peak analysis never finds out that
+ *   it does. Absence was teaching the wrong thing: not *this file cannot*, but
+ *   *this feature does not exist*.
+ *
+ * So the second is `waiting`, with a sentence naming what it needs. A greyed row
+ * reading "load a loop set" is not an unkept promise; it is the menu.
+ */
+export type TaskAvailability =
+  /** Run it. */
+  | { state: 'ready' }
+  /**
+   * It applies here, once the reader supplies something. Listed, greyed, and the
+   * sentence is shown under the row — so write it as an instruction rather than
+   * a diagnosis: *Load a loop set (BEDPE) or a feature set to aggregate over.*
+   */
+  | { state: 'waiting'; needs: string }
+  /** Nothing the reader can do makes this task meaningful here. Not listed. */
+  | { state: 'absent' }
+
+/** The everyday answer, so a task with nothing to check reads as one line. */
+export const READY: TaskAvailability = { state: 'ready' }
+
+/** Listed and greyed, with a sentence saying what would make it runnable. */
+export function waitingFor(needs: string): TaskAvailability {
+  return { state: 'waiting', needs }
+}
+
+/** What every task that reads the matrix says when there is no map open. */
+export const NEEDS_MAP = 'Open a contact map — this one reads the matrix itself.'
+
 /** Everything one run produced, and what it cost in wall clock. */
 export interface TaskResult {
   outputs: TaskOutput[]
@@ -593,6 +637,17 @@ export interface AnalysisContext {
   scoreColumns: string[]
   binsize: number
   nBins: number
+  /**
+   * Whether there is a contact map at all.
+   *
+   * `false` in a 1D browser session (§5.8), where an assembly is open, tracks
+   * can be loaded and compared, and there is no matrix — so `binsize` and
+   * `nBins` are `0`, `contigs` comes from the assembly, and every task that
+   * reads the matrix is `waiting` rather than absent. The zeros never reach a
+   * runner, because a `waiting` task cannot be run.
+   */
+  hasMap: boolean
+
   contigs: ContextContig[]
   genomes: ContextGenome[] | null
   /** Every loaded annotation, for the four entry parameter kinds. */
@@ -642,14 +697,12 @@ export interface AnalysisTask {
    */
   version: number
   /**
-   * Whether this file has anything for this task to do.
+   * Whether this task can run on what is open, and if not, why not.
    *
-   * **A task that means nothing here is absent, not disabled** — §8.5's doctrine
-   * applied a second time. A disabled row is a promise the file cannot keep, and
-   * the reader spends their attention discovering why rather than reading what is
-   * there.
+   * See {@link TaskAvailability}. It replaced a boolean `appliesTo`, which could
+   * only say *absent* — and said it about two situations that are nothing alike.
    */
-  appliesTo(context: AnalysisContext): boolean
+  availability(context: AnalysisContext): TaskAvailability
   params: readonly ParamSpec[]
   /** What comes out, so the row and the drawer know what to offer. */
   outputs: ReadonlyArray<TaskOutput['kind']>
