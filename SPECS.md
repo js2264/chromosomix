@@ -1870,6 +1870,17 @@ spends their attention discovering why rather than reading what is there. A `.me
 models, so it offers no metaplot; a `.cool` has no genomes, so it offers no MAG tasks; and both offer
 insulation, because both have a diagonal.
 
+**A locus a reader can point at is picked on the map, not typed.** The map has had
+the anchor gesture since §8.9 — shift-drag along either axis names a stretch of
+sequence — and the 4C *lane* has always drawn from it. A task that asked for the
+same locus again, in a text box, beside a map the reader had just pointed at, was
+asking twice. So `RegionParam.fromMap` names a toggle that makes the box follow
+`ui/viewpoint.ts`'s anchor, it is **on by default** on 4C, and while it is on the
+box is read-only and mirrors what the map says. What gets written into the
+parameter is the *resolved locus* rather than a sentinel: the record of a run
+names the place, and turning the toggle off leaves the picked locus behind as the
+starting point for an edit rather than an empty box.
+
 **The Analysis drawer** is the workspace: parameters, a **Run** button with the price beside it,
 progress, results, exports. It is anchored to the right of the body, full height, resizable by its left
 edge with its width remembered, and it overlays the content and the two right columns rather than

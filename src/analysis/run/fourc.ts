@@ -62,8 +62,11 @@ export const runFourC: TaskRunner = async (job) => {
   const text = strParam(job.params, 'anchor', '').trim()
   if (text === '') {
     job.note(
-      'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence by ' +
-        'name — or shift-drag on the map to name one.',
+      boolParam(job.params, 'fromMap', true)
+        ? 'No anchor has been picked yet. Shift-drag along either axis of the map to name one — ' +
+          'or turn “Pick on map” off and type a locus.'
+        : 'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence ' +
+          'by name.',
     )
     return []
   }
