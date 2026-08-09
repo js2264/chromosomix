@@ -1611,6 +1611,22 @@ The same inverse serves the readout, and has to: the two names, the separation, 
 and the value are all questions about the square block, and anything that answers one of them from a
 turned row or a half-bin column is naming a place that is not on the picture.
 
+**And the colour scale does not move when the map is turned.** The automatic range is a property of
+the *block that was read*, which is already the rule for a square map — it is measured once per read,
+and neither a pan nor a zoom re-measures it. A band breaks that rule by being a **crop**: it holds
+the near-diagonal separations and drops the rest, and the ones it drops are where the extremes live.
+On a diverging field the effect is dramatic — the auto range is the 99th percentile of the departure
+from neutral, and the far separations are where a small count over a small expectation produces the
+largest departures there are, so turning an O/E map roughly *halved* its range and dragging the depth
+handle moved it again on every pixel.
+
+It is worth being precise about what is **not** the cause, because the obvious guess is wrong. A
+square map holds each off-diagonal pair twice, once in each triangle, and a band holds it once — but
+a percentile is invariant under duplicating every value, so counting both triangles neither doubles
+the range nor changes it at all. Nothing needs halving on the square side. And nothing *could* be
+done on that side anyway: §7.1 fixes the square's rule to `metacooler show`'s, to the bit. So the two
+can only be made to agree in one direction, and the band adopts the block's range.
+
 ### 17.7 Not yet: the butterfly
 
 Two files compared under a turn should be **two rectangles meeting at one genomic axis**, the second
