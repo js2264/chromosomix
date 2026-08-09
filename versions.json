@@ -1,6 +1,13 @@
 {
-  "latest": "39848e4",
+  "latest": "f4c71c0",
   "versions": [
+    {
+      "commit": "f4c71c0",
+      "version": "0.9.0",
+      "date": "2026-08-09T22:54:23+02:00",
+      "subject": "feat(overview): land on bin × bin, gate it, and read it by genome",
+      "tag": ""
+    },
     {
       "commit": "39848e4",
       "version": "0.9.0",
