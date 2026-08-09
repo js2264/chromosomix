@@ -1176,9 +1176,25 @@ function canvasFigure(
   }
 }
 
-/** Height for a curve: wide enough to read a trend, short enough to stack. */
+/**
+ * Height for a curve.
+ *
+ * Taller than it was, and the two curves that made the case are the ones §18.8
+ * puts first: P(s) is read over three or four decades on a log-log axis, and its
+ * *derivative* is a shape whose whole content is a shoulder a few tenths of a
+ * unit deep. At the old 0.62 of the width both were about 170 px in a folded
+ * drawer, which is a plot with four y ticks in it — enough to see that a curve
+ * goes down and not enough to see how.
+ *
+ * 0.78, floored at 260 and capped at 520. The floor is what a narrow drawer
+ * gets, and it is the number that matters: a reader who has folded the drawer to
+ * see the map beside it is still reading a plot rather than a sparkline. The cap
+ * stops a full-width drawer on a wide screen from making one curve taller than
+ * the window, which would be worse than short — two figures in a run would then
+ * never be on screen together.
+ */
 function curveHeight(width: number): number {
-  return Math.max(170, Math.min(360, Math.round(width * 0.62)))
+  return Math.max(260, Math.min(520, Math.round(width * 0.78)))
 }
 
 /**
