@@ -58,6 +58,16 @@ export interface WholeViewProps {
   binsize: number
   /** A control the session puts on the title line; see `RegionViewProps`. */
   extraControl?: HTMLElement
+  /**
+   * Cards the session puts in this view's sidebar, below the panel's own.
+   *
+   * One caller and one card: on a metagenome this view is the `bin × bin` level
+   * of a three-way picker the scan view owns (`ui/Overview.ts`), and the picker
+   * has to be on screen at whichever level is mounted or there is no way back
+   * to the other two. Passed in for the reason {@link extraControl} is — this
+   * view does not know which of the three it is, and the shell does.
+   */
+  extraCards?: HTMLElement[]
   /** Total bins in the file, for the counts a selection is measured against. */
   nBins: number
   /**
@@ -334,7 +344,7 @@ export class WholeView {
       this.panelHost,
     )
 
-    this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards)
+    this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards, ...(props.extraCards ?? []))
 
     // There is no longer a size that defeats this view, so there are two
     // answers rather than three: this is worth asking about first, or it opens.

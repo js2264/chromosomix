@@ -82,7 +82,7 @@ import { FilePicker, firstEntry } from '../ui/FilePicker'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
-import { Overview } from '../ui/Overview'
+import { Overview, wholeFileLevelCard } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/RecordCard'
 import { RegionView } from '../ui/RegionView'
@@ -1125,7 +1125,8 @@ export class Session {
    * would be true and useless.
    */
   private searchNoun(): string {
-    const view = this.store.state?.view
+    const state = this.store.state
+    const view = state?.view
     if (view === 'genomes' || view === 'contigs') return 'The filter above the table.'
     // A gene model beside the map makes the box a *third* thing, and one worth
     // saying: a whole-genome view is three pixels per chromosome arm, so
@@ -1136,7 +1137,12 @@ export class Session {
         ? 'The region box, which is also this view’s title — a contig, a range, or a gene name.'
         : 'The region box, which is also this view’s title.'
     }
-    if (view === 'overview') return 'Name a genome of this file, or one of its contigs.'
+    // Two boxes wear the same view kind: the scan's takes a genome, and the
+    // `bin × bin` level is `WholeView`, whose box takes a contig and a range in
+    // one. Told apart by the level, which is what the shell routes on.
+    if (view === 'overview' && state !== null && overviewLevel(state) !== 'bin') {
+      return 'Name a genome of this file, or one of its contigs.'
+    }
     return genes
       ? 'Name a contig, a range within one, or a gene from the starred model.'
       : 'Name a contig, or a range within one, and open it.'
@@ -3411,6 +3417,16 @@ export class Session {
       return
     }
 
+    // …and the mirror of it. A metagenome's whole-file map is the `bin` level of
+    // `overview` rather than a view kind of its own (§7.3), so a link naming the
+    // cooler's kind lands on the one this file has, at the level it asked for —
+    // `matrixLevel` because that is what `whole` would have drawn. Without this
+    // the picker in the sidebar there would patch a level nothing routes on.
+    if (state.view === 'whole' && this.isMetacool) {
+      this.navigate({ ...state, view: 'overview', level: matrixLevel(state) }, { replace: true })
+      return
+    }
+
     // A link may carry a second file (`uri2`), and the tab may already hold one
     // — or the wrong one. Reconciled here rather than at the drop, so a pasted
     // comparison and a dropped one arrive by the same road.
@@ -3716,6 +3732,12 @@ export class Session {
     if (file === null) return
     const level = matrixLevel(state)
     const balance = this.balanceOf(state)
+    // On a metagenome this view is one level of the whole-file picker rather
+    // than a view of its own (see {@link mountOverview}), so it carries that
+    // picker and not the panel's two-entry one — which would sit beside it
+    // offering a *second* `contig`, meaning the roll-up of this read rather
+    // than the scan the other level draws.
+    const picker = this.isMetacool
     this.mountWholeFile(
       state,
       `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
@@ -3725,6 +3747,15 @@ export class Session {
           client: this.clientOf(),
           caption: this.captionFor(state),
           ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
+          ...(picker
+            ? {
+                extraCards: [
+                  wholeFileLevelCard(level, (next) =>
+                    this.store.patch({ level: next }, { replace: true }),
+                  ),
+                ],
+              }
+            : {}),
           binsize: file.info.binsize ?? 1,
           nBins: file.info.nBins,
           nContigs: file.info.nContigs,
@@ -3741,8 +3772,9 @@ export class Session {
           // stored pixels: a chromosome-level whole-genome view of yeast is
           // 17 x 17 cells and always fits, which makes it the honest answer when
           // the bin-level block does not. It is only meaningless on a file with
-          // one sequence, where every level is a single cell.
-          offerLevel: file.info.nContigs > 1,
+          // one sequence, where every level is a single cell — and on a
+          // metagenome, where the card above already offers all three.
+          offerLevel: !picker && file.info.nContigs > 1,
           noun: file.info.hasGenomes ? 'contig' : 'chromosome',
           ...(this.annotationContext() === undefined
             ? {}
@@ -4021,6 +4053,15 @@ export class Session {
     const file = this.file
     if (file === null) return
     const level = overviewLevel(state)
+    // Three levels, two classes. `bin × bin` is not an accumulation over pairs
+    // of units — it is the pooled whole-file read {@link WholeView} already
+    // makes, and on a metagenome it is the same picture as ticking every row of
+    // the genomes table. Routed here rather than left as a second view to
+    // navigate to, so the three are one choice in one control (§7.3).
+    if (level === 'bin') {
+      this.mountWhole(state)
+      return
+    }
     this.mountWholeFile(
       state,
       `overview|${state.uri}|${level}`,

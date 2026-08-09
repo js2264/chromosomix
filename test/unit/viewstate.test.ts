@@ -20,6 +20,7 @@ import {
   ViewStore,
   viewStateEquals,
 } from '../../src/state/ViewState'
+import { WHOLE_FILE_LEVELS } from '../../src/ui/Overview'
 import type { ViewState } from '../../src/types'
 
 const CASES: ViewState[] = [
@@ -229,13 +230,20 @@ describe('the level, which two vocabularies share one key for', () => {
     expect(overviewLevel(state('genome'))).toBe('genome')
   })
 
-  // The hash is untrusted and the key is shared, so each view meets a value it
-  // has no axis for. It lands on that view's default rather than being refused:
-  // the rest of the link still names a place, and showing it is closer to what
-  // was asked for than an error or the genomes table.
-  it('lands each view on its own default for the other one`s value', () => {
+  // The whole-file view of a metagenome reads all three values of the key,
+  // because all three are levels of it — `bin` is the pooled map the shell
+  // mounts `WholeView` for, and it has to survive the round trip or the picker
+  // offers a place the back button cannot return to.
+  it('gives the overview bins when the state says bins', () => {
+    expect(overviewLevel(state('bin'))).toBe('bin')
+  })
+
+  // The hash is untrusted and the key is shared, so a bin-axis view still meets
+  // a value it has no axis for. It lands on that view's default rather than
+  // being refused: the rest of the link still names a place, and showing it is
+  // closer to what was asked for than an error or the genomes table.
+  it('lands a bin-axis view on its own default for the overview`s value', () => {
     expect(matrixLevel(state('genome'))).toBe('bin')
-    expect(overviewLevel(state('bin'))).toBe('contig')
   })
 
   it('round-trips level=genome, which only the overview reads', () => {
@@ -244,6 +252,21 @@ describe('the level, which two vocabularies share one key for', () => {
       view: 'overview',
       level: 'genome',
     })
+  })
+
+  // The two ends of one choice, tied together. The picker is built in a module
+  // this suite has no document for, so what is asserted is the property that
+  // makes it routable: every level it offers is one `overviewLevel` returns
+  // unchanged, and one the hash carries there and back.
+  it('routes and round-trips every level the whole-file picker offers', () => {
+    for (const { value } of WHOLE_FILE_LEVELS) {
+      expect(overviewLevel(state(value))).toBe(value)
+      expect(parseViewState(`#uri=a&view=overview&level=${value}`)).toStrictEqual({
+        uri: 'a',
+        view: 'overview',
+        level: value,
+      })
+    }
   })
 })
 

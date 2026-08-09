@@ -7,6 +7,17 @@
  * every non-zero pixel, so the level is chosen before the scan rather than
  * derived from it.
  *
+ * The picker offers a third, **bin × bin**, which this class does not draw: the
+ * shell routes it to `WholeView`'s pooled read of the same pixels. It belongs in
+ * the same list because it answers the same question on a third axis, and it is
+ * usually the one to answer it with. A contig cell sums a rectangle of
+ * `length × length` and a metagenome's contigs span several orders of magnitude,
+ * so the contig picture spends its width on the shortest sequences and its
+ * colour range on the longest — on a real 48-MAG file, a third of the diagonal
+ * comes out empty while one badly-assembled genome takes a quarter of the axis.
+ * Bin cells are all the same size, so the scale means one thing everywhere.
+ * See {@link WHOLE_FILE_LEVELS} for what each is for.
+ *
  * This is the only operation in the app that costs the whole file: summing all
  * genome pairs is inherently a full pixel scan and there is no index that
  * shortcuts it (§4). So it is not the landing view, and it never starts on its
@@ -43,6 +54,104 @@ import { SearchBox } from './SearchBox'
  */
 export const REMOTE_SCAN_BYTE_LIMIT = 64 * 1024 * 1024
 
+/**
+ * The three axes the whole-file view of a metagenome can be drawn on.
+ *
+ * Two of them are this view's scan and the third is `WholeView`'s pooled read,
+ * which is a fact about *which class the shell mounts* and not about the choice
+ * being made — the reader is picking what one cell means, and "a 50 kb square",
+ * "a contig pair" and "a genome pair" are three answers to that one question.
+ * So they are one list, offered in one control, and `Session.mountOverview`
+ * turns the answer into a view.
+ */
+export type WholeFileLevel = 'bin' | 'contig' | 'genome'
+
+/**
+ * What each level is called, and what one cell of it holds.
+ *
+ * Exported for the test that ties the two ends of the choice together: every
+ * level offered here has to be one `overviewLevel` can return and one the hash
+ * round-trips, or the picker offers a place the shell cannot route to. That is
+ * the one failure a Node suite can catch in a control it has no document to
+ * build.
+ */
+export const WHOLE_FILE_LEVELS: ReadonlyArray<{
+  value: WholeFileLevel
+  label: string
+  hint: string
+}> = [
+  {
+    value: 'bin',
+    label: 'bin × bin',
+    // The one level whose cells are all the same size, which is why it is the
+    // legible picture of a fragmented assembly: a contig cell sums a rectangle
+    // of `length × length`, and on a metagenome that spans several orders of
+    // magnitude, so one colour scale cannot fit both ends of it.
+    hint:
+      'Every genome at once, on an axis of base pairs — equal-area cells, so the colour scale ' +
+      'means the same thing everywhere. The same map as ticking every row of the genomes table.',
+  },
+  {
+    value: 'contig',
+    label: 'contig × contig',
+    hint:
+      'One cell per contig, so a block is as wide as a genome is fragmented rather than as long ' +
+      'as it is. The picture to read when the question is whether a bin holds together.',
+  },
+  {
+    value: 'genome',
+    label: 'genome × genome',
+    hint: 'One cell per genome pair: the phage–host and HGT picture, and the smallest of the three.',
+  },
+]
+
+/**
+ * The level picker, shared with the bin-level map.
+ *
+ * Built here and handed to whichever view is mounted rather than owned by each,
+ * because it is one control over one choice: `bin × bin` is drawn by
+ * `WholeView` and the other two by this class, and a reader who switched away
+ * from contigs has to find the way back in the place they left it. Two pickers
+ * that happened to agree would be two pickers to keep agreeing.
+ *
+ * The picker reports and does not decide, at every level: the choice is in the
+ * URL like every other view's, so it goes out to the shell and comes back as a
+ * view built for it. That is what makes it survive a shared link and a back
+ * button, and it is the same round trip the transform and the colormap take.
+ *
+ * Which also throws the result on screen away, as it must: the three are
+ * different accumulations of the same pass over the same pixels, and there is no
+ * way to derive one from another without reading them again.
+ */
+export function wholeFileLevelCard(
+  current: WholeFileLevel,
+  onChange: (level: WholeFileLevel) => void,
+): HTMLElement {
+  const select = el('select', { class: 'select' })
+  for (const choice of WHOLE_FILE_LEVELS) {
+    select.appendChild(el('option', { value: choice.value, text: choice.label }))
+  }
+  select.value = current
+  const hint = el('p', {
+    class: 'hint',
+    text: WHOLE_FILE_LEVELS.find((choice) => choice.value === current)?.hint ?? '',
+  })
+  select.addEventListener('change', () => onChange(select.value as WholeFileLevel))
+  return el(
+    'section',
+    { class: 'card' },
+    cardTitle('Scan', 'scan'),
+    el('div', { class: 'field' }, el('span', { class: 'field-label', text: 'level' }), select),
+    hint,
+    el('p', {
+      class: 'hint',
+      text:
+        'Every other view costs a bounded read. All three of these are one pass over every ' +
+        'non-zero pixel of the file.',
+    }),
+  )
+}
+
 export interface OverviewProps {
   client: ReaderClient
   binsize: number
@@ -50,16 +159,26 @@ export interface OverviewProps {
   sourceBytes: number
   /** Sidecar edge list advertised by a catalog, if any. */
   edgeListUrl?: string
-  /** Which axes to scan for, from the view state. */
+  /**
+   * Which axes to scan for, from the view state.
+   *
+   * Never `bin`: the shell routes that level to `WholeView` before this class is
+   * built (`Session.mountOverview`), because it is a bounded read of the stored
+   * pixels rather than an accumulation over unit pairs.
+   */
   level: 'genome' | 'contig'
   /** The colour scale from the view state; the panel starts there. */
   scale: ScaleState
   /**
-   * The level and the colour scale go back into the URL, exactly as they do
-   * from every other heatmap view — which is the whole of what "the overview is
-   * a view state" buys the reader.
+   * A level was chosen — including `bin`, which this view cannot draw.
+   *
+   * It and the colour scale go back into the URL, exactly as they do from every
+   * other heatmap view, which is the whole of what "the overview is a view
+   * state" buys the reader. `bin` is reported through the same callback because
+   * the picker is one list over one choice ({@link wholeFileLevelCard}): the
+   * shell is what knows that one of the three answers is a different class.
    */
-  onLevelChange(level: 'genome' | 'contig'): void
+  onLevelChange(level: WholeFileLevel): void
   onScaleChange(scale: ScaleState): void
   onOpenPair(rowGenome: string, colGenome: string): void
   /**
@@ -106,7 +225,6 @@ export class Overview {
   private readonly summary: HTMLElement
   /** Where a genome is named; the `/` key puts the caret here. */
   private readonly search: SearchBox
-  private readonly levelSelect = el('select', { class: 'select' })
   private running: Cancellable<OverviewResult> | null = null
   /**
    * Which scan the panel is currently willing to paint.
@@ -229,18 +347,7 @@ export class Overview {
       'aside',
       { class: 'side' },
       ...this.panel.cards,
-      el(
-        'section',
-        { class: 'card' },
-        cardTitle('Scan', 'scan'),
-        this.levelPicker(),
-        el('p', {
-          class: 'hint',
-          text:
-            'Every other view costs a bounded read. This one costs a pass over every ' +
-            'non-zero pixel, so it only runs when you ask for it.',
-        }),
-      ),
+      wholeFileLevelCard(this.level, (next) => props.onLevelChange(next)),
     )
 
     this.summary.textContent =
@@ -314,34 +421,6 @@ export class Overview {
         this.props.onOpenContig(target.rowContig, target.colContig)
         break
     }
-  }
-
-  /**
-   * Genome or contig axes, chosen before the scan.
-   *
-   * The picker reports and does not decide: the level is in the URL like every
-   * other view's, so the change goes out to the shell and comes back as a view
-   * built for it. That is what makes the choice survive a shared link and a
-   * back button, and it is the same round trip the transform and colormap take.
-   *
-   * Which also throws the result on screen away, as it must: the two levels are
-   * different accumulations of the same pass, and there is no way to derive one
-   * from the other without re-reading the pixels.
-   */
-  private levelPicker(): HTMLElement {
-    const select = this.levelSelect
-    select.appendChild(el('option', { value: 'genome', text: 'genome × genome' }))
-    select.appendChild(el('option', { value: 'contig', text: 'contig × contig' }))
-    select.value = this.level
-    select.addEventListener('change', () => {
-      this.props.onLevelChange(select.value as 'genome' | 'contig')
-    })
-    return el(
-      'div',
-      { class: 'field' },
-      el('span', { class: 'field-label', text: 'level' }),
-      select,
-    )
   }
 
   private renderGate(): void {
