@@ -114,7 +114,12 @@ interface Row {
   el: HTMLElement
   chip: HTMLElement
   blurb: HTMLElement
-  /** What the task is waiting for, when it cannot run yet. */
+  /**
+   * What the task is waiting for, when it cannot run yet.
+   *
+   * A sibling of {@link Row.el} in the list, not a child of it — so it is held
+   * here rather than found through the row.
+   */
   needs: HTMLElement
   stop: HTMLButtonElement
   /** The cell the chip and the stop share, so the stop can come and go. */
@@ -210,7 +215,11 @@ export class AnalysisPanelCard {
       for (const task of tasks.filter((item) => item.group === group)) {
         const row = this.row(task)
         this.rows.push(row)
-        nodes.push(row.el)
+        // Two nodes per task, the second usually hidden. Flat siblings rather
+        // than a wrapper each, so `.analysis-group + .analysis-row` still names
+        // the first row under a heading — and so the row keeps being the thing
+        // with the border, which is what the reader is clicking.
+        nodes.push(row.el, row.needs)
       }
     }
     this.el.replaceChildren(...nodes)
@@ -243,9 +252,14 @@ export class AnalysisPanelCard {
 
     const cell = el('div', { class: 'plot-icon-row' }, chip)
     const blurb = el('span', { class: 'analysis-row-blurb', text: task.blurb })
-    // What the task is waiting for, under the blurb. Empty and hidden on a row
-    // that can run, so a ready panel is exactly as dense as it was.
-    const needs = el('span', { class: 'analysis-row-needs hidden' })
+    // What the task is waiting for. A **sibling** of the row rather than a third
+    // line inside it: inside, it read as one more thing the task claims about
+    // itself, and a reader scanning twenty rows for one they can run had to read
+    // each card to the bottom. Out here it is an aside in the margin — see the
+    // stylesheet, which is where the rest of that argument lives. Mounted by
+    // {@link rebuild}, and empty and hidden on a row that can run, so a ready
+    // panel is exactly as dense as it was.
+    const needs = el('p', { class: 'analysis-row-needs hidden' })
     const node = el(
       'div',
       {
@@ -255,7 +269,6 @@ export class AnalysisPanelCard {
       el('span', { class: 'analysis-row-title', text: task.title }),
       cell,
       blurb,
-      needs,
     )
     const open = (): void => {
       // A waiting row is a label, not a button. Opening the drawer on it would

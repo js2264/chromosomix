@@ -11,7 +11,14 @@
 
 import type { Region } from '../../annotations/types'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
-import { idParam, listParam, numParam, strParam, type TrackTaskRunner } from '../job'
+import {
+  chosenInput,
+  listParam,
+  missingInput,
+  numParam,
+  strParam,
+  type TrackTaskRunner,
+} from '../job'
 import { pearson, spearman } from '../stats'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
 
@@ -94,10 +101,16 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
 /** The units to compare over: fixed bins across the assembly, or a feature set. */
 async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
   if (strParam(job.params, 'over', 'bins') === 'features') {
-    const setId = idParam(job.params, 'features')
-    const set = setId === null ? undefined : job.inputs.features?.[setId]
+    // By the **parameter key**, `features` — see `chosenInput`.
+    const found = chosenInput(job.inputs.features, job.params, 'features')
+    const set = found.value
     if (set === undefined) {
-      job.note('Correlating over features needs a feature set, and none was chosen.')
+      job.note(
+        missingInput(found, {
+          unchosen: 'Correlating over features needs a feature set, and none was chosen.',
+          gone: 'The feature set chosen is no longer loaded. Re-open the file, or pick another.',
+        }) ?? '',
+      )
       return []
     }
     const out: Region[] = []

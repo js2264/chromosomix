@@ -16,6 +16,13 @@
   --bg: #ffffff;
   --bg-sunken: #f6f7f8;
   --bg-raised: #ffffff;
+  /*
+   * A surface that is *present and inert*: a control listed because the reader
+   * should know it exists, and greyed because they cannot use it yet. Distinct
+   * from `--bg-sunken`, which is a well things sit in, and from `--bg-raised`,
+   * which is a live card.
+   */
+  --bg-muted: #ececee;
   --border: #dcdfe3;
   --border-strong: #b9bec5;
   --text: #16181d;
@@ -51,6 +58,17 @@
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
 
+  /*
+   * The smallest step, and it was missing.
+   *
+   * Twenty rules across this sheet ask for `--step--2` — every state chip, every
+   * caption, every instruction meant to sit quietly under something else — and
+   * two of them wrote `var(--step--2, 0.72rem)`, which is the only reason the
+   * intended value is known. Undefined, `font-size` fell back to *inherited*, so
+   * all twenty rendered at their parent's size and the whole bottom of the type
+   * scale silently did not exist.
+   */
+  --step--2: 0.72rem;
   --step--1: 0.78rem;
   --step-0: 0.875rem;
   --step-1: 1rem;
@@ -72,6 +90,7 @@
   --bg: #16181c;
   --bg-sunken: #101216;
   --bg-raised: #1c1f25;
+  --bg-muted: #141619;
   --border: #2c313a;
   --border-strong: #3d434e;
   --text: #e6e8ec;
@@ -91,6 +110,7 @@
   --bg: #16181c;
   --bg-sunken: #101216;
   --bg-raised: #1c1f25;
+  --bg-muted: #141619;
   --border: #2c313a;
   --border-strong: #3d434e;
   --text: #e6e8ec;
@@ -109,6 +129,7 @@
   --bg: #ffffff;
   --bg-sunken: #f6f7f8;
   --bg-raised: #ffffff;
+  --bg-muted: #ececee;
   --border: #dcdfe3;
   --border-strong: #b9bec5;
   --text: #16181d;
@@ -1086,6 +1107,7 @@ p {
   --bg: #ffffff;
   --bg-sunken: #f6f7f8;
   --bg-raised: #ffffff;
+  --bg-muted: #ececee;
   --border: #dcdfe3;
   --border-strong: #b9bec5;
   --text: #16181d;
@@ -6039,6 +6061,7 @@ p {
   --bg: #ffffff;
   --bg-sunken: #f6f7f8;
   --bg-raised: #ffffff;
+  --bg-muted: #ececee;
   --border: #dcdfe3;
   --border-strong: #b9bec5;
   --text: #16181d;
@@ -6111,11 +6134,17 @@ p {
    Dimmed rather than hidden, which is a reversal of what §18.1 first said and is
    argued at `TaskAvailability`: a task one drag-and-drop away is a menu item, and
    removing it teaches a reader that the feature does not exist. Not `opacity`
-   alone — the text under it has to stay readable, since the whole point of the
-   row is the sentence saying what to load. */
+   alone — the sentence underneath has to stay readable, since the whole point of
+   the row is that it says what to load.
+
+   Greyed on its own surface rather than only outlined. A dashed border is a
+   detail you notice after reading the row; a card that is plainly a different
+   colour from the ones above it is answered before it is read, which is what a
+   list of twenty is asking of it. */
 .analysis-row.is-waiting {
   cursor: default;
   border-style: dashed;
+  background: var(--bg-muted);
 }
 
 .analysis-row.is-waiting .analysis-row-title,
@@ -6124,19 +6153,32 @@ p {
 }
 
 .analysis-row.is-waiting:hover {
-  background: transparent;
+  background: var(--bg-muted);
   border-color: var(--border);
 }
 
-/* What it is waiting for. In the accent rather than in the dim grey the blurb
-   above it takes, because it is the one line on the row that is an instruction
-   rather than a description. */
+/* What the row is waiting for.
+
+   **Outside the row**, and that is the point of it. Inside, it was a third line
+   of a card that already had two, and it read as one more thing the task claims
+   about itself; a reader scanning twenty rows for one they can run had to read
+   each card to the bottom to find out. Out here it is an aside on the margin of
+   the row above — the same relationship a caption has to a figure.
+
+   Quiet, in the faint grey rather than the accent it used to take. It is not a
+   call to action: nothing is wrong, and the reader is not being asked to go and
+   do this now. It is the answer to "why is that one grey", and it should be
+   waiting there for the moment they ask rather than putting itself forward.
+
+   Pulled up against the row and given the row's own left padding, so the pair
+   sits closer to each other than to the next task. */
 .analysis-row-needs {
   display: block;
-  grid-column: 1 / -1;
-  margin-top: 0.15rem;
+  margin: -0.25rem 0 0.4rem;
+  padding: 0 0.55rem;
   font-size: var(--step--2);
-  color: var(--accent);
+  line-height: 1.4;
+  color: var(--text-faint);
 }
 
 /* A per-bin result is a lane and is drawn on the map, not here (§18.5). This is

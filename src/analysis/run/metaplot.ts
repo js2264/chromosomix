@@ -29,8 +29,10 @@ import {
 } from '../metaplot'
 import {
   boolParam,
+  chosenInput,
   idParam,
   listParam,
+  missingInput,
   numParam,
   strParam,
   type TrackJobContext,
@@ -117,15 +119,20 @@ function groupsOf(
 
 export const runMetaplot: TrackTaskRunner = async (job) => {
   const entries = listParam(job.params, 'tracks')
-  const featureId = idParam(job.params, 'features')
-  const set = featureId === null ? undefined : job.inputs.features?.[featureId]
+  // By the **parameter key**, `features` — see `chosenInput`.
+  const found = chosenInput(job.inputs.features, job.params, 'features')
+  const set = found.value
   if (entries.length === 0 || set === undefined) {
+    const noSet = missingInput(found, {
+      unchosen: 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+      gone: 'The feature set chosen is no longer loaded. Re-open the file, or pick another.',
+    })
     job.note(
-      entries.length === 0 && set === undefined
-        ? 'A metaplot needs a track to read and a set of positions to read it at, and neither has been chosen.'
+      entries.length === 0 && noSet !== null
+        ? 'A metaplot needs a track to read and a set of positions to read it at, and neither is in hand.'
         : entries.length === 0
           ? 'No track was chosen. Load a bigWig and tick it under Tracks.'
-          : 'No feature set was chosen. Load a BED or a GTF and pick it under Features.',
+          : (noSet ?? ''),
     )
     return []
   }

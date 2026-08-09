@@ -98,6 +98,40 @@ export function idParam(params: Params, key: string): string | null {
   return typeof value === 'string' && value !== '' ? value : null
 }
 
+/**
+ * A loaded input a parameter chose, told apart from one nobody chose.
+ *
+ * **The record is keyed by the parameter's key, never by the entry id** — see
+ * {@link TaskInputs} and `AnalysisRunner`'s `chosenEntries`, which is where the
+ * keys are made. Indexing it by the id read back out of `params` is the mistake
+ * this function exists to stop being made a sixth time: it type-checks, it reads
+ * as though it must be right, and every task written that way looked up a real
+ * set under a key nothing was filed under, found `undefined`, and reported "no
+ * set was chosen" about a set the reader had plainly chosen.
+ *
+ * Two failures with two sentences, which is the other half of the point. Nothing
+ * picked is a form to finish; picked-and-gone is a row the reader dropped
+ * between filling the form in and pressing Run, and `inputsFor` leaves it out
+ * rather than substituting an empty set precisely so this can be said out loud
+ * instead of being reported as a clean result over nothing.
+ */
+export function chosenInput<T>(
+  held: Record<string, T> | undefined,
+  params: Params,
+  key: string,
+): { value: T | undefined; chosen: boolean } {
+  return { value: held?.[key], chosen: idParam(params, key) !== null }
+}
+
+/** What to say about an input that is not there. `null` when it is. */
+export function missingInput(
+  found: { value: unknown; chosen: boolean },
+  what: { unchosen: string; gone: string },
+): string | null {
+  if (found.value !== undefined) return null
+  return found.chosen ? what.gone : what.unchosen
+}
+
 // ---------------------------------------------------------------------------
 // Cancellation
 // ---------------------------------------------------------------------------
