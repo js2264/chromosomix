@@ -340,6 +340,10 @@ export class RegionView {
           }),
         }
       },
+      onInstalled: (block) => {
+        if (cols === undefined) this.describeMatch(rows, block)
+        else this.describePair(block)
+      },
       onError: (err) => {
         // Said once, in the line the region box already reports into, and not
         // per frame: `BlockLadder` remembers a refusal so the same read is not

@@ -265,6 +265,7 @@ export class PairView {
         })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },
+      onInstalled: (block) => this.renderSummary(block),
     })
     this.ladder.adopt(result)
   }

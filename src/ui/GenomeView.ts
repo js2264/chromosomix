@@ -302,6 +302,10 @@ export class GenomeView {
         })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },
+      onInstalled: (block) => {
+        this.renderSummary(block)
+        this.renderContigs(block)
+      },
     })
     this.ladder.adopt(result)
   }

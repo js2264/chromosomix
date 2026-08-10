@@ -762,6 +762,7 @@ export class WholeView {
           }),
         }
       },
+      onInstalled: (block) => this.summary.replaceChildren(...this.summarise(block)),
       onError: (err) => {
         if (err instanceof ViewerError) this.showRefusal(err)
       },

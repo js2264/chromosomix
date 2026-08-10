@@ -648,6 +648,15 @@ export function attachRefine(options: {
   enabled?: () => boolean
   onBusy?: (busy: boolean) => void
   onError?: (err: unknown) => void
+  /**
+   * A block went in — re-say whatever the view says about it.
+   *
+   * The line above a map names its size and its resolution, and both change
+   * under a refine. Written once at load it becomes a caption for a picture that
+   * is no longer there, which is worse than no caption: a reader checking what
+   * they are looking at is exactly the reader who would believe it.
+   */
+  onInstalled?: (result: MatrixResult) => void
 }): BlockLadder {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
   const ladder = new BlockLadder({
@@ -667,15 +676,18 @@ export function attachRefine(options: {
         }),
       }
     },
-    onBlock: (result) =>
-      options.panel.regrid(
+    onBlock: (result) => {
+      const placed = options.panel.regrid(
         result,
         // The bin size of the map that answered, which is the open one unless a
         // rung was read — `MatrixResult.binsize` is present only then, and a
         // caller that assumed otherwise would caption a 5 kb picture as 1 kb.
         Math.max(1, result.binsize ?? options.binsize) * Math.max(1, result.binsPerCell ?? 1),
         seconds.get(result),
-      ),
+      )
+      if (placed) options.onInstalled?.(result)
+      return placed
+    },
     ...(options.onBusy === undefined ? {} : { onBusy: options.onBusy }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
