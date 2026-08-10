@@ -78,6 +78,19 @@ export function formatCount(v: number): string {
 export interface KeyContent {
   /** e.g. `Balanced O/E (log2)`. */
   title: string
+  /**
+   * A second, quieter line under the title — the cell size, today.
+   *
+   * Separate from {@link title} rather than appended to it because the two are
+   * different kinds of fact and want different weight: the title says what the
+   * numbers *are*, and this says what one square of the picture *covers*. Run
+   * together they read as one long name, and the resolution is the half a reader
+   * scanning a figure is looking for.
+   *
+   * Absent where there is nothing to say, which is a block whose cells are one
+   * sequence each.
+   */
+  note?: string
   /** The scale's ends, in transformed units. */
   lo: number
   hi: number
@@ -157,7 +170,15 @@ export const KEY_METRICS = {
   padding: 5,
   titleSize: 10,
   valueSize: 10,
+  /**
+   * The resolution line under the title — smaller, because it is a footnote to
+   * the name rather than a second name.
+   */
+  noteSize: 9,
   lineGap: 3,
+  /** Between the title and its note. Tighter than {@link lineGap}: the two lines
+   * are one block of text, and the ramp under them is a different thing. */
+  noteGap: 1,
 } as const
 
 /**
@@ -187,13 +208,18 @@ export function drawKey(
   ctx.textAlign = 'left'
   ctx.font = `${m.titleSize}px ${options.font}`
   const titleWidth = ctx.measureText(content.title).width
+  const note = content.note ?? ''
+  ctx.font = `${m.noteSize}px ${options.font}`
+  const noteWidth = note === '' ? 0 : ctx.measureText(note).width
+  const noteBlock = note === '' ? 0 : m.noteGap + m.noteSize
   ctx.font = `${m.valueSize}px ${options.font}`
   const loWidth = ctx.measureText(content.loLabel).width
   const hiWidth = ctx.measureText(content.hiLabel).width
   const rampWidth = m.swatch * 2 + m.swatchGap
   const rowWidth = loWidth + m.gap + rampWidth + m.gap + hiWidth
-  const width = Math.max(titleWidth, rowWidth) + m.padding * 2
-  const height = m.titleSize + m.lineGap + Math.max(m.swatch, m.valueSize) + m.padding * 2
+  const width = Math.max(titleWidth, noteWidth, rowWidth) + m.padding * 2
+  const height =
+    m.titleSize + noteBlock + m.lineGap + Math.max(m.swatch, m.valueSize) + m.padding * 2
   const x = right - width
   const y = top
 
@@ -206,8 +232,14 @@ export function drawKey(
   ctx.fillStyle = options.textColor
   ctx.font = `${m.titleSize}px ${options.font}`
   ctx.fillText(content.title, x + m.padding, y + m.padding)
+  if (note !== '') {
+    ctx.font = `${m.noteSize}px ${options.font}`
+    // The same ink as the title. A greyed line in a figure survives one
+    // reproduction and not two, and this is the number a methods section quotes.
+    ctx.fillText(note, x + m.padding, y + m.padding + m.titleSize + m.noteGap)
+  }
 
-  const rowY = y + m.padding + m.titleSize + m.lineGap
+  const rowY = y + m.padding + m.titleSize + noteBlock + m.lineGap
   const mid = rowY + Math.max(m.swatch, m.valueSize) / 2
   let cursor = x + m.padding + Math.max(0, (width - m.padding * 2 - rowWidth) / 2)
   ctx.font = `${m.valueSize}px ${options.font}`
