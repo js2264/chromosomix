@@ -58,6 +58,7 @@ import {
   getPlotOptions,
   togglePlotOption,
 } from '../ui/plotOptions'
+import { refineEnabled, toggleRefine } from '../ui/refine'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
@@ -714,6 +715,19 @@ export class App implements SessionHost {
     }
 
     list.push(
+      {
+        id: 'refine-on-zoom',
+        group: 'View',
+        title: refineEnabled()
+          ? 'Stop reading finer data as you zoom'
+          : 'Read finer data as you zoom',
+        hint:
+          'On, zooming past what the block in hand can show reads the window again at a finer ' +
+          'grid — one bounded read once the gesture settles, never during it, and never below ' +
+          'the file’s own bins. Off restores the older behaviour: one read per view, and a zoom ' +
+          'that magnifies it.',
+        run: () => void toggleRefine(),
+      },
       {
         id: 'fold-sidebar',
         group: 'View',

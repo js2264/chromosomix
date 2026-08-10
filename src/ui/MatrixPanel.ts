@@ -117,7 +117,7 @@ import {
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
-import type { RefineView } from './refine'
+import { refineEnabled, type RefineView } from './refine'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
@@ -6320,8 +6320,15 @@ export function spanText(axis: SelectedAxis): { start: string; end: string; span
  * was no way to tell which of the two was lying.
  *
  * Two things a reader needs and cannot deduce: that the picture is pooled, and
- * that **zooming does not sharpen it** — the pooling is per block, not per view,
- * so the answer is to open a smaller block, not to magnify this one.
+ * what that means for zooming into it.
+ *
+ * The second half used to be flat — *zooming does not sharpen it, so the answer
+ * is to open a smaller block* — and for a long time that was the truth. It is
+ * now a question about a setting: with refinement on (`ui/refine.ts`) a settled
+ * zoom reads the window again at a finer grid and the picture does sharpen, down
+ * to the file's own bins; with it off, the old sentence holds exactly. So the
+ * note says which, rather than asserting one of them at a reader who is looking
+ * at the other.
  *
  * `null` when every cell has its own pixel, which is every region and nearly
  * every MAG.
@@ -6329,12 +6336,15 @@ export function spanText(axis: SelectedAxis): { start: string; end: string; span
 export function poolingNote(
   nrows: number,
   ncols: number,
+  refining = refineEnabled(),
 ): { phrase: string } | null {
   const strideY = rasterStride(nrows)
   const strideX = rasterStride(ncols)
   if (strideX === 1 && strideY === 1) return null
   return {
-    phrase: `aggregated ${strideX} × ${strideY} bins to a pixel`
+    phrase: `aggregated ${strideX} × ${strideY} bins to a pixel${
+      refining ? ' · zoom in to sharpen' : ' · open a smaller block to sharpen'
+    }`,
   }
 }
 

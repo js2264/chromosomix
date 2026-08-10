@@ -6,7 +6,19 @@
  * | Open + render genomes table | ≤ 20 range requests |
  * | Load one MAG's matrix | ≤ 5 |
  * | Genome-pair block | ≤ 5 |
- * | Pan/zoom within a loaded genome | **0** |
+ * | Pan/zoom within the block in hand | **0** |
+ * | Refine, after a settled zoom | ≤ 5 |
+ *
+ * ## The row that changed, and why it is two rows
+ *
+ * §12 used to say *pan/zoom within a loaded genome: 0 requests*, full stop, and
+ * the test below asserted it with the comment that *"there is no tiling and no
+ * progressive refine precisely because this costs nothing"*. There is now a
+ * progressive refine (`ui/refine.ts`), so that sentence had to be re-earned
+ * rather than deleted: **a gesture still costs nothing**, and what costs a read
+ * is the *settled* zoom afterwards — once, when the picture has stopped moving,
+ * bounded by the same window a region load already pays for. The first row is
+ * therefore unchanged and still asserted at exactly zero; the second is new.
  *
  * ## The substitution
  *
@@ -40,6 +52,7 @@ const BUDGET = {
   genomeMatrix: 5,
   pairMatrix: 5,
   panZoom: 0,
+  refine: 5,
 } as const
 
 const REFERENCE = new URL('../../data/Hum53.metacool', import.meta.url).pathname
@@ -166,6 +179,31 @@ function budgetSuite(label: string, path: string): void {
       }
     })
 
+    it('refines a settled zoom in ≤ ' + String(BUDGET.refine) + ' requests', async () => {
+      const { mc, source } = await open(path)
+      try {
+        const genome = mc.genomeNames[mc.displayGenomes()[0]]
+        const [lo, hi] = mc.genomeExtent(genome)
+        await mc.matrix({ rows: [lo, hi] })
+
+        // What a refine asks for: the middle half of what is on screen, padded
+        // by half a window on each side (`ui/refine.ts`'s REFINE_PAD) — so a
+        // window of half the genome, which is the first step of the staircase.
+        const span = hi - lo
+        const window: Extent = [lo + Math.floor(span / 4), hi - Math.floor(span / 4)]
+        source.resetStats()
+        await mc.matrix({ rows: window })
+
+        const { requests, bytes } = source.stats()
+        expect(
+          requests,
+          `a refine cost ${requests} requests / ${bytes} bytes`,
+        ).toBeLessThanOrEqual(BUDGET.refine)
+      } finally {
+        mc.close()
+      }
+    })
+
     it('does zero I/O while panning, zooming and toggling level', async () => {
       const { mc, source } = await open(path)
       try {
@@ -176,8 +214,15 @@ function budgetSuite(label: string, path: string): void {
         source.resetStats()
         // A pan/zoom session: eight viewports at four zoom levels, each
         // rasterised, plus both level toggles. All of it is arithmetic over the
-        // block already in memory (§2, §5.2) — there is no tiling and no
-        // progressive refine precisely because this costs nothing.
+        // block already in memory (§2, §5.2).
+        //
+        // This is still exactly zero, and it is the half of §12 that the refine
+        // did not change: `HeatmapView` holds no reader and `MatrixPanel` holds
+        // no reader client, so nothing a *gesture* does can reach a byte. What
+        // reaches a byte is the policy above the panel, once the window has
+        // settled, and it is measured by the test before this one — deliberately
+        // as a separate budget, because the property worth protecting is that
+        // the two are separable at all.
         for (const divisor of [1, 2, 4, 8]) {
           const span = Math.max(1, Math.floor(block.nrows / divisor))
           for (const offset of [0, block.nrows - span]) {
