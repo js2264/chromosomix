@@ -227,7 +227,7 @@ the paper's figures.
 
 ## M4 — Interaction (1.5 weeks)
 
-Small, because the spec deleted most of it. There is no tiling, no LRU cache, no progressive refine.
+Small, because the spec deleted most of it. There is no tiling and no tile cache.
 
 1. Pan and zoom as canvas transforms over the in-memory matrix.
 2. Level toggle (bin ↔ contig) computed locally.
@@ -235,8 +235,21 @@ Small, because the spec deleted most of it. There is no tiling, no LRU cache, no
 4. mmetacool handling: integer entry names → zoom ladder wired to the zoom control; otherwise an
    entry picker. Exact integer nesting (`k = resolution / base`), no interpolation.
 
-**Exit criteria:** an instrumented test asserting **zero** network or file reads during pan and zoom
-within a loaded genome, and sustained 60 fps on the largest fixture.
+*Changed during the build.* Item 4 stayed unbuilt through several milestones and the reason was
+never item 4: there was no zoom control for a ladder to be wired to, because a zoom did not choose
+anything. What §9 and §7.2 then added — whole-genome coolers, and a block coarsened in the *read* —
+made that a real gap rather than a documentation one, so §2's fourth clause was renegotiated (see
+its own note) and item 4 landed as part of the answer rather than on its own.
+
+The shape is `annotations/samples.ts`'s, which had solved the same problem for the tracks years
+earlier: pad the window, quantise the resolution, keep drawing what is in hand. `src/ui/refine.ts`
+is the policy; `HeatmapView.regrid` and `MatrixPanel.regrid` are the seam a block arrives through;
+the reader needed nothing new, because `fitPlan` already chose a grid for whatever extents it was
+given and `snapToGrid` already anchored that grid to the sequence.
+
+**Exit criteria:** an instrumented test asserting **zero** network or file reads during a pan or a
+zoom *gesture* within a loaded genome, one bounded read per settled zoom past the block's own grid,
+and sustained 60 fps on the largest fixture.
 
 ---
 
@@ -330,7 +343,8 @@ symmetry/transpose logic and the remote request count, and both are provable ear
 - Every accepted fixture opens and renders; both refused fixtures produce their named error.
 - All golden matrices match with exact integer equality.
 - §12 request budgets hold in CI against a hosted file.
-- Pan and zoom inside a loaded genome perform zero I/O.
+- Pan and zoom inside a loaded genome perform zero I/O *while the gesture lasts*; a settled zoom
+  past the block's own grid performs one bounded read, and zooming back out performs none.
 - No code path reads `/bins`.
 - `__unbinned__` is unreachable as a view; the QC statistic is present.
 - A private file dropped on the page renders without a single network request leaving the browser.

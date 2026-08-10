@@ -50,8 +50,17 @@ is 2–6 Mb, so at 1–5 kb bins a single MAG's matrix is at most a few million 
 pixels are a bounded, contiguous slice of `/pixels`. One genome is therefore *one bounded read*,
 held whole in memory, after which pan and zoom are pure canvas transforms with **zero** further I/O.
 That is the central difference from HiGlass, which has to stream a 3 Gb genome and needs a tile
-server, a tile cache and progressive refinement to do it. None of that is built here, because none
-of it is warranted.
+server, a tile cache and a tile compositor to do it. None of that is built here, because none of it
+is warranted.
+
+**Zooming does sharpen the picture, though** — the one thing on that list that turned out to be
+worth having. A whole chromosome, or a whole genome of a cooler, is larger than any screen and
+arrives already coarsened; zooming into it and having nothing happen is not the interaction anybody
+has in their hands. So a zoom that settles past what the block in hand can show reads that window
+again, at the grid the picture could show. It is still one bounded read drawn whole — no tiles, no
+compositing — and it stops at the file's own bins, which for a MAG means it never starts. Two or
+three blocks are kept so that zooming back out is a swap rather than a request. On by default, and
+one command away from off.
 
 Two things break the small-MAG assumption, and both are handled as exceptions rather than as the
 general case: `__unbinned__` (never displayable) and non-metagenomic coolers (region level only).
@@ -164,7 +173,7 @@ not the plan.
 | M1 | Reader core, headless | **done** — URI parsing, detection and acceptance gates, `MetaCooler`, fixed-bin coordinates, extents, range parsing |
 | M2 | Matrix queries | **done** — bounded reads, dense-size guard, COO → dense, transpose handling, contig/genome roll-up |
 | M3 | Render and first visible app | **done** — canvas heatmap with matplotlib's own LUTs, `metacooler show` defaults, genomes table, genome/pair/region views, breadcrumb, URL-hash state |
-| M4 | Interaction | **mostly** — pan, zoom, level toggle and cross-navigation are all local and I/O-free; the mmetacool *zoom ladder* is classified but not yet wired to a zoom control (see below) |
+| M4 | Interaction | **done** — pan, zoom, level toggle and cross-navigation; a gesture still costs nothing, and a *settled* zoom past the block's own grid reads the window again (`src/ui/refine.ts`). The mmetacool and mcool resolution ladders are wired to it: a coarse read comes from the coarsest rung whose bins still fill a cell, which is fewer pixels for the same picture and the only honest way to draw a balanced map at a coarse grid |
 | M5 | Remote sources | **done** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals), `docs/hosting.md`, and the §12 request-budget regression tests in `test/budgets/` |
 | M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12, BEDPE and FASTA in a worker of their own; `src/render/` draws them as lanes on any of the map’s four edges and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
@@ -174,11 +183,11 @@ not the plan.
 
 Other gaps worth naming rather than discovering:
 
-- **The mmetacool resolution ladder is inferred but not driven.** All-integer entry names are
-  correctly recognised as a `zoomify` ladder (and the entry names *are* the bin sizes — the test
-  suite checks that, and that the levels nest by exact integer ratios), but the entries are not yet
-  wired to a zoom control. Today both a ladder and a sample collection present the same entry
-  picker, with different explanatory text.
+- **The genome × genome overview does not refine.** Everything else does — a region, a genome, a
+  pair, a whole file, and every panel of a deck — but the overview's axes are genomes or contigs
+  rather than positions, so a cell there *is* a sequence and there is no finer grid under it. The
+  entry picker also stays: a ladder is now driven by the zoom, and a reader who picks a rung by hand
+  has still said something the zoom does not overrule.
 - **The genome × genome overview** is implemented and correctly gated (explicit action, progress,
   cancellable; refused over HTTP above a size threshold; instant when a `metacooler network
   --level genome` edge list is advertised), but has not been exercised end-to-end on a large remote
@@ -234,20 +243,24 @@ mirroring, and there is no third half. It must be a cooler with the same chromos
 size, because every coordinate in the picture is an index into one list of sequences and one grid
 cannot be two resolutions. See SPECS §5.7.
 
-**cool and mcool are region-level only, and this is not a HiGlass replacement.** A eukaryotic cooler
-reintroduces exactly the streaming problem the design avoids, so those files are supported as
-*browse a region*, never *view the whole genome*: the entry point is the contigs table, a
-`chrom:start-end` selection loads through the same bounded-read path as a MAG, and whole-chromosome
-or whole-genome selections are size-guarded and refused with the CLI's own wording. The claim is
-zero-install regional inspection of any cooler, **plus** a genome hierarchy that HiGlass has no
-concept of — not a general Hi-C browser.
+**cool and mcool are whole-genome only where it fits, and this is not a HiGlass replacement.** The
+entry point is the contigs table; a `chrom:start-end` selection loads through the same bounded-read
+path as a MAG; and the whole matrix is a view of its own whenever a size estimate against
+`navigator.deviceMemory` says this machine can hold it — a yeast genome at 1 kb is 12,100 bins and
+opens in one read, human chr1 at 5 kb does not. Anything larger than the picture is coarsened in the
+*read* rather than refused, and a zoom sharpens it back down to the file's own bins. What is still
+not built is the thing that makes HiGlass HiGlass: no tile server, no tiles, no picture assembled
+out of parts, and so no view of a 3 Gb genome. The claim is zero-install inspection of any cooler
+that fits, **plus** a genome hierarchy HiGlass has no concept of — not a general Hi-C browser.
 
 ### Non-features
 
-Stated as decisions so they are not mistaken for omissions: no tile server; no user accounts; no
-file upload; no server-side computation of any kind; no required companion files; no required
-preprocessing; no support for orderings other than `genome-then-length`; no whole-genome views of
-eukaryotic coolers; **no write access of any kind** — the viewer never modifies a file it opened.
+Stated as decisions so they are not mistaken for omissions: no tile server; no tiles and no picture
+assembled out of parts; no user accounts; no file upload; no server-side computation of any kind; no
+required companion files; no required preprocessing; no support for orderings other than
+`genome-then-length`; no whole-genome view that does not fit in memory (the limit is measured, not a
+category — see SPECS §9); **no write access of any kind** — the viewer never modifies a file it
+opened.
 
 That last one is worth spelling out now that the app writes bigWigs. It has always *produced* files
 — a PNG, a PDF, a BED of hand-drawn marks, a saved session — and a bigWig is one more of them: new

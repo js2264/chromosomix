@@ -35,10 +35,34 @@ Therefore, within a genome:
 
 - the entire matrix is loaded in one bounded read and held in memory;
 - pan and zoom are pure canvas operations with **zero** further I/O;
-- no tiling, no LRU tile cache, no resolution pyramid, no progressive refinement.
+- no tiling, no LRU tile cache, no resolution pyramid.
 
-This is the central architectural difference from HiGlass, which must stream a 3 Gb genome. The
-complexity that streaming demands is not warranted here and is explicitly not built.
+This is the central architectural difference from HiGlass, which must stream a 3 Gb genome. None of
+the machinery streaming demands is built: there is no tile server, nothing is cut into tiles,
+nothing is composited, and no picture is ever assembled from parts.
+
+**The fourth clause used to be "no progressive refinement", and it is now bounded rather than
+absent.** What the app grew into is what changed it: §9 made whole-genome coolers a first-class view
+and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome now
+opens at a grid the reader can see is coarse — and, until this, could do nothing about but leave.
+Zooming past what the block in hand can show therefore reads the window again, at the grid the
+picture could show, **once the gesture has settled**. The properties that keep this inside §2 rather
+than beside it:
+
+- **a gesture still costs nothing.** The read is issued after the window stops moving, never during
+  it, and never from the renderer or the panel — neither holds a reader (§7.2);
+- **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Two or
+  three are *retained* so that zooming back out is a swap rather than a request, which is a small
+  bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
+  stitched;
+- **it terminates.** There is no grid below the file's own bins, so the staircase from the widest
+  view to the finest data is `⌈log₂ k⌉` reads — one for a whole yeast genome at 1 kb, three for a
+  human chromosome at 5 kb, **none at all for a MAG**, whose block already is the finest data in the
+  file. §2's own case is untouched;
+- **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
+  it cannot become the full pixel scan §7.3 gates;
+- **it is a preference**, on by default and one command away from off, and off is exactly the
+  behaviour above with the fourth clause absolute.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
@@ -197,8 +221,9 @@ a 400×400 heatmap of scalars is less informative than a sortable MAG table with
 The full intra-genome matrix for one MAG, loaded whole (§2). Contig boundaries drawn as separators
 from `/bins/chrom` transitions. Contig names labelled when ≤ 50, matching the Python threshold.
 
-Zoom and pan operate on the in-memory matrix — no I/O. Level toggle between bin and contig
-aggregation, both computed locally from the loaded data.
+Zoom and pan operate on the in-memory matrix — no I/O. A zoom that settles past what the block can
+show reads the window again (§2), which for a MAG never happens: its block is already the file's own
+bins. Level toggle between bin and contig aggregation, both computed locally from the loaded data.
 
 ### 5.3 Genome-pair view
 
@@ -500,7 +525,12 @@ diverges from what a reader reproduces locally.
 - transform `log1p` (with `log10` and `none` selectable)
 - colormap `afmhot_r`
 - `vmin = 0`; `vmax` = 99th percentile of non-zero values in the **transformed** matrix, recomputed on
-  view change, with manual override
+  view change, with manual override. A *refine* (§2) is not a view change and does not recompute it:
+  a coarse cell is a sum of bins, so a finer block over the same place holds systematically smaller
+  numbers, and re-measuring would re-brighten the map for a reader who changed nothing but the
+  magnification. The range is measured from the **widest block held** and stays there while the
+  reader zooms in; zooming out past it re-measures, which is right, because that reader is looking at
+  data that was not in the picture before
 - separators at genome or contig boundaries, thin grey
 - ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
@@ -553,8 +583,15 @@ the legend on its side beneath it. Every control revealed by *pointing* — a ta
 where there is no hover; and every one of them is inert while it is invisible, so a tap or a click
 that lands where one is hidden reaches what is behind it rather than firing a button nobody saw.
 
-**One grid, and one place it is decided.** A block larger than the picture is
-coarsened **once, in the reader**, into cells that hold at most a capacity of bins
+**One grid, and one place it is decided.** This is what a refine (§2) re-uses
+rather than works around: it asks for a narrower window and *nothing else*, and
+the reader plans the grid for it exactly as it plans every other read. A caller
+that named its own grid would bypass the widening below and anchor the cells to
+wherever the reader had panned to, so a cell's value would change as it crossed
+the screen — which is why the plan is never sent by anything driven from a
+viewport.
+
+A block larger than the picture is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
 and never part of one sequence beside anything else: a sequence longer than the
 capacity keeps cells of its own, cut at its own start, and only the ones too small
 to fill a cell share. The capacity is searched for against `RASTER_MAX_DIM`, so the
@@ -841,6 +878,11 @@ contigs at a reduction level chosen for the current zoom and keeps them; panning
 from that cache. A refetch happens only when the visible contig set changes or the required
 resolution crosses a factor of two — not once per frame, and never during a drag.
 
+This paragraph is older than §2's fourth clause and it is what that clause now says too: the matrix
+refines by the same rule, from the same three ideas — a window wider than the view, a resolution
+quantised so a small zoom asks for nothing new, and the picture in hand left on screen until the
+better one arrives.
+
 ### 8.5 cool and mcool only — and genomes with no map
 
 Every card, every lane and every overlay is gated on the file having no genome layer — which is
@@ -1030,7 +1072,13 @@ in the same view. Concretely:
   for; a whole yeast genome at 500 bp (24,322 bins, ~2.7 GB) is the case it must *not* refuse on a
   machine that can hold it
 - `.mcool` resolution levels are each fixed-bin, so §3.3's arithmetic applies unchanged; the levels
-  drive the zoom control exactly as mmetacool entries do. An `.mcool` addressed at its **root** is
+  drive the zoom control exactly as mmetacool entries do — a settled zoom reads from the coarsest
+  rung whose bins still fill a cell, which is fewer stored pixels for the same picture *and* the
+  only honest way to draw a balanced map at a coarse grid, since `zoomify --balance` re-balances
+  each level from raw counts and summing a fine level does not (§6.4). Bin indices are not
+  comparable between levels, so windows cross through base pairs, per contig. The reader still holds
+  one map *open*; the rungs a zoom touches are opened beside it over the same mounted bytes and
+  released with the session. An `.mcool` addressed at its **root** is
   refused with `mcool-root`, naming its resolutions — the mirror of `mmetacool-root` — and the app
   opens the finest of them, as it does for a zoomify ladder
 
@@ -1089,7 +1137,9 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 |---|---|
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
-| Pan/zoom within a loaded genome | 0 requests, 60 fps |
+| Pan/zoom within the block in hand | 0 requests, 60 fps |
+| Refine, after a settled zoom (§2) | ≤ 5 range requests, one bounded read |
+| Zoom out to a block already read | 0 requests |
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 
@@ -1151,7 +1201,13 @@ why the spec got shorter as it got more specific.
 |---|---|---|
 | Variable-bin files | **Not supported.** Fixed-bin only (§3.3, §10) | The variable-width coordinate path throughout — and, as a second-order effect, every read of `/bins` |
 | `__unbinned__` | **Never displayable** (§7.4) | The toggle, the guarded-open path, and the largest counter-example to §2's small-MAG assumption |
-| cool / mcool | **Native; whole-genome where it fits** (§9) | The tiling architecture §2 exists to avoid — a block either fits in one read or is refused, and there is no third path — and, since the reader went native, the synthesised one-genome table and the `synthesised` flag every view carried |
+| cool / mcool | **Native; whole-genome where it fits** (§9) | The tiling architecture §2 exists to avoid — a block is one bounded read or it is refused, and it is never assembled from parts — and, since the reader went native, the synthesised one-genome table and the `synthesised` flag every view carried |
+
+This row used to end *"a block either fits in one read or is refused, and there is no third path"*.
+There is now a third path and it is worth naming, because it is not the one that was being refused:
+a block that does not fit is read **coarser** (§7.2) and then read again, narrower and finer, as the
+reader zooms into it (§2). Every one of those reads is a whole bounded block. What §2 deleted was
+*assembling a picture out of tiles*, and that is still deleted.
 
 The through-line: each answer protects the assumption in §2 that a unit of display fits in memory in
 one bounded read. Variable bins broke the arithmetic, `__unbinned__` broke the size bound, and
@@ -1268,14 +1324,21 @@ session with companions costs the session it would have been, plus the companion
 | Score column and balancing | yes | |
 | Derived values and the 45° turn (§7.5) | yes | |
 | Pan and zoom | yes (§16.3) | opt out |
-| Which rung of a collection (§3.4) | seeded from the lead | yes |
+| Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
 | Transform and colormap | seeded from the lead | yes |
 | `vmin` / `vmax` | opt in | yes |
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
 
+A rung is now *also* what a settled zoom reads from (§2), which does not change the row above: the
+picker still names the map a panel is **addressed** as, the link still carries it, and a reader who
+touches it has said something the zoom does not overrule. What the zoom chooses is which level
+answers one bounded read, and that is a fact about a picture rather than about an address.
+
 **Resolution is the one thing on the shared side of that line that cannot be shared**, and it is why
-the lock's currency is base pairs (§16.3). Two files rarely have the same ladder, so a deck lands an
+the lock's currency is base pairs (§16.3). That is also what lets panels refine independently: five
+maps each reading their own window at their own grid stay in step, because the lock was never
+counting cells. Two files rarely have the same ladder, so a deck lands an
 `.mcool` on the lead's bin size where that rung exists and on its finest otherwise — the right guess,
 and only a guess: the rung that makes a comparison legible is not always the one that matches a
 number. So the entry is a picker, as the `::1000` beside the companion's name, and the choice is
