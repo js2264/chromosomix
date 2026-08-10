@@ -666,6 +666,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The Sequences card is how a cooler's map picks its chromosomes.** The card
+  the 1D browser has always had — every sequence, its length, a bar for the
+  shape of the assembly and a tick box beside each — is now in the **General**
+  column whenever a cooler is open, and beside a map the ticks are the picture:
+  none is the whole genome, one is that chromosome's block, several are those
+  chromosomes against each other. It replaces the **Chromosome** card, which sat
+  in the same place describing the one sequence the breadcrumb already named,
+  from a table the reader can open in full, and offered no way to change it.
+
+  The binding runs both ways, which is the whole of the design. A tick
+  navigates; a navigation re-ticks — so the breadcrumb, the Chromosomes table,
+  the back button and a pasted link all move the boxes with the picture, and the
+  card can never say "showing 1 of 16" over a whole-genome map. A table view is
+  the one thing that leaves the ticks alone rather than clearing them: nothing
+  is drawn there to disagree with, and clearing would throw away a selection
+  being made on the way to the map. Ticking is also order-free — the axis comes
+  out in the file's order however the boxes were clicked, rather than in the
+  order they were clicked in.
+
+  The **Chromosomes table** is untouched, and it is still where columns are
+  sorted, filtered and read; what moved is only the picking. A `.metacool` keeps
+  its **Contig** card and its genomes table: there the unit is the genome, and a
+  picker with a hundred thousand tick boxes in it is not a picker.
+
 - **The virtual 4C lane is gone, and Shift-drag is a zoom.** Shift-dragging on a
   map used to conjure a strip beside it summing that band of the matrix. Every
   part of that the **4C task** now does better: it reads the pixel table rather
@@ -762,6 +786,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   could create one, so that is a decision and not a limitation.
 
 ### Fixed
+
+- **A gene model shows the gene's name, and its accession beside it.** Half the
+  GFF3 world does not spell anything the way GTF does: a VEuPathDB or PlasmoDB
+  annotation writes `ID` and `Name` where Ensembl writes `gene_id` and
+  `gene_name`, and types its genes with the Sequence Ontology's specific terms —
+  `protein_coding_gene`, `ncRNA_gene`, `pseudogene` — rather than the bare
+  `gene`. Every one of those was a place the parser looked for something and
+  found nothing, so a *P. falciparum* annotation was drawn as 6,193 systematic
+  ids with its 2,578 symbols sitting unread two lines up in the file. The gene
+  line is now recognised whatever it is called, registered under both the
+  identifiers a child can name it by — GFF3's `ID` and GTF's `gene_id`, which
+  one file mixes freely — and the symbol reaches the transcripts drawn under it.
+
+  The same pass fixed a quieter one. `transcript` and `mRNA` were the only lines
+  read as transcripts, so an `ncRNA`, a `tRNA` or a `pseudogenic_transcript` was
+  read as somebody's *child* and filed under its `Parent`, which is the gene,
+  while its own exons were filed under theirs, which is it: two glyphs for one
+  transcript, the second a nameless box with no exons in it. That file drew 402
+  of them.
+
+  **The name and the accession are now two facts, and both are kept.** The map
+  and the browser draw the symbol, because a label inside an eight-pixel box has
+  room for one thing. The card a click opens leads with both — `gene name:
+  LipL1`, `gene ID: PF3D7_1314600` — above the coordinates, because a reader
+  clicking one of the sixty genes called `VAR` is very often clicking it *for*
+  the accession. The hover readout carries both. And the **search box answers to
+  either**: `LipL1` out of a paper and `PF3D7_1314600` out of a supplementary
+  table find the same gene, which on an annotation whose symbols repeat sixty
+  times is the only way to ask for one of them. A gene the file identifies but
+  never names is still drawn as its accession, and is printed once rather than
+  twice under two labels.
 
 - **A track turned off stays off when the resolution changes.** Whether a row is
   drawn is a setting like its colour and its height, and it was the one that did

@@ -125,6 +125,18 @@ describe('GTF', () => {
         'I\tsgd\texon\t10\t20\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n',
     )
     expect(set.name[0]).toBe('G1')
+    // The name fell back to the accession, and saying so is what stops the
+    // feature card printing one string under two labels.
+    expect(set.id[0]).toBe('G1')
+  })
+
+  it('keeps the symbol and the accession apart', () => {
+    const set = parseGtf(
+      'I\tsgd\tgene\t10\t20\t.\t+\t.\tgene_id "G1"; gene_name "GAL4";\n' +
+        'I\tsgd\ttranscript\t10\t20\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n',
+    )
+    expect(set.name[0]).toBe('GAL4')
+    expect(set.id[0]).toBe('G1')
   })
 
   it('assembles a transcript from exon lines alone', () => {
@@ -159,6 +171,72 @@ describe('GTF', () => {
         'I\tx\texon\t10\t30\t.\t-\t.\tgene_id "G"; transcript_id "T";\n',
     )
     expect(Array.from(set.exonStart)).toEqual([9, 79])
+  })
+})
+
+/**
+ * The half of the GFF3 world that does not spell anything the way GTF does.
+ *
+ * A VEuPathDB / PlasmoDB annotation writes `ID` and `Name` where Ensembl writes
+ * `gene_id` and `gene_name`, and it types its genes with the Sequence Ontology's
+ * specific terms — `protein_coding_gene`, `ncRNA_gene`, `pseudogene` — rather
+ * than the bare `gene`. Every one of those is a place the parser looked for
+ * something and found nothing, and the whole file came out labelled with
+ * systematic ids while its symbols sat unread two lines up.
+ */
+describe('a GFF3 that spells its attributes the other way', () => {
+  /** One gene, its mRNA, its exons and its CDS — laid out as PlasmoDB writes them. */
+  const PLASMODB =
+    'C\tVEuPathDB\tprotein_coding_gene\t100\t400\t.\t+\t.\tID=PF_001;Name=LipL1;description=ligase\n' +
+    'C\tVEuPathDB\tmRNA\t100\t400\t.\t+\t.\tID=PF_001.1;Parent=PF_001\n' +
+    'C\tVEuPathDB\texon\t100\t200\t.\t+\t.\tID=exon1;Parent=PF_001.1;gene_id=PF_001\n' +
+    'C\tVEuPathDB\texon\t300\t400\t.\t+\t.\tID=exon2;Parent=PF_001.1;gene_id=PF_001\n' +
+    'C\tVEuPathDB\tCDS\t120\t380\t.\t+\t0\tID=cds1;Parent=PF_001.1;gene_id=PF_001\n'
+
+  it('reads a gene named by `ID` and `Name`, through its transcript', () => {
+    const set = parseGtf(PLASMODB)
+    // One glyph: the gene line is not drawn beside its own mRNA.
+    expect(set.length).toBe(1)
+    expect(set.name[0]).toBe('LipL1')
+    expect(set.id[0]).toBe('PF_001')
+    expect(set.exonAt[1] - set.exonAt[0]).toBe(2)
+    expect(set.cdsStart[0]).toBe(119)
+  })
+
+  // `pseudogenic_transcript`, `ncRNA`, `tRNA`: transcripts by any reading, and
+  // each was read as somebody's child and keyed by its `Parent` — which is the
+  // gene — while its own exons were keyed by theirs. Two drafts for one thing,
+  // the second a nameless box with no exons in it.
+  it('draws one glyph for a non-coding transcript, not two', () => {
+    const set = parseGtf(
+      'C\tdb\tncRNA_gene\t100\t400\t.\t-\t.\tID=g2;Name=SNR17\n' +
+        'C\tdb\tncRNA\t100\t400\t.\t-\t.\tID=g2.1;Parent=g2\n' +
+        'C\tdb\texon\t100\t400\t.\t-\t.\tID=e;Parent=g2.1\n',
+    )
+    expect(set.length).toBe(1)
+    expect(set.name[0]).toBe('SNR17')
+    expect(set.id[0]).toBe('g2')
+  })
+
+  it('prefers the gene’s own name to the transcript’s', () => {
+    const set = parseGtf(
+      'C\tdb\tgene\t100\t400\t.\t+\t.\tID=g3;Name=ACT1\n' +
+        'C\tdb\tmRNA\t100\t400\t.\t+\t.\tID=g3.1;Parent=g3;Name=ACT1-201\n',
+    )
+    expect(set.name[0]).toBe('ACT1')
+    expect(set.id[0]).toBe('g3')
+  })
+
+  // A gene's `ID` is the gene; a transcript's `ID` is the transcript. Reading
+  // the attribute everywhere would file every mRNA under a gene of its own.
+  it('does not read a transcript’s own ID as its gene', () => {
+    const set = parseGtf(
+      'C\tdb\tmRNA\t100\t400\t.\t+\t.\tID=lonely.1\n' +
+        'C\tdb\texon\t100\t400\t.\t+\t.\tParent=lonely.1\n',
+    )
+    expect(set.length).toBe(1)
+    expect(set.id[0]).toBe('')
+    expect(set.name[0]).toBe('')
   })
 })
 

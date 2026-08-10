@@ -84,6 +84,29 @@ function attributeRows(detail: string): HTMLElement[] {
 }
 
 /**
+ * What the file calls this gene, both ways, at the top of the card.
+ *
+ * First because it is the answer to the question the click asked. A reader who
+ * clicks a glyph labelled `VAR` on a *Plasmodium* map is very often clicking it
+ * *because* sixty of them are called that, and the accession is the whole of
+ * what distinguishes this one — so it belongs above the coordinates rather than
+ * three lines down among the attributes, and labelled rather than sitting in the
+ * card as an unexplained string of capitals.
+ *
+ * Both lines only where there are two facts. `name === id` is how
+ * {@link FeatureSet.id} spells a gene the file identifies but never names, and
+ * printing that twice under two different labels would invent a symbol the file
+ * does not contain. A format with no accession at all — a BED, a peak set —
+ * gets neither line and keeps its name in the title, where it always was.
+ */
+function geneRows(name: string, id: string): HTMLElement[] {
+  if (id === '') return []
+  return name === '' || name === id
+    ? [row('gene ID', id)]
+    : [row('gene name', name), row('gene ID', id)]
+}
+
+/**
  * The exons, as coordinates rather than as a count.
  *
  * Capped, and the cap is visible in the text rather than silent: a transcript
@@ -123,6 +146,7 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => {
       const rows: HTMLElement[] = [
+        ...geneRows(name, set.id[at]),
         row('position', locusOf(set, at)),
         row('length', fmt.bp(length)),
       ]

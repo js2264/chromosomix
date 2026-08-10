@@ -348,6 +348,14 @@ interface Draft {
  * layouts in the wild all work: a file with `transcript` lines, a file with only
  * `exon` lines, and a file with neither (which falls back to `gene` lines drawn
  * as plain boxes).
+ *
+ * **Names and ids are two different facts and both are kept.** A gene has a
+ * symbol a reader recognises (`LipL1`) and an accession a database does
+ * (`PF3D7_1314600`), the file writes them under whichever pair of attribute
+ * names its authors preferred, and which of the two is on screen should not
+ * depend on that. So both are resolved here — see {@link geneIdOf} and
+ * {@link GENE_NAME_KEYS} — the symbol is drawn and the accession is carried in
+ * `id`, where the search box and the feature card both find it.
  */
 export function parseGtf(text: string): FeatureSet {
   const drafts = new Map<string, Draft>()
@@ -368,14 +376,22 @@ export function parseGtf(text: string): FeatureSet {
     const strand = strandOf(columns[6])
     const attributes = parseAttributes(columns[8] ?? '', gff3)
 
-    const geneId = attributes.get('gene_id') ?? attributes.get('geneid') ?? ''
-    const geneName = attributes.get('gene_name') ?? attributes.get('name') ?? ''
+    const isGene = isGeneRow(feature)
+    const isTranscript = !isGene && isTranscriptRow(feature)
+    const geneId = geneIdOf(attributes, gff3, isGene, isTranscript)
+    const geneName = firstOf(attributes, GENE_NAME_KEYS)
     const biotype = attributes.get('gene_biotype') ?? attributes.get('gene_type') ?? ''
 
-    if (feature === 'gene') {
-      if (geneId !== '') {
-        if (geneName !== '') geneNames.set(geneId, geneName)
-        if (biotype !== '') geneBiotypes.set(geneId, biotype)
+    if (isGene) {
+      // Registered under *every* id a child could name it by — GTF's `gene_id`
+      // and GFF3's own `ID` — because the two conventions are mixed inside one
+      // file more often than not: the PlasmoDB gene line carries `ID`, its mRNA
+      // points at that through `Parent`, and its exons point at the same string
+      // through `gene_id`. Keying on one of them loses the other's children.
+      for (const id of [geneId, attributes.get('id') ?? '']) {
+        if (id === '') continue
+        if (geneName !== '') geneNames.set(id, geneName)
+        if (biotype !== '') geneBiotypes.set(id, biotype)
       }
       genes.push({
         contig,
@@ -393,7 +409,7 @@ export function parseGtf(text: string): FeatureSet {
       return
     }
 
-    const key = transcriptKey(attributes, gff3, feature)
+    const key = transcriptKey(attributes, gff3, isTranscript)
     if (key === null) return
     let draft = drafts.get(key)
     if (draft === undefined) {
@@ -413,7 +429,7 @@ export function parseGtf(text: string): FeatureSet {
       drafts.set(key, draft)
     }
     // A transcript's own line gives the span; an exon-only file has to grow it.
-    if (feature === 'transcript' || feature === 'mrna') {
+    if (isTranscript) {
       draft.start = start
       draft.end = end
     } else {
@@ -442,13 +458,16 @@ export function parseGtf(text: string): FeatureSet {
 
   const builder = new FeatureBuilder()
   for (const draft of rows) {
-    const name =
-      draft.geneName !== ''
-        ? draft.geneName
-        : (geneNames.get(draft.geneId) ?? (draft.geneId !== '' ? draft.geneId : ''))
+    // The gene's own line wins over the transcript's. Where a file names both —
+    // `Name=LipL1` on the gene, `Name=LipL1-1` on its mRNA — the gene's is the
+    // one a reader searched for, and the transcript's suffix is a fact the
+    // feature card can hold rather than one the map has to spell out.
+    const fromGene = draft.geneId === '' ? '' : (geneNames.get(draft.geneId) ?? '')
+    const geneName = fromGene !== '' ? fromGene : draft.geneName
+    // `name === id` is how a nameless gene is spelled; see `FeatureSet.id`.
+    const name = geneName !== '' ? geneName : draft.geneId
     const biotype = draft.biotype !== '' ? draft.biotype : (geneBiotypes.get(draft.geneId) ?? '')
     const detail = [
-      draft.geneId === '' ? '' : draft.geneId,
       biotype,
       draft.source === '' ? '' : `source ${draft.source}`,
       draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
@@ -458,6 +477,7 @@ export function parseGtf(text: string): FeatureSet {
     builder.add(draft.contig, draft.start, draft.end, {
       strand: draft.strand,
       name,
+      id: draft.geneId,
       detail,
       ...(draft.exons.length > 0 ? { exons: draft.exons } : {}),
       ...(draft.cdsFrom >= 0 && draft.cdsTo > draft.cdsFrom
@@ -466,6 +486,86 @@ export function parseGtf(text: string): FeatureSet {
     })
   }
   return builder.finish()
+}
+
+/**
+ * Where a gene's **symbol** may be written, in order of preference.
+ *
+ * `gene_name` is GTF's and the one to believe when it is there. `Name` is
+ * GFF3's, and it is last because a transcript line carries one too and it means
+ * the transcript — which is exactly why the gene's own line is consulted first
+ * when the row is resolved.
+ */
+const GENE_NAME_KEYS = ['gene_name', 'genename', 'gene_symbol', 'symbol', 'name']
+
+/** …and its **accession**. `ID` is not here: see {@link geneIdOf} for why. */
+const GENE_ID_KEYS = ['gene_id', 'geneid']
+
+/** The first of these attributes the line carries, or `''`. */
+function firstOf(attributes: Map<string, string>, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = attributes.get(key)
+    if (value !== undefined && value !== '') return value
+  }
+  return ''
+}
+
+/**
+ * Which gene this line is about.
+ *
+ * `gene_id` first, because a line that says so is not guessing. After that the
+ * answer depends on what kind of line this is, and that is the whole reason
+ * `ID` is not simply added to {@link GENE_ID_KEYS}: on a gene line `ID` *is* the
+ * gene, and on a transcript line it is the transcript, so a rule that read it
+ * everywhere would file every mRNA under a gene of its own and no two
+ * transcripts of one gene would ever meet.
+ *
+ * A GFF3 transcript points at its gene through `Parent`, which is the same
+ * string from the other end of the relationship. Its exons point at the
+ * transcript instead, so they are left to contribute whatever `gene_id` they
+ * carry (VEuPathDB writes one) and nothing otherwise.
+ */
+function geneIdOf(
+  attributes: Map<string, string>,
+  gff3: boolean,
+  isGene: boolean,
+  isTranscript: boolean,
+): string {
+  const explicit = firstOf(attributes, GENE_ID_KEYS)
+  if (explicit !== '') return explicit
+  if (isGene) return attributes.get('id') ?? ''
+  if (!gff3 || !isTranscript) return ''
+  const parent = attributes.get('parent') ?? ''
+  return parent === '' ? '' : parent.split(',')[0]
+}
+
+/**
+ * Whether this line describes a **gene**.
+ *
+ * `gene` is what GTF writes, and what GFF3 writes about half the time. The
+ * Sequence Ontology's more specific terms are the other half —
+ * `protein_coding_gene`, `ncRNA_gene`, `pseudogene`,
+ * `transposable_element_gene` — and every one of them ends in the word. Matching
+ * only the bare term read a PlasmoDB GFF as a file with no genes in it at all,
+ * so every symbol in it was skipped and 6,193 transcripts were drawn wearing
+ * their systematic ids.
+ */
+function isGeneRow(feature: string): boolean {
+  return feature.endsWith('gene')
+}
+
+/**
+ * Whether this line describes a **transcript** — the thing a glyph is drawn for.
+ *
+ * `transcript` and `mRNA` were the two this knew. Everything a genome writes its
+ * non-coding genes with is one in exactly the same sense — `ncRNA`, `tRNA`,
+ * `rRNA`, `snoRNA`, `lnc_RNA` — and so is a `pseudogenic_transcript`. Left out,
+ * each of those was read as somebody's *child* and keyed by its `Parent`, which
+ * is the gene, while its own exons were keyed by their `Parent`, which is it:
+ * two drafts for one transcript, one of them a nameless box with no exons in it.
+ */
+function isTranscriptRow(feature: string): boolean {
+  return feature === 'transcript' || feature.endsWith('_transcript') || feature.endsWith('rna')
 }
 
 /**
@@ -479,12 +579,12 @@ export function parseGtf(text: string): FeatureSet {
 function transcriptKey(
   attributes: Map<string, string>,
   gff3: boolean,
-  feature: string,
+  isTranscript: boolean,
 ): string | null {
   const explicit = attributes.get('transcript_id')
   if (explicit !== undefined && explicit !== '') return explicit
   if (!gff3) return null
-  if (feature === 'transcript' || feature === 'mrna') return attributes.get('id') ?? null
+  if (isTranscript) return attributes.get('id') ?? null
   const parent = attributes.get('parent')
   return parent === undefined || parent === '' ? null : parent.split(',')[0]
 }

@@ -17,7 +17,7 @@
 
 import { button, el } from './dom'
 import { KEYS, keyLabel } from './commands'
-import { findFeatures } from '../annotations/search'
+import { findFeatures, hitLabel } from '../annotations/search'
 import type { AnnotationStore } from '../annotations/store'
 import { fmt } from './dom'
 
@@ -181,7 +181,7 @@ export class SearchBox {
  */
 export function featureSuggestions(store: AnnotationStore, text: string): Suggestion[] {
   return findFeatures(store, text).map((hit) => ({
-    label: `${hit.name} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+    label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
     value: `${hit.contig}:${hit.start}-${hit.end}`,
   }))
 }

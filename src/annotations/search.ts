@@ -33,6 +33,14 @@ const MAX_HITS = 10
 
 export interface FeatureHit {
   name: string
+  /**
+   * The accession, where the file gave one and it is not the name already.
+   *
+   * `''` otherwise, which is both "this format has no such thing" and "this gene
+   * has no symbol, so the name you are reading *is* the accession" — and the
+   * label wants the same thing in either case, which is to print it once.
+   */
+  id: string
   contig: string
   /**
    * The window to open, **0-based half-open** — padded and clamped.
@@ -50,7 +58,16 @@ export interface FeatureHit {
 }
 
 /**
- * Features whose name starts with `text`, from the set the star picks.
+ * Features whose **name or accession** starts with `text`, from the set the star
+ * picks.
+ *
+ * Both, because genomics addresses one gene two ways and a reader uses whichever
+ * the thing they are reading used. `LipL1` is what a paper calls it and
+ * `PF3D7_1314600` is what the supplementary table calls it, and a box that
+ * answered only the first would refuse every identifier pasted out of a
+ * spreadsheet. It matters most exactly where the symbols are least useful: a
+ * *Plasmodium* annotation has sixty genes called `VAR`, and the accession is the
+ * only way to ask for one of them.
  *
  * Empty for a query with a colon in it — that is coordinates, and coordinates
  * have no names to suggest; a list of "no match" hanging under a perfectly good
@@ -67,10 +84,19 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
   const hits: FeatureHit[] = []
   for (let i = 0; i < set.length && hits.length < limit; i++) {
     const name = set.name[i]
-    if (name === '' || !name.toLowerCase().startsWith(query)) continue
+    const id = set.id[i]
+    const matched =
+      (name !== '' && name.toLowerCase().startsWith(query)) ||
+      (id !== '' && id.toLowerCase().startsWith(query))
+    if (!matched) continue
     const pad = Math.max(FEATURE_MIN_PAD, Math.round((set.end[i] - set.start[i]) * FEATURE_PAD))
     hits.push({
-      name,
+      // A gene the file identifies but does not name is drawn as its accession
+      // already (`annotations/parse.ts`), so the two are equal rather than the
+      // name being empty — and a hit found by id alone still has something to
+      // print. `name` is what to read; `id` is what to read it *by*.
+      name: name !== '' ? name : id,
+      id: id === name ? '' : id,
       contig: set.contigs[set.contig[i]],
       start: Math.max(0, set.start[i] - pad),
       end: set.end[i] + pad,
@@ -78,6 +104,17 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
     })
   }
   return hits
+}
+
+/**
+ * How a hit names itself in either box's list: `LipL1 (PF3D7_1314600)`.
+ *
+ * Shared so the map's suggestions and the browser's read the same, since the two
+ * lists differ only in the base they write coordinates in — which is the one
+ * thing they must not share (`ui/SearchBox.ts`).
+ */
+export function hitLabel(hit: FeatureHit): string {
+  return hit.id === '' ? hit.name : `${hit.name} (${hit.id})`
 }
 
 /**

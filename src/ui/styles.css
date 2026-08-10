@@ -4282,6 +4282,20 @@ canvas.is-frozen {
   display: none;
 }
 
+/* The Sequences card's slot in the File panel, directly under the File card and
+   above the record host. Empty on a metacool, where the unit is the genome and
+   the contig list is not a picker — so `:empty` again, or the panel would spend
+   a 0.9rem gap on a card that is not there. */
+.sequence-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sequence-host:empty {
+  display: none;
+}
+
 .record-name {
   font-family: var(--mono);
   font-size: var(--step--1);

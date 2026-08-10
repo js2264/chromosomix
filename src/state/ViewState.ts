@@ -19,6 +19,7 @@
  */
 
 import { isCompareOp } from '../render/compare'
+import { contigOf } from '../ui/labels'
 import type { Transform, ViewKind, ViewState } from '../types'
 
 const VIEW_KINDS: ViewKind[] = [
@@ -432,6 +433,87 @@ export function selectionOf(state: ViewState): UnitSelection | null {
 function splitNames(value: string | undefined): string[] {
   if (value === undefined || value === '') return []
   return value.split(',').map((name) => name.trim()).filter((name) => name !== '')
+}
+
+// ---------------------------------------------------------------------------
+// The view, as a set of sequences
+// ---------------------------------------------------------------------------
+
+/**
+ * A view state and a tick box are the same decision, read in the two directions.
+ *
+ * The Sequences card in the General column is the picker a cooler's map is
+ * steered from (`ui/SequenceCard.ts`): none ticked is the whole genome, one is
+ * that chromosome's block, several are those chromosomes against each other.
+ * Those are three of §5.5's view kinds, so *which sequences are drawn* is a
+ * question the state already answers — and the card must not keep a second
+ * answer beside it, or the breadcrumb, the Chromosomes table, the back button
+ * and a pasted link would each move the picture without moving the ticks.
+ *
+ * So the pair below is the whole of the binding, and they are here rather than
+ * in the session because a round trip through them is the property worth
+ * pinning: {@link sequencesShown} of {@link viewForSequences} is the identity on
+ * every set of names a card can hold.
+ */
+
+/**
+ * Which sequences this view is a picture of, or `null` where it is a picture of
+ * none of them.
+ *
+ * `null` is not "no sequences" — that is `[]`, the whole genome — it is *do not
+ * ask*: a table view draws no map, so there is nothing for the ticks to
+ * disagree with and clearing them would throw away a selection a reader is
+ * halfway through making on the way to one.
+ *
+ * A region narrowed to coordinates is still a picture of its sequence, so the
+ * suffix is stripped — and stripped against the file's own names, since a contig
+ * may legally be called `NODE_1:2` (`ui/labels.ts`).
+ */
+export function sequencesShown(state: ViewState, names: readonly string[]): string[] | null {
+  const known = [...names]
+  switch (state.view) {
+    case 'whole':
+    case 'overview':
+      return []
+    case 'region': {
+      // Both axes of a two-axis view. `chrI × chrII` is a picture of two
+      // sequences by any reading, and the card is the one place a reader can
+      // see that without parsing the crumb.
+      const on = [state.region, state.region2]
+        .map((region) => (region === undefined ? null : contigOf(region, known)))
+        .filter((name): name is string => name !== null)
+      return [...new Set(on)]
+    }
+    case 'selection': {
+      const selection = selectionOf(state)
+      return selection === null || selection.kind !== 'contig' ? null : selection.names
+    }
+    default:
+      return null
+  }
+}
+
+/**
+ * The view that draws exactly these sequences — {@link sequencesShown} run
+ * backwards.
+ *
+ * `whole` is the file's own answer to "all of them", which is not the same view
+ * on the two layouts: a cooler reads its whole map in one bounded read and a
+ * metagenome scans for one (§7.3). The caller knows which; this does not.
+ *
+ * Nothing else about the state is carried, because a navigation is a fresh state
+ * by design (`Session.navigate`) — and the coordinates of a region view are
+ * dropped deliberately: a reader who has just asked for a second chromosome is
+ * no longer looking at a window inside the first.
+ */
+export function viewForSequences(
+  uri: string,
+  names: readonly string[],
+  whole: 'whole' | 'overview',
+): ViewState {
+  if (names.length === 0) return { uri, view: whole }
+  if (names.length === 1) return { uri, view: 'region', region: names[0] }
+  return { uri, view: 'selection', regions: names.join(',') }
 }
 
 /** A view state naming a file but nothing inside it — the landing view (§5.1). */
