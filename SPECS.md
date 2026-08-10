@@ -2162,6 +2162,16 @@ no contact at all has no cis *fraction*, because zero of zero is not zero and
 drawing it at the floor would put a bin that never touched anything in the same
 place as one that only ever reaches other sequences.
 
+**On a file with no annotation layer the drawer is the lane.** A `.metacool` carries no annotations at
+all (§8.5), so it has no Tracks card, no synthetic card and nowhere for a per-bin result to be a row —
+and three of the tasks offered on one produce exactly that: coverage and marginals, diamond insulation,
+and MAG purity's per-contig track. There the drawer draws the profile itself, bucketed to the width it
+has with a min–max band so a spike inside a bucket is visible rather than sampled away, and carries the
+exports the row would have carried: bigWig, bedGraph and TSV beside the PNG and the vector PDF. This is
+not a second opinion about the rule above — wherever there *is* a card the profile goes to it and is a
+track in every sense — it is what the rule has to say about the one layout where the card cannot exist,
+which is otherwise a result that is computed, priced, reported as finished, and then dropped.
+
 **Values are not persisted; the recipe is.** A vector is megabytes and session storage is not for that.
 What survives a reload is the task, its parameters and its framing, and the row comes back in the
 `detached` state with a **Recompute** button — which is precisely the state a dropped local file returns

@@ -93,6 +93,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and the zoom reads the open map, which is §3.4's own rule for what a ladder is
   allowed to be.
 
+- **The test suite can open a DOM.** Everything here ran under Node, which is
+  right for the arithmetic — a range query, an axis, a bin conversion, the shape
+  of a view state — and left the other half of the application, which is cards,
+  panels and dialogs, asserted by reading the source. A file now opts in with a
+  `// @vitest-environment jsdom` docblock and calls `setUpDom()`; the ninety
+  files that do not need a DOM go on paying nothing for one. jsdom has no 2D
+  context and none is faked: `getContext` answers `null` quietly, which every
+  figure in this app already handles because a real browser can refuse one too,
+  and a test that wants to know what was *drawn* runs the figure's own `draw`
+  into a `VectorPage` — the same call the PDF export makes, and a real
+  implementation of the drawing subset rather than a mock of one. The first
+  three suites cover the work above: the Sequences card's ticks against a shared
+  selection, the feature card's leading two lines, and where a profile goes on a
+  file with no annotation layer.
+
 ### Fixed
 
 - **A pooled read drew the wrong column.** `SpanScanOptions` had no `value`, so
@@ -786,6 +801,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   could create one, so that is a decision and not a limitation.
 
 ### Fixed
+
+- **An analysis on a `.metacool` keeps its numbers.** A per-bin result is a lane
+  rather than a picture (§18.5), and on a cooler that is exactly right: it
+  becomes a row on the Synthetic tracks card and inherits colour, limits, edges,
+  the tooltip and the 1D browser by being the same object a bigWig is. A
+  metacool carries no annotations at all (§8.5), so it has no such card — and
+  three of the tasks offered on one produce per-bin vectors: **coverage and
+  marginals**, described in §18.8 as the cheapest useful thing in the catalogue
+  and the one most worth having under the map; **diamond insulation**, which is
+  `READY` there; and **MAG purity's** per-contig track, advertised as "exported
+  as a BED and as a per-contig track". All three were priced, run, reported as
+  finished — and then dropped, under a sentence telling the reader they were on
+  a card that is not on screen.
+
+  The drawer now draws the profile itself on that layout, bucketed to the width
+  it has with a min–max band so a spike inside a bucket shows as a band reaching
+  up to it rather than being sampled away — which matters, because a marginal is
+  read to find exactly those. Beside it are the exports the row would have
+  carried: **bigWig and bedGraph**, written by the same writers the card's export
+  row calls, plus the TSV, PNG and vector PDF every figure there has. §18.7's
+  headline — bigWig for a signal, bedGraph, BED, TSV, PNG and vector PDF — is
+  now true on both layouts rather than on one. A called interval set still has no
+  picture to be drawn as, so it keeps its sentence; what it no longer does is
+  claim to be on a panel that does not exist, and it says plainly that the BED
+  beside it is the way to take the coordinates.
 
 - **A gene model shows the gene's name, and its accession beside it.** Half the
   GFF3 world does not spell anything the way GTF does: a VEuPathDB or PlasmoDB

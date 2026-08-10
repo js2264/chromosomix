@@ -29,11 +29,22 @@
  * did not ask for.
  *
  * **A per-bin result is a lane, not a picture** (§18.5). A profile is therefore
- * not drawn here at all: it goes to the Synthetic tracks card, where it inherits
- * colour, rename, limits, autoscale, four edges, the tooltip, the 1D browser and
- * the vector figure by being the same object a bigWig is. What this drawer shows
- * for one is a sentence saying where it went, because a drawer that appeared to
- * produce nothing would be a bug report.
+ * not drawn here *when there is a lane for it*: it goes to the Synthetic tracks
+ * card, where it inherits colour, rename, limits, autoscale, four edges, the
+ * tooltip, the 1D browser and the vector figure by being the same object a
+ * bigWig is. What this drawer shows for one is a sentence saying where it went,
+ * because a drawer that appeared to produce nothing would be a bug report.
+ *
+ * **…and a picture when there is not.** A `.metacool` carries no annotations at
+ * all (§8.5), so it has no Tracks card, no Synthetic tracks card and nowhere for
+ * a lane to be a row — and there the sentence was a bug report of its own,
+ * pointing a reader at a card that is not on screen while the numbers went
+ * nowhere. Coverage and marginals, diamond insulation and MAG purity are all
+ * offered on a metagenome and all produce per-bin vectors, so on that file this
+ * drawer draws the profile itself ({@link profileFigure}) and carries the
+ * exports the card would have carried: bigWig, bedGraph and TSV beside the PNG
+ * and the vector PDF every other figure here has. §18.7's *every one of them
+ * exports* holds on both layouts, which is what it claims.
  *
  * Every figure here draws through a `CanvasRenderingContext2D` and nothing else,
  * which is the whole reason the PDF export below is four lines: the same `draw`
@@ -52,6 +63,7 @@ import {
   type IntervalsOutput,
   type ParamValue,
   type Params,
+  type ProfileOutput,
   type Provenance,
   type TaskOutput,
   type TaskResult,
@@ -63,6 +75,7 @@ import { durationText } from './AnalysisPanelCard'
 import {
   curveFigure,
   matrixFigure,
+  profileFigure,
   tableFigure,
   type PlotFigure,
   type TableFigure,
@@ -111,6 +124,28 @@ export interface AnalysisDrawerOptions {
   framing(): AnalysisFraming | null
   /** The close button was pressed. The owner clears its own idea of what is open. */
   onClose(): void
+  /**
+   * Whether this file has an Annotations panel for a lane or an overlay to
+   * become a row on.
+   *
+   * `false` on a `.metacool` (§8.5) and that is the whole of what it means: the
+   * outputs that are not pictures have nowhere to go, so this drawer draws and
+   * exports them itself rather than describing a card that is not on screen.
+   */
+  hasLanes(): boolean
+  /**
+   * Write a per-bin profile out as a file a genome browser opens.
+   *
+   * Here rather than in this file because it needs the assembly — a bigWig
+   * carries a chrom list and a bedGraph is written in genomic coordinates —
+   * which is the workspace's to know. Only called while {@link hasLanes} is
+   * `false`; otherwise the row's own export row is the place for it.
+   */
+  writeProfile(
+    output: ProfileOutput,
+    provenance: Provenance,
+    format: 'bigwig' | 'bedgraph',
+  ): Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -738,7 +773,12 @@ export class AnalysisDrawer {
   }
 
   private block(output: TaskOutput, provenance: Provenance): HTMLElement {
-    if (output.kind === 'profile' || output.kind === 'intervals') {
+    // The two that are not pictures go elsewhere — while there *is* an
+    // elsewhere. On a file with no Annotations panel a profile is drawn here
+    // like any other figure, and an interval set keeps its sentence but says the
+    // true thing about where its coordinates are.
+    if (output.kind === 'intervals') return this.elsewhere(output, provenance)
+    if (output.kind === 'profile' && this.options.hasLanes()) {
       return this.elsewhere(output, provenance)
     }
     const figure: PlotFigure | TableFigure =
@@ -746,7 +786,9 @@ export class AnalysisDrawer {
         ? curveFigure(output)
         : output.kind === 'matrix'
           ? matrixFigure(output)
-          : tableFigure(output)
+          : output.kind === 'profile'
+            ? profileFigure(output)
+            : tableFigure(output)
     this.figures.push(figure)
     const drawable = isDrawable(figure) ? figure : null
 
@@ -757,6 +799,11 @@ export class AnalysisDrawer {
         'div',
         { class: 'analysis-figure-head' },
         el('span', { class: 'analysis-figure-title', text: output.label }),
+        // The two formats a genome browser opens, on the one file where this
+        // drawer is the only place they are offered from. §18.7's headline —
+        // bigWig for a signal, bedGraph, BED, TSV, PNG and vector PDF — was
+        // false on a metacool until they were here.
+        ...(output.kind === 'profile' ? this.profileButtons(output, provenance) : []),
         this.tsvButton(output, provenance),
         ...(drawable === null
           ? []
@@ -775,8 +822,30 @@ export class AnalysisDrawer {
     )
   }
 
+  /** bigWig and bedGraph, written by the workspace because they need the assembly. */
+  private profileButtons(output: ProfileOutput, provenance: Provenance): HTMLButtonElement[] {
+    const write = (format: 'bigwig' | 'bedgraph'): void => {
+      void this.options.writeProfile(output, provenance, format).catch((err: unknown) => {
+        this.setStatus(err instanceof Error ? err.message : String(err))
+      })
+    }
+    return [
+      button('bigWig', () => write('bigwig'), {
+        class: 'btn btn-quiet',
+        title:
+          'Written here, byte for byte — no bedGraphToBigWig step. What IGV, deepTools and ' +
+          'pyBigWig open.',
+      }),
+      button('bedGraph', () => write('bedgraph'), {
+        class: 'btn btn-quiet',
+        title:
+          'One line per bin that has a value; bins with none are omitted, never written as 0.',
+      }),
+    ]
+  }
+
   /**
-   * The two outputs that are not pictures, and where they went instead.
+   * The outputs that are not pictures, and where they went instead.
    *
    * A profile is a lane and a called interval is an overlay (§18.5, §18.7), and
    * both are ordinary rows on the Annotations panel from the moment they arrive
@@ -784,15 +853,28 @@ export class AnalysisDrawer {
    * line is here so the drawer does not look as though the run produced nothing,
    * and the TSV is here because §18.7's *every output offers TSV* has no
    * exceptions.
+   *
+   * The sentence has to know whether that panel exists. It used to say the same
+   * thing on every file, which on a `.metacool` sent a reader to a card that is
+   * not on screen — the one shape of wrongness a sentence about *where something
+   * went* must never have. A profile does not reach this method there at all
+   * (see {@link block}); an interval set does, because a set of coordinates has
+   * no picture to be drawn as either way, and it says plainly that the BED
+   * beside it is the way to get them.
    */
   private elsewhere(output: TaskOutput, provenance: Provenance): HTMLElement {
+    const lanes = this.options.hasLanes()
     const where =
       output.kind === 'profile'
         ? 'one value per bin, so it is a lane rather than a picture: it is on the Synthetic ' +
           'tracks card in the Annotations panel, with the colour, limits, edges and figure ' +
           'every other track has.'
-        : 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
-          'the map it was called from.'
+        : lanes
+          ? 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
+            'the map it was called from.'
+          : 'a set of intervals. This file carries no annotation layer, so there is no overlay ' +
+            'to draw them on — take them as a BED, which this app reads back on any file that ' +
+            'has one.'
     return el(
       'div',
       { class: 'analysis-elsewhere' },

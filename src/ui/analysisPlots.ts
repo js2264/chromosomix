@@ -26,6 +26,7 @@ import type {
   CurveOutput,
   CurveSeries,
   MatrixOutput,
+  ProfileOutput,
   TableColumn,
   TableOutput,
 } from '../analysis/types'
@@ -1224,6 +1225,95 @@ export function curveFigure(output: CurveOutput): PlotFigure {
     (ctx, box, theme) => drawCurve(ctx, output, box, theme),
     curveHeight,
   )
+}
+
+/**
+ * How many points a per-bin profile is drawn with.
+ *
+ * A metagenome has four million bins and a drawer is eight hundred pixels wide,
+ * so a line with a point per bin is four million `lineTo` calls to paint four
+ * hundred pixels — several seconds a frame, for a picture that cannot show what
+ * it drew. Above this many the bins are bucketed; below it every one is drawn.
+ */
+const PROFILE_POINTS = 1200
+
+/**
+ * A per-bin profile as a curve, so it can be drawn where there is no lane.
+ *
+ * §18.5 is unchanged and this is not a second opinion about it: a per-bin result
+ * *is* a track, and wherever there is an Annotations panel it goes there and
+ * inherits colour, limits, edges, the tooltip and the browser by being the same
+ * object a bigWig is. A `.metacool` has no such panel (§8.5), and the choice
+ * there is not between a lane and a picture — it is between a picture and
+ * nothing at all, which is what a coverage run on a metagenome used to produce.
+ *
+ * **Bucketed with a band, not sampled.** Taking every thousandth bin would drop
+ * exactly the spikes a marginal is read for, and would drop them silently. Each
+ * bucket is drawn as its mean with its min–max behind it, so a spike inside one
+ * shows as a band reaching up to it — the picture says "something in here got
+ * that high" rather than quietly saying it did not. A profile short enough to
+ * draw whole gets no band, because there is nothing being summarised.
+ *
+ * `NaN` stays `NaN`: a bucket with no finite value in it is a gap, and
+ * {@link drawSeriesLine} breaks the line there rather than bridging it.
+ */
+export function profileCurve(output: ProfileOutput): CurveOutput {
+  const values = output.values
+  const from = output.extent[0]
+  const n = values.length
+  const buckets = n > PROFILE_POINTS ? PROFILE_POINTS : n
+  const width = buckets === 0 ? 1 : n / buckets
+  const x = new Float64Array(buckets)
+  const y = new Float64Array(buckets)
+  const low = new Float64Array(buckets)
+  const high = new Float64Array(buckets)
+
+  for (let b = 0; b < buckets; b++) {
+    const lo = Math.floor(b * width)
+    const hi = Math.max(lo + 1, Math.floor((b + 1) * width))
+    let sum = 0
+    let count = 0
+    let min = Number.POSITIVE_INFINITY
+    let max = Number.NEGATIVE_INFINITY
+    for (let i = lo; i < hi && i < n; i++) {
+      const value = values[i]
+      if (Number.isNaN(value)) continue
+      sum += value
+      count++
+      if (value < min) min = value
+      if (value > max) max = value
+    }
+    // The bucket's midpoint, in the file's own bin numbering: the axis a reader
+    // reads off this is the one the map's own coordinates are in.
+    x[b] = from + (lo + hi) / 2
+    y[b] = count === 0 ? Number.NaN : sum / count
+    low[b] = count === 0 ? Number.NaN : min
+    high[b] = count === 0 ? Number.NaN : max
+  }
+
+  const banded = buckets < n
+  return {
+    kind: 'curve',
+    id: output.id,
+    label: output.label,
+    series: [
+      {
+        name: output.label,
+        x,
+        y,
+        ...(banded ? { low, high } : {}),
+      },
+    ],
+    xLabel: `bin (${fmt.bp(output.binsize)} each)`,
+    yLabel: output.unit === '' ? output.label : `${output.label} (${output.unit})`,
+    xScale: 'linear',
+    yScale: 'linear',
+  }
+}
+
+/** {@link profileCurve}, drawn. */
+export function profileFigure(output: ProfileOutput): PlotFigure {
+  return curveFigure(profileCurve(output))
 }
 
 export function matrixFigure(output: MatrixOutput): PlotFigure {
