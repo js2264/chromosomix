@@ -49,6 +49,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the genome × genome overview, whose axes are sequences rather than positions:
   a cell there *is* a contig, and there is nothing finer to go to.
 
+  The moment it happens is **shown**, not hidden. Crossing the edge of what the
+  block can show freezes the map — no pan, no zoom — and puts a spinner in the
+  corner of the plot until the new grid lands, so the picture is exactly where
+  you left it when it sharpens and the change is one you can watch happen.
+  Escape calls the read off and gives the map back, so no file can lock it.
+  Panning to the edge of the block reads the next stretch **at the same
+  resolution**: panning is a change of place, not of scale, and getting that
+  wrong hands a reader back a four-times coarser map for dragging left.
+
+  The key in the corner now names the cell size, on its own line, and in
+  exported figures too. It is the one thing about a refining map that the pixels
+  cannot tell you.
+
   On by default; **Read finer data as you zoom** in the command palette turns it
   off, and off is exactly the old behaviour. The note under a pooled map now ends
   `· zoom in to sharpen` or `· open a smaller block to sharpen` depending on
@@ -57,8 +70,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The resolution ladder drives the zoom (§3.4, §9).** "Wire the entries to the
   zoom control" has been in the spec since the first draft and in README's own
-  list of gaps as *inferred but not driven*. A settled zoom now reads from the
-  coarsest rung of an `.mcool` or `.mmetacool` whose bins still fill a cell:
+  list of gaps as *inferred but not driven*. A zoom now reads from the
+  coarsest rung of an `.mcool` or `.mmetacool` whose bins still fill a cell — and
+  never one finer than the level you opened, which is a choice the zoom does not
+  get to overrule:
   fewer stored pixels for the same picture, and — the reason that matters — a
   balanced map that was **balanced at that resolution** rather than summed, which
   is what `zoomify --balance` produces and what the reader has been calling "the
