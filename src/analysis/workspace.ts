@@ -34,7 +34,12 @@ import { el } from '../ui/dom'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
-import { SyntheticCard, syntheticEntry, type SyntheticFormat } from '../ui/SyntheticCard'
+import {
+  SyntheticCard,
+  syntheticEntry,
+  syntheticId,
+  type SyntheticFormat,
+} from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
 import { TASKS, tasksFor } from './registry'
 import { AnalysisRunner, type RunnerHost } from './runner'
@@ -158,6 +163,11 @@ export class AnalysisWorkspace {
       context: () => this.host.context(),
       framing: () => this.host.framing(),
       onClose: () => this.show(null),
+      // Read live rather than captured, because a session's store arrives with
+      // the file and this workspace is built when the *view* mounts.
+      hasLanes: () => this.host.store() !== null,
+      writeProfile: (output, provenance, format) =>
+        this.writeProfile(output, provenance, format),
     })
     this.drawerEl = this.drawer.el
 
@@ -282,9 +292,27 @@ export class AnalysisWorkspace {
 
     if (store === null) {
       // §8.5: a file with a genome layer carries no annotations, so there is no
-      // card for a lane to be a row on. Said rather than dropped — a task that
-      // produced a track and appears to have produced nothing is worse than one
-      // that explains where the track went.
+      // card for a lane to be a row on and no overlay for called intervals. The
+      // drawer draws the profile and carries its exports there (see
+      // `AnalysisDrawer.block`) — which it can only do if the values are still
+      // reachable when the button is pressed, so they are held exactly as they
+      // are on a file that does have a card. Held under the ids the card would
+      // have used, so a second run of the same task replaces its own numbers
+      // rather than accumulating a copy per run.
+      for (const output of intervals) {
+        this.intervals.set(`analysis:${task.id}:${output.id}`, {
+          output,
+          provenance: result.provenance,
+          task: task.id,
+        })
+      }
+      for (const output of profiles) {
+        this.profiles.set(syntheticId(output.id), {
+          output,
+          provenance: result.provenance,
+          task: task.id,
+        })
+      }
       this.drawer.refresh()
       return
     }
@@ -565,13 +593,32 @@ export class AnalysisWorkspace {
       return
     }
 
+    await this.writeProfile(held.output, held.provenance, format, base)
+  }
+
+  /**
+   * A per-bin vector as one of the two files a genome browser opens.
+   *
+   * Public to the drawer as well as to the card, because on a `.metacool` the
+   * drawer is the only surface a profile has: there is no Annotations panel for
+   * it to be a row on (§8.5), so the row's export row does not exist and §18.7's
+   * *bigWig for a signal, bedGraph, BED, TSV, PNG and vector PDF* would be a
+   * claim this app did not keep on that layout. One implementation for both,
+   * rather than the drawer growing a second copy of the writers and a second
+   * opinion about where a bin ends.
+   */
+  private async writeProfile(
+    output: ProfileOutput,
+    provenance: Provenance,
+    format: 'bigwig' | 'bedgraph',
+    name = exportBaseName(output.label),
+  ): Promise<void> {
+    const stamp = fileStamp(new Date())
     const contigs = this.host.contigs()
     if (format === 'bedgraph') {
       downloadBlob(
-        new Blob([profileToBedGraph(held.output, contigs, held.provenance)], {
-          type: 'text/plain',
-        }),
-        `${base}-${stamp}.bedGraph`,
+        new Blob([profileToBedGraph(output, contigs, provenance)], { type: 'text/plain' }),
+        `${name}-${stamp}.bedGraph`,
       )
       return
     }
@@ -581,11 +628,11 @@ export class AnalysisWorkspace {
     // not line up with the assembly is a caller bug and throws.
     const blob = await writeBigWig({
       contigs: contigs.map((contig) => ({ name: contig.name, length: contig.length })),
-      values: held.output.values,
-      firstBin: held.output.extent[0],
-      binsize: held.output.binsize,
+      values: output.values,
+      firstBin: output.extent[0],
+      binsize: output.binsize,
     })
-    downloadBlob(blob, `${base}-${stamp}.bw`)
+    downloadBlob(blob, `${name}-${stamp}.bw`)
   }
 
 }
