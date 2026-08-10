@@ -108,6 +108,7 @@ import {
   CROSSHAIR_COLOR,
   DEFAULT_LABEL_FONT,
   HeatmapView,
+  type AxisCoordSet,
   type AxisCoords,
   type Cell,
   type PlotOptions,
@@ -874,6 +875,13 @@ export class MatrixPanel {
    * mapping is exactly what §8.4 exists to prevent.
    */
   private locusAxes: OverlayAxes = { rows: null, cols: null }
+  /**
+   * The block the colour range is measured from, and how much genome it covers.
+   *
+   * The widest block installed since the view was built — see {@link gaugeFor}.
+   * `null` until the first one arrives.
+   */
+  private gaugeBlock: { spanBp: number; dense: DenseMatrix } | null = null
   /** A picking mode in progress; see {@link armPicking}. */
   private picking: {
     /** Called once per click, for as long as the mode is on. */
@@ -3726,11 +3734,20 @@ export class MatrixPanel {
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
     // being counted in half bins.
+    // A navigation is a new view, so the gauge starts again from this block —
+    // `setData` is what a reader reaches by *asking* for somewhere else, and the
+    // colours of a new place are that place's. {@link regrid} is the path that
+    // has to keep them.
+    this.gaugeBlock = null
     this.heatmap.setMatrix(
       dense,
       turned === null ? separatorsFor(data) : { rows: [], cols: [] },
       gauge,
     )
+    this.gaugeBlock = {
+      spanBp: Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize),
+      dense: this.square ?? dense,
+    }
     // A cell is a bin, so a block's span in cells is its length in base pairs:
     // the contigs worth naming in a 300-contig genome are the long ones, and
     // they are named however many short ones surround them. Above bin level a
@@ -3739,22 +3756,7 @@ export class MatrixPanel {
     this.heatmap.setLabelMinSpan(
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
-    this.heatmap.setAxisCoords({
-      // Under a turn the column ruler is a genomic one at half the bin size,
-      // and the row ruler is a *distance* rather than a position: a turned map's
-      // vertical axis answers "how far apart", so labelling it with coordinates
-      // would name places that are not there. See {@link separationCoords}.
-      rows: turned === null
-        ? axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize)
-        : separationCoords(turned, this.options.binsize),
-      cols: axisCoordsFor(
-        data.colGroups,
-        data.colExtent,
-        data.level,
-        this.options.binsize,
-        turned === null ? 1 : BIN_FRACTION,
-      ),
-    })
+    this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
     // The guides follow the two anchors rather than the two axes while this is
     // set, which is the whole of what the view is told about the turn.
     this.heatmap.setTurn(
@@ -3762,43 +3764,7 @@ export class MatrixPanel {
         ? null
         : { maxSeparation: turned.maxSeparation, direction: turned.direction },
     )
-    // The annotations' view of the same two axes. Rebuilt per block rather than
-    // patched, so a stale mapping can never be drawn over fresh data — the same
-    // rule `setAxisCoords` above follows by being cleared in `setMatrix`.
-    // Built for *every* block, and no longer only where there are annotations to
-    // draw against it: the lanes were the first reader of §8.4's one coordinate
-    // model and the line under the map is the second, and a file with no tracks
-    // on it still knows what window it is showing.
-    const context = this.options.annotations
-    const shared = {
-      level: data.level,
-      binsize: this.options.binsize,
-      contigLength: context?.contigLength ?? ((): number | undefined => undefined),
-    }
-    // A turned block has one genomic axis and one that is not: x is position,
-    // measured in the half-bin columns the rotation produced, and y is distance
-    // from the diagonal, which is not a place and has no locus. `null` on rows
-    // is exactly right for the lanes — a stack drawn against a genomic axis has
-    // nothing to draw itself against up the side, which is why a turn moves
-    // every track to the bottom.
-    this.locusAxes =
-      turned === null
-        ? {
-            rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
-            cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-          }
-        : {
-            rows: null,
-            cols: this.turnedLocus(turned, data),
-            // What an overlay is placed by once there is no row axis to ask: a
-            // mark names one locus or two, and the turn is a function of those
-            // two (`render/overlays.ts`).
-            turn: {
-              maxSeparation: turned.maxSeparation,
-              direction: turned.direction,
-              binsize: this.options.binsize,
-            },
-          }
+    this.locusAxes = this.locusAxesOf(data, turned)
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -3818,6 +3784,228 @@ export class MatrixPanel {
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
+  }
+
+  /**
+   * Swap in a block read on a **different grid**, keeping the reader's window.
+   *
+   * The zoom-to-refine entry point, and the third way a block arrives. It does
+   * everything {@link setData} does except decide the geometry: the derivation,
+   * the compare merge, the turn, the rulers, the lanes and the overlays are all
+   * rebuilt against the incoming block — which is why refining works under an
+   * O/E map, under a blended pair and under a 45° turn rather than being refused
+   * on each — but the picture stays over the same stretch of genome at the same
+   * magnification.
+   *
+   * **The window is carried in base pairs, never in cells.** A cell is a
+   * different number of base pairs on every grid, so preserving the transform
+   * would preserve the wrong thing: a block read twice as fine would come back
+   * showing half as much genome. It is read off the outgoing axes, converted
+   * back through the incoming ones, and handed to `HeatmapView.regrid`. That is
+   * the same conversion the deck's navigation lock makes between two panels of
+   * different resolution (`panels/lock.ts`), for the same reason.
+   *
+   * Returns `false` when the window could not be carried — an axis with no
+   * locus, a contig the incoming block does not cover — and changes nothing when
+   * it does. The caller's fallback is {@link setData}, which refits: a picture in
+   * the right place at the wrong zoom is recoverable, and one in the wrong place
+   * is not.
+   */
+  regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean {
+    if (this.data === null) return false
+    // Read *before* anything moves, off the axes the picture is currently drawn
+    // against. A turned map has no row locus, and that is not a failure: its
+    // rows are distance from the diagonal and are decided by the band's own cut.
+    const want = {
+      rows: this.framedEdges(this.locusAxes.rows, this.heatmap.scaleY),
+      cols: this.framedEdges(this.locusAxes.cols, this.heatmap.scaleX),
+    }
+    if (want.cols === null) return false
+
+    const outgoing = this.data
+    const outgoingBinsize = this.options.binsize
+    this.data = data
+    this.setResolution(binsize)
+    const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
+
+    const axes = this.locusAxesOf(data, turned)
+    const cols = spanOnAxis(axes.cols, want.cols, dense.ncols)
+    const rows =
+      turned === null ? spanOnAxis(axes.rows, want.rows, dense.nrows) : ([0, dense.nrows] as const)
+    if (cols === null || rows === null) {
+      // Put back what was moved. `derive` has already written `this.square`,
+      // `this.drawn` and `this.second`, so the caller must re-run it — which
+      // `setData` does, and which is exactly what the fallback is.
+      this.data = outgoing
+      this.setResolution(outgoingBinsize)
+      return false
+    }
+
+    this.turned = turned
+    this.syncLegendSlots()
+    this.painted = null
+    this.heatmap.setAnchor(
+      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
+    )
+    this.heatmap.setSpanGestures(turned !== null)
+    this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
+    this.writeTurnBox()
+    this.heatmap.regrid(
+      dense,
+      { rows: [rows[0], rows[1]], cols: [cols[0], cols[1]] },
+      {
+        separators: turned === null ? separatorsFor(data) : { rows: [], cols: [] },
+        gauge: this.gaugeFor(data, gauge),
+      },
+    )
+    this.heatmap.setLabelMinSpan(
+      data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
+    )
+    this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
+    this.heatmap.setTurn(
+      turned === null
+        ? null
+        : { maxSeparation: turned.maxSeparation, direction: turned.direction },
+    )
+    this.locusAxes = axes
+    if (presentationMoved) {
+      this.options.onScaleChange?.({
+        transform: this.transform,
+        colormap: this.colormap,
+        vmin: this.manualVmin,
+        vmax: this.manualVmax,
+      })
+    }
+    this.lanes.setAxes(this.locusAxes)
+    this.laneEditor?.close()
+    this.heatmap.setScale(this.scale())
+    this.setBusy(false)
+    this.schedule()
+    return true
+  }
+
+  /**
+   * What the colour range is measured from, across a change of grid.
+   *
+   * **The widest block wins, and it keeps winning while the reader zooms in.**
+   * That is the whole of what stops a refine from re-brightening the map: coarse
+   * cells are sums of bins, so a finer block over the same region holds
+   * systematically smaller numbers and a different population of them, and a
+   * range re-measured on it would move `vmax` under a reader who changed nothing
+   * but the magnification. A loop that was bright at fit zoom has to be the same
+   * brightness when the finer data lands, or the picture is arguing with itself.
+   *
+   * Widening is the one case that re-measures, and it should: a reader zooming
+   * out is looking at data that was not in the picture before, and pinning the
+   * range to a window they have left is the opposite error.
+   *
+   * `undefined` leaves whatever the view holds, which is what makes the ordinary
+   * refine cost nothing — the memo on the gauge survives (`render/heatmap.ts`).
+   */
+  private gaugeFor(data: MatrixResult, own: DenseMatrix | undefined): DenseMatrix | null | undefined {
+    const spanBp = Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize)
+    const held = this.gaugeBlock
+    if (held !== null && spanBp <= held.spanBp) return undefined
+    // `this.square` is the block `derive` just produced, before any rotation: the
+    // range belongs to the square whether or not the picture is a band of it.
+    this.gaugeBlock = { spanBp, dense: this.square ?? { ...toDense(data), values: data.values } }
+    return own ?? null
+  }
+
+  /**
+   * The stretch of genome an axis is showing, as its two edges.
+   *
+   * Two loci rather than a span, because a whole-genome axis crosses sequences
+   * and the far edge is not in the same one as the near edge. `null` for an axis
+   * with no locus at all — a turned map's rows, an axis of whole contigs — which
+   * is a fact about the picture rather than an error.
+   */
+  private framedEdges(
+    axis: LocusAxis | null,
+    scale: Scale,
+  ): { from: { contig: string; bp: number }; to: { contig: string; bp: number } } | null {
+    const windows = this.framedWindows(axis, scale)
+    if (windows.length === 0) return null
+    const first = windows[0]
+    const last = windows[windows.length - 1]
+    return {
+      from: { contig: first.contig, bp: first.start },
+      to: { contig: last.contig, bp: last.end },
+    }
+  }
+
+  /**
+   * The rulers a block wants, per axis.
+   *
+   * Split out of {@link setData} for {@link regrid}, which installs a block on a
+   * different grid and has to write both of these against the incoming one. Two
+   * copies of this would be two answers to "how many base pairs is a cell", and
+   * the one that is wrong is invisible: a ruler is only ever read against the
+   * picture it is drawn on.
+   */
+  private axisCoordsOf(data: MatrixResult, turned: RotatedBlock | null): AxisCoordSet {
+    return {
+      // Under a turn the column ruler is a genomic one at half the bin size,
+      // and the row ruler is a *distance* rather than a position: a turned map's
+      // vertical axis answers "how far apart", so labelling it with coordinates
+      // would name places that are not there. See {@link separationCoords}.
+      rows: turned === null
+        ? axisCoordsFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize)
+        : separationCoords(turned, this.options.binsize),
+      cols: axisCoordsFor(
+        data.colGroups,
+        data.colExtent,
+        data.level,
+        this.options.binsize,
+        turned === null ? 1 : BIN_FRACTION,
+      ),
+    }
+  }
+
+  /**
+   * The annotations' view of the same two axes.
+   *
+   * Rebuilt per block rather than patched, so a stale mapping can never be drawn
+   * over fresh data — the same rule `setAxisCoords` follows by being cleared in
+   * `setMatrix`. Built for *every* block, and not only where there are
+   * annotations to draw against it: the lanes were the first reader of §8.4's one
+   * coordinate model and the line under the map is the second, and a file with no
+   * tracks on it still knows what window it is showing.
+   *
+   * It is also what a {@link regrid} converts the reader's window through. A
+   * window held in base pairs is the only form that survives a change of bin
+   * size, and this is the object that turns base pairs back into cells.
+   */
+  private locusAxesOf(data: MatrixResult, turned: RotatedBlock | null): OverlayAxes {
+    const context = this.options.annotations
+    const shared = {
+      level: data.level,
+      binsize: this.options.binsize,
+      contigLength: context?.contigLength ?? ((): number | undefined => undefined),
+    }
+    // A turned block has one genomic axis and one that is not: x is position,
+    // measured in the half-bin columns the rotation produced, and y is distance
+    // from the diagonal, which is not a place and has no locus. `null` on rows
+    // is exactly right for the lanes — a stack drawn against a genomic axis has
+    // nothing to draw itself against up the side, which is why a turn moves
+    // every track to the bottom.
+    return turned === null
+      ? {
+          rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+          cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
+        }
+      : {
+          rows: null,
+          cols: this.turnedLocus(turned, data),
+          // What an overlay is placed by once there is no row axis to ask: a
+          // mark names one locus or two, and the turn is a function of those
+          // two (`render/overlays.ts`).
+          turn: {
+            maxSeparation: turned.maxSeparation,
+            direction: turned.direction,
+            binsize: this.options.binsize,
+          },
+        }
   }
 
   /** Show or hide the "loading" veil; the canvas keeps its last picture. */
@@ -5497,6 +5685,32 @@ export function groupAt(
  * itself begins, so the absolute bin `blockStart + offset` resolves correctly
  * (§3.3 arithmetic throughout; `/bins` is never consulted).
  */
+/**
+ * Two loci, as a cell interval on a given axis — the second half of a regrid.
+ *
+ * `null` where the axis cannot answer: no locus at all, a contig it does not
+ * cover, or an interval that came back inverted. Every one of those is a reason
+ * to leave the picture alone rather than to place it approximately, because a
+ * map drawn over the wrong stretch of genome looks exactly like a map drawn over
+ * the right one.
+ *
+ * Clamped to the block, since the incoming window is padded beyond the view and
+ * its edges can fall outside a block that stopped at a sequence end.
+ */
+export function spanOnAxis(
+  axis: LocusAxis | null,
+  want: { from: { contig: string; bp: number }; to: { contig: string; bp: number } } | null,
+  cells: number,
+): readonly [number, number] | null {
+  if (axis === null || want === null) return null
+  const lo = axis.locusToUnit(want.from.contig, want.from.bp)
+  const hi = axis.locusToUnit(want.to.contig, want.to.bp)
+  if (lo === null || hi === null) return null
+  const from = Math.max(0, Math.min(lo, cells))
+  const to = Math.min(cells, Math.max(hi, from))
+  return to > from ? [from, to] : null
+}
+
 export function bpWithin(
   group: AxisGroup,
   offset: number,

@@ -403,6 +403,22 @@ export interface SpanScanOptions {
   cancelled?: () => boolean
   /** Pixels read so far, and how many there are in this span. */
   onProgress?: (done: number, total: number) => void
+  /**
+   * Which `/pixels` column the values come from; `count` when absent.
+   *
+   * The same choice {@link MatrixQuery.value} makes for the dense path, and it
+   * belongs here for the same reason it belongs there: it is a property of the
+   * *read*, not of what the caller does with what comes back.
+   *
+   * It was missing, and the omission was not cosmetic. `forEachPixelSpan` has
+   * always taken a column and the dense path has always threaded it, so a file
+   * with an `expected` column drew `expected` — right up to the size at which
+   * the reader pools instead, at which point the same view silently drew
+   * `count`. One picture, two quantities, no tell. That the resolution now moves
+   * with the zoom is what made it urgent: a quantity that changes as you
+   * magnify is not a picture of anything.
+   */
+  value?: string
 }
 
 /**
@@ -430,10 +446,11 @@ export async function forEachPixelSpanAsync(
   const [p0, p1] = range
   const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
   const total = p1 - p0
+  const value = options.value ?? DEFAULT_COUNT_COLUMN
   for (let at = p0; at < p1; at += width) {
     if (options.cancelled?.() === true) return false
     const end = Math.min(at + width, p1)
-    onChunk(readPixelWindow(h, at, end))
+    onChunk(readPixelWindow(h, at, end, value))
     options.onProgress?.(end - p0, total)
     await yieldToEventLoop()
   }
@@ -472,12 +489,13 @@ export async function forEachPixelRangesAsync(
 ): Promise<boolean> {
   const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
   const total = ranges.reduce((sum, [p0, p1]) => sum + Math.max(0, p1 - p0), 0)
+  const value = options.value ?? DEFAULT_COUNT_COLUMN
   let done = 0
   for (const [p0, p1] of ranges) {
     for (let at = p0; at < p1; at += width) {
       if (options.cancelled?.() === true) return false
       const end = Math.min(at + width, p1)
-      onChunk(readPixelWindow(h, at, end))
+      onChunk(readPixelWindow(h, at, end, value))
       done += end - at
       options.onProgress?.(done, total)
       await yieldToEventLoop()

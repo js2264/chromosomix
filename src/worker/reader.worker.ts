@@ -391,10 +391,14 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * the plan it used is in the response, which is where the view reads its
  * resolution from.
  *
- * Only for a block that **begins on a contig boundary** — every whole-file,
- * whole-genome and whole-contig read. A region starting mid-contig carries a
- * `unitStart` the coarse grid has no cell for, so it is left dense and refused
- * by size as before rather than drawn against an origin that has quietly moved.
+ * **Any block, wherever it begins.** This used to say "only for a block that
+ * begins on a contig boundary", and to claim a region starting mid-contig was
+ * left dense and refused by size. Neither was ever true of the code: there is no
+ * boundary test here, `snapToGrid` widens a mid-contig request down to the
+ * *contig's* own cell edges, and `anchor` exists precisely to give the first run
+ * of such a block the `unitStart` the comment said it lacked. The claim mattered
+ * because it is the one a zoom leans on — a viewport lands mid-contig by
+ * definition — so it is corrected rather than left to be discovered.
  *
  * **A balanced block is planned like any other, and that is a known
  * approximation.** Summing balanced values is not balancing at a coarser
