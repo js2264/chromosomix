@@ -19,6 +19,7 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { BALANCE_PARAM } from './shared'
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
@@ -241,13 +242,7 @@ const PARAMS: readonly ParamSpec[] = [
     slider: true,
     section: 'Quality',
   },
-  {
-    kind: 'toggle',
-    key: 'balance',
-    label: 'Use balancing weights',
-    default: false,
-    section: 'Quality',
-  },
+  BALANCE_PARAM,
 ]
 
 /** Rows and columns one window will occupy. */

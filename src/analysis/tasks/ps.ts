@@ -29,6 +29,7 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { BALANCE_PARAM } from './shared'
 
 // ---------------------------------------------------------------------------
 // Reading the form
@@ -154,11 +155,24 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minSeparation',
+    /**
+     * In **bins**, not base pairs.
+     *
+     * The near-diagonal is what this drops, and the near-diagonal is a fact
+     * about the *grid*: the first bin of separation is the one that holds every
+     * self-ligation and every unligated fragment, whatever resolution the file
+     * is at. A reader who wants "skip the first two bins" had to work out what
+     * two bins were in base pairs, type that, and get it back rounded — and the
+     * same typed number meant three bins at one resolution and one at the next.
+     * Bins are also what the curve's own x axis is quantised to, so this is now
+     * the same unit as the thing it is trimming.
+     */
     label: 'Minimum separation',
     hint: 'Drops the near-diagonal, where unligated fragments dominate.',
     default: 0,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
   },
   {
     kind: 'toggle',
@@ -167,27 +181,7 @@ const PARAMS: readonly ParamSpec[] = [
     hint: 'The shoulder and the plateau are visible there and not on the curve.',
     default: true,
   },
-  {
-    kind: 'toggle',
-    key: 'balance',
-    label: 'Use balancing weights',
-    hint: 'Only meaningful on a file that has been balanced; a raw file has no weights to apply.',
-    default: false,
-  },
-  {
-    kind: 'number',
-    key: 'maxSeries',
-    label: 'Sequences to draw',
-    hint: 'The largest are kept, and the drawer says how many were left out.',
-    default: 24,
-    min: 1,
-    integer: true,
-    // A 4,395-MAG metacool would otherwise answer a genome-scope run with a
-    // legend taller than the screen and 4,395 lines of the same colour. Under
-    // the whole-file scope there is exactly one curve by construction, so the
-    // control would be a promise about something that cannot happen.
-    when: (params) => scopeOf(params) !== 'file',
-  },
+  BALANCE_PARAM,
 ]
 
 // ---------------------------------------------------------------------------

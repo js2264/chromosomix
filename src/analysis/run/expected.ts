@@ -66,7 +66,7 @@ import type { CurveSeries, TaskOutput } from '../types'
 interface Unit {
   name: string
   spans: Span[]
-  /** Bins in all its spans — how much evidence it has, for the `maxSeries` cut. */
+  /** Bins in all its spans — how much evidence stands behind the curve. */
   bins: number
   /**
    * The longest separation any of its spans can reach.
@@ -91,7 +91,7 @@ function makeUnit(name: string, spans: Span[]): Unit {
 
 
 /**
- * The curves this run is going to produce, before `maxSeries` is applied.
+ * The curves this run is going to produce — all of them.
  *
  * The scope switch normalises an unrecognised value to `contig`, which is the
  * same fallback `analysis/tasks/ps.ts` makes for the same reason — a stored
@@ -151,22 +151,6 @@ function planUnits(mc: MetaCooler, scope: string, region: string): Unit[] {
     if (span !== null) out.push(makeUnit(mc.chromnames[cid], [span]))
   }
   return out
-}
-
-/**
- * The `limit` units with the most bins behind them, back in file order.
- *
- * Something has to be dropped when a metagenome offers four thousand curves, and
- * the largest sequences are the defensible choice: they are the ones whose tails
- * have any evidence in them, and a curve over a 3-bin contig is two points and a
- * legend entry. Kept units are returned in file order rather than in size order,
- * because the axis, the contigs table and every other list in this app are in
- * file order and a legend that is not is a legend somebody has to search.
- */
-function keepLargest(units: Unit[], limit: number): Unit[] {
-  if (units.length <= limit) return units
-  const bySize = [...units].sort((a, b) => b.bins - a.bins || a.spans[0].from - b.spans[0].from)
-  return bySize.slice(0, limit).sort((a, b) => a.spans[0].from - b.spans[0].from)
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +336,6 @@ export const runExpected: TaskRunner = async (job) => {
   const minSeparation = numParam(job.params, 'minSeparation', 0)
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
-  const maxSeries = Math.max(1, Math.trunc(numParam(job.params, 'maxSeries', 24)))
 
   const planned = planUnits(job.mc, scope, region)
   if (planned.length === 0) {
@@ -360,18 +343,18 @@ export const runExpected: TaskRunner = async (job) => {
     return []
   }
 
-  const units = keepLargest(planned, maxSeries)
-  if (units.length < planned.length) {
-    const dropped = planned.length - units.length
-    const kept =
-      units.length === 1
-        ? 'the largest is shown'
-        : `the ${units.length.toLocaleString()} largest are shown`
-    job.note(
-      `${dropped.toLocaleString()} further ${dropped === 1 ? 'sequence was' : 'sequences were'} ` +
-        `not drawn; ${kept}. Raise "Sequences to draw" to see more of them.`,
-    )
-  }
+  // **Every sequence, and no cut.** There was a "Sequences to draw" box that
+  // kept the largest N and said how many it had dropped, which turned the one
+  // question this task answers — *how does contact fall with distance, on each
+  // of my sequences* — into a question about a number nobody had a reason to
+  // pick. A run that leaves out sequences by default is a run whose answer is
+  // about a subset the reader did not choose, and the note saying so is read
+  // after the figure rather than before it.
+  //
+  // The legend is what this used to protect, and `keepLargest` still exists for
+  // it: the curves are all computed and all drawn, and only the *names* beside
+  // them are capped, by the drawer that has to fit them (`analysisPlots.ts`).
+  const units = planned
 
   const curves = await measure(job, units, balance, job.framing.value)
   job.throwIfCancelled()

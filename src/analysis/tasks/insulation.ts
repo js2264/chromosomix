@@ -26,11 +26,24 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { BALANCE_PARAM } from './shared'
 
-/** The base window in base pairs, at least one bin of this file. */
-export function windowBpOf(params: Params, binsize: number): number {
-  const value = typeof params.window === 'number' ? params.window : 10 * binsize
-  return Math.max(binsize, value)
+/**
+ * The base window in **bins**, at least one.
+ *
+ * Bins rather than base pairs, and for the reason the diamond itself gives: the
+ * window is a count of cells on each side of the bin being scored, so the number
+ * that decides what the track measures has always been this one — the form asked
+ * for base pairs and then divided. A reader who wanted a ten-bin diamond had to
+ * know their own resolution to ask for it, and the same typed number was a
+ * different diamond at every resolution of an `.mcool`.
+ *
+ * The 10-bin default is what the old `10 × binsize` resolved to, so a form left
+ * alone computes what it always did.
+ */
+export function windowBinsOf(params: Params): number {
+  const value = typeof params.window === 'number' ? params.window : 10
+  return Math.max(1, Math.round(value))
 }
 
 /** How many doublings of the base window to compute. */
@@ -40,8 +53,8 @@ export function scalesOf(params: Params): number {
 }
 
 /** The ladder, in bins, one entry per scale. */
-export function windowLadder(params: Params, binsize: number): number[] {
-  const base = Math.max(1, Math.round(windowBpOf(params, binsize) / binsize))
+export function windowLadder(params: Params): number[] {
+  const base = windowBinsOf(params)
   const out: number[] = []
   for (let i = 0; i < scalesOf(params); i++) out.push(base * 2 ** i)
   return out
@@ -61,10 +74,11 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'window',
     label: 'Window',
-    hint: 'The diamond is this wide on each side of the bin it scores.',
-    default: 10_000,
+    hint: 'The diamond is this many bins wide on each side of the bin it scores.',
+    default: 10,
     min: 1,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
   },
   {
     kind: 'number',
@@ -96,14 +110,7 @@ const PARAMS: readonly ParamSpec[] = [
     slider: true,
     section: 'Quality',
   },
-  {
-    kind: 'toggle',
-    key: 'balance',
-    label: 'Use balancing weights',
-    hint: 'Only meaningful on a file that has been balanced.',
-    default: false,
-    section: 'Quality',
-  },
+  BALANCE_PARAM,
   {
     kind: 'toggle',
     key: 'call',
@@ -129,10 +136,14 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'spacing',
     label: 'Minimum spacing',
-    hint: 'Two calls closer than this keep only the stronger.',
+    // In bins, like the window above it. One form asking for one distance in
+    // bins and another in base pairs is a form a reader has to read twice, and
+    // both of these are distances along the same track.
+    hint: 'Two calls closer than this many bins keep only the stronger.',
     default: 0,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: (params) => params.call === true,
     section: 'Boundaries',
   },
@@ -140,7 +151,7 @@ const PARAMS: readonly ParamSpec[] = [
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
-  const windows = windowLadder(params, context.binsize)
+  const windows = windowLadder(params)
   const widest = windows[windows.length - 1]
   const contig = regionContig(context, regionOf(params))
 

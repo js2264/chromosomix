@@ -408,6 +408,20 @@ function legendText(series: CurveSeries): string {
 }
 
 /**
+ * How many lines of legend a figure will give up to naming its series.
+ *
+ * Three, and past that it says how many it did not name. **The curves are all
+ * drawn either way** — this is a cap on the *names*, not on the data, and the
+ * distinction is the whole of why it is here rather than in the task: P(s) over
+ * a metagenome is four thousand sequences and every one of them is a real
+ * answer, but four thousand legend entries is a legend taller than the screen
+ * pushing the picture off the bottom of it. What the reader loses is a lookup
+ * they could not have used at that size anyway; what they keep is the shape of
+ * four thousand curves, which is the thing they ran it for.
+ */
+const LEGEND_LINES = 3
+
+/**
  * The legend, wrapped into lines above the plot.
  *
  * Above rather than floating inside the frame at a corner, which is what a
@@ -428,12 +442,24 @@ function legendLines(
   const lines: CurveSeries[][] = []
   let line: CurveSeries[] = []
   let used = 0
-  for (const series of output.series) {
+  for (let i = 0; i < output.series.length; i++) {
+    const series = output.series[i]
     const need = swatch + gap * 0.5 + ctx.measureText(legendText(series)).width + gap * 1.5
     if (line.length > 0 && used + need > width) {
       lines.push(line)
       line = []
       used = 0
+      // Full. The remainder is counted rather than listed, in an entry with no
+      // swatch — it names no one series, so a colour beside it would be a lie
+      // about which.
+      if (lines.length === LEGEND_LINES) {
+        const rest = output.series.length - i
+        lines[LEGEND_LINES - 1] = [
+          ...lines[LEGEND_LINES - 1],
+          { name: `+${fmt.int(rest)} more`, x: EMPTY_SERIES, y: EMPTY_SERIES, colour: 'none' },
+        ]
+        return lines
+      }
     }
     line.push(series)
     used += need
@@ -441,6 +467,9 @@ function legendLines(
   if (line.length > 0) lines.push(line)
   return lines
 }
+
+/** The `x`/`y` of a legend entry that names no data. Shared; never written to. */
+const EMPTY_SERIES = new Float64Array(0)
 
 /**
  * One series' band, as filled polygons at reduced alpha.
@@ -736,13 +765,16 @@ export function drawCurve(
     let at = plot.x
     const py = Math.round(row * line + line / 2)
     for (const series of entries) {
-      const colour = seriesColour(series, output.series.indexOf(series), theme)
-      ctx.strokeStyle = colour
-      ctx.lineWidth = SERIES_WIDTH
-      ctx.beginPath()
-      ctx.moveTo(at, py)
-      ctx.lineTo(at + swatch, py)
-      ctx.stroke()
+      // `colour: 'none'` is the "+N more" entry, which names no series and
+      // therefore draws no swatch; everything else takes its own line's colour.
+      if (series.colour !== 'none') {
+        ctx.strokeStyle = seriesColour(series, output.series.indexOf(series), theme)
+        ctx.lineWidth = SERIES_WIDTH
+        ctx.beginPath()
+        ctx.moveTo(at, py)
+        ctx.lineTo(at + swatch, py)
+        ctx.stroke()
+      }
       const text = legendText(series)
       ctx.fillStyle = theme.ink
       ctx.fillText(text, at + swatch + gap * 0.5, py)
@@ -818,6 +850,33 @@ function matrixRange(output: MatrixOutput): { vmin: number; vmax: number } | nul
 function cellSide(available: number, count: number): number {
   const raw = available / Math.max(1, count)
   return raw >= 1 ? Math.floor(raw) : Math.max(raw, 0)
+}
+
+/**
+ * **One cell size for both axes**, so a cell is a square and an `n × n` matrix
+ * is a square picture.
+ *
+ * The two were computed independently, each filling its own axis, which left the
+ * aspect of a saddle or a correlation heatmap to be decided by how wide the
+ * reader had dragged the drawer: the same 50 × 50 saddle was a tall rectangle in
+ * a narrow panel and a squat one in a wide one. That is a picture whose shape
+ * carries no information and reads as one whose shape does — a saddle is read by
+ * comparing its two corners, and a corner stretched 40% along one axis looks
+ * stronger than the one opposite it. A correlation heatmap over eight tracks is
+ * the same argument with the diagonal as the giveaway.
+ *
+ * The smaller of the two, so the picture fits either way; the slack on the other
+ * axis is centred rather than pooled at one end (see {@link drawMatrix}). A
+ * non-square matrix keeps its own aspect exactly, which is the same rule stated
+ * once: the cells are square, so the picture is as tall as it is many.
+ */
+export function squareCell(
+  availableWidth: number,
+  availableHeight: number,
+  ncols: number,
+  nrows: number,
+): number {
+  return Math.min(cellSide(availableWidth, ncols), cellSide(availableHeight, nrows))
 }
 
 /**
@@ -918,16 +977,17 @@ export function drawMatrix(
     return
   }
 
-  const cellW = cellSide(availableWidth, output.ncols)
-  const cellH = cellSide(availableHeight, output.nrows)
+  const cell = squareCell(availableWidth, availableHeight, output.ncols, output.nrows)
   const plot: Rect = {
     // Centred in what is left over after the cells were snapped to whole pixels,
     // so the slack is split rather than pooled against the colour bar.
-    x: left + Math.round((availableWidth - cellW * output.ncols) / 2),
-    y: top,
-    width: cellW * output.ncols,
-    height: cellH * output.nrows,
+    x: left + Math.round((availableWidth - cell * output.ncols) / 2),
+    y: top + Math.round((availableHeight - cell * output.nrows) / 2),
+    width: cell * output.ncols,
+    height: cell * output.nrows,
   }
+  const cellW = cell
+  const cellH = cell
   if (!(plot.width > 0) || !(plot.height > 0)) {
     drawEmpty(ctx, box, theme, 'too small to draw')
     return

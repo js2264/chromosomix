@@ -25,7 +25,6 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { windowLadder } from './insulation'
-import { NEEDS_MAP, READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -105,7 +104,7 @@ const PARAMS: readonly ParamSpec[] = [
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  const widest = windowLadder({ ...params, scales: 1 }, context.binsize)[0]
+  const widest = windowLadder({ ...params, scales: 1 })[0]
   const usable = context.contigs.filter((contig) => contig.bins > widest * 2).length
   if (usable === 0) {
     return {
@@ -136,7 +135,22 @@ export const CID_TASK: AnalysisTask = {
   venue: 'analysis',
   version: 1,
   requires: ['insulation'],
-  availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
+  /**
+   * **Withheld from the panel for now**, on every file.
+   *
+   * Not `waiting` and not disabled — `absent`, which is the registry's own
+   * doctrine for a row a file cannot keep a promise about (`analysis/registry.ts`)
+   * and the honest state for one whose settings are not yet settled. Everything
+   * it does today is reachable: **Diamond insulation** calls the same boundaries
+   * from the same diamond and exports them as a BED, and the pileup over those
+   * calls is what **APA** does over any interval set. What CID adds is the
+   * composite, and a composite whose two halves disagree about their units is
+   * worth withholding rather than shipping with a caveat.
+   *
+   * The descriptor is left whole, and deliberately: this is one predicate, so
+   * bringing the row back is one line rather than an archaeology.
+   */
+  availability: () => ({ state: 'absent' }),
   params: PARAMS,
   outputs: ['intervals', 'matrix', 'table'],
   estimate,

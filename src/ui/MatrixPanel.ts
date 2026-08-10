@@ -3283,7 +3283,11 @@ export class MatrixPanel {
       // across it where they are looking, rather than move to the map and find
       // the same stretch again. Deliberate enough — a held modifier — that it
       // can outrank a caret and a handle without ever being hit by accident.
-      if (event.shiftKey) {
+      // …and unmodified while a form is waiting to be pointed at, for the reason
+      // the map itself gives: *Pick on map* is already a mode, and asking for a
+      // modifier on top of one is asking twice. `bandOnLane` reports without
+      // zooming while it is armed.
+      if (event.shiftKey || isArmed()) {
         start('', 'zoom', event, 0)
         return
       }

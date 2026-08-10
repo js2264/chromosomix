@@ -33,9 +33,25 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'binsize',
     label: 'Bin size',
-    default: 10_000,
+    /**
+     * 100 bp, and **unitless on the form**.
+     *
+     * This task has no contact map behind it — it correlates loaded bigWigs, and
+     * a 1D browser session can run it with no matrix open at all — so the
+     * "`n` bins at `x` bp" caption every other length control carries was
+     * measuring against a file's resolution that has nothing to do with what
+     * this reads. It said `1 bin at 10.0 kb` beside a box already reading
+     * 10,000 bp, which is the same number twice and the second one wrong.
+     *
+     * 100 bp because a correlation between two coverage tracks is a question
+     * about where the signal is, and 10 kb windows smear a promoter-width peak
+     * into its neighbourhood before the arithmetic starts. It is the resolution
+     * a bigWig usually has something to say at.
+     */
+    hint: 'The window each track is averaged over, in base pairs.',
+    default: 100,
     min: 1,
-    unit: 'bp',
+    integer: true,
     when: (params) => params.over !== 'features',
   },
   {
