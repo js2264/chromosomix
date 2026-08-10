@@ -83,6 +83,20 @@ export interface TaskInputs {
   /** Bin vectors of chosen tracks, where a task correlates or ranks by them. */
   vectors?: Record<string, Float32Array>
   /**
+   * What each chosen entry is **called**, by entry id.
+   *
+   * A task receives ids, because an id is what survives a rename and what the
+   * form stored — and an id is `a1`. A correlation heatmap whose axes read
+   * `a1, a2, a3` is a figure nobody can read, and it was one: the labels are the
+   * reader's own names for their files, and the runner is the only side that has
+   * them. So they travel with the inputs.
+   *
+   * By id and not by parameter key, unlike everything else here: a task that
+   * takes several tracks reads their ids back with `listParam` and looks each of
+   * them up, which is the direction the lookup is actually needed in.
+   */
+  labels?: Record<string, string>
+  /**
    * The assembly, as name to length.
    *
    * Carried because the annotations worker does not have one. It holds bigWig

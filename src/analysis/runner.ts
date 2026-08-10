@@ -100,6 +100,15 @@ export interface RunnerHost {
   annotations?(): AnnotationClient | null
   /** The assembly, so a task in the other venue can clamp a window (§18.3). */
   contigLengths?(): Record<string, number>
+  /**
+   * What a chosen entry is called, for the outputs that name one.
+   *
+   * The store's, and the reader's: an entry id is `a1`, and a figure whose axes
+   * are ids is a figure that has to be decoded against a panel. Optional
+   * because a host that cannot answer leaves the ids, which is what they always
+   * were rather than a regression.
+   */
+  label?(entryId: string): string | undefined
   finished(task: AnalysisTask, result: TaskResult): void
   /**
    * A descriptor by id, for resolving `requires`.
@@ -607,6 +616,10 @@ export class AnalysisRunner {
     const features: Record<string, FeatureSet> = {}
     const pairs: Record<string, PairSet> = {}
     const vectors: Record<string, Float32Array> = {}
+    // By **entry id**, and gathered for every entry parameter whatever its kind:
+    // what a task wants to write on an axis is the name of the file, and which
+    // parameter chose it is not the question.
+    const labels: Record<string, string> = {}
 
     for (const spec of step.task.params) {
       if (
@@ -618,6 +631,8 @@ export class AnalysisRunner {
         continue
       }
       for (const [key, entryId] of chosenEntries(spec, step.params)) {
+        const label = this.host.label?.(entryId)
+        if (label !== undefined && label !== '') labels[entryId] = label
         if (spec.kind === 'track' || spec.kind === 'sequence') {
           // A **sequence** arrives as a vector and not as bases, and that is the
           // whole of how GC-content phasing crosses the venue boundary (§18.6).
@@ -648,6 +663,7 @@ export class AnalysisRunner {
     const inputs: TaskInputs = {}
     if (Object.keys(features).length > 0) inputs.features = features
     if (Object.keys(pairs).length > 0) inputs.pairs = pairs
+    if (Object.keys(labels).length > 0) inputs.labels = labels
     // Only for the other venue, which has no assembly of its own: the
     // annotations worker holds handles and parsed sets, and neither knows how
     // long a sequence is. Sent for that venue alone rather than always, because

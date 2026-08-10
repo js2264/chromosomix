@@ -23,6 +23,16 @@
  * things (§18.5). What the entry carries is the *recipe*, and what this map
  * carries is the answer for as long as the tab is open — which is exactly as
  * long as an export could be asked for.
+ *
+ * "As long as the tab is open" is not the same as "as long as this object
+ * lives", and {@link AnalysisWorkspace.carry} is the difference. A workspace is
+ * built with a file and destroyed with it, and **changing the resolution of an
+ * `.mcool` destroys one**: the same file at another level is a fresh open, with
+ * a new store, a new annotations worker and a new workspace around it. Every
+ * dropped track already survives that (`Session.carry`), and until this a
+ * computed one did not — a reader who ran insulation at 1 kb and looked at the
+ * same region at 5 kb found the Synthetic tracks card empty, having lost numbers
+ * the tab was still holding for no reason other than which object held them.
  */
 
 import type { AnnotationClient } from '../annotations/worker/client'
@@ -79,22 +89,57 @@ export interface AnalysisWorkspaceHost {
   annotations(): AnnotationClient | null
   /** The assembly, for the two writers that lay a vector out over it. */
   contigs(): BedGraphContig[]
+  /**
+   * What the workspace this one replaces was holding, when it replaces one.
+   *
+   * Non-empty for exactly one case: the same file re-opened at another
+   * resolution. See {@link AnalysisWorkspace.carry} for what is in it and
+   * `Session.carry` for when it is filled.
+   */
+  carried?(): readonly CarriedResult[]
   /** A panel's availability changed, or a row needs repainting. */
   changed(): void
 }
 
 /** A finished profile, held for as long as an export could ask for it. */
-interface HeldProfile {
+export interface HeldProfile {
   output: ProfileOutput
+  provenance: Provenance
+  task: string
+  /**
+   * The bin grid these values are on — the assembly as it stood when the task
+   * ran, not as it stands now.
+   *
+   * Carried with the numbers because it is the only thing that makes them
+   * readable, and because the two can now come apart: a profile computed at 1 kb
+   * that survives a switch to 5 kb is still a set of values on *1 kb bins*, and
+   * re-registering it against the new file's grid would lay every value at five
+   * times its true coordinate. A {@link BinVector} already carries its own
+   * `binsize` and contig offsets precisely so that a vector and the map under it
+   * need not be on the same grid; this is the field that keeps the right one.
+   */
+  grid: BinVectorContig[]
+}
+
+/** The same, for a called interval set. */
+export interface HeldIntervals {
+  output: IntervalsOutput
   provenance: Provenance
   task: string
 }
 
-/** The same, for a called interval set. */
-interface HeldIntervals {
-  output: IntervalsOutput
-  provenance: Provenance
-  task: string
+/**
+ * A computed row and the numbers behind it, on its way to the next workspace.
+ *
+ * The entry is the row *as the reader left it* — its colour, its name, its edge,
+ * whether it was hidden — because carrying an analysis and then handing it back
+ * with the defaults is a workspace that survived and a workspace that did not,
+ * as far as anyone looking at the screen is concerned.
+ */
+export interface CarriedResult {
+  entry: AnnotationEntry
+  profile?: HeldProfile
+  intervals?: HeldIntervals
 }
 
 export class AnalysisWorkspace {
@@ -139,6 +184,9 @@ export class AnalysisWorkspace {
       source: () => this.host.source(),
       block: () => this.host.block(),
       payload: (entryId) => this.host.store()?.byId(entryId)?.payload,
+      // The reader's own name for the file, so an output that names an entry
+      // names it the way they do rather than by the id the store minted.
+      label: (entryId) => this.host.store()?.byId(entryId)?.label,
       vector: (entryId) => this.binVector(entryId),
       annotations: () => this.host.annotations(),
       contigLengths: () => {
@@ -216,6 +264,11 @@ export class AnalysisWorkspace {
       stopRunner()
       stopStore()
     }
+
+    // Last, so that the rows land in a workspace that is already wired up: the
+    // store subscription above is what repaints the card, and the signature it
+    // guards on has just been taken.
+    this.adoptCarried(host.carried?.() ?? [])
   }
 
   /**
@@ -311,6 +364,7 @@ export class AnalysisWorkspace {
           output,
           provenance: result.provenance,
           task: task.id,
+          grid: this.grid(),
         })
       }
       this.drawer.refresh()
@@ -344,12 +398,14 @@ export class AnalysisWorkspace {
         placement: entry.placement,
         style: entry.style,
       })
+      const grid = this.grid()
       this.profiles.set(entry.id, {
         output,
         provenance: result.provenance,
         task: task.id,
+        grid,
       })
-      this.register(entry.id, output)
+      this.register(entry.id, output, grid)
       store.update(entry.id, {
         status: 'ready',
         ...(entry.fileExtent === undefined ? {} : { fileExtent: entry.fileExtent }),
@@ -410,6 +466,101 @@ export class AnalysisWorkspace {
     })
     store.update(id, { status: 'ready', payload: output.payload })
     this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
+  }
+
+  // -------------------------------------------------------------------------
+  // Across a change of resolution
+  // -------------------------------------------------------------------------
+
+  /**
+   * Everything computed, with the numbers behind it, for the workspace that
+   * replaces this one.
+   *
+   * Switching the resolution of an `.mcool` re-opens the file: a new store keyed
+   * on the new entry, a new annotations worker, a new workspace. Loaded tracks
+   * already come through that intact — `Session.carry` hands the live rows over
+   * — and a computed one is *more* worth carrying, not less: a bigWig can be
+   * dropped again in a gesture, while a compartment eigenvector is four minutes
+   * of arithmetic the tab is still holding the answer to.
+   *
+   * The numbers come across **unchanged and unrescaled**, which is the honest
+   * thing and not a shortcut. A profile is a set of values on the bins it was
+   * computed on; the row goes on saying so in its framing line, and
+   * {@link HeldProfile.grid} is what keeps the vector readable against a map
+   * that is now on a different grid. Re-binning it to the new resolution would
+   * be inventing an insulation score at 5 kb that no window ever produced.
+   *
+   * Only ever consulted for the *same file* at another entry — see
+   * `Session.carry`, and {@link AnnotationLoader.carry} for why a computed row is
+   * emphatically not carried to a different one.
+   */
+  carry(): CarriedResult[] {
+    const store = this.host.store()
+    if (store === null) return []
+    const out: CarriedResult[] = []
+    for (const entry of store.entries) {
+      if (entry.source.kind !== 'computed') continue
+      const profile = this.profiles.get(entry.id)
+      const intervals = this.intervals.get(entry.id)
+      out.push({
+        entry,
+        ...(profile === undefined ? {} : { profile }),
+        ...(intervals === undefined ? {} : { intervals }),
+      })
+    }
+    return out
+  }
+
+  /**
+   * Put them back, as the rows they were.
+   *
+   * The mirror of {@link adopt} rather than a second implementation of it: the
+   * same `begin` → register → `ready` sequence, with the entry supplying what a
+   * fresh result would have derived. A row whose numbers did *not* come across
+   * — a detached one, restored from a reload and never recomputed — is replayed
+   * with its own status, so the reader gets the Recompute button back rather
+   * than an empty lane claiming to be ready.
+   */
+  private adoptCarried(rows: readonly CarriedResult[]): void {
+    const store = this.host.store()
+    if (store === null || rows.length === 0) return
+    for (const { entry, profile, intervals } of rows) {
+      const source = entry.source
+      if (source.kind !== 'computed') continue
+      store.begin({
+        card: entry.card,
+        kind: entry.kind,
+        id: entry.id,
+        label: entry.label,
+        source,
+        placement: entry.placement,
+        style: entry.style,
+        visible: entry.visible,
+      })
+      if (profile !== undefined) {
+        this.profiles.set(entry.id, profile)
+        this.register(entry.id, profile.output, profile.grid)
+      }
+      if (intervals !== undefined) this.intervals.set(entry.id, intervals)
+      store.update(entry.id, {
+        status: entry.status,
+        ...(entry.summary === undefined ? {} : { summary: entry.summary }),
+        ...(entry.payload === undefined ? {} : { payload: entry.payload }),
+        ...(entry.fileExtent === undefined ? {} : { fileExtent: entry.fileExtent }),
+      })
+    }
+    this.synthetic?.refresh()
+    this.host.changed()
+  }
+
+  /** The assembly a vector computed *now* would be laid out over. */
+  private grid(): BinVectorContig[] {
+    return this.host.contigs().map((contig) => ({
+      name: contig.name,
+      startBin: contig.startBin,
+      bins: contig.bins,
+      length: contig.length,
+    }))
   }
 
   /**
@@ -496,22 +647,18 @@ export class AnalysisWorkspace {
    * the card and the renderer has nothing to draw; after it, nothing downstream
    * can tell the track from a bigWig (§18.5).
    */
-  private register(entryId: string, output: ProfileOutput): void {
+  private register(entryId: string, output: ProfileOutput, grid: BinVectorContig[]): void {
     const client = this.host.annotations()
     if (client === null) return
-    const contigs: BinVectorContig[] = this.host.contigs().map((contig) => ({
-      name: contig.name,
-      startBin: contig.startBin,
-      bins: contig.bins,
-      length: contig.length,
-    }))
     const vector: BinVector = {
       binsize: output.binsize,
       firstBin: output.extent[0],
       // A copy, because the worker takes ownership of what it is sent and this
-      // module still needs the numbers for an export.
+      // module still needs the numbers for an export — and because a carried
+      // vector is registered a second time, with a second worker, from the same
+      // array.
       values: output.values.slice(),
-      contigs,
+      contigs: grid,
     }
     void client.request<'register'>({ kind: 'register', entry: entryId, vector }).catch(() => {
       // A registration that fails leaves a row with no values, which the lane

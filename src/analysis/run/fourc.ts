@@ -20,6 +20,7 @@
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseMetacoolerRange } from '../../metacooler/range'
+import { ExpectedAccumulator, expectedAt } from '../expected'
 import { boolParam, strParam, type JobContext, type TaskRunner } from '../job'
 import type { ProfileOutput, TaskOutput } from '../types'
 import { bandSums, ViewpointAccumulator } from '../viewpoint'
@@ -63,30 +64,107 @@ export const runFourC: TaskRunner = async (job) => {
   if (text === '') {
     job.note(
       'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence by ' +
-        'name — or press “Pick on map” and Shift-drag along either axis.',
+        'name — or press “Pick on map” and drag along either axis.',
     )
     return []
   }
   const balance = boolParam(job.params, 'balance', false)
   const cis = boolParam(job.params, 'cis', true)
+  const overExpected = strParam(job.params, 'normalise', 'none') === 'ps'
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const anchor = resolveAnchor(job, text)
 
-  const values = cis
-    ? await cisProfile(job, anchor, balance, value)
+  const read = cis
+    ? await cisProfile(job, anchor, balance, value, overExpected)
     : await transProfile(job, anchor, balance)
+  const values = cis || !overExpected ? read : overTransMean(job, read, anchor)
 
   const profile: ProfileOutput = {
     kind: 'profile',
     id: `fourc-${anchor.band.from}-${anchor.band.to}`,
-    label: `4C · ${text}${cis ? '' : ' (with trans)'}`,
+    label: `4C · ${text}${cis ? '' : ' (with trans)'}${overExpected ? ' · O/E' : ''}`,
     values,
     extent: [0, job.mc.nBins],
     binsize: job.mc.binsize,
-    unit: 'contacts',
+    // A ratio has no unit, and calling one "contacts" would put a number
+    // centred on 1 under an axis labelled as a count.
+    unit: overExpected ? '' : 'contacts',
   }
   const outputs: TaskOutput[] = [profile]
   return outputs
+}
+
+/**
+ * A profile divided by the decay, cell by cell.
+ *
+ * The curve is accumulated from **the square this task has already read**, which
+ * is the anchor's own sequence — not the P(s) task's genome-wide one. A small
+ * chromosome divided by the average behaviour of the large ones comes out with a
+ * slope that is a property of the set rather than of this locus, and the slope
+ * is exactly what a reader turns this on to remove.
+ *
+ * A bin whose expectation is unknown becomes a gap rather than keeping its
+ * numerator: half of a ratio is not a ratio, and a track holding both raw counts
+ * and O/E values would be read as one quantity.
+ */
+function overDecay(
+  sums: Float64Array,
+  square: { nrows: number; ncols: number; values: Float32Array },
+  band: [number, number],
+): Float64Array {
+  const n = square.nrows
+  const accumulator = new ExpectedAccumulator(Math.max(0, n - 1))
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < square.ncols; c++) accumulator.add(Math.abs(c - r), square.values[r * n + c])
+  }
+  const curve = accumulator.finish()
+  // The anchor's own middle is where every separation is measured from. A band
+  // is usually a bin or two wide, so its centre is the honest single point.
+  const centre = (band[0] + band[1] - 1) / 2
+  const out = new Float64Array(sums.length)
+  for (let i = 0; i < sums.length; i++) {
+    const expected = expectedAt(curve, Math.abs(i - centre))
+    out[i] =
+      Number.isFinite(sums[i]) && Number.isFinite(expected) && expected !== 0
+        ? sums[i] / expected
+        : Number.NaN
+  }
+  return out
+}
+
+/**
+ * The trans half of a profile, over its own mean.
+ *
+ * Two chromosomes have no separation between them, so there is no curve to read
+ * and the expectation is the mean of what this anchor reaches off its own
+ * sequence — the same rule the compartment chain applies to a trans block. The
+ * cis half is divided by the decay in {@link cisProfile}, so both halves come out
+ * as ratios against their own expectation and can be read on one axis.
+ */
+function overTransMean(job: JobContext, values: Float32Array, anchor: Anchor): Float32Array {
+  let total = 0
+  let seen = 0
+  for (let bin = 0; bin < values.length; bin++) {
+    if (bin >= anchor.scope.from && bin < anchor.scope.to) continue
+    const value = values[bin]
+    if (!Number.isFinite(value)) continue
+    total += value
+    seen++
+  }
+  if (seen === 0) {
+    job.note('Nothing was reached outside this sequence, so there is no trans expectation to divide by.')
+    return values
+  }
+  const mean = total / seen
+  const out = new Float32Array(values.length)
+  for (let bin = 0; bin < values.length; bin++) {
+    // The cis half has already been divided by the decay; only what is outside
+    // the anchor's own sequence is left to divide here.
+    const inside = bin >= anchor.scope.from && bin < anchor.scope.to
+    const value = values[bin]
+    out[bin] = inside || !Number.isFinite(value) ? value : mean === 0 ? Number.NaN : value / mean
+  }
+  return out
 }
 
 /**
@@ -101,6 +179,7 @@ async function cisProfile(
   anchor: Anchor,
   balance: boolean,
   value: string,
+  overExpected = false,
 ): Promise<Float32Array> {
   job.progress(0, 1, `Reading ${anchor.label}`)
   const block = usableBlock(job, [anchor.scope], balance)
@@ -123,12 +202,20 @@ async function cisProfile(
     'cols',
   )
 
+  const scored = overExpected
+    ? overDecay(
+        sums,
+        { nrows: square.nrows, ncols: square.ncols, values: square.values },
+        local,
+      )
+    : sums
+
   // Over the whole assembly, with everything outside this sequence left as a
   // gap. Not zero: a cis-only run has said nothing at all about the other
   // sequences, and a track claiming zero contact there would be a claim it did
   // not make.
   const out = new Float32Array(job.mc.nBins).fill(Number.NaN)
-  for (let i = 0; i < sums.length; i++) out[anchor.scope.from + i] = sums[i]
+  for (let i = 0; i < scored.length; i++) out[anchor.scope.from + i] = scored[i]
   return out
 }
 

@@ -183,6 +183,109 @@ describe('a press that does not travel', () => {
   })
 })
 
+/**
+ * What the band looks like while it is being dragged out.
+ *
+ * The 1D browser writes three chips over its marquee — where the drag started,
+ * where the pointer is now, and how much lies between — because the ruler above
+ * it is at whatever resolution the *view* is, so at 20 kb per pixel the nearest
+ * tick is eighty thousand bases from the edge being dragged. That is more true
+ * here, not less: this ruler is the whole assembly at all times. So it is the
+ * same drawing, from `render/browser.ts`, and the numbers it is given are what
+ * this asserts — jsdom refuses a 2D context, and the chips' placement is the
+ * browser's own and has its own tests.
+ */
+describe('the band being dragged out', () => {
+  const press = (bar: SequenceBar, from: number, to: number): void => {
+    const canvas = bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: from, bubbles: true }))
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: to }))
+  }
+
+  it('reads out the sequence and both ends, to the base', () => {
+    const view = open()
+    press(view.bar, 120, 160)
+    expect(view.bar.selection).toEqual({ contig: 'II', start: 200, end: 600 })
+    view.bar.destroy()
+  })
+
+  /** The anchor first, because the two chips are placed at their own edges. */
+  it('reports a backwards drag from where the press landed', () => {
+    const view = open()
+    press(view.bar, 160, 120)
+    expect(view.bar.selection).toEqual({ contig: 'II', start: 600, end: 200 })
+    view.bar.destroy()
+  })
+
+  /** The same clamp the release applies, so the picture cannot contradict it. */
+  it('clamps the moving end to the sequence the press landed in', () => {
+    const view = open()
+    press(view.bar, 250, 350)
+    expect(view.bar.selection).toEqual({ contig: 'III', start: 500, end: 1000 })
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: 350 }))
+    expect(view.regions).toEqual(['III:500-1000'])
+    view.bar.destroy()
+  })
+
+  it('says nothing while no drag is out', () => {
+    const view = open()
+    expect(view.bar.selection).toBeNull()
+    view.bar.destroy()
+  })
+})
+
+/**
+ * Escape, which is the way out of a marquee dragged in the wrong place.
+ *
+ * A region is committed on release and a release cannot be taken back, so
+ * without this the only way out of a drag begun by accident is to let it
+ * navigate somewhere and come back. The key is read **on the window**, and that
+ * is the whole of it: the listener used to be on the canvas, which takes no
+ * focus, so the key went wherever the reader last clicked and the drag went
+ * through regardless.
+ */
+describe('escaping a drag', () => {
+  const escape = (): void => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  }
+
+  it('drops the band and opens nothing', () => {
+    const view = open()
+    const canvas = view.bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 120, bubbles: true }))
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 160 }))
+    expect(view.bar.selection).not.toBeNull()
+
+    escape()
+    expect(view.bar.selection).toBeNull()
+    // And the release that follows — the reader's hand is still on the button —
+    // must not finish the gesture that was just abandoned.
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: 160 }))
+    expect(view.regions).toEqual([])
+    expect(view.contigs).toEqual([])
+    view.bar.destroy()
+  })
+
+  /** Including a press that has not travelled, which would otherwise click. */
+  it('cancels a press before it becomes anything', () => {
+    const view = open()
+    const canvas = view.bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 250, bubbles: true }))
+    escape()
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: 250 }))
+    expect(view.contigs).toEqual([])
+    view.bar.destroy()
+  })
+
+  it('leaves a bar with no drag in progress alone', () => {
+    const view = open()
+    escape()
+    drag(view.bar, 120, 160)
+    expect(view.regions).toEqual(['II:200-600'])
+    view.bar.destroy()
+  })
+})
+
 describe('the box', () => {
   const submit = (bar: SequenceBar, text: string): void => {
     const input = bar.el.querySelector('.input-region') as HTMLInputElement
