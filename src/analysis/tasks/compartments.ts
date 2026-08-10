@@ -44,6 +44,12 @@ import { BALANCE_PARAM } from './shared'
  */
 export const MAX_CORRELATION_BINS = 8192
 
+/** Which contacts enter the correlation; see the `contacts` parameter. */
+function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
+  const value = params.contacts
+  return value === 'cis' || value === 'trans' ? value : 'both'
+}
+
 /** The ticked sequence names. `[]` is a state the reader can reach — see below. */
 function tickedNames(params: Params): string[] {
   const value = params.sequences
@@ -81,6 +87,47 @@ const PARAMS: readonly ParamSpec[] = [
      * them and one of them.
      */
     hint: 'One correlation over all of them, cis and trans. Ticking one gives that chromosome alone.',
+  },
+  {
+    kind: 'choice',
+    key: 'contacts',
+    label: 'Contacts',
+    default: 'both',
+    /**
+     * Three genuinely different computations, not a filter over one.
+     *
+     * **Trans** is the standard genome-wide call and is the one worth
+     * explaining: the cis blocks carry a near-diagonal that dominates every row,
+     * and dividing it out by an expected curve is a correction rather than an
+     * absence — so a correlation with them left out is a statement about which
+     * sequences share a nuclear compartment and nothing else.
+     *
+     * **Cis** is the per-chromosome eigenvector, and choosing it changes the
+     * *shape* of the run rather than only its input: it is one correlation per
+     * sequence rather than one across them, because a single square with its
+     * trans blocks removed correlates to a block-diagonal matrix whose leading
+     * eigenvector lives on one chromosome and is zero on the rest. That also
+     * makes it far the cheapest of the three — the correlation is cubic, so
+     * sixteen squares of 1,500 bins is a fraction of one of 24,000 — which is
+     * what lets it run at a fine resolution where the other two cannot.
+     */
+    options: [
+      {
+        value: 'both',
+        label: 'Cis and trans',
+        hint: 'One correlation over everything ticked. Each half keeps its own expectation.',
+      },
+      {
+        value: 'cis',
+        label: 'Cis only',
+        hint: 'One correlation per sequence, over its own contacts. The cheapest, and per chromosome.',
+      },
+      {
+        value: 'trans',
+        label: 'Trans only',
+        hint: 'Between sequences alone, so no distance decay enters the answer. Needs two or more.',
+      },
+    ],
   },
   {
     kind: 'number',
@@ -165,8 +212,49 @@ function readsFor(context: AnalysisContext, chosen: readonly ContextContig[]): n
   return (runs * (runs + 1)) / 2
 }
 
+/**
+ * Cis-only: one correlation per sequence, priced as such.
+ *
+ * The numbers that change are the two that matter. The **bytes** are the largest
+ * sequence's matrix rather than the whole set's, because the squares are built
+ * and released one after another — quoting the total would quote a peak that
+ * never happens. And the **gate** applies per sequence, which is the whole
+ * practical difference between the modes: a yeast genome is 12,100 bins at 1 kb
+ * and refused as one correlation, while the same sixteen chromosomes correlated
+ * separately are 1,500 bins each and entirely ordinary.
+ */
+function estimateCis(chosen: readonly ContextContig[], balance: boolean): CostEstimate {
+  const usable = chosen.filter((contig) => contig.bins <= MAX_CORRELATION_BINS)
+  const skipped = chosen.length - usable.length
+  if (usable.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal:
+        `Every ticked sequence is past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin limit on ` +
+        'a correlation matrix. Open the file at a coarser resolution.',
+    }
+  }
+  const widest = usable.reduce((most, contig) => Math.max(most, contig.bins), 0)
+  const bytes = widest * widest * 8
+  return {
+    class: usable.length > 1 ? 'scan' : 'bounded',
+    requests: usable.length * (balance ? 5 : 4),
+    bytes,
+    note:
+      `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
+      `correlation each — up to ${(bytes / 1e6).toFixed(0)} MB held at once, over at most ` +
+      `${widest.toLocaleString()} bins. ` +
+      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped. ` : ''}` +
+      'Progress is reported per sequence and it can be cancelled at any point.',
+  }
+}
+
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const chosen = ticked(context, params)
+  const contacts = contactsOf(params)
   if (chosen.length === 0) {
     return {
       class: 'free',
@@ -179,6 +267,22 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
           : 'None of the ticked sequences is in this file.',
     }
   }
+  if (contacts === 'trans' && chosen.length < 2) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal:
+        'A trans correlation is between sequences, so it needs at least two ticked. Tick more, ' +
+        'or read this one’s cis contacts instead.',
+    }
+  }
+
+  const balance = params.balance === true
+  // Cis-only is a different shape of run, not a narrower one — see `estimateCis`
+  // and the `contacts` parameter.
+  if (contacts === 'cis') return estimateCis(chosen, balance)
 
   const bins = chosen.reduce((total, contig) => total + contig.bins, 0)
   const bytes = bins * bins * 8
@@ -192,12 +296,12 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         `Refusing to build a ${bins.toLocaleString()}×${bins.toLocaleString()} correlation ` +
         `matrix (${(bytes / 1e9).toFixed(1)} GB) over ${chosen.length.toLocaleString()} ticked ` +
         `${chosen.length === 1 ? 'sequence' : 'sequences'}. The limit is ` +
-        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, or open the file at ` +
-        'a coarser resolution.',
+        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, open the file at a ` +
+        'coarser resolution, or read the cis contacts alone, which correlates each sequence on ' +
+        'its own.',
     }
   }
 
-  const balance = params.balance === true
   const framing = context.framing
   const spanned: [number, number] = [
     Math.min(...chosen.map((contig) => contig.startBin)),
@@ -220,9 +324,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // resolution and conclude the app has hung.
   const note =
     `A ${bins.toLocaleString()} bin correlation matrix over ` +
-    `${chosen.length.toLocaleString()} ${chosen.length === 1 ? 'sequence' : 'sequences'}, cis and ` +
-    `trans — ${(bytes / 1e6).toFixed(0)} MB held while it is solved, and the correlation itself ` +
-    'grows as the cube of the bin count.'
+    `${chosen.length.toLocaleString()} ${chosen.length === 1 ? 'sequence' : 'sequences'}, ` +
+    `${contacts === 'trans' ? 'trans only' : 'cis and trans'} — ${(bytes / 1e6).toFixed(0)} MB ` +
+    'held while it is solved, and the correlation itself grows as the cube of the bin count.'
   if (free) {
     return { class: 'free', requests: 0, bytes, note: `${note} Read from the block on screen.` }
   }

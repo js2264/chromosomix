@@ -357,3 +357,89 @@ describe('ticking several sequences', () => {
     view.destroy()
   })
 })
+
+/**
+ * Cis, trans and both are three computations, and the control has to be read as
+ * offering three rather than as a filter over one.
+ *
+ * **Trans** is the standard genome-wide call: the cis blocks carry a
+ * near-diagonal that dominates every row, so a correlation with them left out is
+ * a statement about which sequences share a compartment and nothing else. It
+ * needs two sequences by definition.
+ *
+ * **Cis** changes the *shape* of the run — one correlation per sequence rather
+ * than one across them — which is why it is priced against the largest sequence
+ * rather than the whole set, and why it is the mode that still works at a
+ * resolution the other two are refused at. The alternative, one square with its
+ * trans blocks removed, correlates to a block-diagonal matrix whose leading
+ * eigenvector lives on one chromosome; that is wrong in a way that looks like
+ * data, and it is the reason the modes are not interchangeable.
+ */
+describe('which contacts a compartment run reads', () => {
+  it('starts on cis and trans, which is the genome-wide call', () => {
+    const view = form(COMPARTMENTS_TASK)
+    expect(view.value.contacts).toBe('both')
+    expect(asks(view, 'Cis and trans')).toBe(true)
+    expect(asks(view, 'Cis only')).toBe(true)
+    expect(asks(view, 'Trans only')).toBe(true)
+    view.destroy()
+  })
+
+  it('says which halves it is reading in the price', () => {
+    const view = form(COMPARTMENTS_TASK)
+    expect(COMPARTMENTS_TASK.estimate(context(), view.value).note).toContain('cis and trans')
+    expect(
+      COMPARTMENTS_TASK.estimate(context(), { ...view.value, contacts: 'trans' }).note,
+    ).toContain('trans only')
+    view.destroy()
+  })
+
+  /**
+   * The practical difference between the modes, in one assertion: the same
+   * ticked set is refused as one correlation and ordinary as sixteen.
+   */
+  it('prices cis against the largest sequence rather than the whole set', () => {
+    const fine = context()
+    fine.contigs = [
+      { name: 'A', startBin: 0, bins: 5000, length: 5e6, genome: -1 },
+      { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
+    ]
+    const view = form(COMPARTMENTS_TASK, fine)
+    expect(COMPARTMENTS_TASK.estimate(fine, view.value).refusal).toContain('10,000×10,000')
+
+    const cis = COMPARTMENTS_TASK.estimate(fine, { ...view.value, contacts: 'cis' })
+    expect(cis.refusal).toBeUndefined()
+    expect(cis.note).toContain('2 sequences, one correlation each')
+    expect(cis.note).toContain('5,000 bins')
+    view.destroy()
+  })
+
+  it('refuses trans with one sequence ticked, and says what to do instead', () => {
+    const view = form(COMPARTMENTS_TASK)
+    const one = { ...view.value, sequences: ['II'], contacts: 'trans' }
+    const refusal = COMPARTMENTS_TASK.estimate(context(), one).refusal ?? ''
+    expect(refusal).toMatch(/at least two/i)
+    expect(refusal).toMatch(/cis/i)
+    // …and the same one sequence is fine in either of the other two modes.
+    expect(
+      COMPARTMENTS_TASK.estimate(context(), { ...one, contacts: 'cis' }).refusal,
+    ).toBeUndefined()
+    expect(
+      COMPARTMENTS_TASK.estimate(context(), { ...one, contacts: 'both' }).refusal,
+    ).toBeUndefined()
+    view.destroy()
+  })
+
+  // A refusal that names only the way out the reader has already rejected is
+  // half a refusal: at a fine resolution, cis-only is the answer.
+  it('offers cis as a way past the bin-count gate', () => {
+    const huge = context()
+    huge.contigs = [
+      { name: 'A', startBin: 0, bins: 5000, length: 5e6, genome: -1 },
+      { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
+    ]
+    const view = form(COMPARTMENTS_TASK, huge)
+    expect(COMPARTMENTS_TASK.estimate(huge, view.value).refusal).toMatch(/cis contacts alone/i)
+    view.destroy()
+  })
+})

@@ -76,6 +76,24 @@ export interface ExpectedPlan {
   cis: readonly ExpectedCurve[]
   /** Mean of each ordered pair's block, `k × k` row-major. `NaN` where empty. */
   trans: Float64Array
+  /**
+   * Which cells take part; the rest are gaps.
+   *
+   * `trans` is the one worth naming, because it is a method rather than a
+   * filter. A **trans-only** correlation is what you compute when you do not
+   * want the distance decay in the answer at all: the cis blocks carry a
+   * near-diagonal that dominates every row, and dividing it out by an expected
+   * curve is a correction rather than an absence. Excluding them makes the
+   * eigenvector a statement about which sequences share a nuclear compartment
+   * and nothing else — which is why it is the standard genome-wide call.
+   *
+   * `cis` here means *this square's* cis cells. It is not how a multi-sequence
+   * cis-only run is done — see `analysis/run/compartments.ts`, which runs one
+   * square per sequence for that, because a single square with its trans blocks
+   * removed correlates to a **block-diagonal** matrix whose leading eigenvector
+   * lives entirely on one chromosome and is zero on the rest.
+   */
+  contacts: 'cis' | 'trans' | 'both'
 }
 
 /**
@@ -86,7 +104,12 @@ export interface ExpectedPlan {
  * chain builds.
  */
 export function singleGroupPlan(n: number, curve: ExpectedCurve): ExpectedPlan {
-  return { group: new Int32Array(n), cis: [curve], trans: Float64Array.from([Number.NaN]) }
+  return {
+    group: new Int32Array(n),
+    cis: [curve],
+    trans: Float64Array.from([Number.NaN]),
+    contacts: 'both',
+  }
 }
 
 /**
@@ -113,11 +136,18 @@ export function observedOverExpected(
     for (let c = 0; c < m; c++) {
       const col = index[c]
       const colGroup = plan.group[col]
+      const same = rowGroup === colGroup
+      // A cell the mode leaves out is a gap, exactly as a cell with no
+      // expectation is: it takes no part in any correlation, rather than
+      // entering one as a zero and asserting that these two bins do not touch.
+      if (same ? plan.contacts === 'trans' : plan.contacts === 'cis') {
+        out[r * m + c] = Number.NaN
+        continue
+      }
       const observed = values[row * n + col]
-      const denominator =
-        rowGroup === colGroup
-          ? expectedAt(plan.cis[rowGroup], Math.abs(col - row))
-          : plan.trans[rowGroup * k + colGroup]
+      const denominator = same
+        ? expectedAt(plan.cis[rowGroup], Math.abs(col - row))
+        : plan.trans[rowGroup * k + colGroup]
       out[r * m + c] =
         Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0
           ? observed / denominator

@@ -791,6 +791,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **trans** cell has no separation at all, so it is divided by the mean of its
   own pair's block, per pair rather than one global trans mean.
 
+  **And which halves it reads is a control:** *cis and trans*, *cis only*, or
+  *trans only*. These are three computations rather than one with a filter over
+  it. **Trans only** is the standard genome-wide call — the cis blocks carry a
+  near-diagonal that dominates every row, and leaving them out makes the
+  eigenvector a statement about which sequences share a nuclear compartment and
+  nothing else; it needs two sequences by definition and says so. **Cis only**
+  changes the *shape* of the run: one correlation per sequence rather than one
+  across them, because a single square with its trans blocks removed correlates
+  to a block-diagonal matrix whose leading eigenvector lives entirely on one
+  chromosome and is zero on the rest — a genome-wide cis run done that way
+  returns one chromosome's compartments and fifteen flat lines, which is wrong in
+  a way that looks like data. It is also far the cheapest of the three, since the
+  correlation is cubic: sixteen squares of 1,500 bins is a fraction of one of
+  24,000, so it is priced against the largest sequence and gated per sequence.
+  That makes it the mode that still runs at a resolution the other two are
+  refused at, and the refusal says so.
+
   What it reads is the coalesced runs of what was ticked, so everything ticked
   is a single read of the whole file rather than 136 rectangles, and a scattered
   subset pays a rectangle per pair of runs instead of reading the gaps between

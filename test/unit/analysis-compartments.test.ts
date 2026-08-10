@@ -169,12 +169,45 @@ describe('observedOverExpected', () => {
     })
     const trans = Float64Array.from([Number.NaN, 3, 3, Number.NaN])
     const index = Int32Array.from([0, 1, 2, 3, 4])
-    const oe = observedOverExpected(values, n, index, { group, cis, trans })
+    const oe = observedOverExpected(values, n, index, { group, cis, trans, contacts: 'both' })
 
     // Every cell is exactly its own expectation, so the whole matrix is 1 —
     // including across the boundary, where a shared curve would have produced
     // 3/10 on one side and 3/100 on the other.
     for (const value of oe) expect(value).toBeCloseTo(1, 12)
+  })
+
+  /**
+   * Cis, trans and both are three computations rather than one with a filter,
+   * and the mode's whole job in the kernel is which cells become gaps. A gap is
+   * not a zero: a cell left out takes no part in any correlation, where a zero
+   * would assert that its two bins do not touch.
+   */
+  it('leaves out whichever half the mode excludes, as gaps', () => {
+    const n = 4
+    const group = Int32Array.from([0, 0, 1, 1])
+    const values = new Float32Array(n * n).fill(2)
+    const flat = new ExpectedAccumulator(n)
+    for (let k = 0; k <= n; k++) flat.add(k, 2)
+    const curve = flat.finish()
+    const trans = Float64Array.from([Number.NaN, 2, 2, Number.NaN])
+    const index = Int32Array.from([0, 1, 2, 3])
+    const plan = { group, cis: [curve, curve], trans }
+
+    const both = observedOverExpected(values, n, index, { ...plan, contacts: 'both' })
+    expect([...both].every((value) => value === 1)).toBe(true)
+
+    // Cis keeps the two diagonal blocks and drops what is between them…
+    const cis = observedOverExpected(values, n, index, { ...plan, contacts: 'cis' })
+    expect(cis[0 * n + 1]).toBe(1)
+    expect(cis[0 * n + 2]).toBeNaN()
+    expect(cis[2 * n + 3]).toBe(1)
+
+    // …and trans is exactly its complement.
+    const only = observedOverExpected(values, n, index, { ...plan, contacts: 'trans' })
+    expect(only[0 * n + 1]).toBeNaN()
+    expect(only[0 * n + 2]).toBe(1)
+    expect(only[2 * n + 3]).toBeNaN()
   })
 
   it('answers a trans pair with nothing in it with a gap, not with the count', () => {
@@ -187,6 +220,7 @@ describe('observedOverExpected', () => {
       group,
       cis: [flat.finish(), flat.finish()],
       trans: Float64Array.from([Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+      contacts: 'both',
     })
     expect(oe[0]).toBeCloseTo(1, 12)
     expect(oe[1]).toBeNaN()
