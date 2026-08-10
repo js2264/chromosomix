@@ -49,8 +49,12 @@ Zooming past what the block in hand can show therefore reads the window again, a
 picture could show, **once the gesture has settled**. The properties that keep this inside §2 rather
 than beside it:
 
-- **a gesture still costs nothing.** The read is issued after the window stops moving, never during
-  it, and never from the renderer or the panel — neither holds a reader (§7.2);
+- **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
+  block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
+  the plot — until the new grid lands. One crossing is one read, by construction rather than by
+  timing, and the reader is shown the moment their resolution changes instead of having it happen
+  under them. Escape calls the read off and gives the gestures back, because a picture that is
+  already complete is never worth locking the map for;
 - **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Two or
   three are *retained* so that zooming back out is a swap rather than a request, which is a small
   bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
@@ -531,6 +535,9 @@ diverges from what a reader reproduces locally.
   magnification. The range is measured from the **widest block held** and stays there while the
   reader zooms in; zooming out past it re-measures, which is right, because that reader is looking at
   data that was not in the picture before
+- the **cell size** is named in the key, on its own line under the scale's name, and in the exported
+  key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
+  a figure that carries it needs no caption to say it
 - separators at genome or contig boundaries, thin grey
 - ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
@@ -1138,7 +1145,8 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
-| Refine, after a settled zoom (§2) | ≤ 5 range requests, one bounded read |
+| Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
+| Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
@@ -1330,9 +1338,13 @@ session with companions costs the session it would have been, plus the companion
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
 
-A rung is now *also* what a settled zoom reads from (§2), which does not change the row above: the
-picker still names the map a panel is **addressed** as, the link still carries it, and a reader who
-touches it has said something the zoom does not overrule. What the zoom chooses is which level
+A rung is now *also* what a zoom reads from (§2), which does not change the row above but sharpens
+it: the picker still names the map a panel is **addressed** as, the link still carries it, and a
+reader who touches it has said something the zoom does not overrule. Concretely, **the rung that is
+open is the finest one a zoom may use.** Somebody who opened the 2 kb level of a
+`100/200/500/1000/2000/5000` file has said *2 kb*; a zoom that fetched the 100 bp level would be
+overruling them with their own file. Coarser rungs are still the zoom's to choose, that being the
+direction the picker did not rule on. What the zoom chooses is which level
 answers one bounded read, and that is a fact about a picture rather than about an address.
 
 **Resolution is the one thing on the shared side of that line that cannot be shared**, and it is why

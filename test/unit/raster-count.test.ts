@@ -176,6 +176,25 @@ describe('what rebuilds the raster', () => {
     expect(heatmap.zoomLevel).toBeGreaterThan(held.zoom)
   })
 
+  it('lets Escape out of a freeze, and refuses other keys while held', () => {
+    const heatmap = view()
+    heatmap.setMatrix(block(64))
+    heatmap.draw()
+    let cancelled = 0
+    heatmap.setFrozen(true, () => {
+      cancelled += 1
+    })
+    const held = heatmap.cellWindow()
+
+    // An arrow key is a pan, and a pan is refused like every other gesture.
+    heatmap.handleKeyDown({ key: 'ArrowRight', preventDefault: () => {} } as KeyboardEvent)
+    expect(heatmap.cellWindow()).toEqual(held)
+    expect(cancelled).toBe(0)
+
+    heatmap.handleKeyDown({ key: 'Escape', preventDefault: () => {} } as KeyboardEvent)
+    expect(cancelled, 'a held map must always have a way out').toBe(1)
+  })
+
   it('a new block ends a freeze', () => {
     // A navigation is a different question from the one the freeze was waiting
     // on; leaving the map held for a read nobody is waiting for any more is how

@@ -5019,8 +5019,8 @@ export class MatrixPanel {
    * a different picture, and this holds the picture that is already there while
    * a sharper version of it arrives.
    */
-  setFrozen(on: boolean): void {
-    this.heatmap.setFrozen(on)
+  setFrozen(on: boolean, onCancel?: () => void): void {
+    this.heatmap.setFrozen(on, onCancel)
   }
 
   /**
@@ -5084,7 +5084,7 @@ export class MatrixPanel {
         const per = width / Math.max(1, cells)
         const lo = Math.floor(into[0] + view[0] * per)
         const hi = Math.ceil(into[0] + view[1] * per)
-        return [Math.min(lo, hi), Math.max(lo + 1, hi)]
+        return [Math.max(into[0], Math.min(lo, into[1])), Math.min(into[1], Math.max(hi, into[0]))]
       }
       const rows = spanOf(window.rows, data.nrows, source.rows)
       const cols = spanOf(window.cols, data.ncols, source.cols)
@@ -5863,13 +5863,21 @@ export function groupAt(
 /**
  * A cell window on one axis, as absolute bins of the file.
  *
- * Outward on both ends, and deliberately **not clamped to the block**. Clamping
- * looks obviously right — the answer would then never name a bin the block does
- * not hold — and it silently deletes the only signal a zoom-*out* has: once the
- * view is wider than the block, a clamped window reports the block's own edges,
- * so a reader pulling back past what they have is indistinguishable from one
- * sitting still, and nothing ever widens. What bounds the answer instead is the
- * view's own domain, applied where it is known (`ui/refine.ts`'s ceiling).
+ * Outward on both ends, and **clamped to the block**, because a window naming
+ * bins the block does not hold is not a window — at fit zoom the plot is wider
+ * than the picture and the raw cell window runs off both sides into the margins.
+ *
+ * Leaving it unclamped, briefly, was a bug with real teeth: a *fitted* view then
+ * reported a window wider than its own block, the ladder read that as "the
+ * reader has gone outside what they have", and every view that opened fitted
+ * immediately asked for a widening read of its own whole domain. On a small file
+ * that is a wasted read nobody notices. On a 660 MB mouse cooler it is minutes
+ * of scanning, with the map frozen for the duration, before the reader has
+ * touched anything.
+ *
+ * The signal it was standing in for — *the reader wants to go past this block* —
+ * is `BlockLadder.atEdge`'s to give, and it gives it from the block and the
+ * ceiling rather than from a window that has been allowed to lie.
  *
  * `binsPerCell` may be fractional — a turned column is half a bin — which is why
  * the rounding is done after the multiply rather than on the cell index.
@@ -5881,7 +5889,10 @@ export function binsOf(
 ): Extent {
   const lo = extent[0] + Math.floor(window[0] * binsPerCell)
   const hi = extent[0] + Math.ceil(window[1] * binsPerCell)
-  return [Math.min(lo, hi), Math.max(lo + 1, hi)]
+  return [
+    Math.max(extent[0], Math.min(lo, extent[1])),
+    Math.min(extent[1], Math.max(hi, extent[0])),
+  ]
 }
 
 /**
