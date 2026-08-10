@@ -20,7 +20,8 @@
  */
 
 import { BaseCache } from '../annotations/bases'
-import { findFeatures, paddedSpan } from '../annotations/search'
+import { featureLabel } from '../annotations/featureset'
+import { findFeatures, hitLabel, paddedSpan } from '../annotations/search'
 import {
   OVERLAY_DIM,
   extentFor,
@@ -2799,7 +2800,8 @@ export class BrowserView {
     if (feature !== null) {
       const { set, index } = feature
       const strand = set.strand[index] === 1 ? ' (+)' : set.strand[index] === -1 ? ' (−)' : ''
-      const name = set.name[index] === '' ? '' : `${set.name[index]} `
+      const label = featureLabel(set, index)
+      const name = label === '' ? '' : `${label} `
       rows.push(
         el('div', { class: 'cell-tip-row' }, el('span', {
           class: 'cell-tip-key',
@@ -2952,7 +2954,7 @@ export class BrowserView {
     // not share a line is the one that writes the string.
     for (const hit of findFeatures(this.props.store, raw)) {
       hits.push({
-        label: `${hit.name} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+        label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
         locus: `${hit.contig}:${Math.max(1, hit.start + 1)}-${hit.end}`,
       })
     }

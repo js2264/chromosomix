@@ -18,6 +18,7 @@ interface Raw {
   strand: number
   score: number
   name: string
+  id: string
   detail: string
   exons: number[] | null
   cds: [number, number] | null
@@ -53,6 +54,8 @@ export class FeatureBuilder {
       strand?: number
       score?: number
       name?: string
+      /** The accession behind the name, where the format has one; see `FeatureSet.id`. */
+      id?: string
       detail?: string
       /** Flattened `[start, end, start, end, …]`, in file order. */
       exons?: number[]
@@ -70,6 +73,7 @@ export class FeatureBuilder {
       strand: extra.strand ?? 0,
       score: extra.score ?? Number.NaN,
       name: extra.name ?? '',
+      id: extra.id ?? '',
       detail: extra.detail ?? '',
       exons: extra.exons ?? null,
       cds: extra.cds ?? null,
@@ -101,6 +105,7 @@ export class FeatureBuilder {
       strand: new Int8Array(n),
       score: new Float32Array(n),
       name: new Array<string>(n),
+      id: new Array<string>(n),
       detail: new Array<string>(n),
       exonAt: new Int32Array(n + 1),
       exonStart: new Int32Array(0),
@@ -125,6 +130,7 @@ export class FeatureBuilder {
       set.strand[i] = row.strand
       set.score[i] = row.score
       set.name[i] = row.name
+      set.id[i] = row.id
       set.detail[i] = row.detail
       set.cdsStart[i] = row.cds === null ? -1 : row.cds[0]
       set.cdsEnd[i] = row.cds === null ? -1 : row.cds[1]
@@ -154,6 +160,27 @@ export class FeatureBuilder {
     set.contigAt[this.contigs.length] = cursor
     return set
   }
+}
+
+/**
+ * How one feature names itself in prose: `LipL1 (PF3D7_1314600)`.
+ *
+ * The symbol *and* the accession, wherever the file gave two different strings,
+ * because a tooltip that said only `VAR` over a *Plasmodium* map would be
+ * answering "which gene is this" with the name of sixty of them. Just the one
+ * string where there is only one to have: a BED row has no accession, and a gene
+ * with no symbol is drawn as its accession already, so `name === id` there
+ * (`annotations/types.ts`).
+ *
+ * The glyph on the map is *not* this — it is the name alone. A label drawn
+ * inside a box that is often eight pixels wide has room for one thing, and the
+ * one thing a reader scanning a track wants is the name.
+ */
+export function featureLabel(set: FeatureSet, at: number): string {
+  const name = set.name[at]
+  const id = set.id[at]
+  if (id === '' || id === name) return name
+  return name === '' ? id : `${name} (${id})`
 }
 
 /** The contig's index in this set, or `-1` when the file never mentions it. */

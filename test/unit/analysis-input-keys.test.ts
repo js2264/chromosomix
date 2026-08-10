@@ -40,6 +40,7 @@ function features(spans: Array<[number, number]>): FeatureSet {
     strand: new Int8Array(n),
     score: Float32Array.from(new Array<number>(n).fill(Number.NaN)),
     name: spans.map((_, i) => `f${i}`),
+    id: spans.map(() => ''),
     detail: spans.map(() => ''),
     exonAt: new Int32Array(n + 1),
     exonStart: new Int32Array(0),

@@ -189,6 +189,26 @@ export interface FeatureSet {
   /** What to write on the feature; `''` when there is nothing to write. */
   name: string[]
   /**
+   * The **accession** behind the name, where the format carries one: a GTF or
+   * GFF gene id.
+   *
+   * Its own array rather than the first field of {@link detail}, because it is
+   * asked three questions the other attributes are not. It is what a reader
+   * types into the search box — half of genomics addresses its genes by
+   * systematic id and the other half by symbol, and often the same reader in one
+   * afternoon. It is what they copy out of the feature card, which is why the
+   * card writes `gene ID:` beside it rather than leaving it as one unlabelled
+   * part of a joined string. And it is what tells the two apart when a file gives
+   * a gene both: `name` is the symbol and this is the accession.
+   *
+   * `''` for a format with no such notion (a BED name is the only name there is)
+   * and for a gene the file names but does not identify. **`name === id` means
+   * the file gave no symbol** — the display name has fallen back to the
+   * accession — and that is the one convention worth stating here, because it is
+   * what stops the feature card printing the same string on two lines.
+   */
+  id: string[]
+  /**
    * The attributes worth showing, joined with {@link DETAIL_SEP}.
    *
    * One string per feature rather than an array per feature, because there are

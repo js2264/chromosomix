@@ -25,6 +25,17 @@
  * the QC statistic and the stored metadata are consulted once and then ignored.
  * Those two stay last, in that order, wherever the record card is.
  *
+ * **The sequences host** sits above it, and on a cooler it is what the record
+ * card used to be. A *Chromosome* record described the one sequence already
+ * named in the breadcrumb, and it could only ever describe one; the Sequences
+ * card lists every chromosome the file has with a tick beside each, so the same
+ * strip of panel now says both what is drawn and what else could be — one
+ * ticked is that chromosome's block, several are those chromosomes against each
+ * other, none is the whole genome. The Chromosomes *table* is untouched: it is
+ * the place columns are sorted and read, and this is the place a picture is
+ * chosen. A metacool has no host filled here — its unit is the genome, and a
+ * list of a hundred thousand contigs is not a picker (see `Session`).
+ *
  * The three annotation cards were here too, under the record card. They are now
  * the Annotations column (`SidePanel`): everything in this panel is read, and
  * everything in those is worked on, so the two wanted different amounts of room
@@ -70,6 +81,14 @@ export class InfoPanel {
   /** Empty on a table view; `:empty` in the stylesheet is what hides it. */
   private readonly recordHost = el('div', { class: 'record-host' })
   /**
+   * The Sequences card, on a file whose chromosomes are a picker.
+   *
+   * A host rather than a card built here, because the list arrives with the
+   * `/chroms` read and the ticks are the session's — this panel describes the
+   * file, and which sequences are drawn is a fact about the *view*.
+   */
+  private readonly sequenceHost = el('div', { class: 'sequence-host' })
+  /**
    * The File card(s). One while one file is open, two while two are.
    *
    * A host rather than a fixed card, because the second file arrives and leaves
@@ -85,11 +104,24 @@ export class InfoPanel {
       'aside',
       { class: 'info-panel' },
       this.fileHost,
+      this.sequenceHost,
       this.recordHost,
       this.unassignedBlock(),
       this.metadataBlock(),
     )
     this.paintFiles()
+  }
+
+  /**
+   * Hang the Sequences card under the File card, or take it away.
+   *
+   * Called once per file, with the card the session built: rebuilding it on
+   * every navigation would throw away the filter text and the scroll position of
+   * a list a reader is working their way down, and the ticks follow the view on
+   * their own (`SequenceSelection`).
+   */
+  setSequences(card: HTMLElement | null): void {
+    this.sequenceHost.replaceChildren(...(card === null ? [] : [card]))
   }
 
   /**

@@ -40,6 +40,8 @@ import {
   matrixLevel,
   overviewLevel,
   selectionOf,
+  sequencesShown,
+  viewForSequences,
   viewStateEquals,
   type UnitSelection,
 } from '../state/ViewState'
@@ -86,10 +88,11 @@ import { Overview, wholeFileLevelCard } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/RecordCard'
 import { RegionView } from '../ui/RegionView'
+import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
-import { button, el, fmt } from '../ui/dom'
+import { el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
@@ -208,160 +211,17 @@ function genomeCard(
             }),
           ]),
     ),
-    sequenceCard(assembly, onGoTo, selection),
+    sequenceCard({
+      contigs: assembly.contigs,
+      selection,
+      onGoTo,
+      ...BROWSER_TICKS,
+    }),
     // No card about contact maps here. There is one in the Annotations column,
     // it lists the maps this session holds however many that is, and each of
     // them wears the eye that decides whether it is drawn — which is a column
     // about *what is on screen* rather than about what the file is. Two cards
     // offering to load a map, in two columns, is the state this replaced.
-  )
-}
-
-/**
- * How many sequence rows are built at once.
- *
- * A `chrom.sizes` is as likely to be sixteen yeast chromosomes as forty thousand
- * scaffolds off an assembler, and forty thousand buttons is a second of layout
- * for a card nobody scrolled to the end of. The filter above the list is what
- * reaches the rest, which is also the faster way to reach one of sixteen.
- */
-const SEQUENCE_ROWS = 300
-
-/** Above this many, the list gets a filter box; below it, it does not need one. */
-const SEQUENCES_WORTH_FILTERING = 12
-
-/**
- * Every sequence, its length, and a click that goes there.
- *
- * The one question a genome browser is asked before any other — *what is in
- * this genome, and how big is each of them* — and until now the only answer was
- * a count in the card above. It is also the fastest way to navigate: a
- * chromosome is a locus, and the locus box exists for the case where you know
- * the coordinate rather than the case where you want to look at chromosome IV.
- *
- * The bar behind each row is the length, against the longest. It costs a
- * gradient and it turns a column of numbers into the shape of an assembly:
- * sixteen bars in a staircase is a yeast, and one bar with a thousand slivers
- * under it is a draft.
- */
-function sequenceCard(
-  assembly: Assembly,
-  onGoTo: (locus: string) => void,
-  selection: SequenceSelection,
-): HTMLElement {
-  const list = el('div', { class: 'seq-list' })
-  const note = el('p', { class: 'hint seq-note' })
-  const chosen = el('p', { class: 'hint seq-chosen' })
-  const longest = assembly.contigs.reduce((most, contig) => Math.max(most, contig.length), 1)
-
-  const paint = (query: string): void => {
-    const wanted = query.trim().toLowerCase()
-    const matching =
-      wanted === ''
-        ? assembly.contigs
-        : assembly.contigs.filter((contig) => contig.name.toLowerCase().includes(wanted))
-    const shown = matching.slice(0, SEQUENCE_ROWS)
-    list.replaceChildren(
-      ...shown.map((contig) => {
-        // A tick and a button, not a button containing a tick: a checkbox inside
-        // a `<button>` is a control inside a control, which no browser resolves
-        // the same way and none of them make keyboard-reachable.
-        const tick = el('input', {
-          class: 'checkbox seq-tick',
-          type: 'checkbox',
-          title:
-            `Show only the ticked sequences. With none ticked the whole genome is one axis; ` +
-            `ticking ${contig.name} makes it the axis, so a pan cannot leave it.`,
-          attrs: { 'data-seq': contig.name },
-        })
-        tick.checked = selection.has(contig.name)
-        tick.addEventListener('change', () => selection.toggle(contig.name, tick.checked))
-        const go = el(
-          'button',
-          {
-            class: 'seq-go',
-            type: 'button',
-            title: `${contig.name} — ${fmt.int(contig.length)} bp. Click to show the whole sequence.`,
-          },
-          el('span', { class: 'seq-name', text: contig.name }),
-          el('span', { class: 'seq-len', text: fmt.bp(contig.length) }),
-        )
-        go.addEventListener('click', () => onGoTo(contig.name))
-        const row = el('div', { class: 'seq-row' }, tick, go)
-        row.style.setProperty('--seq-share', `${(contig.length / longest) * 100}%`)
-        return row
-      }),
-    )
-    note.textContent =
-      matching.length > shown.length
-        ? `${fmt.int(shown.length)} of ${fmt.int(matching.length)} — narrow the filter to reach the rest`
-        : matching.length === 0
-          ? 'nothing by that name'
-          : ''
-    note.classList.toggle('hidden', note.textContent === '')
-  }
-
-  /**
-   * Bring the ticks and the line above them back in step with the selection.
-   *
-   * Needed because this card is not the only thing that writes to it: going to a
-   * sequence that is not on the axis ticks it (`SequenceSelection.ensure`), and
-   * a tick that appears in the model and not in the box is the one state this
-   * card must never be in.
-   */
-  const sync = (): void => {
-    for (const box of list.querySelectorAll<HTMLInputElement>('.seq-tick')) {
-      const on = selection.has(box.dataset.seq ?? '')
-      box.checked = on
-      box.closest('.seq-row')?.classList.toggle('is-on', on)
-    }
-    const count = selection.names.length
-    chosen.replaceChildren(
-      ...(count === 0
-        ? []
-        : [
-            el('span', { text: `showing ${fmt.int(count)} of ${fmt.int(assembly.contigs.length)} — ` }),
-            button('the whole genome', () => selection.clear(), {
-              class: 'seq-all',
-              title: 'Untick every sequence, which puts the whole assembly back on one axis',
-            }),
-          ]),
-    )
-    chosen.classList.toggle('hidden', count === 0)
-  }
-
-  const filter = el('input', {
-    class: 'input input-tiny seq-filter',
-    type: 'search',
-    placeholder: `filter ${fmt.int(assembly.contigs.length)} sequences…`,
-  })
-  filter.addEventListener('input', () => {
-    paint(filter.value)
-    sync()
-  })
-  paint('')
-
-  const off = selection.subscribe(() => {
-    // The card is replaced wholesale when the assembly's lengths are (see
-    // `adoptSizes`), and nothing hands a detached one a teardown. It
-    // unsubscribes itself the first time it is spoken to after leaving the
-    // document, which is as long as a listener on a dead card can survive.
-    if (!list.isConnected) {
-      off()
-      return
-    }
-    sync()
-  })
-  sync()
-
-  return el(
-    'div',
-    { class: 'card seq-card' },
-    cardTitle('Sequences', 'list'),
-    ...(assembly.contigs.length > SEQUENCES_WORTH_FILTERING ? [filter] : []),
-    list,
-    chosen,
-    note,
   )
 }
 
@@ -620,6 +480,15 @@ export class Session {
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
+  /** Drop the map's listener on that selection; see {@link paintSequences}. */
+  private sequenceListener: (() => void) | null = null
+  /**
+   * `true` for the length of one write of the ticks *from* the view state.
+   *
+   * The binding runs both ways — a tick navigates, a navigation re-ticks — so
+   * without this the second half answers the first and the pair oscillates.
+   */
+  private echoingSequences = false
   /**
    * A config waiting for the file it describes.
    *
@@ -805,6 +674,8 @@ export class Session {
     this.compare?.client.terminate()
     this.compare = null
     this.assembly = null
+    this.sequenceListener?.()
+    this.sequenceListener = null
     this.reader?.terminate()
     this.reader = null
   }
@@ -1596,6 +1467,10 @@ export class Session {
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
       if (this.destroyed) return
+      // After it, not before: the card is the `/chroms` table with tick boxes on
+      // it, and the read that fills it is the one the annotation gate has just
+      // paid for. A metacool never reaches it (see {@link paintSequences}).
+      this.paintSequences()
       this.setGeneral([this.infoPanel.el])
       this.host.activity(this)
       // Destroyed, not merely dropped: a scan of the *previous* file may still
@@ -1923,6 +1798,126 @@ export class Session {
     return this.sequences
   }
 
+  // -------------------------------------------------------------------------
+  // The Sequences card, beside a map
+  // -------------------------------------------------------------------------
+
+  /**
+   * Hang the Sequences card in the General column of a **cooler**.
+   *
+   * The card that used to be the browser's alone, now the picker a contact map
+   * is steered from: no tick is the whole genome, one is that chromosome's
+   * block, several are the selection view of them. It replaces the *Chromosome*
+   * record card, which could only ever describe the one sequence already named
+   * in the breadcrumb — see {@link recordsFor}.
+   *
+   * **A cooler only.** A metacool's unit is the genome (§5.1) and its contig
+   * list is the thousands of pieces those genomes were assembled from; a picker
+   * with a hundred thousand tick boxes in it is not a picker, and the genomes
+   * table is where that file's selection is made. Its record card stays.
+   *
+   * Built once per file — the list arrives with the `/chroms` read that
+   * {@link setUpAnnotations} already pays for — and never rebuilt: the ticks
+   * follow the view through the selection, so rebuilding would only throw away
+   * the filter text and the scroll position of a list being read.
+   */
+  private paintSequences(): void {
+    const file = this.file
+    const panel = this.infoPanel
+    if (file === null || panel === null) return
+    if (file.info.hasGenomes) {
+      panel.setSequences(null)
+      return
+    }
+    const assembly = this.assemblyOfFile(file)
+    if (assembly === null) {
+      panel.setSequences(null)
+      return
+    }
+    const selection = this.selectionFor(assembly)
+    // One listener per file, and it is this session's rather than the card's:
+    // the card is replaced with the file, the selection is not, and a listener
+    // left behind would navigate a session that has since opened something else.
+    this.sequenceListener?.()
+    this.sequenceListener = selection.subscribe(() => this.sequencesChosen())
+    panel.setSequences(
+      sequenceCard({
+        contigs: assembly.contigs,
+        selection,
+        // The same destination a click on a row of the Chromosomes table
+        // reaches, because it is the same act: show me that chromosome.
+        onGoTo: (name) => this.navigate({ uri: file.uri, view: 'region', region: name }),
+        ...MAP_TICKS,
+      }),
+    )
+  }
+
+  /**
+   * A tick changed: draw what is ticked.
+   *
+   * Silent while the browser is mounted: there the ticks *are* the axis and the
+   * browser applies them itself, and while a map is merely parked the state that
+   * would be navigated to is the one being kept for its return.
+   */
+  private sequencesChosen(): void {
+    if (this.echoingSequences) return
+    const file = this.file
+    if (file === null || this.assembly !== null) return
+    this.navigate(viewForSequences(file.uri, this.orderedSelection(), this.wholeFileView()))
+  }
+
+  /**
+   * The ticked names in the file's own order.
+   *
+   * A selection is drawn in the order it is *given*, so ticking XVI and then I
+   * would otherwise put chromosome XVI on the left of the map — a picture of the
+   * order the boxes were clicked in rather than of the genome. The card lists
+   * them in file order and so does the axis.
+   */
+  private orderedSelection(): string[] {
+    const chosen = new Set(this.sequences?.names ?? [])
+    if (chosen.size === 0) return []
+    const order = contigPairs(this.file?.contigs ?? null).map(([name]) => name)
+    const known = order.filter((name) => chosen.has(name))
+    // A name the table does not have cannot be ordered, and dropping it silently
+    // would be this method deciding what the reader ticked. There is no such
+    // name today — the boxes are built from the table — but the selection is
+    // also restored from storage, which is exactly where one would come from.
+    return known.length === chosen.size ? known : [...chosen]
+  }
+
+  /**
+   * Tick whatever the view on screen is a picture of.
+   *
+   * The other direction of the same binding: the breadcrumb, the Chromosomes
+   * table, a pasted link and the back button all move the view without touching
+   * a tick box, and a card that said "showing 1 of 16" over a whole-genome map
+   * would be the panel disagreeing with the picture beside it.
+   *
+   * Only on the views that *are* a picture of sequences. A table view leaves the
+   * ticks alone rather than clearing them: nothing is drawn there, so there is
+   * nothing to disagree with, and clearing would throw away the selection a
+   * reader is halfway through making on the way to the map.
+   *
+   * {@link echoingSequences} is what keeps this from being a loop — the write
+   * notifies, and the listener above would answer it with the navigation that
+   * caused it.
+   */
+  private syncSequenceTicks(state: ViewState): void {
+    const file = this.file
+    const selection = this.sequences
+    if (file === null || selection === null || file.info.hasGenomes) return
+    const names = contigPairs(file.contigs).map(([name]) => name)
+    const shown = sequencesShown(state, names)
+    if (shown === null) return
+    this.echoingSequences = true
+    try {
+      selection.set(shown)
+    } finally {
+      this.echoingSequences = false
+    }
+  }
+
   private mountBrowser(state: ViewState): void {
     const assembly = this.assembly
     const held = this.annotations
@@ -2195,6 +2190,11 @@ export class Session {
     // the round trip is the identity and a track hung deliberately from its
     // ceiling keeps that decision through both halves of it.
     this.annotations?.store.turnAxesForBrowser()
+    // Rebuilt rather than re-parented: a card that leaves the document drops its
+    // listener on the selection the first time it is spoken to afterwards (see
+    // `sequenceCard`), and every tick made in the browser while the map was down
+    // is one of those. The card that comes back has to be a live one.
+    this.paintSequences()
     this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
     this.syncCompareCard()
     this.mounted = null
@@ -2409,6 +2409,8 @@ export class Session {
     this.wholeFile = null
     this.file = null
     this.assembly = null
+    this.sequenceListener?.()
+    this.sequenceListener = null
     this.sequences = null
     this.breadcrumb = null
     this.breadcrumbHost.replaceChildren()
@@ -3374,6 +3376,8 @@ export class Session {
       this.assembly = null
       this.browser = null
       this.annotations?.store.turnAxesForBrowser()
+      // The same live-card rebuild {@link showMap} does, for the other door back.
+      this.paintSequences()
       this.setGeneral(this.infoPanel === null ? [] : [this.infoPanel.el])
       this.syncCompareCard()
       this.mounted = null
@@ -3538,6 +3542,9 @@ export class Session {
     // After the switch, not before: a region view reads the contigs table on the
     // way in, and there is no row to show until it has arrived.
     this.infoPanel?.setRecords(this.recordsFor(state))
+    // …and for the same reason, since the ticks are read against that table: a
+    // link straight to a region arrives before anything has opened one.
+    this.syncSequenceTicks(state)
     this.host.activity(this)
   }
 
@@ -3555,11 +3562,20 @@ export class Session {
    * A two-axis view yields two records, labelled by axis. `contig_A × contig_B`
    * is the phage–host block, and which of the two is on which axis is exactly
    * what one is trying to keep straight while reading it.
+   *
+   * **Nothing at all on a cooler.** The *Chromosome* card there described the
+   * one sequence the breadcrumb already names, from a table the reader can open
+   * in full, and it took the room the Sequences card now uses to say the same
+   * thing about every chromosome at once with a way to change it
+   * ({@link paintSequences}). A metacool keeps its *Contig* card: its picker is
+   * the genomes table, so the contig on screen is the fact the panel has left to
+   * report — and the genome it belongs to, which the card resolves by name.
    */
   private recordsFor(state: ViewState): RecordSpec[] {
     const file = this.file
     if (file === null) return []
-    const noun = file.info.hasGenomes ? 'Contig' : 'Chromosome'
+    if (!file.info.hasGenomes) return []
+    const noun = 'Contig'
     switch (state.view) {
       case 'genome':
         return compact([this.genomeRecord(state.genome, 'Genome')])

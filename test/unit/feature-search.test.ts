@@ -109,6 +109,36 @@ describe('finding a feature by name', () => {
     expect(hit.contig).toBe('chrII')
   })
 
+  // Genomics addresses one gene two ways and a reader uses whichever the thing
+  // in front of them used: `LipL1` out of a paper, `PF3D7_1314600` out of the
+  // supplementary table. It matters most where the symbols are least useful — a
+  // Plasmodium annotation has sixty genes called `VAR`, and the accession is the
+  // only way to ask for one of them.
+  it('matches the accession as well as the symbol', () => {
+    const build = new FeatureBuilder()
+    build.add('chrI', 1000, 2000, { name: 'LipL1', id: 'PF3D7_1314600' })
+    build.add('chrI', 5000, 6000, { name: 'VAR', id: 'PF3D7_1300100' })
+    build.add('chrI', 7000, 8000, { name: 'VAR', id: 'PF3D7_1300300' })
+    const { store } = storeWith(build.finish())
+
+    expect(findFeatures(store, 'lipl').map((hit) => hit.name)).toEqual(['LipL1'])
+    expect(findFeatures(store, 'pf3d7_13146').map((hit) => hit.name)).toEqual(['LipL1'])
+    // The symbol finds both; the accession picks out the one.
+    expect(findFeatures(store, 'var')).toHaveLength(2)
+    expect(findFeatures(store, 'PF3D7_13003').map((hit) => hit.id)).toEqual(['PF3D7_1300300'])
+  })
+
+  // `name === id` is how the parser spells a gene the file identifies but never
+  // names, and a hit that carried both would print the same string twice.
+  it('does not repeat the accession when it is also the name', () => {
+    const build = new FeatureBuilder()
+    build.add('chrI', 1000, 2000, { name: 'PF_0001', id: 'PF_0001' })
+    const { store } = storeWith(build.finish())
+    const [hit] = findFeatures(store, 'pf_')
+    expect(hit.name).toBe('PF_0001')
+    expect(hit.id).toBe('')
+  })
+
   it('says nothing while the set is still loading, or when there is none', () => {
     const store = new AnnotationStore('empty.cool')
     store.clear()
@@ -138,6 +168,15 @@ describe('a hit as a region a map can open', () => {
   it('names the gene, where it is, and which file said so', () => {
     const { store } = storeWith(genes())
     expect(featureSuggestions(store, 'gal80')[0].label).toBe('GAL80 · chrI:4,950 · genes')
+  })
+
+  it('prints the accession beside the symbol, where the file gave both', () => {
+    const build = new FeatureBuilder()
+    build.add('chrI', 1000, 2000, { name: 'LipL1', id: 'PF3D7_1314600' })
+    const { store } = storeWith(build.finish(), 'genes')
+    expect(featureSuggestions(store, 'lipl')[0].label).toBe(
+      'LipL1 (PF3D7_1314600) · chrI:750 · genes',
+    )
   })
 })
 

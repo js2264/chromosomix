@@ -32,6 +32,7 @@ import {
   resolveGroupExtents,
   type GroupSettings,
 } from '../annotations/groups'
+import { featureLabel } from '../annotations/featureset'
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import {
@@ -1413,8 +1414,10 @@ export class AnnotationLanes {
       const strand = set.strand[at] === 1 ? ' (+)' : set.strand[at] === -1 ? ' (−)' : ''
       // The feature's name leads its own block. It is not the lane's name — that
       // one the pointer already gives away — so it belongs in the readout rather
-      // than in the heading.
-      detail = set.name[at] === '' ? [] : [set.name[at]]
+      // than in the heading. With its accession beside it where the file gave
+      // both, since that is what tells one `VAR` from the next.
+      const label = featureLabel(set, at)
+      detail = label === '' ? [] : [label]
       detail.push(
         `${set.contigs[set.contig[at]]}:${fmt.int(set.start[at])}–${fmt.int(set.end[at])}${strand}`,
       )
