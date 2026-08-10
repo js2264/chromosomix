@@ -37,7 +37,12 @@ import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { PileupAccumulator } from '@/analysis/apa'
-import { correlationMatrix, observedOverExpected, usableBins } from '@/analysis/compartments'
+import {
+  correlationMatrix,
+  observedOverExpected,
+  singleGroupPlan,
+  usableBins,
+} from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
 import { ExpectedAccumulator } from '@/analysis/expected'
 import { diamondSums, insulationScore } from '@/analysis/insulation'
@@ -286,7 +291,12 @@ suite('§12 — analysis over a remote cooler', () => {
       const index = usableBins(dense.values, dense.nrows)
       const curve = new ExpectedAccumulator(dense.nrows - 1)
       curve.addBlock(dense)
-      const oe = observedOverExpected(dense.values, dense.nrows, index, curve.finish())
+      const oe = observedOverExpected(
+        dense.values,
+        dense.nrows,
+        index,
+        singleGroupPlan(dense.nrows, curve.finish()),
+      )
       const pairs = leadingEigenpairs(correlationMatrix(oe, index.length), index.length, 2)
       expect(pairs.length, 'the solver produced components to be free about').toBe(2)
       const { requests } = source.stats()

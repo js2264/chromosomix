@@ -48,27 +48,76 @@ export function usableBins(
 }
 
 /**
+ * What each cell of a square is divided by — **cis and trans are two questions**.
+ *
+ * A square over one chromosome has one answer: the decay curve, read at the
+ * separation of the two bins. A square over several has two, and conflating them
+ * is the mistake that makes a genome-wide eigenvector meaningless.
+ *
+ * - A **cis** cell — both bins on one sequence — is divided by *that sequence's
+ *   own* decay at that separation. Not a pooled one: a genome-wide curve divides
+ *   a small chromosome by the average behaviour of the large ones, which shows up
+ *   as a spurious gradient along the eigenvector.
+ * - A **trans** cell has no separation at all. Genomic distance between two
+ *   chromosomes is not a quantity, so there is no curve to read; the expectation
+ *   is the **mean of that pair's own block**, which is what makes a trans cell a
+ *   ratio comparable with a cis one. A per-pair mean rather than one global trans
+ *   mean, because two chromosomes' mutual contact depends on how much of the
+ *   nucleus they share and pooling would push every pair towards the average.
+ *
+ * `group` is which sequence each row of the square belongs to, and the groups are
+ * **contiguous runs** of it — which is what lets a cis separation be `|col − row|`
+ * rather than needing an absolute bin per row.
+ */
+export interface ExpectedPlan {
+  /** Sequence index per row of the square; `n` long, non-decreasing. */
+  group: Int32Array
+  /** One decay curve per sequence, for the cells inside it. */
+  cis: readonly ExpectedCurve[]
+  /** Mean of each ordered pair's block, `k × k` row-major. `NaN` where empty. */
+  trans: Float64Array
+}
+
+/**
+ * The plan a square over **one** sequence has: one curve, no trans.
+ *
+ * Not a special case in the arithmetic — it is the general one with `k = 1` — but
+ * worth a name, because it is what a single-chromosome run and every test of the
+ * chain builds.
+ */
+export function singleGroupPlan(n: number, curve: ExpectedCurve): ExpectedPlan {
+  return { group: new Int32Array(n), cis: [curve], trans: Float64Array.from([Number.NaN]) }
+}
+
+/**
  * The square as observed/expected, over the usable bins only.
  *
  * Row-major and `m × m` where `m` is `index.length`. A cell whose expected is
- * unknown — past the end of the curve, or at an offset nothing was measured at —
- * is `NaN` rather than the observed value: dividing by an unknown and keeping the
- * numerator would put raw counts and ratios in the same matrix.
+ * unknown — past the end of the curve, at an offset nothing was measured at, or
+ * in a trans block with nothing in it — is `NaN` rather than the observed value:
+ * dividing by an unknown and keeping the numerator would put raw counts and
+ * ratios in the same matrix.
  */
 export function observedOverExpected(
   values: Float32Array,
   n: number,
   index: Int32Array,
-  curve: ExpectedCurve,
+  plan: ExpectedPlan,
 ): Float64Array {
   const m = index.length
+  const k = plan.cis.length
   const out = new Float64Array(m * m)
   for (let r = 0; r < m; r++) {
     const row = index[r]
+    const rowGroup = plan.group[row]
     for (let c = 0; c < m; c++) {
       const col = index[c]
+      const colGroup = plan.group[col]
       const observed = values[row * n + col]
-      const denominator = expectedAt(curve, Math.abs(col - row))
+      const denominator =
+        rowGroup === colGroup
+          ? expectedAt(plan.cis[rowGroup], Math.abs(col - row))
+          : plan.trans[rowGroup * k + colGroup]
       out[r * m + c] =
         Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0
           ? observed / denominator
@@ -88,11 +137,25 @@ export function observedOverExpected(
  * floating-point 0.9999999 on the diagonal of a matrix that is about to be
  * deflated.
  */
-export function correlationMatrix(oe: Float64Array, m: number): Float64Array {
+export function correlationMatrix(
+  oe: Float64Array,
+  m: number,
+  /**
+   * Called once per row, before it is correlated against the rows after it.
+   *
+   * This loop is `m²` correlations of `m` cells each — cubic, and the one step of
+   * the chain that is. At a thousand bins it is a second and at four thousand it
+   * is minutes, so a genome-wide run needs to be able to report where it has got
+   * to and to be stopped: the callback is where the runner does both, by
+   * throwing out of it. Optional, because nothing about the arithmetic needs it.
+   */
+  onRow?: (row: number) => void,
+): Float64Array {
   const out = new Float64Array(m * m)
   const rows: Float64Array[] = []
   for (let r = 0; r < m; r++) rows.push(oe.subarray(r * m, (r + 1) * m))
   for (let r = 0; r < m; r++) {
+    onRow?.(r)
     out[r * m + r] = 1
     for (let c = r + 1; c < m; c++) {
       const value = pearson(rows[r], rows[c])

@@ -4631,6 +4631,52 @@ canvas.is-frozen {
   gap: 0.35rem;
 }
 
+/* --- ticking several sequences in a form -------------------------------- */
+
+/* Scrolls at about eight rows, for the same reason the Sequences card's list
+   does: sixteen chromosomes are one glance, and a draft assembly's thousands
+   must not push Run off the bottom of the drawer. */
+.param-sequences {
+  max-height: 12rem;
+  overflow-y: auto;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.2rem;
+}
+
+/* All / None / the count, above the list — where a reader looks before they
+   start clicking rather than after. */
+.param-check-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+
+.param-check-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+}
+
+.param-sequences .param-check {
+  padding: 0.12rem 0.2rem;
+  border-radius: var(--radius);
+}
+
+.param-sequences .param-check:hover {
+  background: var(--bg-muted);
+}
+
+/* The length, pushed to the right so the names form a column that can be read
+   down — the same treatment the Sequences card gives them. */
+.param-check-note {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+}
+
 .ann-row {
   border: 1px solid var(--border);
   border-radius: var(--radius);
