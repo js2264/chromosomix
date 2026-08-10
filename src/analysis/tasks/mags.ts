@@ -18,10 +18,10 @@ import type {
   AnalysisContext,
   AnalysisTask,
   CostEstimate,
-  ParamSpec,
   Params,
   TaskAvailability,
 } from '../types'
+import { BALANCE_PARAM } from './shared'
 
 /**
  * Every one of these needs a genome layer, and a metacool is the only thing with
@@ -46,12 +46,6 @@ function scanCost(note: string): CostEstimate {
   }
 }
 
-const BALANCE: ParamSpec = {
-  kind: 'toggle',
-  key: 'balance',
-  label: 'Use balancing weights',
-  default: false,
-}
 
 export const MAG_QC_TASK: AnalysisTask = {
   id: 'magqc',
@@ -62,7 +56,7 @@ export const MAG_QC_TASK: AnalysisTask = {
   version: 1,
   availability: metagenomeOnly,
   params: [
-    BALANCE,
+    BALANCE_PARAM,
     {
       kind: 'toggle',
       key: 'network',
@@ -142,7 +136,7 @@ export const MAG_PURITY_TASK: AnalysisTask = {
   version: 1,
   availability: metagenomeOnly,
   params: [
-    BALANCE,
+    BALANCE_PARAM,
     {
       kind: 'number',
       key: 'minContacts',
@@ -180,7 +174,7 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
   version: 1,
   availability: metagenomeOnly,
   params: [
-    BALANCE,
+    BALANCE_PARAM,
     {
       kind: 'number',
       key: 'minContigs',

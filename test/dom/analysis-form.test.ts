@@ -29,6 +29,8 @@ import { INSULATION_TASK } from '@/analysis/tasks/insulation'
 import { FOURC_TASK } from '@/analysis/tasks/fourc'
 import { TRACK_CORRELATION_TASK } from '@/analysis/tasks/trackcorr'
 import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
+import { APA_TASK } from '@/analysis/tasks/apa'
+import { MAG_QC_TASK } from '@/analysis/tasks/mags'
 import { defaultParams, type AnalysisContext, type AnalysisTask } from '@/analysis/types'
 import { ParamForm } from '@/ui/ParamForm'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
@@ -103,7 +105,14 @@ function asks(view: ParamForm, text: string): boolean {
 
 describe('balancing', () => {
   it('is never a control on the tasks that read the matrix', () => {
-    for (const task of [EXPECTED_TASK, INSULATION_TASK, FOURC_TASK, COMPARTMENTS_TASK]) {
+    for (const task of [
+      EXPECTED_TASK,
+      INSULATION_TASK,
+      FOURC_TASK,
+      COMPARTMENTS_TASK,
+      APA_TASK,
+      MAG_QC_TASK,
+    ]) {
       const view = form(task)
       expect(asks(view, 'balancing weights'), task.id).toBe(false)
       view.destroy()

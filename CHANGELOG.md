@@ -695,8 +695,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now derived from the file's weights and shown nowhere, on P(s), diamond
   insulation, 4C, compartments and APA. It is still a parameter in every other
   sense, so the runners are unchanged and an exported TSV still says what the
-  numbers were computed with. **Coverage keeps its tickbox**, because there it is
-  a diagnostic rather than a choice: a balanced file should have a flat total, so
+  numbers were computed with — and on the four MAG tasks too, which share the
+  panel with them and would otherwise be one tickbox among nine rows that no
+  longer have one. **Coverage keeps its tickbox**, because there it is a
+  diagnostic rather than a choice: a balanced file should have a flat total, so
   one that does not is a file whose weights do not fit it.
 
   **Distances are asked for in bins.** P(s)'s minimum separation and diamond
