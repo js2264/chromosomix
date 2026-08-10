@@ -337,6 +337,28 @@ export interface MatrixResult {
    */
   binsPerCell?: number
   /**
+   * The bin size of the map this block was actually read from, where that is
+   * not the open one.
+   *
+   * Present only for a cross-rung read (`WorkerRequest`'s `rung`). The effective
+   * resolution on screen is this times {@link binsPerCell}, and a caller that
+   * assumed the open map's bin size would label a 5 kb picture as a 1 kb one —
+   * which is the one number a methods section quotes.
+   */
+  binsize?: number
+  /**
+   * The window that was asked for, in bins of the map that is **open**.
+   *
+   * Present only for a cross-rung read, and present because bin indices are not
+   * comparable across levels: `rowExtent` describes the block on the rung's own
+   * grid — which is what the axes, the runs and every coordinate on screen are
+   * built from — while a caller deciding *what to ask for next* is working in
+   * the space it asked in. Without this the two silently disagree, and a zoom
+   * that had just read a coarse rung would compute its next window against that
+   * rung's indices as though they were the open map's.
+   */
+  source?: { rows: Extent; cols: Extent }
+  /**
    * Whole sequences summed into one cell, where the axis had more of them than
    * the picture has pixels. Absent, or 1, for every axis with room for a cell
    * per sequence — which is every cooler and most assemblies.
@@ -440,7 +462,7 @@ export type WorkerRequest =
   | { id: number; kind: 'open'; uri: string; source: SourceSpec }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
-  | { id: number; kind: 'range'; range: string }
+  | { id: number; kind: 'range'; range: string; rung?: string }
   // `balance` multiplies each cell by its two bin weights, which is cooler's
   // own definition of a balanced matrix (§6.4). Off by default, matching
   // `metacooler show`, and offered only when the file carries the column.
@@ -458,6 +480,29 @@ export type WorkerRequest =
   | {
       id: number
       kind: 'matrix'
+      /**
+       * Read from a **sibling rung** of the collection this file is in, rather
+       * than from the map that is open (§3.4, §9).
+       *
+       * The entry's own name — `2000` under `/resolutions`, whatever an
+       * `.mmetacool` calls it under `/entries` — as `OpenResult.entries` lists
+       * them. Absent is the open map, which is every request that is not a
+       * zoom-driven one.
+       *
+       * `rows` and `cols` stay **bins of the open map** even when this is set,
+       * and the worker converts. That is not a convenience: bin indices are not
+       * comparable across rungs — each level has its own `chrom_offset` and its
+       * own short last bin per sequence — so a caller converting for itself
+       * would need every rung's tables, which is the reader's side of the wall.
+       * Converting here means one round trip and one implementation.
+       *
+       * A coarse rung is read rather than pooled for two reasons, and the second
+       * is the one that matters: it walks fewer stored pixels for the same
+       * picture, and its balanced values are *balanced at that resolution*
+       * rather than summed — which is what `cooler zoomify --balance` produces
+       * and what summing a fine level cannot approximate (§6.4).
+       */
+      rung?: string
       rows: Extent
       cols?: Extent
       balance?: boolean

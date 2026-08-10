@@ -162,6 +162,19 @@ export interface LadderOptions {
 
 interface Held {
   result: MatrixResult
+  /**
+   * The window that was **asked for**, in bins of the open map.
+   *
+   * Not `result.rowExtent`, which describes the block on whatever grid answered
+   * — and on a sibling rung that is a different bin space entirely. The ladder
+   * compares windows to decide what to do next, so every window it holds has to
+   * be in the space it asks in, and the only one that always is is the request's
+   * own.
+   */
+  rows: Extent
+  cols: Extent
+  /** Bins of the open map per drawn cell — the grid, in the ladder's own unit. */
+  grid: number
   bytes: number
 }
 
@@ -197,19 +210,24 @@ export class BlockLadder {
    * a blank map — and hands the result over so that zooming out lands back on it
    * for free.
    */
-  adopt(result: MatrixResult): void {
+  adopt(result: MatrixResult, rows?: Extent, cols?: Extent): void {
     this.current = result
-    this.keep(result)
+    this.keep(result, rows ?? result.rowExtent, cols ?? result.colExtent)
   }
 
   /** The finest block held that covers `view`, or `null`. */
-  private bestFor(view: RefineView): MatrixResult | null {
-    let best: MatrixResult | null = null
-    for (const { result } of this.held) {
-      if (!covers(result.rowExtent, view.rows) || !covers(result.colExtent, view.cols)) continue
-      if (best === null || gridOf(result) < gridOf(best)) best = result
+  private bestFor(view: RefineView): Held | null {
+    let best: Held | null = null
+    for (const held of this.held) {
+      if (!covers(held.rows, view.rows) || !covers(held.cols, view.cols)) continue
+      if (best === null || held.grid < best.grid) best = held
     }
     return best
+  }
+
+  /** What the ladder is holding for the block it last handed over. */
+  private held0(): Held | null {
+    return this.held.find((entry) => entry.result === this.current) ?? null
   }
 
   /**
@@ -229,9 +247,9 @@ export class BlockLadder {
     // Something already in hand may be a better answer than what is drawn —
     // which is the whole of what makes zooming back out free.
     const best = this.bestFor(view)
-    if (best !== null && best !== this.current) {
-      if (this.options.onBlock(best)) this.current = best
-      else this.drop(best)
+    if (best !== null && best.result !== this.current) {
+      if (this.options.onBlock(best.result)) this.current = best.result
+      else this.drop(best.result)
     }
 
     if (this.satisfied(view)) {
@@ -267,10 +285,8 @@ export class BlockLadder {
    * wider than the view was ever entitled to read.
    */
   private plan(view: RefineView): { rows: Extent; cols: Extent } {
-    const inside =
-      this.current !== null &&
-      covers(this.current.rowExtent, view.rows) &&
-      covers(this.current.colExtent, view.cols)
+    const block = this.held0()
+    const inside = block !== null && covers(block.rows, view.rows) && covers(block.cols, view.cols)
     const reach = inside ? REFINE_PAD : WIDEN_REACH
     return {
       rows: clip(pad(view.rows, reach), this.options.ceiling.rows),
@@ -289,11 +305,11 @@ export class BlockLadder {
    * is yes forever.
    */
   private satisfied(view: RefineView): boolean {
-    const block = this.current
+    const block = this.held0()
     if (block === null) return false
-    if (!covers(block.rowExtent, view.rows) || !covers(block.colExtent, view.cols)) return false
+    if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
     const wanted = this.plan(view)
-    return gridOf(block) <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
+    return block.grid <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
   }
 
   private clock(): number {
@@ -341,7 +357,7 @@ export class BlockLadder {
         if (this.disposed || this.inflight?.key !== pending.key) return
         this.inflight = null
         this.options.onBusy?.(false)
-        this.keep(result)
+        this.keep(result, pending.rows, pending.cols)
         if (this.options.onBlock(result)) this.current = result
         else {
           this.drop(result)
@@ -367,9 +383,20 @@ export class BlockLadder {
     if (this.current === result) this.current = null
   }
 
-  private keep(result: MatrixResult): void {
+  private keep(result: MatrixResult, rows: Extent, cols: Extent): void {
     const bytes = result.values.byteLength
-    this.held = [{ result, bytes }, ...this.held.filter((held) => held.result !== result)]
+    // The grid in the ladder's own unit: how many bins **of the open map** one
+    // drawn cell holds. For an ordinary read that is `binsPerCell`; for a rung
+    // it is that times how much coarser the rung's bins are, which is what makes
+    // "is this worth replacing" one comparison rather than two cases.
+    const grid = Math.max(
+      1,
+      Math.round((Math.max(1, rows[1] - rows[0]) / Math.max(1, result.nrows))),
+    )
+    this.held = [
+      { result, rows, cols, grid, bytes },
+      ...this.held.filter((held) => held.result !== result),
+    ]
     let total = this.held.reduce((sum, held) => sum + held.bytes, 0)
     while (this.held.length > 1 && (this.held.length > HELD_BLOCKS || total > HELD_BYTES)) {
       total -= this.held[this.held.length - 1].bytes
@@ -403,11 +430,6 @@ export function clip(extent: Extent, bounds: Extent): Extent {
   const lo = Math.max(bounds[0], Math.min(extent[0], bounds[1]))
   const hi = Math.min(bounds[1], Math.max(extent[1], lo))
   return [lo, hi]
-}
-
-/** Bins per cell of a block, as the reader reported it. */
-function gridOf(result: MatrixResult): number {
-  return Math.max(1, result.binsPerCell ?? 1)
 }
 
 /**
@@ -510,6 +532,69 @@ export function subscribeRefine(listener: (on: boolean) => void): () => void {
 }
 
 // ---------------------------------------------------------------------------
+// The ladder of a laddered file
+// ---------------------------------------------------------------------------
+
+/**
+ * The rungs of a `zoomify` ladder, as bin sizes, finest first.
+ *
+ * The rule is §3.4's and it is the one the app already applies to decide whether
+ * a collection is a ladder or a set of samples: *"all entry names parse as
+ * positive integers → a `zoomify` resolution ladder"*. Anything else — a
+ * replicate collection, a plain file with no siblings — comes back empty, and
+ * the zoom then reads from the map that is open, which is what it does on every
+ * `.metacool` and every `.cool` in existence. §3.4's other half is the reason
+ * that is acceptable: the ladder *"is a pure optimisation: a plain `.metacool`
+ * must behave identically, minus the extra zoom levels"*.
+ */
+export function rungsOf(entries: readonly string[]): Array<{ name: string; binsize: number }> {
+  if (entries.length === 0) return []
+  if (!entries.every((name) => /^\d+$/.test(name) && Number(name) > 0)) return []
+  return entries
+    .map((name) => ({ name, binsize: Number(name) }))
+    .sort((a, b) => a.binsize - b.binsize)
+}
+
+/**
+ * Which rung to read a window from, or `undefined` for the map that is open.
+ *
+ * **The coarsest rung whose bins are no bigger than a cell will be.** That is
+ * the rung whose stored pixels are closest to one per drawn cell, so it is the
+ * one that walks the fewest of them for the same picture — reading a whole
+ * chromosome from a 10 kb level costs a tenth of what pooling it out of the
+ * 1 kb level does, and produces the same map.
+ *
+ * It is also the answer to a correctness problem rather than only a speed one.
+ * Summing balanced values is not balancing at a coarser resolution — the
+ * reader says so at length (`worker/reader.worker.ts`), and names taking a
+ * coarser rung as one of *"the real answers"*. A `zoomify --balance` level is
+ * balanced from raw counts at its own resolution, so reading it is that answer.
+ *
+ * Never coarser than the picture can show, so nothing is lost: a rung above the
+ * target would put more than one of its bins in a cell, which is the pooling
+ * this is avoiding. And never the open map's own bin size, which is spelled as
+ * `undefined` so an ordinary read carries no rung at all.
+ */
+export function chooseRung(
+  rungs: ReadonlyArray<{ name: string; binsize: number }>,
+  spanBins: number,
+  binsize: number,
+  cap = POOLED_CELL_CAP,
+): string | undefined {
+  if (rungs.length === 0 || !(binsize > 0) || !(spanBins > 0)) return undefined
+  const target = (spanBins * binsize) / Math.max(1, cap)
+  let best: { name: string; binsize: number } | null = null
+  for (const rung of rungs) {
+    if (rung.binsize > target) continue
+    if (best === null || rung.binsize > best.binsize) best = rung
+  }
+  // Nothing coarse enough means the window is small: the finest level is the
+  // right one, and if that is the open map there is no rung to name.
+  best ??= rungs[0]
+  return best.binsize === binsize ? undefined : best.name
+}
+
+// ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
 
@@ -542,10 +627,23 @@ export interface RefinablePanel {
 export function attachRefine(options: {
   panel: RefinablePanel
   /** The view's own read, for arbitrary extents, with its own balance and score. */
-  read(rows: Extent, cols: Extent): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
+  read(
+    rows: Extent,
+    cols: Extent,
+    rung: string | undefined,
+  ): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
   ceiling: { rows: Extent; cols: Extent }
   /** The file's own bin size; the effective one is this times `binsPerCell`. */
   binsize: number
+  /**
+   * Sibling rungs of a laddered file, from {@link rungsOf}.
+   *
+   * Absent or empty is every plain file, and the zoom then reads the open map at
+   * whatever grid the reader plans for the window — which is the whole feature,
+   * working, with no ladder anywhere. A ladder makes the coarse end of it
+   * cheaper and its balanced values honest; it is never what makes it work.
+   */
+  rungs?: ReadonlyArray<{ name: string; binsize: number }>
   /** `false` disables refinement without tearing the wiring down. */
   enabled?: () => boolean
   onBusy?: (busy: boolean) => void
@@ -555,7 +653,12 @@ export function attachRefine(options: {
   const ladder = new BlockLadder({
     ceiling: options.ceiling,
     read: (rows, cols) => {
-      const { promise, cancel } = options.read(rows, cols)
+      const rung = chooseRung(
+        options.rungs ?? [],
+        Math.max(rows[1] - rows[0], cols[1] - cols[0]),
+        options.binsize,
+      )
+      const { promise, cancel } = options.read(rows, cols, rung)
       return {
         cancel,
         promise: promise.then(({ result, second }) => {
@@ -567,7 +670,10 @@ export function attachRefine(options: {
     onBlock: (result) =>
       options.panel.regrid(
         result,
-        Math.max(1, options.binsize) * Math.max(1, result.binsPerCell ?? 1),
+        // The bin size of the map that answered, which is the open one unless a
+        // rung was read — `MatrixResult.binsize` is present only then, and a
+        // caller that assumed otherwise would caption a 5 kb picture as 1 kb.
+        Math.max(1, result.binsize ?? options.binsize) * Math.max(1, result.binsPerCell ?? 1),
         seconds.get(result),
       ),
     ...(options.onBusy === undefined ? {} : { onBusy: options.onBusy }),

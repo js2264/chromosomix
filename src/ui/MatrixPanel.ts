@@ -893,6 +893,8 @@ export class MatrixPanel {
    * `null` until the first one arrives.
    */
   private gaugeBlock: { spanBp: number; dense: DenseMatrix } | null = null
+  /** The open map's own bin size — see {@link openBinsize}. */
+  private readonly baseBinsize: number
   /** A picking mode in progress; see {@link armPicking}. */
   private picking: {
     /** Called once per click, for as long as the mode is on. */
@@ -939,6 +941,7 @@ export class MatrixPanel {
   private laneFloor: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(private readonly options: MatrixPanelOptions) {
+    this.baseBinsize = Math.max(1, options.binsize)
     this.transform = options.initial?.transform ?? 'log1p'
     this.colormap = options.initial?.colormap ?? DEFAULT_UI_COLORMAP
     this.manualVmin = options.initial?.vmin
@@ -5005,6 +5008,37 @@ export class MatrixPanel {
     if ((data.contigsPerCell ?? 1) > 1) return null
     const k = Math.max(1, data.binsPerCell ?? 1)
     const window = this.heatmap.cellWindow()
+    // A block read from a sibling rung describes itself on *that* rung's grid,
+    // and the caller of this is deciding what to ask for next in the space it
+    // asks in — the open map's. `source` is the window that was asked for, so
+    // the cell window is placed proportionally inside it rather than multiplied
+    // by a bin size that belongs to another level. Proportional and not exact:
+    // a contig's last bin is short by its own amount at every resolution, so
+    // this can be a cell out at a sequence boundary. It decides *what to read*,
+    // never where anything is drawn — that is the locus axes' job, and they are
+    // exact — and every read is padded by half a window anyway.
+    const source = data.source
+    if (source !== undefined) {
+      const spanOf = (
+        view: readonly [number, number],
+        cells: number,
+        into: Extent,
+      ): Extent => {
+        const width = Math.max(1, into[1] - into[0])
+        const per = width / Math.max(1, cells)
+        return [
+          Math.max(into[0], Math.floor(into[0] + view[0] * per)),
+          Math.min(into[1], Math.ceil(into[0] + view[1] * per)),
+        ]
+      }
+      const rows = spanOf(window.rows, data.nrows, source.rows)
+      const cols = spanOf(window.cols, data.ncols, source.cols)
+      // Reported as the grid it *would* be on the open map, so the ladder's
+      // "is this coarse enough to be worth replacing" comparison is between two
+      // numbers in one unit.
+      const scale = Math.max(1, (data.binsize ?? 1) / Math.max(1, this.openBinsize()))
+      return { rows, cols, binsPerCell: Math.max(1, Math.round(k * scale)) }
+    }
     if (this.turned !== null) {
       const span = binsOf(window.cols, data.colExtent, k * BIN_FRACTION)
       return { rows: span, cols: span, binsPerCell: k }
@@ -5014,6 +5048,21 @@ export class MatrixPanel {
       cols: binsOf(window.cols, data.colExtent, k),
       binsPerCell: k,
     }
+  }
+
+  /**
+   * The bin size of the map the session has **open**, whatever the block on
+   * screen was read at.
+   *
+   * Captured once, at construction, because `options.binsize` is the *effective*
+   * resolution — the read's own bin size times its pooling — and
+   * {@link setResolution} overwrites it on every block. Once a block can arrive
+   * from a sibling rung there is no way back from the effective number to this
+   * one, and the difference between them is the ratio the refine window is
+   * scaled by.
+   */
+  private openBinsize(): number {
+    return this.baseBinsize
   }
 
   // -------------------------------------------------------------------------

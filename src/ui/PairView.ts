@@ -25,12 +25,14 @@ import { MatrixPanel, axisRegion, blockSummary,
   type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, type BlockLadder } from './refine'
+import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { SearchBox } from './SearchBox'
 
 export interface PairViewProps {
   client: ReaderClient
   binsize: number
+  /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
+  rungs?: readonly string[]
   /** A control the session puts on the title line; see `RegionViewProps`. */
   extraControl?: HTMLElement
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
@@ -251,9 +253,11 @@ export class PairView {
       panel: this.panel,
       ceiling: { rows: rowCeiling, cols: colCeiling },
       binsize: this.props.binsize,
-      read: (rows, cols) => {
+      rungs: rungsOf(this.props.rungs ?? []),
+      read: (rows, cols, rung) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
+          ...(rung === undefined ? {} : { rung }),
           rows,
           cols,
           balance: this.props.balance,

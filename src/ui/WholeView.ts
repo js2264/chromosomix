@@ -50,13 +50,15 @@ import {
   type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
-import { attachRefine, type BlockLadder } from './refine'
+import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 
 export interface WholeViewProps {
   client: ReaderClient
   binsize: number
+  /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
+  rungs?: readonly string[]
   /** A control the session puts on the title line; see `RegionViewProps`. */
   extraControl?: HTMLElement
   /**
@@ -730,9 +732,11 @@ export class WholeView {
       panel: this.panel,
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
-      read: (rows, cols) => {
+      rungs: rungsOf(this.props.rungs ?? []),
+      read: (rows, cols, rung) => {
         const own = client.cancellable<'matrix'>({
           kind: 'matrix',
+          ...(rung === undefined ? {} : { rung }),
           rows,
           cols,
           balance,
@@ -745,6 +749,7 @@ export class WholeView {
             const other = await secondBlock(this.props.compare, (client2) =>
               client2.request<'matrix'>({
                 kind: 'matrix',
+                ...(rung === undefined ? {} : { rung }),
                 rows,
                 cols,
                 balance,
