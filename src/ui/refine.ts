@@ -74,6 +74,29 @@ export const REFINE_PAD = 0.5
 export const WIDEN_REACH = 4
 
 /**
+ * Travelling — panning against the edge of the block in hand — moves the window
+ * and **must not change its size**.
+ *
+ * The first attempt at this padded the way a zoom does, and it was wrong in a
+ * way that only showed up in the app: a reader who had zoomed a chromosome down
+ * to 100 bp, panned to the edge of what they had, and got their next block back
+ * at 400 bp. Panning is not a change of scale, and any rule that makes it one is
+ * taking away the thing the reader just asked for.
+ *
+ * So a travel read asks for **the same span the block already covers**,
+ * recentred on the view. `fitPlan` fits a fixed cell count to whatever it is
+ * given, so an identical span comes back at an identical grid — the picture does
+ * not change resolution, it changes place. And because the block is by
+ * construction wider than the view, recentring buys real ground in the direction
+ * of travel rather than a screen's worth.
+ *
+ * Near the ends of a sequence the clip makes the span *shorter*, and the reader
+ * gets a finer grid than they had. That is not a special case to guard: they are
+ * looking at less genome, so there is less to fit, which is the same rule
+ * everywhere else in this module.
+ */
+
+/**
  * A grid this much coarser than the picture could show is worth replacing.
  *
  * §8.4's rule for the tracks, applied to the map: refetch when *"the required
@@ -201,6 +224,16 @@ export class BlockLadder {
    * retries.
    */
   private readonly refused = new Set<string>()
+  /**
+   * A read the reader called off, by key.
+   *
+   * Not the same thing as {@link refused}: that is the reader's *machine*
+   * declining, and it never changes its mind. This is the reader declining, and
+   * it must not be retried on the very next frame — which is what would happen,
+   * since the window they abandoned it at is the window they are still looking
+   * at. Cleared the moment they move, because moving is asking again.
+   */
+  private abandoned: string | null = null
   private disposed = false
 
   constructor(options: LadderOptions) {
@@ -262,6 +295,8 @@ export class BlockLadder {
       return
     }
     if (this.refused.has(key)) return
+    if (this.abandoned === key) return
+    this.abandoned = null
 
     // A read already going for this window, or for one that still contains what
     // is on screen, is the read this frame wants. One that no longer contains it
@@ -288,12 +323,37 @@ export class BlockLadder {
    */
   private plan(view: RefineView): { rows: Extent; cols: Extent } {
     const block = this.held0()
-    const inside = block !== null && covers(block.rows, view.rows) && covers(block.cols, view.cols)
-    const reach = inside ? REFINE_PAD : WIDEN_REACH
     return {
-      rows: clip(pad(view.rows, reach), this.options.ceiling.rows),
-      cols: clip(pad(view.cols, reach), this.options.ceiling.cols),
+      rows: this.axisPlan(view.rows, block?.rows ?? null, this.options.ceiling.rows),
+      cols: this.axisPlan(view.cols, block?.cols ?? null, this.options.ceiling.cols),
     }
+  }
+
+  /**
+   * What to ask for on **one axis**, from where the view sits inside its block.
+   *
+   * Three situations, and they want three different shapes of request. They are
+   * told apart by *which* of the block's edges the view is up against, which is
+   * the only thing the view can say once `clampView` has confined it:
+   *
+   * - **Neither edge** — the reader is looking around inside what they have, so
+   *   this is a zoom. Pad by half a window and let the grid fall where it may.
+   * - **One edge** — they are *travelling*, and have run out of block in the
+   *   direction they are going. Same span, recentred: panning changes place, not
+   *   scale, and padding it the way a zoom does was what handed a reader back a
+   *   4× coarser map for the crime of dragging left.
+   * - **Both edges** — the block is entirely on screen and they are still
+   *   pulling back, which is the only way an axis can be pressed at both ends at
+   *   once. That is a zoom *out*, so buy several windows at a stroke rather than
+   *   stopping again on the next notch.
+   */
+  private axisPlan(view: Extent, block: Extent | null, bound: Extent): Extent {
+    if (block === null || !covers(block, view)) return clip(pad(view, WIDEN_REACH), bound)
+    const low = view[0] <= block[0] && block[0] > bound[0]
+    const high = view[1] >= block[1] && block[1] < bound[1]
+    if (low && high) return clip(pad(view, WIDEN_REACH), bound)
+    if (low || high) return clip(recentre(block, view), bound)
+    return clip(pad(view, REFINE_PAD), bound)
   }
 
   /**
@@ -310,8 +370,41 @@ export class BlockLadder {
     const block = this.held0()
     if (block === null) return false
     if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
+    if (this.atEdge(view, block)) return false
     const wanted = this.plan(view)
     return block.grid <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
+  }
+
+  /**
+   * Whether the reader has pushed the map up against an edge of its own block
+   * that is **not** an edge of the world.
+   *
+   * This is the one thing coverage cannot say, and leaving it unsaid was a hole
+   * a reader falls straight into. `HeatmapView.clampView` treats the block in
+   * hand as the whole world — which is right, and is what keeps a map from
+   * being panned off into nothing — so a block covering 0–52 kb of a chromosome
+   * is a wall at 52 kb. The view can never report a window past it, so
+   * {@link covers} is always satisfied, so nothing is ever read, so the reader
+   * is *stuck*: they zoomed into the start of a sequence, got a finer grid for
+   * it, and thereby lost the ability to pan to the rest of it.
+   *
+   * Pressed against the edge is therefore its own reason to read, and the read
+   * that answers it is the same one every other trigger asks for — a window
+   * centred on the view, padded, clipped to the ceiling — which recentres the
+   * block and gives the ground back.
+   *
+   * It terminates for the same reason the rest does: an edge that *is* the
+   * ceiling's edge is not pressed, so a block spanning the whole domain never
+   * asks for anything, and a block recentred on the view has the reader in its
+   * middle rather than at its rim.
+   */
+  private atEdge(view: RefineView, block: Held): boolean {
+    const pressed = (at: Extent, held: Extent, bound: Extent): boolean =>
+      (at[0] <= held[0] && held[0] > bound[0]) || (at[1] >= held[1] && held[1] < bound[1])
+    return (
+      pressed(view.rows, block.rows, this.options.ceiling.rows) ||
+      pressed(view.cols, block.cols, this.options.ceiling.cols)
+    )
   }
 
   /** Issue the pending read. */
@@ -377,6 +470,29 @@ export class BlockLadder {
     }
   }
 
+  /**
+   * Call off the read in flight, at the reader's request.
+   *
+   * The way out of a freeze. A refine is normally over before it is noticed, but
+   * *normally* is not a guarantee: a coarse window of a large cooler is a real
+   * scan, and a map held for a minute with no way to take it back is an app that
+   * has stopped working as far as anybody using it is concerned. Escape gives it
+   * back — the picture that was already there is still a complete picture, which
+   * is the whole reason this feature could be built without a tile server.
+   *
+   * The window is remembered as {@link abandoned} so the next frame does not
+   * simply ask again. Moving clears it, because moving is asking again.
+   */
+  abort(): void {
+    const flight = this.inflight
+    if (flight === null) return
+    this.abandoned = flight.key
+    flight.cancel()
+    this.inflight = null
+    this.pending = null
+    this.options.onBusy?.(false)
+  }
+
   destroy(): void {
     this.disposed = true
     this.pending = null
@@ -396,6 +512,20 @@ export function covers(outer: Extent, inner: Extent): boolean {
 export function pad(extent: Extent, fraction: number): Extent {
   const margin = (extent[1] - extent[0]) * fraction
   return [Math.floor(extent[0] - margin), Math.ceil(extent[1] + margin)]
+}
+
+/**
+ * `held`'s own span, moved to sit around the middle of `at`.
+ *
+ * The travel read: same width, new place. Written as a span rather than as a
+ * shift so that it does not matter how far the reader has gone — a jump and a
+ * nudge produce the same shape of request, centred where they now are.
+ */
+export function recentre(held: Extent, at: Extent): Extent {
+  const width = Math.max(1, held[1] - held[0])
+  const middle = (at[0] + at[1]) / 2
+  const lo = Math.round(middle - width / 2)
+  return [lo, lo + width]
 }
 
 /** An extent held inside `bounds`. */
@@ -584,7 +714,7 @@ export function chooseRung(
 export interface RefinablePanel {
   setRefineListener(listener: ((view: RefineView) => void) | null): void
   regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean
-  setFrozen(on: boolean): void
+  setFrozen(on: boolean, onCancel?: () => void): void
 }
 
 /**
@@ -673,7 +803,7 @@ export function attachRefine(options: {
     // flight for the window on screen, and the window on screen must therefore
     // stop moving. A view that wants to say something as well still can.
     onBusy: (busy) => {
-      options.panel.setFrozen(busy)
+      options.panel.setFrozen(busy, () => ladder.abort())
       options.onBusy?.(busy)
     },
     ...(options.onError === undefined ? {} : { onError: options.onError }),

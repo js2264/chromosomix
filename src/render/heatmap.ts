@@ -1296,6 +1296,8 @@ export class HeatmapView {
   private frozenAt = 0
   /** The animation loop that turns the spinner; `null` when it is not turning. */
   private spinTimer: number | null = null
+  /** What Escape calls, while frozen — see {@link setFrozen}. */
+  private onCancelFreeze: (() => void) | null = null
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -2024,9 +2026,10 @@ export class HeatmapView {
    * itself is immediate either way: a fast read is imperceptible, and a slow one
    * is announced.
    */
-  setFrozen(on: boolean): void {
+  setFrozen(on: boolean, onCancel?: () => void): void {
     if (this.frozen === on) return
     this.frozen = on
+    this.onCancelFreeze = on ? (onCancel ?? null) : null
     this.frozenAt = on ? now() : 0
     this.canvas.classList.toggle('is-frozen', on)
     if (on) this.spin()
@@ -3852,6 +3855,20 @@ export class HeatmapView {
    * has already been prevented. The caller still has to redraw.
    */
   handleKeyDown(event: KeyboardEvent): boolean {
+    // Escape, while the map is held for a read, calls the read off and gives
+    // the gestures back. It is checked before anything else because it is the
+    // only key that means something *different* while frozen — and because a
+    // held map with no way out is the one failure mode this feature could
+    // plausibly have on a large file (see {@link setFrozen}).
+    if (this.frozen) {
+      if (event.key === 'Escape' && this.onCancelFreeze !== null) {
+        const cancel = this.onCancelFreeze
+        event.preventDefault()
+        cancel()
+        return true
+      }
+      return false
+    }
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
     const cx = plot.x + plot.width / 2
