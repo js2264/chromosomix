@@ -26,7 +26,11 @@ export function wantedTracks(params: Params): Array<'total' | 'cis' | 'trans' | 
   if (params.total !== false) out.push('total')
   if (params.cis === true) out.push('cis')
   if (params.trans === true) out.push('trans')
-  if (params.fraction !== false) out.push('fraction')
+  // `=== true`, like the other two, now that the cis fraction is off by default:
+  // reading it as "anything but false" would turn it back on for a stored
+  // session that predates the change, which is the opposite of what the default
+  // is for.
+  if (params.fraction === true) out.push('fraction')
   return out
 }
 
@@ -43,7 +47,12 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'fraction',
     label: 'Cis fraction',
     hint: 'Of the contacts a bin has, how many stay on its own sequence.',
-    default: true,
+    // Off, like the other two. **Total coverage** is what this task is opened
+    // for — it is the marginal that says whether a pale stretch is a depth
+    // artefact — and every extra track ticked here is another lane arriving
+    // beside the map unasked. A reader who wants the cis fraction knows they
+    // want it; a reader who wants the marginal was getting two.
+    default: false,
   },
   {
     kind: 'toggle',

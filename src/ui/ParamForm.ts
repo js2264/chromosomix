@@ -30,7 +30,7 @@
  */
 
 import { makeRandom } from '../analysis/random'
-import { paramVisible } from '../analysis/types'
+import { paramDerived, paramVisible } from '../analysis/types'
 import type {
   AnalysisContext,
   ChoiceOption,
@@ -361,6 +361,14 @@ export function resolveEntryDefaults(
   for (const spec of specs) {
     if (spec.kind === 'column') out[spec.key] = resolveColumn(spec, context, out)
   }
+  // The controls that are not controls: a derived toggle is the file's answer,
+  // not the reader's, so it is overwritten on every resolution rather than
+  // merely defaulted. A stored session carrying the old tickbox's value lands
+  // here too, which is the point — the value that ran is the one this file's
+  // weights support, whatever a form somewhere once said.
+  for (const spec of specs) {
+    if (spec.kind === 'toggle' && spec.derive !== undefined) out[spec.key] = spec.derive(context)
+  }
   // After the entries, because a choice can be filtered by what is loaded and
   // the entry repair above is what decides whether anything is.
   return resolveChoiceDefaults(specs, context, out)
@@ -491,6 +499,11 @@ export class ParamForm {
     this.el = el('div', { class: 'param-form' })
     for (const section of this.sections()) this.el.appendChild(this.group(section))
     for (const spec of this.specs) {
+      // A derived parameter has no control at all — not a disabled one and not a
+      // hidden one. It is the file's answer rather than a question, and a
+      // greyed-out tickbox saying "balanced, and you may not change it" is a
+      // control whose whole content is an apology.
+      if (paramDerived(spec)) continue
       const control = this.build(spec)
       this.controls.push(control)
       this.groups.get(spec.section ?? '')?.appendChild(control.wrapper)
@@ -578,12 +591,15 @@ export class ParamForm {
    * document.
    */
   private sections(): string[] {
+    // Derived specs are not counted, or a section whose only member is one would
+    // be an empty card with a heading over it.
+    const shown = this.specs.filter((spec) => !paramDerived(spec))
     const out = ['']
-    for (const spec of this.specs) {
+    for (const spec of shown) {
       const section = spec.section ?? ''
       if (!out.includes(section)) out.push(section)
     }
-    return out.filter((section) => this.specs.some((spec) => (spec.section ?? '') === section))
+    return out.filter((section) => shown.some((spec) => (spec.section ?? '') === section))
   }
 
   /** One card per section, which is the shape the three panels' cards have. */
@@ -720,6 +736,14 @@ export class ParamForm {
     for (const spec of this.specs) {
       if (spec.kind !== 'region') continue
       if (stringOr(this.params[spec.key], '') !== '') continue
+      // **A whole-sequence picker is left empty.** For those, empty is an answer
+      // — *every sequence* — and it is the one the list itself offers at the
+      // top; seeding it from the framing silently narrowed P(s), insulation and
+      // compartments to whichever chromosome the map happened to be showing,
+      // which is a run over a subset the reader never chose, reported as if they
+      // had. A spec that says empty is not an answer (`required`) still gets the
+      // framing, because there the alternative is a form that starts refused.
+      if (spec.sequences === true && spec.required !== true) continue
       const region = spec.default ?? framingRegion(this.context)
       if (region !== '') this.params[spec.key] = region
     }

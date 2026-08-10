@@ -2301,10 +2301,27 @@ minima; it never sums across a contig boundary, and never across a MAG boundary 
 *Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
 per contig, behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
-correlation is too weak to decide a sign. *Saddle*, which follows from the two above.
-*CID*, which is insulation plus boundary calls plus a pileup over those calls, and is offered on
-metacools because it is the domain concept that applies to bacterial chromosomes where compartments do
-not.
+correlation is too weak to decide a sign; over **every sequence by default**, one at a time, since the
+whole-genome answer is the per-chromosome one done for each of them, and emitting **A/B segments** from
+E1's sign beside the eigenvector, because the interval is what gets cited and thresholding a bigWig
+elsewhere is a second tool for one comparison against zero. *Saddle*, which follows from the two above.
+*CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the
+panel for now**, since everything it does is reachable through insulation's own boundary calls and an
+APA over them, and a composite whose two halves disagree about their units is worth holding back rather
+than shipping with a caveat.
+
+**Which settings are settings.** A parameter is a question the reader is *entitled to a different
+answer to*; anything with one right answer per file belongs to the file. **Balancing** is the case that
+settles the rule: a balanced cooler should be read balanced and a raw one has no weights to apply, so
+the six matrix tasks derive it from `hasWeights` and show no control — it is still a parameter in every
+other sense, so the runners are unchanged and an exported TSV still says what the numbers were computed
+with. The same reading removes the near-diagonal trim's ambiguity (**bins, not base pairs**: the
+near-diagonal is a fact about the grid, and a number typed in base pairs meant three bins at one
+resolution and one at the next), takes P(s)'s *sequences to draw* away entirely (a run that leaves out
+sequences by default answers a question about a subset the reader did not choose), and leaves a
+**whole-sequence picker empty** rather than seeded from the map's framing, since empty is an answer
+there — *every sequence* — and seeding silently narrowed three tasks to whichever chromosome happened
+to be on screen.
 
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
@@ -2348,7 +2365,8 @@ the reasons are worth recording where the descriptions are:
   pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
   span, which it accumulates from squares it is already reading. **CID and the inter-MAG network
   are** genuine composites, and for the mirror-image reason: their upstream is the whole input,
-  unconditionally.
+  unconditionally. (CID is not currently offered; the argument is about its shape, not its
+  availability.)
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
   own, to express what a base and a count express exactly. A genuinely irregular set of widths is two

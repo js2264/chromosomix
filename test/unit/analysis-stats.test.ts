@@ -315,11 +315,16 @@ describe('logBinCurve', () => {
     for (const value of binned.y) expect(Number.isNaN(value)).toBe(false)
   })
 
-  it('floors the first bin at minSeparation, in base pairs', () => {
+  // In **bins**, not base pairs: the near-diagonal is a fact about the grid, so
+  // the same typed number has to mean the same trim at every resolution.
+  it('floors the first bin at minOffset, in bins', () => {
     const acc = new ExpectedAccumulator(4)
     for (let k = 1; k <= 4; k++) acc.add(k, k)
-    const binned = logBinCurve(acc.finish(), 1000, 2, 3000)
+    const binned = logBinCurve(acc.finish(), 1000, 2, 3)
     expect(binned.x[0]).toBeGreaterThanOrEqual(3000)
+    // …and the same three bins at another resolution, three times further along.
+    const coarse = logBinCurve(acc.finish(), 10_000, 2, 3)
+    expect(coarse.x[0]).toBeGreaterThanOrEqual(30_000)
   })
 })
 

@@ -143,6 +143,32 @@ export interface ChoiceParam extends ParamBase {
 export interface ToggleParam extends ParamBase {
   kind: 'toggle'
   default: boolean
+  /**
+   * Answered from the **file** rather than asked of the reader, and not shown.
+   *
+   * Balancing is the case this exists for, and it is worth stating why it is not
+   * simply a default. "Use balancing weights" is a question with one right
+   * answer per file — a balanced cooler should be read balanced, and a raw one
+   * has no weights to apply — so a tickbox there is not a choice, it is a way to
+   * get a wrong picture. Worse, it was a wrong picture that looks fine: an
+   * unbalanced P(s) or insulation curve is a perfectly plausible shape, and
+   * nothing in the figure says which one you asked for.
+   *
+   * So the descriptor states the rule, the form evaluates it against the context
+   * and writes the value, and the control is never built. The parameter is still
+   * a parameter in every other sense — the runners read it exactly as before,
+   * and it is in the provenance, so a TSV still says whether the numbers were
+   * balanced.
+   *
+   * Pure, and re-evaluated whenever the context changes: opening the same file
+   * at a resolution that carries weights turns it on by itself.
+   */
+  derive?(context: AnalysisContext): boolean
+}
+
+/** Whether this control is answered from the file rather than by the reader. */
+export function paramDerived(spec: ParamSpec): boolean {
+  return spec.kind === 'toggle' && spec.derive !== undefined
 }
 
 /**

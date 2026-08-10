@@ -170,7 +170,9 @@ describe('a session with no contact map', () => {
   })
 
   it('greys every task that reads the matrix, and says why', () => {
-    for (const id of ['expected', 'insulation', 'fourc', 'coverage', 'cid']) {
+    // `cid` is not here: it is withheld from the panel entirely for now
+    // (`analysis/tasks/cid.ts`), so it is absent rather than waiting.
+    for (const id of ['expected', 'insulation', 'fourc', 'coverage']) {
       const task = tasksFor(noMap()).find((candidate) => candidate.id === id)
       expect(task, id).toBeDefined()
       const state = task?.availability(noMap())

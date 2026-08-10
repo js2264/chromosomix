@@ -15,11 +15,13 @@
  * spurious gradient along the eigenvector.
  */
 
+import { FeatureBuilder } from '../../annotations/featureset'
 import type { FeatureSet } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import { parseMetacoolerRange } from '../../metacooler/range'
 import {
+  compartmentSegments,
   correlationMatrix,
   observedOverExpected,
   phaseComponent,
@@ -42,36 +44,156 @@ import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
 import { squareFor, usableBlock, type Span } from './blocks'
 
+/**
+ * The fraction of a bin's row that must carry data for it to take part.
+ *
+ * A constant rather than a control. It was one, in a *Quality* section beside
+ * the balancing tickbox, and neither belonged there: this is the threshold below
+ * which a row of the correlation matrix is noise, not a knob anybody sweeps to
+ * change an answer — moving it does not produce a different reading of the
+ * chromosome, it produces the same reading with more or less rubbish in it. The
+ * bins it drops are named in a note either way, which is the part a reader
+ * actually needs.
+ */
+const MIN_COVERAGE = 0.1
+
+/**
+ * Every sequence, or the one that was named.
+ *
+ * Empty means **all of them**, run one after another, which is what the form's
+ * *Sequence* control now defaults to. Compartments really are a property of one
+ * chromosome — the correlation matrix is `m²` in that chromosome's bins and
+ * pooling two of them would correlate rows that share no expected curve — so
+ * "every sequence" is a loop rather than a wider read, and each pass is exactly
+ * the run a reader would have configured by hand.
+ *
+ * A sequence past {@link MAX_CORRELATION_BINS} is **skipped with a note** rather
+ * than throwing. Naming one was a refusal because the reader asked for that
+ * chromosome and got nothing; meeting one in a sweep is not a reason to throw
+ * away the twenty that did work.
+ */
+function sequencesFor(job: JobContext, region: string): number[] {
+  if (region !== '') {
+    const parsed = parseMetacoolerRange(job.mc, region)
+    return [job.mc.coords.contigOfBin(parsed.extent[0])]
+  }
+  const out: number[] = []
+  for (let cid = 0; cid < job.mc.chromnames.length; cid++) {
+    const [from, to] = job.mc.contigExtent(cid)
+    if (to > from) out.push(cid)
+  }
+  return out
+}
+
 export const runCompartments: TaskRunner = async (job) => {
   const region = strParam(job.params, 'region', '').trim()
-  if (region === '') {
-    // Compartments are a property of one chromosome, so unlike insulation this
-    // task has no whole-file reading to fall back on.
-    job.note('No sequence was chosen. Pick the chromosome to call compartments on.')
+  const sequences = sequencesFor(job, region)
+  if (sequences.length === 0) {
+    job.note('This file has no sequence with any bins in it.')
     return []
   }
-  const parsed = parseMetacoolerRange(job.mc, region)
-  const cid = job.mc.coords.contigOfBin(parsed.extent[0])
+
+  const outputs: TaskOutput[] = []
+  const wanted = Math.max(1, Math.min(3, Math.round(numParam(job.params, 'components', 1))))
+  // One vector per component **over the whole file**, filled in per sequence.
+  // A track is a track: E1 of chromosome IV and E1 of chromosome V are the same
+  // quantity on two stretches of one axis, and two rows on the Synthetic tracks
+  // card saying `E1 · IV` and `E1 · V` would be a card the reader has to
+  // reassemble by eye. The bins nothing wrote stay `NaN`, which is what a gap is.
+  const tracks: Float32Array[] = []
+  for (let i = 0; i < wanted; i++) tracks.push(new Float32Array(job.mc.nBins).fill(Number.NaN))
+  const segments = new FeatureBuilder()
+  let ran = 0
+  let skipped = 0
+
+  for (let s = 0; s < sequences.length; s++) {
+    job.throwIfCancelled()
+    const cid = sequences[s]
+    const name = job.mc.chromnames[cid]
+    job.progress(s, sequences.length, `Compartments on ${name}`)
+    const done = await oneSequence(job, cid, wanted, tracks, segments)
+    if (done === null) {
+      skipped++
+      continue
+    }
+    ran++
+    if (done.saddle !== null) outputs.push(done.saddle)
+  }
+
+  if (ran === 0) {
+    job.note('No sequence in this file produced a component. See the notes above for each.')
+    return []
+  }
+  if (skipped > 0) {
+    job.note(
+      `${skipped.toLocaleString()} ${skipped === 1 ? 'sequence' : 'sequences'} produced no ` +
+        'component and were left out of the tracks below.',
+    )
+  }
+
+  // The tracks first, then the calls, then the pictures: a reader scanning the
+  // drawer meets the thing they will keep before the thing they will look at.
+  const label = region === '' ? '' : ` · ${job.mc.chromnames[sequences[0]]}`
+  outputs.unshift(
+    ...tracks.map(
+      (values, i) =>
+        ({
+          kind: 'profile',
+          id: `compartment-e${i + 1}`,
+          label: `E${i + 1}${label}`,
+          values,
+          extent: [0, job.mc.nBins],
+          binsize: job.mc.binsize,
+          unit: '',
+        }) satisfies ProfileOutput,
+    ),
+    {
+      kind: 'intervals',
+      id: 'compartment-ab',
+      label: `A/B compartments${label}`,
+      payload: { kind: 'features', data: segments.finish() },
+    },
+  )
+
+  job.progress(sequences.length, sequences.length, 'Done')
+  return outputs
+}
+
+/**
+ * One sequence, written into the shared tracks and the shared segment list.
+ *
+ * `null` where this sequence produced nothing — too large, too sparse, or with
+ * no leading component. Every one of those leaves a note naming the sequence,
+ * because a chromosome silently missing from a genome-wide track is the failure
+ * mode this loop could most easily have.
+ */
+async function oneSequence(
+  job: JobContext,
+  cid: number,
+  wanted: number,
+  tracks: Float32Array[],
+  segments: FeatureBuilder,
+): Promise<{ saddle: MatrixOutput | null } | null> {
   const [from, to] = job.mc.contigExtent(cid)
   const span: Span = { from, to }
   const name = job.mc.chromnames[cid]
   const n = to - from
   if (n > MAX_CORRELATION_BINS) {
-    throw new Error(
-      `Refusing to build a ${n.toLocaleString()}×${n.toLocaleString()} correlation matrix for ` +
-        `${name}. The limit is ${MAX_CORRELATION_BINS.toLocaleString()} bins a side.`,
+    job.note(
+      `${name} is ${n.toLocaleString()} bins, past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin ` +
+        'limit on a correlation matrix, so it was skipped. Open the file at a coarser resolution ' +
+        'to include it.',
     )
+    return null
   }
 
   const balance = boolParam(job.params, 'balance', true)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
 
-  job.progress(0, 4, `Reading ${name}`)
   const block = usableBlock(job, [span], balance)
   const square = await squareFor(job, span, { block, balance, value })
   job.throwIfCancelled()
 
-  job.progress(1, 4, 'Expected')
   const accumulator = new ExpectedAccumulator(n)
   accumulator.addBlock({
     nrows: square.nrows,
@@ -82,54 +204,48 @@ export const runCompartments: TaskRunner = async (job) => {
   })
   const curve = accumulator.finish()
 
-  const index = usableBins(square.values, n, numParam(job.params, 'minCoverage', 0.1))
+  const index = usableBins(square.values, n, MIN_COVERAGE)
   if (index.length < 8) {
     job.note(
       `Only ${index.length} bins of ${name} carry enough data to correlate, which is too few ` +
         'for a component to mean anything.',
     )
-    return []
+    return null
   }
   if (index.length < n) {
     job.note(
-      `${(n - index.length).toLocaleString()} of ${n.toLocaleString()} bins were left out for ` +
-        'want of data. They are gaps in the track rather than zeros.',
+      `${name}: ${(n - index.length).toLocaleString()} of ${n.toLocaleString()} bins were left ` +
+        'out for want of data. They are gaps in the track rather than zeros.',
     )
   }
 
-  job.progress(2, 4, 'Correlation')
   const oe = observedOverExpected(square.values, n, index, curve)
   const correlation = correlationMatrix(oe, index.length)
   job.throwIfCancelled()
 
-  job.progress(3, 4, 'Eigenvectors')
-  const wanted = Math.max(1, Math.min(3, Math.round(numParam(job.params, 'components', 1))))
   // The correlation matrix is consumed in place by the deflation, so the saddle
   // below uses `oe` — which is the matrix it wants anyway.
   const pairs = leadingEigenpairs(correlation, index.length, wanted)
   if (pairs.length === 0) {
-    job.note('The correlation matrix has no leading component; the sequence may be too sparse.')
-    return []
+    job.note(`${name}: the correlation matrix has no leading component; it may be too sparse.`)
+    return null
   }
 
   const signal = phasingSignal(job, name, index, from)
-  const outputs: TaskOutput[] = []
   let phased: Phasing | null = null
 
-  for (let component = 0; component < pairs.length; component++) {
+  for (let component = 0; component < pairs.length && component < tracks.length; component++) {
     const vector = pairs[component].vector
     if (signal !== null) {
       const result = phaseComponent(vector, signal, numParam(job.params, 'minR', 0.1))
-      if (component === 0) phased = result
-      if (component === 0 && !result.confident) {
+      if (component === 0) {
+        phased = result
         job.note(
-          `Phasing against ${result.signal} was ambiguous (r = ${fmt(result.r)}), so E1's sign ` +
-            'is arbitrary and should not be compared with another sequence.',
-        )
-      } else if (component === 0) {
-        job.note(
-          `E1 phased against ${result.signal} (r = ${fmt(result.r)})` +
-            `${result.flipped ? ', sign flipped' : ''}.`,
+          result.confident
+            ? `${name}: E1 phased against ${result.signal} (r = ${fmt(result.r)})` +
+                `${result.flipped ? ', sign flipped' : ''}.`
+            : `${name}: phasing against ${result.signal} was ambiguous (r = ${fmt(result.r)}), ` +
+                'so E1’s sign is arbitrary and should not be compared with another sequence.',
         )
       }
     } else if (component === 0) {
@@ -138,25 +254,19 @@ export const runCompartments: TaskRunner = async (job) => {
 
     // Back over the full bin grid, with the excluded bins restored as gaps —
     // which is the whole reason the chain worked over an index (§18.8).
-    const values = new Float32Array(job.mc.nBins).fill(Number.NaN)
-    for (let i = 0; i < index.length; i++) values[from + index[i]] = vector[i]
-    outputs.push({
-      kind: 'profile',
-      id: `compartment-e${component + 1}`,
-      label: `E${component + 1} · ${name}`,
-      values,
-      extent: [0, job.mc.nBins],
-      binsize: job.mc.binsize,
-      unit: '',
-    } satisfies ProfileOutput)
+    const track = tracks[component]
+    for (let i = 0; i < index.length; i++) track[from + index[i]] = vector[i]
   }
 
-  if (boolParam(job.params, 'saddle', true)) {
-    const bins = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
-    const result = saddle(oe, index.length, pairs[0].vector, bins)
-    outputs.push({
+  addCompartmentSegments(job, segments, cid, index, pairs[0].vector, from)
+
+  if (!boolParam(job.params, 'saddle', true)) return { saddle: null }
+  const bins = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
+  const result = saddle(oe, index.length, pairs[0].vector, bins)
+  return {
+    saddle: {
       kind: 'matrix',
-      id: 'compartment-saddle',
+      id: `compartment-saddle-${cid}`,
       label: `Saddle · ${name}`,
       nrows: bins,
       ncols: bins,
@@ -182,11 +292,42 @@ export const runCompartments: TaskRunner = async (job) => {
               },
             ]),
       ],
-    } satisfies MatrixOutput)
+    } satisfies MatrixOutput,
   }
+}
 
-  job.progress(4, 4, 'Done')
-  return outputs
+/**
+ * The segments {@link compartmentSegments} called, as a `FeatureSet` the
+ * Annotations panel can draw and a BED can carry.
+ *
+ * The arithmetic is the kernel's; what is here is the coordinate conversion —
+ * bins to base pairs, clamped at the sequence's own end so the last segment
+ * stops where the chromosome does rather than at the end of a bin that runs past
+ * it.
+ */
+function addCompartmentSegments(
+  job: JobContext,
+  builder: FeatureBuilder,
+  cid: number,
+  index: Int32Array,
+  vector: Float64Array,
+  offset: number,
+): void {
+  const name = job.mc.chromnames[cid]
+  const binsize = job.mc.binsize
+  const length = job.mc.chromsizes.get(name) ?? Number.POSITIVE_INFINITY
+  // The kernel works in the index's own numbering, which starts at the
+  // sequence's first bin; the file's is absolute.
+  const local = Int32Array.from(index, (bin) => bin + offset)
+  for (const segment of compartmentSegments(local, vector)) {
+    const from = (segment.from - offset) * binsize
+    const to = Math.min(length, (segment.to - offset + 1) * binsize)
+    builder.add(name, from, to, {
+      name: segment.side,
+      score: segment.mean,
+      detail: `E1 mean ${segment.mean.toFixed(3)} · ${segment.bins} bins`,
+    })
+  }
 }
 
 function fmt(value: number): string {

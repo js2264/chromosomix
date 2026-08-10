@@ -33,6 +33,7 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { BALANCE_PARAM } from './shared'
 
 /**
  * The largest correlation matrix this will build.
@@ -59,8 +60,19 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'region',
     label: 'Sequence',
     sequences: true,
-    required: true,
-    hint: 'One sequence at a time. Compartments are a property of a chromosome.',
+    /**
+     * Empty is **every sequence**, run one after another.
+     *
+     * It used to be a refusal — *name a sequence* — on the argument that
+     * compartments are a property of one chromosome and there is no whole-file
+     * reading to fall back on. The first half is true and the second does not
+     * follow: the whole-genome answer is not one wider correlation matrix, it is
+     * the per-chromosome one done for each of them, which is exactly what a
+     * reader ends up doing by hand sixteen times. So the run loops, the
+     * eigenvectors land in one track over the whole bin grid, and the A/B calls
+     * land in one BED. Naming a sequence still narrows it to that one.
+     */
+    hint: 'Leave empty to run over every sequence, one at a time.',
   },
   {
     kind: 'number',
@@ -122,29 +134,50 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.saddle !== false,
     section: 'Saddle',
   },
-  {
-    kind: 'toggle',
-    key: 'balance',
-    label: 'Use balancing weights',
-    hint: 'Strongly advised: an unbalanced correlation matrix is mostly a picture of coverage.',
-    default: true,
-    section: 'Quality',
-  },
-  {
-    kind: 'number',
-    key: 'minCoverage',
-    label: 'Least usable row',
-    hint: 'A bin with fewer finite cells than this fraction takes no part.',
-    default: 0.1,
-    min: 0,
-    max: 1,
-    step: 0.05,
-    slider: true,
-    section: 'Quality',
-  },
+  BALANCE_PARAM,
 ]
 
+/**
+ * The sweep over every sequence, priced.
+ *
+ * One dense square per sequence, one correlation matrix at a time — so the bytes
+ * to state are the **largest** of them rather than their sum: they are held one
+ * after another and released, and quoting the total would be quoting a peak that
+ * never happens. Sequences past the limit are counted and named as skipped
+ * rather than made into a refusal, which is what the run itself does with them.
+ */
+function estimateSweep(context: AnalysisContext): CostEstimate {
+  const usable = context.contigs.filter((contig) => contig.bins <= MAX_CORRELATION_BINS)
+  const skipped = context.contigs.length - usable.length
+  if (usable.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal:
+        `Every sequence in this file is past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin ` +
+        'limit on a correlation matrix. Open the file at a coarser resolution.',
+    }
+  }
+  const widest = usable.reduce((most, contig) => Math.max(most, contig.bins), 0)
+  const bytes = widest * widest * 8
+  return {
+    class: 'scan',
+    requests: usable.length * 4,
+    bytes,
+    note:
+      `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
+      `dense square and one correlation matrix at a time — up to ${(bytes / 1e6).toFixed(0)} MB ` +
+      `held at once. ${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped. ` : ''}` +
+      'Progress is reported per sequence and it can be cancelled at any point.',
+  }
+}
+
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
+  // Empty is every sequence now, not a refusal: the whole-genome answer is the
+  // per-chromosome one done for each of them (see the `region` parameter).
+  if (regionOf(params) === '') return estimateSweep(context)
   const contig = regionContig(context, regionOf(params))
   if (contig === undefined) {
     return {
@@ -152,10 +185,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
-      refusal:
-        regionOf(params) === ''
-          ? 'Name a sequence. A correlation matrix is per chromosome — see the note on cost.'
-          : `This file has no sequence called ${regionOf(params).split(':')[0].trim()}.`,
+      refusal: `This file has no sequence called ${regionOf(params).split(':')[0].trim()}.`,
     }
   }
 
@@ -221,6 +251,6 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
         ? READY
         : waitingFor(NEEDS_MAP),
   params: PARAMS,
-  outputs: ['profile', 'matrix'],
+  outputs: ['profile', 'intervals', 'matrix'],
   estimate,
 }

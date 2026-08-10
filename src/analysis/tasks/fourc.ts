@@ -38,6 +38,7 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { BALANCE_PARAM } from './shared'
 
 /** The anchor as typed, trimmed. */
 export function anchorOf(params: Params): string {
@@ -62,7 +63,7 @@ const PARAMS: readonly ParamSpec[] = [
     pickable: true,
     hint:
       'The locus the profile is a reading from. A whole sequence is allowed. Type it, or press ' +
-      '“Pick on map” and Shift-drag along either axis.',
+      '“Pick on map” and drag along either axis.',
   },
   {
     kind: 'toggle',
@@ -73,12 +74,7 @@ const PARAMS: readonly ParamSpec[] = [
       'table to reach the contacts leaving that sequence.',
     default: true,
   },
-  {
-    kind: 'toggle',
-    key: 'balance',
-    label: 'Use balancing weights',
-    default: false,
-  },
+  BALANCE_PARAM,
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {

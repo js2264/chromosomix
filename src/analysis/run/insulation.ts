@@ -78,7 +78,7 @@ export const runInsulation: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
-  const windows = windowLadder(job.params, job.mc.binsize)
+  const windows = windowLadder(job.params)
   const widest = windows[windows.length - 1]
 
   const units = planUnits(job, strParam(job.params, 'region', '').trim()).filter(
@@ -105,8 +105,9 @@ export const runInsulation: TaskRunner = async (job) => {
 
   const call = boolParam(job.params, 'call', true)
   const prominence = numParam(job.params, 'prominence', 0.2)
-  const spacingBp = numParam(job.params, 'spacing', 0)
-  const spacing = Math.max(1, Math.round(spacingBp / job.mc.binsize))
+  // In bins, as the form now asks for it: a spacing between two calls on a
+  // track whose x axis is bins was being typed in base pairs and divided here.
+  const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
   for (let u = 0; u < units.length; u++) {
     job.throwIfCancelled()

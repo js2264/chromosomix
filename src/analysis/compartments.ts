@@ -231,3 +231,91 @@ export function saddle(
     },
   }
 }
+
+// ---------------------------------------------------------------------------
+// The call
+// ---------------------------------------------------------------------------
+
+/** One run of bins that E1 puts on the same side of zero. */
+export interface CompartmentSegment {
+  /** `'A'` where E1 is positive, `'B'` where it is negative. */
+  side: 'A' | 'B'
+  /** First and last bin of the run, **inclusive**, in the index's own numbering. */
+  from: number
+  to: number
+  /** Mean of E1 over the run — the strength of the call. */
+  mean: number
+  /** How many bins are in it. */
+  bins: number
+}
+
+/**
+ * E1's sign, as **A and B segments** — the compartment call the track implies.
+ *
+ * The eigenvector is a number per bin and the thing everybody actually cites is
+ * the interval: *this arm is A, that half-megabase is B*. Getting from one to
+ * the other meant exporting the bigWig and thresholding it somewhere else, which
+ * is a second tool for one comparison against zero — and one this app can make
+ * without the ambiguity a downstream threshold introduces, because it knows
+ * which bins were excluded and does not have to guess whether a gap is a zero.
+ *
+ * Three rules, and each is a way the naive version would be wrong.
+ *
+ * **A run is consecutive bins**, and consecutive means consecutive in the file's
+ * own numbering rather than in the index. `index` holds only the bins that
+ * carried enough data to correlate, so two entries beside each other in it can
+ * be a megabase apart on the chromosome; joining them would draw a segment
+ * across a stretch that took no part in the calculation and assert a compartment
+ * there.
+ *
+ * **Zero and `NaN` end a run and start nothing.** A bin at exactly zero is not
+ * evidence of A, and a bin with no value is not evidence of anything.
+ *
+ * **The mean is carried**, so the call has a strength: it becomes the BED's
+ * score column, which is what lets an overlay be filtered on it and what a
+ * downstream tool sorts by.
+ *
+ * @param index Bins that took part, ascending, in the file's own numbering.
+ * @param vector E1 over those bins, one value per entry of `index`.
+ */
+export function compartmentSegments(
+  index: Int32Array,
+  vector: Float64Array,
+): CompartmentSegment[] {
+  const out: CompartmentSegment[] = []
+  let from = -1
+  let last = -1
+  let side: 1 | -1 | 0 = 0
+  let total = 0
+  let bins = 0
+
+  const flush = (): void => {
+    if (from >= 0 && side !== 0) {
+      out.push({
+        side: side > 0 ? 'A' : 'B',
+        from,
+        to: last,
+        mean: bins === 0 ? Number.NaN : total / bins,
+        bins,
+      })
+    }
+    from = -1
+    total = 0
+    bins = 0
+  }
+
+  for (let i = 0; i < index.length && i < vector.length; i++) {
+    const bin = index[i]
+    const value = vector[i]
+    const next: 1 | -1 | 0 = Number.isFinite(value) && value > 0 ? 1 : value < 0 ? -1 : 0
+    if (next !== side || bin !== last + 1) flush()
+    side = next
+    last = bin
+    if (next === 0) continue
+    if (from < 0) from = bin
+    total += value
+    bins++
+  }
+  flush()
+  return out
+}

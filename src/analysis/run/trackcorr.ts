@@ -41,7 +41,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
 
   const step = strParam(job.params, 'over', 'bins') === 'features'
     ? 0
-    : Math.max(1, Math.round(numParam(job.params, 'binsize', 10_000)))
+    : Math.max(1, Math.round(numParam(job.params, 'binsize', 100)))
   const columns: Float64Array[] = []
   for (let i = 0; i < entries.length; i++) {
     job.throwIfCancelled()
@@ -119,7 +119,7 @@ async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
     }
     return out
   }
-  const size = Math.max(1, Math.round(numParam(job.params, 'binsize', 10_000)))
+  const size = Math.max(1, Math.round(numParam(job.params, 'binsize', 100)))
   const out: Region[] = []
   for (const [contig, length] of Object.entries(job.inputs.contigLengths ?? {})) {
     for (let start = 0; start + size <= length; start += size) {

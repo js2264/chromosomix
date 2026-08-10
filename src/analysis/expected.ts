@@ -192,12 +192,18 @@ export class ExpectedAccumulator {
  * as much as the fullest. `n` is the cells behind the point, which is what the
  * drawer prints when somebody asks why the tail is noisy.
  *
- * `minSeparation` is in base pairs and floors the first bin. The near-diagonal
+ * `minOffset` floors the first bin, **in bins of this file**. The near-diagonal
  * offsets are dominated by unligated fragments and self-ligation rather than by
  * polymer contact, so a P(s) plotted from offset zero has a false shoulder at
  * its left edge that has misled people into reading a structural feature off it.
  * A floor of at least one bin is enforced regardless, since offset zero is the
  * diagonal and has no place on a log axis at all.
+ *
+ * Bins rather than base pairs, which is a change from what the form used to ask
+ * for: the near-diagonal is a fact about the grid, not about the genome, and a
+ * number typed in base pairs meant three bins at one resolution and one at the
+ * next. It is also the unit the accumulator counts in, so the conversion — and
+ * the rounding it did — is gone rather than moved.
  *
  * **Empty log bins are dropped, not emitted as `NaN`.** With a factor near one
  * the bins at short range are narrower than a bin of the file, so many of them
@@ -212,11 +218,11 @@ export function logBinCurve(
   curve: ExpectedCurve,
   binsize: number,
   factor: number,
-  minSeparation: number,
+  minOffset: number,
 ): { x: Float64Array; y: Float64Array; n: Float64Array } {
   const bp = binsize > 0 ? binsize : 1
-  const floor = Number.isFinite(minSeparation) ? minSeparation : 0
-  const floorOffset = Math.max(1, Math.ceil(floor / bp))
+  const floor = Number.isFinite(minOffset) ? minOffset : 0
+  const floorOffset = Math.max(1, Math.ceil(floor))
   const edges = logSpacedEdges(floorOffset, curve.maxOffset + 1, factor)
   const xs: number[] = []
   const ys: number[] = []

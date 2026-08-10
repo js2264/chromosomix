@@ -4020,7 +4020,17 @@ export class HeatmapView {
       // **Shift alone** names a band of one axis and zooms to it, which is the
       // 1D half of the same idea and the gesture the 1D browser has too.
       // Everything else pans.
-      const mode = wantsSelect(e) ? 'select' : e.shiftKey ? 'band' : 'pan'
+      //
+      // …**except while a form is waiting to be pointed at.** *Pick on map* is a
+      // mode with a lit button and a changed cursor saying so, and asking for a
+      // held modifier on top of that is asking twice: a reader who has just
+      // pressed a button that says "pick on map" is going to drag on the map. So
+      // while it is armed a plain drag names the band, and `finishBand` reports
+      // it without zooming — the only thing the gesture does is answer the
+      // question the form asked. It disarms on the first pick, so the next drag
+      // is an ordinary pan again (`ui/mapPick.ts`).
+      const mode =
+        this.bandMode === 'pick' ? 'band' : wantsSelect(e) ? 'select' : e.shiftKey ? 'band' : 'pan'
       // …except on a turned map, where the diagonal is the bottom edge of the
       // picture and a corner snapped to it would be a corner snapped to the
       // frame. The selection is already the on-diagonal one there, whichever
@@ -4157,6 +4167,15 @@ export class HeatmapView {
       // A press that did not travel is a click, in either mode: §5.5's
       // cross-navigation must not need a steady hand.
       if (!this.dragMoved) {
+        // …but not while a form is waiting for a locus. A tap there names the
+        // bin under the pointer, which is the finest anchor this resolution can
+        // express, and navigating to whatever the cell refers to would take the
+        // form that asked the question off the screen.
+        if (this.bandMode === 'pick') {
+          this.finishBand(drag.x0, drag.y0, drag.x, drag.y)
+          this.changed()
+          return
+        }
         const action = this.hitAction(x, y)
         if (action === null) return
         // Deferred behind the double-click window: the second click of a "put

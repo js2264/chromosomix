@@ -681,6 +681,96 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The analysis panel stopped asking questions it can answer itself.** A
+  parameter is a question the reader is entitled to a different answer to;
+  everything with one right answer per file belongs to the file. Going through
+  the catalogue on that rule took a control off nearly every task.
+
+  **Balancing is the case that settles it.** "Use balancing weights" was a
+  tickbox on six tasks, off by default on five of them, and it is the one
+  setting in the panel where the wrong answer produces a figure that looks
+  entirely reasonable — an unbalanced P(s), insulation track or 4C profile is a
+  plausible shape, and nothing in the picture says which one was asked for. A
+  reader who opened a balanced file answered the question by opening it. It is
+  now derived from the file's weights and shown nowhere, on P(s), diamond
+  insulation, 4C, compartments and APA. It is still a parameter in every other
+  sense, so the runners are unchanged and an exported TSV still says what the
+  numbers were computed with. **Coverage keeps its tickbox**, because there it is
+  a diagnostic rather than a choice: a balanced file should have a flat total, so
+  one that does not is a file whose weights do not fit it.
+
+  **Distances are asked for in bins.** P(s)'s minimum separation and diamond
+  insulation's window and call spacing were typed in base pairs and immediately
+  divided by the bin size. The near-diagonal is a fact about the grid rather than
+  about the genome, and the same typed number meant three bins at one resolution
+  and one at the next — so they are counts now, and the diamond's default (10
+  bins) is exactly what `10 × binsize` used to resolve to.
+
+  **A whole-sequence picker starts on every sequence.** It was seeded from the
+  map's framing, which silently narrowed P(s), insulation and compartments to
+  whichever chromosome happened to be on screen and then reported the result as
+  though the reader had chosen it. Empty is an answer for those controls — it is
+  the entry the list itself offers first — so it is left alone. A *locus* box is
+  the opposite case and still starts where the map is: 4C's anchor is a place.
+
+  **P(s) draws every sequence.** The *Sequences to draw* box kept the largest N
+  and said how many it had dropped, which turned "how does contact fall with
+  distance, on each of my sequences" into a question about a number nobody had a
+  reason to pick. All the curves are computed and all are drawn; what is capped
+  is the *legend*, at three lines with a `+N more`, by the drawer that has to fit
+  it.
+
+  **Compartments runs over every sequence** rather than refusing until one is
+  named. The whole-genome answer is the per-chromosome one done for each of them
+  — the correlation matrix is `m²` in one chromosome's bins and pooling two would
+  correlate rows that share no expected curve — so it loops, the eigenvectors
+  land in one track over the whole bin grid, and a sequence past the bin-count
+  gate is skipped with a note rather than throwing away the twenty that worked.
+  Its *Quality* section is gone: the balancing tickbox is derived, and the
+  minimum row coverage is a threshold below which a row is noise rather than a
+  knob that changes an answer.
+
+  **Coverage starts with the total marginal alone**, which is what the task is
+  opened for; the cis fraction is a second lane arriving unasked. **Track
+  correlation** bins at 100 bp rather than 10 kb — 10 kb windows smear a
+  promoter-width peak into its neighbourhood before the arithmetic starts — and
+  no longer prints "1 bin at 10.0 kb" beside the box, a caption measured against
+  a contact map this task does not read and need not have open.
+
+  **Domains (CIDs) is withheld from the panel.** Everything it does is reachable:
+  diamond insulation calls the same boundaries from the same diamond and exports
+  them as a BED, and the pileup over those calls is what APA does over any
+  interval set. The descriptor is left whole, so bringing the row back is one
+  line.
+
+- **A/B compartments come out as segments, not only as an eigenvector.** E1 is a
+  number per bin and the thing that gets cited is the interval — *this arm is A,
+  that half-megabase is B* — and getting from one to the other meant exporting
+  the bigWig and thresholding it in another tool. It is one comparison against
+  zero, and this app can make it without the ambiguity a downstream threshold
+  introduces, because it knows which bins were excluded and does not have to
+  guess whether a gap is a zero. So a run now produces an overlay of A and B
+  runs beside the track, with the mean of E1 over each run as its score, exported
+  as a BED like every other called interval set. A gap in the usable bins ends a
+  run rather than being bridged: a segment drawn across bins that took no part in
+  the calculation would be asserting a compartment where nothing was measured.
+
+- **Pick on map is one gesture.** The 4C anchor was picked with a Shift-drag,
+  which is a held modifier on top of a mode that already has a lit button and a
+  changed cursor — asking twice. While it is armed an ordinary drag names the
+  band, a tap names the bin under the pointer, and neither zooms, pans, nor
+  navigates: the only thing the gesture does is answer the question the form
+  asked. It still disarms after one pick and on Escape.
+
+- **A saddle is a square.** The two cell sizes of a matrix figure were computed
+  independently, each filling its own axis, so the aspect of a saddle or a
+  correlation heatmap was decided by how wide the drawer had been dragged. That
+  is a picture whose shape carries no information and reads as one whose shape
+  does — a saddle is read by comparing its two corners, and a corner stretched
+  40% along one axis looks stronger than the one opposite it. Cells are square
+  now, so an `n × n` matrix comes out square in any panel and a non-square one
+  keeps its own aspect exactly.
+
 - **The Sequences card is how a cooler's map picks its chromosomes.** The card
   the 1D browser has always had — every sequence, its length, a bar for the
   shape of the assembly and a tick box beside each — is now in the **General**
