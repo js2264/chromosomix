@@ -1,6 +1,13 @@
 {
-  "latest": "0995824",
+  "latest": "ceffee3",
   "versions": [
+    {
+      "commit": "ceffee3",
+      "version": "0.9.0",
+      "date": "2026-08-10T18:56:14+02:00",
+      "subject": "feat: synthetic tracks survive a resolution switch, and the bar's marquee",
+      "tag": ""
+    },
     {
       "commit": "0995824",
       "version": "0.9.0",
