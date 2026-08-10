@@ -51,6 +51,7 @@ import {
   type JobContext,
   type TaskRunner,
 } from '../job'
+import type { Params } from '../types'
 import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
@@ -267,50 +268,63 @@ function planExpected(values: Float32Array, selection: Selection): ExpectedPlan 
     }
   }
 
-  return { group, cis, trans }
+  return { group, cis, trans, contacts: 'both' }
 }
 
-export const runCompartments: TaskRunner = async (job) => {
-  const names = listParam(job.params, 'sequences')
-  if (names.length === 0) {
-    job.note('No sequence is ticked, so there is nothing to correlate.')
-    return []
-  }
-  const selection = selectionOf(job, names)
-  if (selection.n === 0) {
-    job.note('None of the ticked sequences has any bins in it.')
-    return []
-  }
-  if (selection.n > MAX_CORRELATION_BINS) {
-    throw new Error(
-      `Refusing to build a ${selection.n.toLocaleString()}×${selection.n.toLocaleString()} ` +
-        `correlation matrix over ${selection.contigs.length.toLocaleString()} ticked ` +
-        `${selection.contigs.length === 1 ? 'sequence' : 'sequences'}. The limit is ` +
-        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, or open the file at ` +
-        'a coarser resolution.',
-    )
-  }
+/** Which contacts enter the correlation; see {@link ExpectedPlan.contacts}. */
+function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
+  const value = params.contacts
+  return value === 'cis' || value === 'trans' ? value : 'both'
+}
 
+/**
+ * One square, from reading it to the outputs it produced.
+ *
+ * The whole chain, run over whatever selection it is handed — every ticked
+ * sequence at once, or one of them. `null` where this square produced nothing,
+ * and every one of those paths leaves a note naming the selection: a chromosome
+ * silently missing from a genome-wide track is the failure this could most
+ * easily have.
+ *
+ * The eigenvectors are written into `tracks` rather than returned, because a
+ * track is a track: E1 of chromosome IV and E1 of chromosome V are the same
+ * quantity on two stretches of one axis, and two rows on the Synthetic tracks
+ * card saying `E1 · IV` and `E1 · V` would be a card the reader reassembles by
+ * eye.
+ */
+async function runSquare(
+  job: JobContext,
+  selection: Selection,
+  options: {
+    contacts: 'cis' | 'trans' | 'both'
+    wanted: number
+    tracks: Float32Array[]
+    segments: FeatureBuilder
+    label: string
+    /** Reported as `done of total` while several squares are being run. */
+    step: { at: number; of: number }
+  },
+): Promise<{ saddle: MatrixOutput | null } | null> {
+  const { label } = options
   const balance = boolParam(job.params, 'balance', true)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const square = await readSquare(job, selection, { balance, value })
   job.throwIfCancelled()
 
-  job.progress(1, 4, 'Expected')
-  const plan = planExpected(square, selection)
-
+  const plan: ExpectedPlan = { ...planExpected(square, selection), contacts: options.contacts }
   const index = usableBins(square, selection.n, MIN_COVERAGE)
   if (index.length < 8) {
     job.note(
-      `Only ${index.length} of the ticked bins carry enough data to correlate, which is too few ` +
-        'for a component to mean anything.',
+      `${label}: only ${index.length} bins carry enough data to correlate, which is too few for ` +
+        'a component to mean anything.',
     )
-    return []
+    return null
   }
   if (index.length < selection.n) {
     job.note(
-      `${(selection.n - index.length).toLocaleString()} of ${selection.n.toLocaleString()} bins ` +
-        'were left out for want of data. They are gaps in the track rather than zeros.',
+      `${label}: ${(selection.n - index.length).toLocaleString()} of ` +
+        `${selection.n.toLocaleString()} bins were left out for want of data. They are gaps in ` +
+        'the track rather than zeros.',
     )
   }
 
@@ -321,25 +335,23 @@ export const runCompartments: TaskRunner = async (job) => {
   // reports where it has got to and can be stopped from inside its own loop.
   const correlation = correlationMatrix(oe, index.length, (row) => {
     job.throwIfCancelled()
-    if (row % 64 === 0) job.progress(row, index.length, 'Correlation')
+    if (row % 64 === 0) {
+      job.progress(options.step.at, options.step.of, `Correlating ${label}`)
+    }
   })
 
-  job.progress(3, 4, 'Eigenvectors')
-  const wanted = Math.max(1, Math.min(3, Math.round(numParam(job.params, 'components', 1))))
   // The correlation matrix is consumed in place by the deflation, so the saddle
   // below uses `oe` — which is the matrix it wants anyway.
-  const pairs = leadingEigenpairs(correlation, index.length, wanted)
+  const pairs = leadingEigenpairs(correlation, index.length, options.wanted)
   if (pairs.length === 0) {
-    job.note('The correlation matrix has no leading component; the selection may be too sparse.')
-    return []
+    job.note(`${label}: the correlation matrix has no leading component; it may be too sparse.`)
+    return null
   }
 
-  const label = describe(job, selection)
   const signal = phasingSignal(job, selection, index)
-  const outputs: TaskOutput[] = []
   let phased: Phasing | null = null
 
-  for (let component = 0; component < pairs.length; component++) {
+  for (let component = 0; component < pairs.length && component < options.tracks.length; component++) {
     const vector = pairs[component].vector
     if (signal !== null) {
       const result = phaseComponent(vector, signal, numParam(job.params, 'minR', 0.1))
@@ -347,39 +359,31 @@ export const runCompartments: TaskRunner = async (job) => {
         phased = result
         job.note(
           result.confident
-            ? `E1 phased against ${result.signal} (r = ${fmt(result.r)})` +
+            ? `${label}: E1 phased against ${result.signal} (r = ${fmt(result.r)})` +
                 `${result.flipped ? ', sign flipped' : ''}.`
-            : `Phasing against ${result.signal} was ambiguous (r = ${fmt(result.r)}), so E1’s ` +
-                'sign is arbitrary and should not be compared with another run.',
+            : `${label}: phasing against ${result.signal} was ambiguous (r = ${fmt(result.r)}), ` +
+                'so E1’s sign is arbitrary and should not be compared with another run.',
         )
       }
     } else if (component === 0) {
       job.note('Nothing was chosen to phase against, so the sign of each component is arbitrary.')
     }
 
-    // Back over the full bin grid, with every bin that took no part restored as a
-    // gap — which is the whole reason the chain worked over an index (§18.8).
-    const values = new Float32Array(job.mc.nBins).fill(Number.NaN)
-    for (let i = 0; i < index.length; i++) values[selection.bin[index[i]]] = vector[i]
-    outputs.push({
-      kind: 'profile',
-      id: `compartment-e${component + 1}`,
-      label: `E${component + 1} · ${label}`,
-      values,
-      extent: [0, job.mc.nBins],
-      binsize: job.mc.binsize,
-      unit: '',
-    } satisfies ProfileOutput)
+    // Back over the full bin grid, with every bin that took no part restored as
+    // a gap — which is the whole reason the chain worked over an index (§18.8).
+    const track = options.tracks[component]
+    for (let i = 0; i < index.length; i++) track[selection.bin[index[i]]] = vector[i]
   }
 
-  outputs.push(abOutput(job, selection, index, pairs[0].vector, label))
+  addCompartmentSegments(job, options.segments, selection, index, pairs[0].vector)
 
-  if (boolParam(job.params, 'saddle', true)) {
-    const bins = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
-    const result = saddle(oe, index.length, pairs[0].vector, bins)
-    outputs.push({
+  if (!boolParam(job.params, 'saddle', true)) return { saddle: null }
+  const bins = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
+  const result = saddle(oe, index.length, pairs[0].vector, bins)
+  return {
+    saddle: {
       kind: 'matrix',
-      id: 'compartment-saddle',
+      id: `compartment-saddle-${label}`,
       label: `Saddle · ${label}`,
       nrows: bins,
       ncols: bins,
@@ -405,11 +409,129 @@ export const runCompartments: TaskRunner = async (job) => {
               },
             ]),
       ],
-    } satisfies MatrixOutput)
+    } satisfies MatrixOutput,
+  }
+}
+
+export const runCompartments: TaskRunner = async (job) => {
+  const names = listParam(job.params, 'sequences')
+  if (names.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to correlate.')
+    return []
+  }
+  const whole = selectionOf(job, names)
+  if (whole.n === 0) {
+    job.note('None of the ticked sequences has any bins in it.')
+    return []
   }
 
-  job.progress(4, 4, 'Done')
+  const contacts = contactsOf(job.params)
+  if (contacts === 'trans' && whole.contigs.length < 2) {
+    throw new Error(
+      'A trans correlation is between sequences, so it needs at least two ticked. Tick more, ' +
+        'or read this one’s cis contacts instead.',
+    )
+  }
+
+  /**
+   * **Cis-only is one square per sequence; the other two are one square.**
+   *
+   * Not a preference. A single square with its trans blocks removed has no
+   * finite cell shared between a row of chromosome IV and a row of chromosome V,
+   * so every correlation across that boundary is undefined and enters the matrix
+   * as a zero — leaving it block-diagonal, and the leading eigenvector of a
+   * block-diagonal matrix lives entirely inside whichever block has the largest
+   * eigenvalue and is zero on all the others. A genome-wide cis-only run done
+   * that way returns one chromosome's compartments and fifteen flat lines, which
+   * is wrong in a way that looks like data.
+   *
+   * So cis-only loops, exactly as somebody would by hand, and each pass is the
+   * per-chromosome run in full. It is also the cheaper shape by a long way — the
+   * correlation is cubic, so sixteen squares of 1,500 bins is a fraction of one
+   * of 24,000 — which is what makes cis-only the mode that works at a fine
+   * resolution.
+   */
+  const squares =
+    contacts === 'cis'
+      ? whole.contigs.map((cid) => selectionOf(job, [job.mc.chromnames[cid]]))
+      : [whole]
+
+  const wanted = Math.max(1, Math.min(3, Math.round(numParam(job.params, 'components', 1))))
+  const tracks: Float32Array[] = []
+  for (let i = 0; i < wanted; i++) tracks.push(new Float32Array(job.mc.nBins).fill(Number.NaN))
+  const segments = new FeatureBuilder()
+  const outputs: TaskOutput[] = []
+  let ran = 0
+
+  for (let s = 0; s < squares.length; s++) {
+    job.throwIfCancelled()
+    const selection = squares[s]
+    const label = describe(job, selection)
+    if (selection.n > MAX_CORRELATION_BINS) {
+      const message =
+        `${label} is ${selection.n.toLocaleString()} bins, past the ` +
+        `${MAX_CORRELATION_BINS.toLocaleString()}-bin limit on a correlation matrix`
+      // Naming one sequence and being refused is a refusal — the reader asked
+      // for that and got nothing. Meeting one in a sweep is not a reason to
+      // throw away the others.
+      if (squares.length === 1) {
+        throw new Error(`Refusing to build it: ${message}. Untick some, or open the file coarser.`)
+      }
+      job.note(`${message}, so it was skipped. Open the file at a coarser resolution to include it.`)
+      continue
+    }
+    job.progress(s, squares.length, `Compartments on ${label}`)
+    const done = await runSquare(job, selection, {
+      contacts,
+      wanted,
+      tracks,
+      segments,
+      label,
+      step: { at: s, of: squares.length },
+    })
+    if (done === null) continue
+    ran++
+    if (done.saddle !== null) outputs.push(done.saddle)
+  }
+
+  if (ran === 0) {
+    job.note('Nothing produced a component. See the notes above.')
+    return []
+  }
+
+  // The tracks first, then the calls, then the pictures: a reader scanning the
+  // drawer meets the thing they will keep before the thing they will look at.
+  const label = `${describe(job, whole)} · ${CONTACT_WORDS[contacts]}`
+  outputs.unshift(
+    ...tracks.map(
+      (values, i) =>
+        ({
+          kind: 'profile',
+          id: `compartment-e${i + 1}`,
+          label: `E${i + 1} · ${label}`,
+          values,
+          extent: [0, job.mc.nBins],
+          binsize: job.mc.binsize,
+          unit: '',
+        }) satisfies ProfileOutput,
+    ),
+    {
+      kind: 'intervals',
+      id: 'compartment-ab',
+      label: `A/B compartments · ${label}`,
+      payload: { kind: 'features', data: segments.finish() },
+    },
+  )
+
+  job.progress(squares.length, squares.length, 'Done')
   return outputs
+}
+
+/** How each mode is named on a lane label and in a provenance line. */
+const CONTACT_WORDS: Record<'cis' | 'trans' | 'both', string> = {
+  cis: 'cis',
+  trans: 'trans',
+  both: 'cis + trans',
 }
 
 /**
@@ -439,14 +561,13 @@ function fmt(value: number): string {
  * once would join the last bin of one to the first of the next wherever they
  * happened to agree — a segment spanning two chromosomes, which is not a thing.
  */
-function abOutput(
+function addCompartmentSegments(
   job: JobContext,
+  builder: FeatureBuilder,
   selection: Selection,
   index: Int32Array,
   vector: Float64Array,
-  label: string,
-): TaskOutput {
-  const builder = new FeatureBuilder()
+): void {
   const binsize = job.mc.binsize
   for (let g = 0; g < selection.contigs.length; g++) {
     const cid = selection.contigs[g]
@@ -475,12 +596,6 @@ function abOutput(
         },
       )
     }
-  }
-  return {
-    kind: 'intervals',
-    id: 'compartment-ab',
-    label: `A/B compartments · ${label}`,
-    payload: { kind: 'features', data: builder.finish() },
   }
 }
 
