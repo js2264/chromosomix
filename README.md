@@ -59,8 +59,9 @@ arrives already coarsened; zooming into it and having nothing happen is not the 
 has in their hands. So a zoom that settles past what the block in hand can show reads that window
 again, at the grid the picture could show. It is still one bounded read drawn whole — no tiles, no
 compositing — and it stops at the file's own bins, which for a MAG means it never starts. Two or
-three blocks are kept so that zooming back out is a swap rather than a request. On by default, and
-one command away from off.
+three blocks are kept so that zooming back out is a swap rather than a request. **Off by default** —
+a zoom that reads is a zoom that can wait, and §2's promise is that it does not — and one press away
+on the map's own controls, beside the 45° turn and the O/E baseline.
 
 Two things break the small-MAG assumption, and both are handled as exceptions rather than as the
 general case: `__unbinned__` (never displayable) and non-metagenomic coolers (region level only).

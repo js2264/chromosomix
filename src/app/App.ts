@@ -723,9 +723,9 @@ export class App implements SessionHost {
           : 'Read finer data as you zoom',
         hint:
           'On, zooming past what the block in hand can show reads the window again at a finer ' +
-          'grid — one bounded read once the gesture settles, never during it, and never below ' +
-          'the file’s own bins. Off restores the older behaviour: one read per view, and a zoom ' +
-          'that magnifies it.',
+          'grid — one bounded read, the map held still while it happens, and never below the ' +
+          'file’s own bins. Off is the default and the older behaviour: one read per view, and a ' +
+          'zoom that magnifies it. The same switch is the first button on a map’s picture row.',
         run: () => void toggleRefine(),
       },
       {
