@@ -100,6 +100,31 @@ const PARAMS: readonly ParamSpec[] = [
   },
   {
     kind: 'number',
+    key: 'ignoreDiags',
+    label: 'Diagonals to ignore',
+    /**
+     * cooltools' `ignore_diags`, and the same rule the compartment chain applies:
+     * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the
+     * two beside it.
+     *
+     * The diamond never touches the main diagonal, so what this trims is its
+     * **inner corner** — the cells one and two bins of separation from it, where
+     * self-ligation and unligated fragments land. They are the largest in the
+     * matrix, so at a small window that corner can be most of the sum, and a
+     * track carried by it is a picture of how deep the near-diagonal is rather
+     * than of what crosses the bin.
+     *
+     * Two by default, which is cooltools' default and what the numbers a reader
+     * compares against were computed with.
+     */
+    hint: '0 counts every cell; 2 trims the corner of the diamond nearest the diagonal.',
+    default: 2,
+    min: 0,
+    integer: true,
+    section: 'Quality',
+  },
+  {
+    kind: 'number',
     key: 'minValid',
     label: 'Minimum coverage of the diamond',
     hint: 'Below this fraction of usable cells the bin gets no score at all.',

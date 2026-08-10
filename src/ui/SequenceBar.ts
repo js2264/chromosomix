@@ -35,7 +35,8 @@
 
 import type { AnnotationStore } from '../annotations/store'
 import { assemblyAxis, type Assembly } from '../genome/assembly'
-import { RULER_FONT, TICK_FONT, drawRuler, rulerHeightFor } from '../render/browser'
+import { RULER_FONT, TICK_FONT, drawGuide, drawRuler, rulerHeightFor } from '../render/browser'
+import { CROSSHAIR_COLOR } from '../render/heatmap'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
 import { button, el, fmt } from './dom'
@@ -91,6 +92,16 @@ export class SequenceBar {
   private dpr = 1
   /** The drag in progress, in canvas pixels, or `null`. */
   private drag: { from: number; to: number } | null = null
+  /**
+   * Where the pointer is over the strip, or `null` while it is away.
+   *
+   * A hairline follows it, which is the whole of what makes this a thing to
+   * point *at*: a band is fifty pixels of shading with a name in the middle, and
+   * without a line the reader has no way to see where in it they are about to
+   * start a drag from. The same line the 1D browser draws under its own pointer,
+   * in the same colour, so a hand that has learned one has learned the other.
+   */
+  private hover: number | null = null
 
   private readonly observer: ResizeObserver | null
   private readonly unsubscribes: Array<() => void> = []
@@ -152,6 +163,18 @@ export class SequenceBar {
   /** The `/` key, which means the same thing here as in every other view. */
   focus(): void {
     this.box.focus()
+  }
+
+  /**
+   * Where the hairline is, or `null` for none.
+   *
+   * Read rather than drawn by a test: jsdom refuses a 2D context, so what can be
+   * seen from outside is the state the paint is driven from. The drawing is
+   * `drawGuide`, which the 1D browser has used for as long as it has had a
+   * pointer, and there is nothing here for a second opinion about it to check.
+   */
+  get hairlineAt(): number | null {
+    return this.drag === null ? this.hover : null
   }
 
   destroy(): void {
@@ -252,6 +275,11 @@ export class SequenceBar {
     })
 
     this.paintMarquee(ctx, palette.plotBorderColor)
+    // Under the marquee, because while a drag is in progress the edges are what
+    // the eye is on and a third line beside one of them is noise.
+    if (this.drag === null && this.hover !== null) {
+      drawGuide(ctx, this.hover, 0, this.height, CROSSHAIR_COLOR, this.dpr)
+    }
   }
 
   /**
@@ -321,6 +349,21 @@ export class SequenceBar {
       if (moved && Math.abs(to - from) >= DRAG_MIN) this.dragged(from, to)
       else this.clicked(from)
     }
+
+    // The hairline follows the pointer whether or not a button is down; the
+    // *drag* is followed on the window, so this one stays on the canvas and
+    // stops the moment the pointer leaves it.
+    canvas.addEventListener('mousemove', (event) => {
+      const x = at(event)
+      if (this.hover === x) return
+      this.hover = x
+      this.schedule()
+    })
+    canvas.addEventListener('mouseleave', () => {
+      if (this.hover === null) return
+      this.hover = null
+      this.schedule()
+    })
 
     canvas.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return

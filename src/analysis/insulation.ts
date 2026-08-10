@@ -42,9 +42,29 @@ export interface DiamondOptions {
   /**
    * How much of the diamond has to carry a value before the bin gets a score.
    *
-   * A fraction of the `window * window` cells. Below it the answer is `NaN`.
+   * A fraction of the cells it is allowed to count. Below it the answer is
+   * `NaN`.
    */
   minValid: number
+  /**
+   * Diagonals to leave out of the sum, cooltools' `ignore_diags`.
+   *
+   * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the two
+   * beside it — the rule is `|col − row| < n`, the same one the compartment
+   * chain applies (`analysis/compartments.ts`).
+   *
+   * The diamond never touches the main diagonal, so this is about its **inner
+   * corner**: the cell at `(i − 1, i)` is one bin of separation, and the corner
+   * of the rectangle nearest the diagonal is where self-ligation and unligated
+   * fragments land. Those cells are the largest in the matrix, so at a small
+   * window the corner can be most of the sum — and a track carried by it is a
+   * track of how deep the near-diagonal is rather than of what crosses the bin.
+   *
+   * `cells` is reduced with it, so `minValid` stays a fraction of what is
+   * actually countable rather than of a rectangle two cells of which can never
+   * be counted.
+   */
+  ignoreDiags?: number
 }
 
 /**
@@ -64,9 +84,14 @@ export interface DiamondOptions {
 export function diamondSums(square: ContigSquare, options: DiamondOptions): Float64Array {
   const { size, values } = square
   const w = Math.max(1, Math.trunc(options.window))
+  const ignore = Math.max(0, Math.trunc(options.ignoreDiags ?? 0))
   const out = new Float64Array(size).fill(Number.NaN)
-  const cells = w * w
-  if (cells === 0 || size === 0) return out
+  // The rectangle, less the triangle the ignored diagonals cut off its inner
+  // corner: offsets `1 … ignore - 1` contribute `1 + 2 + … + (ignore - 1)`
+  // cells, capped at the rectangle itself for a window narrower than the cut.
+  const cut = Math.min(w * w, (Math.min(ignore, w + 1) * Math.max(0, Math.min(ignore, w + 1) - 1)) / 2)
+  const cells = w * w - cut
+  if (cells <= 0 || size === 0) return out
   const needed = Math.max(1, Math.ceil(cells * options.minValid))
 
   for (let i = 0; i < size; i++) {
@@ -80,6 +105,10 @@ export function diamondSums(square: ContigSquare, options: DiamondOptions): Floa
     for (let row = i - w; row < i; row++) {
       const base = row * size
       for (let col = i; col < i + w; col++) {
+        // The inner corner, where the near-diagonal is. `col - row` is the
+        // separation and is always positive here, the diamond being strictly
+        // upstream-against-downstream.
+        if (col - row < ignore) continue
         const value = values[base + col]
         if (Number.isNaN(value)) continue
         total += value

@@ -268,13 +268,15 @@ function planExpected(values: Float32Array, selection: Selection): ExpectedPlan 
     }
   }
 
-  return { group, cis, trans, contacts: 'both' }
+  return { group, cis, trans, contacts: 'both', ignoreDiags: 0 }
 }
 
 /** Which contacts enter the correlation; see {@link ExpectedPlan.contacts}. */
 function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
   const value = params.contacts
-  return value === 'cis' || value === 'trans' ? value : 'both'
+  // The same fallback the descriptor makes, and it must be: one of them prices
+  // what the other runs.
+  return value === 'trans' || value === 'both' ? value : 'cis'
 }
 
 /**
@@ -297,6 +299,7 @@ async function runSquare(
   selection: Selection,
   options: {
     contacts: 'cis' | 'trans' | 'both'
+    ignoreDiags: number
     wanted: number
     tracks: Float32Array[]
     segments: FeatureBuilder
@@ -311,7 +314,11 @@ async function runSquare(
   const square = await readSquare(job, selection, { balance, value })
   job.throwIfCancelled()
 
-  const plan: ExpectedPlan = { ...planExpected(square, selection), contacts: options.contacts }
+  const plan: ExpectedPlan = {
+    ...planExpected(square, selection),
+    contacts: options.contacts,
+    ignoreDiags: options.ignoreDiags,
+  }
   const index = usableBins(square, selection.n, MIN_COVERAGE)
   if (index.length < 8) {
     job.note(
@@ -456,6 +463,8 @@ export const runCompartments: TaskRunner = async (job) => {
       ? whole.contigs.map((cid) => selectionOf(job, [job.mc.chromnames[cid]]))
       : [whole]
 
+  // cooltools' `ignore_diags`, and its arithmetic: `|col - row| < ignoreDiags`.
+  const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 2)))
   const wanted = Math.max(1, Math.min(3, Math.round(numParam(job.params, 'components', 1))))
   const tracks: Float32Array[] = []
   for (let i = 0; i < wanted; i++) tracks.push(new Float32Array(job.mc.nBins).fill(Number.NaN))
@@ -483,6 +492,7 @@ export const runCompartments: TaskRunner = async (job) => {
     job.progress(s, squares.length, `Compartments on ${label}`)
     const done = await runSquare(job, selection, {
       contacts,
+      ignoreDiags,
       wanted,
       tracks,
       segments,

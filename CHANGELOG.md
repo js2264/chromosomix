@@ -108,6 +108,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   whole sequence under it, and `*` opens the whole genome as it does in the
   browser.
 
+  The strip answers a pointer the way the browser's own does: a **hairline**
+  follows it and the cursor is a **caret**. A band is fifty pixels of shading
+  with a name in the middle, so without a line there is no way to see where in it
+  a drag would start — on a chromosome an inch wide, a megabase of ambiguity —
+  and the caret says the gesture names a stretch rather than moving an edge. The
+  head above it is the bar and nothing else: the title and its sentence of prose
+  are what a view needs when the reader has to be told where they are, and the
+  breadcrumb, the ruler and the summary line all say it better.
+
   Three things about the drag are decided rather than incidental. It **clamps to
   the sequence the press landed in**: a region names one contig, and a hand that
   overshoots chromosome III's right-hand edge has still said what it meant.
@@ -791,22 +800,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **trans** cell has no separation at all, so it is divided by the mean of its
   own pair's block, per pair rather than one global trans mean.
 
-  **And which halves it reads is a control:** *cis and trans*, *cis only*, or
-  *trans only*. These are three computations rather than one with a filter over
-  it. **Trans only** is the standard genome-wide call — the cis blocks carry a
-  near-diagonal that dominates every row, and leaving them out makes the
-  eigenvector a statement about which sequences share a nuclear compartment and
-  nothing else; it needs two sequences by definition and says so. **Cis only**
-  changes the *shape* of the run: one correlation per sequence rather than one
-  across them, because a single square with its trans blocks removed correlates
-  to a block-diagonal matrix whose leading eigenvector lives entirely on one
-  chromosome and is zero on the rest — a genome-wide cis run done that way
-  returns one chromosome's compartments and fifteen flat lines, which is wrong in
-  a way that looks like data. It is also far the cheapest of the three, since the
-  correlation is cubic: sixteen squares of 1,500 bins is a fraction of one of
-  24,000, so it is priced against the largest sequence and gated per sequence.
-  That makes it the mode that still runs at a resolution the other two are
-  refused at, and the refusal says so.
+  **And which halves it reads is a control:** *cis only* — the default — *cis and
+  trans*, or *trans only*. These are three computations rather than one with a
+  filter over it. **Cis only** changes the *shape* of the run: one correlation
+  per sequence rather than one across them, because a single square with its
+  trans blocks removed correlates to a block-diagonal matrix whose leading
+  eigenvector lives entirely on one chromosome and is zero on the rest — a
+  genome-wide cis run done that way returns one chromosome's compartments and
+  fifteen flat lines, which is wrong in a way that looks like data. It is the
+  default because it is what people mean by "the compartment track", and because
+  it is far the cheapest of the three: the correlation is cubic, so sixteen
+  squares of 1,500 bins is a fraction of one of 24,000. It is priced against the
+  largest sequence and gated per sequence, which makes it the one mode that still
+  runs at a resolution the other two are refused at — and their refusal says so.
+  **Trans only** is the other standard call: the cis blocks carry a near-diagonal
+  that dominates every row, and leaving them out makes the eigenvector a
+  statement about which sequences share a nuclear compartment and nothing else.
+  It needs two sequences by definition and says so.
 
   What it reads is the coalesced runs of what was ticked, so everything ticked
   is a single read of the whole file rather than 136 rectangles, and a scattered
@@ -816,6 +826,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   open the file coarser. The correlation is cubic in the bin count and now says
   so beside the megabytes, reports progress from inside its own loop, and can be
   cancelled there.
+
+- **`ignore_diags`, on compartments and on insulation.** cooltools' setting,
+  spelled the same way and meaning the same thing: `0` counts every cell, `1`
+  drops the main diagonal, `2` drops it and the two beside it — `|col − row| < n`
+  — and **2 is the default**, which is cooltools' default and what the numbers a
+  reader compares against were computed with.
+
+  It is not a tidiness knob. The near-diagonal is where self-ligation and
+  unligated fragments end up; those cells are the largest in the matrix and the
+  least structural. In a **compartment** run a row's correlation with its
+  neighbours is carried disproportionately by the two or three cells nearest the
+  diagonal, which say only that the bins are adjacent — and every chromosome's
+  rows agree about that, so it enters the eigenvector as a component that is
+  really a picture of the diagonal. In an **insulation** run the diamond never
+  touches the main diagonal, so what the setting trims is its *inner corner*; at
+  a small window that corner can be most of the sum, and a track carried by it is
+  a picture of how deep the near-diagonal is rather than of what crosses the bin.
+  The diamond's coverage threshold is measured against the cells it is allowed to
+  count, so raising the cut does not quietly raise the bar a bin has to clear.
+
+  Trans cells have no separation for a diagonal to be measured from, so they are
+  never affected — and the control is hidden under *trans only*, where there is
+  nothing for it to do.
 
 - **A/B compartments come out as segments, not only as an eigenvector.** E1 is a
   number per bin and the thing that gets cited is the interval — *this arm is A,

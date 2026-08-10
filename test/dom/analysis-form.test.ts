@@ -337,7 +337,7 @@ describe('ticking several sequences', () => {
 
   it('prices the whole ticked set as one correlation, not one per sequence', () => {
     const view = form(COMPARTMENTS_TASK)
-    const cost = COMPARTMENTS_TASK.estimate(context(), view.value)
+    const cost = COMPARTMENTS_TASK.estimate(context(), { ...view.value, contacts: 'both' })
     // 230 + 813 + 1531 bins, correlated together.
     expect(cost.note).toContain('2,574 bin correlation matrix')
     expect(cost.note).toContain('cis and trans')
@@ -351,7 +351,8 @@ describe('ticking several sequences', () => {
       { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
     ]
     const view = form(COMPARTMENTS_TASK, huge)
-    const refusal = COMPARTMENTS_TASK.estimate(huge, view.value).refusal ?? ''
+    const both = { ...view.value, contacts: 'both' }
+    const refusal = COMPARTMENTS_TASK.estimate(huge, both).refusal ?? ''
     expect(refusal).toContain('10,000×10,000')
     expect(refusal).toMatch(/untick some/i)
     view.destroy()
@@ -376,18 +377,25 @@ describe('ticking several sequences', () => {
  * data, and it is the reason the modes are not interchangeable.
  */
 describe('which contacts a compartment run reads', () => {
-  it('starts on cis and trans, which is the genome-wide call', () => {
+  /**
+   * Cis is the default because it is the answer most readers want at a price
+   * most files can pay: it is the object people mean by "the compartment track",
+   * and it is the only one of the three that runs at a fine resolution.
+   */
+  it('starts on cis only, and offers the other two', () => {
     const view = form(COMPARTMENTS_TASK)
-    expect(view.value.contacts).toBe('both')
-    expect(asks(view, 'Cis and trans')).toBe(true)
+    expect(view.value.contacts).toBe('cis')
     expect(asks(view, 'Cis only')).toBe(true)
+    expect(asks(view, 'Cis and trans')).toBe(true)
     expect(asks(view, 'Trans only')).toBe(true)
     view.destroy()
   })
 
   it('says which halves it is reading in the price', () => {
     const view = form(COMPARTMENTS_TASK)
-    expect(COMPARTMENTS_TASK.estimate(context(), view.value).note).toContain('cis and trans')
+    expect(COMPARTMENTS_TASK.estimate(context(), { ...view.value, contacts: 'both' }).note).toContain(
+      'cis and trans',
+    )
     expect(
       COMPARTMENTS_TASK.estimate(context(), { ...view.value, contacts: 'trans' }).note,
     ).toContain('trans only')
@@ -405,7 +413,9 @@ describe('which contacts a compartment run reads', () => {
       { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
     ]
     const view = form(COMPARTMENTS_TASK, fine)
-    expect(COMPARTMENTS_TASK.estimate(fine, view.value).refusal).toContain('10,000×10,000')
+    expect(
+      COMPARTMENTS_TASK.estimate(fine, { ...view.value, contacts: 'both' }).refusal,
+    ).toContain('10,000×10,000')
 
     const cis = COMPARTMENTS_TASK.estimate(fine, { ...view.value, contacts: 'cis' })
     expect(cis.refusal).toBeUndefined()
@@ -439,7 +449,41 @@ describe('which contacts a compartment run reads', () => {
       { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
     ]
     const view = form(COMPARTMENTS_TASK, huge)
-    expect(COMPARTMENTS_TASK.estimate(huge, view.value).refusal).toMatch(/cis contacts alone/i)
+    expect(
+      COMPARTMENTS_TASK.estimate(huge, { ...view.value, contacts: 'both' }).refusal,
+    ).toMatch(/cis contacts alone/i)
     view.destroy()
+  })
+})
+
+/**
+ * cooltools' `ignore_diags`, in the two tasks that read a matrix against its own
+ * diagonal.
+ *
+ * The near-diagonal is where self-ligation and unligated fragments land, and
+ * those cells are both the largest in the matrix and the least structural. Left
+ * in, they carry a disproportionate share of what a row correlates with and of
+ * what a small diamond sums — so the answer becomes a picture of how deep the
+ * diagonal is. Two by default, which is cooltools' default and what the numbers
+ * a reader compares against were computed with.
+ */
+describe('ignoring the near-diagonal', () => {
+  it('is asked for by both compartments and insulation, at cooltools’ default', () => {
+    for (const task of [COMPARTMENTS_TASK, INSULATION_TASK]) {
+      const view = form(task)
+      expect(view.value.ignoreDiags, task.id).toBe(2)
+      expect(asks(view, 'Diagonals to ignore'), task.id).toBe(true)
+      view.destroy()
+    }
+  })
+
+  // There is no diagonal in a trans block to ignore, so the control is not
+  // shown — a form that offers a setting with no effect is a form that has to
+  // be worked out.
+  it('is hidden under trans only, where there is no diagonal to ignore', () => {
+    const spec = COMPARTMENTS_TASK.params.find((param) => param.key === 'ignoreDiags')
+    expect(spec?.when?.({ contacts: 'trans' })).toBe(false)
+    expect(spec?.when?.({ contacts: 'cis' })).toBe(true)
+    expect(spec?.when?.({ contacts: 'both' })).toBe(true)
   })
 })

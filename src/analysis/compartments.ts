@@ -94,6 +94,24 @@ export interface ExpectedPlan {
    * lives entirely on one chromosome and is zero on the rest.
    */
   contacts: 'cis' | 'trans' | 'both'
+  /**
+   * How many diagonals of the cis blocks to leave out, cooltools' `ignore_diags`.
+   *
+   * `0` keeps every cell; `1` drops the main diagonal; `2` drops it and the two
+   * beside it — the rule is `|col − row| < ignoreDiags`, which is the same
+   * arithmetic and the same spelling as the tool everybody compares against.
+   *
+   * It matters more here than the number suggests. The near-diagonal is where a
+   * Hi-C map's self-ligation and unligated fragments end up, and those cells are
+   * both the largest in the matrix and the least related to anything structural
+   * — so a row's correlation with its neighbours is carried disproportionately
+   * by the two or three cells nearest the diagonal, which say only that the two
+   * bins are adjacent. Every chromosome's rows agree about that, so it enters the
+   * eigenvector as a component that is really a picture of the diagonal.
+   *
+   * Trans cells have no separation and are never affected.
+   */
+  ignoreDiags: number
 }
 
 /**
@@ -109,6 +127,7 @@ export function singleGroupPlan(n: number, curve: ExpectedCurve): ExpectedPlan {
     cis: [curve],
     trans: Float64Array.from([Number.NaN]),
     contacts: 'both',
+    ignoreDiags: 0,
   }
 }
 
@@ -144,9 +163,17 @@ export function observedOverExpected(
         out[r * m + c] = Number.NaN
         continue
       }
+      const offset = Math.abs(col - row)
+      // …and the near-diagonal goes the same way, for the same reason and on the
+      // same rule cooltools uses. Only in cis: a trans cell has no separation
+      // for a diagonal to be measured from.
+      if (same && offset < plan.ignoreDiags) {
+        out[r * m + c] = Number.NaN
+        continue
+      }
       const observed = values[row * n + col]
       const denominator = same
-        ? expectedAt(plan.cis[rowGroup], Math.abs(col - row))
+        ? expectedAt(plan.cis[rowGroup], offset)
         : plan.trans[rowGroup * k + colGroup]
       out[r * m + c] =
         Number.isFinite(observed) && Number.isFinite(denominator) && denominator !== 0

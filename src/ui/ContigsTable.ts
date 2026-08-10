@@ -205,27 +205,45 @@ export class ContigsTable {
             })
     }
 
+    /**
+     * **The bar replaces the heading, rather than sitting under it.**
+     *
+     * A title and a sentence of prose above a locus box is what a view needs
+     * when the reader has to be told where they are and what the box is for.
+     * With the bar there they are told both by better means: the breadcrumb says
+     * which file and which table, the ruler underneath *is* the genome, and the
+     * summary line beside it says how many sequences and how far. Two lines of
+     * furniture between the tab strip and the one control anybody uses is two
+     * lines of scrolling on every visit, spent restating what is on screen.
+     *
+     * The plain-box form keeps both, because there it is all the reader has: no
+     * ruler, no summary, and a box whose syntax is worth a sentence.
+     */
     this.el = el(
       'section',
       { class: 'view view-contigs' },
       el(
         'header',
-        { class: 'view-head' },
-        el('h2', { text: options.title ?? 'Contigs' }),
-        el('p', {
-          class: 'hint',
-          text:
-            options.hint ??
-            // 0-based and half-open, because that is what the reader does:
-            // cooler's `parse_region` applies no 1-based conversion despite the
-            // UCSC-looking syntax, and `metacooler/range.ts` mirrors the code
-            // rather than the docstrings. Saying "1-based" here put every
-            // hand-typed start one base off the region the CLI would load.
-            'Click a contig to open it as a region. Add coordinates in the region box ' +
-              'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
-        }),
-        ...(this.locus === null ? [] : [this.locus.el]),
-        ...(this.bar === null ? [] : [this.bar.el]),
+        { class: `view-head${this.bar === null ? '' : ' view-head-bare'}` },
+        ...(this.bar !== null
+          ? [this.bar.el]
+          : [
+              el('h2', { text: options.title ?? 'Contigs' }),
+              el('p', {
+                class: 'hint',
+                text:
+                  options.hint ??
+                  // 0-based and half-open, because that is what the reader does:
+                  // cooler's `parse_region` applies no 1-based conversion despite
+                  // the UCSC-looking syntax, and `metacooler/range.ts` mirrors the
+                  // code rather than the docstrings. Saying "1-based" here put
+                  // every hand-typed start one base off the region the CLI would
+                  // load.
+                  'Click a contig to open it as a region. Add coordinates in the region box ' +
+                    'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
+              }),
+              ...(this.locus === null ? [] : [this.locus.el]),
+            ]),
       ),
       this.table.el,
     )

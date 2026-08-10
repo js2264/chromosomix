@@ -169,7 +169,7 @@ describe('observedOverExpected', () => {
     })
     const trans = Float64Array.from([Number.NaN, 3, 3, Number.NaN])
     const index = Int32Array.from([0, 1, 2, 3, 4])
-    const oe = observedOverExpected(values, n, index, { group, cis, trans, contacts: 'both' })
+    const oe = observedOverExpected(values, n, index, { group, cis, trans, contacts: 'both', ignoreDiags: 0 })
 
     // Every cell is exactly its own expectation, so the whole matrix is 1 —
     // including across the boundary, where a shared curve would have produced
@@ -192,7 +192,7 @@ describe('observedOverExpected', () => {
     const curve = flat.finish()
     const trans = Float64Array.from([Number.NaN, 2, 2, Number.NaN])
     const index = Int32Array.from([0, 1, 2, 3])
-    const plan = { group, cis: [curve, curve], trans }
+    const plan = { group, cis: [curve, curve], trans, ignoreDiags: 0 }
 
     const both = observedOverExpected(values, n, index, { ...plan, contacts: 'both' })
     expect([...both].every((value) => value === 1)).toBe(true)
@@ -210,6 +210,55 @@ describe('observedOverExpected', () => {
     expect(only[2 * n + 3]).toBeNaN()
   })
 
+  /**
+   * cooltools' `ignore_diags`, and its exact arithmetic: `|col - row| < n`.
+   *
+   * The near-diagonal is where self-ligation and unligated fragments land, and
+   * those cells are the largest in the matrix. Left in, a row's correlation with
+   * its neighbours is carried by two or three cells that say only that the bins
+   * are adjacent — which every chromosome's rows agree about, so it enters the
+   * eigenvector as a component that is really a picture of the diagonal.
+   */
+  it('drops the diagonals the count asks for, and only in cis', () => {
+    const n = 4
+    const group = Int32Array.from([0, 0, 1, 1])
+    const values = new Float32Array(n * n).fill(2)
+    const flat = new ExpectedAccumulator(n)
+    for (let k = 0; k <= n; k++) flat.add(k, 2)
+    const curve = flat.finish()
+    const plan = {
+      group,
+      cis: [curve, curve],
+      trans: Float64Array.from([Number.NaN, 2, 2, Number.NaN]),
+      contacts: 'both' as const,
+    }
+    const index = Int32Array.from([0, 1, 2, 3])
+
+    // 0 keeps everything.
+    const none = observedOverExpected(values, n, index, { ...plan, ignoreDiags: 0 })
+    expect(none[0 * n + 0]).toBe(1)
+    expect(none[0 * n + 1]).toBe(1)
+
+    // 1 is the main diagonal alone.
+    const one = observedOverExpected(values, n, index, { ...plan, ignoreDiags: 1 })
+    expect(one[0 * n + 0]).toBeNaN()
+    expect(one[0 * n + 1]).toBe(1)
+
+    // 2 is it and the two beside it — offsets 0 and 1.
+    const two = observedOverExpected(values, n, index, { ...plan, ignoreDiags: 2 })
+    expect(two[0 * n + 0]).toBeNaN()
+    expect(two[0 * n + 1]).toBeNaN()
+    expect(two[1 * n + 0]).toBeNaN()
+
+    // …and the trans block is untouched at every setting: two bins on different
+    // sequences have no separation for a diagonal to be measured from. Rows 0-1
+    // are one sequence and 2-3 the other, so (0, 2) is trans.
+    for (const ignore of [0, 1, 2, 8]) {
+      const oe = observedOverExpected(values, n, index, { ...plan, ignoreDiags: ignore })
+      expect(oe[0 * n + 2], `ignoreDiags ${ignore}`).toBe(1)
+    }
+  })
+
   it('answers a trans pair with nothing in it with a gap, not with the count', () => {
     const n = 2
     const group = Int32Array.from([0, 1])
@@ -221,6 +270,7 @@ describe('observedOverExpected', () => {
       cis: [flat.finish(), flat.finish()],
       trans: Float64Array.from([Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
       contacts: 'both',
+      ignoreDiags: 0,
     })
     expect(oe[0]).toBeCloseTo(1, 12)
     expect(oe[1]).toBeNaN()
