@@ -98,6 +98,36 @@ const LUCIDE = [
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */
 const BRANDS = ['github']
 
+/**
+ * The one shape upstream does not have.
+ *
+ * `icons.ts` says nothing is drawn by hand any more, and the reason it gives is
+ * drift: a sketched icon ends up with different corner radii, a different
+ * optical weight, a chevron at a slightly different angle from the set it is
+ * imitating. None of that can happen to three straight horizontal rules. They
+ * sit on Lucide's own 24-unit grid at its own baselines (`y = 6, 12, 18`, the
+ * rows `align-left` uses), start at its own left margin, and inherit the same
+ * stroke width and round caps from the renderer — so this is Lucide's geometry
+ * with three lengths chosen, not an imitation of its style.
+ *
+ * It is here rather than in `icons.ts` so that the generated file stays the
+ * single place icons come from, and so the exception is visible next to the
+ * rule it is an exception to.
+ *
+ * The nearest upstream shape is `chart-bar-decreasing`, and it was tried first:
+ * it is these three bars plus an L-shaped axis, and at the 15 px these buttons
+ * are drawn at the axis closes the left side and the whole mark reads as a
+ * letter E.
+ */
+const HAND = {
+  /** A resolution ladder: coarse at the top, fine at the bottom, one origin. */
+  'bars-decreasing': [
+    ['path', { d: 'M3 6h18' }],
+    ['path', { d: 'M3 12h11' }],
+    ['path', { d: 'M3 18h5' }],
+  ],
+}
+
 /** Pull the drawable children out of an SVG, in document order. */
 function shapesOf(svg) {
   const body = svg.replace(/<!--[\s\S]*?-->/g, '').replace(/<title>[\s\S]*?<\/title>/g, '')
@@ -126,6 +156,9 @@ function read(path) {
 const entries = []
 for (const name of LUCIDE) {
   entries.push([name, { shapes: shapesOf(read(`node_modules/lucide-static/icons/${name}.svg`)) }])
+}
+for (const [name, shapes] of Object.entries(HAND)) {
+  entries.push([name, { shapes }])
 }
 for (const name of BRANDS) {
   entries.push([

@@ -117,7 +117,12 @@ import {
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
-import { refineEnabled, type RefineView } from './refine'
+import {
+  refineEnabled,
+  setRefineEnabled,
+  subscribeRefine,
+  type RefineView,
+} from './refine'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue, type Scale } from '../render/scale'
 import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
@@ -217,6 +222,28 @@ const COMPARE_OP_LABELS: Record<CompareOp, string> = {
  * the picture to find out what the button does.
  */
 const TURN_ICONS = { off: 'triangle', on: 'square' } as const
+
+/**
+ * Three bars, left-aligned, longest at the top: a resolution ladder, read from
+ * the coarse end down.
+ *
+ * The one mark in the set upstream does not supply; `scripts/build-icons.mjs`
+ * says why, and why the nearest Lucide shape reads as a letter E at this size.
+ *
+ * One mark for both states, lit when on, like every other toggle in these rows.
+ * The turn is the exception and earns it: triangle and square are two *pictures*
+ * of the map, so the button shows which one you would get. There is no second
+ * picture of a resolution.
+ */
+const REFINE_ICON = 'bars-decreasing'
+
+const REFINE_HINT =
+  'Adaptive resolution. Off, the block is read once and zooming magnifies it — which is what ' +
+  'every map here has always done. On, zooming past what that block can show reads the same ' +
+  'window again at a finer grid, down to the file’s own bins: the map holds still while it does, ' +
+  'with a spinner in the corner, and Escape calls it off. Panning to the edge of what has been ' +
+  'read fetches the next stretch at the same resolution. Nothing is tiled and nothing is ' +
+  'stitched — every picture is one whole block.'
 
 const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
@@ -747,6 +774,9 @@ export class MatrixPanel {
   private turned: RotatedBlock | null = null
   /** The turn control, greyed while the block on screen has no diagonal. */
   private turnButton: HTMLElement | null = null
+  /** The adaptive-resolution switch, and its unsubscribe. */
+  private refineButton: HTMLElement | null = null
+  private stopRefineWatch: (() => void) | null = null
   /** The O/E control, lit from {@link setDerive} rather than from its own click. */
   private expectedButton: HTMLElement | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
@@ -1423,6 +1453,32 @@ export class MatrixPanel {
     // of thing. Same mark, same lit state, same `aria-pressed` as every overlay.
     const picture: HTMLElement[] = []
 
+    // First of the three, because it is the one that decides what the other two
+    // are *of*: the turn changes the geometry and `O/E` changes the units, and
+    // both of those are read off whatever grid the picture is on. Off by
+    // default (`ui/refine.ts`), so this is the control that turns it on rather
+    // than a light that happens to be lit.
+    const refineButton = iconButton(
+      REFINE_ICON,
+      REFINE_HINT,
+      () => {
+        setRefineEnabled(!refineEnabled())
+      },
+      { class: 'btn btn-icon btn-toggle', size: 15 },
+    )
+    this.refineButton = refineButton
+    this.paintRefine(refineEnabled())
+    // A global preference with several panels on screen: a deck of five maps
+    // that disagreed about whether the zoom reads would be five answers to one
+    // question. Unsubscribed with the panel.
+    this.stopRefineWatch = subscribeRefine((on) => {
+      this.paintRefine(on)
+      // The note under the map tells a reader what zooming will do, and it now
+      // tells them a different thing.
+      this.schedule()
+    })
+    picture.push(refineButton)
+
     const turn = options.turn
     if (turn !== undefined && turn.onChange !== undefined) {
       // Read back through `this.options` rather than through the object
@@ -2077,6 +2133,22 @@ export class MatrixPanel {
     button.replaceChildren(icon(on ? TURN_ICONS.on : TURN_ICONS.off, { size: 15 }))
   }
 
+  /**
+   * Light the adaptive-resolution toggle.
+   *
+   * Read from the store rather than from a captured value, for the reason
+   * {@link paintTurn} is: the preference is global and can be moved from the
+   * command palette or from another panel, and a switch that answers from what
+   * it was built with is a switch that comes to disagree with the thing it
+   * controls.
+   */
+  private paintRefine(on: boolean): void {
+    const button = this.refineButton
+    if (button === null) return
+    button.setAttribute('aria-pressed', String(on))
+    button.classList.toggle('is-on', on)
+  }
+
   /** Light the O/E toggle. Its state lives in the presentation, not in the DOM. */
   private paintExpected(on: boolean): void {
     const button = this.expectedButton
@@ -2094,6 +2166,8 @@ export class MatrixPanel {
 
   /** Release the resize observer, the canvas listeners and the subscription. */
   destroy(): void {
+    this.stopRefineWatch?.()
+    this.stopRefineWatch = null
     setReadout('')
     this.featureDialog?.close()
     this.featureDialog = null

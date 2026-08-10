@@ -62,8 +62,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   exported figures too. It is the one thing about a refining map that the pixels
   cannot tell you.
 
-  On by default; **Read finer data as you zoom** in the command palette turns it
-  off, and off is exactly the old behaviour. The note under a pooled map now ends
+  **Off by default**, because a zoom that reads is a zoom that can wait and §2's
+  promise has always been that it does not. The switch is the first of the three
+  on the map's `picture` row — three bars, coarse at the top, fine at the bottom
+  — beside the 45° turn and the O/E baseline, and **Read finer data as you zoom**
+  in the command palette does the same thing. Off is exactly the old behaviour.
+  The note under a pooled map now ends
   `· zoom in to sharpen` or `· open a smaller block to sharpen` depending on
   which. `MULTIRES-ZOOM.md` is the study this came out of, with a closing section
   on where the built thing differs from the plan.

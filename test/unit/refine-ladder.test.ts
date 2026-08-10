@@ -23,13 +23,17 @@ import { describe, expect, it } from 'vitest'
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
 import {
   BlockLadder,
+  REFINE_DEFAULT,
   chooseRung,
   clip,
   covers,
   gridFor,
   pad,
   recentre,
+  refineEnabled,
   rungsOf,
+  setRefineEnabled,
+  subscribeRefine,
 } from '@/ui/refine'
 import type { Extent } from '@/types'
 import type { MatrixResult } from '@/worker/protocol'
@@ -105,6 +109,37 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent> } = {}) {
 }
 
 const WHOLE: Extent = [0, 50_000]
+
+describe('the preference', () => {
+  it('is off until somebody asks for it', () => {
+    // §2's promise is that pan and zoom perform no I/O, and that is the promise
+    // the app has always made. A zoom that reads is a zoom that can wait, and on
+    // a large cooler the wait is real — a good trade when it is asked for and a
+    // surprising one when it is not. So the default is the behaviour that keeps
+    // the promise, and the switch is on the map's own controls.
+    expect(REFINE_DEFAULT).toBe(false)
+  })
+
+  it('answers the default where there is no storage to read', () => {
+    // Node has no `localStorage`, and neither does a browser in some private
+    // modes or a strict embedding. Losing a preference must never mean losing
+    // the picture, so the read is wrapped and the default stands.
+    expect(refineEnabled()).toBe(REFINE_DEFAULT)
+  })
+
+  it('tells every panel at once', () => {
+    // One preference, several maps: a deck of five that disagreed about whether
+    // the zoom reads would be five answers to one question.
+    const heard: boolean[] = []
+    const stop = subscribeRefine((on) => heard.push(on))
+    setRefineEnabled(true)
+    setRefineEnabled(false)
+    stop()
+    setRefineEnabled(true)
+    setRefineEnabled(REFINE_DEFAULT)
+    expect(heard, 'and stops telling one that has gone').toEqual([true, false])
+  })
+})
 
 describe('the coverage and padding arithmetic', () => {
   it('covers only what it contains', () => {

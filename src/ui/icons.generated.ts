@@ -517,6 +517,13 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M3 15h18"}],
     ],
   },
+  'bars-decreasing': {
+    shapes: [
+    ['path', {"d":"M3 6h18"}],
+    ['path', {"d":"M3 12h11"}],
+    ['path', {"d":"M3 18h5"}],
+    ],
+  },
   'github': {
     filled: true,
     shapes: [

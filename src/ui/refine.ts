@@ -74,29 +74,6 @@ export const REFINE_PAD = 0.5
 export const WIDEN_REACH = 4
 
 /**
- * Travelling — panning against the edge of the block in hand — moves the window
- * and **must not change its size**.
- *
- * The first attempt at this padded the way a zoom does, and it was wrong in a
- * way that only showed up in the app: a reader who had zoomed a chromosome down
- * to 100 bp, panned to the edge of what they had, and got their next block back
- * at 400 bp. Panning is not a change of scale, and any rule that makes it one is
- * taking away the thing the reader just asked for.
- *
- * So a travel read asks for **the same span the block already covers**,
- * recentred on the view. `fitPlan` fits a fixed cell count to whatever it is
- * given, so an identical span comes back at an identical grid — the picture does
- * not change resolution, it changes place. And because the block is by
- * construction wider than the view, recentring buys real ground in the direction
- * of travel rather than a screen's worth.
- *
- * Near the ends of a sequence the clip makes the span *shorter*, and the reader
- * gets a finer grid than they had. That is not a special case to guard: they are
- * looking at less genome, so there is less to fit, which is the same rule
- * everywhere else in this module.
- */
-
-/**
  * A grid this much coarser than the picture could show is worth replacing.
  *
  * §8.4's rule for the tracks, applied to the map: refetch when *"the required
@@ -106,28 +83,6 @@ export const WIDEN_REACH = 4
  * every step is a visible sharpening.
  */
 export const REFINE_FACTOR = 2
-
-/**
- * A refine is issued on the **first frame that needs one**, not after a pause.
- *
- * This was a trailing debounce — watch the window, read once it stops moving —
- * because there is no gesture-end hook in the pan/zoom path and a read per frame
- * of a drag would be twenty reads per wheel spin. It is gone, and what replaced
- * it is better at the same job: the view **freezes** for the duration of the
- * read (`HeatmapView.setFrozen`), so the gesture cannot continue and there is no
- * second frame to debounce. One crossing is one read, by construction rather
- * than by timing.
- *
- * It is also the more honest interaction. A debounce hides the moment the
- * resolution changes — the picture keeps moving under the reader and then
- * silently sharpens, at a moment they did not cause and cannot predict. A freeze
- * puts the change where it happened: this is the edge of what the block in hand
- * can show, and here is what it costs to go past it.
- *
- * The `inflight` guard is what makes the rule safe rather than the freeze: only
- * one read is ever outstanding, so even a view that never froze could not issue
- * more than one at a time.
- */
 
 /** Blocks kept so that zooming back out costs nothing. */
 export const HELD_BLOCKS = 3
@@ -279,6 +234,15 @@ export class BlockLadder {
    */
   consider(view: RefineView): void {
     if (this.disposed) return
+    // Issued on the **first frame that needs one**, not after a pause. This was
+    // a trailing debounce — watch the window, read once it stops moving —
+    // because there is no gesture-end hook in the pan/zoom path and a read per
+    // frame of a drag would be twenty reads per wheel spin. What replaced it is
+    // better at the same job: the view *freezes* for the duration of the read
+    // (`HeatmapView.setFrozen`), so the gesture cannot continue and there is no
+    // second frame to debounce. One crossing is one read, by construction rather
+    // than by timing — and the `inflight` guard below is what makes that safe
+    // rather than the freeze, since only one read is ever outstanding.
     const wanted = this.plan(view)
     const key = keyOf(wanted.rows, wanted.cols)
 
@@ -517,9 +481,19 @@ export function pad(extent: Extent, fraction: number): Extent {
 /**
  * `held`'s own span, moved to sit around the middle of `at`.
  *
- * The travel read: same width, new place. Written as a span rather than as a
- * shift so that it does not matter how far the reader has gone — a jump and a
- * nudge produce the same shape of request, centred where they now are.
+ * The travel read: **same width, new place**, and the width is the point. The
+ * first version of this padded the way a zoom does, and it was wrong in a way
+ * that only showed up in the app — a reader who had zoomed a chromosome down to
+ * 100 bp, panned to the edge of what they had, and got their next block back at
+ * 400 bp. Panning is not a change of scale, and any rule that makes it one takes
+ * away the thing the reader just asked for. `fitPlan` fits a fixed cell count to
+ * whatever it is given, so an identical span returns an identical grid.
+ *
+ * Written as a span rather than as a shift so that it does not matter how far
+ * the reader has gone: a jump and a nudge produce the same shape of request,
+ * centred where they now are. Near the ends of a sequence the caller's clip
+ * makes it *shorter*, and they get a finer grid — which is the same rule as
+ * everywhere else here, not a special case.
  */
 export function recentre(held: Extent, at: Extent): Extent {
   const width = Math.max(1, held[1] - held[0])
@@ -578,15 +552,17 @@ function isAbort(err: unknown): boolean {
 const REFINE_KEY = 'metacooler-viewer:refine'
 
 /**
- * On.
+ * Off.
  *
- * The alternative — off, with a toggle — ships a feature nobody finds, and the
- * honest note under a pooled map would go on telling readers to open a smaller
- * block while the app could have done it for them. Off is still one click away,
- * and it restores today's behaviour exactly: a block read once, and a zoom that
- * magnifies it.
+ * A zoom that reads is a zoom that can *wait*, and on a large cooler the wait is
+ * real: the map holds still, a spinner turns, and what the reader gets back is a
+ * different grid from the one they were reading. That is a good trade when it is
+ * asked for and a surprising one when it is not — and §2's promise, that pan and
+ * zoom perform no I/O, is the promise the app has always made. So the default is
+ * the behaviour that keeps it, and the feature is one press away on the map's own
+ * controls, beside the two other switches that change what picture this is.
  */
-export const REFINE_DEFAULT = true
+export const REFINE_DEFAULT = false
 
 let refining: boolean | null = null
 const refineListeners = new Set<(on: boolean) => void>()

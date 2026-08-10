@@ -65,8 +65,11 @@ than beside it:
   file. §2's own case is untouched;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
-- **it is a preference**, on by default and one command away from off, and off is exactly the
-  behaviour above with the fourth clause absolute.
+- **it is a preference, and it is off.** The default is the behaviour that keeps this clause
+  absolute: a block read once, and a zoom that magnifies it. Refinement is one press away on the
+  map's own controls — first of the three switches that change *what picture this is*, before the
+  turn and the baseline — because a zoom that reads is a zoom that can wait, and a wait nobody asked
+  for is a surprise rather than a feature.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
