@@ -1250,6 +1250,10 @@ export class HeatmapView {
   private labelPolicies: { rows: string; cols: string } = { rows: 'none', cols: 'none' }
   private colorScale: ColorScale
   private dirtyRaster = false
+  /**
+   * How many times this view has built a raster — see {@link rasterisations}.
+   */
+  private rasterCount = 0
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -1649,6 +1653,71 @@ export class HeatmapView {
   }
 
   /**
+   * Replace the block with one on a **different grid**, and show a named window
+   * of it — the swap a zoom-to-refine makes.
+   *
+   * The third of the three ways a block arrives, and the only one that survives
+   * a change of bin size. {@link setMatrix} refits, which throws away the pan and
+   * zoom the reader arrived at. {@link reshape} keeps them — but it keeps them as
+   * *cell* coordinates, and a cell is a different number of base pairs on every
+   * grid, so a block read twice as fine would come back showing half as much
+   * genome at twice the magnification. Neither is wrong; both were written for a
+   * block whose cells mean what the outgoing block's cells meant.
+   *
+   * So the window is passed in rather than preserved. The caller holds it in base
+   * pairs across the swap and converts it back through the *incoming* block's own
+   * axes (`MatrixPanel.regrid`), which is the same conversion the deck's
+   * navigation lock does between two panels of different resolution
+   * (`panels/lock.ts`) and is the only form that survives a regrid.
+   *
+   * **The gauge is not touched unless one is given.** That is what stops the
+   * colours moving under the reader's hand: the auto range is measured from the
+   * widest block held and memoised on it, so refining the picture re-colours
+   * nothing and a loop that was bright at fit zoom is the same brightness when
+   * the finer data lands. Passing a gauge nulls the memo and re-measures, which
+   * is what widening past the block already held has to do.
+   *
+   * One {@link changed} for the whole operation, so no frame is ever drawn
+   * against the incoming block at the outgoing block's zoom.
+   */
+  regrid(
+    matrix: DenseMatrix,
+    show: { rows: [number, number]; cols: [number, number] },
+    options: {
+      separators?: Separator[] | SeparatorSet
+      /**
+       * `undefined` keeps the gauge in place — the ordinary refine, and what
+       * makes it free. A block *replaces* it, which is what widening past what
+       * was held has to do. `null` clears it, so the range is measured from the
+       * drawn block again.
+       */
+      gauge?: DenseMatrix | null
+    } = {},
+  ): void {
+    this.matrix = matrix
+    if (options.separators !== undefined) {
+      this.separators = Array.isArray(options.separators)
+        ? { rows: options.separators, cols: options.separators }
+        : options.separators
+    }
+    this.blockCache = { rows: null, cols: null }
+    this.dirtyRaster = true
+    this.pooled = null
+    this.hoverCell = null
+    if (options.gauge !== undefined) {
+      this.gauge = options.gauge
+      this.gaugeRange = null
+    }
+    this.rowScale.setFull([0, Math.max(1, matrix.nrows)])
+    this.colScale.setFull([0, Math.max(1, matrix.ncols)])
+    this.recomputeBaseZoom()
+    this.placeCellWindow(show.rows, show.cols)
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
+  /**
    * The same grid, new numbers — which means the array must be the same length.
    *
    * One caller can hand over another: a **turned** map, whose band is re-cut
@@ -1885,6 +1954,23 @@ export class HeatmapView {
   }
 
   /**
+   * Rasters built since this view was constructed.
+   *
+   * The module header states that re-rasterising happens on exactly three events
+   * — a new matrix, a new colour scale, a new colormap — and never on a pan, a
+   * zoom or a resize. Until now that was a claim with nothing behind it: every
+   * canvas stub in the suite makes `putImageData` a no-op, so a regression that
+   * re-coloured a hundred million cells per wheel notch would have gone green.
+   *
+   * It is exposed rather than inferred because the alternative is counting
+   * `putImageData` calls through a mock, which measures the stub instead of the
+   * rule. See `test/unit/raster-count.test.ts`.
+   */
+  get rasterisations(): number {
+    return this.rasterCount
+  }
+
+  /**
    * What is on screen, in matrix cells: `[lo, hi)` per axis.
    *
    * The transform stated as a *window* rather than as the origin-and-zoom it is
@@ -1918,6 +2004,24 @@ export class HeatmapView {
    * `ViewportLock` expects to come back.
    */
   showCellWindow(rows: [number, number], cols: [number, number]): void {
+    this.placeCellWindow(rows, cols)
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
+  /**
+   * The placement half of {@link showCellWindow}, without the clamp, the sync or
+   * the notification.
+   *
+   * Split out for {@link regrid}, which has to reset the block's scales *before*
+   * the window is placed and must not announce a half-installed state in
+   * between. The two callers therefore share the arithmetic rather than each
+   * keeping a copy of "the zoom that fits the larger of two spans", which is the
+   * line that keeps cells square and that a second copy would eventually get
+   * wrong on one axis only.
+   */
+  private placeCellWindow(rows: [number, number], cols: [number, number]): void {
     const plot = this.plotRect
     const rowSpan = Math.max(1e-6, rows[1] - rows[0])
     const colSpan = Math.max(1e-6, cols[1] - cols[0])
@@ -1929,9 +2033,6 @@ export class HeatmapView {
     )
     this.originX = (cols[0] + cols[1]) / 2 - plot.width / this.zoom / 2
     this.originY = (rows[0] + rows[1]) / 2 - plot.height / this.zoom / 2
-    this.clampView()
-    this.syncScales()
-    this.changed()
   }
 
   private dims(): { nrows: number; ncols: number } {
@@ -2990,6 +3091,7 @@ export class HeatmapView {
 
   private rasterizeNow(): void {
     if (this.matrix === null) return
+    this.rasterCount += 1
     const balanced = this.colorScale.balanced === true
     // `centre` is in the key for the same reason the other two are: it selects
     // the reduction, so a pooling made for counts is the wrong array for a ratio

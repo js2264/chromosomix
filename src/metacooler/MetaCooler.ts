@@ -781,7 +781,7 @@ export class MetaCooler {
           aggregator.place(b1, b2, value)
         }
       },
-      options,
+      scanFor(options, q.value),
     )
     return { ...aggregator.finish(), contigsPerCell: aggregator.perCell }
   }
@@ -862,7 +862,7 @@ export class MetaCooler {
           acc.place(b1, b2, value)
         }
       },
-      options,
+      scanFor(options, q.value),
     )
     return {
       ...acc.finish(),
@@ -1286,6 +1286,19 @@ function toInt32(table: Table, column: string): Int32Array {
     return out
   }
   return Int32Array.from(table.numbers(column))
+}
+
+/**
+ * Scan options carrying the query's own value column.
+ *
+ * The streaming reads take their column through `SpanScanOptions` and the dense
+ * read takes it through `MatrixQuery`; this is the one line that joins them, and
+ * it exists so that no caller of the pooled or rolled-up path can forget. An
+ * absent column is left absent rather than defaulted here, so the default stays
+ * in one place (`DEFAULT_COUNT_COLUMN`).
+ */
+function scanFor(options: SpanScanOptions, value: string | undefined): SpanScanOptions {
+  return value === undefined ? options : { ...options, value }
 }
 
 /** A bin range clamped onto the file, matching `readDenseMatrix`'s validation. */
