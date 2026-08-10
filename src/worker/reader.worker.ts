@@ -16,7 +16,9 @@ import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
+import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
+import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
   aggregatedAxes,
@@ -74,7 +76,39 @@ interface Session {
   mc: MetaCooler
   source: ByteSource
   sourceKind: SourceKind
+  /**
+   * Sibling rungs of this file, opened on demand and keyed by entry name.
+   *
+   * The worker has always held exactly one map, and for a *navigation* that is
+   * still right — opening somewhere else means the last place is finished with.
+   * A zoom is not a navigation: a reader pulling back from a 1 kb window to a
+   * whole chromosome wants the 10 kb rung for one frame and the 1 kb rung again
+   * a second later, and re-opening the file each way round would throw away the
+   * contig table and the `bin1_offset` cache twice for a picture that never
+   * left the same file.
+   *
+   * So the rungs a zoom touches are *retained*, over the same mounted bytes —
+   * `createSource` hands back the very same `ByteSource` for the same URL or the
+   * same `File` (`worker/sources.ts`), so a second rung costs one `h5.File` and
+   * that rung's own metadata, and no download at all. Bounded, because an
+   * eleven-level `.mcool` should not end up with eleven HDF5 handles open: the
+   * least recently used is closed past {@link MAX_RUNGS}.
+   */
+  rungs: Map<string, MetaCooler>
+  /** Rung names, most recently used first — the eviction order. */
+  recent: string[]
 }
+
+/**
+ * Sibling rungs held open at once, besides the one that was opened.
+ *
+ * Two is what a zoom actually uses: the rung the picture is on, and the one it
+ * is heading for. A third covers a reader stepping through levels without
+ * settling. Each costs an HDF5 handle and that rung's chrom table, which on a
+ * cooler is kilobytes — the number is small because there is no reason for it to
+ * be large, not because a larger one would break.
+ */
+const MAX_RUNGS = 3
 
 let session: Session | null = null
 let calls = 0
@@ -86,11 +120,72 @@ function requireSession(): Session {
   return session
 }
 
+/**
+ * The map a request names: the open one, or a sibling rung of it.
+ *
+ * Opened lazily and over the retained source, so this is one `h5.File` and that
+ * rung's own metadata rather than a fresh mount. A rung this file does not have
+ * — a stale link, a hand-edited request — falls back to the open map rather than
+ * refusing: the block that comes back is then the one the open map holds, which
+ * is a coarser or finer picture of the same place and never a wrong one.
+ */
+async function mapFor(rung: string | undefined): Promise<MetaCooler> {
+  const active = requireSession()
+  if (rung === undefined || rung === '') return active.mc
+  if (!active.mc.entries.includes(rung)) return active.mc
+  const held = active.rungs.get(rung)
+  if (held !== undefined) {
+    touchRung(active, rung)
+    return held
+  }
+  const group = active.mc.entryGroup === '' ? 'entries' : active.mc.entryGroup
+  const { path } = parseUri(active.mc.uri)
+  let opened: MetaCooler
+  try {
+    opened = await MetaCooler.open(`${path}::${group}/${rung}`, active.source)
+  } catch {
+    // A rung that will not open is not a reason to fail the read: the open map
+    // answers the same question at a different resolution.
+    return active.mc
+  }
+  active.rungs.set(rung, opened)
+  touchRung(active, rung)
+  while (active.recent.length > MAX_RUNGS) {
+    const oldest = active.recent.pop()
+    if (oldest === undefined) break
+    active.rungs.get(oldest)?.close()
+    active.rungs.delete(oldest)
+  }
+  return opened
+}
+
+function touchRung(active: Session, rung: string): void {
+  active.recent = [rung, ...active.recent.filter((name) => name !== rung)]
+}
+
+function releaseRungs(active: Session | null): void {
+  if (active === null) return
+  for (const held of active.rungs.values()) held.close()
+  active.rungs.clear()
+  active.recent = []
+}
+
+/**
+ * A request's extent, on whichever rung is about to answer it.
+ *
+ * The arithmetic is `metacooler/coords.ts`'s, where it can be tested against a
+ * real `.mcool` — this worker module runs `getH5()` at load and cannot be
+ * imported into a test, which is the same reason `snapToGrid`'s rule is mirrored
+ * in `test/unit/anchored-grid.test.ts` rather than exercised directly.
+ */
+function crossRung(from: MetaCooler, to: MetaCooler, extent: Extent): Extent {
+  return from === to ? extent : crossResolution(from.coords, to.coords, extent)
+}
+
 function post(response: WorkerResponse, transfers: Transferable[] = []): void {
   ctx.postMessage(response, transfers)
 }
 
-/** Raised when the user cancels a scan; the client maps it to a quiet no-op. */
 /**
  * The bar and the way out, for the reads that walk a whole file.
  *
@@ -106,6 +201,7 @@ function scanHooks(id: number): { cancelled: () => boolean; onProgress: (done: n
   }
 }
 
+/** Raised when the user cancels a scan; the client maps it to a quiet no-op. */
 function abortError(): Error {
   const err = new Error('cancelled')
   err.name = 'AbortError'
@@ -117,6 +213,7 @@ function abortError(): Error {
 // ---------------------------------------------------------------------------
 
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
+  releaseRungs(session)
   session?.mc.close()
   session = null
   // A cancel that arrives after its target finished leaves its id behind, since
@@ -127,7 +224,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
 
   const source = await createSource(request.source)
   const mc = await MetaCooler.open(request.uri, source)
-  session = { mc, source, sourceKind: request.source.kind }
+  session = { mc, source, sourceKind: request.source.kind, rungs: new Map(), recent: [] }
 
   return {
     uri: mc.uri,
@@ -213,33 +310,64 @@ function hintFor(rows: Extent, cols: Extent): string {
 async function handleMatrix(
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
 ): Promise<MatrixResult> {
-  const { mc } = requireSession()
-  const cols = request.cols ?? request.rows
+  const open = requireSession().mc
+  // The rung the caller named, and the request's own extents translated onto it.
+  // Both are no-ops for the ordinary read, which names no rung: `mapFor` hands
+  // back the open map and `crossRung` returns the extent it was given.
+  const mc = await mapFor(request.rung)
+  const cols = crossRung(open, mc, request.cols ?? request.rows)
+  const rows = crossRung(open, mc, request.rows)
   const asked = planOf(request.binsPerCell, request.contigsPerCell)
+  const asked_ = { rows: request.rows, cols: request.cols ?? request.rows }
   if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
-    return pooledResult(mc, request, request.rows, cols, asked)
+    return atRung(mc, open, asked_, await pooledResult(mc, request, rows, cols, asked))
   }
-  const planned = fitPlan(mc, request.rows, cols)
+  const planned = fitPlan(mc, rows, cols)
   if (planned !== null) {
-    return pooledResult(
+    return atRung(
       mc,
-      request,
-      snapToGrid(mc, request.rows, planned),
-      snapToGrid(mc, cols, planned),
-      planned,
+      open,
+      asked_,
+      await pooledResult(
+        mc,
+        request,
+        snapToGrid(mc, rows, planned),
+        snapToGrid(mc, cols, planned),
+        planned,
+      ),
     )
   }
   const dense = await mc.matrix(
     {
-      rows: request.rows,
+      rows,
       cols,
       ...(request.balance === true ? { balance: true } : {}),
       ...(request.value === undefined ? {} : { value: request.value }),
       ...(request.budgetBytes === undefined ? {} : { budgetBytes: request.budgetBytes }),
     },
-    hintFor(request.rows, cols),
+    hintFor(rows, cols),
   )
-  return binLevelResult(mc, dense, request.genomes === true)
+  return atRung(mc, open, asked_, binLevelResult(mc, dense, request.genomes === true))
+}
+
+/**
+ * Stamp a block with the bin size it was actually read at.
+ *
+ * Only where that is not the open map's, so an ordinary read carries nothing
+ * extra and the field means what it says: *this block came from somewhere else*.
+ * Without it a 5 kb picture read off a coarse rung would be labelled with the
+ * 1 kb the session was opened at, which is the number a figure caption and a
+ * methods section both take.
+ */
+function atRung(
+  mc: MetaCooler,
+  open: MetaCooler,
+  request: { rows: Extent; cols: Extent },
+  result: MatrixResult,
+): MatrixResult {
+  return mc === open
+    ? result
+    : { ...result, binsize: mc.binsize, source: { rows: request.rows, cols: request.cols } }
 }
 
 /**
@@ -950,7 +1078,10 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
     case 'contigs':
       return handleContigs()
     case 'range':
-      return parseMetacoolerRange(requireSession().mc, request.range)
+      // Resolved against the rung the caller named, because a range is a bin
+      // extent and bin extents are per level. Absent, it is the open map's, as
+      // every call but a zoom-driven one leaves it.
+      return parseMetacoolerRange(await mapFor(request.rung), request.range)
     case 'matrix':
       return handleMatrix(request)
     case 'aggregate':
@@ -969,6 +1100,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       cancelled.add(request.target)
       return null
     case 'close':
+      releaseRungs(session)
       session?.mc.close()
       session = null
       cancelled.clear()

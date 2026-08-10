@@ -21,7 +21,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
-import { BlockLadder, SETTLE_MS, clip, covers, gridFor, pad } from '@/ui/refine'
+import {
+  BlockLadder,
+  SETTLE_MS,
+  chooseRung,
+  clip,
+  covers,
+  gridFor,
+  pad,
+  rungsOf,
+} from '@/ui/refine'
 import type { Extent } from '@/types'
 import type { MatrixResult } from '@/worker/protocol'
 
@@ -143,6 +152,58 @@ describe('the coverage and padding arithmetic', () => {
     expect(gridFor([0, 49_792], [0, 49_792])).toBe(13)
     // The widest axis decides, because the reader shares one grid across both.
     expect(gridFor([0, 100], [0, 49_792])).toBe(13)
+  })
+})
+
+describe('choosing a rung of a laddered file', () => {
+  const YEAST = rungsOf(['1000', '2000', '5000', '10000'])
+
+  it('reads a ladder as bin sizes, finest first', () => {
+    expect(YEAST).toEqual([
+      { name: '1000', binsize: 1000 },
+      { name: '2000', binsize: 2000 },
+      { name: '5000', binsize: 5000 },
+      { name: '10000', binsize: 10000 },
+    ])
+    // HDF5 group order is alphabetical, which puts 10000 before 2000. §3.4's
+    // rule is that the names *are* the bin sizes, so the sort is numeric.
+    expect(rungsOf(['10000', '1000', '2000']).map((r) => r.binsize)).toEqual([1000, 2000, 10000])
+  })
+
+  it('is empty for anything that is not a ladder', () => {
+    // A sample collection: names with no order to exploit (§3.4).
+    expect(rungsOf(['rep1', 'rep2'])).toEqual([])
+    // A plain file, which is most of them.
+    expect(rungsOf([])).toEqual([])
+    // Not every name an integer is not a ladder either.
+    expect(rungsOf(['1000', 'raw'])).toEqual([])
+    expect(rungsOf(['0', '1000'])).toEqual([])
+  })
+
+  it('takes the coarsest rung whose bins still fill a cell', () => {
+    // A whole 12.1 Mb yeast genome at 1 kb: 12,100 bins into 4,096 cells is
+    // about 2,954 bp a cell, so the 2 kb level fits and the 5 kb one would put
+    // more than one of its bins in a cell — which is the pooling this avoids.
+    expect(chooseRung(YEAST, 12_100, 1000)).toBe('2000')
+    // Ten times as much genome, ten times coarser a cell.
+    expect(chooseRung(YEAST, 121_000, 1000)).toBe('10000')
+  })
+
+  it('names no rung once the window is small enough for the open map', () => {
+    // Inside the cap, a cell is one bin and the finest level is the open one.
+    expect(chooseRung(YEAST, 2_000, 1000)).toBeUndefined()
+    expect(chooseRung(YEAST, POOLED_CELL_CAP, 1000)).toBeUndefined()
+  })
+
+  it('names nothing at all for a file with no ladder', () => {
+    expect(chooseRung([], 100_000, 1000)).toBeUndefined()
+  })
+
+  it('never names the rung that is already open', () => {
+    // The session opened at 2 kb; a window that wants 2 kb cells wants what is
+    // already in hand, and a request naming it would be a re-open for nothing.
+    expect(chooseRung(YEAST, 8_000, 2000)).toBeUndefined()
+    expect(chooseRung(YEAST, 40_000, 2000)).toBe('10000')
   })
 })
 

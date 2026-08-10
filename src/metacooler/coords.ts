@@ -143,3 +143,76 @@ export class Coords {
     return out
   }
 }
+
+/**
+ * A bin extent of one resolution, as a bin extent of another.
+ *
+ * What a zoom needs the moment it is allowed to change rung: the reader's own
+ * `matrix` request speaks bins, and **bin indices are not comparable across the
+ * levels of an `.mcool`**. Each level has its own `chrom_offset`, and each
+ * sequence's last bin is short by its own amount, so the same index means a
+ * different place — a different *chromosome*, after a few sequences have gone
+ * by. `test/unit/coarse-extent.test.ts` is a whole file about a real cooler
+ * where the arithmetic and the bin table disagree, and this is the conversion
+ * that has to survive it.
+ *
+ * So it goes through base pairs, which is the only currency two levels share,
+ * and it goes through them **per contig** rather than globally: an extent is
+ * anchored to the sequence its first bin falls in, exactly as the reader's own
+ * grid is (`snapToGrid`).
+ *
+ * Rounded **outward** at both ends. A coarse level cannot answer a fine
+ * question exactly, and a window that contains what was asked for is the honest
+ * failure — the same rule the deck's navigation lock follows when it moves a
+ * coarse panel (`panels/lock.ts`), and for the same reason: showing slightly
+ * more than was asked for is a picture, and showing slightly less is a picture
+ * with something missing from it.
+ *
+ * An extent spanning several contigs converts its two ends independently, which
+ * is right: the ends are what bound the read, and every sequence between them is
+ * inside it whichever level it is measured on.
+ */
+export function crossResolution(from: Coords, to: Coords, extent: readonly [number, number]): [number, number] {
+  if (from === to || from.binsize === to.binsize) return [extent[0], extent[1]]
+  if (extent[1] <= extent[0]) {
+    const at = Math.min(Math.max(extent[0], 0), to.nBins)
+    return [at, at]
+  }
+  const inFile = (bin: number): number => Math.min(Math.max(bin, 0), Math.max(0, from.nBins - 1))
+
+  const loContig = from.contigOfBin(inFile(extent[0]))
+  const [fromLoStart] = from.contigBinExtent(loContig)
+  const [toLoStart, toLoEnd] = to.contigBinExtent(loContig)
+  // **A window that starts at a sequence starts at that sequence**, whatever the
+  // two bin sizes divide into. This is not the same answer the arithmetic gives:
+  // it is the `chrom_offset` rule the whole coordinate model rests on, and it is
+  // what makes converting a whole chromosome and converting it back exact.
+  const lo =
+    extent[0] <= fromLoStart
+      ? toLoStart
+      : Math.min(
+          Math.max(toLoStart, toLoEnd - 1),
+          toLoStart + Math.floor(((extent[0] - fromLoStart) * from.binsize) / to.binsize),
+        )
+
+  // The contig of the last bin *inside* the extent, not of the exclusive end —
+  // which sits in the next sequence whenever a window ends on a boundary.
+  const hiContig = from.contigOfBin(inFile(extent[1] - 1))
+  const [fromHiStart, fromHiEnd] = from.contigBinExtent(hiContig)
+  const [toHiStart, toHiEnd] = to.contigBinExtent(hiContig)
+  // And the mirror of the rule above: a window that reaches the end of a
+  // sequence reaches the end of it at the other level too. The arithmetic would
+  // fall short here on exactly the files this matters for — a coarse level whose
+  // trailing part-bin was absorbed rather than given a row has *fewer* bins than
+  // `ceil(length / binsize)`, so the last of them covers more base pairs than
+  // its width says (`test/unit/coarse-extent.test.ts`).
+  const hi =
+    extent[1] >= fromHiEnd
+      ? toHiEnd
+      : Math.min(
+          toHiEnd,
+          toHiStart + Math.ceil(((extent[1] - fromHiStart) * from.binsize) / to.binsize),
+        )
+
+  return [Math.min(lo, Math.max(0, hi - 1)), Math.min(to.nBins, Math.max(lo + 1, hi))]
+}

@@ -36,7 +36,7 @@ import {
   type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
-import { attachRefine, type BlockLadder } from './refine'
+import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 import { stepper } from './Stepper'
@@ -44,6 +44,8 @@ import { stepper } from './Stepper'
 export interface RegionViewProps {
   client: ReaderClient
   binsize: number
+  /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
+  rungs?: readonly string[]
   /**
    * A control the session puts on the title line, after the box.
    *
@@ -313,8 +315,9 @@ export class RegionView {
     this.ladder = null
     const ceiling = await this.wholeOf(rows, cols)
     if (this.disposed || ceiling === null) return
-    const query = (rowExtent: [number, number], colExtent: [number, number]) => ({
+    const query = (rowExtent: [number, number], colExtent: [number, number], rung?: string) => ({
       kind: 'matrix' as const,
+      ...(rung === undefined ? {} : { rung }),
       rows: rowExtent,
       ...(cols === undefined ? {} : { cols: colExtent }),
       balance: this.props.balance,
@@ -324,13 +327,14 @@ export class RegionView {
       panel: this.panel,
       ceiling,
       binsize: this.props.binsize,
-      read: (rowExtent, colExtent) => {
-        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent))
+      rungs: rungsOf(this.props.rungs ?? []),
+      read: (rowExtent, colExtent, rung) => {
+        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent, rung))
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
             const second = await secondBlock(this.props.compare, (client) =>
-              client.request<'matrix'>(query(rowExtent, colExtent)),
+              client.request<'matrix'>(query(rowExtent, colExtent, rung)),
             )
             return second === undefined ? { result: block } : { result: block, second }
           }),

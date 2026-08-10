@@ -17,7 +17,7 @@ import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { attachRefine, type BlockLadder } from './refine'
+import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -33,6 +33,8 @@ export interface ScaleState {
 export interface GenomeViewProps {
   client: ReaderClient
   binsize: number
+  /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
+  rungs?: readonly string[]
   genome: string
   level: 'bin' | 'contig'
   scale: ScaleState
@@ -290,8 +292,14 @@ export class GenomeView {
       panel: this.panel,
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
-      read: (rows, cols) => {
-        const own = this.props.client.cancellable<'matrix'>({ kind: 'matrix', rows, cols })
+      rungs: rungsOf(this.props.rungs ?? []),
+      read: (rows, cols, rung) => {
+        const own = this.props.client.cancellable<'matrix'>({
+          kind: 'matrix',
+          ...(rung === undefined ? {} : { rung }),
+          rows,
+          cols,
+        })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },
     })

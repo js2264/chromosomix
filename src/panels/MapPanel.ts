@@ -39,7 +39,7 @@ import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
-import { attachRefine, type BlockLadder } from '../ui/refine'
+import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
 
@@ -832,9 +832,11 @@ export class MapPanel {
       panel: this.panel as MatrixPanel,
       ceiling: { rows: result.rowExtent, cols: result.colExtent },
       binsize: info.binsize ?? 1,
-      read: (rows, cols) => {
+      rungs: rungsOf(info.entries),
+      read: (rows, cols, rung) => {
         const own = this.client.cancellable<'matrix'>({
           kind: 'matrix',
+          ...(rung === undefined ? {} : { rung }),
           rows,
           cols,
           ...balance,
