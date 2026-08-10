@@ -33,6 +33,13 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     return []
   }
 
+  // The reader's names, not the store's ids. An id is `a1`, and a heatmap whose
+  // axes read `a1, a2, a3` is a figure that has to be decoded against a panel —
+  // which is the one thing a figure must not need. The ids stay as the keys
+  // everything is looked up by; only what is *written* changes.
+  const nameOf = (id: string): string => job.inputs.labels?.[id] ?? id
+  const names = entries.map(nameOf)
+
   const regions = await unitsOf(job)
   if (regions.length === 0) {
     job.note('No unit to compare over. Check that the tracks and the assembly share contig names.')
@@ -45,7 +52,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   const columns: Float64Array[] = []
   for (let i = 0; i < entries.length; i++) {
     job.throwIfCancelled()
-    job.progress(i, entries.length, entries[i])
+    job.progress(i, entries.length, names[i])
     columns.push(await valuesFor(job, entries[i], regions, step))
   }
   job.progress(entries.length, entries.length, 'Correlating')
@@ -61,7 +68,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
         method === 'pearson' ? pearson(columns[r], columns[c]) : spearman(columns[r], columns[c])
       values[r * n + c] = value
       values[c * n + r] = value
-      rows.push({ a: entries[r], b: entries[c], r: value })
+      rows.push({ a: names[r], b: names[c], r: value })
     }
   }
 
@@ -74,8 +81,8 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     values,
     xLabel: '',
     yLabel: '',
-    xTicks: entries,
-    yTicks: entries,
+    xTicks: names,
+    yTicks: names,
     colormap: DEFAULT_DIVERGING_COLORMAP,
     // Zero, not the data's midpoint: a correlation is read about no-agreement,
     // and a scale centred on whatever the data happened to average would move

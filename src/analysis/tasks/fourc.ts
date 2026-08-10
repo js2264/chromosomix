@@ -66,6 +66,42 @@ const PARAMS: readonly ParamSpec[] = [
       '“Pick on map” and drag along either axis.',
   },
   {
+    kind: 'choice',
+    key: 'normalise',
+    label: 'Normalisation',
+    default: 'none',
+    /**
+     * A 4C profile is a slice of the map, and a slice of a Hi-C map is mostly
+     * P(s): contact falls by orders of magnitude with distance, so the profile's
+     * shape is dominated by *how far away* each bin is rather than by whether
+     * anything is happening there. On a log axis that is a clean triangle with
+     * the anchor at its apex, and the loops a reader ran the task to find are
+     * bumps on its flanks — visible near the anchor, invisible a megabase out.
+     *
+     * Dividing by the decay is the standard way to see past it, and the curve is
+     * taken from **the anchor's own sequence**, accumulated from the square this
+     * task is already reading. Not the P(s) task's genome-wide curve: a small
+     * chromosome divided by the average behaviour of the large ones comes out
+     * with a slope that is a property of the *set* rather than of this locus.
+     *
+     * `none` stays the default because the raw profile is what a bigWig of a 4C
+     * experiment holds and what a reader comparing against one expects — and
+     * because a ratio is a derived quantity that should be asked for.
+     */
+    options: [
+      {
+        value: 'none',
+        label: 'None',
+        hint: 'Contacts as they were counted.',
+      },
+      {
+        value: 'ps',
+        label: 'By P(s)',
+        hint: 'Observed over expected at that separation, from this sequence’s own decay.',
+      },
+    ],
+  },
+  {
     kind: 'toggle',
     key: 'cis',
     label: 'Cis only',

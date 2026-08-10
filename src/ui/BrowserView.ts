@@ -52,6 +52,7 @@ import {
   drawBoundaries,
   drawGuide,
   drawRuler,
+  drawSelection,
   rulerHeightFor,
   type RulerBand,
 } from '../render/browser'
@@ -1402,6 +1403,12 @@ export class BrowserView {
    *
    * Each chip is placed *outside* its own edge where there is room, so the two
    * numbers never sit on top of the region they are measuring.
+   *
+   * The drawing itself is `render/browser.ts`'s, and shared with the bar over
+   * the Chromosomes table: what this method owns is the two things a renderer
+   * should not decide — that a coordinate here is **1-based inclusive**, because
+   * that is what this view's own box takes, and where on the canvas the marks
+   * belong.
    */
   private paintSelectionMarks(
     ctx: CanvasRenderingContext2D,
@@ -1417,56 +1424,24 @@ export class BrowserView {
     const start = at(anchor)
     const end = at(moving)
     if (start === null || end === null) return
-    const span = Math.abs(this.atUnit(moving) - this.atUnit(anchor))
 
-    const chipHeight = scaleLength(SELECTION_CHIP)
-    const chipPad = scaleLength(SELECTION_PAD)
-    ctx.save()
-    ctx.font = scaleFont(SELECTION_FONT)
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
-    // Both edges as hairlines, so the numbers have something exact to belong to.
-    ctx.strokeStyle = CROSSHAIR_COLOR
-    ctx.lineWidth = 1
-    for (const x of [anchor, moving]) {
-      ctx.beginPath()
-      ctx.moveTo(snapTo(x, this.dpr), this.rulerHeight)
-      ctx.lineTo(snapTo(x, this.dpr), height)
-      ctx.stroke()
-    }
-
-    const chip = (text: string, x: number, side: 'left' | 'right', top: number): void => {
-      const width = ctx.measureText(text).width + chipPad * 2
-      // Outside its own edge, and folded back inside at the window's own edges —
-      // a coordinate written off the side of the canvas is a coordinate nobody
-      // can read, and the edges are exactly where a selection is dragged to.
-      let left = side === 'left' ? x - width - 3 : x + 3
-      if (left < 0) left = x + 3
-      if (left + width > this.canvasWidth) left = x - width - 3
-      ctx.fillStyle = palette.labelHaloColor
-      ctx.strokeStyle = CROSSHAIR_COLOR
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      if (ctx.roundRect === undefined) ctx.rect(left, top, width, chipHeight)
-      else ctx.roundRect(left, top, width, chipHeight, 3)
-      ctx.fill()
-      ctx.stroke()
-      ctx.fillStyle = CROSSHAIR_COLOR
-      ctx.fillText(text, left + chipPad, top + chipHeight / 2)
-    }
-
-    const top = this.rulerHeight + 4
-    const backwards = moving < anchor
-    chip(start, anchor, backwards ? 'right' : 'left', top)
-    chip(end, moving, backwards ? 'left' : 'right', top)
-    // The span, in the middle of what has been drawn, where the eye already is.
-    const middle = (anchor + moving) / 2
-    const text = fmt.bp(span)
-    const width = ctx.measureText(text).width + chipPad * 2
-    if (Math.abs(moving - anchor) > width + 8) {
-      chip(text, middle - width / 2 - 3, 'right', top + chipHeight + 3)
-    }
-    ctx.restore()
+    drawSelection(ctx, {
+      anchor,
+      moving,
+      start,
+      end,
+      span: fmt.bp(Math.abs(this.atUnit(moving) - this.atUnit(anchor))),
+      top: this.rulerHeight,
+      bottom: height,
+      chipTop: this.rulerHeight + 4,
+      width: this.canvasWidth,
+      dpr: this.dpr,
+      chipHeight: scaleLength(SELECTION_CHIP),
+      chipPad: scaleLength(SELECTION_PAD),
+      font: scaleFont(SELECTION_FONT),
+      colour: CROSSHAIR_COLOR,
+      halo: palette.labelHaloColor,
+    })
   }
 
   private paintLane(

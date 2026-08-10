@@ -165,7 +165,7 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
   for (const entry of entries) {
     for (const group of groups) {
       job.throwIfCancelled()
-      job.progress(done, total, `${entry} · ${group.name}`)
+      job.progress(done, total, `${job.inputs.labels?.[entry] ?? entry} · ${group.name}`)
       done++
 
       const plan = scaled
@@ -190,8 +190,11 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
         rng: makeRandom(Math.round(numParam(job.params, 'seed', 1))),
       })
 
+      // The reader's name for the file, not the store's id — a legend reading
+      // `a1, a2` is a legend that has to be decoded against a panel.
+      const track = job.inputs.labels?.[entry] ?? entry
       series.push({
-        name: groups.length === 1 ? entry : `${entry} · ${group.name}`,
+        name: groups.length === 1 ? track : `${track} · ${group.name}`,
         x: axisFor(plan.layout).x,
         y: summary.mean,
         low: summary.low,

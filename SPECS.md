@@ -2178,6 +2178,25 @@ What survives a reload is the task, its parameters and its framing, and the row 
 in, for precisely the same reason (§8.6). An exported session therefore hands a colleague the analysis
 rather than a number they have to take on trust.
 
+**But a change of resolution is not a reload, and the values carry across it.** Opening an `.mcool` at
+another level re-opens the file — a new store, a new annotations worker, a new workspace — and every
+other part of the session already treats that as the same data seen differently: the view carries
+(§5.5), and so does every loaded track. A computed row carries too, live, as the row the reader left
+it: colour, name, edge, group, hidden or not, with its values still behind it, its exports still on it
+and, for a called interval set, its features and its **Save as BED**. Dropping them would lose numbers
+the tab is still holding.
+
+They carry **unrescaled**. A profile is one value per bin on the bins it was computed on; re-binning a
+1 kb insulation track to 5 kb would invent a score no window ever produced. So the vector is
+re-registered on *its own* grid — a bin-vector source has always carried its `binsize` and contig
+offsets, which is the same reason a bigWig at one resolution draws correctly over a map at another —
+and the row's framing line goes on naming the level it was computed at. A row that was already
+`detached` stays `detached`, because promoting it would be a lane with nothing in it.
+
+This is for a change of *entry* only. A different file leaves the analysis behind: a computed row is an
+answer about the file being closed, and carrying it forward would be showing a reader a picture of
+somewhere they never pointed at.
+
 ### 18.6 Cost, and the three gates
 
 Analysis makes it possible to ask for something expensive, so the cost model is part of the contract.

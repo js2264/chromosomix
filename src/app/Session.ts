@@ -28,7 +28,11 @@ import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
 import { buildAnalysisContext } from '../analysis/context'
 import type { AnalysisContext } from '../analysis/types'
-import type { AnalysisWorkspace, AnalysisWorkspaceHost } from '../analysis/workspace'
+import type {
+  AnalysisWorkspace,
+  AnalysisWorkspaceHost,
+  CarriedResult,
+} from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
 import {
@@ -1391,7 +1395,7 @@ export class Session {
     // The tracks this session is holding, before anything is torn down. A map
     // opened over a genome browser is the same genome by a different file, and
     // the tracks were drawn against it.
-    this.carry()
+    this.carry(uri)
     this.opening = uri
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
     this.host.sessionChanged(this)
@@ -1648,7 +1652,7 @@ export class Session {
         contigs: result.contigs,
         origin: result.origin,
       })
-      this.carry()
+      this.carry(uri)
       this.tearDown()
       this.assembly = assembly
       this.setUpBrowserAnnotations(assembly)
@@ -2570,16 +2574,51 @@ export class Session {
   private carried: AnnotationEntry[] | null = null
 
   /**
+   * What the analysis workspace had computed, when the file is only changing
+   * resolution.
+   *
+   * Held on the session for the same reason and across the same gap as
+   * {@link carried}, and separately from it because the two travel by different
+   * roads: a loaded track goes back in through the `AnnotationLoader`, which
+   * re-reads it from the handle it still holds, and a computed one has no handle
+   * — its numbers are in the workspace, and only a workspace can put them back.
+   */
+  private carriedAnalysis: readonly CarriedResult[] | null = null
+
+  /**
    * Remember the loaded tracks, if the file about to open is a different one.
    *
    * Only the rows that are actually readable: a detached row is a name and a
    * colour with no bytes behind it, and carrying it across would produce a
    * second "drop this again" in a session that already has one under the old
    * file's memory.
+   *
+   * And, for a **change of resolution only**, what was computed as well. That
+   * condition is the whole of the difference between the two lists, and it is
+   * `AnnotationLoader.carry`'s docstring stated the other way round: a computed
+   * row is an answer *about a file*, so carrying one to a different file would
+   * hand a reader a picture of somewhere they never pointed at — while the same
+   * `.mcool` at another level is the same data, and dropping the analysis there
+   * loses numbers this tab is still holding.
    */
-  private carry(): void {
+  private carry(next: string): void {
     const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
+    const computed = this.reopeningSameFile(next) ? (this.analysis?.carry() ?? []) : []
+    this.carriedAnalysis = computed.length === 0 ? null : computed
+  }
+
+  /**
+   * Whether the file about to open is the one already open.
+   *
+   * The path before `::`, so an `.mcool` at 1 kb and the same `.mcool` at 5 kb
+   * are one file — which is exactly the case this asks about. A re-drop of the
+   * file already open answers `true` too, and should: nothing has changed there
+   * either.
+   */
+  private reopeningSameFile(next: string): boolean {
+    const current = this.file?.uri
+    return current !== undefined && splitUri(current).path === splitUri(next).path
   }
 
   private adoptCarried(loader: AnnotationLoader): void {
@@ -4454,6 +4493,15 @@ export class Session {
       block: () => this.current?.panel?.analysisBlock() ?? null,
       store: () => this.annotations?.store ?? null,
       annotations: () => this.annotations?.client ?? null,
+      // Taken rather than read: the rows belong to the first workspace built
+      // after the switch, and a second one — a later navigation, a reload of the
+      // chunk — must not be handed the same numbers again under ids the store
+      // already holds.
+      carried: () => {
+        const rows = this.carriedAnalysis ?? []
+        this.carriedAnalysis = null
+        return rows
+      },
       contigs: () =>
         (this.analysisContext()?.contigs ?? []).map((contig) => ({
           name: contig.name,

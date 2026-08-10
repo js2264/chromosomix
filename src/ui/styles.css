@@ -791,22 +791,36 @@ p {
   margin: 0;
 }
 
-.seqbar-stage {
-  position: relative;
-  width: 100%;
-}
+/* The strip is what takes up room, and the canvas over it is taller: a drag
+   writes its coordinates on two chip rows *below* the ruler, where the 1D
+   browser has tracks and this view has the table. The stage keeps the ruler's
+   height (set from the script, since it follows the text scale) and the canvas
+   floats over whatever is under it, so nothing moves when a drag begins.
 
-/* The caret, and not a resize arrow: what a drag here does is *name a stretch*,
+   The caret, and not a resize arrow: what a drag here does is *name a stretch*,
    which is the gesture selecting text makes, and it is the cursor the 1D browser
    already wears over its own ruler. `ew-resize` says "move this edge", which is
    a different promise and one this strip does not keep. The hairline drawn under
    the pointer is the other half of the affordance. */
-.seqbar-canvas {
-  display: block;
+.seqbar-stage {
+  position: relative;
   width: 100%;
   cursor: text;
-  outline: none;
   user-select: none;
+}
+
+/* `pointer-events: none` is load-bearing. The canvas hangs forty pixels below
+   the strip, over the table's first rows, and a transparent element sitting on
+   them would swallow their clicks — so the canvas is paint only and the stage
+   above is what the pointer is followed on. */
+.seqbar-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+  outline: none;
+  z-index: 3;
 }
 
 /* The stage is `relative` because three things are positioned against it: the

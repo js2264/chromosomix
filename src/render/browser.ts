@@ -277,6 +277,106 @@ export function drawGuide(
 }
 
 /**
+ * What a range being dragged out looks like, in one place.
+ *
+ * The wash, the two edge hairlines and the three chips — the anchor's
+ * coordinate, the moving end's, and the span between them — as drawn over the
+ * 1D browser's ruler and, since the Chromosomes table grew the same bar, over
+ * that one too. Extracted rather than copied, because the thing being promised
+ * is that the two *look the same*: a reader who has learned to aim by the chips
+ * in one view has learned it for the other, and two implementations of that
+ * would drift on the first change to either.
+ *
+ * The **text arrives formatted**. Placing a chip is geometry and belongs here;
+ * deciding that a coordinate reads `chr1:59,621,870` and a span reads `388.6 kb`
+ * is `ui/dom.ts`'s `fmt`, and nothing under `render/` imports from `ui/`. The
+ * two callers also differ on the base — the browser writes 1-based inclusive
+ * loci because that is what its own box takes — which is exactly the kind of
+ * decision a renderer should not be making.
+ */
+export interface SelectionMarks {
+  /** The end that does not move, in CSS pixels across the canvas. */
+  anchor: number
+  /** The end under the pointer. */
+  moving: number
+  /** The anchor's position, written out: `chr1:59,621,870`. */
+  start: string
+  /** The moving end's, the same way. */
+  end: string
+  /** What lies between them: `388.6 kb`. */
+  span: string
+  /** Where the two edge hairlines run from and to. */
+  top: number
+  bottom: number
+  /** The first chip row's top edge. The span sits on a second row under it. */
+  chipTop: number
+  /** The whole canvas, so a chip at an edge folds back inside it. */
+  width: number
+  dpr: number
+  chipHeight: number
+  chipPad: number
+  font: string
+  /** The hairlines, the chip borders and the text: the crosshair colour. */
+  colour: string
+  /** What a chip is filled with, so what is under it does not show through. */
+  halo: string
+}
+
+/**
+ * Draw it.
+ *
+ * Each chip goes *outside* its own edge where there is room, so the two numbers
+ * never sit on top of the region they are measuring, and folds back inside at
+ * the canvas edges — a coordinate written off the side of the canvas is a
+ * coordinate nobody can read, and the edges are exactly where a selection is
+ * dragged to. The span goes in the middle of what has been drawn, where the eye
+ * already is, and is dropped when the band is too narrow to hold it.
+ */
+export function drawSelection(ctx: CanvasRenderingContext2D, marks: SelectionMarks): void {
+  const { anchor, moving, chipHeight, chipPad } = marks
+  ctx.save()
+  ctx.font = marks.font
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  // Both edges as hairlines, so the numbers have something exact to belong to.
+  ctx.strokeStyle = marks.colour
+  ctx.lineWidth = 1
+  for (const x of [anchor, moving]) {
+    ctx.beginPath()
+    ctx.moveTo(snap(x, marks.dpr), marks.top)
+    ctx.lineTo(snap(x, marks.dpr), marks.bottom)
+    ctx.stroke()
+  }
+
+  const chip = (text: string, x: number, side: 'left' | 'right', top: number): void => {
+    const width = ctx.measureText(text).width + chipPad * 2
+    let left = side === 'left' ? x - width - 3 : x + 3
+    if (left < 0) left = x + 3
+    if (left + width > marks.width) left = x - width - 3
+    ctx.fillStyle = marks.halo
+    ctx.strokeStyle = marks.colour
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    if (ctx.roundRect === undefined) ctx.rect(left, top, width, chipHeight)
+    else ctx.roundRect(left, top, width, chipHeight, 3)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = marks.colour
+    ctx.fillText(text, left + chipPad, top + chipHeight / 2)
+  }
+
+  const backwards = moving < anchor
+  chip(marks.start, anchor, backwards ? 'right' : 'left', marks.chipTop)
+  chip(marks.end, moving, backwards ? 'left' : 'right', marks.chipTop)
+  const middle = (anchor + moving) / 2
+  const width = ctx.measureText(marks.span).width + chipPad * 2
+  if (Math.abs(moving - anchor) > width + 8) {
+    chip(marks.span, middle - width / 2 - 3, 'right', marks.chipTop + chipHeight + 3)
+  }
+  ctx.restore()
+}
+
+/**
  * Sequence boundaries, continued down through the tracks.
  *
  * Without them a whole-genome view is one continuous profile and a reader cannot

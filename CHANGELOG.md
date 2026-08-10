@@ -93,6 +93,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and the zoom reads the open map, which is §3.4's own rule for what a ladder is
   allowed to be.
 
+- **A 4C profile can be divided by P(s).** A slice of a Hi-C map is mostly P(s):
+  contact falls by orders of magnitude with distance, so a raw 4C profile's shape
+  is dominated by *how far away* each bin is rather than by whether anything is
+  happening there — a clean triangle with the anchor at its apex, on which the
+  loops somebody ran the task to find are bumps visible near the anchor and
+  invisible a megabase out. The task now offers a **Normalisation** choice: none,
+  which stays the default because the raw profile is what a bigWig of a 4C
+  experiment holds, or **by P(s)**, which reports observed over expected at each
+  separation.
+
+  The decay is taken from **the anchor's own sequence**, accumulated from the
+  square the task is already reading, rather than from the P(s) task's
+  genome-wide curve: a small chromosome divided by the average behaviour of the
+  large ones comes out with a slope that is a property of the set rather than of
+  the locus. Bins in trans are divided by the mean of what the anchor reaches off
+  its own sequence, since "separation" means nothing between chromosomes.
+
+- **Synthetic tracks survive a change of resolution.** Switching an `.mcool` from
+  1 kb to 5 kb is not opening a different file — it is the same data at a
+  different bin size — and everything a reader can see already treated it that
+  way: the view carries across, and so does every dropped track. The one thing
+  that did not was the output of an analysis. Run compartments genome-wide, wait
+  the four minutes, change level to look at the same region more closely, and the
+  Synthetic tracks card was empty: numbers the tab was still holding, dropped for
+  no reason other than which object held them.
+
+  They now come across live, as the rows the reader left — the colour, the name,
+  the edge, the autoscale group, whether it was hidden — with the values still
+  behind them and the exports still on them. **Unrescaled**, which is the honest
+  thing and not a shortcut: a profile is one number per bin, its bins were 1 kb,
+  and the row goes on saying so in its provenance line. Re-binning it to 5 kb
+  would be inventing an insulation score no window ever produced. What makes that
+  work is that a computed vector has always carried its own grid — the same
+  reason a bigWig at one resolution draws correctly over a map at another.
+
+  Called interval sets — insulation boundaries, CID domains, A/B compartments —
+  come across the same way, with their features and their **Save as BED**. A row
+  that was already waiting for a **Recompute** stays waiting for one rather than
+  being promoted to a lane with nothing in it. And this is for a change of
+  resolution *only*: opening a different file still leaves the analysis behind,
+  because a computed row is an answer about the file being closed.
+
 - **The Chromosomes table gets the browser's bar, and you can drag out a
   window.** The table is where a reader of a cooler lands, and the only way out
   of it into a *window* was to type one — a row click opens a whole chromosome,
@@ -116,6 +158,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   head above it is the bar and nothing else: the title and its sentence of prose
   are what a view needs when the reader has to be told where they are, and the
   breadcrumb, the ruler and the summary line all say it better.
+
+  A band being dragged out **looks exactly like one in the browser**, from the
+  same implementation: the wash, both edges as hairlines, and three chips — where
+  the drag started, where the pointer is, and how much lies between. Those
+  numbers are what makes a marquee aimable, and more so here than in the browser,
+  since this ruler is the whole assembly at all times and the nearest tick can be
+  tens of megabases from the edge being aimed at. They are this bar's own
+  coordinates — 0-based, clamped to the sequence the press landed in — so the
+  chips read as what the release is about to open rather than as wherever the
+  pointer happens to be. The canvas floats over the table to make room for them
+  instead of pushing it down, so nothing moves when a drag begins.
+
+  **Escape** drops the band without opening anything, as it does on the map and
+  in the browser, and the release that follows — the hand is still on the button
+  — does not finish the gesture that was just abandoned.
 
   Three things about the drag are decided rather than incidental. It **clamps to
   the sequence the press landed in**: a region names one contig, and a hand that
@@ -998,6 +1055,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   could create one, so that is a decision and not a limitation.
 
 ### Fixed
+
+- **Analysis outputs name your tracks, not `a1, a2, a3`.** A task is handed the
+  *ids* of the entries it reads — that is the right thing internally, since an id
+  is stable across a rename and a label is not — and then wrote those ids into
+  what it produced. So a track-correlation heatmap came back with axes reading
+  `a1, a2, a3`, a table whose rows were the same, and a metaplot whose series
+  were too: a figure nobody can read, about tracks the reader had named. The
+  runner now sends the labels alongside the ids, and every output uses them.
 
 - **An analysis on a `.metacool` keeps its numbers.** A per-bin result is a lane
   rather than a picture (§18.5), and on a cooler that is exactly right: it

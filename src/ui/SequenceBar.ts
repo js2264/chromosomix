@@ -35,14 +35,26 @@
 
 import type { AnnotationStore } from '../annotations/store'
 import { assemblyAxis, type Assembly } from '../genome/assembly'
-import { RULER_FONT, TICK_FONT, drawGuide, drawRuler, rulerHeightFor } from '../render/browser'
-import { CROSSHAIR_COLOR } from '../render/heatmap'
-import type { LocusAxis } from '../render/locus'
+import {
+  RULER_FONT,
+  TICK_FONT,
+  drawGuide,
+  drawRuler,
+  drawSelection,
+  rulerHeightFor,
+} from '../render/browser'
+import {
+  CROSSHAIR_COLOR,
+  SELECTION_CHIP,
+  SELECTION_FONT,
+  SELECTION_PAD,
+} from '../render/heatmap'
+import type { LocusAxis, LocusSegment } from '../render/locus'
 import { Scale } from '../render/scale'
 import { button, el, fmt } from './dom'
 import { readCanvasPalette } from './MatrixPanel'
 import { SearchBox, featureSuggestions } from './SearchBox'
-import { getTextScale, scaleFont, subscribeTextScale } from './textScale'
+import { getTextScale, scaleFont, scaleLength, subscribeTextScale } from './textScale'
 
 /** Movement below this many pixels is a click rather than a drag. */
 const DRAG_SLOP = 3
@@ -83,6 +95,20 @@ export interface SequenceBarProps {
 export class SequenceBar {
   readonly el: HTMLElement
   private readonly canvas = el('canvas', { class: 'seqbar-canvas' })
+  /**
+   * The pointer target, and the only part of this that takes up room.
+   *
+   * The canvas is taller than the strip and hangs *over* the table below it, so
+   * the coordinate chips a drag writes have somewhere to go: they sit under the
+   * ruler in the 1D browser, where there are tracks to sit over, and here there
+   * is the table. Growing the strip to hold them would leave forty pixels of
+   * blank canvas above the table at all times for a gesture nobody is making;
+   * pushing the table down when a drag starts would move the thing being aimed
+   * at. So the canvas floats, this element keeps the height, and the pointer is
+   * followed here — otherwise a transparent canvas would be sitting on the first
+   * two rows of the table swallowing clicks.
+   */
+  private readonly stage = el('div', { class: 'seqbar-stage' })
   private readonly box: SearchBox
   private readonly axis: LocusAxis
   private readonly note = el('p', { class: 'summary hint' })
@@ -138,8 +164,12 @@ export class SequenceBar {
         // the whole assembly and there is nothing under it to fit.
       ),
       this.note,
-      el('div', { class: 'seqbar-stage' }, this.canvas),
+      this.stage,
     )
+    this.stage.appendChild(this.canvas)
+    // Before the first paint, or the table jumps up by the height of the ruler
+    // and back down again on the frame after mounting.
+    this.stage.style.height = `${this.height}px`
 
     this.paintNote()
     this.watchPointer()
@@ -177,6 +207,30 @@ export class SequenceBar {
     return this.drag === null ? this.hover : null
   }
 
+  /**
+   * What the band being dragged out says, or `null` when none is.
+   *
+   * The three numbers the chips are drawn from: the sequence, where the press
+   * landed, and where the pointer is now — **in that order**, so a backwards
+   * drag reports its anchor first, which is what the two chips show. Clamped to
+   * the press's sequence and 0-based, exactly as the region {@link dragged} will
+   * emit on release; a marquee that reads differently from what it is about to
+   * open is a picture contradicting the result.
+   *
+   * Read rather than drawn by a test, for the reason {@link hairlineAt} gives:
+   * jsdom refuses a 2D context, and the drawing is `drawSelection`, which the 1D
+   * browser has used for as long as it has had a marquee.
+   */
+  get selection(): { contig: string; start: number; end: number } | null {
+    const drag = this.drag
+    if (drag === null) return null
+    const segment = this.axis.segmentAt(this.scale().toUnit(drag.from))
+    if (segment === null) return null
+    const start = this.bpAt(drag.from, segment)
+    const end = this.bpAt(drag.to, segment)
+    return start === null || end === null ? null : { contig: segment.contig, start, end }
+  }
+
   destroy(): void {
     this.observer?.disconnect()
     for (const off of this.unsubscribes) off()
@@ -185,7 +239,9 @@ export class SequenceBar {
 
   /** Re-read the box's width and repaint. Called by the view on a relayout. */
   remeasure(): void {
-    const width = this.canvas.parentElement?.clientWidth ?? this.el.clientWidth
+    // The stage, not the canvas: the canvas is absolutely positioned and takes
+    // whatever width it is given, so measuring it would measure the last frame.
+    const width = this.stage.clientWidth || this.el.clientWidth
     if (width <= 0) return
     this.width = width
     this.schedule()
@@ -237,21 +293,34 @@ export class SequenceBar {
       `${fmt.bp(this.props.assembly.total)} · drag a band to open a window in it`
   }
 
+  /**
+   * How far the canvas hangs below the strip: two chip rows and their gaps.
+   *
+   * Derived from the chip metrics rather than fixed, so a reader who has turned
+   * the text up does not get the second row clipped off the bottom.
+   */
+  private marksRoom(): number {
+    return 4 + scaleLength(SELECTION_CHIP) * 2 + 5
+  }
+
   private paint(): void {
     const width = this.width
     if (width <= 0) return
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
+    // The strip's own height is the ruler's; the canvas over it is taller.
+    this.stage.style.height = `${this.height}px`
     const canvas = this.canvas as HTMLCanvasElement
+    const tall = this.height + this.marksRoom()
     canvas.style.width = `${width}px`
-    canvas.style.height = `${this.height}px`
+    canvas.style.height = `${tall}px`
     const wantWidth = Math.max(1, Math.round(width * this.dpr))
-    const wantHeight = Math.max(1, Math.round(this.height * this.dpr))
+    const wantHeight = Math.max(1, Math.round(tall * this.dpr))
     if (canvas.width !== wantWidth) canvas.width = wantWidth
     if (canvas.height !== wantHeight) canvas.height = wantHeight
     const ctx = canvas.getContext('2d')
     if (ctx === null) return
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-    ctx.clearRect(0, 0, width, this.height)
+    ctx.clearRect(0, 0, width, tall)
 
     const scale = this.scale()
     const palette = readCanvasPalette(canvas)
@@ -274,7 +343,7 @@ export class SequenceBar {
       fonts: { ruler: scaleFont(RULER_FONT), tick: scaleFont(TICK_FONT) },
     })
 
-    this.paintMarquee(ctx, palette.plotBorderColor)
+    this.paintMarquee(ctx, palette.labelHaloColor)
     // Under the marquee, because while a drag is in progress the edges are what
     // the eye is on and a third line beside one of them is noise.
     if (this.drag === null && this.hover !== null) {
@@ -285,29 +354,64 @@ export class SequenceBar {
   /**
    * The band being dragged out, over the ruler it names a part of.
    *
-   * A wash with two edges, exactly as the map's own marquee is drawn: the wash
-   * says what is inside and the edges say where it stops, and at a few pixels
-   * wide the edges are the whole of what can be seen.
+   * The 1D browser's marquee exactly — a wash the width of the drag, both edges
+   * as hairlines, and three chips: where the drag started, where it is now, and
+   * how much lies between. Not a second look for the same gesture: the drawing
+   * is `render/browser.ts`'s {@link drawSelection}, and a hand that has learned
+   * to aim by those numbers in the browser aims by the same ones here.
+   *
+   * What differs is the **base**, and it differs on purpose. The browser writes
+   * 1-based inclusive positions because that is what its own box takes; this bar
+   * emits, and its box reads, 0-based half-open regions as `metacooler/range.ts`
+   * does — so the chips are the numbers that will actually appear in the crumb.
+   *
+   * The ends are also **clamped to the sequence the press landed in**, exactly
+   * as {@link dragged} clamps them. A drag that runs off the end of chromosome
+   * IV opens a window in chromosome IV, and a chip reading `chrV:…` while that
+   * is what is about to happen would be the picture contradicting the result.
    */
-  private paintMarquee(ctx: CanvasRenderingContext2D, colour: string): void {
+  private paintMarquee(ctx: CanvasRenderingContext2D, halo: string): void {
     const drag = this.drag
     if (drag === null) return
     const lo = Math.min(drag.from, drag.to)
     const hi = Math.max(drag.from, drag.to)
     ctx.save()
-    ctx.fillStyle = colour
-    ctx.globalAlpha = 0.18
-    ctx.fillRect(lo, 0, Math.max(1, hi - lo), this.height)
-    ctx.globalAlpha = 1
-    ctx.strokeStyle = colour
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(lo + 0.5, 0)
-    ctx.lineTo(lo + 0.5, this.height)
-    ctx.moveTo(hi - 0.5, 0)
-    ctx.lineTo(hi - 0.5, this.height)
-    ctx.stroke()
+    ctx.fillStyle = CROSSHAIR_COLOR
+    ctx.globalAlpha = 0.15
+    ctx.fillRect(lo, 0, Math.max(1, hi - lo), this.height + this.marksRoom())
     ctx.restore()
+
+    const marks = this.selection
+    if (marks === null) return
+    drawSelection(ctx, {
+      anchor: drag.from,
+      moving: drag.to,
+      start: `${marks.contig}:${fmt.int(marks.start)}`,
+      end: `${marks.contig}:${fmt.int(marks.end)}`,
+      span: fmt.bp(Math.abs(marks.end - marks.start)),
+      top: 0,
+      bottom: this.height + this.marksRoom(),
+      chipTop: this.height + 4,
+      width: this.width,
+      dpr: this.dpr,
+      chipHeight: scaleLength(SELECTION_CHIP),
+      chipPad: scaleLength(SELECTION_PAD),
+      font: scaleFont(SELECTION_FONT),
+      colour: CROSSHAIR_COLOR,
+      halo,
+    })
+  }
+
+  /** Where a pixel falls in one sequence, in that sequence's own base pairs. */
+  private bpAt(x: number, segment: LocusSegment): number | null {
+    const unit = Math.max(
+      segment.unitStart,
+      // A hair inside the far edge, or a drag that ends exactly on a boundary
+      // is read as the *next* sequence — the same guard {@link dragged} needs.
+      Math.min(segment.unitEnd - 1e-6, this.scale().toUnit(x)),
+    )
+    const locus = this.axis.unitToLocus(unit)
+    return locus === null ? null : Math.round(locus.bp)
   }
 
   // -------------------------------------------------------------------------
@@ -315,9 +419,12 @@ export class SequenceBar {
   // -------------------------------------------------------------------------
 
   private watchPointer(): void {
-    const canvas = this.canvas as HTMLCanvasElement
+    // The *stage* and not the canvas: the canvas is a floating overlay with
+    // `pointer-events: none`, or the part of it hanging over the table would eat
+    // the first two rows' clicks. See {@link stage}.
+    const stage = this.stage
     const at = (event: MouseEvent): number => {
-      const box = canvas.getBoundingClientRect()
+      const box = stage.getBoundingClientRect()
       return Math.max(0, Math.min(this.width, event.clientX - box.left))
     }
 
@@ -351,21 +458,21 @@ export class SequenceBar {
     }
 
     // The hairline follows the pointer whether or not a button is down; the
-    // *drag* is followed on the window, so this one stays on the canvas and
-    // stops the moment the pointer leaves it.
-    canvas.addEventListener('mousemove', (event) => {
+    // *drag* is followed on the window, so this one stays on the strip and stops
+    // the moment the pointer leaves it.
+    stage.addEventListener('mousemove', (event) => {
       const x = at(event)
       if (this.hover === x) return
       this.hover = x
       this.schedule()
     })
-    canvas.addEventListener('mouseleave', () => {
+    stage.addEventListener('mouseleave', () => {
       if (this.hover === null) return
       this.hover = null
       this.schedule()
     })
 
-    canvas.addEventListener('mousedown', (event) => {
+    stage.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return
       event.preventDefault()
       down = at(event)
@@ -374,14 +481,37 @@ export class SequenceBar {
       host?.addEventListener('mouseup', onUp)
     })
 
-    // Escape gets out of a drag, as it does out of every other mode here. The
-    // listener is on the canvas rather than the window because a drag holds the
-    // pointer and nothing else is listening for it.
-    canvas.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape' || this.drag === null) return
+    /**
+     * Escape abandons the drag, opening nothing.
+     *
+     * The way out of a marquee dragged in the wrong place, and the same key
+     * doing the same thing in the 1D browser and on the contact map. A region is
+     * committed on release and a release cannot be taken back, so without this
+     * the only way out of a drag begun by accident was to let it navigate
+     * somewhere and come back.
+     *
+     * **On the window and capturing**, which is the whole of the bug fix: this
+     * listener used to be on the canvas, and a canvas takes no focus, so the key
+     * went to whatever the reader last clicked on and the drag went through. The
+     * `mouseup` listener goes with it — a drag whose press has been abandoned
+     * must not be finished by the release of the same button.
+     */
+    const onAbort = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || down === null) return
+      event.preventDefault()
+      event.stopPropagation()
       down = null
+      moved = false
       this.drag = null
+      host?.removeEventListener('mousemove', onMove)
+      host?.removeEventListener('mouseup', onUp)
       this.schedule()
+    }
+    host?.addEventListener('keydown', onAbort, true)
+    this.unsubscribes.push(() => {
+      host?.removeEventListener('keydown', onAbort, true)
+      host?.removeEventListener('mousemove', onMove)
+      host?.removeEventListener('mouseup', onUp)
     })
   }
 
