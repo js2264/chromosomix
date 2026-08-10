@@ -849,6 +849,11 @@ export class MapPanel {
       // that will not fit is the mildest thing that can go wrong in one: the map
       // it already has is a complete picture, and the sentence goes in the same
       // line every other refusal here goes in.
+      onInstalled: (block) => {
+        this.nameEl.title =
+          `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
+          `${fmt.int(block.nrows)}×${fmt.int(block.ncols)} cells`
+      },
       onError: (err) => this.say(err instanceof Error ? err.message : String(err)),
     })
     this.ladder.adopt(result)

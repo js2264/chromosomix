@@ -893,6 +893,8 @@ export class MatrixPanel {
    * `null` until the first one arrives.
    */
   private gaugeBlock: { spanBp: number; dense: DenseMatrix } | null = null
+  /** The gauge the view is currently measuring from — see {@link gaugeFor}. */
+  private gaugeShown: DenseMatrix | null = null
   /** The open map's own bin size — see {@link openBinsize}. */
   private readonly baseBinsize: number
   /** A picking mode in progress; see {@link armPicking}. */
@@ -3753,6 +3755,7 @@ export class MatrixPanel {
     // colours of a new place are that place's. {@link regrid} is the path that
     // has to keep them.
     this.gaugeBlock = null
+    this.gaugeShown = gauge ?? null
     this.heatmap.setMatrix(
       dense,
       turned === null ? separatorsFor(data) : { rows: [], cols: [] },
@@ -3919,11 +3922,24 @@ export class MatrixPanel {
   private gaugeFor(data: MatrixResult, own: DenseMatrix | undefined): DenseMatrix | null | undefined {
     const spanBp = Math.max(data.nrows, data.ncols) * Math.max(1, this.options.binsize)
     const held = this.gaugeBlock
-    if (held !== null && spanBp <= held.spanBp) return undefined
-    // `this.square` is the block `derive` just produced, before any rotation: the
-    // range belongs to the square whether or not the picture is a band of it.
-    this.gaugeBlock = { spanBp, dense: this.square ?? { ...toDense(data), values: data.values } }
-    return own ?? null
+    if (held === null || spanBp > held.spanBp) {
+      // Wider than anything held, or the first block of a view: this is the
+      // gauge from now on. `this.square` is what `derive` just produced, before
+      // any rotation — the range belongs to the square whether or not the
+      // picture is a band cut out of it.
+      const dense = this.square ?? { ...toDense(data), values: data.values }
+      this.gaugeBlock = { spanBp, dense }
+      this.gaugeShown = own ?? null
+      return this.gaugeShown
+    }
+    // Narrower: the range stays the wider block's. Handed over the first time
+    // and then left alone, because passing a gauge invalidates the memo on it
+    // (`render/heatmap.ts`) and re-measuring is the most expensive thing that
+    // class does — which would put the whole cost of this feature back on every
+    // step of a zoom, for a number that by construction did not move.
+    if (this.gaugeShown === held.dense) return undefined
+    this.gaugeShown = held.dense
+    return held.dense
   }
 
   /**
