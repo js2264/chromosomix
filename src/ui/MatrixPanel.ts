@@ -117,9 +117,10 @@ import {
   type SeparatorSet,
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
+import type { RefineView } from './refine'
 import { ceilingFactor, nudgedLimits } from '../render/tracks'
 import { inverseTransform, transformValue, type Scale } from '../render/scale'
-import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
+import type { ColorScale, DenseMatrix, Extent, Separator, Transform } from '../types'
 import type { AnalysisFraming } from '../analysis/types'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/protocol'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
@@ -699,6 +700,16 @@ export class MatrixPanel {
   private data: MatrixResult | null = null
   /** Where this panel is looking, for whoever is keeping N of them in step. */
   private viewportListener: ((rows: [number, number], cols: [number, number]) => void) | null = null
+  /**
+   * Who to tell where the picture is, in the reader's own bins — see
+   * {@link setRefineListener}.
+   *
+   * A second slot rather than a use of {@link viewportListener}, because a deck
+   * already owns that one and the two want different things: the lock wants
+   * cells so it can translate between panels, and this wants absolute bins so a
+   * read can be made of them.
+   */
+  private refineListener: ((view: RefineView) => void) | null = null
   /**
    * The second file's block, when one is open, and the factor applied to it.
    *
@@ -4942,7 +4953,67 @@ export class MatrixPanel {
         const window = this.heatmap.cellWindow()
         this.viewportListener(window.rows, window.cols)
       }
+      // After the lock's report and from the same frame, for the same reason it
+      // is here rather than on the five mutators: this is the one place they all
+      // converge, so a refine is considered at most once per frame however hard
+      // the map is being dragged.
+      if (this.refineListener !== null) {
+        const view = this.refineWindow()
+        if (view !== null) this.refineListener(view)
+      }
     })
+  }
+
+  /**
+   * Follow this panel's window in **bins**, so somebody can read them.
+   *
+   * The counterpart of {@link setViewportListener}, and separate from it because
+   * the two answer different questions. A deck's lock asks "where is this panel
+   * looking" and wants cells, which it converts to base pairs to move its
+   * neighbours. A refine asks "what would I have to read to draw this properly"
+   * and wants absolute bins of the open map, which is what a `matrix` request
+   * takes.
+   *
+   * Set from outside rather than taken as an option for the reason the viewport
+   * listener is: the panel a view refines is one it did not build, and
+   * `MatrixPanel` holds no reader client and must not gain one
+   * (`ui/MatrixPanel.ts`, the header). The window goes up; the block comes back
+   * down through {@link regrid}.
+   */
+  setRefineListener(listener: ((view: RefineView) => void) | null): void {
+    this.refineListener = listener
+  }
+
+  /**
+   * What is on screen, in absolute bins of the file — or `null` where the
+   * question has no answer.
+   *
+   * `null` for every axis that is not one of positions: a contig-level or
+   * genome-level block, and a block whose cells hold whole sequences
+   * (`contigsPerCell > 1`, the whole-metagenome picture). A cell there *is* a
+   * sequence, so there is no finer grid to go to and nothing to ask for.
+   *
+   * A **turned** map answers with the square block's own window: the drawn
+   * columns are half-bins of the rotation (`render/rotate.ts`) and the rows are
+   * distance from the diagonal rather than a place, so the honest window is the
+   * on-diagonal square the band was cut from — which is the block a refine would
+   * replace, and which `syncTurnDepth` then re-cuts the band out of.
+   */
+  private refineWindow(): RefineView | null {
+    const data = this.data
+    if (data === null || data.level !== 'bin') return null
+    if ((data.contigsPerCell ?? 1) > 1) return null
+    const k = Math.max(1, data.binsPerCell ?? 1)
+    const window = this.heatmap.cellWindow()
+    if (this.turned !== null) {
+      const span = binsOf(window.cols, data.colExtent, k * BIN_FRACTION)
+      return { rows: span, cols: span, binsPerCell: k }
+    }
+    return {
+      rows: binsOf(window.rows, data.rowExtent, k),
+      cols: binsOf(window.cols, data.colExtent, k),
+      binsPerCell: k,
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -5685,6 +5756,27 @@ export function groupAt(
  * itself begins, so the absolute bin `blockStart + offset` resolves correctly
  * (§3.3 arithmetic throughout; `/bins` is never consulted).
  */
+/**
+ * A cell window on one axis, as absolute bins of the file.
+ *
+ * Outward on both ends and clamped to the block, so the answer never names a
+ * bin the block does not hold and never cuts off a cell the reader can see part
+ * of. `binsPerCell` may be fractional — a turned column is half a bin — which is
+ * why the rounding is done after the multiply rather than on the cell index.
+ */
+export function binsOf(
+  window: readonly [number, number],
+  extent: Extent,
+  binsPerCell: number,
+): Extent {
+  const lo = extent[0] + Math.floor(window[0] * binsPerCell)
+  const hi = extent[0] + Math.ceil(window[1] * binsPerCell)
+  return [
+    Math.max(extent[0], Math.min(lo, extent[1])),
+    Math.min(extent[1], Math.max(hi, extent[0])),
+  ]
+}
+
 /**
  * Two loci, as a cell interval on a given axis — the second half of a regrid.
  *

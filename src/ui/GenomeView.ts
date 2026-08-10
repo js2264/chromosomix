@@ -17,6 +17,7 @@ import { MatrixPanel, axisRegion, blockSummary, poolingNote,
   type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
+import { attachRefine, type BlockLadder } from './refine'
 import { SearchBox } from './SearchBox'
 import { stepper } from './Stepper'
 
@@ -99,6 +100,13 @@ export class GenomeView {
   private extent: [number, number] | null = null
   private level: 'bin' | 'contig'
   private disposed = false
+  /**
+   * The zoom's own reader. Its ceiling is this genome, which is also the
+   * block it starts from: a genome view already reads the whole of what it
+   * is a view of, so there is nowhere further out to go and zooming out
+   * costs nothing but a swap back to the block already held.
+   */
+  private ladder: BlockLadder | null = null
 
   constructor(private readonly props: GenomeViewProps) {
     this.level = props.level
@@ -220,6 +228,8 @@ export class GenomeView {
 
   destroy(): void {
     this.disposed = true
+    this.ladder?.destroy()
+    this.ladder = null
     this.panel.destroy()
   }
 
@@ -251,6 +261,7 @@ export class GenomeView {
       this.panel.setData(result, this.props.genome)
       this.renderSummary(result)
       this.renderContigs(result)
+      this.armRefine([lo, hi], result)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the
       // map puts the reader down, which rejects every read still in flight —
@@ -260,6 +271,31 @@ export class GenomeView {
       if (this.disposed) return
       this.props.onError(err)
     }
+  }
+
+  /**
+   * Let the zoom read inside this genome.
+   *
+   * Only at bin level: a contig-level block's cells *are* sequences, so there is
+   * no finer grid for a zoom to reach and the roll-up is a different question
+   * from the one this answers. That is also the rule `MatrixPanel.refineWindow`
+   * enforces on its own side, and it is stated in both places because a ladder
+   * armed on a rolled-up view would sit there being asked and answering nothing.
+   */
+  private armRefine(ceiling: [number, number], result: MatrixResult): void {
+    this.ladder?.destroy()
+    this.ladder = null
+    if (this.level !== 'bin') return
+    this.ladder = attachRefine({
+      panel: this.panel,
+      ceiling: { rows: ceiling, cols: ceiling },
+      binsize: this.props.binsize,
+      read: (rows, cols) => {
+        const own = this.props.client.cancellable<'matrix'>({ kind: 'matrix', rows, cols })
+        return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
+      },
+    })
+    this.ladder.adopt(result)
   }
 
   private renderSummary(result: MatrixResult): void {
