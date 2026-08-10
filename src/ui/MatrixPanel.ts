@@ -5042,10 +5042,9 @@ export class MatrixPanel {
       ): Extent => {
         const width = Math.max(1, into[1] - into[0])
         const per = width / Math.max(1, cells)
-        return [
-          Math.max(into[0], Math.floor(into[0] + view[0] * per)),
-          Math.min(into[1], Math.ceil(into[0] + view[1] * per)),
-        ]
+        const lo = Math.floor(into[0] + view[0] * per)
+        const hi = Math.ceil(into[0] + view[1] * per)
+        return [Math.min(lo, hi), Math.max(lo + 1, hi)]
       }
       const rows = spanOf(window.rows, data.nrows, source.rows)
       const cols = spanOf(window.cols, data.ncols, source.cols)
@@ -5824,10 +5823,16 @@ export function groupAt(
 /**
  * A cell window on one axis, as absolute bins of the file.
  *
- * Outward on both ends and clamped to the block, so the answer never names a
- * bin the block does not hold and never cuts off a cell the reader can see part
- * of. `binsPerCell` may be fractional — a turned column is half a bin — which is
- * why the rounding is done after the multiply rather than on the cell index.
+ * Outward on both ends, and deliberately **not clamped to the block**. Clamping
+ * looks obviously right — the answer would then never name a bin the block does
+ * not hold — and it silently deletes the only signal a zoom-*out* has: once the
+ * view is wider than the block, a clamped window reports the block's own edges,
+ * so a reader pulling back past what they have is indistinguishable from one
+ * sitting still, and nothing ever widens. What bounds the answer instead is the
+ * view's own domain, applied where it is known (`ui/refine.ts`'s ceiling).
+ *
+ * `binsPerCell` may be fractional — a turned column is half a bin — which is why
+ * the rounding is done after the multiply rather than on the cell index.
  */
 export function binsOf(
   window: readonly [number, number],
@@ -5836,10 +5841,7 @@ export function binsOf(
 ): Extent {
   const lo = extent[0] + Math.floor(window[0] * binsPerCell)
   const hi = extent[0] + Math.ceil(window[1] * binsPerCell)
-  return [
-    Math.max(extent[0], Math.min(lo, extent[1])),
-    Math.min(extent[1], Math.max(hi, extent[0])),
-  ]
+  return [Math.min(lo, hi), Math.max(lo + 1, hi)]
 }
 
 /**
@@ -6381,9 +6383,22 @@ export function poolingNote(
  */
 export function resolutionNote(
   binsize: number,
-  result: { binsPerCell?: number; contigsPerCell?: number; level?: MatrixResult['level'] },
+  result: {
+    binsPerCell?: number
+    contigsPerCell?: number
+    level?: MatrixResult['level']
+    /**
+     * The bin size of the map that actually answered, where a read came from a
+     * sibling rung (`worker/protocol.ts`). It wins over the caller's, which is
+     * the *open* map's — a caller passing its own would caption a block read at
+     * 2 kb with the 1 kb the session was opened at, and this is the one number
+     * on the line that changes what the picture means.
+     */
+    binsize?: number
+  },
   noun = 'sequence',
 ): string {
+  binsize = result.binsize ?? binsize
   if ((result.level ?? 'bin') !== 'bin') {
     const per = result.contigsPerCell ?? 1
     return per > 1 ? `${fmt.int(per)} ${noun}s per cell, summed` : ''
