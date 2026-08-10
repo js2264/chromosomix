@@ -760,6 +760,53 @@ p {
   width: 100%;
 }
 
+/* --- the browser's bar, over a table ------------------------------------ */
+
+/* The Chromosomes table's header: the same box, the same `go`, the same switch,
+   and a ruler of the whole assembly to drag on. Laid out like the browser's
+   because it *is* the browser's — what differs is only what is missing from it
+   (`ui/SequenceBar.ts`). */
+.seqbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.seqbar-bar {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.seqbar-bar .search-box {
+  flex: 1 1 22rem;
+  min-width: 12rem;
+}
+
+.seqbar-bar .input-region {
+  width: 100%;
+}
+
+.seqbar .summary {
+  margin: 0;
+}
+
+.seqbar-stage {
+  position: relative;
+  width: 100%;
+}
+
+/* The cursor is the whole affordance: a strip that can be dragged across has to
+   say so before the hand arrives, and there is no other furniture here that
+   could. */
+.seqbar-canvas {
+  display: block;
+  width: 100%;
+  cursor: ew-resize;
+  outline: none;
+  user-select: none;
+}
+
 /* The stage is `relative` because three things are positioned against it: the
    canvas, the row of inline editors over it, and the tooltip. */
 .browser-stage {

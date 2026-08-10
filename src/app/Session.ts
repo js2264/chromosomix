@@ -3714,6 +3714,12 @@ export class Session {
     // A plain cooler is opened as itself: no genome layer, no genome_id column,
     // and the chrom table is the landing view rather than a consolation prize.
     const cooler = !file.info.hasGenomes
+    // …and on one, the landing view gets the 1D browser's bar over the table: a
+    // ruler of the whole assembly that a drag names a window in. Withheld on a
+    // metacool, where the same strip is a hundred thousand sub-pixel bands with
+    // no name in any of them — see `ContigsTableOptions.assembly`.
+    const assembly = cooler ? this.assemblyOfFile(file) : null
+    const toggle = assembly === null ? undefined : this.mapToggleButton()
     const view = new ContigsTable({
       data,
       hideColumns: cooler ? ['genome_id'] : [],
@@ -3721,6 +3727,9 @@ export class Session {
       hint: cooler
         ? 'One genome, its chromosomes. Pick one to see its map, or select a subset to compare them.'
         : undefined,
+      ...(assembly === null ? {} : { assembly }),
+      ...(this.annotations === null ? {} : { store: this.annotations.store }),
+      ...(toggle === undefined ? {} : { extraControl: toggle }),
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.navigate({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
