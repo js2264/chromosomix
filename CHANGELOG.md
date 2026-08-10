@@ -93,6 +93,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and the zoom reads the open map, which is §3.4's own rule for what a ladder is
   allowed to be.
 
+- **The Chromosomes table gets the browser's bar, and you can drag out a
+  window.** The table is where a reader of a cooler lands, and the only way out
+  of it into a *window* was to type one — a row click opens a whole chromosome,
+  and a quarter of a gigabase is a large read taken to reach a small one. The box
+  that narrowed it asked for `chrIV:1200000-1210000`, which is a coordinate
+  somebody is usually looking *for* rather than one they already have.
+
+  So the header is now the 1D browser's own: the same locus box, with the same
+  gene search behind it — by name or by accession, from whichever annotation the
+  star picks — the same **go**, the same switch through to the tracks, and the
+  same **ruler**. Dragging across a chromosome's band opens that window, which is
+  the gesture the picture was missing; a press that does not travel opens the
+  whole sequence under it, and `*` opens the whole genome as it does in the
+  browser.
+
+  Three things about the drag are decided rather than incidental. It **clamps to
+  the sequence the press landed in**: a region names one contig, and a hand that
+  overshoots chromosome III's right-hand edge has still said what it meant.
+  A movement under six pixels is a **click, not a forty-base window**. And what
+  it emits is 0-based half-open with no thousands separators — what
+  `metacooler/range.ts` reads and what pastes into other tools — while the same
+  drag in the browser writes 1-based inclusive, because that is what the
+  browser's own box takes.
+
+  **No zoom buttons and no track fitting**, unlike the browser's bar: this ruler
+  is the whole assembly and stays that way, so a zoom control would imply a
+  picture that can be somewhere other than where it is, and the fit buttons are
+  about a stack of tracks that is not on screen. A `.metacool`'s contig list gets
+  the plain box it always had — a hundred thousand contigs from four thousand
+  independently assembled organisms is a texture rather than a picture, with no
+  band wide enough to hold a name or to aim at.
+
 - **The test suite can open a DOM.** Everything here ran under Node, which is
   right for the arithmetic — a range query, an axis, a bin conversion, the shape
   of a view state — and left the other half of the application, which is cards,

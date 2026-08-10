@@ -13,10 +13,13 @@
  * only a chevron in the breadcrumb.
  */
 
+import type { AnnotationStore } from '../annotations/store'
+import type { Assembly } from '../genome/assembly'
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
 import { SearchBox } from './SearchBox'
+import { SequenceBar, type SequenceBarProps } from './SequenceBar'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 const CORE_ORDER = ['name', 'length']
@@ -48,6 +51,23 @@ export interface ContigsTableOptions {
    * asks — the whole of what was missing is somewhere to ask from.
    */
   onOpenRegion?(region: string): void
+  /**
+   * The assembly this table's rows are of, where it is one — and then the plain
+   * locus box above becomes the **1D browser's bar** ({@link SequenceBar}).
+   *
+   * Given on a cooler and withheld on a metacool, and the reason is what the
+   * ruler is: sixteen chromosomes laid end to end is a picture of a genome that
+   * a hand can point at, while a hundred thousand contigs from four thousand
+   * independently assembled organisms is a texture — every band a fraction of a
+   * pixel, no name in any of them, and a drag that names a window inside
+   * whichever slice the pointer happened to land on. There the genomes table is
+   * the picker, and this table is the third crumb rather than the way in.
+   */
+  assembly?: Assembly
+  /** The feature index the bar's box searches; see {@link SequenceBarProps.store}. */
+  store?: AnnotationStore
+  /** The map/tracks switch, put in the bar beside **go**. */
+  extraControl?: HTMLElement
   /** Show every ticked sequence as one map — see the genomes table's twin. */
   onOpenSelection?(names: string[]): void
   /**
@@ -64,6 +84,7 @@ export class ContigsTable {
   readonly el: HTMLElement
   private readonly table: VirtualTable
   private readonly locus: SearchBox | null
+  private readonly bar: SequenceBar | null
 
   constructor(options: ContigsTableOptions) {
     const payload = options.data.table
@@ -151,20 +172,38 @@ export class ContigsTable {
     // Optional on the class, always passed by the session: a table with nowhere
     // to send a locus should not grow a box that pretends otherwise, and this
     // one is mounted from two places.
+    //
+    // With an assembly it is the browser's whole bar — box, **go**, the switch
+    // and a ruler to drag on — and without one it is the box alone, which is
+    // what a metacool's per-genome contig list gets.
     const go = options.onOpenRegion
-    this.locus =
-      go === undefined
-        ? null
-        : new SearchBox({
-            placeholder: 'contig, or contig:start-end',
-            title:
-              'Open a window inside a sequence without opening the whole of it first — ' +
-              'chrIV:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
-              'cooler. The same box the / key opens.',
-            onSubmit: (text) => {
-              if (text !== '') go(text)
-            },
-          })
+    const assembly = options.assembly
+    if (go !== undefined && assembly !== undefined) {
+      this.bar = new SequenceBar({
+        assembly,
+        ...(options.store === undefined ? {} : { store: options.store }),
+        ...(options.extraControl === undefined ? {} : { extraControl: options.extraControl }),
+        onOpenContig: (name) => options.onOpenContig(name),
+        onOpenRegion: (region) => go(region),
+        ...(whole === undefined ? {} : { onOpenWhole: whole }),
+      })
+      this.locus = null
+    } else {
+      this.bar = null
+      this.locus =
+        go === undefined
+          ? null
+          : new SearchBox({
+              placeholder: 'contig, or contig:start-end',
+              title:
+                'Open a window inside a sequence without opening the whole of it first — ' +
+                'chrIV:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
+                'cooler. The same box the / key opens.',
+              onSubmit: (text) => {
+                if (text !== '') go(text)
+              },
+            })
+    }
 
     this.el = el(
       'section',
@@ -186,9 +225,15 @@ export class ContigsTable {
               'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
         }),
         ...(this.locus === null ? [] : [this.locus.el]),
+        ...(this.bar === null ? [] : [this.bar.el]),
       ),
       this.table.el,
     )
+  }
+
+  /** The window or a column moved; the ruler is drawn to its own width. */
+  remeasure(): void {
+    this.bar?.remeasure()
   }
 
   /**
@@ -202,12 +247,14 @@ export class ContigsTable {
    * where a reader narrowing a list is already looking.
    */
   focusSearch(): void {
-    if (this.locus !== null) this.locus.focus()
+    if (this.bar !== null) this.bar.focus()
+    else if (this.locus !== null) this.locus.focus()
     else this.table.focusSearch()
   }
 
   /** Release the table's listeners and flush its pending filter state. */
   destroy(): void {
     this.table.destroy()
+    this.bar?.destroy()
   }
 }
