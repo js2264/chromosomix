@@ -78,6 +78,8 @@ export const runInsulation: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
+  // cooltools' `ignore_diags`, and its arithmetic: `|col - row| < n`.
+  const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 2)))
   const windows = windowLadder(job.params)
   const widest = windows[windows.length - 1]
 
@@ -119,7 +121,7 @@ export const runInsulation: TaskRunner = async (job) => {
     for (let w = 0; w < windows.length; w++) {
       const sums = diamondSums(
         { size, values: square.values },
-        { window: windows[w], minValid },
+        { window: windows[w], minValid, ignoreDiags },
       )
       const score = insulationScore(sums)
       for (let local = 0; local < size; local++) {

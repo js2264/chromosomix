@@ -48,6 +48,50 @@ describe('diamondSums', () => {
     expect(sums[2]).toBe(4)
   })
 
+  /**
+   * cooltools' `ignore_diags`, applied to the diamond's **inner corner**.
+   *
+   * The rectangle `[i - w, i) x [i, i + w)` never touches the main diagonal, so
+   * what a diagonal cut removes is the corner nearest it — where self-ligation
+   * and unligated fragments land. Those cells are the largest in the matrix, so
+   * at a small window the corner can be most of the sum, and a track carried by
+   * it is a picture of how deep the near-diagonal is rather than of what crosses
+   * the bin.
+   *
+   * The count is the triangle `1 + 2 + ... + (n - 1)`: at `w = 3` a cut of 2
+   * removes one cell and a cut of 3 removes three.
+   */
+  it('trims the corner nearest the diagonal, by cooltools’ count', () => {
+    const square = ones(12)
+    expect(diamondSums(square, { window: 3, minValid: 0 })[6]).toBe(9)
+    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 0 })[6]).toBe(9)
+    // Offset 1 is the single cell (i - 1, i).
+    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 2 })[6]).toBe(8)
+    // …and offsets 1 and 2 are three cells.
+    expect(diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 3 })[6]).toBe(6)
+  })
+
+  /**
+   * `minValid` is a fraction of what can be counted, so trimming the corner must
+   * shrink the denominator with it — otherwise raising the cut quietly raises
+   * the bar a bin has to clear, and bins start losing their score for a reason
+   * that has nothing to do with their data.
+   */
+  it('measures coverage against the cells it is allowed to count', () => {
+    const square = ones(12)
+    // 9 cells, 3 cut away, 6 countable and all 6 present: a demand for every
+    // cell is met.
+    expect(diamondSums(square, { window: 3, minValid: 1, ignoreDiags: 3 })[6]).toBe(6)
+  })
+
+  // The cut cannot take more than the diamond has. A window of 1 is one cell at
+  // offset 1, so a cut of 2 or more leaves nothing and the bin has no score
+  // rather than a sum of zero.
+  it('leaves no score at all when the cut swallows the whole diamond', () => {
+    const sums = diamondSums(ones(12), { window: 1, minValid: 0, ignoreDiags: 2 })
+    expect(sums[6]).toBeNaN()
+  })
+
   it('gives the ends of a contig no score at all', () => {
     const sums = diamondSums(ones(10), { window: 2, minValid: 0.5 })
     // The diamond at `i` reads rows [i-2, i) and columns [i, i+2), so it fits

@@ -796,13 +796,15 @@ p {
   width: 100%;
 }
 
-/* The cursor is the whole affordance: a strip that can be dragged across has to
-   say so before the hand arrives, and there is no other furniture here that
-   could. */
+/* The caret, and not a resize arrow: what a drag here does is *name a stretch*,
+   which is the gesture selecting text makes, and it is the cursor the 1D browser
+   already wears over its own ruler. `ew-resize` says "move this edge", which is
+   a different promise and one this strip does not keep. The hairline drawn under
+   the pointer is the other half of the affordance. */
 .seqbar-canvas {
   display: block;
   width: 100%;
-  cursor: ew-resize;
+  cursor: text;
   outline: none;
   user-select: none;
 }
@@ -1870,6 +1872,18 @@ p {
 
 .view-head {
   margin-bottom: 0.75rem;
+}
+
+/* A head that is the bar and nothing else. The bar carries its own top margin
+   for the case where it follows a heading; with no heading above it that margin
+   is a gap under the tab strip, so it is taken back and the head's own breathing
+   room is stated here instead — the same 0.5rem the title would have sat on. */
+.view-head-bare {
+  padding-top: 0.5rem;
+}
+
+.view-head-bare > .seqbar {
+  margin-top: 0;
 }
 
 /* The locus box under a table's heading and hint, not beside them: the hint is

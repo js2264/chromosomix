@@ -2308,12 +2308,15 @@ eigenvector's signal comes from, so ticking them all is one answer the per-chrom
 rather than sixteen runs stacked up. The *expectation* stays per chromosome and that distinction is the
 whole of it — a cis cell is divided by its own sequence's decay at that separation, a trans cell has no
 separation and is divided by its own pair's block mean. **Which halves it reads is a control** and the
-three settings are three computations: *trans only* is the standard genome-wide call, with no distance
-decay entering the answer at all, and needs two sequences; *cis only* is **one correlation per
-sequence** rather than one across them, because a single square with its trans blocks removed
-correlates to a block-diagonal matrix whose leading eigenvector lives on one chromosome and is zero on
-the rest — and it is priced and gated per sequence accordingly, which makes it the mode that still runs
-where the other two are refused on size. It emits **A/B segments** from E1's sign beside the eigenvector,
+three settings are three computations: *cis only*, the **default**, is **one correlation per sequence**
+rather than one across them, because a single square with its trans blocks removed correlates to a
+block-diagonal matrix whose leading eigenvector lives on one chromosome and is zero on the rest — and it
+is priced and gated per sequence accordingly, which makes it the mode that still runs where the other
+two are refused on size; *trans only* is the standard genome-wide call, with no distance decay entering
+the answer at all, and needs two sequences. Both it and insulation take cooltools' **`ignore_diags`**
+(`|col − row| < n`, default 2), which is what keeps the near-diagonal — self-ligation and unligated
+fragments, the largest cells in the matrix and the least structural — from carrying a correlation or a
+diamond sum that then reads as structure. It emits **A/B segments** from E1's sign beside the eigenvector,
 because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
 comparison against zero. *Saddle*, which follows from the two above.
 *CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the

@@ -223,3 +223,65 @@ describe('the box', () => {
     view.bar.destroy()
   })
 })
+
+/**
+ * What the strip does under a pointer that has not pressed anything.
+ *
+ * A band is fifty pixels of shading with a name in the middle, so without a line
+ * following the pointer there is no way to see *where in it* a drag would start
+ * — which on a chromosome an inch wide is a megabase of ambiguity. The hairline
+ * is the 1D browser's own, in the same colour, so a hand that has learned one
+ * surface has learned the other; the caret cursor is the other half, and says
+ * that what this gesture does is name a stretch rather than move an edge.
+ *
+ * jsdom refuses a 2D context, so what a test can see is the *state* the paint is
+ * driven from rather than the pixels. That is the honest boundary: the drawing
+ * itself is `drawGuide`, which the browser has been using for as long as it has
+ * had a pointer.
+ */
+describe('the pointer over the strip', () => {
+  const move = (bar: SequenceBar, x: number): void => {
+    const canvas = bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: x, bubbles: true }))
+  }
+  const leave = (bar: SequenceBar): void => {
+    const canvas = bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }))
+  }
+
+  it('follows it, and lets go when it leaves', () => {
+    const view = open()
+    move(view.bar, 210)
+    expect(view.bar.hairlineAt).toBe(210)
+    move(view.bar, 211)
+    expect(view.bar.hairlineAt).toBe(211)
+    leave(view.bar)
+    expect(view.bar.hairlineAt).toBeNull()
+    view.bar.destroy()
+  })
+
+  // While a drag is out, its two edges are what the eye is on and a third line
+  // beside one of them is noise.
+  it('draws no hairline while a band is being dragged out', () => {
+    const view = open()
+    const canvas = view.bar.el.querySelector('.seqbar-canvas') as HTMLElement
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 120, bubbles: true }))
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 160 }))
+    move(view.bar, 160)
+    expect(view.bar.hairlineAt).toBeNull()
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: 160 }))
+    // …and it comes back the moment the drag is over.
+    move(view.bar, 160)
+    expect(view.bar.hairlineAt).toBe(160)
+    view.bar.destroy()
+  })
+
+  it('stays inside the strip when the pointer runs past its edge', () => {
+    const view = open()
+    move(view.bar, WIDTH + 200)
+    expect(view.bar.hairlineAt).toBe(WIDTH)
+    move(view.bar, -50)
+    expect(view.bar.hairlineAt).toBe(0)
+    view.bar.destroy()
+  })
+})

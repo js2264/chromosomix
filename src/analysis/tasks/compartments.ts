@@ -47,7 +47,11 @@ export const MAX_CORRELATION_BINS = 8192
 /** Which contacts enter the correlation; see the `contacts` parameter. */
 function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
   const value = params.contacts
-  return value === 'cis' || value === 'trans' ? value : 'both'
+  // An unrecognised value falls back to the default rather than to the widest
+  // reading: a stored session written by a later build can name a mode this one
+  // has never heard of, and the honest answer is the cheap per-chromosome run
+  // rather than a genome-wide correlation nobody asked for.
+  return value === 'trans' || value === 'both' ? value : 'cis'
 }
 
 /** The ticked sequence names. `[]` is a state the reader can reach — see below. */
@@ -92,7 +96,16 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'choice',
     key: 'contacts',
     label: 'Contacts',
-    default: 'both',
+    /**
+     * **Cis by default**, and the reason is what a default is for: the answer
+     * most readers want, at a price most files can pay. A per-chromosome
+     * eigenvector is the object people mean by "the compartment track", it is
+     * what every other tool produces without being asked, and it is the only one
+     * of the three that runs at a fine resolution — the correlation is cubic, so
+     * sixteen squares of 1,500 bins is a fraction of one of 24,000. A reader who
+     * wants the genome-wide call is asking a further question and can say so.
+     */
+    default: 'cis',
     /**
      * Three genuinely different computations, not a filter over one.
      *
@@ -113,14 +126,14 @@ const PARAMS: readonly ParamSpec[] = [
      */
     options: [
       {
-        value: 'both',
-        label: 'Cis and trans',
-        hint: 'One correlation over everything ticked. Each half keeps its own expectation.',
-      },
-      {
         value: 'cis',
         label: 'Cis only',
         hint: 'One correlation per sequence, over its own contacts. The cheapest, and per chromosome.',
+      },
+      {
+        value: 'both',
+        label: 'Cis and trans',
+        hint: 'One correlation over everything ticked. Each half keeps its own expectation.',
       },
       {
         value: 'trans',
@@ -128,6 +141,32 @@ const PARAMS: readonly ParamSpec[] = [
         hint: 'Between sequences alone, so no distance decay enters the answer. Needs two or more.',
       },
     ],
+  },
+  {
+    kind: 'number',
+    key: 'ignoreDiags',
+    label: 'Diagonals to ignore',
+    /**
+     * cooltools' `ignore_diags`, spelled the same way and meaning the same
+     * thing: `0` keeps every cell, `1` drops the main diagonal, `2` drops it and
+     * the two beside it — `|col − row| < n`.
+     *
+     * **Two by default**, which is cooltools' default and is not a round number
+     * picked for tidiness. The near-diagonal is where self-ligation and
+     * unligated fragments end up; those cells are the largest in the matrix and
+     * the least structural, and a row's correlation with its neighbours is
+     * carried disproportionately by the two or three of them nearest the
+     * diagonal — which say only that the bins are adjacent. Every chromosome's
+     * rows agree about that, so left in it enters the eigenvector as a component
+     * that is really a picture of the diagonal.
+     *
+     * Hidden under *trans only*, where there is no diagonal to ignore.
+     */
+    hint: '0 keeps every cell; 1 drops the main diagonal; 2 drops it and the two beside it.',
+    default: 2,
+    min: 0,
+    integer: true,
+    when: (params) => params.contacts !== 'trans',
   },
   {
     kind: 'number',
