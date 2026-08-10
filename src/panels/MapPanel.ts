@@ -39,6 +39,7 @@ import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
+import { attachRefine, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
 
@@ -277,6 +278,17 @@ export class MapPanel {
   private state: ViewState | null = null
   /** The sibling entries of the collection this map is inside; `[]` for a plain file. */
   private entries: string[] = []
+  /**
+   * The zoom's own reader for this panel.
+   *
+   * Its ceiling is the block this panel read, not the file: a companion
+   * follows the deck's navigation, and one that widened on its own would be
+   * showing a window the lock is about to drag it out of. Refining *in* is a
+   * different matter — the lock's currency is base pairs (§16.3), so five
+   * panels each at their own resolution stay in step by construction, which
+   * is the property that lets them refine independently.
+   */
+  private ladder: BlockLadder | null = null
   /** The group they live under — `resolutions` for an mcool, `entries` for an mmetacool. */
   private entryGroup = ''
   /** The `::1000` in the heading: a picker, where there is more than one rung. */
@@ -448,6 +460,8 @@ export class MapPanel {
 
   destroy(): void {
     this.disposed = true
+    this.ladder?.destroy()
+    this.ladder = null
     this.panel?.destroy()
     this.panel = null
     this.client.terminate()
@@ -791,10 +805,51 @@ export class MapPanel {
     // at is wrong in the one place nobody re-checks.
     this.panel.setCaptionFile(fileLabel(this.uri))
     this.panel.setData(result, fileLabel(this.uri))
+    this.armRefine(result, info, state)
     this.nameEl.title =
       `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
       `${fmt.int(result.nrows)}×${fmt.int(result.ncols)} cells` +
       (state.view === 'whole' ? ' (whole file)' : '')
+  }
+
+  /**
+   * Let this panel's zoom read, inside what it already has.
+   *
+   * Bin level and a positional axis only, and the ceiling is the block itself —
+   * see {@link ladder}. The score and the balance come from {@link scoreOf},
+   * which resolves against *this* file's columns rather than the lead's, exactly
+   * as {@link readBlock} does: a companion refining with the lead's choice would
+   * be drawing a column it may not have.
+   */
+  private armRefine(result: MatrixResult, info: OpenResult, state: ViewState): void {
+    this.ladder?.destroy()
+    this.ladder = null
+    if (result.level !== 'bin' || (result.contigsPerCell ?? 1) > 1) return
+    const choice = this.scoreOf(info, state)
+    const value = choice.value === undefined || choice.value === COUNT_SCORE ? {} : { value: choice.value }
+    const balance = choice.balance ? { balance: true } : {}
+    this.ladder = attachRefine({
+      panel: this.panel as MatrixPanel,
+      ceiling: { rows: result.rowExtent, cols: result.colExtent },
+      binsize: info.binsize ?? 1,
+      read: (rows, cols) => {
+        const own = this.client.cancellable<'matrix'>({
+          kind: 'matrix',
+          rows,
+          cols,
+          ...balance,
+          ...value,
+          budgetBytes: this.props.budgetBytes(),
+        })
+        return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
+      },
+      // A companion never replaces the page with an error screen, and a refine
+      // that will not fit is the mildest thing that can go wrong in one: the map
+      // it already has is a complete picture, and the sentence goes in the same
+      // line every other refusal here goes in.
+      onError: (err) => this.say(err instanceof Error ? err.message : String(err)),
+    })
+    this.ladder.adopt(result)
   }
 
   /** One line under the heading, or none. */

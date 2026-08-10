@@ -50,6 +50,7 @@ import {
   type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { attachRefine, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 
@@ -233,6 +234,17 @@ export class WholeView {
   /** The read in flight, so it can be called off. */
   private running: Cancellable<MatrixResult> | null = null
   private disposed = false
+  /**
+   * The zoom's own reader, once the gated pass has produced a picture.
+   *
+   * This is the view the whole feature is for: a whole file arrives pooled
+   * — the note under it says by how much — and until now the only way to
+   * sharpen it was to leave and open something smaller. The gate is
+   * untouched: the full pass still runs once, on an explicit action, and
+   * what the ladder adds is *bounded* reads inside the picture it produced,
+   * never another pass over every pixel.
+   */
+  private ladder: BlockLadder | null = null
 
   constructor(private readonly props: WholeViewProps) {
     this.level = props.level
@@ -406,6 +418,8 @@ export class WholeView {
     this.disposed = true
     this.running?.cancel()
     this.running = null
+    this.ladder?.destroy()
+    this.ladder = null
     this.panel.destroy()
   }
 
@@ -645,6 +659,7 @@ export class WholeView {
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(this.byGenome(result), 'Whole genome', second)
       this.summary.replaceChildren(...this.summarise(result))
+      this.armRefine(rows, result, budget)
     } catch (err) {
       // `disposed` covers the case the others need a guard for: closing the map
       // puts the reader down, which rejects this read after the browser has
@@ -688,6 +703,67 @@ export class WholeView {
    * from. Only here is the axis the whole metagenome, and only here are 2,082
    * contig hairlines a grey wash over the 48 blocks that are the point.
    */
+  /**
+   * Let the zoom read inside the whole-file picture.
+   *
+   * Three things this deliberately does *not* do. It is not armed at contig
+   * level or over a selection: a cell there is a whole sequence and there is no
+   * finer grid under it. It does not send `this.wire()` — the plan this view
+   * chose for the whole file is the answer to a different question, and a
+   * request carrying an explicit plan bypasses the reader's `snapToGrid`, which
+   * would anchor the cell grid to the pan position and make cell values move as
+   * the reader panned. And it does not run another full pass: every read it
+   * makes is a bounded window inside the extent the gate already allowed.
+   */
+  private armRefine(
+    ceiling: Extent,
+    result: MatrixResult,
+    budget: { budgetBytes?: number },
+  ): void {
+    this.ladder?.destroy()
+    this.ladder = null
+    if (this.level !== 'bin' || this.props.selection !== undefined) return
+    if ((result.contigsPerCell ?? 1) > 1) return
+    const { client, balance, namesGenomes } = this.props
+    const genomes = namesGenomes ? { genomes: true } : {}
+    this.ladder = attachRefine({
+      panel: this.panel,
+      ceiling: { rows: ceiling, cols: ceiling },
+      binsize: this.props.binsize,
+      read: (rows, cols) => {
+        const own = client.cancellable<'matrix'>({
+          kind: 'matrix',
+          rows,
+          cols,
+          balance,
+          ...budget,
+          ...genomes,
+        })
+        return {
+          cancel: own.cancel,
+          promise: own.promise.then(async (block) => {
+            const other = await secondBlock(this.props.compare, (client2) =>
+              client2.request<'matrix'>({
+                kind: 'matrix',
+                rows,
+                cols,
+                balance,
+                ...budget,
+                ...genomes,
+              }),
+            )
+            const primary = this.byGenome(block)
+            return other === undefined ? { result: primary } : { result: primary, second: other }
+          }),
+        }
+      },
+      onError: (err) => {
+        if (err instanceof ViewerError) this.showRefusal(err)
+      },
+    })
+    this.ladder.adopt(this.byGenome(result))
+  }
+
   private byGenome(result: MatrixResult): MatrixResult {
     if (this.props.wholeFileLevel === undefined) return result
     if (result.rowGenomes === undefined || result.colGenomes === undefined) return result

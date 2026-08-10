@@ -25,6 +25,7 @@ import { MatrixPanel, axisRegion, blockSummary,
   type TurnPresentation,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
+import { attachRefine, type BlockLadder } from './refine'
 import { SearchBox } from './SearchBox'
 
 export interface PairViewProps {
@@ -96,6 +97,13 @@ export class PairView {
   private readonly search: SearchBox
   private level: 'bin' | 'contig'
   private disposed = false
+  /**
+   * The zoom's own reader. The two axes have separate ceilings — the two
+   * genomes — because a pair is a rectangle and its two sides are
+   * independent, which is the same reason the two ranges are resolved
+   * separately above.
+   */
+  private ladder: BlockLadder | null = null
 
   constructor(private readonly props: PairViewProps) {
     this.level = props.level
@@ -215,6 +223,8 @@ export class PairView {
 
   destroy(): void {
     this.disposed = true
+    this.ladder?.destroy()
+    this.ladder = null
     this.panel.destroy()
   }
 
@@ -226,6 +236,33 @@ export class PairView {
     select.value = selected
     select.addEventListener('change', () => onChange(select.value))
     return select
+  }
+
+  /** Let the zoom read inside the pair; bin level only, as everywhere. */
+  private armRefine(
+    rowCeiling: [number, number],
+    colCeiling: [number, number],
+    result: MatrixResult,
+  ): void {
+    this.ladder?.destroy()
+    this.ladder = null
+    if (this.level !== 'bin') return
+    this.ladder = attachRefine({
+      panel: this.panel,
+      ceiling: { rows: rowCeiling, cols: colCeiling },
+      binsize: this.props.binsize,
+      read: (rows, cols) => {
+        const own = this.props.client.cancellable<'matrix'>({
+          kind: 'matrix',
+          rows,
+          cols,
+          balance: this.props.balance,
+          ...(this.props.value === undefined ? {} : { value: this.props.value }),
+        })
+        return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
+      },
+    })
+    this.ladder.adopt(result)
   }
 
   private async load(): Promise<void> {
@@ -253,6 +290,7 @@ export class PairView {
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.rowGenome} × ${this.props.colGenome}`)
       this.renderSummary(result)
+      this.armRefine(rows.extent, cols.extent, result)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the
       // map puts the reader down, which rejects every read still in flight —

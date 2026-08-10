@@ -36,6 +36,7 @@ import {
   type TurnPresentation,
 } from './MatrixPanel'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { attachRefine, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions } from './SearchBox'
 import { stepper } from './Stepper'
@@ -137,6 +138,17 @@ export class RegionView {
   private readonly title: HTMLElement
   private readonly problem: HTMLElement
   private disposed = false
+  /**
+   * The zoom's own reader, once a block is on screen.
+   *
+   * Built after the first read rather than in the constructor, because it
+   * needs the ceiling — and the ceiling is the *whole sequence* this region
+   * is a window into, which is the one thing a region view knows and the
+   * other views do not. A genome view already reads its whole genome, so
+   * there is nowhere further out for it to go; a region is a window, and
+   * zooming out of a window should reach the rest of what it is a window on.
+   */
+  private ladder: BlockLadder | null = null
 
   constructor(private readonly props: RegionViewProps) {
     const store = props.annotations?.store
@@ -272,7 +284,100 @@ export class RegionView {
 
   destroy(): void {
     this.disposed = true
+    this.ladder?.destroy()
+    this.ladder = null
     this.panel.destroy()
+  }
+
+  /**
+   * Let the zoom read, now that there is a picture to zoom into.
+   *
+   * The ceiling is the **whole sequence** each axis is a window on, not the
+   * window itself: a region is the one view that is a viewport onto something
+   * bigger, so zooming out of it should reach the rest of the chromosome rather
+   * than stop at the edge of whatever was typed in the box. It costs one `range`
+   * request per axis, which reads no pixels — `parsed.contig` names the sequence
+   * and the reader answers with its bin extent from `chrom_offset` arithmetic
+   * (§4).
+   *
+   * Rebuilt per load, because a navigation is a different window on a possibly
+   * different sequence, and a ladder holding the last one would hand back blocks
+   * of somewhere else.
+   */
+  private async armRefine(
+    rows: ParsedRange,
+    result: MatrixResult,
+    cols: ParsedRange | undefined,
+  ): Promise<void> {
+    this.ladder?.destroy()
+    this.ladder = null
+    const ceiling = await this.wholeOf(rows, cols)
+    if (this.disposed || ceiling === null) return
+    const query = (rowExtent: [number, number], colExtent: [number, number]) => ({
+      kind: 'matrix' as const,
+      rows: rowExtent,
+      ...(cols === undefined ? {} : { cols: colExtent }),
+      balance: this.props.balance,
+      ...(this.props.value === undefined ? {} : { value: this.props.value }),
+    })
+    this.ladder = attachRefine({
+      panel: this.panel,
+      ceiling,
+      binsize: this.props.binsize,
+      read: (rowExtent, colExtent) => {
+        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent))
+        return {
+          cancel: own.cancel,
+          promise: own.promise.then(async (block) => {
+            const second = await secondBlock(this.props.compare, (client) =>
+              client.request<'matrix'>(query(rowExtent, colExtent)),
+            )
+            return second === undefined ? { result: block } : { result: block, second }
+          }),
+        }
+      },
+      onError: (err) => {
+        // Said once, in the line the region box already reports into, and not
+        // per frame: `BlockLadder` remembers a refusal so the same read is not
+        // reissued, and this is the sentence that goes with it.
+        this.problem.textContent = err instanceof Error ? err.message : String(err)
+        this.problem.classList.remove('hidden')
+      },
+    })
+    this.ladder.adopt(result)
+  }
+
+  /**
+   * The bin extent of the whole sequence each axis is a window on.
+   *
+   * `null` where an axis is not a window on a single sequence — a range that
+   * names several, or one the reader has since navigated away from — and the
+   * zoom then simply does not read, which is today's behaviour and is never
+   * wrong, only less.
+   */
+  private async wholeOf(
+    rows: ParsedRange,
+    cols: ParsedRange | undefined,
+  ): Promise<{ rows: [number, number]; cols: [number, number] } | null> {
+    const whole = async (range: ParsedRange): Promise<[number, number] | null> => {
+      // A genome range is already whole — `metacooler` refuses coordinates on
+      // one (§10) — so its own extent is the ceiling and there is nothing to ask.
+      if (range.kind === 'genome') return range.extent
+      try {
+        const full: ParsedRange = await this.props.client.request<'range'>({
+          kind: 'range',
+          range: range.label,
+        })
+        return full.extent
+      } catch {
+        return null
+      }
+    }
+    const rowCeiling = await whole(rows)
+    if (rowCeiling === null) return null
+    if (cols === undefined) return { rows: rowCeiling, cols: rowCeiling }
+    const colCeiling = await whole(cols)
+    return colCeiling === null ? null : { rows: rowCeiling, cols: colCeiling }
   }
 
   private async load(): Promise<void> {
@@ -310,6 +415,7 @@ export class RegionView {
         // panel is told before it is given the block.
         this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
         this.panel.setData(result, this.props.region, second)
+        await this.armRefine(parsed, result, undefined)
         return
       }
 
@@ -343,6 +449,7 @@ export class RegionView {
       // panel is told before it is given the block.
       this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
       this.panel.setData(result, `${this.props.region} × ${this.props.region2}`, second)
+      await this.armRefine(parsed, result, other)
     } catch (err) {
       // A view that has been torn down must not navigate the shell. Closing the
       // map puts the reader down, which rejects every read still in flight —
