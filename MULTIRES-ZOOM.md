@@ -2,9 +2,15 @@
 
 *A feasibility study and an implementation plan for progressive refinement in `metacooler-viewer`.*
 
-Status: **proposal**. Nothing in this document is implemented. Every claim about the code that is
-here today carries a `file:line` anchor and was read rather than remembered; where the source's own
-comments and its code disagree, this document says so and follows the code.
+Status: **built.** This document was written as a feasibility study, and what it proposed is now on
+disk — with four of its five v1 exclusions overruled, which is the largest change between the plan
+and the thing. §11 records what was decided, what that changed, and what was found by driving the
+app that no test had caught.
+
+Every claim about the code *as it was before this work* carries a `file:line` anchor and was read
+rather than remembered; where the source's own comments and its code disagreed, this document said
+so and followed the code. Anchors into files this work then changed have moved by a few lines; the
+symbols are still the right ones.
 
 ---
 
@@ -213,7 +219,7 @@ is being asked for.
 | **A** | Zooming into the block in hand re-reads the visible window at the finest grid that fits the picture, **within the currently open map** | one bounded read per settled gesture, *cheaper than the read that got you here* | **This is the proposal.** Works on every accepted file, ladder or not. |
 | **B** | Zooming crosses **rungs of an `.mcool`/`.mmetacool` ladder** | one lazy `openHdf5` per rung over the retained byte source, then as A | **Phase 2.** An accelerator and a correctness fix, never a requirement (SPECS §3.4). |
 | **C** | A **tile pyramid**: the view is a viewport onto a stream of fixed tiles, cached and evicted | a tile cache, an eviction policy, a seam-free compositor, a second render path | **Rejected.** SPECS §13, and unnecessary — see §3.2 below. |
-| **D** | Zooming *out* past the block streams in wider data | unbounded; at the limit it is the gated full-file scan §7.3 exists to prevent | **Rejected.** Zoom-out falls back to the resident anchor block, at zero I/O. |
+| **D** | Zooming *out* past the block streams in wider data | bounded by the view's own domain; free through anything already read | **Built** (it was proposed as rejected — see §11.1). A widening read is clipped to the ceiling, so it can never become the gated full-file scan §7.3 prevents. |
 
 Everything below is A, with B behind it.
 
@@ -472,19 +478,23 @@ chose in `binsPerCell` and the panel multiplies its bin size by it, exactly as i
 
 There is no new read path, no new guard and no new equivalence suite. That is the point.
 
-### D2 — Two blocks, and refine inward only
+### D2 — A few whole blocks, and a ceiling
 
-Each view keeps the block it entered with — the **anchor** — for as long as the view lives. The
-anchor is:
+*(Proposed as "two blocks, refine inward only"; overruled — §11.1.)*
 
-- the fallback whenever the view leaves the refined window (**zoom-out is free and instant**);
-- the colour **gauge**, so `vmin`/`vmax` never move under the reader's hand;
-- the wall `clampView` should be measured against.
+Each view keeps the blocks it has read, most recent first, bounded at three and at 160 MB. That
+small cache is what makes zooming **out** free: leaving the window a fine block covers falls back to
+a coarser one that is still in hand, instantly and with no request. Going wider than anything held
+costs one read, clipped to the **ceiling** — the view's own domain, which is the whole contig for a
+region, the genome for a genome view, the file for a whole view, and its own block for a deck
+companion. A zoom therefore cannot widen into the full-file scan §7.3 gates.
 
-Refinement therefore only ever goes *inward*, which mirrors `syncTurnDepth`'s asymmetry exactly
-(re-cut only when the band is too shallow, `MatrixPanel.ts:4163-4170`) and removes at a stroke:
-an eviction policy, unbounded memory, the gated full-file scan re-running, and the zoom-out
-streaming problem.
+The **widest** block held is the colour gauge, so `vmin`/`vmax` do not move while the reader zooms
+in; zooming out past it re-measures, which is right, because that reader is looking at data that was
+not in the picture before.
+
+None of this is a tile cache. Nothing is evicted mid-picture, nothing is stitched, and every entry
+is a whole bounded block that was drawn on its own.
 
 Memory: two blocks per panel, each ≤ 4096² × 4 B = **67 MB**, so ≤ 134 MB — the same order as
 today's compare path, which already holds up to five block-sized arrays at once
@@ -604,25 +614,18 @@ through base pairs, per rung, against that rung's own tables.
 
 ### D7 — What this is not
 
-Stated as decisions, in the house style, so they are not mistaken for omissions:
+Stated as decisions, in the house style, so they are not mistaken for omissions. **Four of these
+were proposed and then overruled** — see §11; what is left is the list as built:
 
 - **No tiles.** One block per picture, always. There is no compositor and no seam.
-- **No tile cache, no eviction.** Two blocks per panel, owned by the view, freed with it.
-- **No refinement on zoom-out.** The anchor is resident; zooming out is a free swap.
+- **No tile cache, no eviction mid-picture.** Two or three whole blocks per panel, owned by the
+  view, freed with it — kept so that zooming back out is a swap rather than a request.
 - **No per-axis resolution.** Both axes share one `k`, because the panel has one bin size and the
   labels down the side depend on it (`reader.worker.ts:417-421`).
-- **No refinement while a derivation is on.** O/E, VC, VC√ and ICE are measured *from the block*
-  (`render/derive.ts:13-23`), and `expectedModel` indexes its decay curve by absolute bin separation
-  (`:469-530`), so the same locus is a different number at a different grid. Refining under a
-  derivation would move the baseline under the reader's hand — which `derive.ts`'s own header names
-  as the dishonesty a tile server would introduce.
-- **No refinement while two files are blended.** `alignable()` refuses to merge blocks unless both
-  extents match exactly (`render/compare.ts:67-77`), and §5.7 refuses differing bin sizes outright:
-  *"one grid cannot be two resolutions"*. Both sides would have to refine in lockstep; not v1.
-- **No refinement on a turned map** in v1. `syncTurnDepth` already owns the block on that path and
-  the two policies would fight.
 - **No refinement of the genome × genome overview.** Its axes are genomes or contigs, not
-  positions; there is no finer grid to go to.
+  positions; a cell there *is* a sequence, so there is no finer grid to go to. This is the one
+  exclusion that survived, and it survived because it is not a limitation — it is what the picture
+  is.
 - **No refinement written to the URL.** See §8, last bullet.
 
 ---
@@ -877,7 +880,7 @@ resolves the window on that rung with a `range` request carrying the same `rung`
 |---|---|
 | **Feasible?** | Yes. |
 | **Needs a tile server?** | No. |
-| **Needs a tile cache or eviction?** | No — two blocks per panel. |
+| **Needs a tile cache or eviction?** | No — two or three *whole blocks* per panel, so zooming out is free. |
 | **Needs a resolution pyramid in the file?** | No. Works on a plain `.metacool`; a ladder is an accelerator (SPECS §3.4's rule, kept). |
 | **Needs a protocol change?** | Not for phase A. Two optional fields for phase B. |
 | **Needs a second render path?** | No. `render/` is untouched except for one new method. |
@@ -887,3 +890,68 @@ resolves the window on that rung with a `range` request carrying the same `rung`
 | **Prerequisite bug** | M0.1: the score column is dropped by every pooled read today, so crossing the pooling threshold already changes which quantity is drawn. |
 | **Biggest hazard** | The colour scale moving under the reader's hand. The `gauge` mechanism already solves it. |
 | **Where the precedent is** | `src/annotations/samples.ts` — the same feature, shipped, for the tracks drawn on the map's own axis. |
+
+
+---
+
+## 11. What was built, and where it differs from this plan
+
+The plan above was written before any of it existed. Four of its five v1 exclusions were overruled
+on review, and the reasons are worth keeping, because each of them was a real cost that turned out
+to be payable.
+
+### 11.1 The four exclusions that went
+
+| Proposed exclusion | Decision | What it cost |
+|---|---|---|
+| No refinement on **zoom-out** | **Refine both ways.** | The single anchor became a small bounded cache — two or three whole blocks, LRU by bytes — and the ladder gained a widening read, over-buying 4× and clipped to the view's own domain. Zooming out through levels already read costs nothing at all; only going wider than anything held costs a read. |
+| No refinement under a **derivation** | **Refine anyway.** | Nothing. `MatrixPanel.regrid` goes *through* `derive()` rather than around it, so O/E, VC, VC√ and ICE are recomputed on the incoming block exactly as they are on a navigation. The baseline does move with the window — which is already true of a region view today, and is a property of the derivation rather than of the zoom. |
+| No refinement while **two files are blended** | **Refine both, in lockstep.** | One `read` callback returns `{ result, second }` and the panel installs both at once, so `alignable()` sees two blocks of identical shape. §5.7's refusal is untouched: the two files still have to share a grid, which the compare gate established before either read was made. |
+| No refinement on a **turned (45°) map** | **Refine the square under it.** | Nothing, and it composes: `refineWindow` answers with the on-diagonal square the band was cut from, `derive()` re-cuts the band from the incoming square, and `syncTurnDepth` carries on doing what it already did. The two policies do not fight because they act on different things — one chooses the block, the other cuts a band out of whatever block is there. |
+
+### 11.2 What was found by running it
+
+Two defects survived a green test suite and were caught by driving the built app against
+`demo/yeast/Yeast_microC_G2M_1kb.cool` at whole-genome zoom. Both are the kind that only appear when
+a real block replaces a real block:
+
+1. **The summary line was written once.** `4,046 × 4,046 bins · effective resolution: 3.0 kb` stayed
+   above a picture that had become 63 × 63 at 1.0 kb. Fixed with an `onInstalled` hook that every
+   view re-says its own line through.
+2. **The gauge was never installed.** §7's first hazard, exactly as predicted and one line short of
+   being prevented: `setData` passes the gauge `derive` produces, which is `undefined` for anything
+   but a turned map, so the range was measured from the drawn block and a refine moved the legend
+   from `-4.215 … -1.918` to `-3.21 … -0.245`. The widest block is now handed over the first time a
+   refine narrows past it.
+
+Measured on that file: **3.0 kb → 1.0 kb on one bounded read**, zero reads during the gesture, zero
+on the way back out, and — because a 19 MB file fits inside the 64 MiB / 1 MiB-chunk LRU — zero
+network requests for the refine itself.
+
+### 11.3 Corrections to this document's own analysis
+
+- **§3.4's cost estimate was wrong on the first pass** and is corrected in place: the staircase costs
+  about 1.2× the anchor read across the whole zoom, not 0.15×, and the series runs expensive to cheap
+  rather than the reverse. What holds is the claim that matters — no single refine costs more than
+  the read that drew the view.
+- **§4.4 mis-stated `poolingNote`.** *"Zooming does not sharpen it"* was its docstring, not the
+  sentence under the map; the drawn phrase was `aggregated N × M bins to a pixel`. Both changed, and
+  the phrase now ends `· zoom in to sharpen` or `· open a smaller block to sharpen` depending on the
+  preference.
+- **M0.1's test needs a new fixture.** No golden in `test/golden/` has a second `/pixels` value
+  column — `floatcount.metacool` varies the *dtype* of `count`, not its name.
+- **`crossResolution` needed two rules the plan did not anticipate**, and the real `.mcool` found
+  them: a window that *starts* at a sequence starts at that sequence, and one that *reaches the end*
+  of a sequence reaches its end, whatever the two bin sizes divide into. Without them the far edge of
+  a whole chromosome landed in the next one at 2 kb, on exactly the five chromosomes
+  `coarse-extent.test.ts` was written about.
+
+### 11.4 What is in the tree
+
+| | |
+|---|---|
+| The policy | `src/ui/refine.ts` — `BlockLadder`, `chooseRung`, `rungsOf`, the preference |
+| The seam | `HeatmapView.regrid`, `MatrixPanel.regrid`, `MatrixPanel.setRefineListener` |
+| Cross-rung coordinates | `crossResolution` in `src/metacooler/coords.ts`; `rung` / `binsize` / `source` on the wire |
+| The multi-rung session | `src/worker/reader.worker.ts` — `mapFor`, `MAX_RUNGS`, `releaseRungs` |
+| Tests | `refine-ladder`, `regrid-window`, `cross-resolution`, `raster-count`, and a §12 `refine` budget |
