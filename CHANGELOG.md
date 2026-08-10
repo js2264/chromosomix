@@ -722,15 +722,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is the *legend*, at three lines with a `+N more`, by the drawer that has to fit
   it.
 
-  **Compartments runs over every sequence** rather than refusing until one is
-  named. The whole-genome answer is the per-chromosome one done for each of them
-  — the correlation matrix is `m²` in one chromosome's bins and pooling two would
-  correlate rows that share no expected curve — so it loops, the eigenvectors
-  land in one track over the whole bin grid, and a sequence past the bin-count
-  gate is skipped with a note rather than throwing away the twenty that worked.
-  Its *Quality* section is gone: the balancing tickbox is derived, and the
-  minimum row coverage is a threshold below which a row is noise rather than a
-  knob that changes an answer.
+  **Compartments takes a set of sequences** rather than refusing until one is
+  named — see the entry below. Its *Quality* section is gone: the balancing
+  tickbox is derived, and the minimum row coverage is a threshold below which a
+  row is noise rather than a knob that changes an answer.
 
   **Coverage starts with the total marginal alone**, which is what the task is
   opened for; the cis fraction is a second lane arriving unasked. **Track
@@ -744,6 +739,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   them as a BED, and the pileup over those calls is what APA does over any
   interval set. The descriptor is left whole, so bringing the row back is one
   line.
+
+- **Compartments correlates several chromosomes at once, cis and trans.** It
+  took one sequence, and before that it refused until one was named, on the
+  argument that compartments are a property of one chromosome. That argument is
+  about the *expectation* — which really is per chromosome and stays per
+  chromosome — and it does not carry to the correlation: two chromosomes in the
+  same compartment **touch each other in trans**, and a square holding those
+  trans blocks is where a genome-wide eigenvector's signal actually comes from.
+  So the control is now a list of tick boxes with **All** and **None** beside
+  it, every sequence is ticked to begin with, and what comes back is one E1 over
+  all of them rather than one per chromosome. Ticking a single sequence gives
+  the per-chromosome answer as the degenerate case of the same arithmetic.
+
+  The two denominators are the whole of the difference and are kept apart: a
+  **cis** cell is divided by its own sequence's decay at that separation — never
+  a pooled curve, which would divide a small chromosome by the average behaviour
+  of the large ones and read as a gradient along the eigenvector — while a
+  **trans** cell has no separation at all, so it is divided by the mean of its
+  own pair's block, per pair rather than one global trans mean.
+
+  What it reads is the coalesced runs of what was ticked, so everything ticked
+  is a single read of the whole file rather than 136 rectangles, and a scattered
+  subset pays a rectangle per pair of runs instead of reading the gaps between
+  them. The bin-count gate now counts the *whole* ticked set — a yeast genome is
+  12,100 bins at 1 kb and 1,210 at 10 kb — and the refusal says to untick some or
+  open the file coarser. The correlation is cubic in the bin count and now says
+  so beside the megabytes, reports progress from inside its own loop, and can be
+  cancelled there.
 
 - **A/B compartments come out as segments, not only as an eigenvector.** E1 is a
   number per bin and the thing that gets cited is the interval — *this arm is A,

@@ -2299,12 +2299,17 @@ artefact. *Diamond insulation* at any window, or several windows at once, with b
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
 *4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig.
 *Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
-per contig, behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
+behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
-correlation is too weak to decide a sign; over **every sequence by default**, one at a time, since the
-whole-genome answer is the per-chromosome one done for each of them, and emitting **A/B segments** from
-E1's sign beside the eigenvector, because the interval is what gets cited and thresholding a bigWig
-elsewhere is a second tool for one comparison against zero. *Saddle*, which follows from the two above.
+correlation is too weak to decide a sign. It is over **several ticked sequences, every one of them by
+default**, and the square it correlates holds their **cis and trans blocks together**: two chromosomes
+in the same compartment touch each other in trans, and that is where a genome-wide eigenvector's signal
+comes from, so ticking them all is one answer the per-chromosome runs cannot give rather than sixteen
+runs stacked up. The *expectation* stays per chromosome and that distinction is the whole of it — a cis
+cell is divided by its own sequence's decay at that separation, a trans cell has no separation and is
+divided by its own pair's block mean. It emits **A/B segments** from E1's sign beside the eigenvector,
+because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
+comparison against zero. *Saddle*, which follows from the two above.
 *CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the
 panel for now**, since everything it does is reachable through insulation's own boundary calls and an
 APA over them, and a composite whose two halves disagree about their units is worth holding back rather

@@ -49,6 +49,7 @@ import { PileupAccumulator, p2ll } from '@/analysis/apa'
 import {
   correlationMatrix,
   observedOverExpected,
+  singleGroupPlan,
   usableBins,
 } from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
@@ -469,7 +470,7 @@ suite('compartments, against numpy.linalg.eigh and cooltools.eigs_cis', () => {
     const index = usableBins(dense.values, n)
     const accumulator = new ExpectedAccumulator(n - 1)
     accumulator.addBlock(dense)
-    const oe = observedOverExpected(dense.values, n, index, accumulator.finish())
+    const oe = observedOverExpected(dense.values, n, index, singleGroupPlan(n, accumulator.finish()))
     const correlation = correlationMatrix(oe, index.length)
     const pairs = leadingEigenpairs(correlation, index.length, 1)
     return { index, vector: pairs.length > 0 ? pairs[0].vector : new Float64Array() }

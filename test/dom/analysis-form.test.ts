@@ -33,7 +33,7 @@ import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
 import { defaultParams, type AnalysisContext, type AnalysisTask } from '@/analysis/types'
 import { ParamForm } from '@/ui/ParamForm'
-import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
 
@@ -159,7 +159,7 @@ describe('balancing', () => {
 
 describe('a whole-sequence picker', () => {
   it('starts on every sequence, not on whatever the map is framed at', () => {
-    for (const task of [EXPECTED_TASK, INSULATION_TASK, COMPARTMENTS_TASK]) {
+    for (const task of [EXPECTED_TASK, INSULATION_TASK]) {
       const view = form(task)
       expect(view.value.region, task.id).toBe('')
       view.destroy()
@@ -233,6 +233,127 @@ describe('coverage', () => {
     expect(view.value.fraction).toBe(false)
     expect(view.value.cis).toBe(false)
     expect(view.value.trans).toBe(false)
+    view.destroy()
+  })
+})
+
+/**
+ * Compartments takes **several** sequences and correlates them together, cis
+ * and trans — which is a different quantity from the per-chromosome one and not
+ * an average of it: two chromosomes in the same compartment touch each other in
+ * trans, and that is where a genome-wide eigenvector's signal comes from.
+ *
+ * The convention worth pinning is the one about *empty*. Everywhere else in this
+ * app an empty selection means "all of them"; here it means the reader pressed
+ * **None**, and a run whose parameters read `[]` must not be indistinguishable
+ * from one that ran over everything. So unanswered (`null`) resolves to every
+ * sequence and `[]` stays `[]` and is refused.
+ */
+describe('ticking several sequences', () => {
+  it('starts with every one ticked, which is the genome-wide call', () => {
+    const view = form(COMPARTMENTS_TASK)
+    expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
+    const boxes = all<HTMLInputElement>(view.el, '.param-sequences input[type="checkbox"]')
+    expect(boxes).toHaveLength(3)
+    expect(boxes.every((box) => box.checked)).toBe(true)
+    view.destroy()
+  })
+
+  it('names each sequence and says how many are ticked', () => {
+    const view = form(COMPARTMENTS_TASK)
+    expect(
+      textsOf(view.el, '.param-sequences .param-check span:not(.param-check-note)'),
+    ).toEqual(['I', 'II', 'IV'])
+    // …with its length beside it, so a reader picking chromosomes can see which
+    // ones are worth correlating without leaving the form.
+    expect(textsOf(view.el, '.param-check-note')).toEqual([
+      '230.2 kb',
+      '813.2 kb',
+      '1.53 Mb',
+    ])
+    expect(asks(view, '3 of 3 ticked')).toBe(true)
+    view.destroy()
+  })
+
+  it('unticks one without touching the rest', () => {
+    let held: unknown = null
+    const view = new ParamForm({
+      specs: COMPARTMENTS_TASK.params,
+      context: context(),
+      value: defaultParams(COMPARTMENTS_TASK.params),
+      onChange: (next) => {
+        held = next.sequences
+      },
+    })
+    const boxes = all<HTMLInputElement>(view.el, '.param-sequences input[type="checkbox"]')
+    boxes[1].checked = false
+    boxes[1].dispatchEvent(new Event('change'))
+    expect(held).toEqual(['I', 'IV'])
+    view.destroy()
+  })
+
+  it('has a None that empties it and an All that fills it', () => {
+    const view = form(COMPARTMENTS_TASK)
+    buttonNamed(view.el, 'None')?.click()
+    expect(view.value.sequences).toEqual([])
+    expect(asks(view, '0 of 3 ticked')).toBe(true)
+
+    buttonNamed(view.el, 'All')?.click()
+    expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
+    view.destroy()
+  })
+
+  /**
+   * The half of the convention that a helpful `resolve` would quietly undo:
+   * pressing **None** is an answer, and re-filling it on the next context change
+   * would make the button do nothing a moment after it worked.
+   */
+  it('leaves an emptied list empty when the context changes under it', () => {
+    const view = form(COMPARTMENTS_TASK)
+    buttonNamed(view.el, 'None')?.click()
+    view.setContext(context())
+    expect(view.value.sequences).toEqual([])
+    view.destroy()
+  })
+
+  it('drops a name the open file does not have', () => {
+    const view = new ParamForm({
+      specs: COMPARTMENTS_TASK.params,
+      context: context(),
+      value: { ...defaultParams(COMPARTMENTS_TASK.params), sequences: ['I', 'chr21'] },
+      onChange: () => {},
+    })
+    expect(view.value.sequences).toEqual(['I'])
+    view.destroy()
+  })
+
+  it('refuses a run with nothing ticked, and says what to do', () => {
+    const view = form(COMPARTMENTS_TASK)
+    buttonNamed(view.el, 'None')?.click()
+    const refusal = COMPARTMENTS_TASK.estimate(context(), view.value).refusal ?? ''
+    expect(refusal).toMatch(/tick at least one/i)
+    view.destroy()
+  })
+
+  it('prices the whole ticked set as one correlation, not one per sequence', () => {
+    const view = form(COMPARTMENTS_TASK)
+    const cost = COMPARTMENTS_TASK.estimate(context(), view.value)
+    // 230 + 813 + 1531 bins, correlated together.
+    expect(cost.note).toContain('2,574 bin correlation matrix')
+    expect(cost.note).toContain('cis and trans')
+    view.destroy()
+  })
+
+  it('refuses a ticked set past the bin-count gate, counting the whole of it', () => {
+    const huge = context()
+    huge.contigs = [
+      { name: 'A', startBin: 0, bins: 5000, length: 5e6, genome: -1 },
+      { name: 'B', startBin: 5000, bins: 5000, length: 5e6, genome: -1 },
+    ]
+    const view = form(COMPARTMENTS_TASK, huge)
+    const refusal = COMPARTMENTS_TASK.estimate(huge, view.value).refusal ?? ''
+    expect(refusal).toContain('10,000×10,000')
+    expect(refusal).toMatch(/untick some/i)
     view.destroy()
   })
 })

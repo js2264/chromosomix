@@ -42,6 +42,7 @@ import type {
   ParamValue,
   Params,
   RegionParam,
+  SequencesParam,
   SeedParam,
   ToggleParam,
 } from '../analysis/types'
@@ -317,6 +318,29 @@ function columnsFor(spec: ColumnParam, context: AnalysisContext, params: Params)
   return numericColumns(sourceEntry(spec, context, params))
 }
 
+/**
+ * A set of ticked sequences, against the file that is actually open.
+ *
+ * Two jobs, and the first is the one the convention rests on: **never answered
+ * is every sequence**, so a task that takes one of these starts genome-wide
+ * rather than starting refused. `null` is what {@link defaultParams} writes and
+ * is the only value that means it — an array is the reader's answer, including
+ * the empty one they get by pressing **None**, which is left exactly as it is and
+ * refused at Run rather than helpfully undone.
+ *
+ * The second is repair: a name the file does not have is dropped, exactly as a
+ * dropped track is dropped from an entry parameter. That is a stored session
+ * reopened against another assembly, and a run asking the reader for
+ * `chr1` on a file whose sequences are `I`…`XVI` is a run that refuses itself
+ * for a reason nothing on screen explains.
+ */
+function resolveSequences(context: AnalysisContext, held: ParamValue | undefined): string[] {
+  const known = context.contigs.map((contig) => contig.name)
+  if (!Array.isArray(held)) return known
+  const has = new Set(known)
+  return held.filter((name): name is string => typeof name === 'string' && has.has(name))
+}
+
 /** A column choice, repaired by the same rule the entry choices follow. */
 function resolveColumn(
   spec: ColumnParam,
@@ -360,6 +384,9 @@ export function resolveEntryDefaults(
   }
   for (const spec of specs) {
     if (spec.kind === 'column') out[spec.key] = resolveColumn(spec, context, out)
+  }
+  for (const spec of specs) {
+    if (spec.kind === 'sequences') out[spec.key] = resolveSequences(context, out[spec.key])
   }
   // The controls that are not controls: a derived toggle is the file's answer,
   // not the reader's, so it is overwritten on every resolution rather than
@@ -768,6 +795,8 @@ export class ParamForm {
         return spec.multiple === true ? this.entryList(spec) : this.entrySelect(spec)
       case 'column':
         return this.columnControl(spec)
+      case 'sequences':
+        return this.sequenceList(spec)
       case 'region':
         return this.regionControl(spec)
       case 'seed':
@@ -1093,6 +1122,98 @@ export class ParamForm {
       shown: false,
       sync,
       refill,
+    }
+  }
+
+  /**
+   * Several sequences, ticked — with **All** and **None** beside the count.
+   *
+   * A list of tick boxes rather than a multiple `<select>`, for the reason the
+   * Sequences card in the General column gives: a `<select multiple>` needs a
+   * modifier to add to a selection and loses the lot to a stray click, which is a
+   * control that punishes the gesture it is there for. Ticks are what the rest of
+   * this application uses for choosing several of something.
+   *
+   * The two quick buttons are not a nicety. The two states a reader reaches for
+   * are *all of them* and *one of them*, and getting from one to the other by
+   * hand on a sixteen-chromosome yeast is sixteen clicks in the wrong direction —
+   * so **None** followed by one tick is the second, and **All** is the way back.
+   * The line beside them says how many of how many, because a list scrolled past
+   * its own bottom cannot be counted by eye.
+   */
+  private sequenceList(spec: SequencesParam): Control {
+    const labelId = `${this.id}-${spec.key}-label`
+    const list = el('div', { class: 'ann-list param-checks param-sequences' })
+    const count = el('span', { class: 'hint param-check-count' })
+    let boxes: Array<{ name: string; input: HTMLInputElement }> = []
+
+    const chosen = (): string[] => {
+      const held = this.params[spec.key]
+      return Array.isArray(held)
+        ? held.filter((item): item is string => typeof item === 'string')
+        : []
+    }
+    const commitTicked = (): void => {
+      this.commit(
+        spec.key,
+        boxes.filter((box) => box.input.checked).map((box) => box.name),
+      )
+    }
+    const refill = (): void => {
+      list.replaceChildren()
+      boxes = this.context.contigs.map((contig) => {
+        const input = el('input', { class: 'checkbox', type: 'checkbox' })
+        input.addEventListener('change', commitTicked)
+        list.appendChild(
+          el(
+            'label',
+            { class: 'ann-head param-check' },
+            input,
+            el('span', { text: contig.name }),
+            el('span', { class: 'hint param-check-note', text: fmt.bp(contig.length) }),
+          ),
+        )
+        return { name: contig.name, input }
+      })
+      if (boxes.length === 0) {
+        list.appendChild(el('div', { class: 'hint', text: 'this file has no sequences' }))
+      }
+    }
+    const sync = (): void => {
+      const held = new Set(chosen())
+      for (const box of boxes) box.input.checked = held.has(box.name)
+      count.textContent =
+        boxes.length === 0
+          ? ''
+          : `${fmt.int(held.size)} of ${fmt.int(boxes.length)} ticked`
+    }
+
+    const quick = el(
+      'div',
+      { class: 'param-check-actions' },
+      button(
+        'All',
+        () => this.commit(spec.key, this.context.contigs.map((contig) => contig.name)),
+        { class: 'btn btn-quiet', title: 'Tick every sequence' },
+      ),
+      button('None', () => this.commit(spec.key, []), {
+        class: 'btn btn-quiet',
+        title: 'Untick every sequence',
+      }),
+      count,
+    )
+
+    refill()
+    sync()
+    return {
+      spec,
+      wrapper: this.wrap(spec, this.blocked(spec, el('div', {}, quick, list), labelId)),
+      shown: false,
+      sync,
+      refill: () => {
+        refill()
+        sync()
+      },
     }
   }
 

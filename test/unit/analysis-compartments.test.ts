@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import {
   correlationMatrix,
   observedOverExpected,
+  singleGroupPlan,
   phaseComponent,
   saddle,
   usableBins,
@@ -63,7 +64,7 @@ function chainOf(values: Float32Array, n: number): { component: Float64Array; in
     colExtent: [0, n],
   })
   const index = usableBins(values, n, 0.1)
-  const oe = observedOverExpected(values, n, index, accumulator.finish())
+  const oe = observedOverExpected(values, n, index, singleGroupPlan(n, accumulator.finish()))
   const correlation = correlationMatrix(oe, index.length)
   const pairs = leadingEigenpairs(correlation, index.length, 1)
   return { component: pairs[0].vector, index }
@@ -125,9 +126,71 @@ describe('observedOverExpected', () => {
     const accumulator = new ExpectedAccumulator(n)
     accumulator.addBlock({ nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] })
     const index = Int32Array.from([0, 1, 2, 3])
-    const oe = observedOverExpected(values, n, index, accumulator.finish())
+    const oe = observedOverExpected(values, n, index, singleGroupPlan(n, accumulator.finish()))
     // Every cell equals the mean at its own offset, so every ratio is 1.
     for (const value of oe) expect(value).toBeCloseTo(1, 12)
+  })
+
+  /**
+   * Two sequences in one square, which is what a genome-wide run builds.
+   *
+   * The two halves of the plan are two different questions and the test is
+   * really about not conflating them. A **cis** cell is divided by *its own*
+   * sequence's decay — pooling the two would divide a small chromosome by the
+   * average behaviour of a large one, which comes out as a gradient along the
+   * eigenvector and looks exactly like a compartment. A **trans** cell has no
+   * separation at all, so there is no curve to read and the expectation is that
+   * pair's own block mean; reading `|col − row|` there would file every trans
+   * cell under a made-up separation.
+   */
+  it('divides cis by its own sequence’s decay and trans by the pair’s mean', () => {
+    // Rows 0–1 are sequence A, rows 2–4 are sequence B. A's cis cells are 10 on
+    // the diagonal and 5 off it; B's are 100 and 50; the trans block is 3.
+    const n = 5
+    const group = Int32Array.from([0, 0, 1, 1, 1])
+    const values = new Float32Array(n * n)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const same = group[r] === group[c]
+        const scale = group[r] === 0 ? 1 : 10
+        values[r * n + c] = same ? (r === c ? 10 * scale : 5 * scale) : 3
+      }
+    }
+
+    const cis = [0, 1].map((g) => {
+      const accumulator = new ExpectedAccumulator(n)
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (group[r] !== g || group[c] !== g) continue
+          accumulator.add(Math.abs(c - r), values[r * n + c])
+        }
+      }
+      return accumulator.finish()
+    })
+    const trans = Float64Array.from([Number.NaN, 3, 3, Number.NaN])
+    const index = Int32Array.from([0, 1, 2, 3, 4])
+    const oe = observedOverExpected(values, n, index, { group, cis, trans })
+
+    // Every cell is exactly its own expectation, so the whole matrix is 1 —
+    // including across the boundary, where a shared curve would have produced
+    // 3/10 on one side and 3/100 on the other.
+    for (const value of oe) expect(value).toBeCloseTo(1, 12)
+  })
+
+  it('answers a trans pair with nothing in it with a gap, not with the count', () => {
+    const n = 2
+    const group = Int32Array.from([0, 1])
+    const values = Float32Array.from([1, 7, 7, 1])
+    const flat = new ExpectedAccumulator(0)
+    flat.add(0, 1)
+    const oe = observedOverExpected(values, n, Int32Array.from([0, 1]), {
+      group,
+      cis: [flat.finish(), flat.finish()],
+      trans: Float64Array.from([Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+    })
+    expect(oe[0]).toBeCloseTo(1, 12)
+    expect(oe[1]).toBeNaN()
+    expect(oe[2]).toBeNaN()
   })
 })
 

@@ -251,6 +251,32 @@ export interface RegionParam extends ParamBase {
 }
 
 /**
+ * **Several** whole sequences, ticked.
+ *
+ * The plural of {@link RegionParam}'s `sequences` mode, and a different question
+ * rather than a wider one. A task takes this where its answer is over a *set* of
+ * sequences at once and not one reading per sequence: compartments is the case —
+ * a correlation over four chromosomes' cis and trans blocks together is a
+ * genome-wide eigenvector, which is not any of the four per-chromosome ones and
+ * cannot be assembled from them.
+ *
+ * The value is the names, explicitly, and **never a sentinel**. `[]` means
+ * nothing is ticked — a state the form can be in and the estimate refuses — and
+ * every-one-ticked is every name, written out. That is the opposite convention
+ * to `genome/selection.ts`, where empty means the whole genome, and deliberately:
+ * there the empty set is the *default* and the reader never has to reach it,
+ * while here it is a thing a reader can do by pressing **None**, and a run whose
+ * parameters read `[]` should not be indistinguishable from one that ran over
+ * everything.
+ *
+ * Never answered at all is `null`, which the form resolves to every sequence the
+ * file has — so a task with one of these starts genome-wide.
+ */
+export interface SequencesParam extends ParamBase {
+  kind: 'sequences'
+}
+
+/**
  * The seed of a task that samples.
  *
  * Present on every one of them, and not as a nicety: a figure has to come out
@@ -269,6 +295,7 @@ export type ParamSpec =
   | EntryParam
   | ColumnParam
   | RegionParam
+  | SequencesParam
   | SeedParam
 
 /** The defaults a task starts with, before memory or a session overrides them. */
@@ -288,6 +315,12 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
         break
       case 'region':
         out[spec.key] = spec.default ?? ''
+        break
+      // `null` rather than `[]`, and the difference is the whole convention:
+      // the form resolves *unanswered* to every sequence the file has, and `[]`
+      // is a reader who pressed **None**. See {@link SequencesParam}.
+      case 'sequences':
+        out[spec.key] = null
         break
       // An entry parameter's default is whatever is loaded *now*, which this
       // function cannot know — the form resolves it against the context on the

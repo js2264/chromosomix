@@ -23,7 +23,6 @@
  * — are already in the session.
  */
 
-import { contigNamed } from '../context'
 import type {
   AnalysisContext,
   AnalysisTask,
@@ -45,34 +44,43 @@ import { BALANCE_PARAM } from './shared'
  */
 export const MAX_CORRELATION_BINS = 8192
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
+/** The ticked sequence names. `[]` is a state the reader can reach — see below. */
+function tickedNames(params: Params): string[] {
+  const value = params.sequences
+  return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : []
 }
 
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
+/** The ticked sequences, as rows of the contigs table. */
+function ticked(context: AnalysisContext, params: Params): ContextContig[] {
+  const names = new Set(tickedNames(params))
+  return context.contigs.filter((contig) => names.has(contig.name))
 }
 
 const PARAMS: readonly ParamSpec[] = [
   {
-    kind: 'region',
-    key: 'region',
-    label: 'Sequence',
-    sequences: true,
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'Sequences',
     /**
-     * Empty is **every sequence**, run one after another.
+     * **Several**, and every one of them ticked to begin with.
      *
-     * It used to be a refusal — *name a sequence* — on the argument that
-     * compartments are a property of one chromosome and there is no whole-file
-     * reading to fall back on. The first half is true and the second does not
-     * follow: the whole-genome answer is not one wider correlation matrix, it is
-     * the per-chromosome one done for each of them, which is exactly what a
-     * reader ends up doing by hand sixteen times. So the run loops, the
-     * eigenvectors land in one track over the whole bin grid, and the A/B calls
-     * land in one BED. Naming a sequence still narrows it to that one.
+     * It used to be a single picker, and before that a refusal — *name a
+     * sequence* — on the argument that compartments are a property of one
+     * chromosome. That argument is about the *expectation*, which really is per
+     * chromosome and stays per chromosome (`ExpectedPlan`), and it does not carry
+     * to the correlation: two chromosomes in the same compartment touch each
+     * other **in trans**, and a square holding those trans blocks is where a
+     * genome-wide eigenvector's signal actually comes from. Ticking them all is
+     * therefore not sixteen runs stacked up — it is one answer the per-sequence
+     * runs cannot give.
+     *
+     * Everything ticked is the default because it is the question most people
+     * are asking, and because the alternative default — one arbitrary sequence —
+     * is a run whose scope the reader did not choose. **None** and **All** are
+     * beside the list, since the two states worth reaching quickly are all of
+     * them and one of them.
      */
-    hint: 'Leave empty to run over every sequence, one at a time.',
+    hint: 'One correlation over all of them, cis and trans. Ticking one gives that chromosome alone.',
   },
   {
     kind: 'number',
@@ -138,96 +146,95 @@ const PARAMS: readonly ParamSpec[] = [
 ]
 
 /**
- * The sweep over every sequence, priced.
+ * How many dense reads a set of ticked sequences costs.
  *
- * One dense square per sequence, one correlation matrix at a time — so the bytes
- * to state are the **largest** of them rather than their sum: they are held one
- * after another and released, and quoting the total would be quoting a peak that
- * never happens. Sequences past the limit are counted and named as skipped
- * rather than made into a refusal, which is what the run itself does with them.
+ * The **coalesced runs**, squared and halved: adjacent ticked sequences are one
+ * run and read as one rectangle, so everything ticked is a single read of the
+ * whole file rather than 136 of them. A scattered subset pays a rectangle per
+ * pair of runs, which is the honest price of not reading the gaps between them.
  */
-function estimateSweep(context: AnalysisContext): CostEstimate {
-  const usable = context.contigs.filter((contig) => contig.bins <= MAX_CORRELATION_BINS)
-  const skipped = context.contigs.length - usable.length
-  if (usable.length === 0) {
-    return {
-      class: 'free',
-      requests: 0,
-      bytes: 0,
-      note: 'Nothing to read.',
-      refusal:
-        `Every sequence in this file is past the ${MAX_CORRELATION_BINS.toLocaleString()}-bin ` +
-        'limit on a correlation matrix. Open the file at a coarser resolution.',
-    }
+function readsFor(context: AnalysisContext, chosen: readonly ContextContig[]): number {
+  const ticked = new Set(chosen.map((contig) => contig.name))
+  let runs = 0
+  let inRun = false
+  for (const contig of context.contigs) {
+    const on = ticked.has(contig.name)
+    if (on && !inRun) runs++
+    inRun = on
   }
-  const widest = usable.reduce((most, contig) => Math.max(most, contig.bins), 0)
-  const bytes = widest * widest * 8
-  return {
-    class: 'scan',
-    requests: usable.length * 4,
-    bytes,
-    note:
-      `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
-      `dense square and one correlation matrix at a time — up to ${(bytes / 1e6).toFixed(0)} MB ` +
-      `held at once. ${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped. ` : ''}` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
-  }
+  return (runs * (runs + 1)) / 2
 }
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  // Empty is every sequence now, not a refusal: the whole-genome answer is the
-  // per-chromosome one done for each of them (see the `region` parameter).
-  if (regionOf(params) === '') return estimateSweep(context)
-  const contig = regionContig(context, regionOf(params))
-  if (contig === undefined) {
-    return {
-      class: 'free',
-      requests: 0,
-      bytes: 0,
-      note: 'Nothing to read.',
-      refusal: `This file has no sequence called ${regionOf(params).split(':')[0].trim()}.`,
-    }
-  }
-
-  const bytes = contig.bins * contig.bins * 8
-  if (contig.bins > MAX_CORRELATION_BINS) {
+  const chosen = ticked(context, params)
+  if (chosen.length === 0) {
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `Refusing to build a ${contig.bins.toLocaleString()}×${contig.bins.toLocaleString()} ` +
-        `correlation matrix (${(bytes / 1e9).toFixed(1)} GB) for ${contig.name}. ` +
-        `The limit is ${MAX_CORRELATION_BINS.toLocaleString()} bins a side. Open the file at a ` +
-        'coarser resolution, or choose a shorter sequence.',
+        tickedNames(params).length === 0
+          ? 'Tick at least one sequence. All of them is the genome-wide compartment call.'
+          : 'None of the ticked sequences is in this file.',
     }
   }
 
-  const balance = params.balance !== false
+  const bins = chosen.reduce((total, contig) => total + contig.bins, 0)
+  const bytes = bins * bins * 8
+  if (bins > MAX_CORRELATION_BINS) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal:
+        `Refusing to build a ${bins.toLocaleString()}×${bins.toLocaleString()} correlation ` +
+        `matrix (${(bytes / 1e9).toFixed(1)} GB) over ${chosen.length.toLocaleString()} ticked ` +
+        `${chosen.length === 1 ? 'sequence' : 'sequences'}. The limit is ` +
+        `${MAX_CORRELATION_BINS.toLocaleString()} bins a side — untick some, or open the file at ` +
+        'a coarser resolution.',
+    }
+  }
+
+  const balance = params.balance === true
   const framing = context.framing
-  const extent: [number, number] = [contig.startBin, contig.startBin + contig.bins]
+  const spanned: [number, number] = [
+    Math.min(...chosen.map((contig) => contig.startBin)),
+    Math.max(...chosen.map((contig) => contig.startBin + contig.bins)),
+  ]
   const free =
     context.blockLoaded &&
     framing !== null &&
     framing.binsPerCell === 1 &&
     framing.balance === balance &&
-    framing.rows[0] <= extent[0] &&
-    framing.rows[1] >= extent[1] &&
-    framing.cols[0] <= extent[0] &&
-    framing.cols[1] >= extent[1]
+    framing.rows[0] <= spanned[0] &&
+    framing.rows[1] >= spanned[1] &&
+    framing.cols[0] <= spanned[0] &&
+    framing.cols[1] >= spanned[1]
 
+  // The correlation is `m²` doubles and `m³` operations, and it is the second
+  // number that decides whether a run is worth starting: at a thousand bins it
+  // is a second and at four thousand it is minutes. Both are stated, because a
+  // reader who sees only the megabytes will tick everything at a fine
+  // resolution and conclude the app has hung.
   const note =
-    `A ${contig.bins.toLocaleString()} bin correlation matrix — ` +
-    `${(bytes / 1e6).toFixed(0)} MB held while it is solved.`
-  return free
-    ? { class: 'free', requests: 0, bytes, note: `${note} Read from the block on screen.` }
-    : {
-        class: 'bounded',
-        requests: balance ? 5 : 4,
-        bytes,
-        note: `${note} One dense square to read it from.`,
-      }
+    `A ${bins.toLocaleString()} bin correlation matrix over ` +
+    `${chosen.length.toLocaleString()} ${chosen.length === 1 ? 'sequence' : 'sequences'}, cis and ` +
+    `trans — ${(bytes / 1e6).toFixed(0)} MB held while it is solved, and the correlation itself ` +
+    'grows as the cube of the bin count.'
+  if (free) {
+    return { class: 'free', requests: 0, bytes, note: `${note} Read from the block on screen.` }
+  }
+  const reads = readsFor(context, chosen)
+  return {
+    class: reads > 1 ? 'scan' : 'bounded',
+    requests: reads * (balance ? 5 : 4),
+    bytes,
+    note:
+      `${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build it ` +
+      'from. Progress is reported as it goes and it can be cancelled at any point.',
+  }
 }
 
 export const COMPARTMENTS_TASK: AnalysisTask = {
