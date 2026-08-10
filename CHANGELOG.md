@@ -14,6 +14,77 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Zooming sharpens the picture.** A block larger than the screen has arrived
+  coarsened since pooling landed — a whole yeast genome at 1 kb is drawn at
+  3.0 kb cells, and the note under it said so honestly and told you the remedy
+  was to open something smaller. That was true and it was not the interaction
+  anybody has in their hands. A zoom that **settles** past what the block can
+  show now reads that window again at the grid the picture could show: on the
+  demo yeast cooler, 3.0 kb becomes 1.0 kb on one bounded read, and on a file
+  that size the read comes out of the chunk cache without touching the network.
+
+  It changes one clause of SPECS §2 and leaves three standing, which is the whole
+  design. There is still no tile server, nothing is cut into tiles, and no
+  picture is ever assembled out of parts: what is drawn is always exactly one
+  bounded block. **A gesture still costs nothing** — the read goes out after the
+  window stops moving, never during it, and neither the renderer nor the panel
+  holds a reader to issue it with. It **terminates**, because there is no grid
+  below the file's own bins: one step for a whole yeast genome, three for a human
+  chromosome at 5 kb, and *none at all for a MAG*, whose block already is the
+  finest data in the file — §2's own case is untouched. And it is **bounded by
+  the view**: a zoom can never widen past the domain the view was entered on, so
+  it cannot become the full pixel scan §7.3 gates.
+
+  Zooming back **out** is served the same way and is usually free: two or three
+  whole blocks are kept, so leaving what a fine one covers falls back to a coarse
+  one still in hand. The colour range is measured from the widest of them and
+  does not move while you zoom in — coarse cells are sums of bins, so a finer
+  block holds smaller numbers, and re-measuring would re-brighten the map for
+  somebody who changed nothing but the magnification.
+
+  It refines under an O/E map, under two files blended on the diagonal, under a
+  45° turn, and in every panel of a deck independently — the last of those
+  because the navigation lock's currency was always base pairs, so five maps at
+  five resolutions were already in step. The one picture that does not refine is
+  the genome × genome overview, whose axes are sequences rather than positions:
+  a cell there *is* a contig, and there is nothing finer to go to.
+
+  On by default; **Read finer data as you zoom** in the command palette turns it
+  off, and off is exactly the old behaviour. The note under a pooled map now ends
+  `· zoom in to sharpen` or `· open a smaller block to sharpen` depending on
+  which. `MULTIRES-ZOOM.md` is the study this came out of, with a closing section
+  on where the built thing differs from the plan.
+
+- **The resolution ladder drives the zoom (§3.4, §9).** "Wire the entries to the
+  zoom control" has been in the spec since the first draft and in README's own
+  list of gaps as *inferred but not driven*. A settled zoom now reads from the
+  coarsest rung of an `.mcool` or `.mmetacool` whose bins still fill a cell:
+  fewer stored pixels for the same picture, and — the reason that matters — a
+  balanced map that was **balanced at that resolution** rather than summed, which
+  is what `zoomify --balance` produces and what the reader has been calling "the
+  real answer" in a comment since pooling landed.
+
+  The rungs a zoom touches are opened beside the one that is open, over the same
+  mounted bytes, bounded at three and released with the session; a navigation
+  still closes the map, because a navigation means the last place is finished
+  with. Bin indices are not comparable between levels — five chromosomes of the
+  demo `.mcool` have one fewer 2 kb bin than the division says — so windows cross
+  through base pairs, per contig, with a whole sequence converting to its whole
+  self at either end. None of it is required: a plain `.metacool` has no ladder
+  and the zoom reads the open map, which is §3.4's own rule for what a ladder is
+  allowed to be.
+
+### Fixed
+
+- **A pooled read drew the wrong column.** `SpanScanOptions` had no `value`, so
+  every pooled, rolled-up and selection read walked `pixels/count` whatever the
+  request asked for, while the dense path honoured the choice — one view showing
+  two different quantities, decided by whether the block happened to cross the
+  pooling threshold, with nothing said. It is threaded now, in the one place both
+  paths meet. Latent since pooling landed; urgent once the resolution started
+  moving with the zoom, because a quantity that changes as you magnify is not a
+  picture of anything.
+
 - **`bin × bin` in the whole-genome view.** The overview offered two levels and
   both put one cell per *unit*: a contig cell sums a rectangle of
   `length × length`, and a metagenome's contigs span several orders of magnitude,
