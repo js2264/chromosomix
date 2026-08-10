@@ -501,6 +501,42 @@ function createRasterCanvas(width: number, height: number): RasterCanvas {
  */
 const DOUBLE_CLICK_MS = 250
 
+/**
+ * How long a freeze lasts before it shows a spinner.
+ *
+ * Most refines are served out of the byte source's chunk cache and land in a few
+ * milliseconds; a spinner that flashed on every one would be noise about
+ * something that did not happen. Long enough that a cached read is silent, short
+ * enough that a real one is announced before the reader wonders.
+ */
+const SPINNER_DELAY_MS = 140
+
+/** The spinner's ring radius, and how far its disc sits off the plot corner. */
+const SPINNER_RADIUS = 9
+const SPINNER_INSET = 10
+
+/** `performance.now` where there is one, so a spinner turns evenly. */
+function now(): number {
+  return typeof performance === 'undefined' ? Date.now() : performance.now()
+}
+
+/**
+ * `requestAnimationFrame`, where there is one.
+ *
+ * There is not, in two places this class already runs: the export path builds a
+ * view against an offscreen canvas, and the test suite runs under Node. Neither
+ * has anything to animate, so the honest answer is not to schedule — a spinner
+ * that never turns is exactly right for a figure and for a headless draw, and
+ * the alternative is a `ReferenceError` from a decoration.
+ */
+function frameLoop(run: () => void): number | null {
+  return typeof requestAnimationFrame === 'undefined' ? null : requestAnimationFrame(run)
+}
+
+function cancelFrameLoop(handle: number): void {
+  if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(handle)
+}
+
 /** Space reserved outside the plot area for tick labels, in CSS pixels. */
 export interface Margin {
   top: number
@@ -1254,6 +1290,12 @@ export class HeatmapView {
    * How many times this view has built a raster — see {@link rasterisations}.
    */
   private rasterCount = 0
+  /** Whether gestures are held — see {@link setFrozen}. */
+  private frozen = false
+  /** When the current freeze began, for the spinner's grace period. */
+  private frozenAt = 0
+  /** The animation loop that turns the spinner; `null` when it is not turning. */
+  private spinTimer: number | null = null
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -1573,6 +1615,7 @@ export class HeatmapView {
     separators: Separator[] | SeparatorSet = [],
     gauge?: DenseMatrix,
   ): void {
+    this.setFrozen(false)
     this.matrix = matrix
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
@@ -1908,6 +1951,7 @@ export class HeatmapView {
    * edge {@link setAnchor} named, which is what a turned band asks for.
    */
   fit(): void {
+    if (this.frozen) return
     this.recomputeBaseZoom()
     this.zoom = this.baseZoom
     const plot = this.plotRect
@@ -1921,6 +1965,7 @@ export class HeatmapView {
 
   /** Pan by a screen distance in CSS pixels. Positive `dx` drags content right. */
   panBy(dx: number, dy: number): void {
+    if (this.frozen) return
     this.originX -= dx / this.zoom
     this.originY -= dy / this.zoom
     this.clampView()
@@ -1933,6 +1978,7 @@ export class HeatmapView {
    * under it fixed. `factor > 1` zooms in.
    */
   zoomAt(x: number, y: number, factor: number): void {
+    if (this.frozen) return
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
     const plot = this.plotRect
     const px = x - plot.x
@@ -1951,6 +1997,107 @@ export class HeatmapView {
   /** Current zoom, in CSS pixels per matrix cell. */
   get zoomLevel(): number {
     return this.zoom
+  }
+
+  /**
+   * Hold the view still, and say so.
+   *
+   * Set while a finer block is being read for the window on screen
+   * (`ui/refine.ts`). Two things happen and both are the point.
+   *
+   * **The gestures stop.** Pan, zoom and refit are refused for the duration, so
+   * the picture is exactly where the reader left it when the new grid arrives
+   * and the swap is a change of *sharpness* and nothing else. Letting the zoom
+   * run on underneath would mean the block landed against a window that had
+   * moved since it was asked for — the reader would see it jump, and the jump
+   * would be the app catching up rather than anything in the data.
+   *
+   * **And it is visible.** The edge of what a block can show is a real boundary
+   * and until now it was an invisible one: the picture simply stopped improving,
+   * and whether that was the file's limit or the app's was not something the
+   * screen said. A held frame with a spinner in the corner says *this is the
+   * edge, and going past it costs a read* — at the moment it costs it.
+   *
+   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
+   * refines are served out of the chunk cache in a few milliseconds and a
+   * spinner that flashes on every wheel notch is worse than none. The freeze
+   * itself is immediate either way: a fast read is imperceptible, and a slow one
+   * is announced.
+   */
+  setFrozen(on: boolean): void {
+    if (this.frozen === on) return
+    this.frozen = on
+    this.frozenAt = on ? now() : 0
+    this.canvas.classList.toggle('is-frozen', on)
+    if (on) this.spin()
+    else this.stopSpin()
+    this.changed()
+  }
+
+  /** Whether gestures are currently held. */
+  get isFrozen(): boolean {
+    return this.frozen
+  }
+
+  private spin(): void {
+    if (this.spinTimer !== null) return
+    const tick = (): void => {
+      if (!this.frozen) {
+        this.spinTimer = null
+        return
+      }
+      this.spinTimer = frameLoop(tick)
+      // A redraw, not a re-raster: `draw` blits the raster it already has, which
+      // is what makes a turning spinner cost a `drawImage` rather than a pass
+      // over the block (see {@link rasterisations}).
+      this.draw()
+    }
+    this.spinTimer = frameLoop(tick)
+  }
+
+  private stopSpin(): void {
+    if (this.spinTimer !== null) cancelFrameLoop(this.spinTimer)
+    this.spinTimer = null
+  }
+
+  /**
+   * The spinner, in the bottom-left corner of the plot.
+   *
+   * Bottom-left because every other corner is taken: the key is top-right, the
+   * scale bar and the readout sit along the bottom edge outside the plot, and
+   * the top-left is where a turned map's diagonal comes to a point. Inside the
+   * plot rather than beside it, because what it is about is the picture.
+   */
+  private drawSpinner(): void {
+    if (!this.frozen) return
+    const elapsed = now() - this.frozenAt
+    if (elapsed < SPINNER_DELAY_MS) return
+    const plot = this.plotRect
+    const r = SPINNER_RADIUS
+    const cx = plot.x + SPINNER_INSET + r
+    const cy = plot.y + plot.height - SPINNER_INSET - r
+    const ctx = this.ctx
+    ctx.save()
+    // A disc behind it, for the same reason the key has one: this is drawn over
+    // data, and a ring over a dark map is a ring nobody sees.
+    ctx.beginPath()
+    ctx.arc(cx, cy, r + 5, 0, Math.PI * 2)
+    ctx.fillStyle = this.opts.labelHaloColor
+    ctx.globalAlpha = 0.88
+    ctx.fill()
+    ctx.globalAlpha = 1
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = this.opts.plotBorderColor
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.stroke()
+    const from = ((elapsed / 900) % 1) * Math.PI * 2
+    ctx.strokeStyle = this.opts.labelColor
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, from, from + Math.PI * 0.7)
+    ctx.stroke()
+    ctx.restore()
   }
 
   /**
@@ -2004,6 +2151,7 @@ export class HeatmapView {
    * `ViewportLock` expects to come back.
    */
   showCellWindow(rows: [number, number], cols: [number, number]): void {
+    if (this.frozen) return
     this.placeCellWindow(rows, cols)
     this.clampView()
     this.syncScales()
@@ -2675,6 +2823,9 @@ export class HeatmapView {
     }
     this.drawSelection()
     this.drawPlotBorder()
+    // Last, so it is over everything including the border: it is not part of the
+    // picture, it is a statement about the picture's state.
+    this.drawSpinner()
   }
 
   /**

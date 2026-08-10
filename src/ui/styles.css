@@ -2673,6 +2673,27 @@ p {
   text-overflow: ellipsis;
 }
 
+/* What one square of the map covers. Under the name and quieter than it: the
+   title says what the numbers are, this says what they are *of*, and run
+   together on one line they read as one long name. Monospaced because it is a
+   measurement, like the two bounds under it. */
+/* Held while a finer block is read for the window on screen (`ui/refine.ts`).
+   The pointer says the map is not taking gestures before the reader tries one
+   and finds out; the spinner in the corner says why. */
+canvas.is-frozen {
+  cursor: progress;
+}
+
+.map-key-note {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.9em;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .map-key-row {
   display: flex;
   align-items: center;

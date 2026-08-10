@@ -4549,7 +4549,33 @@ export class MatrixPanel {
             ? 'balanced'
             : 'count'
     const title = keyTitle([base, this.units], scale.transform, prefix)
-    return keyContent(scale, title, (value) => trimNumber(value, 3))
+    return { ...keyContent(scale, title, (value) => trimNumber(value, 3)), ...this.keyNote() }
+  }
+
+  /**
+   * The cell size, for the corner of the map.
+   *
+   * It is on the line above the map already, and it is here as well because the
+   * two answer at different moments. The line is read once, when the view opens.
+   * The key is read *while looking* — and now that a zoom changes the grid under
+   * the reader, the number it changes to is the one thing about the picture that
+   * cannot be seen by looking at it: two maps of the same locus at 3 kb and at
+   * 200 bp are different figures, and nothing in the pixels says which is which.
+   *
+   * It goes into the exported key too, which is where it matters most: a figure
+   * that carries its own resolution needs no caption to say it, and a methods
+   * section quoting a number nobody can check against the panel is how the wrong
+   * one gets published.
+   *
+   * Empty where there is nothing to say — a contig-level block whose cells are
+   * one sequence each — because a key line that is sometimes blank is better
+   * than one that pads itself with `1 sequence per cell`.
+   */
+  private keyNote(): { note?: string } {
+    const data = this.data
+    if (data === null) return {}
+    const note = resolutionNote(this.baseBinsize, data)
+    return note === '' ? {} : { note: note.replace(/^effective resolution: /, '') }
   }
 
   /**
@@ -4981,6 +5007,20 @@ export class MatrixPanel {
         if (view !== null) this.refineListener(view)
       }
     })
+  }
+
+  /**
+   * Hold the map still while a finer block is read for it.
+   *
+   * Straight through to the view, because that is where both halves of it live
+   * — the gestures it refuses and the spinner it draws. It is a method rather
+   * than something the panel infers from its own busy state because the two are
+   * different waits: {@link setBusy} veils the map while a *navigation* fetches
+   * a different picture, and this holds the picture that is already there while
+   * a sharper version of it arrives.
+   */
+  setFrozen(on: boolean): void {
+    this.heatmap.setFrozen(on)
   }
 
   /**

@@ -85,15 +85,26 @@ export const WIDEN_REACH = 4
 export const REFINE_FACTOR = 2
 
 /**
- * Milliseconds of stillness before a refine is issued.
+ * A refine is issued on the **first frame that needs one**, not after a pause.
  *
- * There is no gesture-end hook anywhere in the pan/zoom path — the only timers
- * in the panel are the double-tap deferrals — so settling is measured rather
- * than signalled: the window is watched, and a read goes out once it has stopped
- * moving. Long enough that a wheel gesture is one read rather than twenty, short
- * enough that it feels like part of the zoom rather than an afterthought.
+ * This was a trailing debounce — watch the window, read once it stops moving —
+ * because there is no gesture-end hook in the pan/zoom path and a read per frame
+ * of a drag would be twenty reads per wheel spin. It is gone, and what replaced
+ * it is better at the same job: the view **freezes** for the duration of the
+ * read (`HeatmapView.setFrozen`), so the gesture cannot continue and there is no
+ * second frame to debounce. One crossing is one read, by construction rather
+ * than by timing.
+ *
+ * It is also the more honest interaction. A debounce hides the moment the
+ * resolution changes — the picture keeps moving under the reader and then
+ * silently sharpens, at a moment they did not cause and cannot predict. A freeze
+ * puts the change where it happened: this is the edge of what the block in hand
+ * can show, and here is what it costs to go past it.
+ *
+ * The `inflight` guard is what makes the rule safe rather than the freeze: only
+ * one read is ever outstanding, so even a view that never froze could not issue
+ * more than one at a time.
  */
-export const SETTLE_MS = 120
 
 /** Blocks kept so that zooming back out costs nothing. */
 export const HELD_BLOCKS = 3
@@ -154,10 +165,6 @@ export interface LadderOptions {
   onBusy?(busy: boolean): void
   /** Told when a read fails, so the view can say so once rather than per frame. */
   onError?(err: unknown): void
-  /** Overridable for tests; `Date.now` otherwise. */
-  now?(): number
-  /** Overridable for tests; `setTimeout` otherwise. */
-  defer?(run: () => void, ms: number): () => void
 }
 
 interface Held {
@@ -183,9 +190,7 @@ export class BlockLadder {
   private held: Held[] = []
   private current: MatrixResult | null = null
   private inflight: { key: string; rows: Extent; cols: Extent; cancel(): void } | null = null
-  private cancelTimer: (() => void) | null = null
   private pending: { rows: Extent; cols: Extent; key: string } | null = null
-  private movedAt = 0
   /**
    * Reads that failed, by key.
    *
@@ -253,7 +258,7 @@ export class BlockLadder {
     }
 
     if (this.satisfied(view)) {
-      this.disarm()
+      this.pending = null
       return
     }
     if (this.refused.has(key)) return
@@ -269,11 +274,8 @@ export class BlockLadder {
       this.options.onBusy?.(false)
     }
 
-    if (this.pending === null || this.pending.key !== key) {
-      this.pending = { ...wanted, key }
-      this.movedAt = this.clock()
-    }
-    this.arm()
+    this.pending = { ...wanted, key }
+    this.fire()
   }
 
   /**
@@ -312,40 +314,11 @@ export class BlockLadder {
     return block.grid <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
   }
 
-  private clock(): number {
-    return (this.options.now ?? Date.now)()
-  }
-
-  private arm(): void {
-    if (this.cancelTimer !== null) return
-    const defer = this.options.defer ?? defaultDefer
-    this.cancelTimer = defer(() => {
-      this.cancelTimer = null
-      this.fire()
-    }, SETTLE_MS)
-  }
-
-  private disarm(): void {
-    this.cancelTimer?.()
-    this.cancelTimer = null
-    this.pending = null
-  }
-
-  /**
-   * Issue the pending read, unless the window is still moving.
-   *
-   * A trailing edge rather than a leading one: the read that matters is the one
-   * for where the reader stopped, not for the first frame of the gesture that
-   * got them there.
-   */
+  /** Issue the pending read. */
   private fire(): void {
     if (this.disposed) return
     const pending = this.pending
     if (pending === null) return
-    if (this.clock() - this.movedAt < SETTLE_MS) {
-      this.arm()
-      return
-    }
     this.pending = null
     if (this.inflight !== null || this.refused.has(pending.key)) return
 
@@ -406,7 +379,7 @@ export class BlockLadder {
 
   destroy(): void {
     this.disposed = true
-    this.disarm()
+    this.pending = null
     this.inflight?.cancel()
     this.inflight = null
     this.held = []
@@ -452,13 +425,6 @@ function keyOf(rows: Extent, cols: Extent): string {
 
 function isAbort(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
-}
-
-function defaultDefer(run: () => void, ms: number): () => void {
-  const handle = setTimeout(run, ms)
-  return () => {
-    clearTimeout(handle)
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +540,14 @@ export function rungsOf(entries: readonly string[]): Array<{ name: string; binsi
  * target would put more than one of its bins in a cell, which is the pooling
  * this is avoiding. And never the open map's own bin size, which is spelled as
  * `undefined` so an ordinary read carries no rung at all.
+ *
+ * **And never finer than the rung that is open.** The entry picker is a
+ * statement about what the reader wants to look at (§16.2), not a starting
+ * guess for something else to improve on: somebody who opened the 2 kb level of
+ * a `100/200/500/1000/2000/5000` file has said *2 kb*, and a zoom that quietly
+ * fetched the 100 bp level would be overruling them with their own file. So the
+ * open rung is the **floor**, and a `.cool` — which has no ladder at all — is
+ * the same rule with one rung in it.
  */
 export function chooseRung(
   rungs: ReadonlyArray<{ name: string; binsize: number }>,
@@ -582,15 +556,20 @@ export function chooseRung(
   cap = POOLED_CELL_CAP,
 ): string | undefined {
   if (rungs.length === 0 || !(binsize > 0) || !(spanBins > 0)) return undefined
+  // The floor, applied before anything is chosen rather than after: a rung
+  // finer than the open one is not a candidate that loses, it is not a
+  // candidate.
+  const above = rungs.filter((rung) => rung.binsize >= binsize)
+  if (above.length === 0) return undefined
   const target = (spanBins * binsize) / Math.max(1, cap)
   let best: { name: string; binsize: number } | null = null
-  for (const rung of rungs) {
+  for (const rung of above) {
     if (rung.binsize > target) continue
     if (best === null || rung.binsize > best.binsize) best = rung
   }
-  // Nothing coarse enough means the window is small: the finest level is the
-  // right one, and if that is the open map there is no rung to name.
-  best ??= rungs[0]
+  // Nothing coarse enough means the window is small, and the finest thing this
+  // zoom may use is the level that is open — which needs no rung named.
+  best ??= above[0]
   return best.binsize === binsize ? undefined : best.name
 }
 
@@ -605,6 +584,7 @@ export function chooseRung(
 export interface RefinablePanel {
   setRefineListener(listener: ((view: RefineView) => void) | null): void
   regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean
+  setFrozen(on: boolean): void
 }
 
 /**
@@ -688,7 +668,14 @@ export function attachRefine(options: {
       if (placed) options.onInstalled?.(result)
       return placed
     },
-    ...(options.onBusy === undefined ? {} : { onBusy: options.onBusy }),
+    // The freeze, and the caller's own hook after it. Wired here rather than
+    // left to each view because it is not a view's decision: a read is in
+    // flight for the window on screen, and the window on screen must therefore
+    // stop moving. A view that wants to say something as well still can.
+    onBusy: (busy) => {
+      options.panel.setFrozen(busy)
+      options.onBusy?.(busy)
+    },
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
   const enabled = options.enabled ?? refineEnabled

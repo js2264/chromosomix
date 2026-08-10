@@ -29,6 +29,7 @@ export interface MapKeyProps {
 export class MapKey {
   readonly el: HTMLElement
   private readonly titleEl = el('span', { class: 'map-key-title' })
+  private readonly noteEl = el('span', { class: 'map-key-note' })
   private readonly loEl: HTMLElement
   private readonly hiEl: HTMLElement
   private readonly loSwatch = el('span', { class: 'map-key-swatch' })
@@ -42,6 +43,7 @@ export class MapKey {
       'div',
       { class: 'map-key' },
       this.titleEl,
+      this.noteEl,
       el(
         'div',
         { class: 'map-key-row' },
@@ -56,6 +58,12 @@ export class MapKey {
     this.content = content
     this.titleEl.textContent = content.title
     this.titleEl.title = content.title
+    const note = content.note ?? ''
+    this.noteEl.textContent = note
+    this.noteEl.title = note === '' ? '' : `One square of this map covers ${note}.`
+    // Hidden rather than emptied, so the key does not keep a blank line's worth
+    // of height on a block that has no resolution to report.
+    this.noteEl.classList.toggle('hidden', note === '')
     this.loSwatch.style.background = content.loColor
     this.hiSwatch.style.background = content.hiColor
     // Not while a caret is in it: the panel repaints on every frame of a drag

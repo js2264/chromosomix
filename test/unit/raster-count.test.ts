@@ -149,6 +149,59 @@ describe('what rebuilds the raster', () => {
     expect(heatmap.rasterisations).toBe(after + 1)
   })
 
+  it('refuses gestures while frozen, and takes them again after', () => {
+    const heatmap = view()
+    heatmap.setMatrix(block(64))
+    heatmap.draw()
+    heatmap.zoomAt(200, 200, 2)
+    const held = { zoom: heatmap.zoomLevel, window: heatmap.cellWindow() }
+
+    heatmap.setFrozen(true)
+    expect(heatmap.isFrozen).toBe(true)
+    // Everything a reader can do to move the picture, refused. The block that
+    // is about to arrive was asked for against *this* window, so a zoom that
+    // ran on underneath would land it against one that had moved — the reader
+    // would see a jump, and the jump would be the app catching up.
+    heatmap.zoomAt(200, 200, 4)
+    heatmap.panBy(50, 50)
+    heatmap.fit()
+    heatmap.showCellWindow([0, 8], [0, 8])
+    expect(heatmap.zoomLevel).toBe(held.zoom)
+    expect(heatmap.cellWindow()).toEqual(held.window)
+    // …and no re-colouring for any of it, frozen or not.
+    heatmap.draw()
+
+    heatmap.setFrozen(false)
+    heatmap.zoomAt(200, 200, 2)
+    expect(heatmap.zoomLevel).toBeGreaterThan(held.zoom)
+  })
+
+  it('a new block ends a freeze', () => {
+    // A navigation is a different question from the one the freeze was waiting
+    // on; leaving the map held for a read nobody is waiting for any more is how
+    // an app looks broken.
+    const heatmap = view()
+    heatmap.setMatrix(block(64))
+    heatmap.setFrozen(true)
+    heatmap.setMatrix(block(32))
+    expect(heatmap.isFrozen).toBe(false)
+  })
+
+  it('does not re-rasterise while a freeze is drawn', () => {
+    const heatmap = view()
+    heatmap.setMatrix(block(64))
+    heatmap.draw()
+    const after = heatmap.rasterisations
+    heatmap.setFrozen(true)
+    for (let i = 0; i < 10; i++) heatmap.draw()
+    heatmap.setFrozen(false)
+    heatmap.draw()
+    // The spinner turns on a `requestAnimationFrame` loop that calls `draw`, so
+    // a spinner that cost a raster would cost one sixty times a second while
+    // the reader waits — on the very block a slow read says is large.
+    expect(heatmap.rasterisations).toBe(after)
+  })
+
   it('builds exactly one for a block swapped in under a live transform', () => {
     const heatmap = view()
     heatmap.setMatrix(block(64))
