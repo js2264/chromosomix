@@ -50,7 +50,20 @@ export interface Raster {
    * Two numbers, not one: a 600 × 8,141 genome pair — the shape every pair
    * involving a large MAG has — would otherwise halve the 600-bin axis to
    * match the axis that actually needed pooling, losing resolution nothing was
-   * asking for and saving nothing.
+   * asking for and saving nothing. The two axes of such a block are two
+   * *different sequences*, so there is nothing to keep in step between them.
+   *
+   * **A turned band is the exception, and it is asked for by name** (`isotropic`
+   * in {@link poolDisplay}). The rotation is isometric — a base pair up the side
+   * is the same length as one along the bottom (`render/rotate.ts`) — so a raster
+   * pixel that covers four cells across and two up is drawn as a rectangle where
+   * the geometry promises a square. Everything downstream then has one decision
+   * to make about two different scales: the filter is chosen for both axes at
+   * once, so at the crossover x is *magnified* through a blur while y is still
+   * minified with point sampling, and past it nearest neighbour lays down cells
+   * two device pixels wide and one tall. Against a picture whose structure runs
+   * at 45° that reads as a staircase of smeared diagonals — the aliasing a reader
+   * sees when they scroll into a band on a long chromosome.
    */
   strideX: number
   strideY: number
@@ -109,6 +122,14 @@ export interface PooledDisplay {
   height: number
   strideX: number
   strideY: number
+  /**
+   * Whether the two strides were held equal; part of the cache key.
+   *
+   * A turned band asks for it and nothing else does, so this is also how the
+   * cache knows that pressing the turn toggle invalidates a pooling whose
+   * numbers, transform and balancing have not moved at all.
+   */
+  isotropic: boolean
   /** `width * height` display values; `NaN` where nothing was drawable. */
   values: Float32Array
   /** What the pooling was computed for; the cache key. */
@@ -158,15 +179,23 @@ function poolsRawMax(transform: Transform, balanced: boolean): boolean {
 export function poolDisplay(
   matrix: DenseMatrix,
   scale: ColorScale,
-  options: { maxDim?: number } = {},
+  options: { maxDim?: number; isotropic?: boolean } = {},
 ): PooledDisplay {
   const { nrows, ncols, values } = matrix
   const balanced = scale.balanced === true
   const transform = scale.transform
 
   const maxDim = options.maxDim ?? RASTER_MAX_DIM
-  const strideY = rasterStride(nrows, maxDim)
-  const strideX = rasterStride(ncols, maxDim)
+  const perAxis = { x: rasterStride(ncols, maxDim), y: rasterStride(nrows, maxDim) }
+  // One stride for both axes where the caller says the block's two axes are the
+  // same measure — which is a turned band, and only a turned band. See
+  // {@link Raster.strideX} for what a rectangular raster pixel does to a picture
+  // whose geometry promises square ones, and why a genome pair wants the
+  // opposite. The larger of the two, because a stride is the *floor* on what fits.
+  const common = Math.max(perAxis.x, perAxis.y)
+  const isotropic = options.isotropic === true
+  const strideX = isotropic ? common : perAxis.x
+  const strideY = isotropic ? common : perAxis.y
   const width = Math.ceil(ncols / strideX)
   const height = Math.ceil(nrows / strideY)
   const pooled = new Float32Array(width * height)
@@ -182,6 +211,7 @@ export function poolDisplay(
     height,
     strideX,
     strideY,
+    isotropic,
     values: pooled,
     transform,
     balanced,
@@ -3353,13 +3383,20 @@ export class HeatmapView {
       this.colorScale.neutral === undefined
         ? null
         : transformValue(this.colorScale.neutral, this.colorScale.transform)
+    // A turned band's two axes are one measure, so its raster pixels have to be
+    // square in matrix space ({@link Raster.strideX}). In the key for the same
+    // reason as the three above it: it selects the reduction, so a pooling made
+    // for the square is the wrong array for the band — and pressing the turn
+    // toggle changes nothing else about the numbers.
+    const isotropic = this.turn !== null
     if (
       this.pooled === null ||
       this.pooled.transform !== this.colorScale.transform ||
       this.pooled.balanced !== balanced ||
-      this.pooled.centre !== centre
+      this.pooled.centre !== centre ||
+      this.pooled.isotropic !== isotropic
     ) {
-      this.pooled = poolDisplay(this.matrix, this.colorScale)
+      this.pooled = poolDisplay(this.matrix, this.colorScale, { isotropic })
     }
     // Both buffers are handed back to the next colouring. A colormap change or
     // a clip drag never resizes the raster, so the common case reuses a 4 B/px
@@ -3535,6 +3572,13 @@ export class HeatmapView {
         turn.maxSeparation === held.maxSeparation &&
         turn.direction === held.direction)
     if (same) return
+    // A band and a square pool differently — one stride for both axes against
+    // one per axis ({@link Raster.strideX}) — so arriving at or leaving the turn
+    // is a raster to build even when the numbers under it are the same array.
+    // `rasterizeNow` would notice on its own through the key; saying it here as
+    // well keeps the frame that follows this call from drawing the previous
+    // shape's pixels while it works that out.
+    if ((turn === null) !== (held === null)) this.dirtyRaster = true
     this.turn = turn
     this.changed()
   }

@@ -34,6 +34,15 @@
  * renderers use rather than a mock of one. So "does this figure paint without
  * throwing, and does it put marks on the page" is a question a test can ask, and
  * the answer is about the code that runs in the browser rather than about a stub.
+ *
+ * There is one exception, and it is opt-in: `setUpDom({ canvas: 'stub' })` hands
+ * back a context that accepts every call and draws nothing. It exists for the
+ * objects that *refuse to be built* without one — `HeatmapView` throws in its
+ * constructor, so `MatrixPanel` cannot be constructed at all, so nothing about
+ * the largest class in the application could be tested. What such a test may ask
+ * is about arrangement rather than about pixels: which element got which size,
+ * what a resize rewrote, what a turn put on the grid. For pixels, use
+ * {@link drawingOf}, which is a real context rather than a silent one.
  */
 
 import { VectorPage } from '@/ui/vector'
@@ -46,8 +55,11 @@ export type DomTeardown = () => void
  *
  * Returns the teardown, which a test may ignore: `beforeEach` calling this again
  * clears the body anyway, and a jsdom environment is per file.
+ *
+ * `canvas: 'stub'` answers with a silent context instead of `null`, for the one
+ * case that needs it; see the header, and {@link silentContext} for what is in it.
  */
-export function setUpDom(): DomTeardown {
+export function setUpDom(options: { canvas?: 'null' | 'stub' } = {}): DomTeardown {
   document.body.replaceChildren()
   document.documentElement.removeAttribute('data-theme')
 
@@ -57,12 +69,113 @@ export function setUpDom(): DomTeardown {
   const original = prototype.getContext
   // Assigned rather than `vi.spyOn`, so this works in a file that has not asked
   // for the mocking API and cannot be left half-restored by a failing assertion.
-  prototype.getContext = () => null
+  prototype.getContext =
+    options.canvas === 'stub'
+      ? function (this: HTMLCanvasElement) {
+          return silentContext(this)
+        }
+      : () => null
+
+  // The rasteriser puts its pixels through both of these, and jsdom has neither.
+  // Installed with the stub and only with it, so the ninety files that answer
+  // `null` keep the environment they were written against.
+  const globals = globalThis as Record<string, unknown>
+  const hadImageData = globals['ImageData']
+  const hadOffscreen = globals['OffscreenCanvas']
+  if (options.canvas === 'stub') {
+    // Overwritten rather than filled in: jsdom *has* an `OffscreenCanvas`, and
+    // its `getContext` answers `null` — which the rasteriser is right to treat as
+    // fatal, and which made a half-installed stub fail deeper and later than no
+    // stub at all. Both are put back by the teardown.
+    globals['ImageData'] = class {
+      constructor(
+        readonly data: Uint8ClampedArray,
+        readonly width: number,
+        readonly height: number,
+      ) {}
+    }
+    globals['OffscreenCanvas'] = class {
+      width: number
+      height: number
+      constructor(width = 0, height = 0) {
+        this.width = width
+        this.height = height
+      }
+      getContext(): unknown {
+        return silentContext(this as unknown as HTMLCanvasElement)
+      }
+    }
+  }
 
   return () => {
     prototype.getContext = original
+    globals['ImageData'] = hadImageData
+    globals['OffscreenCanvas'] = hadOffscreen
     document.body.replaceChildren()
   }
+}
+
+/**
+ * A 2D context that answers every call these renderers make and draws nothing.
+ *
+ * Deliberately not a spy and deliberately not asserted on: it exists so that an
+ * object which *refuses to exist* without a context can be built and then asked
+ * about its arrangement. `measureText` returns a width, because a gutter measured
+ * as zero is a layout no browser would produce; everything else is a no-op.
+ */
+export function silentContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const noop = (): void => {}
+  const ctx: Record<string, unknown> = {
+    canvas,
+    measureText: (text: string) => ({ width: text.length * 7 }),
+    getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+    createImageData: (width: number, height: number) => ({
+      data: new Uint8ClampedArray(Math.max(0, width * height * 4)),
+      width,
+      height,
+    }),
+    getImageData: (_x: number, _y: number, width: number, height: number) => ({
+      data: new Uint8ClampedArray(Math.max(0, width * height * 4)),
+      width,
+      height,
+    }),
+    createLinearGradient: () => ({ addColorStop: noop }),
+  }
+  for (const name of [
+    'arc',
+    'arcTo',
+    'beginPath',
+    'bezierCurveTo',
+    'clearRect',
+    'clip',
+    'closePath',
+    'drawImage',
+    'ellipse',
+    'fill',
+    'fillRect',
+    'fillText',
+    'lineTo',
+    'moveTo',
+    'putImageData',
+    'quadraticCurveTo',
+    'rect',
+    'resetTransform',
+    'restore',
+    'rotate',
+    'roundRect',
+    'save',
+    'scale',
+    'setLineDash',
+    'setTransform',
+    'stroke',
+    'strokeRect',
+    'strokeText',
+    'transform',
+    'translate',
+  ]) {
+    ctx[name] = noop
+  }
+  return ctx as unknown as CanvasRenderingContext2D
 }
 
 /**

@@ -1843,7 +1843,11 @@ export class MatrixPanel {
             // positioning parent, and it is the box that changes when a lane
             // appears — which the plot's own size does not.
             this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
-            this.measureRoom()
+            // Room *and* box, which is what a lane appearing has to change: the
+            // stack beside the map takes from the same width the band is drawn
+            // in, and re-measuring without redrawing left the band overlapping
+            // the tracks that had just arrived under it.
+            this.refit()
             this.heatmap.resize()
             this.placeKey()
             this.schedule()
@@ -2274,9 +2278,42 @@ export class MatrixPanel {
    */
   remeasure(): void {
     this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
+    this.refit()
     this.heatmap.resize()
     this.placeKey()
     this.schedule()
+  }
+
+  /**
+   * Take the room again, and redraw the box in it.
+   *
+   * Every road into this panel from a change of *space* ends here, and there are
+   * four of them: the shell folding a column ({@link remeasure}), the view's own
+   * `ResizeObserver` for a window resize or a lane appearing, a turn arriving or
+   * leaving, and a deck relaying out. They used to end in different places and
+   * only some of them redrew the box, so a turned band kept the width of the
+   * window it was first drawn in: folding two columns gave the map three hundred
+   * pixels it never took, and adding a track under it left the band as wide as it
+   * was before the stack was there.
+   *
+   * A square map needs none of this — its canvas is sized by the stylesheet, and
+   * `HeatmapView.resize` reads that — which is exactly why the turned one was
+   * missed: it is the one picture in the app whose size is a number this class
+   * computes.
+   *
+   * The band's *depth* follows on the next frame with nothing to arrange:
+   * {@link syncTurnDepth} runs before every draw and re-cuts the band whenever
+   * the box it has to fill has changed shape.
+   *
+   * Idempotent, and it has to be: writing the box resizes the grid, which is what
+   * the observer is watching. The room is measured against the *panel* and never
+   * against the grid the box is in ({@link measureRoom}), so a second pass over
+   * the same window computes the same numbers and the loop stops on the first
+   * repeat.
+   */
+  private refit(): void {
+    this.measureRoom()
+    this.writeTurnBox()
   }
 
   /**
@@ -3891,7 +3928,12 @@ export class MatrixPanel {
     // Before `setMatrix`, which measures its gutters against the canvas: the box
     // is a CSS size and the canvas has to have it before anything is fitted into
     // it, or the first frame of every turn is drawn at the square map's height.
-    this.writeTurnBox()
+    //
+    // The room is measured again rather than taken from the cache, because *this*
+    // is the path a turn arrives by: pressing the toggle re-runs the derivation
+    // from the top, and a band drawn to a room measured before the last column
+    // was folded is a band in the wrong window. One style read per block.
+    this.refit()
     // No separators under a turn: `isTurnable` has already refused any block
     // spanning more than one sequence, so there is no boundary to draw — and the
     // square block's own would land at the wrong columns anyway, the axis now
@@ -4016,7 +4058,7 @@ export class MatrixPanel {
     )
     this.heatmap.setSpanGestures(turned !== null)
     this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
-    this.writeTurnBox()
+    this.refit()
     this.heatmap.regrid(
       dense,
       { rows: [rows[0], rows[1]], cols: [cols[0], cols[1]] },
