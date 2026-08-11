@@ -2588,7 +2588,18 @@ p {
      the grid keeps, since a gap the arithmetic did not know about is a gap the
      map is pushed down by — and both default to nothing, so a view with no
      lanes is sized exactly as it was before they existed. */
-  width: var(--map-budget);
+  /* `--map-size` is the reader's own, written by the panel from the size they
+     dragged an edge to (`ui/mapSize.ts`); the budget is what it falls back to,
+     which is also what a double-click on any handle puts back. The fallback is
+     what keeps a panel that never writes the property — and every build before
+     the handles existed — laid out exactly as it was. */
+  width: var(--map-size, var(--map-budget));
+  /* The ceiling both presentations are bounded by, and the number
+     `MatrixPanel.measureRoom` reads back to bound the handles: a *length* on an
+     element, because a custom property comes back from `getComputedStyle` as the
+     unresolved `clamp()` it was written from. The panel clamps `--map-size` to it,
+     so this never fights the aspect ratio above. */
+  max-height: var(--map-budget);
   /* Of its own grid track, which the grid's cap has already taken the lane
      stacks beside it out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
@@ -2796,17 +2807,18 @@ p {
    wrapper's corner floats in the margin above the picture.
    --------------------------------------------------------------------------- */
 
-/* The top edge of a turned band, as something a hand can take hold of.
+/* A horizontal edge of the picture, as something a hand can take hold of: the
+   far edge of a band, or the top and bottom of a square map.
 
    Faint until it is approached, because it lies along the picture and a solid
-   rule there would read as data — the apex of the band is where a domain's
+   rule there would read as data — the apex of a band is where a domain's
    triangle meets it. Its hit area is taller than it looks: eight pixels is what
    a pointer can reliably land on, and one is what should be drawn.
 
    Above the drop rectangles in the stack, since both live over the map and this
    one is the smaller target. `touch-action: none` for the same reason the map
    has it: a drag along it must not be claimed by the page's own scrolling. */
-.turn-depth {
+.plot-grip-y {
   position: absolute;
   z-index: 5;
   height: 9px;
@@ -2825,9 +2837,9 @@ p {
   transition: opacity 120ms ease;
 }
 
-.turn-depth:hover,
-.turn-depth:focus-visible,
-.turn-depth.is-dragging {
+.plot-grip-y:hover,
+.plot-grip-y:focus-visible,
+.plot-grip-y.is-dragging {
   opacity: 1;
   background: linear-gradient(
     to bottom,
@@ -2839,18 +2851,18 @@ p {
   outline: none;
 }
 
-/* The two ends of a turned band, on the same rules as its top edge, turned
+/* The two ends of the picture, on the same rules as its horizontal edges, turned
    through a right angle.
 
-   Two of them and not one, because the box is centred: with a single handle the
-   reader would have to know which end the app had decided to grow from, and
-   either answer is wrong half the time. Each widens the box about its middle,
-   so the edge under the pointer stays under it.
+   Two of them and not one, because the box is centred in its column: with a
+   single handle the reader would have to know which end the app had decided to
+   grow from, and either answer is wrong half the time. Each widens the box about
+   its middle, so the edge under the pointer stays under it.
 
    Drawn *inside* their own edge — `margin-left` pulls the left one back over the
    frame and the right one is offset by its own width — so neither bar sits out
    in the margin where the picture is not. */
-.turn-width {
+.plot-grip-x {
   position: absolute;
   z-index: 5;
   width: 9px;
@@ -2869,9 +2881,9 @@ p {
   transition: opacity 120ms ease;
 }
 
-.turn-width:hover,
-.turn-width:focus-visible,
-.turn-width.is-dragging {
+.plot-grip-x:hover,
+.plot-grip-x:focus-visible,
+.plot-grip-x.is-dragging {
   opacity: 1;
   background: linear-gradient(
     to right,
@@ -4740,8 +4752,16 @@ canvas.is-frozen {
     padding: 0.6rem;
   }
 
+  /* The whole width, and *not* the size a handle was dragged to: a phone has one
+     column and no room to give away, and a size chosen on a laptop is a size this
+     screen cannot honour. The handles are a pointer gesture and are not offered
+     here either — see `.plot-grip`. */
   .heatmap-wrap {
     width: 100%;
+  }
+
+  .plot-grip {
+    display: none;
   }
 
   /* The legend under the plot rather than beside it, where 5.5rem of it would

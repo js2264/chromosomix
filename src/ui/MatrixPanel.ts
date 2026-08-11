@@ -188,6 +188,7 @@ import {
   subscribePlotOptions,
   type PlotOptionKey,
 } from './plotOptions'
+import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
 import { scaleFont, scaleLength, subscribeTextScale, textScaleField } from './textScale'
 import {
   MIN_TURN_HEIGHT,
@@ -268,15 +269,22 @@ function turnedDense(turned: RotatedBlock): DenseMatrix {
 }
 
 /** One end of the turned band's box, as a bar a hand can take hold of. */
-function turnWidthGrip(side: 'left' | 'right'): HTMLElement {
+/** One edge of the picture; see {@link MatrixPanel.grips}. */
+type PlotEdge = 'top' | 'bottom' | 'left' | 'right'
+
+/** Whether an edge is dragged along x or along y. */
+function edgeAxis(edge: PlotEdge): 'x' | 'y' {
+  return edge === 'left' || edge === 'right' ? 'x' : 'y'
+}
+
+function plotGrip(edge: PlotEdge): HTMLElement {
+  const axis = edgeAxis(edge)
   return el('div', {
-    class: `turn-width turn-width-${side} hidden`,
+    class: `plot-grip plot-grip-${axis} plot-grip-${edge} hidden`,
     attrs: {
-      title:
-        'Drag to set how wide this band is drawn. Both ends move, so the box stays centred, and ' +
-        'the tracks under it follow.',
       role: 'separator',
-      'aria-orientation': 'vertical',
+      // Which way the *separator* lies, which is across the axis it travels on.
+      'aria-orientation': axis === 'x' ? 'vertical' : 'horizontal',
       tabindex: '0',
     },
   })
@@ -655,38 +663,33 @@ export class MatrixPanel {
   private readonly key2: MapKey
   private readonly keySlot: HTMLElement
   /**
-   * The top edge of the turned band, as something a hand can take hold of.
+   * The four edges of the picture, as things a hand can take hold of.
    *
-   * A bar rather than a strip of live canvas, and visible on approach rather
-   * than only under the pointer, because how far from the diagonal the picture
-   * reaches is the one number a turned map has that a square one does not —
-   * and a gesture nobody can see is a gesture nobody finds. Hidden entirely
-   * while the map is square, where there is no such number.
-   */
-  private readonly depthGrip = el('div', {
-    class: 'turn-depth hidden',
-    attrs: {
-      title:
-        'Drag to set how tall this band is drawn. The distance from the diagonal it reaches ' +
-        'follows from the zoom — the box keeps its shape and the picture fills it.',
-      role: 'separator',
-      'aria-orientation': 'horizontal',
-      tabindex: '0',
-    },
-  })
-  /**
-   * The two ends of the turned band, as things a hand can take hold of.
+   * Bars rather than strips of live canvas, and visible on approach rather than
+   * only under the pointer, because how big the picture is drawn is a decision
+   * the reader has to be able to *find* — a gesture nobody can see is a gesture
+   * nobody uses.
    *
-   * The width's counterpart to {@link depthGrip}, and there are two of them
-   * rather than one because the box is *centred*: with one handle the reader
-   * would have to know which end the app had decided to grow from. Either end
-   * widens the box about its middle, so the edge under the pointer stays under
-   * it and the other moves out by the same amount.
+   * Which of them are shown, and what a drag on one means, is the whole of the
+   * difference between the two presentations:
+   *
+   * - **A square map** shows all four, and every one sets the same number — the
+   *   side of the box (`ui/mapSize.ts`). A square block has no shape to choose,
+   *   so a box of another shape would be paper down two sides of the picture.
+   * - **A band** shows three. Its width and its depth are separate numbers
+   *   (`ui/turnBox.ts`), and its fourth edge is the diagonal itself: the band
+   *   stands on the axis, so there is nothing to drag there. Which of the
+   *   horizontal pair is the far edge follows the direction the band grows in —
+   *   up on an ordinary turn, down on the mirrored half of a comparison.
    */
-  private readonly widthGrips: Record<'left' | 'right', HTMLElement> = {
-    left: turnWidthGrip('left'),
-    right: turnWidthGrip('right'),
+  private readonly grips: Record<PlotEdge, HTMLElement> = {
+    top: plotGrip('top'),
+    bottom: plotGrip('bottom'),
+    left: plotGrip('left'),
+    right: plotGrip('right'),
   }
+  /** Which presentation the grips are labelled for; see {@link placeGrips}. */
+  private gripMode: 'square' | 'band' | null = null
   /**
    * What the numbers in the cells are called, before the transform is added.
    *
@@ -729,6 +732,7 @@ export class MatrixPanel {
   private readonly unsubscribePlotOptions: () => void
   private readonly unsubscribeTextScale: () => void
   private readonly unsubscribeTurnBox: () => void
+  private readonly unsubscribeMapSize: () => void
   private readonly themeWatchers: () => void
   private readonly narrowWatcher: () => void
   private readonly observer: ResizeObserver | null
@@ -1400,6 +1404,9 @@ export class MatrixPanel {
     // Every panel, not only the one whose handle was dragged: the box is the
     // session's, so a deck of bands is one shape (§17.3).
     this.unsubscribeTurnBox = subscribeTurnBox(() => this.applyTurnBox())
+    // The square map's own size, on the same terms and through the same call: one
+    // reader, one shape, however many pictures are drawn from it.
+    this.unsubscribeMapSize = subscribeMapSize(() => this.applyTurnBox())
 
     // Offered whenever there is more than one answer. A file with no weights and
     // no extra columns has exactly one thing its cells can be, and a dropdown
@@ -1693,13 +1700,14 @@ export class MatrixPanel {
       this.canvas,
       this.overlay,
       this.keySlot,
-      this.depthGrip,
-      this.widthGrips.left,
-      this.widthGrips.right,
+      this.grips.top,
+      this.grips.bottom,
+      this.grips.left,
+      this.grips.right,
       ...(this.settingsEl === null ? [] : [this.settingsCorner(this.settingsEl)]),
       ...LANE_EDGES.map((edge) => this.edgeZone(edge)),
     ))
-    this.watchDepth()
+    this.watchGrips()
 
     for (const edge of LANE_EDGES) {
       const layer = el('div', { class: 'lane-overlays' })
@@ -2245,6 +2253,7 @@ export class MatrixPanel {
     this.unsubscribePick()
     this.unsubscribeTextScale()
     this.unsubscribeTurnBox()
+    this.unsubscribeMapSize()
     this.themeWatchers()
     this.narrowWatcher()
     this.observer?.disconnect()
@@ -2331,102 +2340,152 @@ export class MatrixPanel {
     const size = this.heatmap.cssSize
     this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
     this.keySlot.style.right = `${Math.round(size.width - plot.x - plot.width + KEY_INSET)}px`
-    this.placeDepthGrip()
+    this.placeGrips()
   }
 
   /**
-   * Lay the depth handle along the top edge of the turned band.
+   * Lay the size handles along the edges of the picture.
    *
-   * The **data** rectangle, not the plot: the band is as wide as the block and
-   * the plot is as wide as the panel, so a bar across the plot would run out
-   * past the picture at every zoom that does not fill it. Placed from the
-   * measured rectangle on every frame, exactly as the key is, so it follows a
-   * pan and a zoom with nothing to keep in step.
+   * Placed from the measured rectangles on every frame, exactly as the key is, so
+   * they follow a pan and a zoom with nothing to keep in step.
+   *
+   * The **plot** frame for a square map, on all four edges: the plot is what a
+   * reader sees as the map — the canvas around it is the gutter its axis labels
+   * live in — and the box being dragged is the canvas, so a handle on the frame
+   * is the honest place to take hold of it.
+   *
+   * The band keeps the rectangle each of its own handles was always on. Its far
+   * edge follows the **data**, because a band is as wide as its block while the
+   * plot is as wide as the panel, and a bar across the plot would run out past
+   * the picture at every zoom that does not fill it. Its two ends follow the
+   * *plot*'s height for the opposite reason: a band fills its box vertically by
+   * construction, so a handle that stopped at the last column would sit in the
+   * middle of the picture pointing at nothing.
    */
-  private placeDepthGrip(): void {
+  private placeGrips(): void {
     const turned = this.turned
-    this.depthGrip.classList.toggle('hidden', turned === null)
-    for (const grip of Object.values(this.widthGrips)) {
-      grip.classList.toggle('hidden', turned === null)
-    }
-    if (turned === null) return
-    const data = this.heatmap.dataRect
-    // `down` is the mirrored half of a comparison, where separation grows
-    // towards the bottom of the picture and the far edge is the bottom one.
-    const top = turned.direction === 'up' ? data.y : data.y + data.height
-    this.depthGrip.style.top = `${Math.round(top)}px`
-    this.depthGrip.style.left = `${Math.round(data.x)}px`
-    this.depthGrip.style.width = `${Math.round(data.width)}px`
-    // The **plot**'s height for the ends, not the data's: a band fills its box
-    // vertically by construction, but a view zoomed out past the fit leaves
-    // paper either side, and a handle that stopped at the last column would sit
-    // in the middle of the picture pointing at nothing.
     const plot = this.heatmap.plotRect
-    for (const [side, grip] of Object.entries(this.widthGrips)) {
+    const data = this.heatmap.dataRect
+    // `down` is the mirrored half of a comparison, where separation grows towards
+    // the bottom of the picture and the far edge is the bottom one. The other
+    // horizontal edge is the diagonal the band stands on, and is not a handle.
+    const idle: PlotEdge | null =
+      turned === null ? null : turned.direction === 'up' ? 'bottom' : 'top'
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      this.grips[edge].classList.toggle('hidden', edge === idle)
+    }
+    this.labelGrips(turned === null ? 'square' : 'band')
+
+    for (const edge of ['left', 'right'] as const) {
+      const grip = this.grips[edge]
       grip.style.top = `${Math.round(plot.y)}px`
       grip.style.height = `${Math.round(plot.height)}px`
-      grip.style.left = `${Math.round(side === 'left' ? plot.x : plot.x + plot.width)}px`
+      grip.style.left = `${Math.round(edge === 'left' ? plot.x : plot.x + plot.width)}px`
+    }
+    for (const edge of ['top', 'bottom'] as const) {
+      if (edge === idle) continue
+      const grip = this.grips[edge]
+      // The band's far edge sits on the data; a square map's edges are the frame.
+      const box = turned === null ? plot : data
+      grip.style.top = `${Math.round(edge === 'top' ? box.y : box.y + box.height)}px`
+      grip.style.left = `${Math.round(box.x)}px`
+      grip.style.width = `${Math.round(box.width)}px`
     }
   }
 
   /**
-   * A drag on that handle sets how far from the diagonal the map reaches.
+   * What the handles say they do, which is not the same thing in the two
+   * presentations.
    *
-   * In **bins of separation per pixel of band**, taken from the band as it is
-   * drawn rather than from the zoom: the reader is dragging an edge, and what
-   * they mean by moving it fifty pixels is "fifty pixels more picture". Working
-   * in bins is also what makes the gesture survive the re-read it causes — the
-   * band is redrawn at a new height, and a factor derived from the old one
-   * would make the second half of a single drag a different speed from the
-   * first.
+   * Written when the presentation changes rather than on every frame: a title is
+   * a DOM write, and {@link placeGrips} runs before every draw.
+   */
+  private labelGrips(mode: 'square' | 'band'): void {
+    if (mode === this.gripMode) return
+    this.gripMode = mode
+    const same = 'Double-click for as much room as there is.'
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      this.grips[edge].title =
+        mode === 'square'
+          ? `Drag to set how big this map is drawn — every edge sets the same size, because a ` +
+            `square block has no shape to choose. ${same}`
+          : edgeAxis(edge) === 'y'
+            ? `Drag to set how tall this band is drawn. The distance from the diagonal it ` +
+              `reaches follows from the zoom — the box keeps its shape and the picture fills ` +
+              `it. ${same}`
+            : `Drag to set how wide this band is drawn. Both ends move, so the box stays ` +
+              `centred, and the tracks under it follow. ${same}`
+    }
+  }
+
+  /**
+   * A drag on a handle sets how big the picture is drawn.
+   *
+   * Pixels, straight through: a handle is on the edge of a box measured in them,
+   * so the edge goes exactly where the hand puts it. What each of the four edges
+   * *means* is read at the moment of the drag rather than wired once, because the
+   * same edge belongs to two pictures — the left edge of a band is one end of its
+   * width, and the left edge of a square map is one side of its size — and a
+   * panel changes between them under the reader's hand.
+   *
+   * The **band** keeps the numbers it always had (`ui/turnBox.ts`): its far
+   * horizontal edge is the depth, its two ends are the width, and the width moves
+   * at twice the hand because the box is centred — the edge under the pointer has
+   * to stay under it, so the far end goes out by the same amount.
+   *
+   * A **square map** has one number and every edge sets it (`ui/mapSize.ts`). The
+   * two ends move it at twice the hand, for the same centring reason. The two
+   * horizontal edges move it at once: the picture hangs from the stack above it,
+   * so its top is where the panel starts and a taller box grows downward. The top
+   * handle therefore reads as *out is bigger* rather than as an edge that follows
+   * the pointer — which is what an edge handle means anyway, and the alternative
+   * is a picture that floats in the middle of a reserved column with its tracks
+   * detached from it.
    *
    * Keyboard too, because this is the only way to reach the number without a
-   * pointer and a `role="separator"` that answers no keys is a control that
-   * says it is one.
+   * pointer and a `role="separator"` that answers no keys is a control that says
+   * it is one.
    */
-  private watchDepth(): void {
-    // Pixels, straight through: the handle is on the edge of a box measured in
-    // them, so the edge goes exactly where the hand puts it. The rate this used
-    // to need — bins of separation per pixel, taken once at the press so the
-    // second half of a movement did not travel less than the first — went with
-    // the depth it was converting into.
-    this.dragTurnEdge(this.depthGrip, {
-      // Out of the box, which on an ordinary turned map is *up* the screen: the
-      // handle is on the top edge, and a hand that drags it towards the top of
-      // the panel is asking for a taller band. Screen y grows the other way,
-      // hence the sign. On the mirrored half the band hangs below its own axis
-      // and the handle is its bottom edge, so out is down.
-      away: () => (this.turned?.direction === 'down' ? 1 : -1),
-      axis: 'y',
-      held: () => this.turnBox().height,
-      // One edge moves, so the box grows by exactly what the hand travelled.
-      gain: 1,
-      set: (value) => this.setTurnBox({ height: value }),
-      reset: () => this.setTurnBox({ height: null }),
-    })
-    for (const side of ['left', 'right'] as const) {
-      this.dragTurnEdge(this.widthGrips[side], {
-        away: () => (side === 'left' ? -1 : 1),
-        axis: 'x',
-        held: () => this.turnBox().width,
-        // Both ends move, because the box is centred: the edge under the pointer
-        // has to stay under it, and the far one goes out by the same amount.
-        gain: 2,
-        set: (value) => this.setTurnBox({ width: value }),
-        reset: () => this.setTurnBox({ width: null }),
+  private watchGrips(): void {
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      const axis = edgeAxis(edge)
+      // Out of the box: left and up are negative on screen, right and down are
+      // positive, and "out" is whichever of them leaves the picture's middle.
+      const away = edge === 'left' || edge === 'top' ? -1 : 1
+      this.dragEdge(this.grips[edge], {
+        axis,
+        away: () => away,
+        held: () =>
+          this.turned === null
+            ? this.mapSize()
+            : axis === 'x'
+              ? this.turnBox().width
+              : this.turnBox().height,
+        // Both ends of a centred box move; one horizontal edge moves alone.
+        gain: axis === 'x' ? 2 : 1,
+        set: (value) => {
+          if (this.turned === null) setMapSize(value)
+          else if (axis === 'x') this.setTurnBox({ width: value })
+          else this.setTurnBox({ height: value })
+        },
+        reset: () => {
+          if (this.turned === null) setMapSize(null)
+          else if (axis === 'x') this.setTurnBox({ width: null })
+          else this.setTurnBox({ height: null })
+        },
       })
     }
   }
 
   /**
-   * One edge of the turned box, as something a hand or a keyboard can move.
+   * One edge of the box, as something a hand or a keyboard can move.
    *
    * The four handles differ in three numbers and nothing else — which axis they
    * travel on, which way out of the box is, and how much the box grows per pixel
    * travelled — so they are one gesture parameterised rather than four listeners
    * that have to be kept saying the same thing.
    */
-  private dragTurnEdge(
+  private dragEdge(
     grip: HTMLElement,
     rule: {
       axis: 'x' | 'y'
@@ -2439,7 +2498,10 @@ export class MatrixPanel {
   ): void {
     let from: { at: number; size: number } | null = null
     const onDown = (event: PointerEvent): void => {
-      if (event.button !== 0 || this.turned === null) return
+      // No guard on the presentation any more: both of them have a size for this
+      // handle to move, and the one edge that has none — the diagonal a band
+      // stands on — is hidden rather than inert ({@link placeGrips}).
+      if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
       from = { at: rule.axis === 'x' ? event.clientX : event.clientY, size: rule.held() }
@@ -2458,7 +2520,6 @@ export class MatrixPanel {
       grip.classList.remove('is-dragging')
     }
     const onKey = (event: KeyboardEvent): void => {
-      if (this.turned === null) return
       const size = rule.held()
       // A tenth of the box per press, a half with Shift — the step the map's own
       // arrow keys pan by, so one hand learns one rule.
@@ -4726,11 +4787,31 @@ export class MatrixPanel {
     if (!turned) {
       this.grid.style.removeProperty('--turn-width')
       this.grid.style.removeProperty('--turn-height')
+      // A square map's side, on the same terms: one number, written where the
+      // stylesheet's own default sits so that the default is what an unset size
+      // falls back to (`--map-size` defaults to `--map-budget` in `styles.css`).
+      // Written on every refit rather than only on a drag, because "as much as
+      // there is" is a rule and the room moves under it.
+      this.grid.style.setProperty('--map-size', `${Math.round(this.mapSize())}px`)
       return
     }
+    this.grid.style.removeProperty('--map-size')
     const box = this.turnBox()
     this.grid.style.setProperty('--turn-width', `${Math.round(box.width)}px`)
     this.grid.style.setProperty('--turn-height', `${Math.round(box.height)}px`)
+  }
+
+  /**
+   * The side a square map is drawn at, in CSS pixels.
+   *
+   * {@link turnBox}'s counterpart, and clamped on the way out for the same
+   * reasons: what is stored is one number for the session, the panels drawing
+   * from it need not have the same room, and "as much as there is" is a rule that
+   * has to be re-read whenever the room changes rather than a width remembered
+   * from another window.
+   */
+  private mapSize(): number {
+    return fitMapSize(getMapSize(), this.turnRoom())
   }
 
   /**
@@ -4765,10 +4846,10 @@ export class MatrixPanel {
    *
    * The subscription's half of the resize, and every panel runs it — the one the
    * hand is in and the others of a deck, which is what keeps a deck of bands one
-   * shape (§17.3).
+   * shape (§17.3). Both presentations arrive here: a square map has a size to be
+   * drawn at too, and the panel the hand is *not* in has to follow it.
    */
   private applyTurnBox(): void {
-    if (this.turned === null) return
     this.writeTurnBox()
     // The canvas has a new CSS size, and nothing else will tell the view: the
     // resize observer watches the *grid*, whose own size need not have changed.
