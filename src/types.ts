@@ -23,6 +23,24 @@ export interface ByteSource {
   readonly size: number
   /** Make the bytes visible to the Emscripten FS; returns the mounted path. */
   mount(): Promise<string>
+  /**
+   * Read `[position, position + length)` directly, without going through HDF5.
+   *
+   * HDF5 is not the only container this app opens: a `.hic` is a flat binary
+   * file with its own index, and it needs the same bounded, cached, counted
+   * byte access that `mount()` gives h5wasm — the LRU, the request coalescing
+   * and the §12 accounting are properties of the *source*, not of the format
+   * reading it. So the byte layer is exposed once here rather than reimplemented
+   * beside every parser.
+   *
+   * **Synchronous, and therefore worker-only** on the remote path, for the same
+   * reason `mount()`'s stream ops are: it is `XMLHttpRequest` underneath, and a
+   * synchronous one is legal only off the main thread. That is where all I/O
+   * already lives.
+   *
+   * Returns fewer bytes than asked for only at end of file.
+   */
+  readBytes(position: number, length: number): Uint8Array
   /** Release the mount. Idempotent. */
   close(): void
   /** Bytes fetched and requests issued so far — drives the §12 budget tests. */
@@ -64,13 +82,13 @@ export interface Table {
 // File layout detection (spec §3.1)
 // ---------------------------------------------------------------------------
 
-export type LayoutKind = 'mmetacool' | 'metacool' | 'mcool' | 'cool'
+export type LayoutKind = 'mmetacool' | 'metacool' | 'mcool' | 'cool' | 'hic'
 
 export interface Layout {
   kind: LayoutKind
   /** HDF5 group path holding the dataset ('/' for a plain metacool). */
   group: string
-  /** For mmetacool/mcool: available entry (or resolution) names, in file order. */
+  /** For mmetacool/mcool/hic: available entry (or resolution) names, in file order. */
   entries?: string[]
 }
 

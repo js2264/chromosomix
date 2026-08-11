@@ -16,7 +16,6 @@
  * rest when that view actually opens, which is the only place it is shown.
  */
 
-import { yieldToEventLoop } from '../async'
 import { UNBINNED_NAME } from '../constants'
 import type { StorageMode } from '../constants'
 import { MetaCoolerFormatError, truncateNames, ViewerError } from '../errors'
@@ -51,16 +50,17 @@ import {
 import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
-  scoreColumns,
   DENSE_HINTS,
-  forEachPixelRangesAsync,
-  forEachPixelSpanAsync,
-  PIXEL_BAND_GAP,
   type SpanScanOptions,
   planRead,
   readDenseMatrix,
   resolveCountKind,
 } from './matrix'
+import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
+import { HicFile } from '../hic/HicFile'
+import { isHicMagic } from '../hic/format'
+import { hicHandle } from '../hic/handle'
+import { HicStore } from '../hic/store'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -96,6 +96,14 @@ export interface MetaCoolerInit {
   layout: Layout
   attrs: Record<string, AttrValue>
   contigs: Table
+  /**
+   * Where the pixels come from, when they do not come from this handle.
+   *
+   * Absent for every HDF5 file, which is the overwhelming majority and takes
+   * {@link CoolerStore} by default. Supplied by {@link MetaCooler.fromHic},
+   * which is the one caller whose pixels are indexed some other way.
+   */
+  store?: PixelStore
   /** `indexes/chrom_offset`, length `nContigs + 1`. */
   chromOffset: Float64Array
   /**
@@ -206,6 +214,14 @@ export class MetaCooler {
   readonly contigGenomeIds: Int32Array
 
   readonly handle: Hdf5Handle
+  /**
+   * The pixels, behind the one interface both containers implement.
+   *
+   * Public because `analysis/run/` walks pixels directly and must go through
+   * the same seam the views do; see `metacooler/store.ts` for why the seam is
+   * at the operation rather than at the dataset.
+   */
+  readonly store: PixelStore
   private readonly chromOffset: Float64Array
   private readonly genomeOffset: Float64Array
   private readonly genomeIds: Map<string, number>
@@ -217,7 +233,6 @@ export class MetaCooler {
   private contigIdCache: Map<string, number> | null = null
   private chromsizeCache: Map<string, number> | null = null
   /** `indexes/bin1_offset`, read whole on first use; see {@link binOffsets}. */
-  private binOffsetCache: Float64Array | null = null
   private readonly contigLengths: Float64Array
 
   /**
@@ -228,6 +243,14 @@ export class MetaCooler {
    * identical for both.
    */
   static async open(uri: string, source: ByteSource): Promise<MetaCooler> {
+    // Mounted first so the sniff below has a byte accessor in every backing —
+    // a path-backed source resolves its filesystem at mount and has nowhere
+    // else to await one. Idempotent, and `openHdf5` reuses the same mount.
+    await source.mount()
+    // Four bytes decide the container. Asked before HDF5 is asked anything at
+    // all, because a `.hic` is not an HDF5 file and h5wasm's refusal of one is
+    // a stack trace rather than the sentence §10 requires.
+    if (isHicMagic(source.readBytes(0, 4))) return MetaCooler.fromHic(uri, source)
     // The group comes from the URI, so `file.mmetacool::entries/rep1` and a
     // plain `file.metacool` reach the handle already resolved (§3.5).
     const handle = await openHdf5(uri, source, parseUri(uri).group)
@@ -237,6 +260,51 @@ export class MetaCooler {
       handle.close()
       throw error
     }
+  }
+
+  /**
+   * Open a `.hic` as one of these.
+   *
+   * The three lines of translation are all there is, and that is the design
+   * rather than an accident: `hic/handle.ts` answers the metadata questions a
+   * cooler's HDF5 groups answer, `hic/store.ts` answers the pixel ones, and
+   * this constructor is the only place in the repo that knows both exist. The
+   * resulting object is a `MetaCooler` in every sense the rest of the
+   * application uses the word.
+   *
+   * The resolution is named the way an mcool's is — `file.hic::/resolutions/5000`
+   * — so the entry picker, the URL hash, the refine ladder (§3.4) and a deck
+   * descending to its lead's rung all work on a `.hic` without a line of their
+   * own. A URI with no group opens the finest resolution the file carries,
+   * which is what dropping one on the page means.
+   */
+  static fromHic(uri: string, source: ByteSource): MetaCooler {
+    const { group } = parseUri(uri)
+    const named = /^\/resolutions\/(\d+)$/.exec(group)
+    const file = HicFile.open(source, named === null ? {} : { binSize: Number(named[1]) })
+    if (!file.hasAnyMatrix()) {
+      throw new ViewerError(
+        'unsupported',
+        `This .hic carries no base-pair matrix at ${file.binSize} bp. Its resolutions are ` +
+          `${file.resolutions.join(', ')}.`,
+        { binSize: file.binSize, resolutions: file.resolutions },
+      )
+    }
+    const handle = hicHandle(uri, file)
+    const attrs = handle.attrs()
+    return new MetaCooler({
+      uri,
+      handle,
+      layout: {
+        kind: 'hic',
+        group,
+        entries: file.resolutions.map((size) => String(size)),
+      },
+      attrs,
+      contigs: handle.readTable('chroms'),
+      chromOffset: handle.readNumeric('indexes/chrom_offset'),
+      store: new HicStore(file),
+    })
   }
 
   /**
@@ -352,6 +420,9 @@ export class MetaCooler {
     for (let i = 0; i < this.genomeNames.length; i++) this.genomeIds.set(this.genomeNames[i], i)
 
     this.countKind = resolveCountKind(this.handle.dtype('pixels/count'))
+    // After `countKind` and after `chromOffset`, because the default store is
+    // built from both. A supplied one already knows its own answers.
+    this.store = init.store ?? new CoolerStore(this.handle, this.nBins, this.countKind)
     this.validateLight()
   }
 
@@ -390,7 +461,7 @@ export class MetaCooler {
    * per-pixel significance had no way of saying so.
    */
   get scoreColumns(): string[] {
-    return scoreColumns(this.handle)
+    return this.store.scoreColumns()
   }
 
   /** Number of genomes, `__unbinned__` included; `0` for a plain cooler. */
@@ -657,8 +728,7 @@ export class MetaCooler {
    * and every bounded read consult, so it is re-asked for constantly.
    */
   binOffsets(): Float64Array {
-    this.binOffsetCache ??= this.handle.readNumeric('indexes/bin1_offset')
-    return this.binOffsetCache
+    return this.store.binOffsets()
   }
 
   /**
@@ -764,10 +834,10 @@ export class MetaCooler {
     // Watched for the same reason as the pooled read above: a roll-up of the
     // whole file walks every pixel of it, and the level toggle is one click away
     // from the view that does.
-    await forEachPixelSpanAsync(
-      this.handle,
-      plan.span[0],
-      plan.span[1],
+    await this.store.forEachWindow(
+      rows,
+      cols,
+      plan,
       (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           const b1 = chunk.bin1[i]
@@ -845,10 +915,10 @@ export class MetaCooler {
     // Watched rather than raced through: this is the read the whole-genome view
     // makes, its span is the whole file, and a person waiting on it is owed a
     // bar and a way out (`forEachPixelSpanAsync`).
-    await forEachPixelSpanAsync(
-      this.handle,
-      plan.span[0],
-      plan.span[1],
+    await this.store.forEachWindow(
+      rows,
+      cols,
+      plan,
       (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           const b1 = chunk.bin1[i]
@@ -923,9 +993,8 @@ export class MetaCooler {
       this.storageMode === 'symmetric-upper',
     )
     const weights = options.balance === true ? this.weightSlices(whole, whole) : null
-    await forEachPixelRangesAsync(
-      this.handle,
-      this.pixelBandsOf(units.map(({ extent }) => extent)),
+    await this.store.forEachBands(
+      units.map(({ extent }) => [extent[0], extent[1]] as Extent),
       (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           const b1 = chunk.bin1[i]
@@ -947,40 +1016,6 @@ export class MetaCooler {
       ids: pooling.ids,
       pooling,
     }
-  }
-
-  /**
-   * The stored-pixel bands a set of bin ranges occupies, merged.
-   *
-   * `bin1_offset` is one entry per bin and already in memory ({@link binOffsets}),
-   * so a band costs two array reads and no I/O at all. Bands that touch — or that
-   * are separated by less than a window's worth of pixels — become one, because
-   * the source reads in 1 MiB chunks and seeking over a gap smaller than that
-   * costs more than reading across it.
-   *
-   * Sorted, because the ranges arrive in display order and the file is in file
-   * order; a selection that puts MAG_9 before MAG_2 must still be read forwards.
-   */
-  private pixelBandsOf(extents: ReadonlyArray<readonly [number, number]>): Extent[] {
-    const offsets = this.binOffsets()
-    const bands: Extent[] = []
-    for (const [lo, hi] of extents) {
-      if (hi <= lo) continue
-      const p0 = offsets[Math.max(0, lo)]
-      const p1 = offsets[Math.min(this.nBins, hi)]
-      if (p1 > p0) bands.push([p0, p1])
-    }
-    bands.sort((a, b) => a[0] - b[0])
-    const merged: Extent[] = []
-    for (const band of bands) {
-      const last = merged[merged.length - 1]
-      if (last !== undefined && band[0] <= last[1] + PIXEL_BAND_GAP) {
-        last[1] = Math.max(last[1], band[1])
-      } else {
-        merged.push([band[0], band[1]])
-      }
-    }
-    return merged
   }
 
   /** The two bounded weight slices a balanced roll-up multiplies by. */
@@ -1018,7 +1053,7 @@ export class MetaCooler {
 
   /** Total stored pixels, from the dataset shape. No pixel is read. */
   get nnz(): number {
-    return this.handle.datasetLength('pixels/bin1_id')
+    return this.store.nnz ?? 0
   }
 
   /**
@@ -1031,24 +1066,7 @@ export class MetaCooler {
    * scan, and that is what makes the gate cancellable.
    */
   async scanPixels(options: ScanOptions): Promise<void> {
-    const chunkSize = options.chunkSize ?? 1_000_000
-    const total = this.nnz
-    for (let lo = 0; lo < total; lo += chunkSize) {
-      const hi = Math.min(lo + chunkSize, total)
-      // `readInt32` rather than `readNumeric` then `Int32Array.from`: the bin
-      // ids are int64 on disk and array indices in use, and the double in
-      // between was 8 B per pixel per column that existed only to be narrowed.
-      const bin1 = this.handle.readInt32('pixels/bin1_id', lo, hi)
-      const bin2 = this.handle.readInt32('pixels/bin2_id', lo, hi)
-      const count = this.handle.readNumeric('pixels/count', lo, hi)
-      const chunk: PixelChunk = { bin1, bin2, count, length: count.length }
-      const keepGoing = options.onChunk(chunk)
-      options.onProgress?.(hi, total)
-      if (keepGoing === false) return
-      // A *real* yield, not `await Promise.resolve()`: the cancel arrives as a
-      // message, and a microtask never lets the message queue run (`../async`).
-      await yieldToEventLoop()
-    }
+    await this.store.scanAll(options as ScanAllOptions)
   }
 
   /**

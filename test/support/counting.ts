@@ -151,6 +151,11 @@ export class CountingRangeSource implements ByteSource {
   private readonly remote: RemoteRangeSource
   private mounted = false
 
+  /** The byte accessor, forwarded so a `.hic` reads through the same counters. */
+  readBytes(position: number, length: number): Uint8Array {
+    return this.remote.readBytes(position, length)
+  }
+
   private constructor(path: string, url: string, remote: RemoteRangeSource) {
     this.path = path
     this.url = url

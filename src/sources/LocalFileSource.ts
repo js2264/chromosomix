@@ -81,6 +81,8 @@ export class LocalFileSource implements ByteSource {
   private readonly cache = new Map<number, Uint8Array>()
   private cachedBytes = 0
   private syncReader: FileReaderSync | null = null
+  /** Resolved at mount, so {@link readBytes} has an FS to read a path through. */
+  private module: H5Module | null = null
 
   /**
    * Wrap a `File`, a `Blob`, raw bytes, or a {@link LocalPathRef}.
@@ -162,6 +164,7 @@ export class LocalFileSource implements ByteSource {
   async mount(): Promise<string> {
     if (this.mountPath !== null) return this.mountPath
     const h5 = await getH5()
+    this.module = h5
 
     if (this.existingPath !== null) {
       // NODERAWFS: the file is already visible to HDF5 where it lies. No copy,
@@ -235,6 +238,56 @@ export class LocalFileSource implements ByteSource {
       },
     }
     return `/${leaf}`
+  }
+
+  /**
+   * Read `[position, position + length)`, whatever this source is backed by.
+   *
+   * The three cases are the three constructor inputs, and each takes the
+   * cheapest route it has: in-memory bytes are a `subarray` copy, a `Blob` goes
+   * through the same slice cache the lazy mount uses — so a `.hic`'s block
+   * index and the blocks beside it are paid for once — and a path is read
+   * through the Emscripten FS, which under NODERAWFS is a real bounded read.
+   *
+   * The path case needs {@link mount} to have been called, because that is
+   * where the module is resolved and there is nowhere in a synchronous method
+   * to await it. Every caller mounts first; the throw is for the one that
+   * forgets, and says so rather than returning zeroes.
+   */
+  readBytes(position: number, length: number): Uint8Array {
+    const n = Math.max(0, Math.min(this.size - position, length))
+    if (n <= 0) return new Uint8Array(0)
+    if (this.bytes !== null) {
+      return this.bytes.subarray(position, position + n).slice()
+    }
+    if (this.blob !== null) {
+      const out = new Uint8Array(n)
+      this.copyInto(this.blob, out, 0, position, n)
+      return out
+    }
+    const h5 = this.module
+    if (this.existingPath === null || h5 === null) {
+      throw new ViewerError(
+        'unsupported',
+        `${this.id} cannot be read directly before it has been mounted.`,
+        { id: this.id },
+      )
+    }
+    const out = new Uint8Array(n)
+    const stream = h5.FS.open(this.existingPath, 'r')
+    try {
+      let done = 0
+      while (done < n) {
+        const got = h5.FS.read(stream, out, done, n - done, position + done)
+        if (got <= 0) break
+        done += got
+      }
+      this.requests += 1
+      this.bytesRead += done
+      return done === n ? out : out.subarray(0, done)
+    } finally {
+      h5.FS.close(stream)
+    }
   }
 
   /**
@@ -330,21 +383,6 @@ export class LocalFileSource implements ByteSource {
   /** Slices currently retained — a cache-behaviour assertion for tests. */
   cachedChunkCount(): number {
     return this.cache.size
-  }
-
-  /**
-   * Read `[position, position + length)` of the file.
-   *
-   * The byte accessor {@link mount}'s stream op is built on, exposed for the
-   * same reason `RemoteRangeSource.readBytes` is: the slice cache is the part
-   * with the interesting behaviour, and it should be assertable without
-   * standing up an Emscripten FS. Only meaningful for a `Blob` input.
-   */
-  readBytes(position: number, length: number): Uint8Array {
-    const n = Math.max(0, Math.min(this.size - position, length))
-    const out = new Uint8Array(n)
-    if (n > 0 && this.blob !== null) this.copyInto(this.blob, out, 0, position, n)
-    return out
   }
 
   /** Zero the counters, so a budget test can measure one operation. */

@@ -48,7 +48,20 @@ function oversizedSource(nBins: number): MatrixSource {
       },
     },
   ) as Hdf5Handle
-  return { handle, nBins, storageMode: 'symmetric-upper' }
+  // The store is proxied for the same reason the handle is: the guard's whole
+  // claim is that it refuses before *any* read, and a store that quietly
+  // returned nothing would let a regression through as a pass.
+  const store = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        throw new Error(
+          `the dense guard must refuse before touching the file (store.${String(property)})`,
+        )
+      },
+    },
+  ) as MatrixSource['store']
+  return { handle, nBins, storageMode: 'symmetric-upper', store }
 }
 
 describe('checkDenseSize', () => {
@@ -109,51 +122,53 @@ describe('checkDenseSize', () => {
 })
 
 describe('readDenseMatrix', () => {
-  it('refuses an oversized block before reading a single byte', () => {
+  it('refuses an oversized block before reading a single byte', async () => {
     const src = oversizedSource(422_967)
-    expect(() =>
+    await expect(
       readDenseMatrix(src, { rows: [0, 422_967] }, DENSE_HINTS.binSelection),
-    ).toThrowError(
+    ).rejects.toThrowError(
       'Refusing to allocate a 422967×422967 dense matrix (1431.2 GB). ' +
         'Use --range to select a smaller region, or --level contig.',
     )
   })
 
-  it('judges a rectangular selection on its cell count, not its longest axis', () => {
+  it('judges a rectangular selection on its cell count, not its longest axis', async () => {
     const src = oversizedSource(200_000)
     // 20000 × 4000 = 8e7 cells and no axis past a canvas's side: it passes both
     // guards, so the read is attempted — which the proxy handle reports by
     // throwing. Its longest axis is still under `DENSE_MATRIX_BIN_LIMIT`, so
     // the cell-count rule is what let it through, not the axis rule.
-    expect(() => readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 4_000] }, DENSE_HINTS.range))
-      .toThrowError(/must refuse before touching the file/)
+    await expect(
+      readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 4_000] }, DENSE_HINTS.range),
+    ).rejects.toThrowError(/must refuse before touching the file/)
     // 200000 × 13000 = 2.6e9 cells: over even the CLI-parity limit, so it never
     // gets that far.
-    expect(() =>
+    await expect(
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 13_000] }, DENSE_HINTS.range),
-    ).toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
+    ).rejects.toThrowError(/Refusing to allocate a 200000×13000 dense matrix/)
     // 200000 × 12000 = 2.4e9 cells: under Python's limit and past what one
     // typed array can hold, so the browser guard is what answers — with the
     // ceiling, which is the truer of its two refusals for a block this size.
-    expect(() =>
+    await expect(
       readDenseMatrix(src, { rows: [0, 200_000], cols: [0, 12_000] }, DENSE_HINTS.range),
-    ).toThrowError(/single array/)
+    ).rejects.toThrowError(/single array/)
     // 20000 × 12000 = 2.4e8 cells: 960 MB of values and a raster that has
     // stopped growing, so it is *inside* a 4 GiB machine's budget and the read
     // is attempted. It was refused when the estimate still charged a per-nnz
     // term for a read that is now windowed.
-    expect(() => readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 12_000] }, DENSE_HINTS.range))
-      .toThrowError(/must refuse before touching the file/)
+    await expect(
+      readDenseMatrix(src, { rows: [0, 20_000], cols: [0, 12_000] }, DENSE_HINTS.range),
+    ).rejects.toThrowError(/must refuse before touching the file/)
   })
 
-  it('rejects a malformed bin range before the size check', () => {
+  it('rejects a malformed bin range before the size check', async () => {
     const src = oversizedSource(1000)
-    expect(() => readDenseMatrix(src, { rows: [500, 100] }, DENSE_HINTS.range)).toThrowError(
-      /Bin range for rows is \[500, 100\)/,
-    )
-    expect(() => readDenseMatrix(src, { rows: [0, 2000] }, DENSE_HINTS.range)).toThrowError(
-      /Bin range for rows is \[0, 2000\)/,
-    )
+    await expect(
+      readDenseMatrix(src, { rows: [500, 100] }, DENSE_HINTS.range),
+    ).rejects.toThrowError(/Bin range for rows is \[500, 100\)/)
+    await expect(
+      readDenseMatrix(src, { rows: [0, 2000] }, DENSE_HINTS.range),
+    ).rejects.toThrowError(/Bin range for rows is \[0, 2000\)/)
   })
 })
 

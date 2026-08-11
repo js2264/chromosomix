@@ -105,6 +105,29 @@ export interface H5FileSystem {
     canRead: boolean,
     canWrite: boolean,
   ): H5FSNode
+  /**
+   * The three stream ops, for reading a *bounded* slice of a mounted file.
+   *
+   * Present so `LocalFileSource.readBytes` can serve a path-backed source
+   * without loading it: under NODERAWFS these are real `pread`s, so a `.hic`
+   * on disk is read a block at a time by the CLI exactly as it is in a tab.
+   * `readFile` would be the obvious call and is the wrong one — it returns the
+   * whole file, which is precisely the cost the block index exists to avoid.
+   */
+  open(path: string, flags: string): H5FSStream
+  read(
+    stream: H5FSStream,
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number,
+  ): number
+  close(stream: H5FSStream): void
+}
+
+/** An open Emscripten FS stream. Opaque; only {@link H5FileSystem} touches it. */
+export interface H5FSStream {
+  readonly fd?: number
 }
 
 /**
