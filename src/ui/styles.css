@@ -5818,7 +5818,13 @@ canvas.is-frozen {
    out at its 20rem floor while the other was capped by its column. A number is
    the only thing that cannot be derived two ways. */
 .deck-panel:not(.is-lead) .heatmap-wrap {
-  width: var(--deck-plot, 100%);
+  /* The panel's own measured size as the fallback rather than `100%`, for the
+     reason the rule two below gives at length: a percentage here has no definite
+     containing block and degenerates to the canvas's own pixels, which is where a
+     companion's 182-pixel map in a 430-pixel cell came from until the deck had
+     measured its lead. Its own number is right for its own cell, and it is a
+     number. */
+  width: var(--deck-plot, var(--map-size, 20rem));
   max-width: 100%;
   flex: 0 0 auto;
 }
@@ -5851,13 +5857,27 @@ canvas.is-frozen {
   min-width: 0;
 }
 
-/* The plot fills its column instead of claiming the window's height.
+/* The plot fills its column instead of claiming the window's height:
    `.heatmap-wrap`'s own `clamp` has a 20rem floor, which four side by side
-   overflow; the cap keeps it square and stops a wide window from producing four
-   plots taller than the page. */
+   overflow, and the cap stops a wide window from producing four plots taller
+   than the page.
+
+   **A length, never a percentage.** This box sits in a grid track sized from its
+   own contents (`.panel-grid`'s middle column is `minmax(min(20rem, 100%),
+   auto)`), so a percentage width has no definite containing block to resolve
+   against and CSS falls back to intrinsic sizing — which for a box whose only
+   child is a canvas means *the canvas's current pixel size*. That is a circle:
+   the canvas is sized from this box, so the box comes out at whatever the canvas
+   was last left at. A deck of two at 1 kb drew 182-pixel maps in 430-pixel
+   cells, a change of resolution moved them to 320 without ever reaching the
+   cell, and only a turn — which writes lengths — settled it. `--map-size` is the
+   size the panel *measured* (`ui/mapSize.ts`), already clamped to this cell and
+   to the height budget, so it is both definite and correct; the floor is what a
+   panel that has not measured itself yet draws for one frame, and it is small
+   rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number. */
 .deck .heatmap-wrap {
   width: min(
-    100%,
+    var(--map-size, 20rem),
     calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px))
   );
 }

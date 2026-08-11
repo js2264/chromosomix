@@ -34,7 +34,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is the gesture anybody who has just sized a map is about to make. It is clamped
   to the room rather than stored as what was drawn, so a size chosen in a tall
   window comes back in full when that window comes back, and a narrower one draws
-  as much of it as fits.
+  as much of it as fits. It works in a **deck** too, from any panel: the number is
+  shared, so one drag resizes every map on screen and they stay comparable.
 
 ### Changed
 
@@ -72,6 +73,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   What is behind this one is the file and what can be read off it.
 
 ### Fixed
+
+- **A deck of square maps drew them at whatever size their canvases happened to
+  be left at, with air between them.** Two maps at 1 kb came up as 182-pixel
+  pictures in 430-pixel cells; changing resolution in the breadcrumb moved them to
+  320 and still never reached the cell; and turning the map and back was the only
+  thing that settled it — which is the shape of the report that named this bug.
+
+  A map's box sits in a grid track sized from its own contents, because a map has
+  to be able to give width back to the lane stacks beside it. Inside a deck its
+  width was `min(100%, …)`, and a percentage with no definite containing block
+  falls back to intrinsic sizing — which for a box whose only child is a canvas
+  means *the canvas's own pixel size*, a number derived from that same box a frame
+  earlier. A change of resolution is a new canvas, so the circle settled somewhere
+  new; a turn writes lengths, so it broke the circle. Both the lead's rule and the
+  companions' fallback are now the size the panel measured, and
+  `test/unit/deck-plot-css.test.ts` keeps them numbers — the same fault had already
+  been fixed once for a turned companion's height.
 
 - **A turned map now takes the room it is given, whenever the room changes.** A
   band's rectangle is the one picture in this app whose size is a number the panel
