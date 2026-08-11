@@ -54,6 +54,15 @@ const TRACK = {
   },
 }
 
+const BOOKMARK = {
+  id: 'b7',
+  label: 'the loop',
+  contig: 'IV',
+  start: 400000,
+  end: 460000,
+  binsize: 1000,
+}
+
 // No storage to clear: `UiMemory` falls back to a module-level map when there
 // is no `window`, which is what a node test has. Each test uses keys of its own.
 describe('buildConfig', () => {
@@ -64,6 +73,9 @@ describe('buildConfig', () => {
     remember(key, 'browser:sequences', ['IV', 'XII'])
     remember(key, 'browser:groups', { reads: 'overlay' })
     remember(key, 'browser:scaling', { reads: 'each' })
+    remember(key, 'bookmarks', [
+      { id: 'b1', label: 'anchor_A', contig: 'IV', start: 400000, end: 460000, binsize: 1000 },
+    ])
     remember(key, 'compare:normalise', true)
     remember(key, 'table:contigs', { filters: {}, search: 'chr', sortKey: 'length', sortDir: -1 })
 
@@ -79,6 +91,11 @@ describe('buildConfig', () => {
     expect(config.state).toEqual(STATE)
     expect(config.tracks).toEqual([TRACK])
     expect(config.manual).toHaveLength(1)
+    // Saved places (§8.10): a list of loci walked one after another is work, it is
+    // not in the URL, and it is exactly the kind of thing handed to a colleague.
+    expect(config.bookmarks).toEqual([
+      { id: 'b1', label: 'anchor_A', contig: 'IV', start: 400000, end: 460000, binsize: 1000 },
+    ])
     expect(config.sequences).toEqual(['IV', 'XII'])
     expect(config.groups).toEqual({ reads: 'overlay' })
     expect(config.scaling).toEqual({ reads: 'each' })
@@ -106,6 +123,7 @@ describe('the round trip', () => {
   it('survives JSON, and lands under the importing session’s own key', () => {
     const key = 'trip|yeast.cool'
     remember(key, 'annotations', [TRACK])
+    remember(key, 'bookmarks', [BOOKMARK])
     remember(key, 'browser:sequences', ['IV'])
     const config = buildConfig({
       state: STATE,
@@ -118,11 +136,13 @@ describe('the round trip', () => {
     expect(read).not.toBeNull()
     expect(read?.state).toEqual(STATE)
     expect(read?.tracks).toEqual([TRACK])
+    expect(read?.bookmarks).toEqual([BOOKMARK])
 
     // …into a *different* tab, under a *different* name for the same file.
     applyConfig(read as NonNullable<typeof read>, 's7|dropped.cool')
     expect(recall('s7|dropped.cool', 'annotations')).toEqual([TRACK])
     expect(recall('s7|dropped.cool', 'browser:sequences')).toEqual(['IV'])
+    expect(recall('s7|dropped.cool', 'bookmarks')).toEqual([BOOKMARK])
     // The exporting session's own memory is untouched by the import.
     expect(recall(key, 'annotations')).toEqual([TRACK])
   })
@@ -142,6 +162,7 @@ describe('parseConfig', () => {
     const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
     expect(read?.tracks).toEqual([])
     expect(read?.manual).toEqual([])
+    expect(read?.bookmarks).toEqual([])
     expect(read?.sequences).toEqual([])
     expect(read?.groups).toEqual({})
     expect(read?.compareNormalise).toBe(false)

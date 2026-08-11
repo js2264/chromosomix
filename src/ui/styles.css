@@ -5481,6 +5481,113 @@ canvas.is-frozen {
   white-space: nowrap;
 }
 
+/* --- bookmarks --------------------------------------------------------- */
+
+/* The whole row is the button, and the arrow is its sign.
+   A saved place is the one card row whose *primary* act is a navigation, and a
+   list of coordinates gives no hint that clicking one goes anywhere — so the
+   arrow says which way and the row gives it a target big enough to hit. The
+   chrome is dropped because a filled button per row would make a list of forty
+   read as a wall of controls; what marks it as pressable is that it lights under
+   the hand, which is the same treatment a track row's buttons get
+   (`.ann-row.ann-ready .btn`). */
+.bookmark-go {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: none;
+  padding: 0.1rem 0.15rem;
+  text-align: left;
+}
+
+.bookmark-go:hover:not(:disabled) {
+  background: var(--bg-muted);
+}
+
+/* The arrow, at the far end: it is the row's punctuation rather than a thing
+   beside the name, and a fixed place for it means a column of them lines up down
+   the list however long the names are. `margin-left: auto` only when it is the
+   last thing on the row — a row with a resolution chip has already pushed that to
+   the end, and a second auto margin would put a gap between the two. */
+.bookmark-go > svg {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.bookmark-go > .bookmark-where + svg {
+  margin-left: auto;
+}
+
+.bookmark-go:hover:not(:disabled) > svg {
+  color: var(--text);
+}
+
+/* A name over its coordinates, not beside them.
+   Side by side, the two shared a 230-pixel column and both lost: `anchor_A` came
+   out as `anch…` next to `NC_000913.3:120,000-1…`, so neither the thing the
+   reader was looking for nor the thing that tells two rows apart survived.
+   Stacked, each gets the full width — which is the same answer `.ann-row` gives
+   for a track's name over its controls. A row with no name is one line, because
+   there is nothing to stack. */
+.bookmark-where {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The name from the file, when there is one — the thing a reader is looking for
+   in a list imported from a peak caller, so it gets the top line. */
+.bookmark-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The coordinates, always, and dimmer than the name: they are what tells two
+   rows called `peak_1` apart, which is a job they do without being read first.
+   Monospaced so the digits form columns down the list. */
+.bookmark-coords {
+  max-width: 100%;
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The grain the place was found at. A chip rather than more grey text, because
+   it is a different kind of fact from the coordinates beside it — where against
+   how closely — and a bookmark taken at 1 kb sends the reader somewhere a
+   bookmark taken at 20 kb does not. Pushed to the far end with the arrow, so the
+   two columns a reader scans down are the names on the left and the grains on the
+   right. */
+.bookmark-res {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  padding: 0 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* One line of padding less than a track's row: a bookmark has one row of
+   content and no controls under it, so the box should read as a list item
+   rather than as a card. */
+.bookmark-row {
+  padding: 0.15rem 0.25rem;
+}
+
 /* The one-click offer, when the open map has annotations published beside it.
    Above the drop areas because it is the shortest path to a working picture,
    and quiet enough that it does not read as the only way in. */

@@ -98,6 +98,14 @@ const LUCIDE = [
   'circle-stop',
   'rotate-cw',
   'table',
+  // Bookmarks (§8.7): the card's own mark, the *take one* button that sits beside
+  // `go` on the title line, and the arrow a saved row is opened by. The arrow is
+  // the row's whole affordance — a list of coordinates says nothing about what
+  // clicking one does, and `chevron-right` is already the app's "there is more
+  // under this" rather than its "take me there".
+  'bookmark',
+  'bookmark-plus',
+  'arrow-right',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */

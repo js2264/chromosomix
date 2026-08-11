@@ -14,6 +14,60 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Bookmarks: places worth coming back to**, in a card under the hand-drawn
+  marks. A bookmark is a **region and a bin size**, and carrying the second one
+  separately is the point — on a contact map *where* and *how closely* are two
+  questions, a loop found at 1 kb is not visible at 20 kb, and coordinates without
+  the grain give back a picture the note was never made against. Nothing else is
+  in one: not the zoom, not the colour scale, not which way the map was turned.
+  Those are how the picture happened to be drawn, and a bookmark that restored
+  them would be a saved screenshot rather than a saved place.
+
+  **Going to one opens the whole sequence, standing on the location** — and that
+  is not what typing `chrI:1,200,000-1,260,000` into the region box does. That
+  *cuts a block* at those coordinates, so the edges of the picture are the edges
+  of the data and panning off them shows paper. A saved place opens `chrI` and
+  puts the location in a new `focus` key, which is a window over a block read
+  whole: the first thing anybody does on arriving somewhere — look at what is
+  either side of it — works. It lands on the diagonal, because a locus is one
+  coordinate and a contact map takes two, and both presentations are served from
+  the same window: a square map takes it on both axes, a turned one along the
+  genomic axis with the other following. Arriving at a second place on the same
+  chromosome is a *zoom* rather than a navigation, so walking a list of forty
+  peaks costs one read of the chromosome and not forty.
+
+  `focus` is in the hash, so **a bookmark is a link**. It is a one-shot initial
+  condition rather than a live position — pan and zoom are deliberately not
+  shareable state, and a URL that rewrote itself on every wheel notch would make
+  the back button a scrollback — so the link goes on naming the place it was made
+  for however far its recipient then wanders.
+
+  **Three ways in, because they are three moments.** A `bookmark` button beside
+  `go` on the title line saves the window on screen, for the place you have just
+  found and do not want to retype; the round trip to a sidebar to copy coordinates
+  you are already looking at was the whole cost of not having it. The card takes
+  **typed coordinates**, in every spelling this app's own readout and tooltips
+  produce — separators, `kb`/`Mb`, `..` from an IGV or Ensembl URL, and a bare
+  position for a loop anchor. And it imports **BED**, which is what anybody who
+  has called peaks or loops already has in hand: the first three columns and the
+  name, so a narrowPeak, a BEDPE's first mate and a headed table from R all
+  import without a format question being asked. It says how many arrived and how
+  many lines had nothing in them, because an import that silently keeps four rows
+  out of forty has told the reader nothing.
+
+  Every refusal is **said**: a coordinate that will not parse, a picture that is
+  not at one place, a file with no regions in it, a place already saved. All four
+  are a press that would otherwise appear to do nothing — including pressing
+  `bookmark` twice, which is what anybody does when they cannot remember whether
+  the first press worked, and which answers "that place is already bookmarked"
+  rather than growing a second identical row.
+
+  They are kept in per-file session memory beside the marks, so they survive a
+  change of resolution, a switch of view, a deck opening and closing, and a
+  reload; and they are carried in an **exported session**, because a list of loci
+  walked one after another is work, and it is the one part of a workspace a
+  recipient can act on without the bytes.
+
 - **A square map is resized by dragging any of its four edges**, as a band has
   been by three of its own. The handles are the same bars, faint until they are
   approached and lit under the hand, and a **double-click on any of them** — or

@@ -263,6 +263,12 @@ search matched.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+Pan and zoom are deliberately **not** in it: the hash carries what is being looked at, and one that
+rewrote itself on every wheel notch would turn the back button into a scrollback. The one exception is
+`focus`, and it is not a live position — it is a window a view *opens* standing on, applied when the
+block arrives and never written back, so a link that named a place goes on naming it however far its
+recipient then wanders (§8.10).
+
 ### 5.6 Sessions
 
 Several files may be open at once, as tabs. A **session** is one file, its views, its tracks, its
@@ -819,7 +825,9 @@ additive: a file with no annotations loaded behaves exactly as it did before thi
 ### 8.1 The three cards
 
 Three cards in the left sidebar, above Binning QC, in this order. Each is absent — not disabled, not
-empty — on a file that cannot carry them.
+empty — on a file that cannot carry them. A fourth, **Bookmarks** (§8.10), sits under them and is not
+in this list because nothing in it is an annotation: it holds places rather than things drawn at
+them.
 
 **Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
 on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
@@ -1039,6 +1047,43 @@ Option-drag, which selects a box, writes both axes in the order this app always 
 produce on its own, separated by a character no coordinate grammar uses. In the browser a drag
 crossing two sequences zooms and copies nothing: that is a fine thing to look at and it is not a
 locus, and clamping it to one end would hand back coordinates for a region nobody selected.
+
+### 8.10 Bookmarks
+
+A fourth card under the marks, and the second thing in this section that comes from nobody's file:
+**places worth coming back to.** A bookmark is a region and a bin size, and nothing else.
+
+Both halves are decisions. The **region** is stated in (contig, base pair) like every other
+annotation here (§8.1), so it means the same thing at 1 kb and at 20 kb. The **bin size** is carried
+anyway, and separately, because on a contact map *where* and *how closely* are two questions: a loop
+found at 1 kb is not visible at 20 kb, and giving a reader back the coordinates without the grain
+gives them back a picture the note was never made against. What is deliberately **not** in it is the
+zoom, the colour scale and which way the map was turned — those are how the picture was drawn at the
+time, and a bookmark that restored them would be a saved screenshot rather than a saved place.
+
+**Going there opens the whole sequence, standing on the location.** This is the requirement the
+feature exists for and it is not what setting `region=chrI:1200000-1260000` does: that *cuts a block*
+at those coordinates, so the edges of the picture are the edges of the data and panning off them
+shows paper. A bookmark sets `region=chrI` and puts the location in **`focus`** (§5.5), which is a
+window over a block read whole — so the first thing anybody does on arriving somewhere, look at what
+is either side of it, works. `focus` is a one-shot initial condition rather than a live position:
+pan and zoom are not in the hash, so the link keeps pointing at the place it was made for however far
+the reader then wanders. It is applied on the diagonal, because a locus is one coordinate and a
+contact map takes two — a square map takes the window on both axes and a turned one takes it along
+the genomic axis and lets the other follow.
+
+**Three ways in, because they are three moments.** A button beside `go` on the title line saves the
+window on screen, which is for the place you have just found and do not want to retype. The card
+takes typed coordinates, which is for a place from a paper or a colleague. And the card imports
+**BED**, which is for the forty places anybody who has called peaks or loops already has in hand —
+read as the first three columns and the name, so a narrowPeak, a BEDPE's first mate and a headed
+table from R all import without a format question. An import claims no bin size, since a list of
+intervals does not state one.
+
+Kept in per-file session memory beside the marks (§8.6), which is what makes them survive a change of
+resolution, a switch of view, a deck opening and closing, and a reload; and carried in an exported
+session (§5.6), because a list of loci walked one after another is work, and it is the one part of a
+workspace a recipient can act on without the bytes.
 
 ---
 

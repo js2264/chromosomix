@@ -2237,6 +2237,35 @@ export class HeatmapView {
   }
 
   /**
+   * Show a stretch of the **column** axis, letting the other one follow.
+   *
+   * {@link zoomToSpan} for a caller that has cells rather than pixels, and the
+   * counterpart {@link showCellWindow} cannot be for a band: a turned block's
+   * rows are distance from the diagonal, its height in cells is chosen so the cut
+   * fills the box at fit zoom, and asking for "these rows and these columns"
+   * therefore asks for the zoom that fits the band's whole depth — which is fit
+   * zoom, whatever window was named. So the row span is not passed at all here.
+   * One scalar still serves both axes, `clampView` stands the band back on its
+   * anchor, and what the caller gets is the stretch it asked for at as much
+   * magnification as the picture allows.
+   */
+  showCellSpan(cols: [number, number]): void {
+    if (this.frozen) return
+    const plot = this.plotRect
+    const span = Math.max(1e-6, cols[1] - cols[0])
+    const wanted = plot.width / span
+    this.zoom = clamp(
+      Number.isFinite(wanted) && wanted > 0 ? wanted : this.zoom,
+      this.minZoom(),
+      this.maxZoom(),
+    )
+    this.originX = (cols[0] + cols[1]) / 2 - plot.width / this.zoom / 2
+    this.clampView()
+    this.syncScales()
+    this.changed()
+  }
+
+  /**
    * The placement half of {@link showCellWindow}, without the clamp, the sync or
    * the notification.
    *

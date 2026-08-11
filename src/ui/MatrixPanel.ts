@@ -5715,6 +5715,80 @@ export class MatrixPanel {
   }
 
   /**
+   * Put a stretch of genome on screen **on the diagonal**, without re-cutting the
+   * block — what a bookmark means by "take me there" (§8.10).
+   *
+   * The distinction from opening `region=chrI:1200000-1260000` is the point of
+   * the whole feature: that reads a block cut at those coordinates, so the edges
+   * of the picture are the edges of the data and panning off them shows paper.
+   * This is a *zoom* over a block that was read whole, so the rest of the
+   * chromosome is still behind the window and one drag reaches it.
+   *
+   * On the diagonal because a locus is one coordinate and a contact map takes
+   * two: the square a stretch cuts out of its own chromosome is the only block
+   * one locus names, and it is the block the reader means. Which is the same
+   * resolution {@link turnedWindow} makes for a drag across a band, arrived at
+   * from the other end.
+   *
+   * Both presentations are served from the same window, and neither is a special
+   * case of the other. A **square** map takes the window on both axes, which is
+   * literally the on-diagonal square. A **turned** one takes it on the column
+   * axis alone and lets the row axis follow ({@link HeatmapView.showCellSpan}):
+   * up the side is distance from the diagonal, so there is no row window to ask
+   * for and asking for one would pin the zoom to the band's own depth.
+   *
+   * `false` when the window could not be placed — no block yet, a contig this one
+   * does not cover, a locus above bin level — and nothing moves when it cannot.
+   * The caller's fallback is the fitted view it already has: §8.4's rule is that
+   * a picture in the wrong place is worse than one at the wrong zoom, and a
+   * bookmark quietly landing on another chromosome is exactly that.
+   */
+  showLocus(window: { contig: string; start: number; end: number }): boolean {
+    if (this.data === null) return false
+    const want = {
+      from: { contig: window.contig, bp: window.start },
+      to: { contig: window.contig, bp: window.end },
+    }
+    const cells = this.cellCount()
+    const cols = spanOnAxis(this.locusAxes.cols, want, cells.cols)
+    if (cols === null) return false
+    if (this.turned !== null) {
+      this.heatmap.showCellSpan([cols[0], cols[1]])
+      return true
+    }
+    const rows = spanOnAxis(this.locusAxes.rows, want, cells.rows)
+    if (rows === null) return false
+    this.heatmap.showCellWindow([rows[0], rows[1]], [cols[0], cols[1]])
+    return true
+  }
+
+  /**
+   * The stretch of genome the picture is showing, for something that wants to
+   * write it down — the *take a bookmark* button, today.
+   *
+   * The **column** axis, because that is the one that means position in both
+   * presentations: a turned band has no row locus at all, and on a square
+   * on-diagonal map the two axes are the same stretch anyway. Off the diagonal
+   * they are not, and the honest answer there is still the columns — a
+   * contig × contig block is a picture of two places, and a bookmark is one.
+   *
+   * `null` where the answer would be a guess: no block, no locus axis (a contig
+   * or genome level cell is a whole sequence), or a window spanning **more than
+   * one contig**. That last is a refusal rather than a truncation: a whole-genome
+   * map framed across four chromosomes is not at a location, and saving its first
+   * chromosome would be saving somewhere the reader is not looking.
+   */
+  framedRegion(): { contig: string; start: number; end: number } | null {
+    if (this.data === null) return null
+    const windows = this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX)
+    if (windows.length !== 1) return null
+    const only = windows[0]
+    return only.end > only.start
+      ? { contig: only.contig, start: only.start, end: only.end }
+      : null
+  }
+
+  /**
    * Tell the stylesheet how much vertical budget the horizontal stacks take, and
    * re-measure whenever any stack changes thickness.
    *

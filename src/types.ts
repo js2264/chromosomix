@@ -305,6 +305,32 @@ export interface ViewState {
    */
   region2?: string
   /**
+   * The stretch of {@link region} the map opens **zoomed to**, on the diagonal:
+   * `chrI:1200000-1260000`, 0-based half-open, exactly as `region` is written.
+   *
+   * The distinction from `region` is the whole of what this key is for, and it is
+   * a distinction a reader can feel: `region=chrI:1200000-1260000` *cuts a block*
+   * at those coordinates, so panning stops at its edges and there is nothing
+   * outside them to see. This names a window over a block that was read whole, so
+   * the picture opens on the locus and the rest of the chromosome is still there
+   * to pan into. That is what a bookmark means by "take me there" (§8.10), and it
+   * is why saved places do not simply set `region`.
+   *
+   * A **one-shot initial condition**, not a live position. Pan and zoom are
+   * deliberately absent from the hash (§5.5 carries what is *being looked at*,
+   * and a URL that rewrote itself on every wheel notch would make the back button
+   * a scrollback), so this is applied when the block it names arrives and is not
+   * written back when the reader moves off it. The link keeps pointing at the
+   * place it was made for, which is what makes a bookmark shareable.
+   *
+   * Ignored by every view but `region`: it is a window *inside* a block read on
+   * one axis pair, and a genome or a selection has no single diagonal to put it
+   * on. Ignored quietly, and left in the hash rather than stripped, for the
+   * reason `flip` is on a metagenome — a reader passing through a view that
+   * cannot honour it should not find it deleted on the far side.
+   */
+  focus?: string
+  /**
    * The genomes a `selection` view is of, comma-joined, in the order ticked.
    *
    * The plural of {@link genome}, and it makes the pair view a special case
