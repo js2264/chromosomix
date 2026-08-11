@@ -183,11 +183,6 @@ export function featureLabel(set: FeatureSet, at: number): string {
   return name === '' ? id : `${name} (${id})`
 }
 
-/** The contig's index in this set, or `-1` when the file never mentions it. */
-export function contigIndexOf(set: { contigs: string[] }, name: string): number {
-  return set.contigs.indexOf(name)
-}
-
 /**
  * The half-open index range worth *examining* for features overlapping
  * `[lo, hi)` on `contig`.

@@ -297,7 +297,7 @@ suite('§12 — analysis over a remote cooler', () => {
         index,
         singleGroupPlan(dense.nrows, curve.finish()),
       )
-      const pairs = leadingEigenpairs(correlationMatrix(oe, index.length), index.length, 2)
+      const pairs = leadingEigenpairs(await correlationMatrix(oe, index.length), index.length, 2)
       expect(pairs.length, 'the solver produced components to be free about').toBe(2)
       const { requests } = source.stats()
       expect(requests, `the compartment chain cost ${requests} requests`).toBe(

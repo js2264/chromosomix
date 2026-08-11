@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   callBoundaries,
+  diamondCells,
   diamondSums,
   insulationScore,
   type ContigSquare,
@@ -125,6 +126,60 @@ describe('diamondSums', () => {
     // And the bins away from it are full, so the trough is a trough.
     expect(sums[5]).toBe(9)
     expect(sums[15]).toBe(9)
+  })
+
+  /**
+   * How many cells a cut actually leaves, which is what `minValid` is a fraction
+   * of — and the number the old arithmetic stopped tracking past `w + 1`.
+   *
+   * A diamond of half-width `w` spans separations `1 … 2w − 1`. It is the *span*
+   * that bounds the cut, not the window: at `ignoreDiags = 2w` there is nothing
+   * left, and between `w + 1` and `2w` there is less left than a triangle of
+   * `w(w + 1) / 2` would suggest.
+   */
+  describe('ignoring diagonals', () => {
+    it('counts what a cut leaves, over the diamond’s whole span', () => {
+      // Nothing ignored is the whole rectangle.
+      expect(diamondCells(4, 0)).toBe(16)
+      expect(diamondCells(4, 1)).toBe(16)
+      // One cell at separation 1, two at 2, three at 3, four at 4, then 3, 2, 1.
+      expect(diamondCells(4, 2)).toBe(15)
+      expect(diamondCells(4, 3)).toBe(13)
+      expect(diamondCells(4, 5)).toBe(6)
+      // Separations run 1…7, so seven ignored diagonals leave one cell and
+      // eight leave none — where the capped triangle claimed 6.
+      expect(diamondCells(4, 7)).toBe(1)
+      expect(diamondCells(4, 8)).toBe(0)
+      expect(diamondCells(4, 30)).toBe(0)
+    })
+
+    it('trims the corner nearest the diagonal, and only that', () => {
+      const square = ones(12)
+      const all = diamondSums(square, { window: 3, minValid: 0 })
+      const trimmed = diamondSums(square, { window: 3, minValid: 0, ignoreDiags: 2 })
+      // The cell at (i − 1, i) is one bin of separation and is the only one the
+      // cut reaches at `ignoreDiags: 2`.
+      expect(all[6]).toBe(9)
+      expect(trimmed[6]).toBe(8)
+    })
+
+    it('scores a bin whose diamond still has cells in it', () => {
+      // Six ignored diagonals of a window-4 diamond leave separations 6 and 7 —
+      // three cells. The count that capped its triangle called it 6, so a
+      // `minValid` of 0.5 asked for 3 of a possible 3 and got them; at 0.9 it
+      // asked for 6 and refused a bin that had everything it could have.
+      const square = ones(20)
+      expect(diamondCells(4, 6)).toBe(3)
+      const scored = diamondSums(square, { window: 4, minValid: 0.9, ignoreDiags: 6 })
+      expect(scored[10]).toBe(3)
+    })
+
+    it('answers a cut wider than the diamond with gaps rather than with zeros', () => {
+      const sums = diamondSums(ones(40), { window: 5, minValid: 0.5, ignoreDiags: 30 })
+      // Every bin, not merely the ends: there is no cell at a separation of 30
+      // in a diamond that spans 9. A zero here would read as total insulation.
+      expect([...sums].every((value) => Number.isNaN(value))).toBe(true)
+    })
   })
 })
 

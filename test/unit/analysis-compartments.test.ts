@@ -54,7 +54,10 @@ function blocks(n: number): Float32Array {
   return values
 }
 
-function chainOf(values: Float32Array, n: number): { component: Float64Array; index: Int32Array } {
+async function chainOf(
+  values: Float32Array,
+  n: number,
+): Promise<{ component: Float64Array; index: Int32Array }> {
   const accumulator = new ExpectedAccumulator(n)
   accumulator.addBlock({
     nrows: n,
@@ -65,15 +68,15 @@ function chainOf(values: Float32Array, n: number): { component: Float64Array; in
   })
   const index = usableBins(values, n, 0.1)
   const oe = observedOverExpected(values, n, index, singleGroupPlan(n, accumulator.finish()))
-  const correlation = correlationMatrix(oe, index.length)
+  const correlation = await correlationMatrix(oe, index.length)
   const pairs = leadingEigenpairs(correlation, index.length, 1)
   return { component: pairs[0].vector, index }
 }
 
 describe('the compartment chain', () => {
-  it('separates two compartments with its first component', () => {
+  it('separates two compartments with its first component', async () => {
     const n = 40
-    const { component, index } = chainOf(blocks(n), n)
+    const { component, index } = await chainOf(blocks(n), n)
     // One compartment on each side of zero. Which side is which is arbitrary
     // until phasing, so the test asks only that the two groups are split.
     const even: number[] = []
@@ -91,13 +94,13 @@ describe('the compartment chain', () => {
     expect(Math.abs(evenMean - oddMean)).toBeGreaterThan(typical)
   })
 
-  it('gives the same component twice, so a figure is reproducible', () => {
+  it('gives the same component twice, so a figure is reproducible', async () => {
     // S16.4. Power iteration from an arbitrary start converges to the same
     // vector up to sign, and the sign is what a compartment track *means* — so
     // the start is seeded rather than random.
     const n = 30
-    const a = chainOf(blocks(n), n).component
-    const b = chainOf(blocks(n), n).component
+    const a = (await chainOf(blocks(n), n)).component
+    const b = (await chainOf(blocks(n), n)).component
     expect(Array.from(a)).toEqual(Array.from(b))
   })
 })
@@ -259,6 +262,26 @@ describe('observedOverExpected', () => {
     }
   })
 
+  it('leaves a cis-only square with nothing at all once the cut covers it', () => {
+    // The control has no upper bound, and on a metagenome a sequence can be
+    // shorter than the number typed into it. Every cell then becomes a gap,
+    // every correlation is undefined, and `correlationMatrix` fills the matrix
+    // with the zeros it reads *no evidence* as — so the eigenvector of what is
+    // left is a shape with no data behind it. `run/compartments.ts` checks for
+    // exactly this and says so instead of drawing it; this pins the premise.
+    const n = 4
+    const values = new Float32Array(n * n).fill(2)
+    const flat = new ExpectedAccumulator(n)
+    for (let k = 0; k <= n; k++) flat.add(k, 2)
+    const index = Int32Array.from([0, 1, 2, 3])
+    const oe = observedOverExpected(values, n, index, {
+      ...singleGroupPlan(n, flat.finish()),
+      contacts: 'cis',
+      ignoreDiags: n,
+    })
+    expect([...oe].every((value) => Number.isNaN(value))).toBe(true)
+  })
+
   it('answers a trans pair with nothing in it with a gap, not with the count', () => {
     const n = 2
     const group = Int32Array.from([0, 1])
@@ -349,5 +372,49 @@ describe('fiedlerSplit', () => {
 
   it('refuses to split something with fewer than two members', () => {
     expect(fiedlerSplit(new Float64Array(1), 1)).toBeNull()
+  })
+})
+
+/**
+ * Why the correlation's row hook is awaited.
+ *
+ * A cancel arrives as a *message*, and a message is delivered in a task of its
+ * own — so a hook that only ever ran synchronously asked about a cancel that
+ * could not yet have been received, however many times it asked. The cubic loop
+ * here is the one that most needs stopping and was the one that could not be:
+ * a genome-wide correlation ran to completion with the reader's cancel sitting
+ * in the worker's queue behind it, and delivered its result to somebody who had
+ * asked for it to stop.
+ */
+describe('stopping the correlation', () => {
+  const square = (m: number): Float64Array => {
+    const oe = new Float64Array(m * m)
+    for (let r = 0; r < m; r++) {
+      for (let c = 0; c < m; c++) oe[r * m + c] = Math.sin((r + 1) * (c + 1))
+    }
+    return oe
+  }
+
+  it('waits for the hook rather than running past it', async () => {
+    const m = 32
+    const seen: number[] = []
+    await expect(
+      correlationMatrix(square(m), m, async (row) => {
+        seen.push(row)
+        // The yield is the whole point: a hook that suspends must suspend the
+        // loop, or the flag it is about to read is one nothing could have set.
+        await Promise.resolve()
+        if (row === 3) throw new Error('stopped')
+      }),
+    ).rejects.toThrow('stopped')
+    expect(seen).toEqual([0, 1, 2, 3])
+  })
+
+  it('still answers when nothing is watching', async () => {
+    const m = 8
+    const out = await correlationMatrix(square(m), m)
+    expect(out).toHaveLength(m * m)
+    // The diagonal is 1 by construction rather than by computation.
+    for (let r = 0; r < m; r++) expect(out[r * m + r]).toBe(1)
   })
 })

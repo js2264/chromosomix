@@ -81,7 +81,11 @@ describe('the maps key', () => {
   })
 
   it('refuses to build a deck past the limit from a hand-edited hash', () => {
-    const many = Array.from({ length: 20 }, (_, i) => `f${i}.cool`).join(MAPS_SEPARATOR)
+    // The backstop, not a policy: a hash asking for ten thousand cells should be
+    // refused before ten thousand workers are started.
+    const many = Array.from({ length: MAX_PANELS + 20 }, (_, i) => `f${i}.cool`).join(
+      MAPS_SEPARATOR,
+    )
     expect(parseMaps(many)).toHaveLength(MAX_PANELS - 1)
   })
 
@@ -241,11 +245,14 @@ describe('growing a deck by an edge', () => {
   /**
    * The ceiling is the deck's to enforce, not this function's — it is the same
    * `MAX_PANELS` a hand-edited hash meets — but the arithmetic has to make the
-   * refusal reachable rather than land exactly on six for ever.
+   * refusal *reachable*, whatever the backstop is set to. Written against
+   * `MAX_PANELS` rather than against a shape that happens to land on it, so
+   * raising the backstop cannot quietly make the refusal unreachable.
    */
   it('grows past the limit, for the deck to refuse', () => {
-    expect(grownDeck(shape(4, 2), 'beside').cells).toBe(MAX_PANELS)
-    expect(grownDeck(shape(MAX_PANELS, 3), 'below').cells).toBeGreaterThan(MAX_PANELS)
+    for (const direction of ['beside', 'below'] as const) {
+      expect(grownDeck(shape(MAX_PANELS, 3), direction).cells).toBeGreaterThan(MAX_PANELS)
+    }
   })
 
   /**
@@ -255,8 +262,11 @@ describe('growing a deck by an edge', () => {
    * refuses.
    */
   it('runs out of room on one edge before the other', () => {
-    expect(grownDeck(shape(4, 4), 'beside').cells).toBeLessThanOrEqual(MAX_PANELS)
-    expect(grownDeck(shape(4, 4), 'below').cells).toBeGreaterThan(MAX_PANELS)
+    // One row, one short of the backstop: a cell beside it fits and a whole
+    // second row does not.
+    const wide = shape(MAX_PANELS - 1, MAX_PANELS - 1)
+    expect(grownDeck(wide, 'beside').cells).toBeLessThanOrEqual(MAX_PANELS)
+    expect(grownDeck(wide, 'below').cells).toBeGreaterThan(MAX_PANELS)
   })
 
   /** A shape that came back from an older build's session memory (§8.6). */

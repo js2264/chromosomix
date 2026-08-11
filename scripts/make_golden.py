@@ -28,20 +28,19 @@ under ``info_volatile_keys`` so a JS test knows exactly what to ignore rather
 than guessing. ``metadata.commands`` is stripped for the same reason — it
 carries the absolute paths of whatever machine ran ``make_fixtures.py``.
 
-Two Python-side limitations are recorded rather than worked around
-------------------------------------------------------------------
-1. ``cooler.Cooler`` cannot open a metacool whose **contig** names are
-   non-ASCII: ``cooler/core/_tableops.py`` does ``dset[lo:hi].astype("U")``,
-   which is an ASCII decode. ``utf8.metacool`` therefore gets a *partial*
-   golden — attributes, tables and offsets, which is everything the JS reader
-   needs to prove its UTF-8 decode — plus a ``python_open`` record naming the
-   exception. metacooler writes and validates the file happily; only the read
-   path through cooler fails.
-2. ``metacooler aggregate`` cannot write a genome-level ``.cool`` when
-   **genome** names are non-ASCII: cooler's ``CHROM_DTYPE`` is an ASCII ``S``
-   column. Aggregated matrices fall back to ``ops.aggregate._aggregate_sparse``
-   (the same primitive ``show`` uses) in that case, and every matrix entry
-   records which method produced it.
+Every fixture has a **full** oracle, and that is a property of the fixture set
+------------------------------------------------------------------------------
+Nothing here has a non-ASCII name, because metacooler will not write one:
+``/contigs`` doubles as cooler's ``/chroms`` and cooler decodes it with an ASCII
+``.astype("U")``, so ``check_ascii_names`` refuses on the way in and
+``schema.validate`` on the way out.  There is therefore no fixture ``cooler`` and
+``MetaCooler`` cannot open, no partial golden, and no matrix this script has to
+record as unobtainable — a file the reference implementation cannot read is one
+the viewer should not be claiming to read either.
+
+``metacooler aggregate`` can still fall back to ``ops.aggregate._aggregate_sparse``
+— the same primitive ``show`` uses — and every matrix entry records which method
+produced it, because the two are worth telling apart wherever they differ.
 """
 
 from __future__ import annotations
@@ -120,11 +119,12 @@ READER_NOTES = {
     "string_decoding": {
         "note": (
             "h5wasm decodes fixed-length 'A<n>' string datasets as Latin-1, not "
-            "UTF-8: /contigs/name in utf8.metacool comes back as 'contig_Ã±_04' "
-            "where the file holds 'contig_ñ_04'. Dataset.value is therefore unusable "
-            "for name columns — read the raw bytes and decode with "
-            "TextDecoder('utf-8'), stripping trailing NULs (spec §6.2). "
-            "utf8.metacool and utf8_genomes.metacool exist to fail loudly on this."
+            "UTF-8, so Dataset.value is unusable for any string column — read the "
+            "raw bytes and decode with TextDecoder('utf-8'), stripping trailing "
+            "NULs (spec §6.2). Names are ASCII by construction (metacooler refuses "
+            "anything else, since /contigs is cooler's /chroms), but an extra "
+            "/genomes column is not: an accented taxonomy is legal metadata cooler "
+            "never sees, and it is what this note is about."
         )
     },
     "non_finite": {
@@ -310,9 +310,9 @@ def dataset_kinds(node: h5py.Group, group: str) -> dict:
 def raw_table(node: h5py.Group, group: str) -> dict:
     """Read a table group straight from HDF5, decoding S columns as UTF-8.
 
-    Deliberately not ``pandas``: this must work on ``utf8.metacool``, where the
-    cooler read path raises. Mirrors ``schema.read_table``'s decode, which uses
-    an explicit UTF-8 decode precisely because ``astype('U')`` is ASCII.
+    Deliberately not ``pandas``: this mirrors ``schema.read_table``'s decode,
+    which uses an explicit UTF-8 decode precisely because ``astype('U')`` is
+    ASCII — and an extra ``/genomes`` column may legally hold an accented value.
     """
     grp = node[group]
     columns = [k for k in grp if isinstance(grp[k], h5py.Dataset)]
@@ -377,8 +377,7 @@ def aggregated(uri: str, mc, level: str) -> tuple[list[list], str, str | None]:
     Prefers the public ``metacooler.ops.aggregate.aggregate`` (write a ``.cool``,
     read it dense) because that is the documented route and it preserves float
     counts. Falls back to ``_aggregate_sparse`` — the same primitive ``show``
-    uses — when cooler cannot round-trip the names, which happens for non-ASCII
-    genome names (cooler's ``CHROM_DTYPE`` is ASCII).
+    uses — when cooler cannot round-trip the names.
     """
     import cooler
     from metacooler.ops.aggregate import _aggregate_sparse, aggregate
@@ -598,23 +597,12 @@ def metacool_golden(path: Path, group: str, uri: str, descriptor: dict) -> dict:
             proxy[genome["name"]] = int(bin1_offset[b_hi] - bin1_offset[b_lo])
         out["density_proxy"] = proxy
 
-    try:
-        mc = MetaCooler(uri)
-    except Exception as exc:  # noqa: BLE001
-        out["python_open"] = {
-            "ok": False,
-            "error_type": type(exc).__name__,
-            "error_message": scrub(str(exc)),
-            "note": (
-                "cooler.Cooler decodes /chroms/name with astype('U'), an ASCII "
-                "decode, so a metacool with non-ASCII contig names has no Python "
-                "read path. The file itself is well-formed: schema.validate() "
-                "passes and schema.read_table() decodes it as UTF-8."
-            ),
-        }
-        out["golden"] = "partial"
-        return out
-
+    # Not caught: a fixture Python cannot open is a broken fixture, and the
+    # generator's job is to say so rather than to write a partial oracle around
+    # it. The one shape that used to land here — non-ASCII contig names, which
+    # cooler decodes with an ASCII ``astype('U')`` — is a file metacooler now
+    # refuses to write at all.
+    mc = MetaCooler(uri)
     out["python_open"] = {"ok": True}
     out["golden"] = "full"
 

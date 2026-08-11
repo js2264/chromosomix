@@ -120,13 +120,26 @@ function result(outputs: TaskResult['outputs']): TaskResult {
   }
 }
 
+/** A map of a deck, as the runner reports one. */
+interface FakeTarget {
+  map: string
+  uri: string
+  label: string
+}
+
 /** A runner that has already finished — the drawer only reads from it. */
-function runnerWith(finished: TaskResult): AnalysisRunner {
+function runnerWith(finished: TaskResult, deck: readonly FakeTarget[] = []): AnalysisRunner {
   return {
     subscribe: () => () => {},
     resultOf: (taskId: string) => (taskId === finished.provenance.task ? finished : null),
     stateOf: () => ({ status: 'idle' }),
     run: () => {},
+    runAll: () => {},
+    // Empty is one map, so the drawer offers no batch — see
+    // `AnalysisRunner.targets`.
+    targets: () => deck,
+    // The starred one, which on this deck is the second.
+    target: () => deck[1] ?? null,
     cancel: () => {},
   } as unknown as AnalysisRunner
 }
@@ -134,13 +147,22 @@ function runnerWith(finished: TaskResult): AnalysisRunner {
 function open(
   finished: TaskResult,
   hasLanes: boolean,
-): { el: HTMLElement; wrote: Array<[string, string]>; destroy(): void } {
+  deck: readonly FakeTarget[] = [],
+): {
+  el: HTMLElement
+  wrote: Array<[string, string]>
+  closes: number
+  destroy(): void
+} {
   const wrote: Array<[string, string]> = []
+  let closes = 0
   const drawer = new AnalysisDrawer({
-    runner: runnerWith(finished),
+    runner: runnerWith(finished, deck),
     context: () => CONTEXT,
     framing: () => FRAMING,
-    onClose: () => {},
+    onClose: () => {
+      closes++
+    },
     hasLanes: () => hasLanes,
     writeProfile: (output, _provenance, format) => {
       wrote.push([output.id, format])
@@ -149,7 +171,14 @@ function open(
   })
   document.body.appendChild(drawer.el)
   drawer.show(TASK)
-  return { el: drawer.el, wrote, destroy: () => drawer.destroy() }
+  return {
+    el: drawer.el,
+    wrote,
+    get closes() {
+      return closes
+    },
+    destroy: () => drawer.destroy(),
+  }
 }
 
 describe('a profile on a file that has a Synthetic tracks card', () => {
@@ -247,5 +276,125 @@ describe('the drawer as a whole', () => {
     expect(document.body.contains(view.el)).toBe(true)
     view.destroy()
     expect(document.body.contains(view.el)).toBe(false)
+  })
+})
+
+/**
+ * Escape puts the drawer down.
+ *
+ * Not a modal's Escape, which cancels the question and throws the answer away:
+ * this one is the ✕, said with the key every other overlay in the application is
+ * dismissed by. Whatever is running keeps running, and the panel row goes on
+ * reporting it — which is the whole reason it can be a dismissal at all.
+ */
+describe('the Escape key', () => {
+  const escape = (over?: HTMLElement): void => {
+    ;(over ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  }
+
+  it('closes the drawer, and tells the owner', () => {
+    const view = open(result([profile()]), false)
+    expect(view.el.classList.contains('collapsed')).toBe(false)
+    escape()
+    expect(view.el.classList.contains('collapsed')).toBe(true)
+    expect(view.closes).toBe(1)
+    view.destroy()
+  })
+
+  it('does nothing when the drawer is already down', () => {
+    const view = open(result([profile()]), false)
+    escape()
+    escape()
+    expect(view.closes).toBe(1)
+    view.destroy()
+  })
+
+  it('leaves the key to a field the reader is typing in', () => {
+    const view = open(result([profile()]), false)
+    const box = document.createElement('input')
+    box.type = 'text'
+    view.el.appendChild(box)
+    box.focus()
+    escape(box)
+    // A half-typed anchor abandoned with Escape means *that box*, and a panel
+    // that vanished from under the reader would take the form with it.
+    expect(view.el.classList.contains('collapsed')).toBe(false)
+    expect(view.closes).toBe(0)
+
+    // …and with the focus off the field, the same key closes as usual.
+    box.blur()
+    escape()
+    expect(view.closes).toBe(1)
+    view.destroy()
+  })
+
+  it('leaves the key to whatever handled it first', () => {
+    const view = open(result([profile()]), false)
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    // A marquee on the map and a caret in the legend both answer Escape before
+    // this does; a drawer that closed as well would make one key do two things.
+    event.preventDefault()
+    document.body.dispatchEvent(event)
+    expect(view.closes).toBe(0)
+    view.destroy()
+  })
+
+  it('stops listening once it is gone', () => {
+    const view = open(result([profile()]), false)
+    view.destroy()
+    escape()
+    expect(view.closes).toBe(0)
+  })
+})
+
+/**
+ * What Run says it is about.
+ *
+ * `run` is a complete sentence beside one map and dangerously incomplete beside
+ * five: the reader has one starred and four not, the difference is a small
+ * filled star in each heading, and a button saying only `run` gives them nothing
+ * to check that against before spending a minute of compute.
+ */
+describe('the Run button’s label', () => {
+  const DECK: FakeTarget[] = [
+    { map: 'lead', uri: 'first.cool', label: 'first.cool' },
+    { map: 'p1', uri: 'rep2.cool', label: 'rep2.cool' },
+  ]
+
+  function runButton(el: HTMLElement): HTMLButtonElement {
+    const node = [...el.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      (button.textContent ?? '').trim().startsWith('run'),
+    )
+    if (node === undefined) throw new Error('no run button')
+    return node
+  }
+
+  it('is plain `run` while there is one map', () => {
+    // No star on screen for a mark to point at, so a mark would be a control the
+    // reader has to go looking for.
+    const view = open(result([profile()]), true)
+    const node = runButton(view.el)
+    expect((node.textContent ?? '').trim()).toBe('run')
+    expect(node.querySelector('svg')).toBeNull()
+    view.destroy()
+  })
+
+  it('carries the deck’s own star once there is more than one', () => {
+    const view = open(result([profile()]), true, DECK)
+    const node = runButton(view.el)
+    expect((node.textContent ?? '').trim()).toBe('run on')
+    // The same mark the headings carry, filled — the reader is already reading
+    // the deck by it.
+    expect(node.querySelector('svg.run-star')).not.toBeNull()
+    view.destroy()
+  })
+
+  it('names the starred map where there is room for a name', () => {
+    const view = open(result([profile()]), true, DECK)
+    // The star is on the companion, so that is what a press measures — and the
+    // tooltip is where somebody who does not yet know what the mark means looks.
+    expect(runButton(view.el).title).toContain('rep2.cool')
+    expect(runButton(view.el).title).toContain('starred map')
+    view.destroy()
   })
 })

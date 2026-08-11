@@ -261,12 +261,45 @@ export class ViewportLock {
   }
 
   /**
+   * Adopt a window as the deck's **without moving anybody to it**.
+   *
+   * The gap {@link catchUp} leaves. A window is established by a panel
+   * *reporting*, and a panel reports when it draws — so a deck whose lead has
+   * not redrawn since the lock was built has no window, and a companion that
+   * arrives into that gap is left at its own fitted view. Which is the one
+   * thing a deck must not do: two maps side by side under a bar saying they are
+   * one navigation, one of them zoomed into a locus and the other showing its
+   * whole block.
+   *
+   * The gap is not hypothetical and it is not a race in the renderer. A deck is
+   * built the moment a reader adds a second map, and the lead they added it
+   * beside was drawn — and reported nothing, because nothing was listening —
+   * before the lock existed. Every window the reader had chosen up to that point
+   * is therefore invisible to the deck until they touch the map again.
+   *
+   * So the deck seeds it from the lead's *present* window, which is a thing the
+   * lead can be asked for at any time. Deliberately **not** a
+   * {@link ViewportLock.report}: a report is a gesture and would push every
+   * member, recording a debt against panels that are already where they should
+   * be and swallowing their next real move. Seeding sets the window and moves
+   * nothing; whoever needs to catch up says so.
+   *
+   * Only where there is no window — an established one is a reader's choice and
+   * outranks whatever the lead happens to be showing.
+   */
+  seed(rows: CellSpan, cols: CellSpan, bpPerCell: number): void {
+    if (this.current !== null) return
+    this.current = { rows: cellsToBp(rows, bpPerCell), cols: cellsToBp(cols, bpPerCell) }
+  }
+
+  /**
    * Put one panel where the deck is looking — a panel that has just arrived, or
    * one whose lock was just switched back on.
    *
    * Nothing happens where the deck has no window yet: the first panel to move
    * is what establishes one, and forcing a newcomer to a window nobody chose
-   * would move it away from its own fitted view for no reason.
+   * would move it away from its own fitted view for no reason. {@link seed} is
+   * how the deck says what that window is when it knows and nobody has moved.
    */
   catchUp(id: string): void {
     if (this.current === null) return

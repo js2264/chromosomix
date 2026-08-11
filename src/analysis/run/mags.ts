@@ -402,7 +402,9 @@ export const runMagSplit: TaskRunner = async (job) => {
   const flagged = new FeatureBuilder()
 
   for (let i = 0; i < candidates.length; i++) {
-    job.throwIfCancelled()
+    // Once per candidate MAG: a Fiedler split is a power iteration over a dense
+    // contig matrix and hands nothing back to the event loop.
+    await job.breathe()
     job.progress(i, candidates.length, candidates[i].name)
     const genome = candidates[i]
     const extent = job.mc.genomeExtent(genome.id)

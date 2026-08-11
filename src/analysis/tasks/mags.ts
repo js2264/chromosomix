@@ -18,7 +18,6 @@ import type {
   AnalysisContext,
   AnalysisTask,
   CostEstimate,
-  Params,
   TaskAvailability,
 } from '../types'
 import { BALANCE_PARAM } from './shared'
@@ -208,9 +207,4 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
         'read. Cancellable at any point.',
     }
   },
-}
-
-/** Params helper shared by the runners. */
-export function magBalance(params: Params): boolean {
-  return params.balance === true
 }

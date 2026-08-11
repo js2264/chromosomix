@@ -264,7 +264,14 @@ async function comparePooled(mc: MetaCooler, plan: PoolPlan): Promise<void> {
   const grouping = poolBins(mc.coords, 0, n, plan, POOLED_CELL_CAP, mc.contigGenomeIds)
 
   expect(pooled.binsPerCell).toBe(plan.binsPerCell)
-  expect(pooled.contigsPerCell).toBe(1)
+  // Whatever the grouping came to, and never a number of this test's own. Under
+  // the capacity rule a sequence shorter than the cell shares one with the
+  // neighbours it is beside, so a file holding two single-bin contigs of the same
+  // genome side by side reports two per cell at a stride of two — which is the
+  // rule working rather than failing (`ladder.mmetacool::entries/4000` is one).
+  // What the read owes the caller is that it used the grouping `poolBins` builds,
+  // and that is what is asserted.
+  expect(pooled.contigsPerCell).toBe(grouping.contigsPerCell)
   expect(pooled.nrows).toBe(grouping.ids.length)
   expect(pooled.ncols).toBe(grouping.ids.length)
 

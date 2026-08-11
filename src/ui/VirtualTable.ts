@@ -98,10 +98,11 @@ export class VirtualTable {
   private readonly selected = new Set<number>()
   private readonly pool: HTMLElement[] = []
 
-  private source: number[]
+  /** Source row indices, in the order the file wrote them. Fixed at construction. */
+  private readonly source: number[]
   private visible: number[] = []
   /** Memoised sort order; see {@link sorted}. */
-  private sortCache: { key: string; dir: 1 | -1; source: number[]; order: number[] } | null = null
+  private sortCache: { key: string; dir: 1 | -1; order: number[] } | null = null
   /**
    * Position of {@link active} within {@link visible}.
    *
@@ -283,15 +284,6 @@ export class VirtualTable {
   /** Extra controls placed in the toolbar by the owning view. */
   addToolbarItem(node: HTMLElement): void {
     this.toolbar.appendChild(node)
-  }
-
-  /** Replace the candidate rows (used when the underlying table changes). */
-  setRows(rows: number[]): void {
-    this.source = rows
-    this.selected.clear()
-    this.searchCache.clear()
-    this.sortCache = null
-    this.recompute()
   }
 
   get selection(): number[] {
@@ -482,7 +474,7 @@ export class VirtualTable {
     const key = this.sortKey
     if (key === null) return this.source
     if (this.sortCache !== null && this.sortCache.key === key && this.sortCache.dir === this.sortDir) {
-      if (this.sortCache.source === this.source) return this.sortCache.order
+      return this.sortCache.order
     }
     const column = this.options.columns.find((c) => c.key === key)
     if (column === undefined) return this.source
@@ -509,7 +501,7 @@ export class VirtualTable {
       return COLLATOR.compare(String(values[a]), String(values[b])) * dir
     })
     const rows = order.map((i) => this.source[i])
-    this.sortCache = { key, dir, source: this.source, order: rows }
+    this.sortCache = { key, dir, order: rows }
     return rows
   }
 
@@ -547,8 +539,13 @@ export class VirtualTable {
     // in view exist as elements.
     this.body.style.height = `${this.visible.length * this.options.rowHeight}px`
     this.viewport.scrollTop = 0
-    // The active row's *position* is meaningless in a different visible set.
+    // The active row's *position* is meaningless in a different visible set —
+    // and so is the row itself once a filter has taken it away. Keeping it would
+    // leave Enter opening, and the space bar ticking, a row that is no longer on
+    // screen: a keypress aimed at the list the reader can see, answered with one
+    // they cannot.
     this.activePosition = this.active < 0 ? -1 : this.visible.indexOf(this.active)
+    if (this.activePosition < 0) this.active = -1
     this.paint()
   }
 
@@ -732,19 +729,32 @@ function defaultFormat(value: string | number | undefined): string {
 }
 
 /**
+ * A number as this box accepts one: digits, a decimal point, and an exponent
+ * whose sign may be either.
+ *
+ * The sign of the exponent is the whole reason this is written out rather than
+ * left as a character class. It used to be `-?[\d.eE+]+`, which has no `-` in
+ * it past the first character — so `1e-5` did not parse, `>1e-5` compiled to
+ * `null`, and the column came back *unfiltered* rather than reporting anything.
+ * A density is the column a reader most often filters, and a density is written
+ * in exactly that form.
+ */
+const NUMBER = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?`
+
+/**
  * Compile a numeric filter box. Returns `null` for an expression that does not
  * parse, which leaves the column unfiltered rather than emptying the table
  * while the user is still typing `>`.
  */
 export function numberFilter(expression: string): ((value: string | number | undefined) => boolean) | null {
-  const range = /^(-?[\d.eE+]+)\.\.(-?[\d.eE+]+)$/.exec(expression)
+  const range = new RegExp(`^(${NUMBER})\\.\\.(${NUMBER})$`).exec(expression)
   if (range !== null) {
     const lo = Number(range[1])
     const hi = Number(range[2])
     if (Number.isNaN(lo) || Number.isNaN(hi)) return null
     return (value) => isNumber(value) && value >= lo && value <= hi
   }
-  const comparison = /^(>=|<=|!=|>|<|=)?\s*(-?[\d.eE+]+)$/.exec(expression)
+  const comparison = new RegExp(`^(>=|<=|!=|>|<|=)?\\s*(${NUMBER})$`).exec(expression)
   if (comparison === null) return null
   const operator = comparison[1] ?? '='
   const bound = Number(comparison[2])

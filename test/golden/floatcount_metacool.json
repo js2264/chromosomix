@@ -1,8 +1,8 @@
 {
  "attrs": {
   "bin-size": {
-   "numpy_dtype": "<i4",
-   "python_type": "int32",
+   "numpy_dtype": "<i8",
+   "python_type": "int64",
    "value": 1000
   },
   "bin-type": {

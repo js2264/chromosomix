@@ -162,3 +162,59 @@ export function resetPick(): void {
 export function locusText(at: PickedLocus): string {
   return `${at.contig}:${at.start + 1}-${at.end}`
 }
+
+// ---------------------------------------------------------------------------
+// Arming several maps at once
+// ---------------------------------------------------------------------------
+
+/** Anything that can be put into a picking mode — a map, or a deck of them. */
+export interface Armable<P> {
+  armPicking(onPoint: (point: P) => void, onEnd: () => void): () => void
+}
+
+/**
+ * Put every map on screen into one picking mode.
+ *
+ * A mark is a coordinate and a companion is a map, so a deck of five pictures is
+ * five places a reader may reasonably point at. The marks already *appear* on
+ * all of them — they live in one store every panel draws from — and this is the
+ * half that lets them be put there.
+ *
+ * What this is really for is making N modes behave as one. Each map ends its own
+ * mode on Escape or when it is torn down, and each reports that by calling the
+ * `onEnd` it was armed with; a reader who disarmed the panel they were looking
+ * at and left the other four swallowing clicks they meant as navigation would
+ * have a map that had silently stopped answering. So every target is armed with
+ * the *same* ending, and that ending disarms all of them and reports upward
+ * exactly once, however it was reached.
+ *
+ * Returns the same ending, for the card that armed the mode to put its button
+ * back. `onEnd` is called immediately, and the returned function does nothing,
+ * when there is no map to arm at all — which is the race where a view was torn
+ * down between a button being enabled and being pressed.
+ */
+export function armAll<P>(
+  targets: ReadonlyArray<Armable<P> | null | undefined>,
+  onPoint: (point: P) => void,
+  onEnd: () => void,
+): () => void {
+  const cancels: Array<() => void> = []
+  let ended = false
+  const finish = (): void => {
+    if (ended) return
+    ended = true
+    // Taken first: cancelling a target calls back in here through its own
+    // `onEnd`, and the list must not be walked while it is emptying.
+    for (const cancel of cancels.splice(0, cancels.length)) cancel()
+    onEnd()
+  }
+  for (const target of targets) {
+    if (target === null || target === undefined) continue
+    cancels.push(target.armPicking(onPoint, finish))
+  }
+  if (cancels.length === 0) {
+    onEnd()
+    return () => {}
+  }
+  return finish
+}

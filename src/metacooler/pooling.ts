@@ -103,11 +103,6 @@ export function poolPlan(nBins: number, _nContigs: number, cap = POOLED_CELL_CAP
   return { binsPerCell: Math.max(2, Math.ceil(bins / cap)), contigsPerCell: 1 }
 }
 
-/** Whether any cell of a plan ended up holding more than one whole sequence. */
-export function groupsContigs(plan: PoolPlan): boolean {
-  return plan.contigsPerCell > 1
-}
-
 /** A partition of an axis into cells that never split a sequence. */
 export interface AxisPartition {
   /** Output cell of every input index. */
@@ -502,15 +497,4 @@ export function selectionPooling(
     memberStart: Int32Array.from(memberStart),
     bins: total,
   }
-}
-
-/**
- * The plan a selection needs: its own bin and sequence counts against the cap.
- *
- * Not the file's — four MAGs of a metagenome are a small picture however large
- * the file is, and pooling them by the file's plan would throw away the detail
- * the selection was made to look at.
- */
-export function selectionPlan(bins: number, contigs: number, cap = POOLED_CELL_CAP): PoolPlan {
-  return poolPlan(bins, contigs, cap)
 }

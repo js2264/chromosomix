@@ -1254,6 +1254,7 @@ export class BrowserView {
       x: this.gutter,
       y: 0,
       width: width - this.gutter,
+      height: this.rulerHeight,
       toPixel: (unit: number) => this.gutter + this.scale.toPixel(unit),
       axis: this.axis,
       domain: this.scale.domain,

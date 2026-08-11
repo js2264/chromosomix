@@ -37,7 +37,9 @@
 
 import type { AnnotationClient } from '../annotations/worker/client'
 import type { BinVector, BinVectorContig } from '../annotations/worker/binVector'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { defaultStyle, emptyPlacement } from '../annotations/types'
+import type { Placement } from '../annotations/types'
 import type { AnnotationEntry, ComputedSource } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import { el } from '../ui/dom'
@@ -52,7 +54,7 @@ import {
 } from '../ui/SyntheticCard'
 import type { SourceSpec } from '../worker/protocol'
 import { TASKS, tasksFor } from './registry'
-import { AnalysisRunner, type RunnerHost } from './runner'
+import { AnalysisRunner, type RunnerHost, type RunTarget } from './runner'
 import { rememberParams } from './memory'
 import type {
   AnalysisContext,
@@ -85,6 +87,18 @@ export interface AnalysisWorkspaceHost {
    * dropped; see {@link AnalysisWorkspace.adopt}.
    */
   store(): AnnotationStore | null
+  /**
+   * The map a result belongs to — the star (§18.2).
+   *
+   * A task reads one picture, and what it produces is a measurement *of that
+   * picture*: an insulation track computed from the third replicate is a track
+   * about the third replicate, and putting it on the lead would draw it beside a
+   * map whose numbers it is not. Absent, or answering the lead, on a session
+   * with no deck — which is every session until one is opened.
+   */
+  targetMap?(): MapId
+  /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
+  allTargets?(): readonly RunTarget[]
   /** The worker a bin vector is registered with, so `sample` can answer for it. */
   annotations(): AnnotationClient | null
   /** The assembly, for the two writers that lay a vector out over it. */
@@ -194,7 +208,8 @@ export class AnalysisWorkspace {
         for (const contig of this.host.contigs()) out[contig.name] = contig.length
         return out
       },
-      finished: (task, result) => this.adopt(task, result),
+      allTargets: () => this.host.allTargets?.() ?? [],
+      finished: (task, result, target) => this.adopt(task, result, target),
     }
     this.runner = new AnalysisRunner(runnerHost)
 
@@ -331,7 +346,8 @@ export class AnalysisWorkspace {
    * the Annotations panel" over a panel that has nothing new on it is worse than
    * no line at all.
    */
-  private adopt(task: AnalysisTask, result: TaskResult): void {
+  private adopt(task: AnalysisTask, result: TaskResult, on: RunTarget): void {
+    const map = on.map
     rememberParams(result.provenance.framing.uri, task.id, result.provenance.params)
 
     const store = this.host.store()
@@ -371,7 +387,7 @@ export class AnalysisWorkspace {
       return
     }
 
-    for (const output of intervals) this.adoptIntervals(task, result, output, store)
+    for (const output of intervals) this.adoptIntervals(task, result, output, store, on)
 
     for (const output of profiles) {
       const source = {
@@ -385,7 +401,7 @@ export class AnalysisWorkspace {
         },
         framing: result.provenance.framing.label,
       }
-      const entry = syntheticEntry(output, source, output.colour ?? store.nextColour())
+      const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
       // `begin` is the one door every row goes through, and it opens them
       // `loading`; the vector is already in hand, so this one is ready the
       // moment the worker has been told about it.
@@ -398,6 +414,7 @@ export class AnalysisWorkspace {
         placement: entry.placement,
         style: entry.style,
       })
+      this.placeOnTarget(store, entry.id, entry.placement, map)
       const grid = this.grid()
       this.profiles.set(entry.id, {
         output,
@@ -434,7 +451,9 @@ export class AnalysisWorkspace {
     result: TaskResult,
     output: IntervalsOutput,
     store: AnnotationStore,
+    on: RunTarget,
   ): void {
+    const map = on.map
     const source: ComputedSource = {
       kind: 'computed',
       name: output.label,
@@ -447,7 +466,15 @@ export class AnalysisWorkspace {
       framing: result.provenance.framing.label,
     }
     const kind = output.payload.kind === 'pairs' ? 'pairs' : 'segments'
-    const id = `analysis:${task.id}:${output.id}`
+    // Scoped to the map, exactly as a profile's id is and for the same reason:
+    // a batch over five maps called five sets of boundaries, and one id meant
+    // each `begin` replaced the row before it while `placeOnTarget` moved the
+    // single survivor onto the next panel and off the last. The lead keeps the
+    // bare id it has always had, so a restored session still resolves.
+    const id =
+      map === LEAD_MAP
+        ? `analysis:${task.id}:${output.id}`
+        : `analysis:${map}:${task.id}:${output.id}`
     const colour = store.nextColour()
     // Replacing rather than accumulating: running insulation a second time with
     // a wider window means the reader wants the *new* boundaries, and a panel
@@ -459,11 +486,12 @@ export class AnalysisWorkspace {
       card: 'overlay',
       kind,
       id,
-      label: output.label,
+      label: map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`,
       source,
       placement: emptyPlacement(),
       style: defaultStyle(kind, colour),
     })
+    this.placeOnTarget(store, id, emptyPlacement(), map)
     store.update(id, { status: 'ready', payload: output.payload })
     this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
   }
@@ -521,6 +549,28 @@ export class AnalysisWorkspace {
    * with its own status, so the reader gets the Recompute button back rather
    * than an empty lane claiming to be ready.
    */
+  /**
+   * Put a freshly computed row on the map it was computed from.
+   *
+   * `begin` places every new track on the lead, which is what importing has
+   * always meant and is right for a file the reader dropped. A *result* is not
+   * an import: it is a measurement of one picture, and on a deck the picture is
+   * whichever one the star is on. So the lane is moved the moment the row
+   * exists — the same two calls a track dropped on a companion's edge makes
+   * (`app/Session.ts`), and a no-op while the star is on the lead, which is
+   * every session that has not opened a deck.
+   */
+  private placeOnTarget(
+    store: AnnotationStore,
+    id: string,
+    placement: Placement,
+    map: MapId,
+  ): void {
+    if (map === LEAD_MAP) return
+    store.placeOn(id, map, placement)
+    store.unplaceFrom(id, LEAD_MAP)
+  }
+
   private adoptCarried(rows: readonly CarriedResult[]): void {
     const store = this.host.store()
     if (store === null || rows.length === 0) return

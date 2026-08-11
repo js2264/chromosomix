@@ -60,9 +60,22 @@ export interface RulerPalette {
 export interface RulerFrame {
   /** Left edge of the drawable area, in canvas pixels. */
   x: number
-  /** Top edge — the ruler occupies `[y, y + RULER_HEIGHT)`. */
+  /** Top edge — the ruler occupies `[y, y + height)`. */
   y: number
   width: number
+  /**
+   * How tall the ruler is, from {@link rulerHeightFor} at the text scale in
+   * force. Absent means the unscaled {@link RULER_HEIGHT}.
+   *
+   * It is what the clip is taken against, and that is the whole of why it is a
+   * field rather than the constant. The scale row grows with the text — that is
+   * what {@link rulerHeightFor} is for, and both callers already size their
+   * canvas by it — while the clip did not, so at any scale above 1 the ruler was
+   * drawn into a box shorter than the one it had been given and the coordinate
+   * labels were shaved off along the bottom. The default text scale is 1.35, so
+   * this was every reader who had never touched the control.
+   */
+  height?: number
   /** Genome-wide unit → canvas pixel. */
   toPixel(unit: number): number
   axis: LocusAxis
@@ -116,7 +129,7 @@ export function drawRuler(ctx: CanvasRenderingContext2D, frame: RulerFrame): Rul
     )
   ctx.save()
   ctx.beginPath()
-  ctx.rect(x, y, width, RULER_HEIGHT)
+  ctx.rect(x, y, width, frame.height ?? RULER_HEIGHT)
   ctx.clip()
 
   const bands: RulerBand[] = []

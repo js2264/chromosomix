@@ -44,6 +44,29 @@ export interface JobContext {
   cancelled(): boolean
   /** @throws an `AbortError` when {@link cancelled}. Call it inside loops. */
   throwIfCancelled(): void
+  /**
+   * Hand the worker's event loop back, then throw if the reader has stopped it.
+   *
+   * **`throwIfCancelled` alone cannot see a cancel that has not been
+   * delivered.** The flag it reads is set by a `cancel` *message*, and a message
+   * is delivered in a task of its own — so a runner that never returns to the
+   * event loop never receives one, and asking it a thousand times inside a loop
+   * asks a thousand times about a message still sitting in the queue. `await`
+   * does not help: an already-resolved promise schedules a microtask, and the
+   * microtask queue is drained inside the task that scheduled it (`../async`).
+   *
+   * That is why cancelling did nothing on exactly the tasks worth cancelling.
+   * The reads yield between windows and have always been stoppable; the *compute*
+   * — a cubic correlation, a diamond over every bin of every sequence, a pileup
+   * over ten thousand windows — ran to completion inside one task with the
+   * reader's cancel behind it in the queue, and delivered its result to somebody
+   * who had asked for it to stop.
+   *
+   * Costs a `MessageChannel` round trip, so it belongs at the top of an outer
+   * loop — once per sequence, per window, per batch of rows — and never in the
+   * inner one.
+   */
+  breathe(): Promise<void>
   progress(done: number, total: number, note?: string): void
   /** Something the reader should know that is not an error. */
   note(text: string): void

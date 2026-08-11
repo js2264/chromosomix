@@ -2,14 +2,26 @@
  * The workspace: parameters, a price, a Run, progress, results and exports.
  *
  * **It is not a modal and must not become one** (§18.1). The dialogs in §5 are
- * questions; this is a place to work, and the three things `Modal` does are
- * three ways of getting in the way of one. It would take the keyboard, which is
- * how this app is driven; it would dismiss on a stray click outside itself,
- * after a forty-second scan; and it would answer Escape by destroying the thing
- * the reader is reading. So this class listens for no key, watches for no
- * outside click, and never touches `App.modal` — every shortcut keeps working
- * behind it, which is what makes panning the map while reading a pileup an
- * ordinary thing to do rather than a mode to leave first.
+ * questions; this is a place to work, and two of the three things `Modal` does
+ * are ways of getting in the way of one: it takes the keyboard, which is how
+ * this app is driven, and it dismisses on a stray click outside itself, after a
+ * forty-second scan. So this class watches for no outside click and never
+ * touches `App.modal` — every shortcut keeps working behind it, which is what
+ * makes panning the map while reading a pileup an ordinary thing to do rather
+ * than a mode to leave first.
+ *
+ * **Escape closes it, and that is not the modal's Escape.** A modal's Escape
+ * cancels the question and throws the answer away; this one puts the panel down
+ * and leaves everything running — the same thing the ✕ does, said with the key
+ * every other overlay in this application is dismissed by. Nothing is lost by
+ * pressing it: the run continues, the panel row goes on reporting it, and
+ * re-opening the task brings back the form and the figures. Held to two rules so
+ * that it stays a dismissal rather than becoming a mode. It fires in the
+ * **bubble** phase and skips an event something else has already handled, so a
+ * marquee on the map, a caret in the legend and a search box's own hit list all
+ * keep the Escape they answer first; and a caret inside one of the drawer's own
+ * fields keeps it too, because a reader abandoning a half-typed anchor means
+ * that field and not the panel around it.
  *
  * It **overlays** the content and the two right columns rather than joining the
  * flex row, and that is arithmetic rather than taste: at three quarters of the
@@ -70,7 +82,7 @@ import {
 } from '../analysis/types'
 import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
 import { formatIntervals } from '../annotations/export'
-import { recall, remember } from '../state/UiMemory'
+import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText } from './AnalysisPanelCard'
 import {
   curveFigure,
@@ -82,7 +94,7 @@ import {
 } from './analysisPlots'
 import { button, el, fmt } from './dom'
 import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
-import { iconButton } from './icons'
+import { icon, iconButton } from './icons'
 import { ParamForm } from './ParamForm'
 import { resizeHandle } from './resizeHandle'
 import { VectorPage } from './vector'
@@ -186,11 +198,6 @@ function writeStoredWidth(width: number | null): void {
 // Small readings
 // ---------------------------------------------------------------------------
 
-/** Parameters are remembered per file and per task (§18.2); this is the per-task half. */
-function paramScope(task: AnalysisTask): string {
-  return `analysis:${task.id}`
-}
-
 /** Whether a recalled value is something a parameter may legally hold. */
 function isParamValue(value: unknown): value is ParamValue {
   if (value === null) return true
@@ -207,11 +214,22 @@ function isParamValue(value: unknown): value is ParamValue {
  * task that has since gained, lost or retyped a parameter must not be handed the
  * old shape. A key the descriptor no longer has is dropped; one it has gained
  * keeps its default.
+ *
+ * Through `analysis/memory.ts` rather than through a scope of this module's own,
+ * and the difference is not stylistic. This used to read and write
+ * `analysis:<task id>` — one storage scope per task — while `analysis/memory.ts`
+ * wrote every task's parameters into the single `analysis:params` scope on Run.
+ * Two schemes for one thing, and the split fell exactly where that module's
+ * docstring says it would: `state/SessionConfig.ts` gathers a session by reading
+ * a **fixed list** of scopes, a scope named after a task id cannot be on that
+ * list, and so an exported session carried the parameters of every task and put
+ * none of them back on import. One scope, one reader, and the fixed list is
+ * complete again.
  */
-function recallParams(task: AnalysisTask, uri: string): Params {
+function recallParamsFor(task: AnalysisTask, uri: string): Params {
   const out: Record<string, ParamValue> = { ...defaultParams(task.params) }
-  const held = recall<Record<string, unknown>>(uri, paramScope(task))
-  if (held === null || typeof held !== 'object' || Array.isArray(held)) return out
+  const held = recallParams(uri, task.id)
+  if (held === null) return out
   for (const spec of task.params) {
     const value = held[spec.key]
     if (isParamValue(value)) out[spec.key] = value
@@ -255,6 +273,21 @@ function framingHolds(provenance: Provenance, framing: AnalysisFraming): boolean
  * kind that produced it, so the day a third figure kind appears the compiler
  * asks the question at the one place that has to answer it.
  */
+/**
+ * Whether a control answers Escape itself.
+ *
+ * A text box does — the key is how a half-typed value is abandoned — and a
+ * button, a tickbox or a slider does not, so a reader who has just pressed Run
+ * and left the focus there gets the dismissal they meant. `select` is included:
+ * an open dropdown closes on Escape and closing the panel under it would take
+ * the list away mid-choice.
+ */
+function takesEscape(node: HTMLElement): boolean {
+  if (node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) return true
+  if (!(node instanceof HTMLInputElement)) return node.isContentEditable
+  return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset'].includes(node.type)
+}
+
 function isDrawable(figure: PlotFigure | TableFigure): figure is PlotFigure {
   return 'draw' in figure
 }
@@ -317,6 +350,16 @@ export class AnalysisDrawer {
   private readonly recomputeButton: HTMLButtonElement
   private readonly formSlot = el('div', { class: 'analysis-form' })
   private readonly runButton: HTMLButtonElement
+  /**
+   * Run this task on every map in the deck — hidden while there is one map.
+   *
+   * Beside Run rather than instead of it, because the two are different
+   * questions and the reader has already answered which by opening a deck:
+   * *this* picture, or all of them. Hidden rather than disabled on a session
+   * with one map, since a control offering to do something to a set of one is a
+   * control a reader has to work out.
+   */
+  private readonly runAllButton: HTMLButtonElement
   private readonly cancelButton: HTMLButtonElement
   private readonly costEl = el('span', { class: 'analysis-cost' })
   private readonly progressFill = el('div', { class: 'analysis-progress-fill' })
@@ -357,6 +400,18 @@ export class AnalysisDrawer {
         'the view it was computed from, so it is left as it is until this finishes (§18.4).',
     })
     this.runButton = button('run', () => this.run(), { class: 'btn' })
+    // Its label is written in {@link paintRun}, because on a deck it names the
+    // map — which changes under the drawer while it is open.
+    // The same weight as `run` beside it, and not the quiet form. The two are
+    // the same act at two scopes — one map, or every map — and a bordered
+    // button next to a borderless one says the second is an afterthought, or a
+    // link, rather than the other half of a choice the reader is making.
+    this.runAllButton = button('run on all maps', () => this.runAll(), {
+      class: 'btn hidden',
+      title:
+        'Run this task once per map on screen, one after another. Each result is filed against ' +
+        'the map it was measured from, so a batch leaves a row per panel.',
+    })
     this.cancelButton = button('cancel', () => this.cancel(), {
       class: 'btn btn-quiet',
       title: 'Stop this job. The worker checks between chunks, so it stops at the next one.',
@@ -404,6 +459,7 @@ export class AnalysisDrawer {
           'div',
           { class: 'analysis-run' },
           this.runButton,
+          this.runAllButton,
           // The price beside the button and before the controls that only exist
           // while it is running (§18.6): what a task costs is what decides
           // whether to press Run, so it is read on the way to the button and not
@@ -422,6 +478,7 @@ export class AnalysisDrawer {
     )
 
     this.unsubscribe = options.runner.subscribe(() => this.refresh())
+    window.addEventListener('keydown', this.onKeyDown)
   }
 
   // -------------------------------------------------------------------------
@@ -462,6 +519,38 @@ export class AnalysisDrawer {
   }
 
   /** Re-read the runner, the context and the framing, and repaint from them. */
+  /**
+   * Say which map Run is about, on a deck — with the star itself.
+   *
+   * `run` is a complete sentence while there is one map and is dangerously
+   * incomplete beside five: the reader has one map starred and four not, the
+   * difference between them is a small filled star in each heading, and a button
+   * saying only `run` gives them nothing to check that against before they spend
+   * a minute of compute. So the button carries **the same mark**, filled, rather
+   * than the file's name — a name is longer than the button and would resize it
+   * every time the star moved, and the mark is what the reader is already
+   * reading the deck by.
+   *
+   * The name goes in the tooltip, where there is room for it and where somebody
+   * who does not yet know what the star stands for will look next.
+   *
+   * Plain `run` on a single map, and deliberately not `run on ★`: there is no
+   * star on screen for it to point at, and a mark standing for a choice nobody
+   * has been offered is a control a reader has to go looking for.
+   */
+  private paintRun(task: AnalysisTask, maps: number): void {
+    const target = maps < 2 ? null : this.options.runner.target()
+    if (target === null) {
+      this.runButton.replaceChildren('run')
+      this.runButton.title = `Run ${task.title} on the open map.`
+      return
+    }
+    this.runButton.replaceChildren('run on ', icon('star', { size: 12, class: 'run-star' }))
+    this.runButton.title =
+      `Run ${task.title} on ${target.label} — the starred map, which is the one every task ` +
+      'measures. Move the star in a panel’s heading to measure another, or run on all of them.'
+  }
+
   refresh(): void {
     const task = this.current
     if (task === null) return
@@ -487,8 +576,28 @@ export class AnalysisDrawer {
 
   destroy(): void {
     this.unsubscribe()
+    window.removeEventListener('keydown', this.onKeyDown)
     this.teardown()
     this.el.remove()
+  }
+
+  /**
+   * Escape puts the drawer down — see the module docstring for why that is a
+   * dismissal rather than a modal's cancel.
+   *
+   * A field is the one thing that outranks it. A reader who has typed half an
+   * anchor into the 4C box and presses Escape means *that box*, and a panel that
+   * vanished from under them would take the form with it — so a caret in one of
+   * the drawer's own text controls keeps the key, and the second press, with the
+   * field no longer interesting, closes as usual.
+   */
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return
+    if (this.current === null) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement && this.el.contains(active) && takesEscape(active)) return
+    event.preventDefault()
+    this.close()
   }
 
   /**
@@ -601,7 +710,7 @@ export class AnalysisDrawer {
       this.form.setContext(context)
       return
     }
-    this.params = recallParams(task, context.uri)
+    this.params = recallParamsFor(task, context.uri)
     const form = new ParamForm({
       specs: task.params,
       context,
@@ -624,7 +733,7 @@ export class AnalysisDrawer {
     // Remembered on every edit rather than on Run, so that reproducing a figure
     // is opening the session and pressing Run (§18.2) — including the run the
     // reader configured, thought better of, and came back to.
-    remember(context.uri, paramScope(task), next)
+    rememberParams(context.uri, task.id, next)
     this.syncRun(task, context)
   }
 
@@ -637,6 +746,22 @@ export class AnalysisDrawer {
     if (task === null) return
     this.setStatus('')
     this.options.runner.run(task, this.params)
+    this.refresh()
+  }
+
+  /**
+   * The same task, once per map, in reading order.
+   *
+   * The runner queues them rather than starting them together: the worker mounts
+   * one file at a time, and five h5wasm instances with five dense blocks live at
+   * once is the moment a tab can least afford it. Cancel stops the batch where
+   * it has reached, which is the honest meaning of a queue.
+   */
+  private runAll(): void {
+    const task = this.current
+    if (task === null) return
+    this.setStatus('')
+    this.options.runner.runAll(task, this.params, this.options.runner.targets())
     this.refresh()
   }
 
@@ -656,6 +781,14 @@ export class AnalysisDrawer {
           : null
 
     this.runButton.disabled = busy || refusal !== null
+    // The button appears only where there is more than one map to run on, and
+    // is priced by the same refusal: a task this file cannot answer cannot be
+    // answered five times either.
+    const maps = this.options.runner.targets().length
+    this.paintRun(task, maps)
+    this.runAllButton.classList.toggle('hidden', maps < 2)
+    this.runAllButton.disabled = busy || refusal !== null
+    this.runAllButton.textContent = `run on all ${maps} maps`
     if (refusal !== null) {
       // In the price's place, not beside it. A refusal names the bin count, the
       // bytes and the way out (§18.6), and a cost estimate underneath it would

@@ -167,49 +167,6 @@ export function genomeGrouping(
 }
 
 /**
- * Roll a loaded block up to contig or genome level in one call.
- *
- * The block's own `rowExtent` / `colExtent` say which bins it covers, so the
- * grouping is derived from the matrix itself and cannot drift out of step with
- * the data it describes — and it is also what decides whether the block needs
- * folding: identical extents mean an on-diagonal block, which carries both
- * triangles of the store and would otherwise double-count its own diagonal.
- *
- * @param upperTriangular `true` for a `symmetric-upper` file (every one
- *   metacooler writes). Under `square` storage both triangles are stored
- *   independently, each dense cell is a value in its own right, and the direct
- *   sum is the correct one.
- *
- * A block whose extents *partially* overlap is neither case: it is mirrored
- * inside the overlap only. No view produces one — genome views are
- * on-diagonal and pair views disjoint — so it is summed directly, and the
- * overlap would be double-counted if a caller ever built one.
- */
-/**
- * The same roll-up, from the **stored pixels** rather than from a dense block.
- *
- * `aggregateMatrix` needs the block materialised first, and that is the wrong
- * way round for a selection whose output is small and whose input is not: a
- * whole yeast genome at 500 bp is 2,366 MB of `Float32Array` and 295 million
- * loop iterations to produce a 17 × 17 answer — 2,046,919 dense cells per output
- * cell — and its cost does not move with the file's sparsity, because it walks
- * cells rather than pixels. Measured on that shape: 2,090 ms against 139 ms for
- * this, with identical output.
- *
- * It also means the roll-up no longer passes through the dense guard. A
- * contig-level whole-genome view was being refused for the size of a block it
- * only ever wanted to collapse — the one escape hatch the refusal offered, and
- * it did not work.
- *
- * The accumulation is `_aggregate_sparse`'s: map each stored pixel once into its
- * pair of groups, then symmetrise on the diagonal. That is exactly what
- * {@link aggregateDense}'s `fold` reproduces from the mirrored dense block, so
- * the two agree cell for cell.
- *
- * @param place Called once per stored pixel with its two bin ids and value;
- *   the caller drives the read, so this module still performs no I/O.
- */
-/**
  * The same grouping, with its output slots collapsed until there are at most
  * `cap` of them.
  *
@@ -249,6 +206,30 @@ export function coarsenGrouping(
   return { grouping: { slot, ids }, perCell: part.plan.contigsPerCell }
 }
 
+/**
+ * The roll-up, from the **stored pixels** rather than from a dense block.
+ *
+ * {@link aggregateMatrix} needs the block materialised first, and that is the wrong
+ * way round for a selection whose output is small and whose input is not: a
+ * whole yeast genome at 500 bp is 2,366 MB of `Float32Array` and 295 million
+ * loop iterations to produce a 17 × 17 answer — 2,046,919 dense cells per output
+ * cell — and its cost does not move with the file's sparsity, because it walks
+ * cells rather than pixels. Measured on that shape: 2,090 ms against 139 ms for
+ * this, with identical output.
+ *
+ * It also means the roll-up no longer passes through the dense guard. A
+ * contig-level whole-genome view was being refused for the size of a block it
+ * only ever wanted to collapse — the one escape hatch the refusal offered, and
+ * it did not work.
+ *
+ * The accumulation is `_aggregate_sparse`'s: map each stored pixel once into its
+ * pair of groups, then symmetrise on the diagonal. That is exactly what
+ * {@link aggregateDense}'s `fold` reproduces from the mirrored dense block, so
+ * the two agree cell for cell.
+ *
+ * @param place Called once per stored pixel with its two bin ids and value;
+ *   the caller drives the read, so this module still performs no I/O.
+ */
 export function sparseAggregator(
   rows: Extent,
   cols: Extent,
@@ -381,6 +362,25 @@ export function pixelAccumulator(
   }
 }
 
+/**
+ * Roll a loaded block up to contig or genome level in one call.
+ *
+ * The block's own `rowExtent` / `colExtent` say which bins it covers, so the
+ * grouping is derived from the matrix itself and cannot drift out of step with
+ * the data it describes — and it is also what decides whether the block needs
+ * folding: identical extents mean an on-diagonal block, which carries both
+ * triangles of the store and would otherwise double-count its own diagonal.
+ *
+ * @param upperTriangular `true` for a `symmetric-upper` file (every one
+ *   metacooler writes). Under `square` storage both triangles are stored
+ *   independently, each dense cell is a value in its own right, and the direct
+ *   sum is the correct one.
+ *
+ * A block whose extents *partially* overlap is neither case: it is mirrored
+ * inside the overlap only. No view produces one — genome views are
+ * on-diagonal and pair views disjoint — so it is summed directly, and the
+ * overlap would be double-counted if a caller ever built one.
+ */
 export function aggregateMatrix(
   m: DenseMatrix,
   coords: Coords,

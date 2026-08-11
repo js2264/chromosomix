@@ -25,7 +25,7 @@ import { parseHumanized, parseMetacoolerRange, parseRegionString } from '../../s
 import type { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { goldenMaps, withMap } from './_golden'
 
-const MAPS = goldenMaps({ full: true })
+const MAPS = goldenMaps()
 
 /** One row of a golden's `ranges` block. */
 interface GoldenRange {

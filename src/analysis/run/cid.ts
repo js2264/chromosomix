@@ -206,6 +206,12 @@ async function aggregateCalls(job: JobContext, calls: Call[]): Promise<TaskOutpu
   const total = groups.reduce((sum, group) => sum + group.length, 0)
 
   for (let g = 0; g < groups.length; g++) {
+    // Once per group and not once per call: a `breathe` is a `MessageChannel`
+    // round trip, and the inner loop is where the time goes but also where
+    // paying for one per iteration would be felt. The synchronous check stays
+    // inside it — between breaths the flag cannot have changed, and this is
+    // what makes it able to.
+    await job.breathe()
     const pileup = new PileupAccumulator(side, side)
     for (const call of groups[g]) {
       job.throwIfCancelled()

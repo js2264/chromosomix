@@ -16,6 +16,7 @@ import {
   parsePoint,
   type ManualMark,
 } from '../../src/annotations/manual'
+import { LEAD_MAP } from '../../src/annotations/placement'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
 import { overlapWarning } from '../../src/ui/AnnotationCard'
@@ -668,5 +669,174 @@ describe('what a row brings back with it', () => {
     })
     expect(store.byId(entry.id)?.visible).toBe(false)
     expect(store.entries.filter((row) => row.id === entry.id)).toHaveLength(1)
+  })
+})
+
+/**
+ * What a deck put down does to the tracks that were on it.
+ *
+ * A deck closing is a statement about **layout**, and never about what the
+ * reader has imported. `PanelDeck.closeDeck` reconciles the lanes to the one map
+ * that is staying and leaves every track where it was; what that leaves behind
+ * is a track with no lanes, which is a state this model has always had and is
+ * one tick from being on the lead.
+ *
+ * It used to be a deletion, and the deletion was uneven in a way that read as a
+ * bug: a track the reader had also put on the lead survived and one they had
+ * only ever put on a companion did not.
+ */
+describe('closing a deck', () => {
+  /** A finished track, since a lane is only drawn once its file has been read. */
+  function loaded(store: AnnotationStore, name: string, placement: Placement): string {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name },
+      placement,
+    })
+    store.update(entry.id, { status: 'ready' })
+    return entry.id
+  }
+
+  it('keeps a companion-only track, drawn nowhere', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'companion.bw', placementOn('bottom'))
+    store.placeOn(id, 'slot-2', placementOn('top'))
+    store.unplaceFrom(id, LEAD_MAP)
+    expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(1)
+
+    // The deck goes down: one map left, and the lanes reconciled to it.
+    store.keepMaps(new Set([LEAD_MAP]))
+    // The import survives — a deck put down is a statement about layout, not
+    // about what the reader has loaded — and it is drawn nowhere, which is one
+    // tick from being on the lead.
+    expect(store.entries.map((entry) => entry.id)).toEqual([id])
+    expect(store.placements.filter((lane) => lane.track === id)).toEqual([])
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+    expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(0)
+  })
+
+  it('leaves a track that was also on the lead exactly where it was', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'both.bw', placementOn('bottom'))
+    store.placeOn(id, 'slot-2', placementOn('top'))
+
+    store.keepMaps(new Set([LEAD_MAP]))
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(0)
+  })
+})
+
+/**
+ * What happens to a deck's lanes when the file is opened again.
+ *
+ * A change of resolution is a fresh open: the session puts down its store, makes
+ * another, and begins every track it was holding around it. `begin` places what
+ * it is handed on the **lead** — which is what importing has always meant, and
+ * is exactly wrong for a row that is coming back. So a deck of four maps each
+ * carrying its own bigWig came back with all four stacked on the first one, and
+ * a track that had lived only on a companion arrived on a map it had never been
+ * on.
+ */
+describe('carrying a deck’s lanes across a reopen', () => {
+  /** The state a reopen leaves: every carried row begun again, on the lead. */
+  function reopened(store: AnnotationStore, names: readonly string[]): string[] {
+    return names.map((name) => {
+      const entry = store.begin({
+        card: 'linear',
+        kind: 'track',
+        source: { ...localSource, name },
+        placement: placementOn('bottom'),
+      })
+      store.update(entry.id, { status: 'ready' })
+      return entry.id
+    })
+  }
+
+  it('puts a companion-only track back on its companion, and off the lead', () => {
+    const store = freshStore(`carry-${Math.random()}.cool`)
+    const [id] = reopened(store, ['companion.bw'])
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+
+    store.restoreLanes([{ track: id, map: 'p1', placement: placementOn('top') }])
+    expect(store.drawnOnMap('p1', 'top')).toHaveLength(1)
+    // Off the lead, not merely also on the companion: a snapshot applied on top
+    // of `begin`'s placement leaves the same picture twice.
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+  })
+
+  it('puts a track that was on three maps back on all three', () => {
+    const store = freshStore(`carry-${Math.random()}.cool`)
+    const [id] = reopened(store, ['everywhere.bw'])
+    store.restoreLanes([
+      { track: id, map: LEAD_MAP, placement: placementOn('bottom') },
+      { track: id, map: 'p1', placement: placementOn('bottom') },
+      { track: id, map: 'p2', placement: placementOn('left') },
+    ])
+    expect(store.mapsDrawing(id).sort()).toEqual([LEAD_MAP, 'p1', 'p2'])
+    expect(store.drawnOnMap('p2', 'left')).toHaveLength(1)
+    expect(store.drawnOnMap('p2', 'bottom')).toHaveLength(0)
+  })
+
+  it('keeps the edge each map drew it on, rather than one edge for all', () => {
+    const store = freshStore(`carry-${Math.random()}.cool`)
+    const [id] = reopened(store, ['sided.bw'])
+    store.restoreLanes([
+      { track: id, map: LEAD_MAP, placement: placementOn('bottom') },
+      { track: id, map: 'p1', placement: placementOn('right') },
+    ])
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap(LEAD_MAP, 'right')).toHaveLength(0)
+    expect(store.drawnOnMap('p1', 'right')).toHaveLength(1)
+    expect(store.drawnOnMap('p1', 'bottom')).toHaveLength(0)
+  })
+
+  it('says nothing about a row that did not come back', () => {
+    // A `computed` row is not carried by the loader at all, and a `detached` one
+    // has no file behind it. Their lanes are in the snapshot and their ids are
+    // not in the store, and naming a track that is not here must not invent one.
+    const store = freshStore(`carry-${Math.random()}.cool`)
+    const [id] = reopened(store, ['here.bw'])
+    store.restoreLanes([
+      { track: id, map: 'p1', placement: placementOn('top') },
+      { track: 'analysis:coverage', map: 'p2', placement: placementOn('left') },
+    ])
+    expect(store.entries.map((entry) => entry.id)).toEqual([id])
+    expect(store.placements.map((lane) => lane.track)).toEqual([id])
+  })
+
+  it('leaves rows the snapshot does not mention where the reopen put them', () => {
+    const store = freshStore(`carry-${Math.random()}.cool`)
+    const [first, second] = reopened(store, ['moved.bw', 'untouched.bw'])
+    store.restoreLanes([{ track: first, map: 'p1', placement: placementOn('top') }])
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom').map((entry) => entry.id)).toEqual([second])
+  })
+})
+
+/**
+ * Where a task's result goes.
+ *
+ * `begin` places every new row on the lead, which is what *importing* has always
+ * meant. A result is not an import: it is a measurement of one picture, and on a
+ * deck the picture is whichever the star is on — an insulation track computed
+ * from the third replicate is a track about the third replicate, and drawing it
+ * beside a map whose numbers it is not is the one way this can be quietly wrong.
+ * `AnalysisWorkspace.placeOnTarget` is the mover; this pins the two calls it
+ * makes.
+ */
+describe('a result placed on the starred map', () => {
+  it('leaves the lead and lands on the map it was measured from', () => {
+    const store = freshStore(`star-${Math.random()}.cool`)
+    const entry = store.begin({ card: 'synthetic', kind: 'track', source: localSource })
+    store.update(entry.id, { status: 'ready' })
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+
+    store.placeOn(entry.id, 'slot-3', placementOn('bottom'))
+    store.unplaceFrom(entry.id, LEAD_MAP)
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+    expect(store.drawnOnMap('slot-3', 'bottom')).toHaveLength(1)
+    // Still one import, on one row of the panel: a result on a companion is a
+    // placement, never a second copy of the track.
+    expect(store.entries).toHaveLength(1)
   })
 })

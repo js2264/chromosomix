@@ -167,7 +167,10 @@ export const runApa: TaskRunner = async (job) => {
   let done = 0
 
   for (const batch of batches) {
-    job.throwIfCancelled()
+    // The pileup is arithmetic over windows already in hand, so nothing below
+    // returns to the event loop on its own and a cancel would sit in the queue
+    // until the last batch had been summed. See `analysis/job.ts`.
+    await job.breathe()
     job.progress(done, plans.length, `${done.toLocaleString()} of ${plans.length.toLocaleString()} windows`)
     const dense = await readRect(job, batch.rect, { block, balance, value })
     // Once per *read*, not once per window: a coalesced block covers several

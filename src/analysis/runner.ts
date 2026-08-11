@@ -49,6 +49,7 @@ import {
   type Provenance,
   type TaskResult,
 } from './types'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from './worker/client'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput, type TaskInputs } from './worker/protocol'
@@ -68,7 +69,15 @@ import { BLOCK_COPY_LIMIT_BYTES, type BlockInput, type TaskInputs } from './work
 export type JobState =
   | { status: 'idle' }
   | { status: 'queued' }
-  | { status: 'running'; done: number; total: number; note: string; startedAt: number }
+  | {
+      status: 'running'
+      done: number
+      total: number
+      note: string
+      startedAt: number
+      /** `3 of 5 · rep3.cool` while a batch is being worked through. */
+      batch?: { at: number; of: number; label: string }
+    }
   | { status: 'done'; result: TaskResult; ms: number }
   | { status: 'failed'; message: string }
   | { status: 'cancelled' }
@@ -85,6 +94,10 @@ export type JobState =
 export interface RunnerHost {
   context(): AnalysisContext | null
   source(): { uri: string; source: SourceSpec } | null
+  /** Which map a plain Run files its results against — the star (§18.2). */
+  targetMap?(): MapId
+  /** Every map on screen, in reading order, for {@link AnalysisRunner.runAll}. */
+  allTargets?(): readonly RunTarget[]
   block(): BlockInput | null
   payload(entryId: string): AnnotationPayload | undefined
   vector?(entryId: string): Promise<Float32Array | undefined>
@@ -109,7 +122,16 @@ export interface RunnerHost {
    * were rather than a regression.
    */
   label?(entryId: string): string | undefined
-  finished(task: AnalysisTask, result: TaskResult): void
+  /**
+   * A run produced a result, and the map it was measured from.
+   *
+   * The map is the third argument rather than something the host reads back off
+   * the star, and a batch is why: five results arrive one after another and the
+   * star has not moved between them, so a host asking "which map is starred"
+   * would file all five on whichever one it is. What a task produces belongs to
+   * the picture it read.
+   */
+  finished(task: AnalysisTask, result: TaskResult, target: RunTarget): void
   /**
    * A descriptor by id, for resolving `requires`.
    *
@@ -202,11 +224,34 @@ interface PlanStep {
   params: Params
 }
 
+/**
+ * The map one job runs against, taken when Run was pressed.
+ *
+ * Held on the job rather than read from the host at dispatch, which is what
+ * makes a **batch** possible at all: five jobs queued against five files are
+ * five targets, and a host answering "the starred map" would give all five
+ * whichever map the star was on when the last of them reached the worker. It
+ * also removes a race the old shape had to fail on by name — *the open file
+ * changed while this job was queued* — because there is no longer a moving
+ * answer for it to disagree with.
+ */
+export interface RunTarget {
+  /** Which map, for filing what the run produces (`annotations/placement.ts`). */
+  map: MapId
+  uri: string
+  source: SourceSpec
+  /** What to call it while a batch is being worked through. */
+  label: string
+}
+
 interface Job {
   task: AnalysisTask
   params: Params
   /** Taken when Run was pressed, not when the worker got to it (§18.4). */
   framing: AnalysisFraming
+  target: RunTarget
+  /** Where this job sits in a batch, or `null` for a run of one. */
+  batch: { at: number; of: number } | null
   /** Set by {@link AnalysisRunner.cancel}; read between chain steps. */
   cancelled: boolean
   /** The step currently on the worker, so a cancel has something to call. */
@@ -271,6 +316,51 @@ export class AnalysisRunner {
    * still looking at the button they pressed.
    */
   run(task: AnalysisTask, params: Params): void {
+    this.queueOne(task, params, null)
+  }
+
+  /**
+   * Run one task against **every map on screen**, one after another.
+   *
+   * The question a deck raises and the star only half answers: four replicates
+   * are open because they are being compared, and the comparison is four
+   * insulation tracks rather than one. Pressing Run four times means moving the
+   * star four times and remembering which of them has been done — bookkeeping
+   * the reader should not be doing for a machine that can count.
+   *
+   * **One job per map, queued, not four at once.** The worker mounts one file at
+   * a time, so the queue is what the deck's own memory budget already assumes;
+   * running them in parallel would be four h5wasm instances and four dense
+   * blocks live at the moment the tab can least afford it. Each result is filed
+   * against the map it was measured from, so what a batch leaves behind is a
+   * track per panel, each on its own picture, and each cancellable at the point
+   * it has reached.
+   *
+   * The targets are the caller's, in the order they should run: the session
+   * hands the lead first and then the deck in reading order, which is what a
+   * reader looking at the grid would expect the progress to follow.
+   */
+  runAll(task: AnalysisTask, params: Params, targets: readonly RunTarget[]): void {
+    if (targets.length === 0) return
+    if (targets.length === 1) {
+      this.queueOne(task, params, null, targets[0])
+      return
+    }
+    // Cleared first, so a batch does not queue behind the single run of the same
+    // task a reader pressed a moment ago and then report *its* progress as the
+    // first of five.
+    this.cancel(task.id)
+    targets.forEach((target, at) => {
+      this.queueOne(task, params, { at, of: targets.length }, target)
+    })
+  }
+
+  private queueOne(
+    task: AnalysisTask,
+    params: Params,
+    batch: { at: number; of: number } | null,
+    target?: RunTarget,
+  ): void {
     if (this.destroyed) return
     const context = this.host.context()
     if (context === null) {
@@ -291,21 +381,79 @@ export class AnalysisRunner {
       })
       return
     }
+    const where = target ?? this.hostTarget(framing)
+    if (where === null) {
+      this.setState(task.id, { status: 'failed', message: 'nothing is open' })
+      return
+    }
     // A second press while the same task is already on the worker is a reader
     // wondering whether the first one registered, not a request for two runs of
     // it. A press while it is still *queued* is a change of mind about the
     // parameters, so the recipe is replaced where it stands — moving it to the
     // back of the queue would punish the correction.
-    if (this.current?.task.id === task.id) return
-    const waiting = this.queue.find((job) => job.task.id === task.id)
-    if (waiting !== undefined) {
-      waiting.params = params
-      waiting.framing = framing
-      return
+    //
+    // **Per map, not per task**, since a batch is one task queued five times:
+    // collapsing on the id alone would leave a five-map batch running once.
+    if (batch === null) {
+      if (this.current?.task.id === task.id && this.current.target.map === where.map) return
+      const waiting = this.queue.find(
+        (job) => job.task.id === task.id && job.target.map === where.map,
+      )
+      if (waiting !== undefined) {
+        waiting.params = params
+        waiting.framing = framing
+        return
+      }
     }
-    this.queue.push({ task, params, framing, cancelled: false, running: null })
+    this.queue.push({
+      task,
+      params,
+      framing,
+      target: where,
+      batch,
+      cancelled: false,
+      running: null,
+    })
     this.setState(task.id, { status: 'queued' })
     this.pump()
+  }
+
+  /**
+   * Every map a batch would run on, in the order it would run them.
+   *
+   * Asked of the host on every call rather than held: a deck gains and loses
+   * maps while a drawer is open, and the button that offers to run on all of
+   * them has to be counting the ones that are there.
+   */
+  targets(): readonly RunTarget[] {
+    return this.host.allTargets?.() ?? []
+  }
+
+  /**
+   * Which of {@link targets} a plain Run goes to — the starred map (§18.2).
+   *
+   * `null` where the session names no such map, which is every session without
+   * a deck: there is one map, a plain Run goes to it, and naming it would be
+   * telling a reader which of one thing was chosen. The drawer's Run button
+   * reads this to say *what it is about to measure*, which on a deck of five is
+   * the one thing the word "run" does not say.
+   */
+  target(): RunTarget | null {
+    const map = this.host.targetMap?.()
+    if (map === undefined) return null
+    return this.targets().find((target) => target.map === map) ?? null
+  }
+
+  /** The one map a plain Run goes to: whatever the session says is current. */
+  private hostTarget(framing: AnalysisFraming): RunTarget | null {
+    const source = this.host.source()
+    if (source === null) return null
+    return {
+      map: this.host.targetMap?.() ?? LEAD_MAP,
+      uri: source.uri,
+      source: source.source,
+      label: framing.uri,
+    }
   }
 
   /**
@@ -317,14 +465,23 @@ export class AnalysisRunner {
    * left alone — cancelling a result would be deleting it.
    */
   cancel(taskId: string): void {
-    const waiting = this.queue.findIndex((job) => job.task.id === taskId)
-    if (waiting >= 0) {
-      this.queue.splice(waiting, 1)
-      this.setState(taskId, { status: 'cancelled' })
-      return
+    // **Every** queued job for this task, not the first: a batch is one task
+    // queued once per map, and dropping one of five would stop the map in flight
+    // and start the next — a Stop that looks like it did nothing, twice.
+    let dropped = 0
+    for (let at = this.queue.length - 1; at >= 0; at--) {
+      if (this.queue[at].task.id !== taskId) continue
+      this.queue.splice(at, 1)
+      dropped++
     }
     const job = this.current
-    if (job === null || job.task.id !== taskId) return
+    if (job === null || job.task.id !== taskId) {
+      // Nothing was running: what was cancelled is what was waiting. A task with
+      // neither is a press on a row whose job has already finished, and
+      // cancelling a result would be deleting it.
+      if (dropped > 0) this.setState(taskId, { status: 'cancelled' })
+      return
+    }
     job.cancelled = true
     job.running?.handle.cancel()
   }
@@ -369,10 +526,31 @@ export class AnalysisRunner {
     })
   }
 
+  /**
+   * The batch tail of a running state, or nothing for a run of one.
+   *
+   * Attached to every `running` state rather than to the first, because a batch
+   * is only legible while it is *in progress*: a reader who sees "opening the
+   * file" with no idea it is the fourth of five has no way to tell a long job
+   * from a stuck one.
+   */
+  private batchOf(job: Job): { batch: { at: number; of: number; label: string } } | object {
+    return job.batch === null
+      ? {}
+      : { batch: { at: job.batch.at, of: job.batch.of, label: job.target.label } }
+  }
+
   private async execute(job: Job): Promise<void> {
     const startedAt = performance.now()
     let step: PlanStep | null = null
-    this.setState(job.task.id, { status: 'running', done: 0, total: 0, note: 'starting', startedAt })
+    this.setState(job.task.id, {
+      status: 'running',
+      done: 0,
+      total: 0,
+      note: 'starting',
+      startedAt,
+      ...this.batchOf(job),
+    })
     try {
       const chain = this.plan(job.task, job.params)
       const client = this.ensureClient()
@@ -415,7 +593,7 @@ export class AnalysisRunner {
             // last step's own time, and is what the drawer prints beside it.
             ms: performance.now() - startedAt,
           })
-          this.host.finished(job.task, result)
+          this.host.finished(job.task, result, job.target)
         } else {
           // A required result is cached and its row says so, but it is not
           // handed to `finished`: the reader asked for the saddle, and
@@ -449,11 +627,13 @@ export class AnalysisRunner {
    * the single thing {@link AnalysisFraming.uri} exists to prevent.
    */
   private async mount(job: Job, client: AnalysisClient, startedAt: number): Promise<void> {
-    const source = this.host.source()
-    if (source === null) throw new Error('no file is open')
-    if (source.uri !== job.framing.uri) {
-      throw new Error('the open file changed while this job was queued')
-    }
+    // The job's own target, not the host's answer now: a batch is five jobs
+    // against five files, and asking the session which map is current as each
+    // reaches the worker would run all five against whichever one it had drifted
+    // to. It also retires a failure this used to have to invent — *the open file
+    // changed while this job was queued* — since there is no moving answer left
+    // for a job to disagree with.
+    const source = job.target
     if (this.mounted === source.uri) return
     this.setState(job.task.id, {
       status: 'running',
@@ -461,6 +641,7 @@ export class AnalysisRunner {
       total: 0,
       note: 'opening the file',
       startedAt,
+      ...this.batchOf(job),
     })
     // Cleared first: an `open` that rejects halfway leaves the worker holding
     // nothing, and a `mounted` still naming the previous file would make the
@@ -487,12 +668,19 @@ export class AnalysisRunner {
         chain.length > 1 ? `${step.task.title} (${at + 1}/${chain.length})` : step.task.title
       return note === undefined || note === '' ? where : `${where} — ${note}`
     }
-    this.setState(job.task.id, { status: 'running', done: 0, total: 0, note: label(), startedAt })
+    this.setState(job.task.id, {
+      status: 'running',
+      done: 0,
+      total: 0,
+      note: label(),
+      startedAt,
+      ...this.batchOf(job),
+    })
 
     const onProgress = (done: number, total: number, note?: string): void => {
       this.setState(
         job.task.id,
-        { status: 'running', done, total, note: label(note), startedAt },
+        { status: 'running', done, total, note: label(note), startedAt, ...this.batchOf(job) },
         true,
       )
     }
@@ -501,7 +689,7 @@ export class AnalysisRunner {
       task: step.task.id,
       params: step.params,
       framing: job.framing,
-      inputs: await this.inputsFor(step, job.framing, upstream),
+      inputs: await this.inputsFor(step, job, upstream),
     }
 
     let raw: TaskResult
@@ -610,9 +798,10 @@ export class AnalysisRunner {
    */
   private async inputsFor(
     step: PlanStep,
-    framing: AnalysisFraming,
+    job: Job,
     upstream: Record<string, TaskResult>,
   ): Promise<TaskInputs> {
+    const framing = job.framing
     const features: Record<string, FeatureSet> = {}
     const pairs: Record<string, PairSet> = {}
     const vectors: Record<string, Float32Array> = {}
@@ -676,7 +865,18 @@ export class AnalysisRunner {
     if (Object.keys(vectors).length > 0) inputs.vectors = vectors
     if (Object.keys(upstream).length > 0) inputs.upstream = { ...upstream }
 
-    const block = this.host.block()
+    // **Only to the job that is about the map the block came from.**
+    //
+    // The block on screen belongs to one panel — the starred one — and
+    // {@link blockMatches} cannot tell: it compares extents and a bin size, and
+    // in a deck every panel is at the same extents at the same bin size, which
+    // is the whole point of a deck. So a batch handed the *same* pixels to all
+    // five jobs, and five maps came back with one map's answer. Only on the
+    // chromosome that happened to be in view, which is the worst shape a bug of
+    // this kind can have: every other region was read per file and correct, so
+    // the numbers agreed with themselves everywhere a reader would think to
+    // check.
+    const block = this.hostBlockFor(job)
     if (block !== null && blockWorthCopying(block) && blockMatches(block, framing)) {
       // **Copied, never transferred**, which is why the size gate above is
       // worth having at all. `Transferable` is the optimisation that looks free
@@ -686,6 +886,20 @@ export class AnalysisRunner {
       inputs.block = block
     }
     return inputs
+  }
+
+  /**
+   * The block on screen, when it is a picture of *this job's* map.
+   *
+   * The host has one block to offer and it is whichever panel the star is on
+   * (`app/Session.ts`), so lending it to a job about another map is lending one
+   * file's pixels to a measurement of another's. `null` everywhere else, which
+   * costs that job a read it would have made anyway before decks existed — the
+   * worker's second mount is exactly for this.
+   */
+  private hostBlockFor(job: Job): BlockInput | null {
+    const host = this.host.targetMap?.() ?? LEAD_MAP
+    return job.target.map === host ? this.host.block() : null
   }
 
   // -------------------------------------------------------------------------

@@ -143,11 +143,13 @@ export interface FixtureCase {
 /**
  * Every fixture the reader must reproduce exactly.
  *
- * `coverage: 'partial'` is excluded on purpose: `utf8.metacool` has no matrix
- * oracle because `cooler.Cooler()` cannot open it at all (its contig names are
- * non-ASCII and cooler's `_tableops` does an ASCII decode), so there is nothing
- * to compare a matrix against. `plain.cool`/`plain.mcool` are excluded because
- * they are M7's synthesised single-genome view, not a metacool.
+ * Every one of them carries a full oracle, which is a property of the fixture
+ * set rather than a coincidence: a fixture cooler cannot open has nothing to
+ * compare a matrix against, and there is no longer one — the two that had
+ * non-ASCII contig names are gone, because metacooler refuses to write such a
+ * file and a viewer should not claim to read what cannot be produced.
+ * `plain.cool`/`plain.mcool` are excluded because they are M7's synthesised
+ * single-genome view, not a metacool.
  */
 export function fixtureCases(): FixtureCase[] {
   const cases: FixtureCase[] = []

@@ -276,9 +276,10 @@ export class App implements SessionHost {
     // Dropping is *the* gesture this app is opened with, so the whole content
     // area takes it and not only the marked rectangle on the landing page: a
     // reader who is already looking at a map and wants a track on it should not
-    // have to find a drop zone in a column, and one who wants a different map
-    // should not have to go back to the picker for it. What each file means is
-    // the session's decision, by name — see `Session.dropFiles`.
+    // have to find a drop zone in a column, and one who wants a second map
+    // beside it should not have to find the `+` on its edge. What each file
+    // means is the session's decision, by name — see `Session.dropFiles`, which
+    // adds rather than replaces in every case it can.
     this.content.addEventListener('dragover', (event) => {
       // Files only. A track row dragged out of the Tracks card is also a drag
       // across this area — it is on its way to the map's edge rectangles — and
@@ -320,7 +321,7 @@ export class App implements SessionHost {
       const files = Array.from(event.dataTransfer?.files ?? [])
       if (files.length === 0) return
       event.preventDefault()
-      this.current?.dropFiles(files)
+      void this.current?.dropFiles(files)
     })
 
     this.restore()

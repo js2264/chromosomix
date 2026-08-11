@@ -194,7 +194,7 @@ export function observedOverExpected(
  * floating-point 0.9999999 on the diagonal of a matrix that is about to be
  * deflated.
  */
-export function correlationMatrix(
+export async function correlationMatrix(
   oe: Float64Array,
   m: number,
   /**
@@ -205,14 +205,22 @@ export function correlationMatrix(
    * is minutes, so a genome-wide run needs to be able to report where it has got
    * to and to be stopped: the callback is where the runner does both, by
    * throwing out of it. Optional, because nothing about the arithmetic needs it.
+   *
+   * **Awaited**, which is what makes the stopping real. A cancel arrives as a
+   * message and a message is delivered in a task of its own, so a hook that
+   * only ever ran synchronously asked about a cancel that could not yet have
+   * been received however many times it asked (`analysis/job.ts`'s `breathe`).
+   * The `await` is per *row* and the yield inside it is the runner's to make
+   * every sixty-fourth, so the round trip is paid once a batch rather than
+   * `m` times.
    */
-  onRow?: (row: number) => void,
-): Float64Array {
+  onRow?: (row: number) => void | Promise<void>,
+): Promise<Float64Array> {
   const out = new Float64Array(m * m)
   const rows: Float64Array[] = []
   for (let r = 0; r < m; r++) rows.push(oe.subarray(r * m, (r + 1) * m))
   for (let r = 0; r < m; r++) {
-    onRow?.(r)
+    await onRow?.(r)
     out[r * m + r] = 1
     for (let c = r + 1; c < m; c++) {
       const value = pearson(rows[r], rows[c])

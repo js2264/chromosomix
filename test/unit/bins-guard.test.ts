@@ -97,7 +97,7 @@ function guardBins(handle: Hdf5Handle): { guarded: Hdf5Handle; calls: Call[] } {
   return { guarded, calls }
 }
 
-const MAPS = goldenMaps({ full: true })
+const MAPS = goldenMaps()
 const BASIC = MAPS.find((m) => m.id === 'basic.metacool')!
 
 describe('the guard itself', () => {

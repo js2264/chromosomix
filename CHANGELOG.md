@@ -206,7 +206,495 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   selection, the feature card's leading two lines, and where a profile goes on a
   file with no annotation layer.
 
+### Changed
+
+- **Run a task on every map in the deck.** The star answers *this* picture; a
+  deck of four replicates is usually open because they are being compared, and
+  the comparison is four insulation tracks rather than one. **run on all N maps**
+  sits beside Run whenever there is more than one map, and is hidden when there
+  is not — a control offering to do something to a set of one is a control a
+  reader has to work out.
+
+  One job per map, **queued rather than started together**: the worker mounts one
+  file at a time, and five h5wasm instances with five dense blocks live at once
+  is the moment a tab can least afford it. Each result is filed against the map
+  it was measured from, so a batch leaves a row per panel rather than five rows
+  on the lead. The panel row says which map and how far through — the percentage
+  is one map's progress, and a reader watching it reach 100 four times with no
+  idea there are five would read the fifth as a stall. Stop stops the batch where
+  it has reached: the maps already measured keep their results, the rest are
+  never sent.
+
+  A job now carries the file it runs against rather than asking the session at
+  dispatch, which is what makes any of this possible — and it retires a failure
+  the old shape had to invent, *the open file changed while this job was queued*,
+  since there is no longer a moving answer for a job to disagree with.
+
+- **A star says which map an analysis runs against.** A deck of four replicates
+  is usually opened to measure *one* of them, and until now the Analysis column
+  could only ever read the session's own file — so the answer was to close the
+  deck, open the replicate as the session, run the task, and put the deck back.
+  Every panel now carries a star, exactly one is filled, and the filled one is
+  the map every task is priced against, framed by, run on, and files its results
+  into.
+
+  **It is not the lead, and that is the whole design.** The lead is what the
+  session *is of* — the breadcrumb, the tables, the tracks, the second-file split
+  all name it — and it does not move (§16.9): making a star change it would
+  rewrite half the furniture to run a P(s), and a region valid in one assembly is
+  not a place in the next. So the star is a second, smaller idea. It starts on
+  the lead, it goes back to the lead the moment the map it named leaves or the
+  deck closes, and it is remembered per file like the deck's own column count.
+
+  A starred companion reads its `/contigs` and `/genomes` when the star lands on
+  it and not before: those two tables are what a *task* needs and a picture does
+  not, so an eight-panel deck fetches sixteen of them only if a reader stars
+  eight maps in turn. And what a task produces goes to the map it was measured
+  from — an insulation track computed from the third replicate is a track about
+  the third replicate, and drawing it beside a map whose numbers it is not is the
+  one way this could have been quietly wrong.
+
+- **A deck grows as far as the machine will carry it.** The limit was six, and
+  six was a judgement about how many maps are useful rather than about what the
+  tab can do — the wrong kind of limit on a grid a reader draws. A row of eight
+  replicates, a 4 × 4 of a community's MAGs, a column down one chromosome: each
+  is a legitimate figure and none of them fits in six. The real limit was never
+  that number. Every panel's share of this tab's memory is already this tab's
+  budget divided by the panel count, so the *reads* get smaller as the deck grows
+  and refuse when a share will not do — a limit in bytes on the machine in front
+  of the reader, which is the only honest one. What is left is a backstop at 64,
+  an 8 × 8 grid, so that a hand-edited hash asking for ten thousand cells is
+  refused before ten thousand workers are started.
+
+- **Closing a deck no longer deletes the tracks that were on it.** A deck put
+  down is a statement about layout and never about what the reader has imported,
+  and the deletion was uneven in a way that read as a bug: a track they had
+  *also* put on the lead survived, and one they had only ever put on a companion
+  did not — so opening four replicates, giving each its own bigWig and closing
+  the deck lost three imports to a gesture about how many pictures are on screen.
+  The lanes on the departing maps still go with them; the tracks stay on the
+  Annotations panel, drawn nowhere, which is a state the model has always had and
+  is one tick from being on the lead.
+
+- **Manual marks can be placed on any map in a deck, not only on the lead.** They
+  were always *drawn* on all of them — the marks live in one store every panel
+  reads from — and only the gesture was the session's own panel, which made the
+  feature look broken in the layout it is most useful in: a domain boundary drawn
+  across four replicates is the thing a deck is for. Every map on screen is armed
+  now, as **one** mode rather than five: whichever picture the reader places on,
+  whichever one they press Escape over, and the card putting its button back all
+  end it everywhere. Armed on five panels and disarmed on one would leave four
+  maps swallowing clicks the reader meant as navigation.
+
+- **Escape puts the analysis drawer down.** It was the one overlay in the
+  application that did not answer the key, on the argument that a modal's Escape
+  destroys what the reader is reading — true of a modal, and not of this. Closing
+  the drawer is the ✕, and the ✕ has always left everything running: the run
+  continues, the panel row goes on reporting it, and re-opening the task brings
+  back the form and the figures. Two things still outrank it, which is what keeps
+  it a dismissal rather than a mode: an event something else has already handled
+  (a marquee on the map, a caret in the legend, a search box's hit list), and a
+  caret in one of the drawer's own fields — a half-typed anchor abandoned with
+  Escape means that box, not the panel around it.
+
+- **The map card reads outward from the axis.** Coverage and the marginals — what
+  every bin *has* — then P(s), how contact falls away from it; then 4C, one
+  locus's slice of that decay; then insulation, the domains it resolves into;
+  then the compartments those domains sit in. Each is a question the one before
+  it makes it sensible to ask, which the old order (P(s), coverage, insulation,
+  4C, … compartments) did not read as.
+
+- **The Aesthetics panel is marked by a plot rather than by a chevron.** Its two
+  siblings are marked by what they hold — `layers` for the annotation stack, a
+  beaker for what can be computed — while this one carried a left-pointing panel
+  arrow that said only *this folds*, which all three do and which the arrow's
+  direction already showed.
+
+- **A hand over a band on the Chromosomes bar.** The strip carries two gestures
+  and the cursor is what tells them apart before either happens: a press picks
+  the sequence under it, so the pointer is a hand there, and the caret comes back
+  the moment the hand starts travelling, because naming a window is what
+  selecting text does.
+
+### Changed
+
+- **A deck's two shared settings are presses, not switches, and the first map's
+  resolution takes the deck with it.**
+
+  Changing the first map's resolution — from the breadcrumb's own picker, from a
+  link, or from the deck's bar — now moves every companion to that resolution.
+  A reader who changes the rung means the deck rather than one cell of it: the
+  whole claim a deck makes is that its pictures are of one place and can be read
+  against each other, and half of them at 1 kb beside the rest at 10 kb is a
+  claim it is no longer making.
+
+  A file that has **not got** that level stays exactly where it is and says so
+  under its own map, naming what it does have. The nearest rung would have kept
+  every panel doing *something*, which is the wrong kind of helpful: it answers
+  "put these on one resolution" with a deck at two and says nothing about it.
+
+  **fix all scales** and **fix all resolutions** are now bordered action buttons
+  rather than switches, first in the bar, ahead of the chain. A switch here made
+  a promise it could not keep — left on, every later nudge of any panel's clip
+  either had to be undone or left the deck claiming a shared scale it no longer
+  had. A press says something that stays true: *these are all on that one's
+  numbers now*, and the very next nudge is honestly the reader's own again. Both
+  read from the **starred** map, which is the map every other "all of them" in
+  this app is measured from, and both move the first map too when the star is
+  elsewhere. Maps that could not follow a resolution are named in the deck's own
+  line.
+
+  The switch these replace read `one scale` / `own scales` — two phrases of the
+  same length in the same shade, so the only way to read the setting was to know
+  the phrasing, and the only way to learn what pressing it did was to press it.
+
+- **Run says which map it will measure.** Beside one map `run` is a complete
+  sentence; beside five it is dangerously incomplete — the reader has one map
+  starred and four not, the difference between them is a small filled star in
+  each heading, and a button saying only `run` gives them nothing to check that
+  against before spending a minute of compute. On a deck it now reads **run on
+  ★**, carrying the deck's own mark rather than the file's name: a name is longer
+  than the button and would resize it every time the star moved, and the mark is
+  what the reader is already reading the deck by. The name goes in the tooltip.
+
+- **The adaptive-resolution switch is hidden for now.** The preference itself is
+  untouched — global, honoured by every panel, and still reachable — it is simply
+  not in the map's control row.
+
+- **The turn control is a swap, not a light.** Its mark is the picture the next
+  press produces: a square map offers a triangle, a turned one offers a square.
+  Lighting it as well said both things at once — a turned map showed a square in
+  accent blue, which reads as "square is on" beside a band along a diagonal. The
+  neighbouring toggles keep one mark and change their state, so the tint is the
+  only thing that can carry it there; here the mark already does.
+
+- **`run on all maps` is drawn as the button it is.** It sat beside `run` in the
+  quiet, borderless form, which reads as an afterthought or a link rather than
+  as the other half of a choice.
+
+### Changed
+
+- **Dropping a contact map adds it to the deck instead of replacing what is
+  open.** It was the one route in this app where a drop destroyed something: a
+  track dropped on a map is added to it, a `chrom.sizes` dropped on a browser
+  replaces the lengths and keeps everything else, and a cooler dropped on a map
+  threw away the file, the tracks placed on it, the window and the colour scale
+  — for a gesture that everywhere else means *and this too*. Now it opens beside
+  what is there, which is what the `+` edges and the deck's URL box already did
+  one file at a time, so the three ways of reaching a second map agree.
+
+  **Several at once populate a whole deck**, which is what selecting four
+  replicates and dropping them meant. The landing page took the second map as a
+  *blend* — the lower-left triangle of one square — and discarded the third
+  onwards without a word; both halves of that were wrong. The blend is the
+  strongest claim two files can make and is gated accordingly (one grid, so one
+  bin size, so one chromosome list), so the commonest two-cooler drop met a
+  refusal where a deck would simply have worked, and a gesture that loses two of
+  four files reads as the application dropping them. The blend is still one
+  click away on the compare card, which is where a claim that strong belongs.
+
+  Where there is nothing open to put them beside, the first map still opens the
+  session — that is an empty seat being filled, not a replacement — and the rest
+  become its companions. Replacing the open file is now the deliberate gesture it
+  should always have been: the picker, `Open file…`, or a new tab.
+
+- **Two turned maps in a deck cut their bands to different depths.** A band
+  reaches as far from the diagonal as its own box has rows for (§17.2), which is
+  the right rule for one map and cannot work for several: a grid lays its cells
+  out over more than one frame, so two panels asking their own boxes at their own
+  moments get two answers and neither is wrong — and the depth is only ever
+  *grown*, so nothing brought them back together. Pressing `+` beside a turned
+  map halved the first map's width, which asked for a shallower band that it
+  refused to shrink to, while the companion arriving beside it cut a fresh one
+  from the narrower cell. The result was two visibly different bands, the lock
+  refusing to move them together, and a refusal blaming the two files'
+  *resolutions* for what was a layout race — a claim about their data, made out
+  of a timing accident, and curable only by turning the deck off and on again.
+  The deck now shares the **distance**, in base pairs, exactly as its navigation
+  lock shares the window and for the same reason: each panel converts through its
+  own bin size, so panels of unequal resolution reach the same place rather than
+  the same number of bins.
+
+- **An empty cell of a deck was drawn square whatever it stood next to.** A
+  contact map is square and a turned one is not — it is a band along its
+  diagonal, a fraction of the height of the square it was cut from — so pressing
+  `+` beside a turned map produced a card several times taller than the picture
+  it was offering to stand beside. A grid row is as tall as its tallest cell, so
+  that card set the height of the row and every map in it was pushed to the foot
+  of a rectangle of air. The deck already measures the lead's plot and pushes the
+  number down rather than letting each panel derive one; it now measures both
+  sides of it, and the empty card is the size of the maps beside it whatever
+  shape they are.
+
 ### Fixed
+
+- **`fix all scales` carried the ramp across the deck and left every range
+  where it was.** A panel has two colour scales and the press read the wrong
+  one: `scale()` reports what the *reader* has set, and `NaN` on a bound is how
+  it spells *nobody has* — which is the state of every map whose clip has never
+  been nudged, and so of nearly every map. The transform and the colormap
+  travelled, the two `NaN`s were dropped on the way out, and each panel kept its
+  own auto range, which made the button look inert. It now reads what the
+  rasteriser resolved — §7.1's auto rule, run once per read, and the same pair of
+  numbers printed under the map's own key — so pressing it pins every other map
+  to the numbers the starred one is actually drawing with.
+
+- **A batch measured every map from the first map's pixels, on the one
+  chromosome that was in view.** A task that can run off the block already on
+  screen is handed it rather than reading the file again, and whether that block
+  still describes the job is checked by comparing extents and a bin size —
+  which, in a deck, is exactly what every panel has in common. So "run on all
+  maps" lent one panel's pixels to all five jobs and five maps came back with
+  one map's answer.
+
+  Only for the region that happened to be in view, which is the worst shape a
+  bug of this kind can have: everywhere else there is no block to lend, so every
+  other chromosome was read per file and correct, and the numbers agreed with
+  themselves everywhere a reader would think to check. The block is now lent
+  only to the job about the map it is a picture of — the starred one — and every
+  other job in the batch reads its own file, which is what the worker's second
+  mount has always been for.
+
+- **A companion drew none of the tracks placed on it, and a reopen collected
+  them all onto the first map.** Two faults with one shape, and between them
+  they made a deck's annotations look like they had never worked.
+
+  The session builds a **new** `AnnotationStore` on every open — a change of
+  resolution, a re-drop of the file, a link into another entry — and the lead's
+  view is rebuilt around it while a companion's is not. So from the first
+  resolution change a companion was subscribed to a store nobody writes to any
+  more: every track placed on it afterwards, computed or dropped, went into the
+  live store and was drawn nowhere. A companion's map is now rebuilt when the
+  store under it is replaced, which costs a construction and no read — the block
+  is already in hand.
+
+  And carrying a track across that reopen carried the *import* without its
+  *lanes*. `AnnotationStore.begin` places everything it is handed on the lead,
+  which is what importing means and is exactly wrong for a row that is coming
+  back, so a deck of four maps each with its own bigWig came back with all four
+  stacked on the first one — and a track that had only ever been on a companion
+  arrived on a map it had never been on. The lanes are snapshotted with the rows
+  and reconciled back onto them, the lead's placement included or removed as the
+  snapshot says.
+
+- **A batch over several maps produced one track, not several.** The id a
+  computed track gets is derived from the output so that a second run replaces
+  its own numbers instead of stacking a lane beside them — and it named the
+  output alone, with no mention of the map. So "run on all maps" over five
+  replicates made five coverage tracks under one id: each one replaced the row
+  before it, and each placement moved the single surviving lane onto the next
+  panel and off the last. What came back was one track, on the fifth map, and
+  four maps with nothing drawn on them, which reads as the batch having failed
+  rather than as five results landing on top of each other. Ids are now scoped
+  to the map, and a row from a companion carries that map's name in its label so
+  five rows are not five identical `coverage`s. The first map keeps the bare id
+  it has always had — a restored session and every `Recompute` on a row written
+  before decks existed resolve through it.
+
+- **A companion's band was drawn forty pixels tall beside a first map four
+  hundred tall.** A turned map's box is a pair of numbers fitted per panel
+  against how much room that panel measures itself to have, and a companion is
+  built *already turned* — so the measurement happens before its plot has been
+  laid out, `max-height` resolves to nothing, and the fit bottoms out on its own
+  minimum. A square map never showed it, because a square's height follows its
+  width through `aspect-ratio` and the width was already being pushed down.
+
+- **How far through a batch a task is has its own pill**, beside the percentage
+  rather than in front of the sentence under it. The percentage is one map's
+  progress and reaches 100 once per map; a reader watching the fourth of five
+  fill and reset had nothing to tell a batch from a stall.
+
+- **A map added to a deck opened at its own zoom rather than at the deck's.**
+  The navigation lock learns where the deck is looking from a panel *reporting*
+  a window, and a panel reports when it draws. The first map of a deck was drawn
+  long before there was a deck — nothing was listening while the reader zoomed
+  into a locus and went looking for a second file — so at the moment the deck
+  came into existence the lock knew nothing, and the companion that arrived was
+  caught up to nothing: a whole contig beside a lead showing 40 kb of it, under
+  a bar saying the two are one navigation. It usually looked right, which is why
+  it survived: re-parenting the first map into the grid resizes it, a resize is
+  a redraw and a redraw is a report, so the window generally arrived a frame
+  after the deck was built and a frame before the companion's bytes came off the
+  network. A deck that lines up because the network is slower than a relayout is
+  not a deck that lines up. The deck now *seeds* the lock from the first map's
+  present window whenever it is about to catch a panel up to it — on a
+  companion settling, on a panel being put back on the lead, and on the first
+  map itself being put back in step. Seeding moves nobody and never overwrites
+  a window a panel has actually reported, so a reader's own choice still
+  outranks it, and it records no debt, so the next real gesture still drives the
+  deck. The same gap opened after every navigation, where the lock is cleared
+  on purpose and a small companion could finish reading before the first map had
+  drawn the new block.
+
+- **The star could be left on a map that was not in the deck.** It is remembered
+  per file, and a companion's internal id comes from a counter that climbs for
+  the life of the tab — so a reader who starred a companion, closed the deck and
+  opened another one restored an id this deck would never mint. It was
+  reconciled only where a slot *departed*: a link naming fewer maps, a cell
+  closed, the deck closed. A deck built by "add a map" reaches none of those, so
+  the star sat on a panel that had never existed — no star filled anywhere, the
+  first map's own star offering to make it the target it already was, and every
+  task's result adopted onto a map with no panel to draw it. The star is now
+  reconciled wherever the list of cells changes, arrivals included.
+
+- **A track placed on a companion outlived the companion.** `keepMaps` says of
+  itself that it is reconciled against the deck rather than driven by an event,
+  because "doing it once per render cannot go stale" — and it was reached from
+  exactly one place, the deck's own close. So closing *one* map out of four, or
+  following a link that named fewer maps than the deck held, left that map's
+  lanes in the store bound to an id nothing would mint again: invisible, because
+  the placement control lists the maps that exist and a lane on one that does
+  not has no row to be unticked from, and still counted by everything that asks
+  a track how many maps it is on. It now runs wherever the grid is repainted,
+  and it is keyed on the cells rather than on the pictures in them, so a
+  companion that is still reading — or one whose current view is a table, and
+  therefore momentarily has no map — keeps its placements.
+
+- **A local companion was offered by its internal id.** The list of maps a track
+  can be drawn on fell back to the deck's own name for a slot for anything that
+  was not a *remote* file, which is every file a reader drags in: the placement
+  control offered `p3` as the map to draw a bigWig on, in a list where every
+  other row said what it was. It now names every companion by the URI that
+  panel is actually reading, which also fixes the neighbouring case — a map that
+  descended into an entry of a collection is listed as `rep2.mcool::1000`,
+  the rung on screen, rather than as the collection it was dropped as.
+
+- **Changing a starred companion's resolution did not change what a task read.**
+  The facts an analysis needs are fetched once and held, which is right for a
+  panel whose address never moves and wrong for the one control that moves it:
+  picking `::5000` on the starred map ran the next task against `::1000` and
+  captioned the result with the rung on screen. The cache is dropped with the
+  other two the entry picker invalidates, and the deck re-reads it where the
+  panel it happened to is the starred one.
+
+- **Smaller things in the deck.** A companion's star named the file it was
+  dropped as rather than the entry it descended into. A deck of one map — the
+  state a reader meets first, because "add a map" builds the deck and shows its
+  bar before a file has been chosen — said "1 maps". A map dropped on a cell
+  index out of range repainted the grid and rewrote the hash with the list it
+  already had, behind an identity check that could never fire.
+
+- **The ruler drew into a box shorter than the one it had been given.** Both
+  callers size their canvas with `rulerHeightFor(scale)` — the sequence band is a
+  fixed target and the coordinate row under it is a line of text that has to grow
+  with the text — and `drawRuler` clipped to `RULER_HEIGHT`, which is that height
+  at a scale of one. Nothing runs at a scale of one: the default is 1.35, for the
+  reason `ui/textScale.ts` gives, so the bottom of every tick label in the 1D
+  browser and on the Chromosomes table's bar was shaved off for everyone who had
+  never touched the control, and further for everyone who had turned it up. The
+  height travels with the frame now, and the clip is the strip the table was
+  actually pushed down by.
+
+- **A 4C profile *with trans*, divided by P(s), was two quantities on one axis.**
+  The trans half was divided by the mean of what the anchor reaches off its own
+  sequence, and the cis half was left as raw counts — on the stated grounds that
+  the decay had already been divided out of it, which is true on the cis-only
+  path and was never true on this one, where nothing had read a square at all. So
+  a track labelled `O/E` held ratios near 1 across fifteen chromosomes and a
+  band sum in the thousands on the sixteenth, which reads as the strongest signal
+  in the file and is a unit error. The anchor's own sequence is now normalised by
+  its own decay on both paths — one on-diagonal square against a pass that is
+  already touching half the pixels in the file, and only when the ratio was asked
+  for. The curve is also accumulated through `ExpectedAccumulator.addBlock` rather
+  than through a loop written beside it, which is the one that files a cell under
+  the separation its *absolute* bins imply and cannot read a block down the wrong
+  stride. The square is read from `count` rather than borrowed from the view's
+  block, which `usableBlock` vouches for the resolution and the balancing of and
+  not for the column: a map drawn from `expected` would otherwise have put the
+  two quantities back in one track by a second route.
+
+- **An exported session carried every task's parameters and put none of them
+  back.** `analysis/memory.ts` keeps them in one scope, `analysis:params`, and its
+  docstring says exactly why: `SessionConfig` gathers a session by reading a
+  **fixed list** of scopes, which is what makes an exported config provably the
+  same thing a reload would restore, and a scope named after a task id cannot be
+  on that list. The Analysis drawer had grown one per task anyway — it read and
+  wrote `analysis:<task id>` while the workspace wrote `analysis:params` on Run —
+  so the two halves of §18.2 were persisting to different places and the config's
+  `analysis` block was written, exported, imported and never read. One scope now,
+  through the one module that owns it; the drawer keeps its own key-by-key
+  validation, which is the part that knows what shape a parameter is meant to be.
+
+- **Every dialog opened with the caret on its close button.** A selector list
+  answers in document order and the ✕ is in the header, so "the first focusable
+  in the panel" was always Close: Enter dismissed the dialog instead of
+  submitting it, and reaching the box you opened it for meant tabbing past the
+  one control that throws the work away. The caret goes to the body's first
+  enabled control, and to the panel's only if the body has none.
+
+- **A numeric table filter refused a negative exponent.** The pattern had no `-`
+  past the first character, so `1e-5` did not parse and `>1e-5` compiled to
+  nothing — which leaves the column *unfiltered* rather than saying anything, on
+  exactly the column (a density) a reader writes that way.
+
+- **Cancelling a task did nothing on exactly the tasks worth cancelling.** A
+  cancel arrives as a *message*, and a message is delivered in a task of its own
+  — so a runner that never returns to the worker's event loop never receives one,
+  and `throwIfCancelled` asked a thousand times about a cancel still sitting in
+  the queue. `await` does not help: an already-resolved promise schedules a
+  microtask, and the microtask queue drains inside the task that scheduled it.
+  The *reads* yield between windows and have always been stoppable; the
+  **compute** did not — a cubic correlation, a diamond over every bin of every
+  sequence, a pileup over ten thousand windows — so those ran to completion and
+  delivered a result to a reader who had asked them to stop. Every one of them
+  now breathes at the top of its outer loop, and the correlation's row hook is
+  awaited so that stopping it is possible at all. The track venue still has no
+  cancel channel, which is stated in its own docstring and unchanged.
+
+- **A companion `.mcool` was handed to an analysis at its root.** A collection is
+  opened at the root, refused and re-opened one rung down, and it is that
+  descended address the panel actually shows — but the star recorded the URI the
+  panel was *built* with, so starring one asked the worker for the collection and
+  got `mcool-root` back: the refusal a reader was never meant to see, arriving
+  from a task rather than from a picture.
+
+- **A companion accused the files of disagreeing while the lead was still
+  reading.** A panel with no block yet answers "1 × 1 cells", and one cell times
+  a bin size is a span — so a companion that settled first was told *this block
+  spans 16.6 Mb × 16.6 Mb where the first map spans 1.0 kb × 1.0 kb. The same
+  name resolved against different sequences*, which is one bin of the lead's
+  binsize dressed up as a measurement and then blamed on the assemblies. Neither
+  panel is compared until both have a block, and the note is re-asked when the
+  lead reports, so a real disagreement is still said — once there is something to
+  say it about.
+
+- **Insulation counted cells a cut had already taken away.** A diamond of
+  half-width `w` spans separations `1 … 2w − 1`, and `ignoreDiags` drops
+  everything below its value — so the cells it leaves are bounded by the
+  diamond's *span*, not by its width. The count capped the ignored triangle at
+  `w(w + 1) / 2` and stopped there, which is right up to `w + 1` and wrong past
+  it. `minValid` is a fraction of that count, so the error did not stop at
+  bookkeeping: between `w + 1` and `2w` the threshold was measured against cells
+  that could never be counted and bins with a perfectly good diamond scored
+  `NaN`, and at `2w` and above *every* bin did — the lane came back empty, with
+  nothing said, which is indistinguishable from a file with no contacts in it.
+  The cells are counted over the span now, and a window a cut has emptied is
+  named: a note where some scales survive, a refusal naming the arithmetic where
+  none do.
+
+- **A compartment square a cut had emptied was drawn rather than refused.** The
+  same control, with no upper bound, on a task whose sequences can be shorter
+  than the number typed into it: every cell becomes a gap, every correlation is
+  undefined, `correlationMatrix` fills the matrix with the zeros it reads *no
+  evidence* as, and the leading eigenvector of that is a shape with no data
+  behind it. It now says which square, and how many bins were in it.
+
+- **The keyboard opened rows the filters were hiding.** A table keeps the row
+  under the cursor so that Enter opens it and the space bar ticks it, and a
+  filter that took that row away cleared only its *position*. The row itself
+  stayed, so Enter navigated to something no longer on screen and the space bar
+  ticked it into a selection the reader could not see — a keypress aimed at the
+  list in front of them, answered with one that is not.
+
+- **An emptied colour-clip box set the bound to zero.** A `type="number"` input
+  reports `''` both for a cleared box and for anything the browser refused to
+  parse, and `Number('')` is `0`: clearing a bound *set* one. On a `log10` map,
+  whose values live entirely below zero, clearing the high box clipped the whole
+  picture at 1. Refused now, like any other value that does not parse — and the
+  refusal is *visible*, which it was not: `change` fires on Enter without moving
+  the focus, and the repaint that was supposed to snap the box back leaves a
+  focused box alone, so the number the reader typed stayed on screen looking as
+  though it had been taken.
 
 - **A pooled read drew the wrong column.** `SpanScanOptions` had no `value`, so
   every pooled, rolled-up and selection read walked `pixels/count` whatever the
@@ -778,6 +1266,85 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   requests*.
 
 ### Changed
+
+- **Half of this application is cards, panels and dialogs, and it is tested
+  now.** The jsdom scaffolding landed with the Sequences card; what it was
+  reaching was seven files. `VirtualTable` — which is under both tables, and so
+  under where a reader of a metagenome spends most of their time — had none at
+  all, and every one of its behaviours was asserted by reading it. Twelve more
+  DOM files cover the table (filters, the sort cycle, the header box that speaks
+  for what the filters left rather than for the file, keyboard walking, what
+  virtualisation actually builds, what it remembers, and what it must forget),
+  the genomes table's two structural spec rules, the one search box four views
+  share, the modal and the context menu and every way each of them closes, the
+  small shared controls with `ui/dom.ts` underneath them, the ruler's clip, the
+  analysis parameter memory end to end, the breadcrumb, the error view, the info
+  panel's §7.4 statistic and the two controls a colour scale is set from. Five of
+  the fixes above were found by writing them.
+
+- **Dead code taken out.** Nine exported symbols with no caller anywhere in the
+  repository, plus `VirtualTable.setRows`, which was a public method nothing
+  called and which cleared the selection without telling the toolbar that reads
+  it. `magBalance` is the one worth naming: it says "params helper shared by the
+  runners" and the runners have always read the parameter themselves.
+  `mergeParams` went with the drawer's own parameter scope, which is what it
+  existed to serve. Out with `setRows` goes the sort cache's `source` field,
+  which existed only to be invalidated by it.
+
+- **Non-ASCII names are not supported, and are no longer tested as though they
+  were.** `/contigs` *is* cooler's `/chroms`, and cooler decodes every column of
+  it with an ASCII `.astype("U")`, so metacooler refuses to write a non-ASCII
+  `/contigs` or `/genomes` name at all — `check_ascii_names` before the first
+  write and `schema.validate` after the last. Two fixtures here had exactly that
+  shape, and the cost of keeping them had already come due: `make_fixtures.py`
+  could no longer build them, so `npm run fixtures` stopped after two of eleven
+  files and the full `npm test` was unrunnable from a fresh clone. One of the two
+  also had no Python oracle at all — the reference implementation cannot open it
+  — and the *partial golden* the whole toolchain carried existed for that one
+  file: a `coverage` field, a `golden: 'partial'` branch in `make_golden.py`, a
+  `python_open` failure record, a `full` flag on every golden map and a `full:
+  true` filter at three call sites. Fixtures, goldens, manifest rows, the
+  suites that read them and that machinery are all gone; the generator now lets
+  a fixture Python cannot open raise, because that is a broken fixture rather
+  than a documented limitation.
+
+  **What is kept is the decode.** An extra `/genomes` column may still hold an
+  accented taxonomy — legal metadata cooler never sees — so `decodeFixedStrings`
+  is now tested directly, over bytes, for the three things that go wrong: a
+  multi-byte character read back as itself rather than as mojibake, NUL padding
+  stripped, and a record sized in bytes rather than in characters. No fixture is
+  needed to hold them, which is the point.
+
+- **The goldens were built from fixtures that are no longer there.** Eight of
+  the eleven had moved — `npm run fixtures` rebuilds both halves, and the
+  fixtures a current metacooler writes are not byte-identical to the ones the
+  committed oracles were made from. Almost everything still matched, which is
+  what made it dangerous: what did not was whatever the two versions happened to
+  disagree about — a root attribute stored as `int32` in one and `int64` in the
+  other — and it surfaced as one deep object comparison failing in the middle of
+  an otherwise green suite, which reads as a bug in the reader and is not one.
+  The goldens are regenerated, so the two halves are one set; the only
+  substantive change in them is `floatcount.metacool`'s `bin-size`, now recorded
+  as the `int64` the file actually holds. And the skew is now checked before any
+  comparison is made: the manifest already records the byte size of every fixture
+  as it went in, so a fixture that has moved is named, with the command that
+  fixes it.
+
+- **Three docblocks in `metacooler/aggregate.ts` had drifted off their
+  functions.** The paragraphs describing `aggregateMatrix` and `sparseAggregator`
+  were stacked above `coarsenGrouping`, which has its own; the two exported
+  functions they belong to had none where they are. Moved, unchanged.
+
+- **The pooled read's own test asserted an invariant the rule does not have.**
+  `pooling.test.ts` required `contigsPerCell === 1` for every whole-file pooled
+  read, which was true of the *old* two-regime rule and is not true of the
+  capacity rule that replaced it: a sequence shorter than a cell shares one with
+  the neighbours it is beside, so `ladder.mmetacool::entries/4000` — which holds
+  two single-bin contigs of one genome side by side — reports two at a stride of
+  two, correctly. The assertion is now that the read used the grouping `poolBins`
+  built, which is what it actually owes the caller. `npm test` was red on `main`
+  because of it; the cell-for-cell comparison against the dense oracle beside it
+  was passing throughout.
 
 - **The analysis panel stopped asking questions it can answer itself.** A
   parameter is a question the reader is entitled to a different answer to;
