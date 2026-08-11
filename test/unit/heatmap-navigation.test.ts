@@ -983,3 +983,80 @@ describe('fitting a band', () => {
     }
   })
 })
+
+/**
+ * Being *told* where to stand, in cells (§8.10).
+ *
+ * A bookmark names a stretch of genome, the panel turns it into cells, and this
+ * is what the view does with them. The two shapes are different questions and
+ * that is the whole of what is asserted here.
+ *
+ * A **square** map takes a row window and a column window, because an on-diagonal
+ * locus is a square and both axes mean position. A **band** cannot: up its side is
+ * distance from the diagonal, its height in cells is chosen so the cut fills the
+ * box at fit zoom, and so asking for "these rows" asks for fit zoom whatever
+ * window was named. So a band is given the column span alone and the vertical
+ * follows — which is `zoomToSpan`'s rule, reached from a caller that has cells
+ * rather than pixels.
+ */
+describe('showing a window that came from outside', () => {
+  it('stands a square map on the window, both axes', () => {
+    const heatmap = view(400, 100)
+    heatmap.showCellWindow([20, 40], [20, 40])
+    const plot = heatmap.plotRect
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.row).toBeCloseTo(30, 0)
+    expect(centre?.col).toBeCloseTo(30, 0)
+    // 20 cells across 400 px, so the whole window is on screen at 20 px a cell.
+    expect(heatmap.zoomLevel).toBeCloseTo(20, 6)
+  })
+
+  it('stands a band on a column span, and does not ask its rows for one', () => {
+    // A band 200 rows deep in a 400 px box is at fit zoom already; a row window
+    // would therefore cap the zoom at the fit and the bookmark would never arrive.
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setFitAxis('cols')
+    heatmap.setAnchor('end')
+    heatmap.setMatrix(
+      { nrows: 200, ncols: 200, values: new Float32Array(200 * 200), rowExtent: [0, 200], colExtent: [0, 200] },
+      [],
+    )
+    const fitted = heatmap.zoomLevel
+    heatmap.showCellSpan([80, 100])
+    expect(heatmap.zoomLevel).toBeGreaterThan(fitted)
+    const plot = heatmap.plotRect
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.col).toBeCloseTo(90, 0)
+  })
+
+  it('reports the window it actually reached, not the one asked for', () => {
+    // `clampView` is what stops a span near the end of a block from sliding into
+    // empty space, and the honest answer afterwards is where the picture is.
+    const heatmap = view(400, 100)
+    heatmap.showCellSpan([95, 115])
+    const shown = heatmap.cellWindow()
+    expect(shown.cols[1]).toBeLessThanOrEqual(100)
+    expect(shown.cols[0]).toBeGreaterThanOrEqual(0)
+  })
+
+  it('leaves a frozen view alone, as every other gesture does', () => {
+    // Held while a finer block is being read: the picture must be exactly where
+    // the reader left it when the swap happens.
+    const heatmap = view(400, 100)
+    const before = heatmap.cellWindow()
+    heatmap.setFrozen(true)
+    heatmap.showCellSpan([20, 40])
+    expect(heatmap.cellWindow()).toEqual(before)
+    heatmap.setFrozen(false)
+  })
+
+  it('refuses a span of nothing rather than dividing by it', () => {
+    const heatmap = view(400, 100)
+    const before = heatmap.zoomLevel
+    heatmap.showCellSpan([50, 50])
+    // A zero-width window is a point, and the zoom it asks for is the ceiling
+    // rather than infinity — which is what a bookmark of one base pair is.
+    expect(Number.isFinite(heatmap.zoomLevel)).toBe(true)
+    expect(heatmap.zoomLevel).toBeGreaterThanOrEqual(before)
+  })
+})

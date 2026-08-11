@@ -26,6 +26,7 @@ import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
 import type { StoredEntry } from '../annotations/types'
+import type { Bookmark } from '../annotations/bookmarks'
 import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
@@ -57,6 +58,16 @@ export interface SessionConfig {
   tracks: StoredEntry[]
   /** Hand-placed lines and arrowheads on the map. */
   manual: ManualMark[]
+  /**
+   * Saved places, with the resolution each was found at (§8.10).
+   *
+   * Here for the reason this whole file exists: a list of forty loci walked one
+   * after another is work, it is not in the URL, and it is precisely the kind of
+   * thing a reader wants to hand to somebody else along with the tracks. It is
+   * also the one field here that a *recipient* can act on without the bytes —
+   * coordinates mean the same thing in anybody's copy of the assembly.
+   */
+  bookmarks: Bookmark[]
   /** Ticked sequences, when the session is a genome browser. */
   sequences: string[]
   /** Per-group stacking and scaling, by group name. */
@@ -99,6 +110,7 @@ function tableOf(
 const SCOPES = {
   tracks: 'annotations',
   manual: 'manual-annotations',
+  bookmarks: 'bookmarks',
   sequences: 'browser:sequences',
   groups: 'browser:groups',
   scaling: 'browser:scaling',
@@ -130,6 +142,7 @@ export function buildConfig(options: {
     state: options.state,
     tracks: recall<StoredEntry[]>(key, SCOPES.tracks) ?? [],
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
+    bookmarks: recall<Bookmark[]>(key, SCOPES.bookmarks) ?? [],
     sequences: recall<string[]>(key, SCOPES.sequences) ?? [],
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
@@ -160,6 +173,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   const key = memoryKey
   remember(key, SCOPES.tracks, config.tracks)
   remember(key, SCOPES.manual, config.manual)
+  remember(key, SCOPES.bookmarks, config.bookmarks)
   remember(key, SCOPES.sequences, config.sequences)
   remember(key, SCOPES.groups, config.groups)
   remember(key, SCOPES.scaling, config.scaling)
@@ -217,6 +231,9 @@ export function parseConfig(text: string): SessionConfig | null {
     state: state as ViewState,
     tracks: list<StoredEntry>(row['tracks']),
     manual: list<ManualMark>(row['manual']),
+    // Absent from every config written before §8.10, and read as no saved places
+    // rather than as a broken file — the same tolerance every field here has.
+    bookmarks: list<Bookmark>(row['bookmarks']),
     sequences: list<string>(row['sequences']).filter((name) => typeof name === 'string'),
     groups: record(row['groups']),
     scaling: record(row['scaling']),

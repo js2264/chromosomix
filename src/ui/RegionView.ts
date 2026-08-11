@@ -23,6 +23,7 @@
 
 import type { ParsedRange } from '../types'
 import type { MatrixResult } from '../worker/protocol'
+import { parseRegion } from '../annotations/bookmarks'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el } from './dom'
@@ -57,6 +58,26 @@ export interface RegionViewProps {
   region: string
   /** Column-axis region; when set the block is rectangular, not square. */
   region2?: string
+  /**
+   * A stretch of {@link region} to open zoomed to, on the diagonal — a bookmark's
+   * "take me there" (§8.10, `ViewState.focus`).
+   *
+   * A window over the block this view reads, *not* a narrower block: the region
+   * is still whatever was asked for, so the reader can pan out of the window into
+   * the rest of it. Which is why it is a prop of this view rather than a
+   * coordinate suffix on {@link region} — the two say different things about what
+   * is read, and only one of them can be panned out of.
+   */
+  focus?: string
+  /**
+   * A control the session puts on the title line, after `go`.
+   *
+   * *Take a bookmark of what is on screen*, today. Separate from
+   * {@link extraControl} because the two belong at opposite ends of the bar: this
+   * one acts on the box's own subject and sits beside it, and that one switches
+   * which picture the whole view is of.
+   */
+  boxControl?: HTMLElement
   scale: ScaleState
   balance: boolean
   /** Whether the file carries a weight column at all. */
@@ -244,6 +265,11 @@ export class RegionView {
           // same thing, and a hit list the button could not see would make them
           // disagree about what "go" is.
           button('go', () => this.search.submit()),
+          // Beside `go`, because it is about the same thing `go` is: the box says
+          // where to be and this says *remember this*. A bookmark button in the
+          // sidebar would have been a card control, and the hand that has just
+          // arrived somewhere worth keeping is up here.
+          ...(props.boxControl === undefined ? [] : [props.boxControl]),
           ...(props.extraControl === undefined ? [] : [props.extraControl]),
           // Back, beside the box that got you here. Every navigation is a
           // history entry (§5.5 puts the whole view state in the hash), so this
@@ -306,6 +332,46 @@ export class RegionView {
    * different sequence, and a ladder holding the last one would hand back blocks
    * of somewhere else.
    */
+  /**
+   * Stand the picture on {@link RegionViewProps.focus}, if there is one.
+   *
+   * Silent when there is no focus and silent when it will not place — a contig
+   * this block does not carry, a level with no coordinates in it. The fitted view
+   * is a good answer to a window that could not be found, and an error line about
+   * one would be reporting a failure the reader can already see the absence of.
+   *
+   * Also the second entry point, {@link showFocus}: going to another saved place
+   * on the same chromosome is a zoom rather than a navigation, and the shell takes
+   * that road (`ViewState.differsOnlyInFocus`).
+   */
+  private applyFocus(): void {
+    const region = this.props.focus
+    // A two-contig block has no diagonal to stand a locus on: its axes are two
+    // different sequences, so one window cannot name a place on both of them.
+    // Refused here rather than in the panel, which would refuse it by finding no
+    // row for the contig — the same outcome by accident instead of on purpose.
+    if (region === undefined || this.props.region2 !== undefined) return
+    const parsed = parseRegion(region)
+    if (parsed !== null) this.panel.showLocus(parsed)
+  }
+
+  /**
+   * Move to a saved place without rebuilding — the counterpart of
+   * {@link applyScale}.
+   *
+   * The prop is written too, so a later reload of the block (a refine widening
+   * past what is held, a change of level) stands on the place the reader is
+   * actually at rather than on the one the view was constructed for.
+   */
+  showFocus(region: string | undefined): void {
+    if (region === undefined) {
+      delete this.props.focus
+      return
+    }
+    this.props.focus = region
+    this.applyFocus()
+  }
+
   private async armRefine(
     rows: ParsedRange,
     result: MatrixResult,
@@ -423,6 +489,12 @@ export class RegionView {
         // panel is told before it is given the block.
         this.panel.setResolution(this.props.binsize * (result.binsPerCell ?? 1))
         this.panel.setData(result, this.props.region, second)
+        // After the block and *before* the ladder is armed, which is the whole
+        // reason it is here rather than in the panel's own setup: the refine
+        // reads the window that is on screen, so focusing first means the finer
+        // block that arrives is a finer block of the bookmark rather than of the
+        // fitted chromosome nobody is looking at any more.
+        this.applyFocus()
         await this.armRefine(parsed, result, undefined)
         return
       }

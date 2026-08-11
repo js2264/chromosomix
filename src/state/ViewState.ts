@@ -47,6 +47,7 @@ const KEY_ORDER = [
   'genomes',
   'region',
   'region2',
+  'focus',
   'regions',
   'locus',
   'level',
@@ -70,6 +71,7 @@ const OPTIONAL_KEYS = [
   'genomes',
   'region',
   'region2',
+  'focus',
   'regions',
   'locus',
   'level',
@@ -174,6 +176,11 @@ export function parseViewState(hash: string): ViewState | null {
   if (region !== undefined) state.region = region
   const region2 = raw.get('region2')
   if (region2 !== undefined) state.region2 = region2
+  // Empty is dropped rather than kept, as `locus` is and unlike `region`: an
+  // absent focus is a view fitted to its whole block, and `focus=` would be a
+  // window with no coordinates in it for the panel to refuse one row later.
+  const focus = raw.get('focus')
+  if (focus !== undefined && focus !== '') state.focus = focus
   const genomes = raw.get('genomes')
   if (genomes !== undefined) state.genomes = genomes
   const regions = raw.get('regions')
@@ -358,6 +365,25 @@ export const READING_KEYS = ['flip', 'oe'] as const
  */
 export function differsOnlyInPresentation(a: ViewState, b: ViewState): boolean {
   return differsOnly(a, b, [...SCALE_KEYS, ...DERIVED_KEYS, ...DECK_KEYS])
+}
+
+/**
+ * `true` when two states are the same view of the same block and differ only in
+ * **where the picture is standing** — which a mounted panel can be told.
+ *
+ * Its own predicate rather than a fourth entry in {@link differsOnlyInPresentation},
+ * because what it authorises is different in kind: a scale change repaints from a
+ * block in memory, and this moves a transform over one. Sharing the road would
+ * mean a focus change also ran `rederive`, and a derivation change also moved the
+ * view — each doing the other's work for nothing.
+ *
+ * The reason it exists at all is that going to a second saved place on the same
+ * chromosome is not a navigation. Left to the rebuild, every bookmark in a list
+ * of twenty cost a worker round trip and a re-read of a block already on
+ * screen — for a change that is one zoom.
+ */
+export function differsOnlyInFocus(a: ViewState, b: ViewState): boolean {
+  return a.focus !== b.focus && differsOnly(a, b, ['focus'])
 }
 
 function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {

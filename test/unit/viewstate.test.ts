@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  differsOnlyInFocus,
   differsOnlyInPresentation,
   differsOnlyInScale,
   matrixLevel,
@@ -61,6 +62,15 @@ const CASES: ViewState[] = [
   // the pair view a special case of something rather than a thing of its own.
   { uri: 'Hum53.metacool', view: 'selection', genomes: 'MAG_1,MAG_2,MAG_7' },
   { uri: 'yeast.cool', view: 'selection', regions: 'I,II,XVI' },
+  // A saved place: the whole chromosome, standing on a window inside it (§8.10).
+  // The two keys have to survive together, because the pair is the whole point —
+  // `region` alone crops and `focus` alone has nothing to be a window on.
+  {
+    uri: 'Ecoli.mcool::resolutions/10000',
+    view: 'region',
+    region: 'NC_000913.3',
+    focus: 'NC_000913.3:3500000-3560000',
+  },
 ]
 
 describe('serialiseViewState / parseViewState', () => {
@@ -398,5 +408,62 @@ describe('the turn in the hash', () => {
     const square: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: false }
     const turned: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
     expect(differsOnlyInPresentation(square, turned)).toBe(true)
+  })
+})
+
+/**
+ * The saved place in the hash (§8.10).
+ *
+ * `focus` is the key that makes a bookmark a *link*, and the reason it is not
+ * simply a coordinate suffix on `region`: `region=chrI:1.2-1.26 Mb` reads a
+ * block cut at those coordinates, so the edges of the picture are the edges of
+ * the data, and `region=chrI&focus=chrI:1.2-1.26 Mb` reads the chromosome and
+ * stands the view on the locus — which is what "take me there, but let me look
+ * around" means.
+ */
+describe('the saved place in the hash', () => {
+  const base: ViewState = { uri: 'a.cool', view: 'region', region: 'chrI' }
+  const at = (focus: string): ViewState => ({ ...base, focus })
+
+  it('says nothing when there is no place', () => {
+    expect(serialiseViewState(base)).not.toContain('focus')
+    expect('focus' in (parseViewState(serialiseViewState(base)) as object)).toBe(false)
+  })
+
+  it('drops an empty one rather than keeping a window with no coordinates', () => {
+    // Unlike `region`, whose empty value is meaningful. A `focus=` would reach the
+    // panel as a window to refuse one frame later, for no gain over its absence.
+    expect('focus' in (parseViewState('#uri=a.cool&view=region&focus=') as object)).toBe(false)
+  })
+
+  it('is a data key, so arriving at a place the mounted view is not at rebuilds', () => {
+    expect(differsOnlyInPresentation(base, at('chrI:100-200'))).toBe(false)
+    expect(differsOnlyInScale(base, at('chrI:100-200'))).toBe(false)
+  })
+
+  it('has its own road, so a second saved place is a zoom rather than a re-read', () => {
+    expect(differsOnlyInFocus(at('chrI:100-200'), at('chrI:800-900'))).toBe(true)
+    // Leaving a place is the same move as arriving at one.
+    expect(differsOnlyInFocus(at('chrI:100-200'), base)).toBe(true)
+    expect(differsOnlyInFocus(base, at('chrI:100-200'))).toBe(true)
+  })
+
+  it('does not take that road when anything else moved', () => {
+    // The block would be a different block, so there is nothing on screen to
+    // zoom: a rebuild is the only honest answer.
+    expect(differsOnlyInFocus(at('chrI:100-200'), { ...at('chrI:100-200'), region: 'chrII' })).toBe(
+      false,
+    )
+    expect(differsOnlyInFocus(at('chrI:100-200'), { ...at('chrI:800-900'), vmax: 4 })).toBe(false)
+    expect(
+      differsOnlyInFocus(at('chrI:100-200'), { ...at('chrI:800-900'), uri: 'b.cool' }),
+    ).toBe(false)
+  })
+
+  it('is not the focus road when the focus itself did not move', () => {
+    // Otherwise a colour change on a focused view would be answered by re-standing
+    // the picture on its bookmark, which is not what the reader asked for.
+    expect(differsOnlyInFocus(at('chrI:100-200'), at('chrI:100-200'))).toBe(false)
+    expect(differsOnlyInFocus(base, base)).toBe(false)
   })
 })

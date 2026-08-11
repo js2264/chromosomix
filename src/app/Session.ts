@@ -39,6 +39,7 @@ import {
   COMPANION_KEYS,
   READING_KEYS,
   ViewStore,
+  differsOnlyInFocus,
   differsOnlyInPresentation,
   landingState,
   matrixLevel,
@@ -83,6 +84,8 @@ import { MAX_PANELS, parseMaps, type GrowDirection } from '../panels/deck'
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
+import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
+import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
@@ -99,7 +102,7 @@ import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { el, fmt } from '../ui/dom'
-import { cardTitle } from '../ui/icons'
+import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
@@ -362,6 +365,15 @@ export class Session {
   private current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
+    /**
+     * Move to a saved place without being rebuilt (§8.10).
+     *
+     * Present on the region view alone, which is the only one whose block has a
+     * diagonal a single locus names. Its absence is what routes every other view
+     * through the ordinary rebuild for a `focus` change, rather than a list of
+     * view kinds kept in the render path.
+     */
+    showFocus?(region: string | undefined): void
     /** Present on the heatmap views; the manual card places marks through it. */
     panel?: MatrixPanel
     /** Present on the genome browser, which owns a canvas of its own. */
@@ -386,6 +398,7 @@ export class Session {
    */
   private annotations: FileAnnotations | null = null
   private manualCard: ManualCard | null = null
+  private bookmarksCard: BookmarksCard | null = null
   /**
    * The state the mounted view was built for.
    *
@@ -2498,6 +2511,7 @@ export class Session {
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
+    this.bookmarksCard = null
     this.dropCompare()
     this.compareCard = null
     this.wholeFile?.view.destroy()
@@ -2533,6 +2547,7 @@ export class Session {
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
+    this.bookmarksCard = null
     // A picked locus names a sequence, and the same name in another file is
     // another place: carrying one across would hand a form coordinates from
     // somewhere the reader never pointed at. A module-level fact about which
@@ -2603,6 +2618,17 @@ export class Session {
       start: (onPoint, onEnd) => armAll([this.current?.panel, this.deck], onPoint, onEnd),
     }
     this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
+    this.bookmarksCard = new BookmarksCard({
+      store: new BookmarkStore(scope),
+      go: (mark) => this.goToBookmark(mark),
+      available: () => this.current?.panel !== undefined,
+      // Read off whatever panel is mounted *now*, not off one captured here: this
+      // card is built once per file and the picture under it is rebuilt on every
+      // navigation, so a held reference would save the window of a view the reader
+      // left ten clicks ago.
+      framed: () => this.current?.panel?.framedRegion() ?? null,
+      binsize: () => this.file?.info.binsize ?? null,
+    })
 
     this.compareCard = this.newCompareCard(uri)
 
@@ -2644,6 +2670,10 @@ export class Session {
             }),
       }).el,
       this.manualCard.el,
+      // Under the marks, because the two are the same kind of note made at
+      // opposite ends of a gesture: a mark says *look here* on the picture you
+      // have, and a bookmark says *take me back* to a picture you had.
+      this.bookmarksCard.el,
     ])
 
     // What a previous visit to this file left in session storage (§8.6). After
@@ -3344,6 +3374,91 @@ export class Session {
   }
 
   /**
+   * *Bookmark this view*, on the title line beside `go`.
+   *
+   * Built here rather than in the view for the reason {@link mapToggleButton} is:
+   * what it saves is the window the panel is showing and where it saves it is a
+   * store the session owns, and neither is something a view mounted for one region
+   * knows about.
+   *
+   * `undefined` on a file with no bookmarks card, which is §8.5's gate — a
+   * metagenome has no annotation stores at all, and a button that saved into
+   * nothing would be furniture.
+   *
+   * It reports by *going quiet*: the press is confirmed by the row appearing in
+   * the card, which is where the reader will look for it, and pressing it a second
+   * time on the same view says so in the card's own line rather than as a toast
+   * over the map (`BookmarkStore.add`).
+   */
+  private bookmarkButton(): HTMLElement | undefined {
+    if (this.bookmarksCard === null) return undefined
+    return iconButton(
+      'bookmark-plus',
+      'Bookmark this view — the place on screen, at this resolution',
+      () => this.bookmarksCard?.saveFramed(),
+    )
+  }
+
+  /**
+   * Take the reader to a saved place (§8.10).
+   *
+   * **The whole chromosome, zoomed to the place** — `region` is the contig and the
+   * location goes in `focus`. That is the one design decision in here and it is
+   * the reader's own requirement: a bookmark whose region was `chrI:1.20-1.26 Mb`
+   * would open a block cut at those coordinates, and panning out of it would show
+   * paper rather than the rest of the chromosome. `ViewState.focus` is a window
+   * over a block read whole, so arriving somewhere and looking around works.
+   *
+   * **And at the resolution it was saved at**, when the file has one: a bookmark
+   * is a place *and* a grain, because a loop found at 1 kb is not visible at 20 kb
+   * and giving back the coordinates without the grain gives back a picture the
+   * note was not made against. A bin size this file has no rung for is dropped
+   * rather than approximated — the nearest thing would be a different picture
+   * presented as the saved one — and a bookmark imported from BED never had one.
+   *
+   * What carries: **how the file is being read** — the transform, the colormap,
+   * the level, balancing, the score column — plus whatever {@link navigate}
+   * already carries, which is the deck, the compared file and the turn. Those are
+   * facts about the reader rather than about the place, and finding the map square
+   * and grey again after every jump would make a list of twenty bookmarks
+   * unusable. The **clip** does not carry, on `carryAcrossEntries`'s rule and for
+   * its reason: `vmax` is in counts, counts scale with the bin, and a ceiling
+   * tuned on one window is a black square or an empty one on the next.
+   */
+  private goToBookmark(mark: Bookmark): void {
+    const state = this.store.state
+    if (state === null) return
+    this.navigate({
+      uri: this.uriAtBinsize(mark.binsize) ?? state.uri,
+      view: 'region',
+      region: mark.contig,
+      focus: formatRegion(mark),
+      ...(state.transform === undefined ? {} : { transform: state.transform }),
+      ...(state.colormap === undefined ? {} : { colormap: state.colormap }),
+      ...(state.level === undefined ? {} : { level: state.level }),
+      ...(state.balance === undefined ? {} : { balance: state.balance }),
+      ...(state.score === undefined ? {} : { score: state.score }),
+    })
+  }
+
+  /**
+   * This file addressed at `binsize`, or `null` for "leave it where it is".
+   *
+   * {@link openAtBinsize}'s address arithmetic without its navigation, for a
+   * caller that is building one state rather than moving to one. Exact on the same
+   * rule: a bin size the collection has no rung for is refused, because the
+   * nearest rung is a different picture and a bookmark has promised this one.
+   */
+  private uriAtBinsize(binsize: number | undefined): string | null {
+    const held = this.file
+    if (held === null || binsize === undefined) return null
+    if (held.info.binsize === binsize) return null
+    const match = rungsOf(held.entries).find((rung) => rung.binsize === binsize)
+    if (match === undefined || match.name === held.currentEntry) return null
+    return `${splitUri(held.uri).path}::${held.info.entryGroup || 'entries'}/${match.name}`
+  }
+
+  /**
    * The view to reopen at another resolution — the same one, at the other one.
    *
    * Switching resolution in an `.mcool` is not opening a different file: it is
@@ -3552,6 +3667,7 @@ export class Session {
       this.annotations?.client.destroy()
       this.annotations = null
       this.manualCard = null
+    this.bookmarksCard = null
       // The second file too, and for the same reason: it is a second map *of a
       // file that is no longer open*, and with no state there is no `uri2` left
       // to reconcile against — so nothing downstream would ever reach it again,
@@ -3742,6 +3858,34 @@ export class Session {
     ) {
       this.current.applyScale?.(this.scaleOf(state))
       this.rederive()
+      // …and stand back on the saved place, if the view is at one. Turning a map
+      // re-cuts it and therefore refits it — which the reader asked for, and which
+      // on a focused view meant pressing the turn toggle at a bookmark threw you
+      // back to the whole chromosome. `rederive` is synchronous, so the place is
+      // restored in the same frame as the shape and nothing flashes.
+      this.current.showFocus?.(state.focus)
+      this.mounted = state
+      this.breadcrumb?.render(state)
+      this.host.activity(this)
+      return
+    }
+
+    // Going to a second saved place on the same chromosome is a *zoom*, not a
+    // navigation (§8.10). The block on screen already covers it — that is what
+    // `focus` means, a window over a region read whole — so rebuilding the view
+    // would pay a worker round trip and a re-read of the picture already in front
+    // of the reader, for a change of transform. Walking a BED of forty peaks made
+    // that forty reads of one chromosome.
+    //
+    // Guarded on `showFocus` rather than on the view kind, so a view that has no
+    // diagonal to stand a locus on falls through to the rebuild and lands
+    // wherever the hash actually says.
+    if (
+      this.mounted !== null &&
+      this.current?.showFocus !== undefined &&
+      differsOnlyInFocus(this.mounted, state)
+    ) {
+      this.current.showFocus(state.focus)
       this.mounted = state
       this.breadcrumb?.render(state)
       this.host.activity(this)
@@ -4283,10 +4427,12 @@ export class Session {
     if (this.file?.contigs == null) await this.contigs().catch(() => null)
     if (this.destroyed || this.store.state !== state) return
     const mapSwitch = this.mapToggleButton()
+    const keep = this.bookmarkButton()
     const view = new RegionView({
       client: this.clientOf(),
       caption: this.captionFor(state),
       ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
+      ...(keep === undefined ? {} : { boxControl: keep }),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
       region: state.region,
@@ -4302,14 +4448,21 @@ export class Session {
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
+      ...(state.focus === undefined ? {} : { focus: state.focus }),
       scale: this.scaleOf(state),
       // Typing a new region replaces the whole selection, so the second axis
       // goes with it: `contig_A × contig_B` then `contig_C` means contig_C, not
       // contig_C against a column the user can no longer see named anywhere.
       // Built by omission rather than `region2: undefined`, so the state object
       // has no undefined-valued keys for a strict deep-equal to trip on.
+      //
+      // …and the saved place goes with it too, for a stronger reason: a `focus` is
+      // a window *inside* a named region, so the moment the region changes it
+      // names a stretch of somewhere the reader is no longer looking. Left in, a
+      // selection drawn on a bookmarked chromosome opened the new block and then
+      // yanked it back to the old bookmark.
       onChangeRegion: (region, region2) => {
-        const { region2: _dropped, ...rest } = state
+        const { region2: _dropped, focus: _left, ...rest } = state
         this.navigate({ ...rest, region, ...(region2 === undefined ? {} : { region2 }) })
       },
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
@@ -4501,6 +4654,8 @@ export class Session {
     view?: {
       destroy?(): void
       applyScale?(scale: ScaleState): void
+      /** For a view that can be moved to a saved place rather than rebuilt (§8.10). */
+      showFocus?(region: string | undefined): void
       sideEl?: HTMLElement
       panel?: MatrixPanel
       /** For a view that owns a canvas but not a {@link MatrixPanel}. */
@@ -4520,6 +4675,9 @@ export class Session {
     // none, and a button that arms a gesture nothing can complete is worse than
     // one that is plainly unavailable.
     this.manualCard?.refresh()
+    // …and the same for *this view*, which saves the window on screen and has none
+    // to save on a table.
+    this.bookmarksCard?.refresh()
     // The deck, where there is one, is a frame around whatever was going to be
     // mounted: the view's own element is *re-parented* into the first cell of a
     // grid rather than rebuilt, so a session with companions costs the session
