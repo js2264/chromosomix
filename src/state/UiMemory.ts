@@ -18,7 +18,39 @@
  * embedding), because losing a filter must never break a view.
  */
 
+import { splitUri } from '../ui/labels'
+
 const PREFIX = 'metacooler-viewer:ui:'
+
+/**
+ * The key one session's memory of one *file* hangs on.
+ *
+ * Two facts, and both of them are decisions.
+ *
+ * The **session id**, because two tabs on the same file are two independent
+ * workspaces: keyed on the URI alone the second would adopt the first's tracks
+ * and filters, which is exactly what tabs exist to prevent.
+ *
+ * The **file, not the entry inside it** — the path before `::`. An `.mcool` at
+ * 1 kb and the same `.mcool` at 5 kb are one file, which is the definition
+ * `Session.reopeningSameFile` already uses and the reason a change of resolution
+ * carries every field of the view state across (`Session.carryAcrossEntries`):
+ * names are names and coordinates are base pairs. Everything stored under this
+ * key is the same kind of fact — a hand-drawn mark is a contig and a base pair
+ * (§8.1), a ticked sequence is a name, a group is a claim about tracks, a table's
+ * filter is a phrase about rows — and none of them means anything different at
+ * another bin size.
+ *
+ * With the entry in the key all of it was *lost* on a resolution switch, and
+ * silently: the previous level's marks stayed in storage under its own key, so
+ * they came back if the reader switched back and stayed invisible if they did
+ * not. Tracks were the exception, and only because they are carried live across
+ * the reopen — which is why this surfaced as "my annotations are gone" rather
+ * than as everything at once.
+ */
+export function fileMemoryKey(sessionId: string, uri: string): string {
+  return `${sessionId}|${splitUri(uri).path}`
+}
 
 /** Storage that cannot throw. Falls back to a module-level map. */
 const memory = new Map<string, string>()
