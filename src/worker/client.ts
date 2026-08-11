@@ -7,7 +7,6 @@
  * the only place a file is open.
  */
 
-import { ViewerError } from '../errors'
 import { registerThread } from '../perf/threads'
 import { withCredential } from '../s3/attach'
 import {
@@ -127,9 +126,4 @@ export class ReaderClient {
 /** `true` when a rejection is a user cancellation rather than a failure. */
 export function isCancellation(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
-}
-
-/** Narrow an unknown rejection to a {@link ViewerError} where possible. */
-export function asViewerError(err: unknown): ViewerError | null {
-  return err instanceof ViewerError ? err : null
 }

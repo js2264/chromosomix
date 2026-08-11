@@ -17,7 +17,12 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { AnalysisRunner, sameRecipe, type RunnerHost } from '@/analysis/runner'
+import {
+  AnalysisRunner,
+  sameRecipe,
+  type RunnerHost,
+  type RunTarget,
+} from '@/analysis/runner'
 import { READY } from '@/analysis/types'
 import type {
   AnalysisContext,
@@ -27,7 +32,7 @@ import type {
   TaskResult,
 } from '@/analysis/types'
 import { AnalysisClient } from '@/analysis/worker/client'
-import type { AnalysisRequest, AnalysisResponse } from '@/analysis/worker/protocol'
+import type { AnalysisRequest, AnalysisResponse, BlockInput } from '@/analysis/worker/protocol'
 
 // ---------------------------------------------------------------------------
 // The fake worker
@@ -195,23 +200,51 @@ function context(framing: AnalysisFraming | null): AnalysisContext {
 interface Harness {
   runner: AnalysisRunner
   fake: FakeAnalysisWorker
-  finished: Array<{ task: string; result: TaskResult }>
+  finished: Array<{ task: string; result: TaskResult; map: string }>
   catalogue: Map<string, AnalysisTask>
+}
+
+/** Three maps on screen, as a deck of a lead and two companions would be. */
+const DECK: RunTarget[] = [
+  { map: 'lead', uri: URI, source: { kind: 'local', file: new File([], URI) }, label: 'lead.cool' },
+  { map: 'p1', uri: 'rep2.cool', source: { kind: 'remote', url: 'rep2.cool' }, label: 'rep2.cool' },
+  { map: 'p2', uri: 'rep3.cool', source: { kind: 'remote', url: 'rep3.cool' }, label: 'rep3.cool' },
+]
+
+/**
+ * The block on screen, sized to be worth copying and matching {@link FRAMING}.
+ *
+ * `blockMatches` compares extents and a bin size and nothing else, which in a
+ * deck is exactly what every panel has in common.
+ */
+function inViewBlock(): BlockInput {
+  return {
+    values: new Float32Array(4),
+    nrows: 2,
+    ncols: 2,
+    rowExtent: [0, 100],
+    colExtent: [0, 100],
+    binsPerCell: 1,
+  } as unknown as BlockInput
 }
 
 function harness(
   framing: AnalysisFraming | null = FRAMING,
   vectors: Map<string, Float32Array> | null = null,
+  targets: readonly RunTarget[] = [],
+  onScreen: { block: BlockInput | null; map: string } = { block: null, map: 'lead' },
 ): Harness {
   const fake = new FakeAnalysisWorker()
-  const finished: Array<{ task: string; result: TaskResult }> = []
+  const finished: Array<{ task: string; result: TaskResult; map: string }> = []
   const catalogue = new Map<string, AnalysisTask>()
   const host: RunnerHost = {
     context: () => context(framing),
     source: () => ({ uri: URI, source: { kind: 'local', file: new File([], URI) } }),
-    block: () => null,
+    block: () => onScreen.block,
+    targetMap: () => onScreen.map,
     payload: () => undefined,
-    finished: (ran, result) => finished.push({ task: ran.id, result }),
+    allTargets: () => targets,
+    finished: (ran, result, target) => finished.push({ task: ran.id, result, map: target.map }),
     task: (id) => catalogue.get(id),
     ...(vectors === null
       ? {}
@@ -282,6 +315,160 @@ describe('the analysis queue', () => {
     const quiet = calls
     runner.run(task('coverage'), {})
     expect(calls).toBe(quiet)
+    runner.destroy()
+  })
+})
+
+/**
+ * One task, every map on screen.
+ *
+ * The question a deck raises and the star only half answers: four replicates are
+ * open because they are being compared, and the comparison is four insulation
+ * tracks rather than one. What is worth pinning is not the loop but the three
+ * things that make it honest — one file on the worker at a time, each result
+ * filed against the map it was measured from, and a cancel that stops the batch
+ * where it has reached rather than only the job in flight.
+ */
+describe('running on every map', () => {
+  it('queues one job per map and mounts one file at a time', async () => {
+    const { runner, fake, finished } = harness(FRAMING, null, DECK)
+    const insulation = task('insulation')
+
+    runner.runAll(insulation, {}, runner.targets())
+    await settle()
+    // One in flight, two waiting: the worker mounts one file at a time, and
+    // three h5wasm instances with three dense blocks live at once is the moment
+    // a tab can least afford it.
+    expect(fake.running()).toEqual(['insulation'])
+    expect(fake.peak).toBe(1)
+
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+
+    expect(runner.stateOf('insulation').status).toBe('done')
+    // Each result carries the map it was measured from, so a batch leaves a row
+    // per panel rather than three rows on the lead.
+    expect(finished.map((entry) => entry.map)).toEqual(['lead', 'p1', 'p2'])
+    // Three files, so three mounts — and no more than three.
+    expect(fake.seen.filter((request) => request.kind === 'open')).toHaveLength(3)
+    runner.destroy()
+  })
+
+  /**
+   * The regression, and the worst shape a bug of this kind can have.
+   *
+   * The block on screen belongs to **one** panel — the starred one — and
+   * `blockMatches` cannot tell: it compares extents and a bin size, and every
+   * panel of a deck is at the same extents at the same bin size, which is the
+   * whole point of a deck. So a batch lent the same pixels to all five jobs and
+   * five maps came back with one map's answer — only for the chromosome that
+   * happened to be in view, because everywhere else there is no block to lend.
+   * Every other region was read per file and correct, so the numbers agreed
+   * with themselves everywhere a reader would think to check.
+   */
+  it('lends the block on screen only to the map it is a picture of', async () => {
+    const { runner, fake } = harness(FRAMING, null, DECK, { block: inViewBlock(), map: 'lead' })
+
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+
+    const runs = fake.seen.filter((request) => request.kind === 'run')
+    expect(runs).toHaveLength(3)
+    // The first job is the lead's, and it is the one the pixels belong to.
+    expect(runs[0].inputs?.block).toBeDefined()
+    expect(runs[1].inputs?.block).toBeUndefined()
+    expect(runs[2].inputs?.block).toBeUndefined()
+    runner.destroy()
+  })
+
+  it('lends it to the starred companion instead when the star has moved', async () => {
+    // The host has one block and it is whichever panel the star is on, so which
+    // job may borrow it moves with the star rather than being the first one.
+    const { runner, fake } = harness(FRAMING, null, DECK, { block: inViewBlock(), map: 'p1' })
+
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+
+    const runs = fake.seen.filter((request) => request.kind === 'run')
+    expect(runs[0].inputs?.block).toBeUndefined()
+    expect(runs[1].inputs?.block).toBeDefined()
+    expect(runs[2].inputs?.block).toBeUndefined()
+    runner.destroy()
+  })
+
+  it('still lends it to a run of one, which is every session without a deck', async () => {
+    const { runner, fake } = harness(FRAMING, null, [], { block: inViewBlock(), map: 'lead' })
+    runner.run(task('insulation'), {})
+    await settle()
+    const runs = fake.seen.filter((request) => request.kind === 'run')
+    expect(runs[0].inputs?.block).toBeDefined()
+    runner.destroy()
+  })
+
+  it('says where in the deck it has got to', async () => {
+    const { runner, fake } = harness(FRAMING, null, DECK)
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+
+    const first = runner.stateOf('insulation')
+    // The percentage is one map's progress; without this a reader would watch it
+    // reach 100 twice and read the third as a stall.
+    expect(first.status === 'running' && first.batch).toEqual({
+      at: 0,
+      of: 3,
+      label: 'lead.cool',
+    })
+
+    fake.finish()
+    await settle()
+    const second = runner.stateOf('insulation')
+    expect(second.status === 'running' && second.batch?.at).toBe(1)
+    expect(second.status === 'running' && second.batch?.label).toBe('rep2.cool')
+    runner.destroy()
+  })
+
+  it('is stopped where it has reached, not only the job in flight', async () => {
+    const { runner, fake, finished } = harness(FRAMING, null, DECK)
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+    fake.finish()
+    await settle()
+
+    runner.cancel('insulation')
+    await settle()
+    expect(runner.stateOf('insulation').status).toBe('cancelled')
+    // The first map's result stands — it was measured before the reader
+    // stopped — and the third was never sent.
+    expect(finished.map((entry) => entry.map)).toEqual(['lead'])
+    expect(runner.busy).toBe(false)
+    runner.destroy()
+  })
+
+  it('runs one map as a plain run, with no batch to report', async () => {
+    const { runner, fake } = harness(FRAMING, null, [DECK[0]])
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+    const state = runner.stateOf('insulation')
+    expect(state.status === 'running' && state.batch).toBeUndefined()
+    fake.finish()
+    await settle()
+    expect(runner.stateOf('insulation').status).toBe('done')
     runner.destroy()
   })
 })

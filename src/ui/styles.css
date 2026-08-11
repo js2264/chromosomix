@@ -802,11 +802,52 @@ p {
    already wears over its own ruler. `ew-resize` says "move this edge", which is
    a different promise and one this strip does not keep. The hairline drawn under
    the pointer is the other half of the affordance. */
+/* The star: which map an analysis runs against (§18.2). Empty until it is the
+   one, and then filled and dead — the way to move it is to press another, and a
+   press that does nothing is a control a reader has to try to understand. The
+   same idiom, and the same class, as the Annotations card's search star. */
+/* The mark on the Run button, which is the deck's star said a second time.
+   Filled, because the one it points at is the *filled* one — a hollow star
+   beside four hollow stars would be asking the reader to guess which map is
+   meant, which is the question the button is there to answer. Sitting on the
+   text baseline rather than on its own line: it is a word of the label, not an
+   icon beside one. */
+.run-star {
+  fill: currentColor;
+  stroke: currentColor;
+  vertical-align: -0.1em;
+}
+
+.deck-star {
+  opacity: 0.45;
+}
+
+.deck-star.is-on {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.deck-star.is-on svg {
+  fill: currentColor;
+}
+
 .seqbar-stage {
   position: relative;
   width: 100%;
   cursor: text;
   user-select: none;
+}
+
+/* …and a hand over a band, because there a press *opens that sequence*. The two
+   gestures share the strip and the cursor is what tells them apart: over a
+   sequence the press is a pick, and once the hand is travelling it is naming a
+   stretch, so `is-dragging` puts the caret back. `SequenceBar` sets both. */
+.seqbar-stage.is-over-band {
+  cursor: pointer;
+}
+
+.seqbar-stage.is-dragging {
+  cursor: text;
 }
 
 /* `pointer-events: none` is load-bearing. The canvas hangs forty pixels below
@@ -5623,6 +5664,26 @@ canvas.is-frozen {
   flex: 0 0 auto;
 }
 
+/* And its **height**, under a turn, for the same reason one step further on.
+   A square map's height follows its width through `aspect-ratio`, so pushing
+   the width down was enough; a turned map's does not — its box is a separate
+   pair of numbers, fitted per panel against how much room that panel measures
+   itself to have (`ui/turnBox.ts`). A companion is *built already turned*, so
+   that measurement happens before its wrap has been laid out: `max-height`
+   resolves to `none`, the fallback is a host size of nothing, and the fit
+   bottoms out on `MIN_TURN_HEIGHT`. What the reader saw was the right band —
+   the deck shares the distance from the diagonal — squashed into forty pixels
+   beside a first map four hundred tall.
+
+   So the same number that already sizes a companion's width sizes its height:
+   the lead's own plot, measured, which is what §16.8 pushes down rather than
+   letting each panel derive one. `--deck-plot-h` is unset until something has
+   been measured, and the panel's own fit is the fallback. */
+.deck-panel:not(.is-lead) .panel-grid.is-turned > .heatmap-wrap {
+  width: var(--deck-plot, var(--turn-width));
+  height: var(--deck-plot-h, var(--turn-height));
+}
+
 /* The lead is the session's own view — its heading, its search box, its lanes,
    its cards — re-parented into the first cell. Nothing about it is restyled:
    a panel that looked different from the map it was a moment ago would say the
@@ -5761,10 +5822,23 @@ canvas.is-frozen {
 
 /* An empty cell is a *card the size of a map*, not a slot in a list. Its whole
    job is to say "a picture goes here" before there is one, and a 2rem strip
-   would say "a control goes here" instead. `aspect-ratio` with a floor, so a
-   row of four narrow cells does not collapse into letterboxes. */
+   would say "a control goes here" instead.
+
+   The size of the maps beside it, measured, and not a square. It was a square —
+   `aspect-ratio: 1 / 1`, on the reasoning that a contact map is one — and a
+   turned map is not: it is a band along its diagonal and a fraction of the
+   height of the square it was cut from (§17.2). So pressing `+` beside a turned
+   map produced an empty card several times taller than the picture it was
+   offering to stand next to, which in a grid row sized to its tallest cell set
+   the height of the row, and every map in that row was pushed to the foot of a
+   rectangle of air. `--deck-plot-h` is the lead's own plot height as the deck
+   measured it (`panels/PanelDeck.ts`'s `align`), which is the same number that
+   already sizes a companion's map — so the card is the size of the thing it
+   stands in for whatever shape that is. The square is the fallback for the one
+   frame before anything has been measured. */
 .deck-vacant {
-  min-height: 10rem;
+  min-height: 6rem;
+  height: var(--deck-plot-h);
   aspect-ratio: 1 / 1;
   max-height: 60vh;
 }
@@ -6017,6 +6091,18 @@ canvas.is-frozen {
 .analysis-chip.is-failed {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+/* How far through a *batch* — `2 of 5` — beside how far through the map the
+   percentage is about. Quieter than the chip it stands next to, because the two
+   are not the same kind of fact: the percentage moves several times a second and
+   is the thing being watched, and this changes once per map and is the thing
+   that stops a fourth fill-and-reset reading as a stall. Filled rather than
+   outlined so the pair reads as one control at two weights. */
+.analysis-batch {
+  border-color: transparent;
+  background: var(--bg-sunken);
+  font-variant-numeric: tabular-nums;
 }
 
 /* A determinate ring would need an angle per frame and a repaint of the column

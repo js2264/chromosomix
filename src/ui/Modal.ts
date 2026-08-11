@@ -25,6 +25,14 @@ export interface ModalProps {
   onClose?(): void
 }
 
+/**
+ * What counts as a control the caret may land on, in document order.
+ *
+ * `:not([disabled])` because a dialog whose first button is greyed out is a
+ * dialog that opens with the caret nowhere a key can reach.
+ */
+const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]'
+
 export class Modal {
   private readonly props: ModalProps
   private closed = false
@@ -37,6 +45,7 @@ export class Modal {
     this.previouslyFocused = document.activeElement as HTMLElement | null
     const close = (): void => this.close()
 
+    const body = props.body(close)
     const panel = el(
       'div',
       { class: `modal-panel${props.variant === undefined ? '' : ` ${props.variant}`}` },
@@ -46,7 +55,7 @@ export class Modal {
         el('h2', { class: 'modal-title', text: props.title }),
         iconButton('x', 'Close (Esc)', close, { class: 'btn-close', size: 16 }),
       ),
-      props.body(close),
+      body,
     )
     panel.setAttribute('role', 'dialog')
     panel.setAttribute('aria-modal', 'true')
@@ -67,8 +76,17 @@ export class Modal {
     window.addEventListener('keydown', this.onKeyDown, true)
     document.body.appendChild(this.root)
 
-    const focusable = panel.querySelector<HTMLElement>('input, select, button, [tabindex]')
-    focusable?.focus()
+    // The **body's** first control, and the panel's only if the body has none.
+    //
+    // A selector list answers in document order, and the close button is in the
+    // header — so "the first focusable in the panel" was always the ✕, on every
+    // dialog in the application. The caret landed on Close, Enter dismissed
+    // instead of submitting, and a keyboard user opening the file dialog had to
+    // Tab past the one control that throws their work away to reach the box they
+    // came for.
+    const first =
+      body.querySelector<HTMLElement>(FOCUSABLE) ?? panel.querySelector<HTMLElement>(FOCUSABLE)
+    first?.focus()
   }
 
   close(): void {

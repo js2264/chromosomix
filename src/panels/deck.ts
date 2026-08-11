@@ -21,16 +21,31 @@
 import { LANE_EDGES, type LaneEdge } from '../annotations/types'
 
 /**
- * How many maps may be on screen at once, lead included.
+ * A **backstop** on how many maps may be on screen at once, lead included.
  *
- * The same argument `MAX_SESSIONS` makes, at a smaller number, because these
- * are all live at once rather than one at a time: every panel is a worker, an
- * h5wasm instance and — for a whole-file view — a dense block held whole.
- * Six is more than any figure has panels in it and well short of what makes a
- * tab unresponsive. Above it, {@link panelBudgetBytes} would in any case be
- * refusing the reads.
+ * It was six, and six was a judgement about how many maps are useful rather
+ * than about what the machine can do — which is the wrong kind of limit to put
+ * on a grid a reader draws. A deck is a figure, and a figure is however many
+ * panels the figure has: a row of eight replicates, a 4 × 4 of every MAG in a
+ * community, a column down one chromosome. Each of those is a legitimate thing
+ * to want and none of them fits in six.
+ *
+ * The real limit was never this number. Every panel is a worker, an h5wasm
+ * instance and — for a whole-file view — a dense block held whole, and
+ * {@link panelBudgetBytes} already divides this tab's budget by the panel count,
+ * so the *reads* get smaller as the deck grows and refuse when a share will not
+ * do. That is a limit measured in bytes on the machine in front of the reader,
+ * which is the only honest one; a fixed count says no to a sixteenth 400-bin
+ * panel on a workstation and yes to a sixth whole-genome one on a phone.
+ *
+ * So what is left here is a backstop against arithmetic rather than a policy: a
+ * hand-edited hash asking for ten thousand cells should be refused before ten
+ * thousand workers are started. 64 is an 8 × 8 grid — past any figure and past
+ * the point where a panel is a picture rather than a swatch — and every press
+ * that reaches it is still answered in the deck's own bar rather than with an
+ * error screen.
  */
-export const MAX_PANELS = 6
+export const MAX_PANELS = 64
 
 /**
  * The stand-in a link carries where a local file was.

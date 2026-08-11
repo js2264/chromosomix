@@ -5,7 +5,7 @@
    "coverage": "full",
    "description": "fixed 1 kb bins, genome-then-length, 10 MAGs + __unbinned__ with real contigs",
    "expect": "accept",
-   "fixture_bytes": 74498,
+   "fixture_bytes": 78146,
    "golden": "basic_metacool.json",
    "golden_bytes": 164507,
    "kind": "metacool",
@@ -15,38 +15,17 @@
    "coverage": "full",
    "description": "basic plus /genomes metadata columns (taxonomy, completeness, …) and /contigs extras",
    "expect": "accept",
-   "fixture_bytes": 78669,
+   "fixture_bytes": 82317,
    "golden": "metadata_metacool.json",
    "golden_bytes": 171691,
    "kind": "metacool",
    "name": "metadata.metacool"
   },
   {
-   "coverage": "partial",
-   "description": "non-ASCII genome AND contig names; S<n> columns sized by encoded byte length",
-   "expect": "accept",
-   "fixture_bytes": 43248,
-   "golden": "utf8_metacool.json",
-   "golden_bytes": 5424,
-   "kind": "metacool",
-   "name": "utf8.metacool",
-   "note": "cooler.Cooler() cannot open this file — cooler/core/_tableops.py does dset[lo:hi].astype('U'), an ASCII decode, on /chroms/name. The golden therefore carries raw tables and attributes only."
-  },
-  {
-   "coverage": "full",
-   "description": "non-ASCII /genomes/name with ASCII contig names — the UTF-8 fixture that still has a full Python oracle",
-   "expect": "accept",
-   "fixture_bytes": 74231,
-   "golden": "utf8_genomes_metacool.json",
-   "golden_bytes": 164926,
-   "kind": "metacool",
-   "name": "utf8_genomes.metacool"
-  },
-  {
    "coverage": "full",
    "description": "created with --drop-unassigned: no __unbinned__ row, genome 0 is a real MAG",
    "expect": "accept",
-   "fixture_bytes": 70773,
+   "fixture_bytes": 74485,
    "golden": "dropped_metacool.json",
    "golden_bytes": 158665,
    "kind": "metacool",
@@ -56,7 +35,7 @@
    "coverage": "full",
    "description": "product of `metacooler binnify`: pixels/count is int64, bins are 2 kb",
    "expect": "accept",
-   "fixture_bytes": 67156,
+   "fixture_bytes": 70452,
    "golden": "int64_metacool.json",
    "golden_bytes": 118503,
    "kind": "metacool",
@@ -66,7 +45,7 @@
    "coverage": "full",
    "description": "float64 pixels/count preserved by resolve_count_dtype (correction #2)",
    "expect": "accept",
-   "fixture_bytes": 79071,
+   "fixture_bytes": 82719,
    "golden": "floatcount_metacool.json",
    "golden_bytes": 188273,
    "kind": "metacool",
@@ -118,7 +97,7 @@
    "coverage": "full",
    "description": "contig-ordering=fasta: genomes are not contiguous in bin space",
    "expect": "refuse:bad-ordering",
-   "fixture_bytes": 76282,
+   "fixture_bytes": 79930,
    "golden": "fasta_order_metacool.json",
    "golden_bytes": 3512,
    "kind": "metacool",
@@ -128,7 +107,7 @@
    "coverage": "full",
    "description": "DpnII fragment bins: bin-type='variable', bin-size stored as the string 'null'",
    "expect": "refuse:variable-bins",
-   "fixture_bytes": 125545,
+   "fixture_bytes": 129193,
    "golden": "variable_metacool.json",
    "golden_bytes": 3481,
    "kind": "metacool",
@@ -205,7 +184,7 @@
    "note": "Optional /genomes columns carry NaN for any genome absent from the user's --genomes table (__unbinned__ always is, since /genomes rows are derived from the contigs table and the table only left-joins). JSON has no NaN, so these goldens encode it as null; the JS reader will see a real NaN and must treat the two as equal. metadata.metacool is the fixture with this shape."
   },
   "string_decoding": {
-   "note": "h5wasm decodes fixed-length 'A<n>' string datasets as Latin-1, not UTF-8: /contigs/name in utf8.metacool comes back as 'contig_Ã±_04' where the file holds 'contig_ñ_04'. Dataset.value is therefore unusable for name columns — read the raw bytes and decode with TextDecoder('utf-8'), stripping trailing NULs (spec §6.2). utf8.metacool and utf8_genomes.metacool exist to fail loudly on this."
+   "note": "h5wasm decodes fixed-length 'A<n>' string datasets as Latin-1, not UTF-8, so Dataset.value is unusable for any string column — read the raw bytes and decode with TextDecoder('utf-8'), stripping trailing NULs (spec §6.2). Names are ASCII by construction (metacooler refuses anything else, since /contigs is cooler's /chroms), but an extra /genomes column is not: an accented taxonomy is legal metadata cooler never sees, and it is what this note is about."
   }
  },
  "unbinned_name": "__unbinned__"

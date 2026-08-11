@@ -20,14 +20,26 @@ import {
   goldenEquals,
   goldenMaps,
   manifest,
+  staleFixtures,
   withMap,
   withoutKeys,
   requireGenomes,
 } from './_golden'
 
-const MAPS = goldenMaps({ full: true })
+const MAPS = goldenMaps()
 
 describe('every accepted map reproduces its golden', () => {
+  it('the goldens describe the fixtures that are actually here', () => {
+    // Before any comparison, because a skew between the two halves of
+    // `npm run fixtures` shows up as one deep comparison failing somewhere in
+    // the middle of an otherwise green suite — which reads as a bug in the
+    // reader and is not one. See `staleFixtures`.
+    expect(
+      staleFixtures(),
+      'Fixtures and goldens were built by different runs. Rebuild both: `npm run fixtures`.',
+    ).toEqual([])
+  })
+
   it('there is more than one map to check', () => {
     // Guards against a silently empty table: a broken helper would otherwise
     // make this whole file pass by running nothing.

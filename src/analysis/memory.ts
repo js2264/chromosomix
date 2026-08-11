@@ -48,7 +48,13 @@ export function readAnalysisMemory(uri: string): AnalysisMemory {
   return out
 }
 
-/** The parameters `task` was last run with on `uri`, or `null`. */
+/**
+ * The parameters `task` was last configured with on `uri`, or `null`.
+ *
+ * What `ui/AnalysisDrawer.ts` opens a task's form from, merged key by key over
+ * the descriptor's defaults and validated there — which is the only place that
+ * knows what shape each parameter is meant to be.
+ */
 export function recallParams(uri: string, task: string): Params | null {
   return readAnalysisMemory(uri)[task] ?? null
 }
@@ -63,21 +69,4 @@ export function rememberParams(uri: string, task: string, params: Params): void 
   const all = readAnalysisMemory(uri)
   all[task] = params
   remember(uri, ANALYSIS_SCOPE, all)
-}
-
-/**
- * Merge stored parameters over a task's defaults.
- *
- * Defaults first, so a task that gained a parameter since the session was
- * written gets the new one at its default instead of `undefined`; stored values
- * second, but only for keys the task still has, so one that *lost* a parameter
- * does not carry a dead key into its provenance line.
- */
-export function mergeParams(defaults: Params, stored: Params | null): Params {
-  if (stored === null) return defaults
-  const out: Record<string, Params[string]> = { ...defaults }
-  for (const key of Object.keys(defaults)) {
-    if (key in stored) out[key] = stored[key]
-  }
-  return out
 }

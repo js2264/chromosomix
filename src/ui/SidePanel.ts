@@ -130,7 +130,16 @@ export const ANALYSIS_PANEL: SidePanelSpec = {
   keys: 'j',
 }
 
-/** Transform, colormap, clip, overlays and export — whatever the view offers. */
+/**
+ * Transform, colormap, clip, overlays and export — whatever the view offers.
+ *
+ * A **plot** rather than a panel chevron, which is what this used to carry. Its
+ * two siblings are marked by what they hold — `layers` for the annotation
+ * stack, `beaker` for what can be computed — and a left-pointing chevron said
+ * only *this thing folds*, which every one of the three does and which the
+ * arrow's direction already showed. What is behind it is the picture's own
+ * controls, so the mark is the picture.
+ */
 export const AESTHETICS_PANEL: SidePanelSpec = {
   key: 'metacooler-viewer:aesthetics-collapsed',
   title: 'Aesthetics',
@@ -139,8 +148,8 @@ export const AESTHETICS_PANEL: SidePanelSpec = {
   defaultWidth: 256,
   minWidth: 200,
   maxWidth: 480,
-  closeIcon: 'panel-right-close',
-  openIcon: 'panel-right-open',
+  closeIcon: 'chart-spline',
+  openIcon: 'chart-spline',
   keys: 'm',
 }
 

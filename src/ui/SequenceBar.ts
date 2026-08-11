@@ -328,6 +328,7 @@ export class SequenceBar {
       x: 0,
       y: 0,
       width,
+      height: this.height,
       toPixel: (unit: number) => scale.toPixel(unit),
       axis: this.axis,
       domain: scale.domain,
@@ -442,6 +443,7 @@ export class SequenceBar {
       if (!moved && Math.abs(x - down) < DRAG_SLOP) return
       moved = true
       this.drag = { from: down, to: x }
+      this.syncCursor()
       this.schedule()
     }
     const onUp = (event: MouseEvent): void => {
@@ -452,6 +454,7 @@ export class SequenceBar {
       host?.removeEventListener('mousemove', onMove)
       host?.removeEventListener('mouseup', onUp)
       this.drag = null
+      this.syncCursor()
       this.schedule()
       if (moved && Math.abs(to - from) >= DRAG_MIN) this.dragged(from, to)
       else this.clicked(from)
@@ -464,11 +467,13 @@ export class SequenceBar {
       const x = at(event)
       if (this.hover === x) return
       this.hover = x
+      this.syncCursor()
       this.schedule()
     })
     stage.addEventListener('mouseleave', () => {
       if (this.hover === null) return
       this.hover = null
+      this.syncCursor()
       this.schedule()
     })
 
@@ -503,6 +508,7 @@ export class SequenceBar {
       down = null
       moved = false
       this.drag = null
+      this.syncCursor()
       host?.removeEventListener('mousemove', onMove)
       host?.removeEventListener('mouseup', onUp)
       this.schedule()
@@ -513,6 +519,28 @@ export class SequenceBar {
       host?.removeEventListener('mousemove', onMove)
       host?.removeEventListener('mouseup', onUp)
     })
+  }
+
+  /**
+   * What the pointer says the press would do.
+   *
+   * A hand over a band, because a press there opens *that sequence* — which is
+   * the gesture a reader arrives with, and a caret over a row of named blocks
+   * says nothing about it. The caret is still right once the hand is travelling:
+   * a drag names a stretch, which is what selecting text does, and swapping back
+   * mid-gesture is what keeps the two from reading as one control that cannot
+   * make up its mind.
+   *
+   * Written as classes rather than as an inline style so the two answers live in
+   * the stylesheet beside the base cursor they qualify, and so a test can read
+   * which one is in force without parsing a style attribute.
+   */
+  private syncCursor(): void {
+    const dragging = this.drag !== null
+    const overBand =
+      !dragging && this.hover !== null && this.axis.segmentAt(this.scale().toUnit(this.hover)) !== null
+    this.stage.classList.toggle('is-dragging', dragging)
+    this.stage.classList.toggle('is-over-band', overBand)
   }
 
   /**

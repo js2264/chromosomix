@@ -68,6 +68,32 @@ export interface DiamondOptions {
 }
 
 /**
+ * Cells of a diamond that `ignoreDiags` leaves countable.
+ *
+ * The diamond at bin `i` is `[i − w, i) × [i, i + w)`, so its separations run
+ * `1 … 2w − 1`, with `d` cells at separation `d` up to `w` and `2w − d` past it.
+ * `ignoreDiags` drops every cell below it, and at `2w` there is nothing left at
+ * all: **a window is only as wide as its widest separation**, and asking to
+ * ignore more diagonals than the diamond spans empties it.
+ *
+ * Counted rather than solved for, because the closed form has three regimes and
+ * this is `2w` additions once per call. The version it replaces had two of the
+ * three: it capped the ignored triangle at `w(w + 1) / 2` and so kept reporting
+ * a positive cell count for a diamond with nothing countable in it. `minValid`
+ * is a fraction *of this number*, so the error did not stop at bookkeeping —
+ * past `ignoreDiags = w + 1` the threshold was computed against cells that could
+ * never be counted, and bins with a perfectly good diamond were scored `NaN`;
+ * past `2w` every bin was, and the track came back empty with nothing said.
+ */
+export function diamondCells(window: number, ignoreDiags: number): number {
+  const w = Math.max(1, Math.trunc(window))
+  const ignore = Math.max(0, Math.trunc(ignoreDiags))
+  let cells = 0
+  for (let d = Math.max(1, ignore); d < 2 * w; d++) cells += d <= w ? d : 2 * w - d
+  return cells
+}
+
+/**
  * The diamond sum at every bin of one contig, or `NaN` where there is no answer.
  *
  * The diamond at bin `i` is the rectangle of upstream rows against downstream
@@ -86,11 +112,10 @@ export function diamondSums(square: ContigSquare, options: DiamondOptions): Floa
   const w = Math.max(1, Math.trunc(options.window))
   const ignore = Math.max(0, Math.trunc(options.ignoreDiags ?? 0))
   const out = new Float64Array(size).fill(Number.NaN)
-  // The rectangle, less the triangle the ignored diagonals cut off its inner
-  // corner: offsets `1 … ignore - 1` contribute `1 + 2 + … + (ignore - 1)`
-  // cells, capped at the rectangle itself for a window narrower than the cut.
-  const cut = Math.min(w * w, (Math.min(ignore, w + 1) * Math.max(0, Math.min(ignore, w + 1) - 1)) / 2)
-  const cells = w * w - cut
+  // The rectangle, less the cells the ignored diagonals take off its inner
+  // corner — counted, because the triangle is only a triangle while the cut is
+  // narrower than the window. See {@link diamondCells}.
+  const cells = diamondCells(w, ignore)
   if (cells <= 0 || size === 0) return out
   const needed = Math.max(1, Math.ceil(cells * options.minValid))
 

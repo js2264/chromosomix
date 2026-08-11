@@ -28,6 +28,7 @@
  * only such module *there* is untouched.
  */
 
+import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { MetaCooler } from '../../metacooler/MetaCooler'
 import type { ByteSource } from '../../types'
@@ -161,6 +162,14 @@ async function handleRun(
     inputs: request.inputs,
     cancelled: () => cancelled.has(id),
     throwIfCancelled: () => {
+      if (cancelled.has(id)) throw abortError()
+    },
+    // The event loop first and the flag second, in that order: the whole point
+    // is to let the `cancel` message that is already queued be *delivered*, and
+    // reading the flag before yielding would read it exactly as stale as
+    // `throwIfCancelled` does. See `analysis/job.ts`.
+    breathe: async () => {
+      await yieldToEventLoop()
       if (cancelled.has(id)) throw abortError()
     },
     progress: (done, total, note) => post({ type: 'progress', id, done, total, note }),

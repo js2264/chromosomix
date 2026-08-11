@@ -33,8 +33,10 @@ import {
   cellAt,
   isTurnable,
   positionAt,
+  reachForRows,
   rotateBlock,
   rowForSeparation,
+  rowsForReach,
   separationAt,
   separationBp,
   separationCoords,
@@ -343,6 +345,59 @@ describe('how deep the band opens', () => {
   it('has something to draw even for a block two bins across', () => {
     expect(turnDepthFor({ nrows: 2, ncols: 2 }, null)).toBe(1)
     expect(turnDepthFor({ nrows: 1, ncols: 1 }, null)).toBe(1)
+  })
+
+  /**
+   * The currency a **deck** shares, and why it is a distance rather than a
+   * depth.
+   *
+   * A band is cut as deep as the box it is drawn in has rows for, which is the
+   * right rule for one map and cannot work for several: a grid lays its cells
+   * out over more than one frame, so two panels asking their own boxes at their
+   * own moments cut two different bands — and the deck's lock then refused to
+   * move them together, in a sentence blaming the files' resolutions for what
+   * was a layout race. The fix is the one the lock itself already makes: share
+   * the *distance*, and let each panel convert it through its own bin size.
+   */
+  describe('as a distance every panel can convert', () => {
+    it('is the row count in bins, which is the lattice’s own identity', () => {
+      // A row is half a bin of height and a whole bin of separation
+      // (`separationForRows`), so a band of 400 rows on a 9 kb grid reaches
+      // 3.6 Mb from the diagonal.
+      expect(reachForRows(400, 9000)).toBe(3_600_000)
+      expect(rowsForReach(3_600_000, 9000)).toBe(400)
+    })
+
+    it('round-trips at whatever bin size the panel is on', () => {
+      for (const binsize of [1000, 5000, 9000, 250_000]) {
+        expect(rowsForReach(reachForRows(137, binsize), binsize)).toBe(137)
+      }
+    })
+
+    it('puts two panels of unequal resolution at the same distance', () => {
+      // The case the shared *depth* could never serve: 400 rows means 3.6 Mb on
+      // one grid and 400 kb on the other, so a deck that shared the row count
+      // would have drawn the two bands to wildly different reaches and called it
+      // one navigation.
+      const reach = reachForRows(400, 9000)
+      expect(rowsForReach(reach, 1000)).toBe(3600)
+      expect(reachForRows(rowsForReach(reach, 1000), 1000)).toBe(reach)
+    })
+
+    it('rounds rather than floors, so neither side loses a bin', () => {
+      // The two panels are converting the same number through different sizes,
+      // and a floor on both would drift them apart by up to a bin each.
+      expect(rowsForReach(3_599_999, 9000)).toBe(400)
+      expect(rowsForReach(3_604_000, 9000)).toBe(400)
+    })
+
+    it('is never nothing, on `turnDepthFor`’s rule', () => {
+      expect(rowsForReach(0, 9000)).toBe(1)
+      expect(rowsForReach(-1, 9000)).toBe(1)
+      // A bin size that never arrived must not divide by zero.
+      expect(rowsForReach(12, 0)).toBe(12)
+      expect(reachForRows(3, 0)).toBe(3)
+    })
   })
 
   it('produces a block whose rows are the depth, plus the diagonal', () => {

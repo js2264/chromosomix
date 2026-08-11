@@ -91,6 +91,8 @@ import {
   rotateBlock,
   rowForSeparation,
   separationCoords,
+  reachForRows,
+  rowsForReach,
   separationForRows,
   turnDepthFor,
   turnedAxis,
@@ -463,8 +465,19 @@ export interface MatrixPanelOptions {
  */
 export interface PanelGeometry {
   lanes: Record<LaneEdge, number>
-  /** The plot's width in CSS pixels; it is square. */
+  /** The plot's width in CSS pixels. */
   plot: number
+  /**
+   * The plot's height in CSS pixels, which is **not** its width.
+   *
+   * It was, for as long as the only picture was a square. A turned map is a band
+   * along its diagonal and is a fraction of the height of the square it came out
+   * of (§17.2), so a deck that sized anything from the width alone sized it for
+   * a picture that is not on screen — and the thing it sized was the empty cell,
+   * which then set the height of its whole row and pushed every map in that row
+   * to the foot of a rectangle of air.
+   */
+  plotHeight: number
 }
 
 export interface TurnPresentation {
@@ -791,6 +804,14 @@ export class MatrixPanel {
    * baseline pass behind a wheel click. Only the geometry has to be redone.
    */
   private square: DenseMatrix | null = null
+  /**
+   * The distance from the diagonal a **deck** has asked every panel to reach, in
+   * base pairs, or `null` for a map that answers to its own box.
+   *
+   * `null` is the ordinary state and is every map outside a deck. See
+   * {@link setTurnReach} for why a deck cannot leave this to the box.
+   */
+  private deckReach: number | null = null
   /** The neutral value of what is currently drawn, or `null` for a count field. */
   private neutral: number | null = null
   /**
@@ -1468,6 +1489,13 @@ export class MatrixPanel {
     )
     this.refineButton = refineButton
     this.paintRefine(refineEnabled())
+    // **Not offered, for now.** The switch is built, painted and subscribed
+    // exactly as before — the preference is global, it is still honoured by
+    // every panel, and the palette and a stored `on` still reach it — it simply
+    // is not in the row. Built rather than skipped so that putting it back is
+    // one line rather than an unpicking, and so the machinery below cannot rot
+    // while it is out of sight.
+    const OFFER_REFINE = false
     // A global preference with several panels on screen: a deck of five maps
     // that disagreed about whether the zoom reads would be five answers to one
     // question. Unsubscribed with the panel.
@@ -1477,7 +1505,7 @@ export class MatrixPanel {
       // tells them a different thing.
       this.schedule()
     })
-    picture.push(refineButton)
+    if (OFFER_REFINE) picture.push(refineButton)
 
     const turn = options.turn
     if (turn !== undefined && turn.onChange !== undefined) {
@@ -2119,17 +2147,31 @@ export class MatrixPanel {
   }
 
   /**
-   * Light the turn toggle, and point its arrow the way the next press will go.
+   * Point the turn control at the picture the next press produces.
    *
-   * Both halves matter and only one of them is decoration: `aria-pressed` is
-   * what the stylesheet colours the button by and what a screen reader says, and
-   * the arrow is what a reader sees before they have pressed anything.
+   * **A swap, not a light**, and that is the whole of what changed here. Its
+   * mark is the *destination*: a square map offers a triangle, and a turned one
+   * offers a square. Lighting it as well said the opposite thing at the same
+   * time — a turned map showed a square in accent blue, which reads as "square
+   * is on" beside a band along a diagonal, and the reader has to press it to
+   * find out which of the two the button meant. The neighbouring toggles are
+   * lights and are right to be: `O/E` keeps one mark and changes its state, so
+   * the tint is the only thing that can carry it.
+   *
+   * `aria-pressed` is what the stylesheet tints by, so it is the thing that has
+   * to go — and with it the state has to be said in words instead, since a
+   * screen reader was reading it off exactly that attribute. The label is the
+   * button's whole meaning either way, which is why it is written here rather
+   * than left at the construction-time hint.
    */
   private paintTurn(on: boolean): void {
     const button = this.turnButton
     if (button === null) return
-    button.setAttribute('aria-pressed', String(on))
-    button.classList.toggle('is-on', on)
+    button.removeAttribute('aria-pressed')
+    button.classList.remove('is-on')
+    const label = on ? 'Draw this map square again' : 'Turn this map 45°, onto its diagonal'
+    button.title = `${label}. ${TURN_HINT}`
+    button.setAttribute('aria-label', label)
     button.replaceChildren(icon(on ? TURN_ICONS.on : TURN_ICONS.off, { size: 15 }))
   }
 
@@ -4416,9 +4458,65 @@ export class MatrixPanel {
    * a band cannot be deeper than the block has cells to fill.
    */
   private turnDepth(data: MatrixResult): number {
+    // A deck's distance, where a deck has set one. Every panel of a deck cuts
+    // the *same* band or the pictures are not comparable, and the box is the one
+    // input that cannot deliver that: the cells of a grid are laid out over
+    // several frames, so two panels asking their own boxes at their own moments
+    // get two answers, and neither is wrong. See {@link setTurnReach}.
+    const asked = this.deckReach
+    if (asked !== null) return turnDepthFor(data, rowsForReach(asked, this.options.binsize) - 1)
     const rows = this.plotRows()
     return turnDepthFor(data, separationForRows(rows) - 1)
   }
+
+  /**
+   * How far this band reaches from the diagonal, in base pairs, or `null` for a
+   * map that is not turned.
+   *
+   * Base pairs, and the same expression the deck's lock compares
+   * (`panels/PanelDeck.ts`'s `lockNote`), so a deck that hands this number to
+   * every panel makes that comparison pass by construction rather than by
+   * hoping two boxes were measured on the same frame. A row of a turned map is
+   * half a bin of *height* and a whole bin of *separation* — hence the two —
+   * which is `render/rotate.ts`'s lattice seen from here.
+   */
+  turnReach(): number | null {
+    const turned = this.turned
+    if (turned === null) return null
+    return reachForRows(turned.nrows, this.options.binsize)
+  }
+
+  /**
+   * Cut this band to reach `bp` from the diagonal, whatever the box wants.
+   *
+   * The deck making one distance out of N pictures, and the reason it has to be
+   * *told* rather than derived: {@link turnDepth} asks the panel's own box how
+   * many rows fit, and a deck lays its cells out over several frames — a
+   * companion that measured while the grid was still settling cut a band to a
+   * height its cell had for one frame, and {@link syncTurnDepth} only ever
+   * grows a band, so nothing brought the two back together. What the reader saw
+   * was two bands of visibly different depths, the deck's own lock refusing to
+   * move them together, and a refusal blaming the files' resolutions for what
+   * was a layout race — cured, mysteriously, by turning the deck off and on,
+   * which re-cuts both bands from boxes that have by then settled.
+   *
+   * `null` gives the panel its box back, which is what a map that has left a
+   * deck should have.
+   */
+  setTurnReach(bp: number | null): void {
+    const asked = bp === null || !Number.isFinite(bp) || bp <= 0 ? null : bp
+    if (asked === this.deckReach) return
+    this.deckReach = asked
+    const data = this.data
+    if (this.turned === null || this.square === null || data === null) return
+    this.recutBand(
+      turnDepthFor(
+        data,
+        (asked === null ? this.plotRows() : rowsForReach(asked, this.options.binsize)) - 1,
+      ),
+    )
+  }
+
 
   /**
    * How many cells tall the plot is, at the zoom in force.
@@ -4470,7 +4568,29 @@ export class MatrixPanel {
     // of the several the rest of the gesture would have asked for. Bounded by
     // the block, which is `turnDepthFor`'s clamp and the reason this cannot run
     // away: past the whole triangle there is nothing left to cut.
-    const cut = turnDepthFor(data, wanted * 2)
+    //
+    // Not over-cut under a deck's distance: there the depth is a number every
+    // panel was given rather than an appetite this one has, and reaching twice
+    // as far as it says is exactly the disagreement {@link setTurnReach} exists
+    // to end.
+    this.recutBand(this.deckReach === null ? turnDepthFor(data, wanted * 2) : wanted)
+  }
+
+  /**
+   * Re-cut the band to `cut` bins of separation, and move everything measured
+   * from it.
+   *
+   * A *reshape* rather than a re-read or a re-derive: the picture is of the same
+   * place at the same zoom over the same stretch of genome, and only the number
+   * of rows behind it has changed. Shared by the per-frame sync above and by the
+   * deck's {@link setTurnReach}, which is what keeps a band cut one way from
+   * being re-labelled the other.
+   */
+  private recutBand(cut: number): void {
+    const turned = this.turned
+    const square = this.square
+    const data = this.data
+    if (turned === null || square === null || data === null) return
     const next = rotateBlock(
       { ...data, values: square.values },
       {
@@ -5009,6 +5129,30 @@ export class MatrixPanel {
     this.schedule()
   }
 
+  /**
+   * The clip this panel is **actually drawing with**, auto rule included.
+   *
+   * The difference from {@link scale} is the whole of what "fix all scales"
+   * needs, and it is the difference between a setting and a picture. `scale`
+   * reports what the *reader* has set, and `NaN` is how it spells *nobody has
+   * set one* — which is the state of every map that has not had its clip nudged,
+   * which is most of them. A deck asked for one map's numbers and was handed two
+   * `NaN`s; the ramp and the transform travelled and the range did not, so the
+   * press appeared to do nothing at all.
+   *
+   * What the rasteriser resolved, then, which is the same pair the colourbar
+   * prints and the clip boxes offer — §7.1's rule, run once per read
+   * (`render/heatmap.ts`'s `autoRange`). Handing *those* to another panel pins
+   * it, which is exactly what a reader means by fixing a deck's scales: the
+   * numbers under the two keys are then the same numbers.
+   *
+   * Falls back to the setting where nothing has been drawn, because there is no
+   * resolved answer yet and inventing one would be worse than saying `NaN`.
+   */
+  shownScale(): ColorScale {
+    return this.data === null ? this.scale() : this.heatmap.effectiveScale
+  }
+
   private rescale(): void {
     this.heatmap.setScale(this.scale())
     this.options.onScaleChange?.({
@@ -5287,6 +5431,7 @@ export class MatrixPanel {
         left: this.roomOn('left'),
       },
       plot: this.heatmap.cssSize.width,
+      plotHeight: this.heatmap.cssSize.height,
     })
   }
 
@@ -5350,6 +5495,21 @@ export class MatrixPanel {
    * at the far end — every turned panel of a deck showing half of what the one
    * beside it was showing, under a bar that says one navigation.
    */
+  /**
+   * Whether this panel has a block to be compared with.
+   *
+   * {@link cellCount} answers `1 × 1` for a panel that has not read one, because
+   * a divisor of zero is worse than a divisor of one — but *one cell* is also a
+   * legitimate answer, so the two cannot be told apart from outside. The deck's
+   * lock has to: comparing a companion against a lead that is still reading
+   * produced "this block spans 16.6 Mb × 16.6 Mb where the first map spans
+   * 1.0 kb × 1.0 kb", which is one bin of the lead's binsize dressed up as a
+   * measurement — and the sentence went on to blame the sequences.
+   */
+  get hasBlock(): boolean {
+    return this.data !== null
+  }
+
   cellCount(): { rows: number; cols: number } {
     const turned = this.turned
     if (turned !== null) return { rows: turned.nrows, cols: turned.ncols }

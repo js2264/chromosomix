@@ -41,14 +41,19 @@ import { EXPECTED_TASK } from "./tasks/ps";
 import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
 
 export const TASKS: readonly AnalysisTask[] = [
-  EXPECTED_TASK,
+  // The map group reads outward from the axis: what every bin *has* first
+  // (coverage and the marginals), then how contact falls away from it (P(s)),
+  // then one locus's slice of that decay (4C), then the domains it resolves
+  // into (insulation), then the compartments those domains sit in. Each is a
+  // question the one before it makes it sensible to ask.
   COVERAGE_TASK,
-  INSULATION_TASK,
+  EXPECTED_TASK,
   FOURC_TASK,
+  INSULATION_TASK,
+  COMPARTMENTS_TASK,
+  CID_TASK,
   METAPLOT_TASK,
   APA_TASK,
-  CID_TASK,
-  COMPARTMENTS_TASK,
   TRACK_CORRELATION_TASK,
   OVERLAP_TASK,
   MAG_QC_TASK,

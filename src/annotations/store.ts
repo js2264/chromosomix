@@ -207,6 +207,49 @@ export class AnnotationStore {
   }
 
   /**
+   * Put a snapshot of lanes back, for the tracks that came back with them.
+   *
+   * What a **reopen** needs, and the reason it needs it is {@link begin}: every
+   * row handed to that function is placed on the lead, which is exactly right
+   * for an import and exactly wrong for a row that is *returning*. A change of
+   * resolution is a fresh open — so is re-dropping the file, so is following a
+   * link into another entry — and every track in the session is begun again
+   * around it. Without this, a deck of four maps each carrying its own bigWig
+   * came back with all four stacked on the first one, and a track that had lived
+   * only on a companion arrived on the lead, which is a map it was never on.
+   *
+   * **Reconciled, not added to.** A snapshot applied on top of `begin`'s lead
+   * placement would leave every track on the lead *as well as* where it belongs,
+   * which on a deck of four is the same picture four times. So a track whose
+   * snapshot does not name the lead is taken off it.
+   *
+   * Tracks the snapshot does not mention keep whatever the store gave them: a
+   * row that did not come back — a `computed` one, a `detached` one — is not a
+   * row this can say anything about.
+   */
+  restoreLanes(lanes: readonly Lane[]): void {
+    const wanted = new Map<string, Lane[]>()
+    for (const lane of lanes) {
+      const held = wanted.get(lane.track)
+      if (held === undefined) wanted.set(lane.track, [lane])
+      else held.push(lane)
+    }
+    let moved = false
+    for (const [track, placements] of wanted) {
+      if (!this.items.some((row) => row.id === track)) continue
+      if (!placements.some((lane) => lane.map === LEAD_MAP)) {
+        this.lanes = unplace(this.lanes, track, LEAD_MAP)
+        moved = true
+      }
+      for (const lane of placements) {
+        this.lanes = place(this.lanes, track, lane.map, lane.placement)
+        moved = true
+      }
+    }
+    if (moved) this.changed()
+  }
+
+  /**
    * Drop lanes whose map is gone.
    *
    * Reconciled against the deck rather than driven by an event, for the reason

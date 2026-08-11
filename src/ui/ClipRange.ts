@@ -117,10 +117,22 @@ export class ClipRange {
    * two-number control needs.
    */
   private fromBox(which: 'low' | 'high', box: HTMLInputElement): void {
-    const typed = Number(box.value)
+    // `''` and not `Number('')`, which is `0`. A `type="number"` box reports an
+    // empty string both for a cleared box and for anything the browser could not
+    // parse — `1e`, `--`, a pasted word — and reading either as zero is how
+    // clearing a bound came to *set* one: on a log10 scale, whose values live
+    // below zero, an emptied high box silently clipped the map at 1.
+    const raw = box.value.trim()
+    const typed = raw === '' ? Number.NaN : Number(raw)
     const other = which === 'low' ? this.value.vmax : this.value.vmin
     const valid = Number.isFinite(typed) && (which === 'low' ? typed < other : typed > other)
     if (!valid) {
+      // Written straight into the box rather than through {@link paint}, which
+      // leaves a focused box alone. `change` fires on Enter with the caret still
+      // in it, so going through the guard meant the refusal was invisible for the
+      // one way of committing a value that does not move the focus — the reader
+      // was left reading a bound that is not the bound in force.
+      box.value = trimNumber(which === 'low' ? this.value.vmin : this.value.vmax)
       this.paint()
       return
     }

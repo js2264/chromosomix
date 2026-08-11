@@ -15,9 +15,18 @@ signal that the viewer is claiming support it should not claim.
 
 Raw inputs (assemblies, pairs, contig/MAG tables) are reused from the
 metacooler test-data directory rather than regenerated — they are already small,
-already checked in, and already the shape real MetaTOR output has.  The two
-inputs that do not exist there (a UTF-8 assembly and a float-count cooler) are
-synthesised into ``test/fixtures/_inputs/`` with a pinned RNG seed.
+already checked in, and already the shape real MetaTOR output has.  The one
+input that does not exist there (a float-count cooler) is synthesised into
+``test/fixtures/_inputs/``.
+
+**Nothing here has a non-ASCII name.** ``/contigs`` doubles as cooler's
+``/chroms`` and cooler decodes it with an ASCII ``.astype("U")``, so metacooler
+refuses to write such a file at all — ``check_ascii_names`` on the way in and
+``schema.validate`` on the way out.  A fixture that cannot be built from a
+documented command is a signal that the viewer is claiming support it should not
+claim, and this was that signal: the two UTF-8 fixtures had to be generated
+around the writer, and one of them carried a partial oracle because the
+reference implementation could not open it.
 
 The script is idempotent: every output is unlinked first and every CLI call
 passes ``--force`` where the command supports it.
@@ -27,8 +36,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import gzip
-import io
 import json
 import logging
 import os
@@ -42,37 +49,6 @@ DEFAULT_OUT = REPO / "test" / "fixtures"
 DEFAULT_DATA = Path("/pasteur/helix/users/jaseriza/repos/metacooler/tests/data")
 
 log = logging.getLogger("make_fixtures")
-
-# Seed for the synthetic UTF-8 pairs file. Pinned so the fixture is byte-stable
-# apart from the HDF5 creation-date attribute (see the note in make_golden.py).
-UTF8_SEED = 20260731
-UTF8_N_PAIRS = 3000
-
-# Contigs of the synthetic UTF-8 assembly: (name, length, genome).
-# Names are chosen so that the *encoded byte length* exceeds the character
-# count — that is exactly what `_str_to_hdf5` sizes the `S<n>` column by, and
-# a JS reader that slices by character would truncate mid-codepoint here.
-UTF8_CONTIGS: list[tuple[str, int, str]] = [
-    ("contig_é_00", 8000, "MAG_αβ"),
-    ("contig_µ_01", 5000, "MAG_αβ"),
-    ("contig_ü_02", 6000, "MAG_日本"),
-    ("contig_中_03", 4000, "MAG_日本"),
-    ("contig_ñ_04", 3000, "__unbinned__"),
-    ("contig_ø_05", 2000, "__unbinned__"),
-]
-
-# Genome renaming applied to build `utf8_genomes.metacool`. Contig names stay
-# ASCII there on purpose — see the module docstring of make_golden.py and the
-# `python_open` record in that fixture's golden: `cooler.Cooler` cannot open a
-# file whose *contig* names are non-ASCII, so `utf8.metacool` has no Python
-# oracle beyond its raw tables.
-UTF8_GENOME_RENAME = {
-    "MAG_01": "MAG_é_01",
-    "MAG_02": "MAG_µ_02",
-    "MAG_03": "MAG_ü_03",
-    "MAG_04": "MAG_日本_04",
-    "MAG_05": "MAG_αβ_05",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -167,68 +143,6 @@ def write_rich_genomes(src: Path, dst: Path) -> None:
             )
 
 
-def write_renamed_genomes_contigs(src: Path, dst: Path) -> None:
-    """Rewrite a contig table with non-ASCII *genome* names, ASCII contigs."""
-    with src.open(newline="", encoding="utf-8") as fh, dst.open(
-        "w", newline="", encoding="utf-8"
-    ) as out:
-        reader = csv.reader(fh, delimiter="\t")
-        header = next(reader)
-        i_contig = header.index("contig_name")
-        i_genome = header.index("genome_name")
-        out.write("contig_name\tgenome_name\n")
-        for row in reader:
-            genome = UTF8_GENOME_RENAME.get(row[i_genome], row[i_genome])
-            out.write(f"{row[i_contig]}\t{genome}\n")
-
-
-def write_utf8_inputs(inputs: Path) -> tuple[Path, Path]:
-    """Synthesise a tiny assembly whose contig *and* genome names are UTF-8."""
-    import numpy as np
-
-    contigs_tsv = inputs / "utf8_contigs.tsv"
-    with contigs_tsv.open("w", encoding="utf-8") as fh:
-        fh.write("contig_name\tgenome_name\n")
-        for name, _length, genome in UTF8_CONTIGS:
-            fh.write(f"{name}\t{genome}\n")
-
-    rng = np.random.default_rng(UTF8_SEED)
-    names = [c[0] for c in UTF8_CONTIGS]
-    lengths = {c[0]: c[1] for c in UTF8_CONTIGS}
-    by_genome: dict[str, list[str]] = {}
-    for name, _length, genome in UTF8_CONTIGS:
-        by_genome.setdefault(genome, []).append(name)
-
-    pairs = inputs / "utf8.pairs.gz"
-    # GzipFile(mtime=0) rather than gzip.open: the default stamps the current
-    # time into the gzip header, so the input file would differ byte-for-byte on
-    # every regeneration even though its contents are identical.
-    raw = gzip.GzipFile(filename=str(pairs), mode="wb", compresslevel=9, mtime=0)
-    with io.TextIOWrapper(raw, encoding="utf-8", newline="\n") as fh:
-        fh.write("## pairs format v1.0\n")
-        fh.write("#sorted: none\n")
-        fh.write("#shape: upper triangle\n")
-        fh.write("#genome_assembly: utf8_assembly\n")
-        for name, length, _genome in UTF8_CONTIGS:
-            fh.write(f"#chromsize: {name} {length}\n")
-        fh.write("#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2\n")
-        for i in range(UTF8_N_PAIRS):
-            if rng.random() < 0.75:
-                pool = by_genome[UTF8_CONTIGS[int(rng.integers(0, len(UTF8_CONTIGS)))][2]]
-            else:
-                pool = names
-            c1 = pool[int(rng.integers(0, len(pool)))]
-            c2 = (
-                pool[int(rng.integers(0, len(pool)))]
-                if rng.random() < 0.5
-                else names[int(rng.integers(0, len(names)))]
-            )
-            p1 = int(rng.integers(1, lengths[c1] + 1))
-            p2 = int(rng.integers(1, lengths[c2] + 1))
-            fh.write(f"read_{i}\t{c1}\t{p1}\t{c2}\t{p2}\t+\t+\n")
-    return contigs_tsv, pairs
-
-
 def write_float_cool(source_cool: Path, dst: Path) -> None:
     """Copy a cooler, turning its integer counts into genuinely fractional ones.
 
@@ -281,9 +195,6 @@ def build(out: Path, data: Path) -> list[dict]:
     write_minimal_contigs(contigs_1, basic_contigs)
     rich_genomes = inputs / "rich_mag_table.tsv"
     write_rich_genomes(mags_1, rich_genomes)
-    utf8_genomes_contigs = inputs / "utf8_genomes_contigs.tsv"
-    write_renamed_genomes_contigs(contigs_1, utf8_genomes_contigs)
-    utf8_contigs, utf8_pairs = write_utf8_inputs(inputs)
 
     def create_pairs(output: Path, *extra: str, contigs: Path, pairs: Path) -> None:
         run(
@@ -361,47 +272,6 @@ def build(out: Path, data: Path) -> list[dict]:
         "metacool",
         "accept",
         "basic plus /genomes metadata columns (taxonomy, completeness, …) and /contigs extras",
-    )
-
-    # -- utf8 (contig names too) --------------------------------------------
-    create_pairs(
-        out / "utf8.metacool",
-        "--bins",
-        "1000",
-        "--assembly-name",
-        "utf8_assembly",
-        contigs=utf8_contigs,
-        pairs=utf8_pairs,
-    )
-    note(
-        "utf8.metacool",
-        "metacool",
-        "accept",
-        "non-ASCII genome AND contig names; S<n> columns sized by encoded byte length",
-        golden="partial",
-        note=(
-            "cooler.Cooler() cannot open this file — cooler/core/_tableops.py "
-            "does dset[lo:hi].astype('U'), an ASCII decode, on /chroms/name. "
-            "The golden therefore carries raw tables and attributes only."
-        ),
-    )
-
-    # -- utf8, genome names only --------------------------------------------
-    create_pairs(
-        out / "utf8_genomes.metacool",
-        "--bins",
-        "1000",
-        "--assembly-name",
-        "basic_assembly",
-        contigs=utf8_genomes_contigs,
-        pairs=pairs_rep1,
-    )
-    note(
-        "utf8_genomes.metacool",
-        "metacool",
-        "accept",
-        "non-ASCII /genomes/name with ASCII contig names — the UTF-8 fixture that "
-        "still has a full Python oracle",
     )
 
     # -- dropped -------------------------------------------------------------

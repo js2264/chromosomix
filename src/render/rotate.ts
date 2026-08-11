@@ -357,6 +357,34 @@ export function separationForRows(rows: number): number {
 }
 
 /**
+ * How far a band of `rows` reaches from the diagonal, in base pairs.
+ *
+ * The same identity as {@link separationForRows} with the bin size put back in:
+ * a row is a whole bin of separation, so a band of `rows` rows reaches
+ * `rows × binsize`. Written down rather than open-coded because it is what a
+ * **deck** shares — a distance rather than a row count, exactly as the
+ * navigation lock's currency is base pairs rather than cells, so panels of
+ * unequal resolution reach the same place instead of the same number of bins
+ * (`panels/lock.ts`, `panels/PanelDeck.ts`'s `syncTurnReach`).
+ */
+export function reachForRows(rows: number, binsize: number): number {
+  return Math.max(0, Math.trunc(rows)) * (binsize > 0 ? binsize : 1)
+}
+
+/**
+ * The inverse: the rows a panel of this bin size needs to reach `bp`.
+ *
+ * At least one, on {@link turnDepthFor}'s rule — a band of no rows is a picture
+ * with no picture in it — and rounded rather than floored, because the two
+ * panels this exists to keep in step are converting the *same* distance through
+ * different bin sizes and a floor on both sides loses up to a bin on each.
+ */
+export function rowsForReach(bp: number, binsize: number): number {
+  const per = binsize > 0 ? binsize : 1
+  return Math.max(1, Math.round(bp / per))
+}
+
+/**
  * Whether a block can be turned at all.
  *
  * Three conditions, and each of them is the same condition looked at from a

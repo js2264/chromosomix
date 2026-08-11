@@ -12,7 +12,7 @@
  * so this module is imported, never collected.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 
 import type { Hdf5Handle } from '../../src/h5/api'
 import { openHdf5 } from '../../src/h5/Hdf5File'
@@ -37,6 +37,44 @@ export function fixturePath(name: string): string {
   return `${FIXTURE_DIR}${name}`
 }
 
+/**
+ * Fixtures on disk that are not the ones the goldens were made from.
+ *
+ * `npm run fixtures` builds both halves, and the manifest records the byte size
+ * of every fixture as it went in — so a fixture whose size has moved is a
+ * fixture some *other* run of the generator produced, against a different
+ * metacooler or a different cooler, and the goldens beside it are describing a
+ * file that is no longer there.
+ *
+ * The failure that skew produces is the reason this exists. Almost everything
+ * still matches — the bin table, the offsets, the pixels — and what does not is
+ * whatever the two versions happened to disagree about: a root attribute stored
+ * as `int32` in one and `int64` in the other, a provenance record whose shape
+ * changed. It surfaces as one deep object comparison failing in the middle of a
+ * suite that is otherwise green, which reads as a bug in the reader and is not
+ * one. Named up front, it is a sentence and a command.
+ *
+ * Sizes rather than a hash: it is the number the generator already writes, and
+ * a fixture that differs by a byte differs by a version.
+ */
+export function staleFixtures(): string[] {
+  const out: string[] = []
+  for (const entry of manifest.fixtures) {
+    const recorded = entry.fixture_bytes
+    if (typeof recorded !== 'number') continue
+    let onDisk = -1
+    try {
+      onDisk = statSync(fixturePath(entry.name)).size
+    } catch {
+      // A missing fixture is `npm run fixtures` not having been run at all,
+      // which every suite here already fails on with its own message.
+      continue
+    }
+    if (onDisk !== recorded) out.push(`${entry.name} (${onDisk} B on disk, golden built from ${recorded} B)`)
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // Manifest and goldens
 // ---------------------------------------------------------------------------
@@ -47,9 +85,11 @@ export interface ManifestEntry {
   kind: 'metacool' | 'mmetacool' | 'cool' | 'mcool'
   /** `'accept'` or `'refuse:<ErrorCode>'`. */
   expect: string
-  /** `'full'` when a complete Python oracle exists, `'partial'` otherwise. */
+  /** `'full'` — every fixture has a complete Python oracle. See `_manifest.json`. */
   coverage?: string
   golden: string
+  /** Size of the fixture the golden was built from; see {@link staleFixtures}. */
+  fixture_bytes?: number
   description: string
   entries?: string[]
   entry_uris?: string[]
@@ -107,8 +147,6 @@ export interface GoldenMap {
   /** HDF5 group the map is rooted at. */
   group: string
   golden: Golden
-  /** `false` for `utf8.metacool`, whose Python oracle is partial (see manifest). */
-  full: boolean
 }
 
 /**
@@ -116,7 +154,7 @@ export interface GoldenMap {
  * entry. Plain cool/mcool are excluded — §9's synthesised single-genome view is
  * M4 work and `MetaCooler.fromHandle` refuses them with `unsupported` today.
  */
-export function goldenMaps(options: { full?: boolean } = {}): GoldenMap[] {
+export function goldenMaps(): GoldenMap[] {
   const out: GoldenMap[] = []
   for (const entry of manifest.fixtures) {
     const golden = loadGolden(entry.golden)
@@ -127,7 +165,6 @@ export function goldenMaps(options: { full?: boolean } = {}): GoldenMap[] {
         file: entry.name,
         group: (golden.group as string) ?? '/',
         golden,
-        full: entry.coverage !== 'partial',
       })
     }
     if (entry.kind === 'mmetacool') {
@@ -139,12 +176,11 @@ export function goldenMaps(options: { full?: boolean } = {}): GoldenMap[] {
           file: entry.name,
           group: child.group as string,
           golden: child,
-          full: true,
         })
       }
     }
   }
-  return options.full === true ? out.filter((m) => m.full) : out
+  return out
 }
 
 // ---------------------------------------------------------------------------

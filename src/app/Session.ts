@@ -51,7 +51,7 @@ import {
 } from '../state/ViewState'
 import { recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
-import { resetPick } from '../ui/mapPick'
+import { armAll, resetPick } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
@@ -64,7 +64,7 @@ import {
 import type { CompareOp, Transform, ViewState } from '../types'
 import type { Normalisation } from '../render/derive'
 import type { RotateDirection } from '../render/rotate'
-import { LEAD_MAP } from '../annotations/placement'
+import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
@@ -80,6 +80,8 @@ import type { CompareRead } from '../ui/compare'
 import { PanelDeck } from '../panels/PanelDeck'
 import { DeckFrame } from '../panels/DeckFrame'
 import { MAX_PANELS, parseMaps, type GrowDirection } from '../panels/deck'
+import type { AnalysisFacts } from '../panels/MapPanel'
+import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
@@ -100,6 +102,7 @@ import { el, fmt } from '../ui/dom'
 import { cardTitle } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
+import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
 
@@ -1344,9 +1347,20 @@ export class Session {
    * the rest are annotations of it. Everything left over is loaded as a track
    * once the view exists, through the same routing a drop onto the tracks takes.
    *
-   * A second contact map is the one interesting case: it is not a track and it
-   * is not a second view, it is a comparison — which is exactly the gesture the
-   * compare card asks for, so it is taken as one.
+   * The **other** contact maps are the interesting case: they are not tracks and
+   * they are not second views, they are the deck (§16). Dropping four replicates
+   * is the plainest possible statement of "put these side by side", and it is
+   * the gesture the `+` edges and the deck's URL box exist to serve one file at
+   * a time.
+   *
+   * It used to take the second as a *blend* — the lower-left triangle of one
+   * square — and discard the third onwards without a word. Both halves of that
+   * were wrong. The blend is the strongest claim two files can make and is gated
+   * accordingly (one grid, so one bin size, so one chromosome list, §16.4), so
+   * the commonest two-cooler drop met a refusal where a deck would simply have
+   * worked; and a gesture that silently loses two of the four files a reader
+   * selected reads as the application dropping them. The blend is still one
+   * click away on the compare card, which is where a claim that strong belongs.
    */
   async openFiles(files: readonly File[]): Promise<void> {
     if (files.length === 0) return
@@ -1372,10 +1386,10 @@ export class Session {
     if (this.destroyed) return
     for (const file of files) {
       if (file === lead) continue
+      // Every spare map, and in the order they were selected — the deck is a
+      // list and the reader's order is the only one that means anything.
       if (maps.includes(file)) {
-        // Only the first spare map: two comparisons is not a thing this viewer
-        // has, and the second would silently replace the first.
-        if (maps[1] === file) void this.openCompare(file.name, { kind: 'local', file })
+        this.addCompanion(file)
         continue
       }
       this.dropped(file)
@@ -1953,18 +1967,72 @@ export class Session {
   }
 
   /**
-   * A file dropped on the content area — in either shape of session.
+   * Files dropped on the content area — in either shape of session.
    *
    * Dropping is *the* gesture this app is opened with, so it works everywhere
    * the file could plausibly be meant for rather than only on the marked
-   * rectangle: a contact map replaces what is open, a sizes file answers a
-   * browser's inferred lengths, and anything else joins the tracks. The decision
-   * is by name, exactly as {@link routeOf} makes it everywhere else — and a file
-   * whose name says nothing is offered to the loader, which reads its bytes and
-   * refuses it by name if it is not an annotation.
+   * rectangle: a sizes file answers a browser's inferred lengths, and anything
+   * else joins the tracks. The decision is by name, exactly as {@link routeOf}
+   * makes it everywhere else — and a file whose name says nothing is offered to
+   * the loader, which reads its bytes and refuses it by name if it is not an
+   * annotation.
+   *
+   * **A contact map dropped on an open session opens *beside* what is there,
+   * not instead of it.** It used to replace it, and that was the one route in
+   * this app where a drop destroyed something: a track dropped on a map is
+   * added to it, a sizes file dropped on a browser replaces one thing and keeps
+   * the rest, and a cooler dropped on a map threw away the file, the tracks
+   * placed on it, the window and the colour scale — for a gesture that in every
+   * other corner of the app means *and this too*. Now it is a companion, which
+   * is the same thing the `+` edges and the deck's own URL box do (§16.9), so
+   * the three ways of reaching a second map agree.
+   *
+   * Several at once populate a whole deck, which is what a reader selecting four
+   * replicates and dropping them meant. Where there is nothing open to put them
+   * beside, the first one still opens the session — that is not a replacement,
+   * it is the empty seat being filled — and the rest become its companions once
+   * it has landed. They wait, drawn, until the reader opens a view a second map
+   * can answer: a genomes table is of *this file* and holds no deck (§16.8), and
+   * the maps are in the link from the moment they are dropped.
+   *
+   * Replacing the open file is still one gesture away and is now the deliberate
+   * one it should always have been — the picker, `Open file…`, or a new tab.
    */
-  dropFiles(files: readonly File[]): void {
-    for (const file of files) this.dropped(file)
+  async dropFiles(files: readonly File[]): Promise<void> {
+    if (files.length === 0) return
+    const maps = files.filter(
+      (file) => !looksLikeConfig(file.name) && this.routeOf(file.name) === 'map',
+    )
+    // The empty seat, where there is one. `this.file` and not `deckIsPossible`:
+    // a session showing a table, an overview or a refusal has a file open all
+    // the same, and dropping a cooler on it must not throw that file away
+    // because the view it is currently on cannot hold a second panel.
+    const seat = this.file === null && maps.length > 0 ? maps[0] : null
+    if (seat !== null) {
+      await this.open(seat.name, { kind: 'local', file: seat })
+      if (this.destroyed) return
+    }
+    for (const file of files) {
+      if (file === seat) continue
+      if (maps.includes(file)) {
+        this.addCompanion(file)
+        continue
+      }
+      this.dropped(file)
+    }
+  }
+
+  /**
+   * Open one more map beside the one on screen, rather than instead of it.
+   *
+   * The deck is built if there is none, exactly as the `+` edges and the "add a
+   * map" command build one, so all three roads to a second map end in the same
+   * place. Refusals — past the backstop, or past what this tab's share of memory
+   * will lend — are the deck's own and are said in its bar (`panels/deck.ts`).
+   */
+  private addCompanion(file: File): void {
+    if (this.file === null) return
+    this.ensureDeck().add({ kind: 'local', uri: file.name }, { kind: 'local', file })
   }
 
   /**
@@ -1981,8 +2049,14 @@ export class Session {
       void this.openConfigFile(file)
       return
     }
+    // A map, dropped somewhere {@link dropFiles} did not route: the map's own
+    // lane rectangles, and a config's "and here is the file it describes". It
+    // still goes beside what is open rather than over it — a `.cool` aimed at
+    // the bottom edge of the map is a map and not a track drawn along the
+    // bottom, and it is not a reason to throw the map away either.
     if (this.routeOf(file.name) === 'map') {
-      void this.open(file.name, { kind: 'local', file })
+      if (this.file !== null) this.addCompanion(file)
+      else void this.open(file.name, { kind: 'local', file })
       return
     }
     // A sizes file dropped on a browser is not a track — it is an answer to the
@@ -2495,17 +2569,18 @@ export class Session {
 
     const picker: MapPicker = {
       available: () => this.current?.panel !== undefined,
-      start: (onPoint, onEnd) => {
-        const panel = this.current?.panel
-        // No plot to click on. The mode ends before it starts, which the card
-        // reads as "put the button back" — the button was disabled anyway, so
-        // this is the race where a view was torn down between the two.
-        if (panel === undefined) {
-          onEnd()
-          return () => {}
-        }
-        return panel.armPicking(onPoint, onEnd)
-      },
+      /**
+       * The session's own map **and every map in the deck**.
+       *
+       * A mark is a coordinate and a companion is a map, so a deck of five
+       * pictures is five places a reader may reasonably point at — and the marks
+       * already appeared on all of them, because they live in one store every
+       * panel draws from. Only the *gesture* was the lead's, which made the
+       * feature look broken in exactly the layout it is most useful in: a domain
+       * boundary drawn across four replicates is the thing a deck is for.
+       * `armAll` is what makes the five into one mode.
+       */
+      start: (onPoint, onEnd) => armAll([this.current?.panel, this.deck], onPoint, onEnd),
     }
     this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
 
@@ -2572,6 +2647,18 @@ export class Session {
    * the old URI and the new store opens empty.
    */
   private carried: AnnotationEntry[] | null = null
+  /**
+   * Which map each carried row was drawn on, snapshotted with the rows.
+   *
+   * Held **apart from the rows**, because a lane is not a property of a track:
+   * one import can be on three maps of a deck and on none, and an entry carries
+   * only the placement it defaults to (`annotations/placement.ts`). Without this
+   * the whole deck's arrangement was thrown away on every reopen — and not
+   * silently: `AnnotationStore.begin` places every row it is handed on the lead,
+   * which is right for an import and wrong for a row coming *back*, so a change
+   * of resolution collected every companion's tracks onto the first map.
+   */
+  private carriedLanes: readonly Lane[] | null = null
 
   /**
    * What the analysis workspace had computed, when the file is only changing
@@ -2604,6 +2691,8 @@ export class Session {
   private carry(next: string): void {
     const rows = this.annotations?.store.entries.filter((entry) => entry.status === 'ready')
     this.carried = rows === undefined || rows.length === 0 ? null : [...rows]
+    const lanes = this.annotations?.store.placements
+    this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]
     const computed = this.reopeningSameFile(next) ? (this.analysis?.carry() ?? []) : []
     this.carriedAnalysis = computed.length === 0 ? null : computed
   }
@@ -2626,6 +2715,30 @@ export class Session {
     this.carried = null
     if (rows === null) return
     for (const row of rows) loader.carry(row)
+    this.adoptCarriedLanes()
+  }
+
+  /**
+   * Put the carried rows back on the maps they were on.
+   *
+   * `begin` places everything it is handed on the lead, which is what importing
+   * means and is the wrong answer for a row that is *returning*: a change of
+   * resolution is a fresh open, every track is begun again around it, and a deck
+   * of four maps each with its own bigWig came back with all four stacked on the
+   * first one. The same reopen also loses a companion's own lanes entirely,
+   * because nothing else in the session remembers them.
+   *
+   * Reconciled rather than added to, and only for tracks that came back: a lane
+   * list restored on top of `begin`'s lead placement would leave every track on
+   * the lead *as well as* where it belongs, which on a deck of four is the same
+   * picture four times. Rows the carry dropped — a `computed` one, a `detached`
+   * one — keep whatever the new store gave them; their lanes are the analysis
+   * workspace's to restore, and it does it from the same snapshot.
+   */
+  private adoptCarriedLanes(): void {
+    const lanes = this.carriedLanes
+    if (lanes === null) return
+    this.annotations?.store.restoreLanes(lanes)
   }
 
   /**
@@ -2980,6 +3093,17 @@ export class Session {
         return shared
       },
       annotations: (map) => this.annotationContext(map),
+      /**
+       * The star moved, or the map it was on finished reading its tables.
+       *
+       * Every answer the Analysis column gives is about one file — what a task
+       * costs, which sequences its form lists, whether a task applies at all —
+       * so a star that has moved invalidates all of them at once. `refresh` is
+       * the same call a navigation makes, for the same reason.
+       */
+      onStarChange: () => {
+        this.analysis?.refresh()
+      },
       leadLabel: () => fileLabel(this.file?.uri ?? ''),
       // Stripped the same way and for the same two reasons. `onChange` would be
       // a sixth copy of a control over something the deck shares; `onAvailable`
@@ -2993,6 +3117,18 @@ export class Session {
         return shared
       },
       binsize: () => this.file?.info.binsize ?? undefined,
+      // The two directions "fix all …" needs that the deck cannot take itself.
+      //
+      // A clip written straight onto the lead's panel is one the next render
+      // puts back — the lead's view is rebuilt from the *state*, which is where
+      // its colour lives — so it goes through the store, exactly as the
+      // Aesthetics column's own controls do, and travels in the link with them.
+      onLeadScale: (scale) => this.store.patch(scale, { replace: true }),
+      // And its resolution is the breadcrumb's entry picker from the other end:
+      // changing the first map's rung means reopening the file the session *is*.
+      // Answers whether it *could*, so the deck can name it in the one line it
+      // has for a map with no frame of its own.
+      onLeadBinsize: (binsize) => this.openAtBinsize(binsize),
       score: () => {
         const state = this.store.state
         return state === null ? undefined : this.scoreOf(state).id
@@ -3138,6 +3274,34 @@ export class Session {
             for (const file of files) this.dropped(file, placementOn(edge), map)
           },
         }
+  }
+
+  /**
+   * Reopen this session's own file at `binsize`, and say whether it could.
+   *
+   * The deck's *fix all resolutions* reaching the one map it cannot move by
+   * itself: a companion changes rung inside its own worker, and the first map is
+   * the file the *session* is of, so moving it is the breadcrumb's entry picker
+   * from the other end — the same `open` with the same carried view state, so
+   * the region, the level and the score all survive the hop (§3.4).
+   *
+   * **Exact**, on {@link MapPanel.useBinsize}'s rule and for its reason: the
+   * button has just promised one resolution across the deck, and answering with
+   * the nearest thing would leave two while saying one. `false` is a file that
+   * has not got that level, which the deck names in its own line — this map has
+   * no frame of its own to be told in.
+   */
+  private openAtBinsize(binsize: number): boolean {
+    const held = this.file
+    if (held === null || !Number.isFinite(binsize) || binsize <= 0) return false
+    if (held.info.binsize === binsize) return true
+    const match = rungsOf(held.entries).find((rung) => rung.binsize === binsize)
+    if (match === undefined) return false
+    if (match.name === held.currentEntry) return true
+    const group = held.info.entryGroup || 'entries'
+    const next = `${splitUri(held.uri).path}::${group}/${match.name}`
+    void this.open(next, held.source, this.carryAcrossEntries(next))
+    return true
   }
 
   /**
@@ -3538,10 +3702,6 @@ export class Session {
     ) {
       this.current.applyScale?.(this.scaleOf(state))
       this.rederive()
-      // After the lead has the new scale, never before: the deck is reconciled
-      // above (a colour-only change is still a view its panels must be handed),
-      // and reading the lead's clip there reads the one it is about to replace.
-      this.deck?.syncSharedLook()
       this.mounted = state
       this.breadcrumb?.render(state)
       this.host.activity(this)
@@ -4452,6 +4612,12 @@ export class Session {
       // have been closed, or the file replaced, while the chunk was in flight.
       if (this.destroyed || this.analysisContext() === null || this.analysis !== null) return
       this.analysis = new AnalysisWorkspace(this.analysisHost_())
+      // The workspace brings its own carried rows back through the same `begin`
+      // an import goes through, so they arrive on the lead like everything else
+      // — and a computed row's map is exactly the fact a batch existed to
+      // record. The snapshot is still here, so it is applied again over what the
+      // workspace has just added ({@link adoptCarriedLanes}).
+      this.adoptCarriedLanes()
       this.paintAnalysis(this.analysis)
     } catch {
       // A chunk that will not load is a viewer with no Analysis column, which
@@ -4476,6 +4642,8 @@ export class Session {
   private analysisHost_(): AnalysisWorkspaceHost {
     return {
       source: () => {
+        const starred = this.starredFacts()
+        if (starred !== null) return { uri: starred.uri, source: starred.source }
         const file = this.file
         return file === null ? null : { uri: file.uri, source: file.source }
       },
@@ -4484,14 +4652,61 @@ export class Session {
       // the instant it is pressed, and a cached one would be a record of
       // wherever the reader happened to be when the drawer opened.
       framing: () => {
+        const starred = this.deck?.starredPanel ?? null
+        if (starred !== null) {
+          const facts = starred.analysisFacts()
+          return facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
+        }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
           : panel.analysisFraming(file.uri)
       },
-      block: () => this.current?.panel?.analysisBlock() ?? null,
+      block: () => {
+        const starred = this.deck?.starredPanel ?? null
+        if (starred !== null) return starred.map?.analysisBlock() ?? null
+        return this.current?.panel?.analysisBlock() ?? null
+      },
       store: () => this.annotations?.store ?? null,
+      // The star, so a measurement lands on the picture it was measured from.
+      targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
+      /**
+       * Every map on screen, lead first, for a batch (§18.2).
+       *
+       * A companion is listed only once it has read the two tables an analysis
+       * needs — those are fetched when a map is starred or a batch is priced,
+       * and a panel that has not answered yet cannot be run against. The
+       * fetching is kicked off here so that pressing the button twice does what
+       * a reader expects: the first press runs what is ready and starts the
+       * rest reading, the second runs all of them.
+       */
+      allTargets: () => {
+        const out: RunTarget[] = []
+        const file = this.file
+        if (file !== null) {
+          out.push({
+            map: LEAD_MAP,
+            uri: file.uri,
+            source: file.source,
+            label: fileLabel(file.uri),
+          })
+        }
+        for (const { map, panel } of this.deck?.analysable() ?? []) {
+          const facts = panel.analysisFacts()
+          if (facts === null) {
+            void panel.prepareAnalysis(() => this.analysis?.refresh())
+            continue
+          }
+          out.push({
+            map,
+            uri: facts.uri,
+            source: facts.source,
+            label: fileLabel(facts.uri),
+          })
+        }
+        return out
+      },
       annotations: () => this.annotations?.client ?? null,
       // Taken rather than read: the rows belong to the first workspace built
       // after the switch, and a second one — a later navigation, a reload of the
@@ -4522,6 +4737,25 @@ export class Session {
    * table, and the alternative is a cached object that is wrong every time a
    * track is loaded or the map is panned. `analysis/context.ts` does the work.
    */
+  /**
+   * The starred companion's facts, or `null` when the star is on the lead.
+   *
+   * The star (§18.2) says which picture an analysis reads, and it is a second
+   * idea from the lead on purpose: the lead is what the *session* is of — the
+   * breadcrumb, the tables, the tracks — and it does not move. What a deck is
+   * often for is the other question, four replicates on screen and *this* one to
+   * measure, and answering that by changing the session's subject would rewrite
+   * half the furniture to run a P(s).
+   *
+   * `null` while a freshly starred panel is still fetching its tables, which the
+   * Analysis column reads as "no context" for the frame or two it takes — the
+   * honest answer, since the alternative is pricing a task against the lead
+   * under a star that says otherwise.
+   */
+  private starredFacts(): AnalysisFacts | null {
+    return this.deck?.starredPanel?.analysisFacts() ?? null
+  }
+
   private analysisContext(): AnalysisContext | null {
     const file = this.file
     // **A session with no contact map still has a panel.** Three tasks run
@@ -4568,22 +4802,30 @@ export class Session {
     // over. A variable-bin file is refused at open long before this, and this is
     // the type being honest about a case the reader has already excluded — the
     // track tasks still apply, so it is a mapless context rather than none.
-    const binsize = file.info.binsize
+    // The star, where one has moved: an analysis is priced, framed and run
+    // against the picture it points at, and the lead only answers when it is
+    // itself the starred map. `entries` stays the session's, because the tracks
+    // are the session's however many maps are on screen.
+    const starred = this.starredFacts()
+    const starredPanel = this.deck?.starredPanel ?? null
+    const info = starred?.info ?? file.info
+    const uri = starred?.uri ?? file.uri
+    const binsize = info.binsize
     if (binsize === null || binsize <= 0) return null
-    const panel = this.current?.panel
-    const framing = panel === undefined ? null : panel.analysisFraming(file.uri)
-    const block = panel === undefined ? null : panel.analysisBlock()
+    const panel = starred === null ? this.current?.panel : (starredPanel?.map ?? undefined)
+    const framing = panel === undefined || panel === null ? null : panel.analysisFraming(uri)
+    const block = panel === undefined || panel === null ? null : panel.analysisBlock()
     return buildAnalysisContext({
-      uri: file.uri,
-      layout: file.info.layout.kind,
+      uri,
+      layout: info.layout.kind,
       binsize,
-      nBins: file.info.nBins,
-      hasGenomes: file.info.hasGenomes,
-      hasWeights: file.info.hasWeights,
-      scoreColumns: file.info.scoreColumns,
-      contigs: file.contigs?.table ?? null,
-      genomes: file.genomes.table,
-      displayGenomes: file.genomes.display,
+      nBins: info.nBins,
+      hasGenomes: info.hasGenomes,
+      hasWeights: info.hasWeights,
+      scoreColumns: info.scoreColumns,
+      contigs: starred === null ? (file.contigs?.table ?? null) : starred.contigs.table,
+      genomes: starred === null ? file.genomes.table : (starred.genomes?.table ?? null),
+      displayGenomes: starred === null ? file.genomes.display : (starred.genomes?.display ?? null),
       entries: this.annotations?.store.entries ?? [],
       framing,
       blockLoaded: block !== null,

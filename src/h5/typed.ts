@@ -14,12 +14,6 @@ import { MetaCoolerFormatError } from '../errors'
 /** numpy dtype-kind letters this reader can produce or accept. */
 export type DtypeKind = 'i' | 'u' | 'f' | 'S' | 'O' | 'U' | 'b'
 
-/** Kinds that carry text; the read path decodes these to `string[]`. */
-export const STRING_KINDS = 'SOU'
-
-/** Kinds that carry numbers; the read path decodes these to `Float64Array`. */
-export const NUMERIC_KINDS = 'iuf'
-
 // h5wasm builds its dtype strings in `metadata_to_dtype`: a byte-order char
 // (`<` or `>`) plus a struct-module format letter sized by the datatype
 //   1→b  2→h  4→i  8→q   (upper-cased when unsigned)
@@ -84,16 +78,6 @@ export function dtypeKind(dtype: string): DtypeKind {
       if (FLOAT_LETTERS.includes(letter)) return 'f'
       return bad()
   }
-}
-
-/** `true` if values of this kind decode to strings. */
-export function isStringKind(kind: DtypeKind): boolean {
-  return STRING_KINDS.includes(kind)
-}
-
-/** `true` if values of this kind decode to numbers. */
-export function isNumericKind(kind: DtypeKind): boolean {
-  return NUMERIC_KINDS.includes(kind)
 }
 
 /**

@@ -91,6 +91,63 @@ describe('the id a synthetic track gets', () => {
   })
 
   /**
+   * "Run on all maps" is what made the second half of this matter.
+   *
+   * The id was the output's alone, so a batch over five replicates produced five
+   * coverage tracks under one id: each `begin` replaced the row before it, and
+   * each placement moved the single surviving lane onto the next panel and off
+   * the last. What came back from a five-map batch was one track, on the fifth
+   * map, and four maps with nothing drawn on them — which reads as the batch
+   * having silently failed rather than as five results landing on top of one
+   * another.
+   */
+  describe('once a deck can measure more than one map', () => {
+    it('is different for every map, so a batch leaves a row per panel', () => {
+      const ids = ['lead', 'p1', 'p2', 'p3'].map((map) => syntheticId('coverage', map))
+      expect(new Set(ids).size).toBe(4)
+      for (const id of ids) expect(id.startsWith(SYNTHETIC_PREFIX)).toBe(true)
+    })
+
+    /**
+     * Not cosmetic: a session restored from a reload, and every `Recompute` on a
+     * row written before decks existed, resolves through this function. Prefixing
+     * the ordinary case would orphan all of them.
+     */
+    it('leaves the lead’s id exactly as it has always been', () => {
+      expect(syntheticId('coverage', 'lead')).toBe(syntheticId('coverage'))
+      expect(syntheticId('coverage')).toBe(`${SYNTHETIC_PREFIX}coverage`)
+    })
+
+    it('still lands a second run of one map on the row already there', () => {
+      // The whole reason the id is derived rather than minted: Recompute must
+      // replace its own numbers, not stack a second lane of them beside it.
+      expect(syntheticId('coverage', 'p1')).toBe(syntheticId('coverage', 'p1'))
+    })
+
+    it('never mints an id a loaded track could be given', () => {
+      for (const id of ['insulation:w10', 'ps', '1', 'a12345', '']) {
+        expect(syntheticId(id, 'p7')).not.toMatch(MINTED)
+      }
+    })
+
+    it('names the map in the label, so five rows are not five `coverage`s', () => {
+      const on = { map: 'p1', label: 'rep2.mcool::1000' }
+      const plain = syntheticEntry(profile('coverage'), source(), '#0072b2')
+      expect(syntheticEntry(profile('coverage'), source(), '#0072b2', on).label).toBe(
+        `${plain.label} · rep2.mcool::1000`,
+      )
+      // …and says nothing extra about the lead, which is every session that has
+      // never opened a deck.
+      expect(
+        syntheticEntry(profile('coverage'), source(), '#0072b2', {
+          map: 'lead',
+          label: 'first.cool',
+        }).label,
+      ).toBe(syntheticEntry(profile('coverage'), source(), '#0072b2').label)
+    })
+  })
+
+  /**
    * And it does not move the counter either, which is the other half of the
    * same guarantee: `begin` reserves any id handed to it, so an id whose tail
    * parsed as a large number would push every subsequent minted id past it and

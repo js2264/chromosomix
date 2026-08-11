@@ -306,6 +306,91 @@ describe('ViewportLock', () => {
     expect(a.state.shown).toBe(0)
   })
 
+  /**
+   * The gap `catchUp` leaves, and the one a deck falls into every time it is
+   * built.
+   *
+   * A window exists because a panel *reported* one, and a panel reports when it
+   * draws. The first map of a deck was drawn — and reported nothing, because
+   * until the reader pressed "add a map" there was no lock listening — before
+   * the deck existed, so every pan and zoom they had made was invisible to it.
+   * A companion arriving into that gap is left at its own fitted view, which is
+   * two maps side by side at two zooms under a bar saying they are one
+   * navigation.
+   */
+  describe('seeding a window nobody has reported', () => {
+    it('brings a newcomer to where the lead already was', () => {
+      const lock = new ViewportLock()
+      const lead = panel('lead', 1000, 400)
+      // The reader zoomed in before there was a deck: the panel is showing
+      // 100–200 kb and has never reported it.
+      lead.state.rows = [100, 200]
+      lead.state.cols = [100, 200]
+      lock.join(lead.member)
+
+      const late = panel('late', 2000, 200)
+      lock.join(late.member)
+      lock.seed(lead.state.rows, lead.state.cols, 1000)
+      lock.catchUp('late')
+
+      expect(late.state.rows).toEqual([50, 100])
+      // …and the lead was not moved to make it happen.
+      expect(lead.state.shown).toBe(0)
+    })
+
+    it('moves nobody by itself', () => {
+      const lock = new ViewportLock()
+      const a = panel('a', 1000, 400)
+      const b = panel('b', 1000, 400)
+      lock.join(a.member)
+      lock.join(b.member)
+      lock.seed([10, 60], [10, 60], 1000)
+      expect(a.state.shown).toBe(0)
+      expect(b.state.shown).toBe(0)
+      expect(lock.window).toEqual({ rows: { lo: 10_000, hi: 60_000 }, cols: { lo: 10_000, hi: 60_000 } })
+    })
+
+    /**
+     * A window that a panel reported is a reader's choice; the lead's present
+     * view is a guess at one, and the guess must not overwrite the choice. The
+     * deck seeds on every arrival, so without this each newly settled companion
+     * would drag the whole deck back to wherever the first map happened to be.
+     */
+    it('does not overwrite a window a panel established', () => {
+      const lock = new ViewportLock()
+      const a = panel('a', 1000, 400)
+      const b = panel('b', 1000, 400)
+      lock.join(a.member)
+      lock.join(b.member)
+      drag(lock, b, [300, 340], [300, 340])
+      lock.seed([0, 400], [0, 400], 1000)
+      expect(lock.window).toEqual({ rows: { lo: 300_000, hi: 340_000 }, cols: { lo: 300_000, hi: 340_000 } })
+    })
+
+    it('is forgotten with the rest of the window when the deck navigates', () => {
+      const lock = new ViewportLock()
+      const a = panel('a', 1000, 400)
+      lock.join(a.member)
+      lock.seed([10, 60], [10, 60], 1000)
+      lock.reset()
+      expect(lock.window).toBeNull()
+    })
+
+    it('records no debt, so the first panel to move still drives the deck', () => {
+      // `pushTo` owes itself one report per panel it moved and throws that report
+      // away. Seeding pushes nobody, so nothing is owed — and a seed followed
+      // immediately by a genuine gesture must not have the gesture swallowed.
+      const lock = new ViewportLock()
+      const a = panel('a', 1000, 400)
+      const b = panel('b', 1000, 400)
+      lock.join(a.member)
+      lock.join(b.member)
+      lock.seed([0, 400], [0, 400], 1000)
+      drag(lock, a, [10, 60], [10, 60])
+      expect(b.state.rows).toEqual([10, 60])
+    })
+  })
+
   it('stops driving a panel that has left', () => {
     const lock = new ViewportLock()
     const a = panel('a', 1000, 400)

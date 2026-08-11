@@ -338,13 +338,38 @@ async function runSquare(
   const oe = observedOverExpected(square, selection.n, index, plan)
   job.throwIfCancelled()
 
+  // A mode and a diagonal cut can between them leave nothing to correlate — a
+  // cis-only square whose sequence is shorter than `ignoreDiags` is the case
+  // that reaches a reader, since the control has no upper bound and a
+  // metagenome's sequences are short. Every cell being a gap makes every
+  // correlation undefined, which `correlationMatrix` reads as *no evidence* and
+  // fills with zeros, and the leading eigenvector of a zero matrix is a shape
+  // with no data behind it. Named, rather than drawn.
+  let finite = 0
+  for (const value of oe) if (Number.isFinite(value)) finite++
+  if (finite === 0) {
+    job.note(
+      `${label}: nothing was left to correlate — ${plan.ignoreDiags} ignored ` +
+        `${plan.ignoreDiags === 1 ? 'diagonal covers' : 'diagonals cover'} the whole of a ` +
+        `${selection.n.toLocaleString()}-bin square. Ignore fewer.`,
+    )
+    return null
+  }
+
   // Cubic in the bin count, and the one step of the chain that is — so it
   // reports where it has got to and can be stopped from inside its own loop.
-  const correlation = correlationMatrix(oe, index.length, (row) => {
-    job.throwIfCancelled()
-    if (row % 64 === 0) {
-      job.progress(options.step.at, options.step.of, `Correlating ${label}`)
+  const correlation = await correlationMatrix(oe, index.length, async (row) => {
+    // Every sixty-fourth row rather than every row: a `breathe` is a
+    // `MessageChannel` round trip, and this is the loop that most needs to be
+    // stoppable *and* the one that would most notice paying for it `m` times.
+    // Between breaths the flag cannot have changed, so the synchronous check is
+    // the one that matters in between and the yield is what makes it able to.
+    if (row % 64 !== 0) {
+      job.throwIfCancelled()
+      return
     }
+    await job.breathe()
+    job.progress(options.step.at, options.step.of, `Correlating ${label}`)
   })
 
   // The correlation matrix is consumed in place by the deflation, so the saddle
@@ -473,7 +498,7 @@ export const runCompartments: TaskRunner = async (job) => {
   let ran = 0
 
   for (let s = 0; s < squares.length; s++) {
-    job.throwIfCancelled()
+    await job.breathe()
     const selection = squares[s]
     const label = describe(job, selection)
     if (selection.n > MAX_CORRELATION_BINS) {

@@ -24,6 +24,7 @@ import { ExpectedAccumulator, expectedAt } from '../expected'
 import { boolParam, strParam, type JobContext, type TaskRunner } from '../job'
 import type { ProfileOutput, TaskOutput } from '../types'
 import { bandSums, ViewpointAccumulator } from '../viewpoint'
+import type { BlockInput } from '../worker/protocol'
 import { squareFor, usableBlock, validBins, type Span } from './blocks'
 
 /** The anchor, resolved to absolute bins, and the scope "cis" means for it. */
@@ -74,10 +75,9 @@ export const runFourC: TaskRunner = async (job) => {
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const anchor = resolveAnchor(job, text)
 
-  const read = cis
+  const values = cis
     ? await cisProfile(job, anchor, balance, value, overExpected)
-    : await transProfile(job, anchor, balance)
-  const values = cis || !overExpected ? read : overTransMean(job, read, anchor)
+    : await wholeProfile(job, anchor, balance, overExpected)
 
   const profile: ProfileOutput = {
     kind: 'profile',
@@ -95,6 +95,49 @@ export const runFourC: TaskRunner = async (job) => {
 }
 
 /**
+ * The whole file, with both halves of the profile against their own expectation.
+ *
+ * Without normalisation this is the pixel walk and nothing else. With it, the
+ * two halves have two different expectations and **both** have to be applied, or
+ * the track holds raw counts on the anchor's own sequence and ratios everywhere
+ * else — one quantity by the axis, two quantities by the arithmetic, and no
+ * mark on the picture to say which bin is which. That is what this used to do:
+ * `overTransMean` skipped the cis half on the stated grounds that the decay had
+ * already been divided out of it, which was true on the cis-only path and never
+ * on this one, where nothing had read a square at all.
+ *
+ * So the square gets read. It is one on-diagonal block for one sequence against
+ * a pass that is already touching half the pixels in the file, and it is only
+ * read when a reader has asked for the ratio.
+ */
+async function wholeProfile(
+  job: JobContext,
+  anchor: Anchor,
+  balance: boolean,
+  overExpected: boolean,
+): Promise<Float32Array> {
+  // Before the walk rather than after it, so the progress line runs forwards:
+  // `transProfile` reports its way through the file and this would otherwise
+  // send it back to the start once the reader had watched it finish.
+  // `DEFAULT_COUNT_COLUMN` and not `value`: {@link transProfile} walks the
+  // pixels' `count` whatever the map is drawn from, and says so. A cis half read
+  // from another column would put the two quantities back in one track by a
+  // second route — the one this function exists to close.
+  const scored = overExpected
+    ? await cisProfile(job, anchor, balance, DEFAULT_COUNT_COLUMN, true)
+    : null
+  const read = await transProfile(job, anchor, balance)
+  if (scored === null) return read
+  const out = overTransMean(job, read, anchor)
+  // The anchor's own sequence, over its own decay; everything else over the
+  // trans mean {@link overTransMean} just applied.
+  for (let bin = anchor.scope.from; bin < Math.min(anchor.scope.to, out.length); bin++) {
+    out[bin] = scored[bin]
+  }
+  return out
+}
+
+/**
  * A profile divided by the decay, cell by cell.
  *
  * The curve is accumulated from **the square this task has already read**, which
@@ -107,16 +150,20 @@ export const runFourC: TaskRunner = async (job) => {
  * numerator: half of a ratio is not a ratio, and a track holding both raw counts
  * and O/E values would be read as one quantity.
  */
-function overDecay(
-  sums: Float64Array,
-  square: { nrows: number; ncols: number; values: Float32Array },
-  band: [number, number],
-): Float64Array {
-  const n = square.nrows
-  const accumulator = new ExpectedAccumulator(Math.max(0, n - 1))
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < square.ncols; c++) accumulator.add(Math.abs(c - r), square.values[r * n + c])
-  }
+function overDecay(sums: Float64Array, square: BlockInput, band: [number, number]): Float64Array {
+  // `addBlock` rather than a loop written here: it files each cell under the
+  // separation its *absolute* bins imply and counts a mirrored square exactly
+  // once per stored copy, which are the two things a second implementation of
+  // this gets wrong. It is also the one that cannot read a rectangular block
+  // down the wrong stride.
+  const accumulator = new ExpectedAccumulator(Math.max(0, square.nrows - 1))
+  accumulator.addBlock({
+    nrows: square.nrows,
+    ncols: square.ncols,
+    values: square.values,
+    rowExtent: [square.rowExtent[0], square.rowExtent[1]],
+    colExtent: [square.colExtent[0], square.colExtent[1]],
+  })
   const curve = accumulator.finish()
   // The anchor's own middle is where every separation is measured from. A band
   // is usually a bin or two wide, so its centre is the honest single point.
@@ -138,8 +185,9 @@ function overDecay(
  * Two chromosomes have no separation between them, so there is no curve to read
  * and the expectation is the mean of what this anchor reaches off its own
  * sequence — the same rule the compartment chain applies to a trans block. The
- * cis half is divided by the decay in {@link cisProfile}, so both halves come out
- * as ratios against their own expectation and can be read on one axis.
+ * cis half is left exactly as it came in, because {@link wholeProfile} overwrites
+ * it with the decay-normalised one; both halves then come out as ratios against
+ * their own expectation and can be read on one axis.
  */
 function overTransMean(job: JobContext, values: Float32Array, anchor: Anchor): Float32Array {
   let total = 0
@@ -158,8 +206,8 @@ function overTransMean(job: JobContext, values: Float32Array, anchor: Anchor): F
   const mean = total / seen
   const out = new Float32Array(values.length)
   for (let bin = 0; bin < values.length; bin++) {
-    // The cis half has already been divided by the decay; only what is outside
-    // the anchor's own sequence is left to divide here.
+    // Only what is outside the anchor's own sequence: the cis half is replaced
+    // wholesale by {@link wholeProfile} with its decay-normalised counterpart.
     const inside = bin >= anchor.scope.from && bin < anchor.scope.to
     const value = values[bin]
     out[bin] = inside || !Number.isFinite(value) ? value : mean === 0 ? Number.NaN : value / mean
@@ -182,7 +230,12 @@ async function cisProfile(
   overExpected = false,
 ): Promise<Float32Array> {
   job.progress(0, 1, `Reading ${anchor.label}`)
-  const block = usableBlock(job, [anchor.scope], balance)
+  // The view's block only where it holds the column being asked for.
+  // `usableBlock` vouches for the resolution and the balancing and not for the
+  // value column — it is whatever the map happens to be drawn from — so a caller
+  // that wants `count` off a map drawn from `expected` has to read.
+  const framed = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
+  const block = value === framed ? usableBlock(job, [anchor.scope], balance) : null
   const square = await squareFor(job, anchor.scope, { block, balance, value })
   job.throwIfCancelled()
 
@@ -202,13 +255,7 @@ async function cisProfile(
     'cols',
   )
 
-  const scored = overExpected
-    ? overDecay(
-        sums,
-        { nrows: square.nrows, ncols: square.ncols, values: square.values },
-        local,
-      )
-    : sums
+  const scored = overExpected ? overDecay(sums, square, local) : sums
 
   // Over the whole assembly, with everything outside this sequence left as a
   // gap. Not zero: a cis-only run has said nothing at all about the other

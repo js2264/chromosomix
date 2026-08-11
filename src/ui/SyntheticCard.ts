@@ -35,6 +35,7 @@ import type { ProfileOutput } from '../analysis/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ComputedSource, LaneEdge } from '../annotations/types'
 import { defaultStyle, placementOn } from '../annotations/types'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 
@@ -317,16 +318,31 @@ export class SyntheticCard {
 export const SYNTHETIC_PREFIX = 'analysis:'
 
 /**
- * The entry id one output always has.
+ * The entry id one output of one map always has.
  *
  * Derived from the output rather than minted, so that running a task a second
  * time — a **Recompute** on a detached row, or a fresh run at the same framing —
  * lands on the row that is already there instead of stacking a second lane of
  * the same numbers beside it. `AnnotationStore.begin` replaces an id it already
  * holds in place and keeps its slot, which is what makes that work.
+ *
+ * **And of one map.** That clause was missing, and "run on all maps" is what
+ * made it matter: a batch of five produced five coverage tracks under one id, so
+ * each `begin` replaced the row before it and each `placeOnTarget` moved the
+ * single surviving lane onto the next panel and off the last. What came back
+ * from a five-map batch was one track, on the fifth map, and four maps with
+ * nothing drawn on them — which reads as the batch having silently failed rather
+ * than as five results landing on top of each other.
+ *
+ * The lead keeps the bare id it has always had. That is not cosmetic: a session
+ * restored from a reload, and every `Recompute` on a row written before decks
+ * existed, resolves through this function, and prefixing the ordinary case would
+ * orphan all of them.
  */
-export function syntheticId(outputId: string): string {
-  return `${SYNTHETIC_PREFIX}${outputId}`
+export function syntheticId(outputId: string, map: MapId = LEAD_MAP): string {
+  return map === LEAD_MAP
+    ? `${SYNTHETIC_PREFIX}${outputId}`
+    : `${SYNTHETIC_PREFIX}${map}:${outputId}`
 }
 
 /**
@@ -364,13 +380,26 @@ export function syntheticEntry(
   output: ProfileOutput,
   source: ComputedSource,
   colour: string,
+  /**
+   * The map this was measured from, and where its lane goes.
+   *
+   * Absent is the lead, which is every session that has not opened a deck and
+   * every row written before decks existed — see {@link syntheticId}, which is
+   * careful to leave that case's id exactly as it was.
+   */
+  on?: { map: MapId; label: string },
 ): AnnotationEntry {
   const extent = valueExtent(output.values)
   return {
-    id: syntheticId(output.id),
+    id: syntheticId(output.id, on?.map),
     card: 'synthetic',
     kind: 'track',
-    label: output.label,
+    // Named by its map when it came from one that is not the lead. A batch over
+    // five replicates otherwise produces five rows called `coverage`, in one
+    // list, in the order the runner happened to finish them — every one of them
+    // true, and no way to tell which is which.
+    label:
+      on === undefined || on.map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`,
     source,
     status: 'ready',
     visible: true,

@@ -71,17 +71,28 @@ interface Chip {
    * that question.
    */
   detail: string
+  /**
+   * How far through a batch this is — `2 of 5` — or `''` for an ordinary run.
+   *
+   * Its own pill beside the percentage rather than the first clause of the
+   * sentence below, because it answers a different question and the two are read
+   * at different moments. The percentage is *this map's* progress and reaches
+   * 100 once per map; without a count beside it, a reader watching the fourth of
+   * five fill and reset has no way to tell a batch from a stall. Which map it is
+   * stays in the detail line, where there is room for a file name.
+   */
+  batch: string
 }
 
 function chipFor(state: JobState): Chip {
   switch (state.status) {
     case 'idle':
-      return { text: 'never run', tone: '', spinner: false, detail: '' }
+      return { text: 'never run', tone: '', spinner: false, detail: '', batch: '' }
     case 'queued':
       // Queued rather than running, and said so: one job at a time is the
       // runner's contract (§18.3), and a row that claimed to be running while it
       // waited would make the queue look like a stall.
-      return { text: 'queued', tone: 'is-running', spinner: false, detail: '' }
+      return { text: 'queued', tone: 'is-running', spinner: false, detail: '', batch: '' }
     case 'running':
       return {
         // Clamped, as the drawer's bar is: a worker reporting more done than
@@ -90,16 +101,29 @@ function chipFor(state: JobState): Chip {
         text: state.total > 0 ? fmt.pct(Math.min(1, state.done / state.total), 0) : 'running',
         tone: 'is-running',
         spinner: true,
-        detail: state.note,
+        batch: state.batch === undefined ? '' : `${state.batch.at + 1} of ${state.batch.of}`,
+        // Which map, in words, while a batch is being worked through. The count
+        // is the pill above; this is the name, which is the thing that needs
+        // room and the thing a reader looks for once they know there is a batch.
+        detail:
+          state.batch === undefined
+            ? state.note
+            : `${state.batch.label}${state.note === '' ? '' : ` — ${state.note}`}`,
       }
     case 'done':
-      return { text: `done in ${durationText(state.ms)}`, tone: 'is-done', spinner: false, detail: '' }
+      return {
+        text: `done in ${durationText(state.ms)}`,
+        tone: 'is-done',
+        spinner: false,
+        detail: '',
+        batch: '',
+      }
     case 'failed':
-      return { text: 'failed', tone: 'is-failed', spinner: false, detail: state.message }
+      return { text: 'failed', tone: 'is-failed', spinner: false, detail: state.message, batch: '' }
     case 'cancelled':
       // Not a failure and not drawn as one. The reader pressed Stop; they know
       // what happened, which is the distinction `JobState` is careful to keep.
-      return { text: 'cancelled', tone: '', spinner: false, detail: '' }
+      return { text: 'cancelled', tone: '', spinner: false, detail: '', batch: '' }
   }
 }
 
@@ -122,6 +146,8 @@ interface Row {
    */
   needs: HTMLElement
   stop: HTMLButtonElement
+  /** `2 of 5`, beside the percentage; hidden outside a batch. */
+  batch: HTMLElement
   /** The cell the chip and the stop share, so the stop can come and go. */
   cell: HTMLElement
 }
@@ -239,6 +265,9 @@ export class AnalysisPanelCard {
    */
   private row(task: AnalysisTask): Row {
     const chip = el('span', { class: 'analysis-chip' })
+    // Beside the chip and before the stop, so the row reads left to right as
+    // "how far through this map, how far through the deck, and the way to stop".
+    const batch = el('span', { class: 'analysis-chip analysis-batch hidden' })
     const stop = iconButton(
       'circle-stop',
       `Stop ${task.title}. The worker checks between chunks, so it stops at the next one.`,
@@ -250,7 +279,7 @@ export class AnalysisPanelCard {
     // parameters is two answers to one gesture.
     stop.addEventListener('click', (event) => event.stopPropagation())
 
-    const cell = el('div', { class: 'plot-icon-row' }, chip)
+    const cell = el('div', { class: 'plot-icon-row' }, chip, batch)
     const blurb = el('span', { class: 'analysis-row-blurb', text: task.blurb })
     // What the task is waiting for. A **sibling** of the row rather than a third
     // line inside it: inside, it read as one more thing the task claims about
@@ -285,7 +314,7 @@ export class AnalysisPanelCard {
       event.preventDefault()
       open()
     })
-    return { task, el: node, chip, blurb, needs, stop, cell }
+    return { task, el: node, chip, blurb, needs, stop, batch, cell }
   }
 
   // -------------------------------------------------------------------------
@@ -316,6 +345,8 @@ export class AnalysisPanelCard {
         ...(chip.spinner ? [el('span', { class: 'analysis-spinner' })] : []),
         chip.text,
       )
+      row.batch.textContent = chip.batch
+      row.batch.classList.toggle('hidden', chip.batch === '')
 
       // The blurb slot carries the failure or the running step when there is
       // one. Plain, and not `.inline-error`: that class paints a box, and a

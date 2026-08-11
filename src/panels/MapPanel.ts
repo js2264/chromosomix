@@ -27,8 +27,32 @@ import { DECK_DRAG_TYPE } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
-import type { MatrixResult, OpenResult, SourceSpec } from '../worker/protocol'
+import type {
+  ContigsResult,
+  GenomesResult,
+  MatrixResult,
+  OpenResult,
+  SourceSpec,
+} from '../worker/protocol'
+
+/**
+ * What an analysis needs to know about a map that is not the session's own.
+ *
+ * The session builds its `AnalysisContext` from exactly these — the file's info
+ * and its two tables — so a starred companion answering with the same shape
+ * needs no second code path in `analysis/context.ts`. `genomes` is `null` on a
+ * plain cooler, which has no genome layer to read (§8.5).
+ */
+export interface AnalysisFacts {
+  uri: string
+  source: SourceSpec
+  info: OpenResult
+  contigs: ContigsResult
+  genomes: GenomesResult | null
+}
+import type { AnnotationStore } from '../annotations/store'
 import type { LaneEdge } from '../annotations/types'
+import type { ManualPoint } from '../annotations/manual'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -198,6 +222,7 @@ export interface MapPanelProps {
    * The same rule, from the same function, as the second file of a blend
    * (`Session.openCompare`) and as a collection dropped on the picker.
    */
+  preferBinsize(): number | undefined
   /**
    * The score the **lead** resolved to, or `undefined`.
    *
@@ -211,7 +236,6 @@ export interface MapPanelProps {
    * to counts rather than to a read it cannot answer.
    */
   score(): string | undefined
-  preferBinsize(): number | undefined
   /** Rewrite this panel's URI after it resolved a collection to one of its entries. */
   onResolved(uri: string): void
   /**
@@ -222,6 +246,14 @@ export interface MapPanelProps {
    * visible as cells while something is looking for one.
    */
   onDragChange(dragging: boolean): void
+  /**
+   * This panel was starred: make it the map an analysis runs against (§18.2).
+   *
+   * The deck owns which one it is — one star at a time is the whole point — so
+   * this reports the press and the answer comes back through
+   * {@link MapPanel.setStarred}.
+   */
+  onStar(): void
 }
 
 export class MapPanel {
@@ -242,9 +274,32 @@ export class MapPanel {
   private readonly note = el('p', { class: 'deck-note' })
   /** Kept apart from {@link note}: one is about the read, the other the lock. */
   private readonly lockNoteEl = el('p', { class: 'deck-note deck-unlocked hidden' })
+  /**
+   * Why this panel did not follow the deck to another resolution.
+   *
+   * A third line, and a third line rather than a reuse of either of the two
+   * above because it outlives both of them: {@link note} is cleared by the next
+   * successful read, which is the very next thing that happens, and the lock's
+   * is rewritten whenever anything moves. This one stands until the panel is
+   * asked for a resolution it *can* reach.
+   */
+  private readonly resNoteEl = el('p', { class: 'deck-note deck-res-note deck-unlocked hidden' })
   private refusal: string | null = null
   private readonly nameEl: HTMLElement
   private readonly lockButton: HTMLElement
+  /** This panel's half of the deck's star; the deck decides which is filled. */
+  private readonly starButton: HTMLButtonElement
+  /**
+   * What an analysis needs to run against this map, once it has been asked for.
+   *
+   * `null` until {@link prepareAnalysis} has fetched it, which is on purpose: a
+   * companion opens to *draw a picture*, and the picture needs the file's info
+   * and one block. The two tables below are a further pair of reads that only a
+   * starred panel ever needs, so an eight-panel deck does not fetch sixteen
+   * tables to show eight rectangles.
+   */
+  private facts: AnalysisFacts | null = null
+  private preparing: Promise<void> | null = null
   private opening: Promise<OpenResult> | null = null
   private disposed = false
   /**
@@ -257,6 +312,14 @@ export class MapPanel {
   private read: string | null = null
   /** Colour scale, per panel; see {@link applyLook}. */
   private look: ScaleState = {}
+  /**
+   * The annotation store the current panel draws its lanes from.
+   *
+   * Held so a *new* one can be noticed. The session replaces its store on every
+   * open, and a panel built against the previous one draws nothing that anybody
+   * has put on this map since — see {@link show}.
+   */
+  private laneStore: AnnotationStore | null = null
   /**
    * The entry this panel descended into, when it was handed a collection.
    *
@@ -278,6 +341,14 @@ export class MapPanel {
   private state: ViewState | null = null
   /** The sibling entries of the collection this map is inside; `[]` for a plain file. */
   private entries: string[] = []
+  /**
+   * What the last open answered with, for the questions a deck asks between
+   * reads — which rung this panel is on, above all.
+   *
+   * Held rather than re-requested: `open()` is memoised on a promise, so asking
+   * again is free but asynchronous, and the deck prices its toggles on a repaint.
+   */
+  private opened: OpenResult | null = null
   /**
    * The zoom's own reader for this panel.
    *
@@ -308,6 +379,10 @@ export class MapPanel {
     this.entryPicker.addEventListener('change', () => {
       void this.openEntry(this.entryPicker.value)
     })
+    this.starButton = iconButton('star', '', () => props.onStar(), {
+      class: 'btn btn-icon deck-star',
+      size: 13,
+    })
     this.lockButton = iconButton(
       'link',
       'Following the other maps. Click to move this one on its own.',
@@ -323,6 +398,7 @@ export class MapPanel {
         this.grip(),
         this.nameEl,
         this.entryPicker,
+        this.starButton,
         this.lockButton,
         iconButton('x', `Close ${fileLabel(props.uri)}`, () => props.onClose(), {
           class: 'btn-close',
@@ -331,6 +407,7 @@ export class MapPanel {
       ),
       this.note,
       this.lockNoteEl,
+      this.resNoteEl,
       this.body,
     )
     this.say('opening…')
@@ -377,6 +454,133 @@ export class MapPanel {
   /** The map, for the deck's lock; `null` until this panel has read a block. */
   get map(): MatrixPanel | null {
     return this.panel
+  }
+
+  /**
+   * The bin size this panel is reading at, or `undefined` before its first open.
+   *
+   * The **file's** bin size and not the effective resolution of what is drawn:
+   * pooling is a fact about how much of a block is on screen, and a resolution
+   * ladder is not indexed by it — the same distinction
+   * {@link MapPanelProps.preferBinsize} makes.
+   */
+  binsize(): number | undefined {
+    return this.opened?.binsize ?? undefined
+  }
+
+  /**
+   * Read at `bp`, if this file has that resolution — and say so if it has not.
+   *
+   * **Exact, and never the nearest.** The deck asks this of every panel when the
+   * first map changes rung and when the reader presses *fix all resolutions*,
+   * and the promise both of those make is that the maps are then reading the
+   * same data at the same grid. A nearest-rung fallback keeps every panel doing
+   * *something*, which is the wrong kind of helpful here: it answers "put these
+   * on one resolution" with a deck at two, and says nothing about it. A file
+   * that cannot follow says why, in its own frame, and stays where it is — a
+   * complete picture at a resolution the reader can read, which is the same
+   * answer a companion gives to every other thing it cannot do (§16.1).
+   *
+   * A plain cooler has one resolution: it follows when that is the one asked
+   * for, and otherwise says it has only the one. Published through
+   * {@link MapPanelProps.onResolved} by {@link openEntry}, so a rung reached
+   * this way is in the link exactly as one the reader picked is.
+   */
+  useBinsize(bp: number): boolean {
+    if (!Number.isFinite(bp) || bp <= 0) return false
+    // Already there, whatever the ladder looks like — including a plain cooler
+    // that happens to be at the resolution the deck is moving to.
+    if (this.binsize() === bp) {
+      this.sayResolution(null)
+      return true
+    }
+    const rungs = rungsOf(this.entries)
+    const match = rungs.find((rung) => rung.binsize === bp)
+    if (match === undefined) {
+      this.sayResolution(
+        `staying at ${fmt.bp(this.binsize() ?? 0)}: this file has no ${fmt.bp(bp)} level` +
+          (rungs.length === 0
+            ? ', and carries one resolution only.'
+            : ` — it has ${rungs.map((rung) => fmt.bp(rung.binsize)).join(', ')}.`),
+      )
+      return false
+    }
+    this.sayResolution(null)
+    if (match.name === entryLabel(this.uri)) return true
+    void this.openEntry(match.name)
+    return true
+  }
+
+  /**
+   * Everything an analysis needs about this map, or `null` if it has not been
+   * asked for yet.
+   *
+   * Synchronous, because the Analysis column is priced on every repaint and a
+   * promise there would be a column that flickers. {@link prepareAnalysis} is
+   * the asking, and the session does it when the star lands here.
+   */
+  analysisFacts(): AnalysisFacts | null {
+    return this.facts
+  }
+
+  /**
+   * Read what an analysis needs, once, and say when it is there.
+   *
+   * The info arrives with the picture — this panel is opening the file anyway —
+   * and the two tables are the extra. Held after the first call, because they do
+   * not change under a file: a companion's URI is fixed for the life of the
+   * panel, and descending into another entry of a collection rebuilds it.
+   */
+  async prepareAnalysis(onReady: () => void): Promise<void> {
+    if (this.facts !== null || this.disposed) return
+    this.preparing ??= (async (): Promise<void> => {
+      const info = await this.open()
+      const [contigs, genomes] = await Promise.all([
+        this.client.request<'contigs'>({ kind: 'contigs' }),
+        info.hasGenomes
+          ? this.client.request<'genomes'>({ kind: 'genomes' })
+          : Promise.resolve(null),
+      ])
+      if (this.disposed) return
+      // `this.uri` and never `props.uri`: an `.mcool` or `.mmetacool` companion
+      // is opened at its *root*, refused, and re-opened one rung down
+      // ({@link openOrDescend}), and it is that descended address the panel is
+      // actually showing. Handing an analysis the root instead is handing it a
+      // collection, which the worker refuses with `mcool-root` — the same
+      // refusal the reader was never meant to see, arriving from a task rather
+      // than from a picture. Read after `open()`, which is where the descent
+      // happens and therefore where `resolved` is filled in.
+      this.facts = { uri: this.uri, source: this.props.source, info, contigs, genomes }
+    })()
+    try {
+      await this.preparing
+    } catch {
+      // A companion that cannot answer for itself is one the Analysis column
+      // says nothing about; the panel's own note already carries the refusal.
+      this.preparing = null
+      return
+    }
+    if (!this.disposed) onReady()
+  }
+
+  /**
+   * Fill or empty this panel's star.
+   *
+   * Told rather than asked, because exactly one map in a deck is starred and
+   * that is a fact about the deck. A filled star is also a dead button: the way
+   * to move it is to press another one, and a press that does nothing is a
+   * control that has to be tried to be understood.
+   */
+  setStarred(on: boolean): void {
+    this.starButton.classList.toggle('is-on', on)
+    this.starButton.setAttribute('aria-pressed', String(on))
+    this.starButton.disabled = on
+    // `this.uri`, so a companion that descended into an entry names the rung it
+    // is actually reading — which is the file a task would run against, and the
+    // one thing this button is about.
+    this.starButton.title = on
+      ? `${fileLabel(this.uri)} is the map an analysis runs against`
+      : `Run analyses against ${fileLabel(this.uri)} instead`
   }
 
   syncLock(): void {
@@ -452,6 +656,26 @@ export class MapPanel {
   setLaneFloor(floor: Record<LaneEdge, number>): void {
     this.laneFloor = { ...floor }
     this.panel?.setLaneFloor(this.laneFloor)
+  }
+
+  /**
+   * Arm this panel's map for placing marks, or answer that it has none.
+   *
+   * A companion is a map like the lead's and a mark is a coordinate, so there
+   * was never a reason for the gesture to work on one and not the other — only
+   * a picker that had been given the session's own panel and nothing else. The
+   * marks are already drawn on every panel that shows the locus, because they
+   * live in one store that every panel draws from (`ui/MatrixPanel.ts`); this is
+   * the half that lets them be *put* there.
+   *
+   * A panel that is still reading has no map to arm and answers with a cancel
+   * that does nothing, which is the same shape a torn-down panel answers with.
+   */
+  armPicking(
+    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
+    onEnd: () => void = () => {},
+  ): () => void {
+    return this.panel?.armPicking(onPoint, onEnd) ?? ((): void => {})
   }
 
   remeasure(): void {
@@ -542,10 +766,20 @@ export class MapPanel {
     if (entry === entryLabel(this.uri) || !this.entries.includes(entry)) return
     const uri = `${splitUri(this.uri).path}::${this.entryGroup}/${entry}`
     this.resolved = uri
-    // Both caches, in this order: the open is memoised on the promise and the
-    // read on a key that cannot tell two resolutions apart.
+    // The reader has chosen a rung for this panel, so whatever the deck last
+    // said about one it could not reach is no longer the state of things.
+    this.sayResolution(null)
+    // Every cache that is keyed on the address, in this order: the open is
+    // memoised on the promise, the read on a key that cannot tell two
+    // resolutions apart, and the analysis facts on nothing at all — they are
+    // fetched once and held, which is right for a panel whose URI never moves
+    // and wrong for the one control that moves it. A starred panel is
+    // re-prepared by the deck, which is told through `onResolved` below and is
+    // the only thing that knows whether anybody is going to ask.
     this.opening = null
     this.read = null
+    this.facts = null
+    this.preparing = null
     this.nameEl.title = uri
     this.props.onResolved(uri)
     this.panel?.setBusy(true)
@@ -607,6 +841,7 @@ export class MapPanel {
     try {
       const info = await this.open()
       if (this.disposed) return
+      this.opened = info
       this.paintEntries(info)
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
@@ -740,7 +975,30 @@ export class MapPanel {
     // the block that is about to be replaced.
     this.panel?.setDerive(this.props.derive())
     this.panel?.setTurn(this.props.turn())
+    // **The store the lanes are read from is captured at construction, and the
+    // session builds a new one on every open.** A change of resolution is a
+    // fresh open — so is re-dropping the file, so is following a link into
+    // another entry — and `Session.setUpAnnotations` puts down the old
+    // `AnnotationStore` and makes another, keyed on the new URI. The lead's view
+    // is rebuilt around it and a companion's is not, so from that moment the
+    // companion was subscribed to a store nobody writes to: every track placed
+    // on it, computed or dropped, went into the live store and was drawn
+    // nowhere. Rebuilt rather than reconciled, because the store is threaded
+    // through the lanes, the editor, the groups card and four canvases, and one
+    // of them holding the previous one is the same bug again. The block is
+    // already in hand — `setData` runs below — so this costs a construction and
+    // no read.
+    const context = this.props.annotations()
+    // `?? null` on both sides: a file with a genome layer carries no annotations
+    // at all (§8.5), so the context is `undefined` for the life of the panel —
+    // and `undefined !== null` would rebuild the map on every block it read.
+    const store = context?.store ?? null
+    if (this.panel !== null && store !== this.laneStore) {
+      this.panel.destroy()
+      this.panel = null
+    }
     if (this.panel === null) {
+      this.laneStore = store
       // Read once, here, rather than held from construction: a companion is
       // built before its file has been opened and the lead may have been
       // recoloured in between.
@@ -767,9 +1025,7 @@ export class MapPanel {
         initial: this.look,
         ...(this.props.derive() === undefined ? {} : { derive: this.props.derive() }),
         ...(turn === undefined ? {} : { turn }),
-        ...(this.props.annotations() === undefined
-          ? {}
-          : { annotations: this.props.annotations() }),
+        ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
         cornerControls: true,
         hideTitle: true,
@@ -863,6 +1119,12 @@ export class MapPanel {
   private say(message: string): void {
     this.note.textContent = message
     this.note.classList.toggle('hidden', message === '')
+  }
+
+  /** One line about a resolution this file has not got, or none. */
+  private sayResolution(message: string | null): void {
+    this.resNoteEl.textContent = message ?? ''
+    this.resNoteEl.classList.toggle('hidden', message === null)
   }
 
   private sayRefusal(): void {

@@ -388,3 +388,51 @@ describe('the pointer over the strip', () => {
     view.bar.destroy()
   })
 })
+
+/**
+ * The cursor, which is the other half of the affordance.
+ *
+ * The strip carries two gestures at once — a press picks a sequence, a drag
+ * names a window inside one — and what tells them apart before either happens is
+ * the pointer. A hand over a band says the press will open it; the caret comes
+ * back the moment the hand starts travelling, because naming a stretch is what
+ * selecting text does and a hand there would promise a pick that is no longer
+ * what the gesture means.
+ */
+describe('what the pointer says the press will do', () => {
+  const stage = (bar: SequenceBar): HTMLElement =>
+    bar.el.querySelector('.seqbar-stage') as HTMLElement
+  const over = (bar: SequenceBar, x: number): void => {
+    stage(bar).dispatchEvent(new MouseEvent('mousemove', { clientX: x, bubbles: true }))
+  }
+
+  it('is a hand over a band, because a press there opens that sequence', () => {
+    const view = open()
+    over(view.bar, 40)
+    expect(stage(view.bar).classList.contains('is-over-band')).toBe(true)
+    expect(stage(view.bar).classList.contains('is-dragging')).toBe(false)
+    view.bar.destroy()
+  })
+
+  it('gives the caret back once the hand is naming a stretch', () => {
+    const view = open()
+    over(view.bar, 40)
+    stage(view.bar).dispatchEvent(
+      new MouseEvent('mousedown', { button: 0, clientX: 40, bubbles: true }),
+    )
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200 }))
+    expect(stage(view.bar).classList.contains('is-dragging')).toBe(true)
+    expect(stage(view.bar).classList.contains('is-over-band')).toBe(false)
+    window.dispatchEvent(new MouseEvent('mouseup', { clientX: 200 }))
+    expect(stage(view.bar).classList.contains('is-dragging')).toBe(false)
+    view.bar.destroy()
+  })
+
+  it('says nothing once the pointer has left the strip', () => {
+    const view = open()
+    over(view.bar, 40)
+    stage(view.bar).dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }))
+    expect(stage(view.bar).classList.contains('is-over-band')).toBe(false)
+    view.bar.destroy()
+  })
+})

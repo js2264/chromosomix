@@ -471,7 +471,7 @@ suite('compartments, against numpy.linalg.eigh and cooltools.eigs_cis', () => {
     const accumulator = new ExpectedAccumulator(n - 1)
     accumulator.addBlock(dense)
     const oe = observedOverExpected(dense.values, n, index, singleGroupPlan(n, accumulator.finish()))
-    const correlation = correlationMatrix(oe, index.length)
+    const correlation = await correlationMatrix(oe, index.length)
     const pairs = leadingEigenpairs(correlation, index.length, 1)
     return { index, vector: pairs.length > 0 ? pairs[0].vector : new Float64Array() }
   }

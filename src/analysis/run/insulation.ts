@@ -21,6 +21,7 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
 import {
   callBoundaries,
+  diamondCells,
   diamondSums,
   insulationScore,
   type Boundary,
@@ -83,6 +84,29 @@ export const runInsulation: TaskRunner = async (job) => {
   const windows = windowLadder(job.params)
   const widest = windows[windows.length - 1]
 
+  // A diamond spans separations `1 … 2w − 1`, so ignoring `2w` diagonals or more
+  // leaves it with nothing to sum. Said here rather than discovered as an empty
+  // lane: every bin would score `NaN`, which is indistinguishable from a file
+  // with no contacts in it, and the reader's next move would be to doubt the
+  // data rather than the setting.
+  const empty = windows.filter((window) => diamondCells(window, ignoreDiags) <= 0)
+  if (empty.length === windows.length) {
+    throw new Error(
+      `Ignoring ${ignoreDiags} diagonals leaves nothing in a diamond ` +
+        `${windows.length === 1 ? `${widest} bins` : `up to ${widest} bins`} wide: it spans ` +
+        `separations 1 to ${2 * widest - 1}, so every cell is inside the cut. Ignore fewer, or ` +
+        'use a wider window.',
+    )
+  }
+  if (empty.length > 0) {
+    job.note(
+      `Ignoring ${ignoreDiags} diagonals empties the ${empty.join(', ')} bin ` +
+        `${empty.length === 1 ? 'window' : 'windows'} — a diamond of ${empty[0]} bins spans only ` +
+        `${2 * empty[0] - 1} separations — so ${empty.length === 1 ? 'that scale is' : 'those scales are'} ` +
+        'all gaps.',
+    )
+  }
+
   const units = planUnits(job, strParam(job.params, 'region', '').trim()).filter(
     // A sequence with no bin whose whole diamond fits produces a column of NaN
     // at full cost. Dropped here and counted, rather than read and thrown away.
@@ -112,7 +136,9 @@ export const runInsulation: TaskRunner = async (job) => {
   const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
   for (let u = 0; u < units.length; u++) {
-    job.throwIfCancelled()
+    // Once per sequence: the diamonds below are a double loop over one square
+    // and yield nothing, so this is the only place a cancel can be heard.
+    await job.breathe()
     job.progress(u, units.length, units[u].name)
     const unit = units[u]
     const square = await squareFor(job, unit.span, { block, balance, value })

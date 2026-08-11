@@ -3,12 +3,19 @@
  *
  * Three failure modes that all look like working software until you check:
  *
- * 1. **Names decoded as Latin-1.** metacooler sizes its `S<n>` name columns by
- *    *encoded byte length* so multi-byte characters survive, but h5py stamps
- *    those datatypes ASCII and h5wasm honours that literally — its `slice()`
- *    decodes with `TextDecoder('ascii')`, an alias for windows-1252. Every byte
- *    is still there; only the decoding is wrong, so `contig_ñ_04` comes back as
- *    `contig_Ã±_04` and nothing throws.
+ * 1. **A fixed-length string column decoded as Latin-1.** h5py stamps `S<n>`
+ *    datatypes ASCII and h5wasm honours that literally — its `slice()` decodes
+ *    with `TextDecoder('ascii')`, an alias for windows-1252. Every byte is still
+ *    there; only the decoding is wrong, so `Prevotella copri (café strain)`
+ *    comes back mojibaked and nothing throws.
+ *
+ *    **Names are not where this can bite, and deliberately so**: `/contigs`
+ *    doubles as cooler's `/chroms` and cooler decodes it with an ASCII
+ *    `.astype("U")`, so metacooler refuses to write a non-ASCII name at all and
+ *    this viewer does not claim to read one. What a file may still carry is an
+ *    extra `/genomes` column — an accented taxonomy is legal metadata cooler
+ *    never sees — so the decode is exercised where it can still be wrong, over
+ *    the bytes, with no fixture needed to hold them.
  * 2. **Genome 0 assumed to be `__unbinned__`.** `create --drop-unassigned`
  *    omits the row entirely, which makes index 0 an ordinary MAG in exactly the
  *    files that were binned most cleanly (correction #4).
@@ -21,124 +28,47 @@ import { describe, expect, it } from 'vitest'
 
 import { UNBINNED_NAME } from '../../src/constants'
 import { parseMetacoolerRange } from '../../src/metacooler/range'
+import { decodeFixedStrings } from '../../src/h5/readTable'
 import { goldenMaps, loadGolden, openMap, withMap } from './_golden'
 
 const MAPS = goldenMaps()
 const find = (id: string) => MAPS.find((m) => m.id === id)!
 
-/** At least one code point outside 7-bit ASCII. */
-const NON_ASCII = /[^\u0000-\u007F]/
-
-// ---------------------------------------------------------------------------
-// UTF-8 names
-// ---------------------------------------------------------------------------
-
-describe('utf8.metacool: non-ASCII genome *and* contig names', () => {
-  const map = find('utf8.metacool')
-
-  it('round-trips every name as UTF-8', async () => {
-    await withMap(map, (mc) => {
-      const golden = map.golden
-      expect(mc.genomeNames).toEqual(golden.genomes.rows.map((r: any) => r.name))
-      expect(mc.chromnames).toEqual(golden.contigs.rows.map((r: any) => r.name))
-      // Spelled out, so a regression reads as the actual mojibake rather than
-      // as an opaque array diff.
-      expect(mc.chromnames).toContain('contig_ñ_04')
-      expect(mc.chromnames).toContain('contig_中_03')
-      expect(mc.genomeNames).toContain('MAG_αβ')
-      expect(mc.genomeNames).toContain('MAG_日本')
+describe('a fixed-length string column is decoded as UTF-8, not as Latin-1', () => {
+  /** One `S<n>` column, as HDF5 stores it: fixed-width records, NUL-padded. */
+  function column(values: string[], itemSize: number): Uint8Array {
+    const bytes = new Uint8Array(values.length * itemSize)
+    const encoder = new TextEncoder()
+    values.forEach((value, index) => {
+      bytes.set(encoder.encode(value), index * itemSize)
     })
+    return bytes
+  }
+
+  it('reads a multi-byte character back as itself', () => {
+    // What h5wasm's own `slice()` would give for these bytes is `caf├⌐`; the
+    // reader takes the raw bytes and decodes them itself for exactly this.
+    const values = ['Prevotella', 'Bacteroïdes', '日本のMAG']
+    const size = 16
+    expect(decodeFixedStrings(column(values, size), size, values.length)).toEqual(values)
   })
 
-  it('is not decoding as Latin-1', async () => {
-    await withMap(map, (mc) => {
-      // What the h5wasm ASCII path produces for the same bytes. If any of these
-      // appear, `readStringSlice` stopped reading raw bytes.
-      for (const wrong of ['contig_Ã±_04', 'contig_Ã¸_05', 'MAG_Î±Î²', 'MAG_æ¥æÂ¬']) {
-        expect(mc.chromnames).not.toContain(wrong)
-        expect(mc.genomeNames).not.toContain(wrong)
-      }
-      // Every name still has at least one character outside ASCII, so the
-      // fixture is actually exercising the path.
-      expect(mc.chromnames.every((n) => NON_ASCII.test(n))).toBe(true)
-      expect(mc.genomeNames.filter((n) => NON_ASCII.test(n)).length).toBe(2)
-    })
+  it('strips the NUL padding rather than carrying it into the string', () => {
+    const size = 8
+    const decoded = decodeFixedStrings(column(['ab'], size), size, 1)
+    expect(decoded).toEqual(['ab'])
+    expect(decoded[0]).not.toContain('\u0000')
   })
 
-  it('the S<n> width is a byte count, not a character count', async () => {
-    // The file stores 11-character names in an S13 column because two of the
-    // characters are two bytes in UTF-8. A reader that sliced by characters
-    // would truncate; one that decoded per fixed-width record and stripped NUL
-    // padding gets it right.
-    const dtype = map.golden.dtypes.contigs.name as { dtype: string; kind: string }
-    expect(dtype.dtype).toBe('|S13')
-    expect(dtype.kind).toBe('S')
-    await withMap(map, (mc) => {
-      for (const name of mc.chromnames) {
-        expect(name.length).toBe(11)
-        expect(new TextEncoder().encode(name).length).toBeGreaterThan(11)
-        // No NUL padding leaked into the decoded string.
-        expect(name).not.toContain('\u0000')
-        expect(name.trimEnd()).toBe(name)
-      }
-    })
-  })
-
-  it('cooler itself cannot open this file — the golden says so', () => {
-    // Recorded by the fixture generator, not asserted against Python here: the
-    // point is that the JS reader is the *only* reader for this shape, which is
-    // why the golden is partial (see `_manifest.json`).
-    const python = map.golden.python_open as { ok: boolean; error_type: string }
-    expect(python.ok).toBe(false)
-    expect(python.error_type).toBe('UnicodeDecodeError')
-    expect(map.full).toBe(false)
+  it('sizes a record by bytes, not by characters', () => {
+    // `é` is two bytes, so three of these characters fill a six-byte record and
+    // a reader slicing by character would run into its neighbour.
+    const size = 6
+    const values = ['ééé', 'abc']
+    expect(decodeFixedStrings(column(values, size), size, 2)).toEqual(values)
   })
 })
 
-describe('utf8_genomes.metacool: non-ASCII genome names, ASCII contigs', () => {
-  const map = find('utf8_genomes.metacool')
-
-  it('round-trips the genome names and resolves a range by one', async () => {
-    await withMap(map, (mc) => {
-      expect(mc.genomeNames).toEqual(map.golden.genomes.rows.map((r: any) => r.name))
-      expect(mc.displayGenomes().map((i) => mc.genomeNames[i])).toEqual(
-        map.golden.displayable_genomes,
-      )
-      const nonAscii = mc.genomeNames.filter((n) => NON_ASCII.test(n))
-      expect(nonAscii.length).toBe(5)
-      for (const name of nonAscii) {
-        const parsed = parseMetacoolerRange(mc, name)
-        expect(parsed.kind).toBe('genome')
-        expect(parsed.label).toBe(name)
-        expect([...parsed.extent]).toEqual(
-          (map.golden.genome_extent as Record<string, [number, number]>)[name],
-        )
-      }
-    })
-  })
-
-  it('names a non-ASCII genome correctly in a refusal', async () => {
-    await withMap(map, (mc) => {
-      const name = mc.genomeNames.find((n) => NON_ASCII.test(n))!
-      expect(name).toMatch(NON_ASCII)
-      let message = ''
-      try {
-        parseMetacoolerRange(mc, `${name}:1-1000`)
-      } catch (error) {
-        message = (error as Error).message
-      }
-      // Python's repr prints a non-ASCII str as itself, so this is the same
-      // sentence the CLI produces.
-      expect(message).toBe(
-        `Range '${name}:1-1000': '${name}' is a genome name — coordinate suffixes are not ` +
-          `allowed for genome ranges. Use just '${name}'.`,
-      )
-    })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Genome 0 (correction #4)
 // ---------------------------------------------------------------------------
 
 describe('dropped.metacool: genome 0 is an ordinary MAG', () => {

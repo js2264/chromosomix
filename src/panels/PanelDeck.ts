@@ -91,7 +91,8 @@ import {
   type PanelRef,
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
-import { LEAD_MAP, onlyOn } from '../annotations/placement'
+import type { ManualPoint } from '../annotations/manual'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
 import { fileLabel } from '../ui/labels'
 
@@ -107,6 +108,13 @@ export interface PanelDeckProps {
   onMapsChange(maps: string | undefined): void
   /** Where the per-file preferences are remembered — the session's memory key. */
   memoryKey(): string
+  /**
+   * The star moved: which map an analysis now runs against (§18.2).
+   *
+   * The session's cue to re-price the Analysis column and re-read its context,
+   * because both are answers about one file and the file has changed.
+   */
+  onStarChange?(): void
   /**
    * What to call the session's own map, for the heading over its cell.
    *
@@ -146,6 +154,28 @@ export interface PanelDeckProps {
    * bar claiming otherwise.
    */
   turn?(): TurnPresentation | undefined
+  /**
+   * Put a colour scale on the session's own map — "fix all scales" (§16.2).
+   *
+   * Through the session rather than onto the panel, and that is not ceremony:
+   * `MatrixPanel.applyScale` writes the clip onto the panel and tells nobody, so
+   * the next render — which rebuilds the lead's view from the *state* — would
+   * put it straight back. The session's own colour controls patch the view
+   * state, so this does too, and the choice sticks and travels in the link.
+   *
+   * Absent where the lead is a view with no scale to set, in which case the
+   * toggle simply moves the companions.
+   */
+  onLeadScale?(scale: ScaleState): void
+  /**
+   * Read the session's own map at this bin size — "fix all resolutions".
+   *
+   * Only reachable when the star is on a companion: it is the one direction the
+   * deck cannot take itself, because changing the lead's rung means reopening
+   * the file the session *is* — the breadcrumb's own entry picker, from the
+   * other end.
+   */
+  onLeadBinsize?(binsize: number): boolean
   /**
    * The bin size the session's own file is at, or `undefined`.
    *
@@ -194,12 +224,6 @@ interface Slot {
 }
 
 /**
- * What a reader is told when the deck will not open another cell.
- *
- * In the deck's own bar and on the `+` edges rather than on an error screen: a
- * refusal to open a *seventh* map is not a reason to take the six away.
- */
-/**
  * What a deck-wide figure is rasterised at, and the air between its cells.
  *
  * A fixed 300 dpi rather than a picker of its own: the per-panel export already
@@ -209,10 +233,17 @@ interface Slot {
 const DECK_EXPORT_DPI = 300
 const DECK_EXPORT_GAP = 0.02
 
+/**
+ * What a reader is told when the deck will not open another cell.
+ *
+ * In the deck's own bar and on the `+` edges rather than on an error screen: a
+ * refusal to open a *sixty-fifth* map is not a reason to take the others away.
+ */
 const NO_ROOM =
-  `${MAX_PANELS} maps is the limit for one deck. Every panel is a worker and, for a ` +
-  'whole-file view, a block held in memory — and each one added makes every panel’s share of ' +
-  'this tab’s memory smaller. Close one to open another.'
+  `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
+  'many are useful: every panel is a worker and, for a whole-file view, a block held in memory, ' +
+  'and each one added makes every panel’s share of this tab’s memory smaller. Long before this ' +
+  'it is the share that refuses, panel by panel and in bytes. Close one to open another.'
 
 let nextSlotId = 1
 
@@ -222,6 +253,11 @@ export class PanelDeck {
   private readonly toolbar: HTMLElement
   private readonly grid: HTMLElement
   private readonly leadHead = el('header', { class: 'deck-head deck-head-lead hidden' })
+  /** The lead's half of the star; every companion carries its own. */
+  private readonly leadStar = iconButton('star', '', () => this.setStarred(LEAD_MAP), {
+    class: 'btn btn-icon deck-star is-on',
+    size: 13,
+  })
   /**
    * Where the lead view's own heading goes while a deck is on.
    *
@@ -260,6 +296,7 @@ export class PanelDeck {
   private leadGeometry: PanelGeometry = {
     lanes: { top: 0, right: 0, bottom: 0, left: 0 },
     plot: 0,
+    plotHeight: 0,
   }
   /** Guards {@link align} against the reports its own writes provoke. */
   private aligning = false
@@ -278,8 +315,37 @@ export class PanelDeck {
    * said, in the vocabulary the grid is actually in.
    */
   private columns: number | null = null
-  /** Whether the lead's clip is pushed down to every companion (§16.2). */
-  private shareLook = false
+  /**
+   * The map an analysis runs against — the star (§18.2).
+   *
+   * **Not the lead, and deliberately a second idea.** The lead is what the
+   * session *is of*: the breadcrumb, the tables, the tracks and the second-file
+   * split all name it, and it does not move (§16.9). What a reader wants a deck
+   * for is often the other question — four replicates on screen and *this* one is
+   * the one to measure — and answering it by changing which file the session is
+   * of would rewrite the breadcrumb and the tables to run a P(s).
+   *
+   * So the star says only which picture the tasks read, it starts on the lead,
+   * and it goes back to the lead the moment the map it named leaves. One
+   * starred map at a time, because a task runs against one file: this is a radio
+   * button drawn as five, which is the same shape the Annotations card's own
+   * star has for the same reason (`ui/AnnotationCard.ts`).
+   */
+  private starred: MapId = LEAD_MAP
+
+  /**
+   * The bin size the session's own map was last seen at.
+   *
+   * Watched rather than told, because there is no one place to be told from: a
+   * reader changes the first map's resolution from the breadcrumb's own picker,
+   * a link can arrive naming another rung, and *fix all resolutions* can move it
+   * from the deck's bar. All three end in the same place — the session reopens
+   * its file — so the deck notices the number change and takes every companion
+   * with it (§16.2). `undefined` until the first view lands, which is why the
+   * first sighting only records: a companion already opens on the first map's
+   * bin size (§3.4) and has nothing to be moved to.
+   */
+  private leadBinsize: number | undefined
   private state: ViewState | null = null
   /**
    * The `maps` value this deck last wrote, so it does not act on its own echo.
@@ -299,7 +365,11 @@ export class PanelDeck {
 
   constructor(private readonly props: PanelDeckProps) {
     this.columns = this.recallColumns()
-    this.shareLook = recall<boolean>(props.memoryKey(), 'deck:share-look') === true
+    // Restored, then reconciled: a session written when four maps were open can
+    // name a slot this one has not built, and `keepStarPresent` puts it back on
+    // the lead rather than leaving the Analysis column pointed at nothing.
+    const star = recall<string>(props.memoryKey(), 'deck:starred')
+    if (typeof star === 'string' && star !== '') this.starred = star
 
     this.urlInput = el('input', {
       class: 'input input-tiny deck-url',
@@ -421,7 +491,7 @@ export class PanelDeck {
     panel?.setLaneListener((budget) => this.align(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
     if (panel === null) {
-      this.align({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0 })
+      this.align({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0, plotHeight: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
       // is about the lead and there is now nothing for it to hold.
       this.paintBar()
@@ -434,8 +504,53 @@ export class PanelDeck {
       locked: () => this.leadLocked,
       show: (rows, cols) => panel.showViewport(rows, cols),
     })
-    panel.setViewportListener((rows, cols) => this.lock.report(LEAD, rows, cols))
+    panel.setViewportListener((rows, cols) => {
+      this.lock.report(LEAD, rows, cols)
+      // Before the notes, because it is one of the things they are about: a
+      // companion whose band reaches a different distance is refused by
+      // `lockNote`, and this is what stops that being a thing two boxes can
+      // disagree into.
+      this.syncTurnReach()
+      // The lead's first report is the moment a companion's note can be
+      // *answered*: until the lead has a block there is nothing to compare
+      // against, so `lockNote` says nothing, and a real disagreement discovered
+      // afterwards would otherwise sit unsaid until the next thing that happened
+      // to repaint the panel.
+      this.syncLockNotes()
+    })
     this.paintBar()
+  }
+
+  /** Re-ask every companion's chain and line, after something they compare against moved. */
+  private syncLockNotes(): void {
+    for (const slot of this.slots) slot.panel?.syncLock()
+  }
+
+  /**
+   * One distance from the diagonal across every turned panel (§17.2, §16.3).
+   *
+   * A turned map's band is cut as deep as its own box has rows for, which is the
+   * right rule for one map and cannot work for several: a grid lays its cells
+   * out over more than one frame, so two panels asking their own boxes at their
+   * own moments get two answers and neither is wrong. What the reader saw was
+   * two bands of visibly different depths, the lock refusing to move them
+   * together, and `lockNote` blaming the files' *resolutions* for what was a
+   * layout race — a claim about their data, made out of a timing accident, and
+   * cured by turning the deck off and on again, which re-cuts both bands from
+   * boxes that have by then settled.
+   *
+   * So the lead's reach is pushed down, in base pairs, exactly as the window is
+   * and for the same reason: each panel converts to its own lattice, so panels
+   * of unequal resolution reach the same distance rather than the same number of
+   * bins. The lead keeps its box — it is the one map whose depth is a reader's,
+   * through the height of the window they are looking at.
+   *
+   * Companions are released back to their own boxes when the lead is not turned,
+   * which is what makes this leave a square deck exactly as it was.
+   */
+  private syncTurnReach(): void {
+    const reach = this.lead?.turnReach() ?? null
+    for (const slot of this.slots) slot.panel?.map?.setTurnReach(reach)
   }
 
   /**
@@ -455,6 +570,18 @@ export class PanelDeck {
     if (this.place !== null && this.place !== place) this.lock.reset()
     this.place = place
 
+    // The session's own map may have changed rung since the last view — from the
+    // breadcrumb's picker, from a link, or from this deck's own button — and
+    // every companion follows it there. Before the panels are handed the state,
+    // so a companion that is about to re-read does it once at the new resolution
+    // rather than twice.
+    const binsize = this.props.binsize?.()
+    if (binsize !== undefined && binsize > 0) {
+      const moved = this.leadBinsize !== undefined && this.leadBinsize !== binsize
+      this.leadBinsize = binsize
+      if (moved) this.followLeadResolution(binsize)
+    }
+
     this.state = state
     if (this.published === null || this.published.value !== state.maps) {
       const wanted = parseMaps(state.maps)
@@ -466,23 +593,112 @@ export class PanelDeck {
   }
 
   /**
-   * Push the lead's clip down to every companion, where "one scale" is on.
+   * The colour scale the deck is being asked to put every panel on.
    *
-   * Called by the session *after* it has applied a colour change to the lead,
-   * which is the whole of why this is a method rather than part of
-   * {@link apply}: the deck is reconciled before the lead is recoloured — a
-   * colour-only change is still a view its panels have to be handed — so reading
-   * the lead's scale during `apply` reads the one it is about to stop having.
-   *
-   * Without this the setting worked once, when it was switched on, and every
-   * later nudge of the lead's clip left the companions on the old one while the
-   * toolbar went on claiming the same colour is the same number of contacts
-   * across the deck — a claim a reader acts on when reading the figure.
+   * The **starred** map's, which is the map every other "all of them" in this
+   * bar is measured from — it is what a task runs against (§18.2), and making
+   * it what the scale and the resolution come from too is one idea rather than
+   * three. `null` where there is nothing to read one from: a first map that is a
+   * table, a starred companion still opening.
    */
-  syncSharedLook(): void {
-    if (!this.shareLook) return
-    const look = this.leadLook()
-    for (const slot of this.slots) slot.panel?.applyLook(look)
+  private starredLook(): ScaleState | null {
+    // The star's own map and never a fall-back to the first one: a starred
+    // companion that has not drawn yet has no numbers, and answering with
+    // somebody else's while the button says "the starred map" is worse than
+    // answering with nothing.
+    const panel = this.starred === LEAD_MAP ? this.lead : (this.starredPanel?.map ?? null)
+    if (panel === null) return null
+    // **What it is drawing with**, not what the reader has set on it. Those are
+    // the same thing only where somebody has nudged a clip; everywhere else the
+    // setting is `NaN` — §7.1's auto rule, resolved per read — and reading it
+    // here is why the press used to carry the ramp and the transform across the
+    // deck and leave every range where it was ({@link MatrixPanel.shownScale}).
+    return scaleState(panel.shownScale())
+  }
+
+  /**
+   * Draw every panel on the starred map's clip — the *fix all scales* press.
+   *
+   * **An action, and no longer a mode.** It used to be a switch that stayed on,
+   * and a switch makes a promise it cannot keep: the moment it is lit, every
+   * later nudge of any panel's clip either has to be undone or leaves the deck
+   * claiming a shared scale it no longer has. A press says something a reader
+   * can rely on — *these are all on that one's numbers now* — and the very next
+   * nudge is honestly their own again. The same shape as the download beside it,
+   * which is the other thing in this bar that does something rather than being
+   * something.
+   *
+   * The first map goes through the session (see
+   * {@link PanelDeckProps.onLeadScale}), because a clip written straight onto
+   * its panel is one the next render puts back — its colour lives in the view
+   * state. Every other panel is told directly: a companion's scale is its own
+   * and is in no state to be restored from.
+   */
+  private fixScales(): void {
+    const look = this.starredLook()
+    if (look === null) return
+    if (this.starred !== LEAD_MAP) this.props.onLeadScale?.(look)
+    for (const slot of this.slots) {
+      if (slot.id === this.starred) continue
+      slot.panel?.applyLook(look)
+    }
+    this.warn('')
+  }
+
+  /** The bin size the deck is being asked to put every panel on. */
+  private starredBinsize(): number | undefined {
+    const panel = this.starredPanel
+    if (panel !== null) return panel.binsize()
+    return this.props.binsize?.()
+  }
+
+  /**
+   * Read every panel at the starred map's bin size — the *fix all resolutions*
+   * press.
+   *
+   * An action for {@link fixScales}'s reason, and **exact** for
+   * {@link MapPanel.useBinsize}'s: a file that has not got that level stays
+   * where it is and says so under its own map, rather than being moved to the
+   * nearest thing and leaving the deck at two resolutions under a button that
+   * has just claimed one. The first map is named in the deck's own line instead,
+   * since it is the one panel with no frame of its own to be told in.
+   */
+  private fixResolutions(): void {
+    const binsize = this.starredBinsize()
+    if (binsize === undefined || !Number.isFinite(binsize) || binsize <= 0) return
+    const refused: string[] = []
+    if (this.starred !== LEAD_MAP && this.props.onLeadBinsize?.(binsize) === false) {
+      refused.push(this.props.leadName?.() ?? 'the first map')
+    }
+    for (const slot of this.slots) {
+      if (slot.id === this.starred || slot.panel === null) continue
+      if (!slot.panel.useBinsize(binsize)) refused.push(fileLabel(slot.panel.uri))
+    }
+    this.warn(
+      refused.length === 0
+        ? ''
+        : `${refused.join(', ')} ${refused.length === 1 ? 'has' : 'have'} no ` +
+          `${fmt.bp(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
+    )
+  }
+
+  /**
+   * Take every companion to the resolution the session's own map just moved to.
+   *
+   * A reader who changes the first map's rung means the deck, not one cell of
+   * it: the whole claim a deck makes is that its pictures are of one place and
+   * can be read against each other, and half of them at 1 kb beside the rest at
+   * 10 kb is a claim it is no longer making. The same rule
+   * {@link fixResolutions} follows — exact, or the panel stays where it is and
+   * says why — because *this file has not got that level* is a fact about the
+   * file that no amount of good intention changes.
+   *
+   * Watched from {@link apply} rather than reported by the session, so every
+   * road to a new rung arrives here: the breadcrumb's picker, a link, and the
+   * deck's own button.
+   */
+  private followLeadResolution(binsize: number): void {
+    for (const slot of this.slots) slot.panel?.useBinsize(binsize)
   }
 
   /** Show the add row and put the caret in it — the shell's "add a map". */
@@ -502,7 +718,15 @@ export class PanelDeck {
     const out = [{ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' }]
     for (const slot of this.slots) {
       if (slot.panel === null) continue
-      out.push({ id: slot.id, label: fileLabel(slot.ref.kind === 'remote' ? slot.ref.uri : slot.id) })
+      // The panel's **own** URI, which is neither the ref's nor the slot's id.
+      // Not the id: it used to fall back to one for anything that was not a
+      // remote file, which is every local companion — so a reader who dropped
+      // `rep2.cool` on a cell was offered `p3` as the name of the map to draw
+      // their bigWig on, in a list where every other row said what it was. And
+      // not the ref's URI either, because a companion that descended into an
+      // entry of a collection is showing `rep2.mcool::1000` and the ref catches
+      // up to that only after `onResolved` has been round the houses.
+      out.push({ id: slot.id, label: fileLabel(slot.panel.uri) })
     }
     return out
   }
@@ -634,6 +858,14 @@ export class PanelDeck {
       // reading of the rules that fixes that, only a number both can be given.
       const plot = Math.round(held.plot)
       this.grid.style.setProperty('--deck-plot', plot > 0 ? `${plot}px` : '')
+      // And its height, which is the width only while the picture is a square.
+      // An empty cell is a card the size of a *map*, and it has no map to ask —
+      // so with only the width to go on it drew itself square, which under a
+      // turn is several times the height of the band beside it, set the height
+      // of the whole grid row, and left every map in that row standing at the
+      // foot of a rectangle of air (`ui/styles.css`'s `.deck-vacant`).
+      const plotHeight = Math.round(held.plotHeight)
+      this.grid.style.setProperty('--deck-plot-h', plotHeight > 0 ? `${plotHeight}px` : '')
       for (const slot of this.slots) slot.panel?.remeasure()
     } finally {
       this.aligning = false
@@ -691,6 +923,10 @@ export class PanelDeck {
       slot.vacancy?.destroy()
     }
     this.slots = next
+    // A link, or a restored session, can name fewer maps than the star knew
+    // about — and a star on a slot that was not rebuilt would leave the Analysis
+    // column pointed at a picture that is not on screen. Reconciled by
+    // `paintGrid`, along with every other way the list can change.
     this.paintGrid()
   }
 
@@ -718,6 +954,7 @@ export class PanelDeck {
       onSettled: () => this.settle(slot),
       onClose: () => this.remove(slot),
       onToggleLock: () => this.toggleLock(slot),
+      onStar: () => this.setStarred(slot.id),
       isLocked: () => slot.locked,
       lockNote: () => this.lockNote(slot),
       derive: () => this.props.derive?.(),
@@ -757,6 +994,16 @@ export class PanelDeck {
     if (slot.ref.kind === 'vacant' || slot.ref.uri === uri) return
     slot.ref = { kind: slot.ref.kind, uri }
     this.publish()
+    // A **starred** panel that moved rung is a different file to an analysis:
+    // the facts it answers with name a URI, and the one it was holding pointed
+    // at the resolution it used to be at. Nothing else re-reads them — the panel
+    // fetches them once and keeps them, which is right, so the invalidation has
+    // to happen where the address changes. Without this, picking `::5000` on the
+    // starred companion and pressing a task ran it against `::1000` and captioned
+    // the result with the rung on screen.
+    if (slot.id !== this.starred || slot.panel === null) return
+    void slot.panel.prepareAnalysis(() => this.props.onStarChange?.())
+    this.props.onStarChange?.()
   }
 
   /**
@@ -777,7 +1024,10 @@ export class PanelDeck {
       slot.panel?.syncLock()
       return
     }
-    if (this.shareLook) slot.panel?.applyLook(this.leadLook())
+    // Nothing pushed here. A companion opens on the first map's base look and
+    // its bin size (§3.4, {@link MapPanelProps.initialLook}), and what the two
+    // buttons in the bar do is a *press* rather than a state a newcomer has to
+    // be brought into line with.
     this.lock.join({
       id: slot.id,
       bpPerCell: () => map.bpPerCell(),
@@ -787,9 +1037,51 @@ export class PanelDeck {
     })
     map.setViewportListener((rows, cols) => this.lock.report(slot.id, rows, cols))
     map.setHoverListener((cell) => this.echoHover(slot.id, map, cell))
+    // Before the lock and before the note: a panel that has just cut its band
+    // from whatever height its cell had while the grid was settling is put on
+    // the deck's distance first, so `lockNote` is asked about two bands that
+    // already agree rather than about a layout race.
+    this.syncTurnReach()
     slot.panel?.syncLock()
+    this.seedFromLead()
     this.lock.catchUp(slot.id)
     this.paintBar()
+  }
+
+  /**
+   * Tell the lock where the lead is, for a panel about to be caught up to it.
+   *
+   * The lock learns a window from a panel *reporting* one, and a panel reports
+   * when it draws. Both of the moments a deck catches a panel up are moments
+   * where the lead may not have drawn since the lock was built:
+   *
+   * - a **deck is created** by the reader adding a second map, and the map they
+   *   added it beside was drawn — and reported nothing, because until that press
+   *   there was no lock listening — while they were choosing the file. So every
+   *   pan and zoom they had made up to that point was invisible to the deck, and
+   *   the companion opened on its own fitted view: a whole contig beside a lead
+   *   showing 40 kb of it, under a bar claiming one navigation.
+   * - a **navigation resets** the window ({@link ViewportLock.reset}), and a
+   *   companion that finishes its read before the lead has drawn the new block
+   *   lands in the same gap.
+   *
+   * It worked most of the time, which is what made it worth fixing rather than
+   * leaving: re-parenting the lead into the grid resizes it, a resize is a
+   * redraw and a redraw is a report, so the window usually arrived a frame after
+   * the deck was built and a frame before the companion's file had been fetched
+   * over the network. A deck that lines up because the network is slower than a
+   * relayout is not a deck that lines up.
+   *
+   * Nothing is seeded from a lead the reader has taken off the lead themselves:
+   * an unlocked first map is one that is deliberately not driving, and a
+   * companion arriving beside it should be caught up to wherever the *deck* got
+   * to, or to nowhere.
+   */
+  private seedFromLead(): void {
+    if (!this.leadLocked) return
+    const view = this.lead?.viewport()
+    if (view === undefined || view === null) return
+    this.lock.seed(view.rows, view.cols, this.lead?.bpPerCell() ?? 1)
   }
 
   /**
@@ -805,6 +1097,15 @@ export class PanelDeck {
     const map = slot.panel?.map ?? null
     const lead = this.lead
     if (map === null || lead === null) return null
+    // **Neither panel is compared until both have a block.** A panel that has
+    // not read one answers `1 × 1` cells, which multiplied by its bin size is a
+    // span of one bin — and a companion settling while the lead was still
+    // reading was told "this block spans 16.6 Mb × 16.6 Mb where the first map
+    // spans 1.0 kb × 1.0 kb. The same name resolved against different
+    // sequences", which is an accusation about the files built out of a race.
+    // Nothing is owed here: `settle` runs again when the lead reports, and the
+    // note is recomputed then against two real blocks.
+    if (!map.hasBlock || !lead.hasBlock) return null
     const mine = map.cellCount()
     const theirs = lead.cellCount()
     const rows = spansAgree(
@@ -852,7 +1153,9 @@ export class PanelDeck {
   private toggleLock(slot: Slot): void {
     slot.locked = !slot.locked
     slot.panel?.syncLock()
-    if (slot.locked) this.lock.catchUp(slot.id)
+    if (!slot.locked) return
+    this.seedFromLead()
+    this.lock.catchUp(slot.id)
   }
 
   /**
@@ -921,12 +1224,137 @@ export class PanelDeck {
    * dragging.
    */
   private swap(from: number, to: number): void {
-    if (from === to) return
-    const next = swapItems(this.slots, from, to)
-    if (next === this.slots) return
-    this.slots = next
+    // Out of range as well as equal: `swapItems` answers both with a copy, so a
+    // drop that landed nowhere used to repaint the grid and rewrite the hash
+    // with the list it already had. The identity check that stood here instead
+    // could never fire — `swapItems` returns a new array unconditionally.
+    if (from === to || from < 0 || to < 0 || from >= this.slots.length || to >= this.slots.length) {
+      return
+    }
+    this.slots = swapItems(this.slots, from, to)
     this.paintGrid()
     this.publish()
+  }
+
+  /**
+   * Arm every map in the deck for placing marks.
+   *
+   * The session arms its own panel beside this one and hands both the same
+   * `onEnd`, so whichever map the reader places on — and whichever one they
+   * press Escape over — ends the mode everywhere. Without that the gesture would
+   * be armed on five panels and disarmed on one, and the four left over would
+   * go on swallowing clicks that the reader had meant as navigation.
+   *
+   * @returns a function that disarms every panel this armed.
+   */
+  armPicking(
+    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
+    onEnd: () => void = () => {},
+  ): () => void {
+    const cancels = this.slots
+      .map((slot) => slot.panel?.armPicking(onPoint, onEnd))
+      .filter((cancel): cancel is () => void => cancel !== undefined)
+    return () => {
+      for (const cancel of cancels) cancel()
+    }
+  }
+
+  /**
+   * Every map that can be analysed, lead first and then the grid in reading
+   * order — what "run this on all of them" means.
+   *
+   * A companion appears only once it has answered for itself: the two tables an
+   * analysis needs are fetched on demand, so a panel still reading is a panel a
+   * batch cannot yet price. Asked again on the next press rather than waited
+   * for, because a reader pressing the button while a map is still opening has
+   * asked about the maps that are *there*.
+   */
+  analysable(): Array<{ map: MapId; panel: MapPanel }> {
+    const out: Array<{ map: MapId; panel: MapPanel }> = []
+    for (const slot of this.slots) {
+      if (slot.panel === null) continue
+      out.push({ map: slot.id, panel: slot.panel })
+    }
+    return out
+  }
+
+  /** The map an analysis runs against; the lead unless a companion is starred. */
+  get starredMap(): MapId {
+    return this.starred
+  }
+
+  /**
+   * The starred **companion**, or `null` when the star is on the lead.
+   *
+   * `null` is the ordinary answer and the one the session reads as "carry on as
+   * before": the lead's own facts are the ones it has always used, and nothing
+   * about the Analysis column changes while the star has not moved.
+   */
+  get starredPanel(): MapPanel | null {
+    if (this.starred === LEAD_MAP) return null
+    return this.slots.find((slot) => slot.id === this.starred)?.panel ?? null
+  }
+
+  /**
+   * Move the star, or leave it where it is.
+   *
+   * Silent about a map that is not here: a starred slot that has been closed
+   * comes back as the lead through {@link keepStarPresent}, and a caller asking
+   * for one that never existed is asking about a deck it has stale knowledge of.
+   */
+  setStarred(map: MapId): void {
+    if (map === this.starred) return
+    if (map !== LEAD_MAP && !this.slots.some((slot) => slot.id === map)) return
+    this.starred = map
+    remember(this.props.memoryKey(), 'deck:starred', map)
+    this.paintStars()
+    // The bar's two switches say which map they read *from*, so moving the star
+    // rewrites both of them — and applies them, because "fix all scales" over a
+    // deck whose star has moved means the new map's scale from that moment.
+    this.paintBar()
+    // The facts an analysis needs are two reads a drawing panel never makes, so
+    // they are fetched when the star lands rather than when the panel opens —
+    // an eight-panel deck does not read sixteen tables to show eight pictures.
+    // The column re-prices when they land, and again now for the star itself.
+    const panel = this.starredPanel
+    if (panel !== null) void panel.prepareAnalysis(() => this.props.onStarChange?.())
+    this.props.onStarChange?.()
+  }
+
+  /**
+   * Put the star back on the lead if the map it was on is not here.
+   *
+   * Called from {@link paintGrid}, so it runs on every change to the list
+   * whatever caused it. A star pointing at a panel that is not on screen is
+   * worse than one pointing at nothing: the Analysis column goes on offering
+   * tasks priced against a file the reader cannot see, every result is adopted
+   * onto a map with no panel to draw it, and no star anywhere is filled — so
+   * there is no control to move it back with either.
+   *
+   * "Not here" and not "closed": the star is *restored* from this file's memory
+   * (see {@link starred}), and a slot id is minted from a counter that keeps
+   * climbing for the life of the tab. Across a reload the counter starts again
+   * and the restored id names the same position in the same link, which is what
+   * makes remembering it worth doing; within one session it names a slot that
+   * was thrown away, and only a reconciliation that runs on *arrival* as well as
+   * on departure catches that.
+   */
+  private keepStarPresent(): void {
+    if (this.starred === LEAD_MAP) return
+    if (this.slots.some((slot) => slot.id === this.starred)) return
+    this.starred = LEAD_MAP
+    remember(this.props.memoryKey(), 'deck:starred', LEAD_MAP)
+    this.paintBar()
+    this.props.onStarChange?.()
+  }
+
+  /** Repaint every star, so exactly one of them is filled. */
+  private paintStars(): void {
+    this.leadStar.classList.toggle('is-on', this.starred === LEAD_MAP)
+    this.leadStar.setAttribute('aria-pressed', String(this.starred === LEAD_MAP))
+    this.leadStar.disabled = this.starred === LEAD_MAP
+    this.leadStar.title = starTitle(this.props.leadName?.() ?? 'this map', this.starred === LEAD_MAP)
+    for (const slot of this.slots) slot.panel?.setStarred(this.starred === slot.id)
   }
 
   private remove(slot: Slot): void {
@@ -1101,6 +1529,23 @@ export class PanelDeck {
       this.leadCell,
       ...this.slots.map((slot) => slot.panel?.el ?? slot.vacancy?.el ?? el('div')),
     )
+    // Every panel that has just been built needs to be told whether its star is
+    // filled: which one it is belongs to the deck, and a panel has no way to
+    // ask (see {@link starred}).
+    // Before the stars are painted, because it decides which one is filled, and
+    // here rather than at each of the places a cell leaves. It used to be called
+    // from `adopt`, `remove` and `closeDeck`, which is every way a slot can
+    // *depart* and not the way a dangling star actually arises: the star is
+    // restored from this file's memory in the constructor, `adopt` runs only
+    // when the hash names a different list from the one this deck published, and
+    // a deck built by "add a map" publishes an empty list and matches. So a
+    // reader who starred a companion, closed the deck and opened another one got
+    // a deck whose star named a slot it had never built — no star filled
+    // anywhere, the lead's own offering to make it the target it already was,
+    // and every task's result adopted onto a map with no panel to draw it.
+    this.keepStarPresent()
+    this.paintStars()
+    this.keepLanesOnLiveMaps()
     this.applyLayout()
   }
 
@@ -1126,7 +1571,9 @@ export class PanelDeck {
         text: name,
         title: `${name} — the map this session is of, and the one the others follow`,
       }),
+      this.leadStar,
     )
+    this.paintStars()
   }
 
   private applyLayout(): void {
@@ -1181,13 +1628,38 @@ export class PanelDeck {
     const filled = this.filled
     const empty = cells - filled
 
-    const share = button(this.shareLook ? 'one scale' : 'own scales', () => this.toggleShare(), {
-      class: `btn btn-quiet deck-share${this.shareLook ? ' is-on' : ''}`,
-      title: this.shareLook
-        ? 'Every panel is drawn on the lead map’s clip. The same colour is the same number of ' +
-          'contacts across the deck — true only where the libraries are comparable.'
-        : 'Each panel scales to its own values (§7.1). Two libraries at different depths are ' +
-          'each readable; the same colour is not the same count.',
+    // **Two actions, not two modes**, and bordered like the chain beside them
+    // because that is what they are: things that *do* something, pressed once
+    // and finished, in a bar whose other members are the download and the copy.
+    //
+    // A mode here made a promise it could not keep. `one scale`, left on, meant
+    // that every later nudge of any panel's clip either had to be undone or left
+    // the deck claiming a shared scale it no longer had; and a resolution mode
+    // has the same problem the moment a reader picks a rung on one panel. A
+    // press says a thing that stays true — *these are all on that one's numbers
+    // now* — and the very next nudge is honestly their own again.
+    //
+    // Both read from the **starred** map, which is the one every other "all of
+    // them" in this app is measured from: it is what a task runs against
+    // (§18.2), and making it what the scale and the rung come from too is one
+    // idea rather than three.
+    const starName = this.starredName()
+    const share = button('fix all scales', () => this.fixScales(), {
+      class: 'btn deck-share',
+      title:
+        `Draw every panel on ${starName}’s clip — the starred map — so the same colour is the ` +
+        'same number of contacts across the deck. True only where the libraries are comparable, ' +
+        'which is why it is a press rather than a setting: nudge any panel’s clip afterwards and ' +
+        'that panel is on its own values again (§7.1).',
+    })
+
+    const resolutions = button('fix all resolutions', () => this.fixResolutions(), {
+      class: 'btn deck-resolutions',
+      title:
+        `Read every panel at ${starName}’s bin size — the starred map. A file that has no such ` +
+        'level stays where it is and says so under its own map, rather than being moved to the ' +
+        'nearest thing and leaving the deck at two resolutions. Changing the first map’s ' +
+        'resolution does this on its own.',
     })
 
     const leadLock = iconButton(
@@ -1197,7 +1669,13 @@ export class PanelDeck {
         : 'The first map is moving on its own. Click to put it back in step.',
       () => {
         this.leadLocked = !this.leadLocked
-        if (this.leadLocked) this.lock.catchUp(LEAD)
+        if (this.leadLocked) {
+          // Seeded first, so putting the first map back in step over a deck that
+          // has not moved leaves the deck knowing where it is looking rather
+          // than nowhere — which is what the next companion catches up to.
+          this.seedFromLead()
+          this.lock.catchUp(LEAD)
+        }
         this.paintBar()
       },
       { class: `btn btn-icon deck-lock${this.leadLocked ? '' : ' is-off'}`, size: 14 },
@@ -1260,8 +1738,11 @@ export class PanelDeck {
     // empty until the first block lands, and a line opening with a bullet is a
     // sentence with its first clause missing.
     const said = this.deckNote.previousElementSibling?.textContent ?? ''
-    this.deckNote.textContent =
-      `${said === '' ? '' : ' · '}${empty === 0 ? `${filled} maps` : `${filled} of ${cells} maps`}`
+    // Singular where there is one, which is a state a reader does see: pressing
+    // "add a map" builds the deck and shows its bar *before* a file has been
+    // chosen, and "1 maps" over one map is the deck's first sentence.
+    const count = empty === 0 ? `${filled} map${filled === 1 ? '' : 's'}` : `${filled} of ${cells} maps`
+    this.deckNote.textContent = `${said === '' ? '' : ' · '}${count}`
     this.deckNote.title =
       `A deck of ${this.rows()} × ${this.columnsNow()}` +
       (empty === 0 ? '' : `, ${empty} empty — drop a file on one to open it there`) +
@@ -1277,10 +1758,15 @@ export class PanelDeck {
     // which half a control was in said nothing about what it did. Everything
     // that *adjusts* the deck now reads left to right in one run, and the only
     // thing across the gap is the one that ends it.
+    // The two presses first, then the chain, then the shape, then the two
+    // exports — which is the order a reader works in: put the maps on one
+    // footing, decide whether they move together, arrange them, take the
+    // picture. The one control that ends the deck stays across the gap.
     this.toolbar.replaceChildren(
+      share,
+      resolutions,
       leadLock,
       columns,
-      share,
       save,
       copy,
       el('span', { class: 'deck-spacer' }),
@@ -1289,16 +1775,21 @@ export class PanelDeck {
   }
 
   /**
-   * Put the whole deck down: every companion, and every track that was here
-   * only for them.
+   * Put the whole deck down: every companion, and every lane that was on one.
    *
-   * The maps are the easy half. The other half is the one a reader would
-   * otherwise be left to do by hand: a bigWig dropped on a companion's edge is
-   * an import into the *session's* one track list (`annotations/placement.ts`),
-   * so closing the maps it was drawn on leaves it loaded, invisible, and holding
-   * a row in the Tracks card that says it is drawn nowhere. A track that is also
-   * on the lead is a different thing — it is being read against the map that is
-   * staying — so it keeps its lane there and loses only the companions'.
+   * The maps are the easy half. The other half is the tracks, and the rule is
+   * that a deck put down is a statement about **layout** and never about what
+   * the reader has imported. A bigWig dropped on a companion's edge is an import
+   * into the session's one track list (`annotations/placement.ts`), and the
+   * lanes it had on the maps that are leaving go with them — but the track
+   * itself stays, as a row on the Annotations panel that is drawn nowhere, which
+   * is a state the model has always had and is one tick from being on the lead.
+   *
+   * It used to be a deletion, and the deletion was uneven in a way that read as
+   * a bug: a track the reader had *also* put on the lead survived, and one they
+   * had only ever put on a companion did not — so opening four replicates,
+   * giving each its own bigWig and then closing the deck lost three imports to a
+   * gesture about how many pictures are on screen.
    *
    * The lead is not in `slots` and is untouched throughout: §16.9's rule is that
    * the first map is the session's own view, and closing a deck must leave the
@@ -1306,33 +1797,60 @@ export class PanelDeck {
    */
   private closeDeck(): void {
     if (this.slots.length === 0) return
-    const gone = new Set(this.slots.map((slot) => slot.id))
     for (const slot of this.slots) {
       this.lock.leave(slot.id)
       slot.panel?.destroy()
       slot.vacancy?.destroy()
     }
     this.slots = []
-    this.dropCompanionTracks(gone)
+    // The star comes back to the lead and the lanes go with the maps, the
+    // tracks staying behind — both from `paintGrid`, which runs for every other
+    // way a cell can leave as well ({@link keepStarPresent},
+    // {@link keepLanesOnLiveMaps}).
     this.paintGrid()
     // Which leaves the deck empty, so the session's next render puts it down and
     // hands the view back its own frame (`app/Session.ts`'s `syncDeck`).
     this.publish()
   }
 
-  /** Forget the tracks the departing maps were the only reason for. */
-  private dropCompanionTracks(gone: ReadonlySet<string>): void {
+  /**
+   * Take a departed map's tracks *off the map*, and keep the tracks.
+   *
+   * A track and its placement are two different things (`annotations/placement.ts`),
+   * and a map leaving the deck is a statement about the second. The map is gone,
+   * so its lanes are gone with it — but the *import* is a file the reader
+   * dropped, parsed once, named, coloured and possibly edited, and a cell being
+   * closed is not a reason to have thrown it away. A track with no lanes is a
+   * state the model has always had and is exactly the one this leaves: still on
+   * the Annotations panel, drawn nowhere, one tick from being on the lead.
+   *
+   * It used to `remove` any track the departing maps were the only reason for,
+   * which meant a reader who opened four replicates, gave each its own bigWig
+   * and then closed the deck lost three imports to a gesture about layout. The
+   * ones they had also put on the lead survived, which made the loss look
+   * arbitrary rather than deliberate.
+   *
+   * **From `paintGrid`, so it runs wherever the list changes**, which is
+   * `keepMaps`'s own stated contract — "reconciled against the deck rather than
+   * driven by an event … doing it once per render cannot go stale" — and which
+   * it was not getting. The only caller was the deck's own close, so closing
+   * *one* companion out of four, or following a link that named fewer maps than
+   * the deck held, left that map's lanes in the store bound to a slot id nothing
+   * would ever mint again: invisible, because the placement control lists the
+   * maps that exist and a lane on one that does not has no row to be unticked
+   * from, and still counted by everything that asks a track how many maps it is
+   * on.
+   *
+   * Keyed on the **slots**, not on the panels. A companion whose current view is
+   * a table has no `MatrixPanel` for a moment (`panels/MapPanel.ts` drops it for
+   * a plan of `none`) and is still very much a map in the deck; pruning against
+   * the panels would delete the reader's placements the first time they opened a
+   * genomes table.
+   */
+  private keepLanesOnLiveMaps(): void {
     const store = this.props.annotations?.(LEAD_MAP)?.store
     if (store === undefined) return
-    // Over a copy of both lists, because `remove` rewrites them under the loop.
-    const placements = [...store.placements]
-    for (const entry of [...store.entries]) {
-      if (onlyOn(placements, entry.id, gone)) store.remove(entry.id)
-    }
-    // Then the placements of everything that survived, which is what takes a
-    // lead-and-companion track off the maps that have gone. Reconciled against
-    // the truth rather than unplaced one at a time, for `keepMaps`'s reason.
-    store.keepMaps(new Set([LEAD_MAP]))
+    store.keepMaps(new Set<MapId>([LEAD_MAP, ...this.slots.map((slot) => slot.id)]))
   }
 
   /**
@@ -1445,26 +1963,17 @@ export class PanelDeck {
     this.paintBar()
   }
 
-  private toggleShare(): void {
-    this.shareLook = !this.shareLook
-    remember(this.props.memoryKey(), 'deck:share-look', this.shareLook)
-    if (this.shareLook) {
-      const look = this.leadLook()
-      for (const slot of this.slots) slot.panel?.applyLook(look)
-    }
-    this.paintBar()
+  /** What to call the starred map in a sentence about it. */
+  private starredName(): string {
+    if (this.starred === LEAD_MAP) return this.props.leadName?.() ?? 'the first map'
+    const panel = this.starredPanel
+    return panel === null ? 'the starred map' : fileLabel(panel.uri)
   }
 
   /** The lead's colour scale, for the panels that have opted to share it. */
   private leadLook(): ScaleState {
     const scale = this.lead?.scale()
-    if (scale === undefined) return {}
-    return {
-      transform: scale.transform,
-      colormap: scale.colormap,
-      ...(Number.isFinite(scale.vmin) ? { vmin: scale.vmin } : {}),
-      ...(Number.isFinite(scale.vmax) ? { vmax: scale.vmax } : {}),
-    }
+    return scale === undefined ? {} : scaleState(scale)
   }
 
   /**
@@ -1505,6 +2014,34 @@ export class PanelDeck {
     if (typeof stored !== 'number' || !Number.isFinite(stored) || stored < 1) return null
     return Math.min(Math.floor(stored), MAX_PANELS)
   }
+}
+
+/**
+ * A panel's live scale as the thing another panel can be handed.
+ *
+ * `NaN` is how a `ColorScale` spells *auto* and `undefined` is how a
+ * {@link ScaleState} does, so the two cannot simply be copied across: a `NaN`
+ * passed on as a clip is a clip nothing is ever inside.
+ */
+function scaleState(scale: {
+  transform: ScaleState['transform']
+  colormap: string
+  vmin: number
+  vmax: number
+}): ScaleState {
+  return {
+    transform: scale.transform,
+    colormap: scale.colormap,
+    ...(Number.isFinite(scale.vmin) ? { vmin: scale.vmin } : {}),
+    ...(Number.isFinite(scale.vmax) ? { vmax: scale.vmax } : {}),
+  }
+}
+
+/** What a star says, filled or empty. */
+function starTitle(name: string, on: boolean): string {
+  return on
+    ? `${name} is the map an analysis runs against`
+    : `Run analyses against ${name} instead`
 }
 
 /** The file half of a `file::group` URI — what a byte source is pointed at. */

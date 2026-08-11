@@ -479,11 +479,19 @@ interface ByteSource { readonly id: string; readonly size: number;
 
 ### 6.2 Decoding requirements
 
-**String columns.** metacooler writes `name` columns as fixed-length `S<n>`, sized by **UTF-8 encoded
-byte length** rather than character count (`_str_to_hdf5`), precisely so multi-byte characters are not
+**String columns.** metacooler writes them as fixed-length `S<n>`, sized by **UTF-8 encoded byte
+length** rather than character count (`_str_to_hdf5`), precisely so multi-byte characters are not
 truncated. Decode with `TextDecoder('utf-8')` and strip trailing NUL padding; never assume ASCII.
 `CORE_COLUMN_KINDS` also permits kinds `O` and `U`, so a file produced by `create cool` may carry
 variable-length strings instead — handle both.
+
+**Names are ASCII, and this viewer does not claim otherwise.** `/contigs` *is* cooler's `/chroms`,
+and cooler decodes every column of it with an ASCII `.astype("U")` — so metacooler refuses to write a
+non-ASCII `/contigs` or `/genomes` name at all (`check_ascii_names` before the first write,
+`schema.validate` after the last). A file with one cannot be produced by any documented command, and
+supporting a shape the reference implementation will not create is a claim with nothing behind it. The
+UTF-8 decode above is still required and still exercised: an **extra `/genomes` column** — an accented
+taxonomy is the obvious one — is legal metadata cooler never sees.
 
 **int64 becomes `BigInt64Array`.** `bin1_id`, `bin2_id` and all three offset arrays are int64.
 `count` is **int32 at base resolution, int64 wherever counts have been summed** (`binnify`, `merge`),
@@ -2316,7 +2324,11 @@ producing the **expected** curve three later tasks consume. *Coverage and margin
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
-*4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig.
+*4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig,
+and optionally **over expected** — where "expected" means the anchor's own sequence's decay in cis and
+the mean of what the anchor reaches off it in trans, so that a profile carrying both halves carries one
+quantity. Per sequence rather than from P(s)'s genome-wide curve: a small chromosome divided by the
+average behaviour of the large ones comes out with a slope that is a property of the set.
 *Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
 behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that
