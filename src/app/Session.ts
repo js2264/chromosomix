@@ -49,7 +49,7 @@ import {
   viewStateEquals,
   type UnitSelection,
 } from '../state/ViewState'
-import { recall, remember } from '../state/UiMemory'
+import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import { armAll, resetPick } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
@@ -2768,9 +2768,28 @@ export class Session {
    * independent workspaces, and keying their tracks and filters on the URI alone
    * would make the second one adopt the first one's — which is exactly the
    * behaviour tabs exist to prevent.
+   *
+   * **The file, not the entry inside it.** The path before `::`, so an `.mcool` at
+   * 1 kb and the same `.mcool` at 5 kb hang their workspace on one key — which is
+   * the definition of "the same file" {@link reopeningSameFile} already uses, and
+   * the reason {@link carryAcrossEntries} carries every field of a view state
+   * across a change of resolution: names are names and coordinates are base pairs.
+   * Everything under this key is the same kind of fact. A hand-drawn mark is a
+   * contig and a base pair (§8.1), a ticked sequence is a name, a group is a claim
+   * about tracks, a table's filter is a phrase about rows — none of them means
+   * anything different at another bin size.
+   *
+   * With the entry in the key they were all *lost* on a resolution switch, and
+   * silently: the previous level's marks were still in storage under its own key,
+   * so they came back if you switched back and stayed invisible if you did not.
+   * The tracks survived only because they are carried live across the reopen
+   * ({@link carry}), which is why this was a bug about marks rather than about
+   * everything at once.
+   *
+   * The rule itself is `state/UiMemory.ts`'s, beside the storage it keys.
    */
   private memoryKey(uri: string): string {
-    return `${this.id}|${uri}`
+    return fileMemoryKey(this.id, uri)
   }
 
   // -------------------------------------------------------------------------

@@ -74,6 +74,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Hand-drawn marks were lost on a change of resolution.** Placing two marks on
+  a map at 2 kb and picking 5 kb in the breadcrumb drew an unmarked map, in a
+  single view and in a deck alike — and lost them in the worst way, invisibly:
+  the marks stayed in storage under the old level's own key, so they came back if
+  the reader went back to 2 kb and stayed gone if they did not, which reads as the
+  app deciding at random whether to keep your work.
+
+  A session's memory of a file — the marks, the ticked sequences, a table's
+  filters, how a group of tracks is scaled — hung on the URI it was *opened at*,
+  and for an `.mcool` that URI names an entry: `…/Ecoli.mcool::resolutions/2000`.
+  Changing resolution reopens the file at another entry, so it asked a key nothing
+  had ever been written under. It is now keyed on the **file**, the path before
+  `::` — the definition `reopeningSameFile` already uses, and the reason a change
+  of resolution carries every field of the view state across. Everything under that
+  key is the same kind of fact: a mark is a contig and a base pair (§8.1), a ticked
+  sequence is a name, a filter is a phrase about rows, and none of them means
+  anything different at another bin size. Two tabs on one file stay two workspaces,
+  because the session id is the other half of the key. Tracks were the exception
+  that hid the size of this — they are handed across the reopen live rather than
+  recalled — which is why it surfaced as "my annotations are gone" and not as
+  everything at once.
+
 - **A deck of square maps drew them at whatever size their canvases happened to
   be left at, with air between them.** Two maps at 1 kb came up as 182-pixel
   pictures in 430-pixel cells; changing resolution in the breadcrumb moved them to
