@@ -80,9 +80,15 @@ Two things break the assumption and are handled as exceptions, not as the genera
 
 ### 3.1 Detection order
 
-Attribute-based, in this order. Order matters: **a `.metacool` also satisfies cooler's `is_cooler()`**
-because of the `/chroms → /contigs` soft link and `format = "HDF5::Cooler"`, so testing for cooler
-first would silently downgrade every metacool to a contig-only view.
+**Magic bytes first, attributes second.** Not every accepted file is HDF5: a `.hic` (§3.6) is a flat
+binary container, and asking h5wasm to open one produces a stack trace rather than the sentence §10
+requires. So the first four bytes decide the *container* before any attribute is read.
+
+0. bytes `48 49 43 00` (`HIC\0`) → **hic** (§3.6), and nothing below is consulted
+
+Within HDF5, attribute-based, in this order. Order matters: **a `.metacool` also satisfies cooler's
+`is_cooler()`** because of the `/chroms → /contigs` soft link and `format = "HDF5::Cooler"`, so
+testing for cooler first would silently downgrade every metacool to a contig-only view.
 
 1. `format == "HDF5::MMetaCooler"` and `/entries` present → **mmetacool collection** (§3.4)
 2. `metacooler-format == "HDF5::MetaCooler"` and `genomes`, `contigs`, `bins`, `pixels`, `indexes`
@@ -178,6 +184,57 @@ f.mmetacool::              → { path: "f.mmetacool", group: "/" }
 ```
 
 Used in the file picker, in error messages, and in the URL hash so views are shareable.
+
+---
+
+### 3.6 `.hic` — a cooler-class citizen
+
+Versions **7, 8 and 9**, local and remote, read-only, at BP resolutions only. A `.hic` is opened as
+what it is — a contact map with chromosomes and no genome layer — and is therefore a **cooler-class
+citizen** in every sense §9 uses the phrase: the contigs table is the landing view, a region is one
+bounded read, tracks and annotations are offered (§8.5), and thirteen of the fourteen §18 tasks apply.
+`genomes` is `null`; the four metagenome tasks are absent, not disabled.
+
+**Why the format is here at all.** It is where the published record is. Most mammalian Hi-C on 4DN,
+ENCODE and GEO is distributed as `.hic` and as nothing else, and a viewer that cannot open it cannot
+be pointed at the literature. Nothing about it is in tension with §1: the file is block-indexed with a
+master index at a known offset, so a region is a bounded range read through the same `ByteSource` —
+the same LRU, the same §12 accounting, the same S3 signature — as everything else. If anything it
+fits §2 better than HDF5 does, since the index is **two-dimensional** and an off-diagonal rectangle
+costs the blocks it covers rather than a whole row band.
+
+**A block is not a tile.** This is the sentence to keep, because the vocabulary invites the confusion.
+Blocks are how the *file* is indexed. Nothing is composited, nothing is cached to be assembled, and
+the result of a read is one whole bounded matrix handed up in COO exactly as a cooler's is. §14's
+invariant is untouched.
+
+**Three things are translated, and nothing else.**
+
+- **The `All` chromosome is dropped**, by name and never by index — every Juicer file carries a
+  synthetic whole-genome row at index 0, and it is not a sequence: its length is a fabricated round
+  number and including it would shift every real bin. The file's own numbering is kept alongside,
+  because the master index is keyed on it. Same doctrine, same reason, as §7.4's `__unbinned__`.
+- **Normalisation vectors become `bins/weight`**, reciprocated: `.hic` stores a divisor per bin and
+  cooler's weight is a multiplier. A file's best available normalisation is chosen — `SCALE`, then
+  `KR`, then the coverage ones — and *named* in the info panel, so a reader is never guessing which.
+  A bin the balancer dropped becomes `NaN`, which is what a balanced cooler writes for one.
+- **The resolution ladder becomes entries**, spelled `file.hic::/resolutions/5000` exactly as an
+  mcool's is. That is what wires it into the entry picker, the URL hash, §3.4's refine ladder and a
+  deck descending to its lead's rung, with no code in any of them learning the format exists.
+
+**What is not read**, and each is a §13-style decision rather than a gap: fragment-resolution
+matrices (`unit = "FRAG"`), because a fragment grid is variable bins under another name and §3.3
+excludes those from the whole application; the file's expected-value vectors, because §18 computes its
+own against a golden and two expectations under one name would be a quantity that changes with the
+code path; and writing, for §13's reason.
+
+**Correctness.** The reader is checked three ways: against fixtures whose contents are known exactly,
+across every encoding the format allows (v7/v8/v9, short and float values, short and int positions,
+list-of-rows and dense blocks, grid and diagonal block numbering); against **`hic-straw`**, the
+reference implementation, as a devDependency oracle on every one of those fixtures; and through
+`MetaCooler` itself, asserting that the ordinary cooler surface answers identically. The second of the
+three is not optional and the reason is recorded: the first version of the reader and the first version
+of the writer agreed with each other that the format is big-endian. It is not.
 
 ---
 

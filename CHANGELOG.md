@@ -14,6 +14,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`.hic` files open, and nothing downstream can tell.** Versions 7, 8 and 9,
+  local and remote, at every base-pair resolution the file carries. This is where
+  the published record is: most mammalian Hi-C on 4DN, ENCODE and GEO is
+  distributed as `.hic` and as nothing else, and until now this viewer could not
+  be pointed at any of it.
+
+  It costs no constraint. A `.hic` is block-indexed with a master index at a known
+  offset, so a region is a bounded range read through the same `ByteSource` as
+  everything else — the same 1 MiB LRU, the same §12 request accounting, the same
+  S3 signature for a private bucket. **A block is not a tile**: nothing is
+  composited, nothing is cached to be assembled, and a read hands up one whole
+  bounded matrix in COO exactly as a cooler's does. If anything the format suits
+  §2 better than HDF5 does, its index being two-dimensional — so the off-diagonal
+  rectangle this application exists to draw costs the blocks it covers rather than
+  a whole row band across the genome.
+
+  The integration is two modules and a seam rather than a second reader.
+  `hic/handle.ts` answers the questions a cooler's HDF5 groups answer — a chrom
+  table, an offset array, root attributes, a weight column — and
+  `metacooler/store.ts` draws a `PixelStore` seam at the *operation* rather than at
+  the dataset, because the one thing a `.hic` genuinely cannot pretend to have is a
+  globally sorted pixel table. Above those two, `MetaCooler` is unchanged and every
+  `layout.kind === 'metacool'` branch in the application falls the right way
+  untouched. The resolution ladder is spelled `file.hic::/resolutions/5000`, so the
+  entry picker, the URL hash, the refine ladder and a deck descending to its lead's
+  rung all work with no code of their own.
+
+  Three translations, each argued in `SPECS.md` §3.6: the synthetic `All`
+  chromosome is dropped by name (never by index — the master index is keyed on the
+  file's own numbering); normalisation vectors become `bins/weight`, reciprocated
+  into cooler's multiply-by convention, with the chosen one named in the info panel
+  rather than implied; and fragment-resolution matrices are excluded, because a
+  fragment grid is variable bins under another name and §3.3 excludes those from
+  the whole application.
+
+  **Checked three ways**, and the third is the one that earned its place.
+  Fixtures whose contents are known exactly, across every encoding the format
+  allows — v7/v8/v9, short and float values, short and int positions,
+  list-of-rows and dense blocks, grid and diagonal block numbering. Then
+  `hic-straw`, the reference implementation, as a devDependency oracle over all
+  of them. Then `MetaCooler` itself, asserting the ordinary cooler surface answers
+  identically. The oracle immediately found what a self-consistent reader and
+  writer cannot: they had agreed with each other that the format is big-endian,
+  and it is little-endian. It also caught a v9 straddle clause that silently lost
+  every near-diagonal block while leaving the distant ones correct — a map with
+  rectangular holes exactly where the signal is.
+
 - **Bookmarks: places worth coming back to**, in a card under the hand-drawn
   marks. A bookmark is a **region and a bin size**, and carrying the second one
   separately is the point — on a contact map *where* and *how closely* are two

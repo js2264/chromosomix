@@ -124,6 +124,7 @@ function retained(source: ByteSource): ByteSource {
     id: source.id,
     size: source.size,
     mount: () => source.mount(),
+    readBytes: (position, length) => source.readBytes(position, length),
     stats: () => source.stats(),
     close: () => {
       // Deliberately empty: {@link releaseSources} owns this one.

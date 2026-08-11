@@ -85,6 +85,23 @@ export interface MatrixSource {
   readonly handle: Hdf5Handle
   readonly nBins: number
   readonly storageMode: StorageMode
+  /**
+   * Where the pixels come from.
+   *
+   * Typed as the minimum this module uses rather than as `PixelStore`, so that
+   * `metacooler/store.ts` may import this module's `ReadPlan` and
+   * `SpanScanOptions` without the two forming a cycle. The implementations are
+   * `CoolerStore` and `HicStore`.
+   */
+  readonly store: {
+    forEachWindow(
+      rows: Extent,
+      cols: Extent,
+      plan: ReadPlan,
+      onChunk: (chunk: PixelChunk) => void,
+      options?: SpanScanOptions,
+    ): Promise<boolean>
+  }
 }
 
 /**
@@ -591,7 +608,11 @@ export function scatterDense(
  * @param hint Sentence appended to a size refusal — pick one of
  *   {@link DENSE_HINTS} so the wording matches the CLI's for that situation.
  */
-export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string): DenseMatrix {
+export async function readDenseMatrix(
+  src: MatrixSource,
+  q: MatrixQuery,
+  hint: string,
+): Promise<DenseMatrix> {
   const rows = checkExtent(q.rows, src.nBins, 'rows')
   const cols = checkExtent(q.cols ?? q.rows, src.nBins, 'cols')
   const nRows = rows[1] - rows[0]
@@ -604,19 +625,16 @@ export function readDenseMatrix(src: MatrixSource, q: MatrixQuery, hint: string)
   const values = allocateDense(nRows, nCols, hint)
   if (nRows > 0 && nCols > 0) {
     const plan = planRead(rows, cols, src.storageMode)
-    // Scattered window by window: `scatterDense` is additive and per-pixel, so
-    // it needs no knowledge that the span arrived in pieces, and the peak COO
-    // footprint is one window rather than the whole row band.
-    forEachPixelSpan(
-      src.handle,
-      plan.span[0],
-      plan.span[1],
-      (chunk) => {
-        scatterDense(chunk, rows, cols, plan, values)
-      },
-      PIXEL_CHUNK,
-      q.value ?? DEFAULT_COUNT_COLUMN,
-    )
+    // Scattered chunk by chunk: `scatterDense` is additive and per-pixel, so it
+    // needs no knowledge that the read arrived in pieces, and the peak COO
+    // footprint is one chunk rather than the whole row band.
+    //
+    // Asynchronous because one of the two containers has to decompress a block
+    // to answer, and there is no synchronous inflate in a browser that does not
+    // cost a bundle. Every caller was already inside an `async` method.
+    await src.store.forEachWindow(rows, cols, plan, (chunk) => {
+      scatterDense(chunk, rows, cols, plan, values)
+    }, { chunkSize: PIXEL_CHUNK, value: q.value ?? DEFAULT_COUNT_COLUMN })
     if (q.balance === true) applyWeights(src.handle, rows, cols, values)
   }
   return { nrows: nRows, ncols: nCols, values, rowExtent: rows, colExtent: cols }

@@ -1,7 +1,8 @@
 # metacooler-viewer
 
 A browser-based viewer for [`.metacool`](https://github.com/js2264/metacooler) multi-genome
-(metagenomic) Hi-C contact maps.
+(metagenomic) Hi-C contact maps — and for `.cool`, `.mcool` and `.hic`, which open the same way and
+behave the same once open.
 
 Drop a file on the page and you get a sortable table of every MAG in it, the intra-genome contact
 map of any one of them, and — the part no other browser does — the rectangular off-diagonal block
@@ -21,6 +22,13 @@ the inter-MAG network. Each runs in a worker of its own, so the map stays live a
 whole-file scan is running. Results land in a resizable drawer, and every one of them exports:
 bigWig for a signal, bedGraph, BED, TSV, PNG, and true vector PDF. The bigWig is written here, byte
 by byte — no `bedGraphToBigWig` step, because a bigWig is what you actually wanted.
+
+`.hic` is read here too, at versions 7, 8 and 9 — which is most of the published mammalian Hi-C on
+4DN, ENCODE and GEO. It costs no constraint: the format is block-indexed, so a region is a bounded
+range read through the same byte layer as everything else, and a block is an *index* unit rather than
+a tile — nothing is composited, and a read still hands up one whole bounded matrix. Its resolution
+ladder becomes the same entry list an `.mcool`'s is, so the picker, the hash, the zoom ladder and the
+deck all work on one with no code of their own.
 
 There is no server. There is no upload. There is no preprocessing step. A file straight out of
 `metacooler create` opens and works.
@@ -121,7 +129,11 @@ src/
   types.ts constants.ts errors.ts format.ts uri.ts   # the shared contract
   sources/       ByteSource implementations: LocalFileSource, RemoteRangeSource
   h5/            the only code that imports h5wasm or touches raw HDF5 bytes
-  metacooler/    the reader: detect, MetaCooler, coords, range, matrix, aggregate
+  metacooler/    the reader: detect, MetaCooler, coords, range, matrix, aggregate,
+                 and store.ts — the PixelStore seam the two containers meet at
+  hic/           the only code that knows what a .hic looks like on disk: the
+                 header and footer, the block index and its two numbering
+                 schemes, and the cooler-shaped handle that hides all of it
   genome/        an assembly with no matrix behind it, and its one axis
   worker/        message protocol; the worker owns all I/O
   render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar, the

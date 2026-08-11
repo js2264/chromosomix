@@ -1173,7 +1173,7 @@ export class Session {
    */
   private routeOf(uri: string): 'map' | 'genome' | 'unknown' {
     const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
-    if (/\.(m?cool|m?metacool|h5|hdf5)$/i.test(name)) return 'map'
+    if (/\.(m?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
     if (
       /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
         name,

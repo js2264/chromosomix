@@ -81,7 +81,7 @@ export class FilePicker {
         // bigWig and no map, "this app is not for me" is the wrong conclusion
         // and this is the only place it can be corrected before they leave.
         text:
-          'or click to choose one. A contact map — .cool, .mcool, .metacool, .mmetacool — opens ' +
+          'or click to choose one. A contact map — .cool, .mcool, .hic, .metacool, .mmetacool — opens ' +
           'as a map; anything genomic (a chrom.sizes, a FASTA, a bigWig, a bigBed, a GTF, a BED, ' +
           'a BEDPE) opens as a browser over that genome. Drop several at once and they come up ' +
           'together: the first map is the one this tab is of, every other map is a panel beside ' +
