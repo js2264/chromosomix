@@ -12,6 +12,41 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **A folded column leaves a tab rather than nothing.** Folding one used to take
+  it out of the layout entirely, which left the four marks up in the header as the
+  only sign it existed — and a mark in the window furniture says neither which
+  column is folded nor what is in it. A folded column now keeps a strip of itself
+  with a **tab** standing on the bottom of it, carrying the panel's mark, its
+  name, the key that opens it and a chevron pointing the way it will open. The
+  tab is turned a quarter-turn anticlockwise, so the name reads bottom-to-top up
+  the side of the window like the spine of a book — which is what buys it the room
+  to be named at all: a strip wide enough for "General" written upright would be a
+  column, and what a folded column has to cost is a strip.
+
+  They **nest**, and it costs no arithmetic: the four columns are already ordered
+  outermost-first from each edge, and a folded strip sits exactly where its column
+  would. Two folded panels on the left are two tabs side by side at the edge of
+  the screen; open General and the Annotations tab moves out to stand against
+  it, while General's own tab always stands at the screen edge. The right side is
+  the mirror — Analysis at the edge, Aesthetics against it. Nothing is measured,
+  so no tab can be left stranded behind an expanded column. A panel with *nothing
+  to show* still leaves altogether: a tab is an invitation, and one that opens an
+  empty column is worse than the column's absence.
+
+- **The panel buttons come after the name in the header, and the strapline is
+  gone.** Four unlabelled marks used to open the row, so a reader identified them
+  before reaching the thing that says what they are looking at. They are now a
+  group set off from the title by a rule, and the line that explained the app to
+  somebody who had already opened it has given them its room.
+
+- **General is marked `file-cog`** rather than a fold arrow. Its three siblings
+  are already marked by what they hold — `layers` for the annotation stack,
+  `chart-spline` for the picture's controls, `beaker` for what can be computed —
+  and an arrow said only "this panel folds", which is true of all four of them.
+  What is behind this one is the file and what can be read off it.
+
 ### Fixed
 
 - **Marks could not be placed by pointing at a turned map, which is every map a

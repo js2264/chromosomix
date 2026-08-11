@@ -26,6 +26,32 @@
  * taxonomy in General or driving twelve tracks in Annotations. The width is
  * remembered for the same reason the fold is, and double-clicking the handle
  * puts it back.
+ *
+ * ## Folded is a tab, not nothing
+ *
+ * A folded column used to leave the layout entirely, which left the header's
+ * four buttons as the only sign that it existed — and those are up in the window
+ * furniture, spelling out neither which column is folded nor what is in it. So a
+ * folded column keeps a **strip** of itself in the flow, with a tab standing on
+ * the bottom of it: the panel's mark, its name, the key that opens it, and a
+ * chevron pointing the way it will open.
+ *
+ * Turned a quarter-turn anticlockwise, so the name reads bottom-to-top up the
+ * side of the window like the spine of a book on a shelf. That is what buys it
+ * the room to be *named*: a strip of the width the word "General" needs standing
+ * upright would be a column, and what a folded column has to cost is a strip.
+ *
+ * Being in the flow is the whole of the nesting the tabs have to get right, and
+ * it comes for free. `order` already puts the four columns outermost-first from
+ * each edge — General then Annotations on the left, Analysis then Aesthetics
+ * from the right — so a folded strip sits exactly where its column would: two
+ * folded panels are two tabs side by side at the edge of the screen, and opening
+ * the outer one pushes the inner one's tab out to stand against it. Nothing
+ * measures anything, and no tab can be left behind an expanded column.
+ *
+ * A panel with *nothing to show* still leaves altogether ({@link setAvailable}):
+ * a tab is an invitation, and one that opens an empty column is worse than the
+ * column's absence.
  */
 
 import { icon, type IconName } from './icons'
@@ -63,7 +89,16 @@ export interface SidePanelSpec {
   keys: string
 }
 
-/** The file's attributes, its record card, the QC statistic and the metadata. */
+/**
+ * The file's attributes, its record card, the QC statistic and the metadata.
+ *
+ * A `file-cog` rather than the fold arrow it used to carry, which is the same
+ * change its three siblings already made: they are marked by *what they hold* —
+ * `layers` for the annotation stack, `chart-spline` for the picture's controls,
+ * `beaker` for what can be computed — and an arrow said only "this panel folds",
+ * which is true of all four. What is behind this one is the file and what can be
+ * read off it, so the mark is a document with a cog on it.
+ */
 export const GENERAL_PANEL: SidePanelSpec = {
   // The key predates the rename from "file info sidebar"; a stored fold is not
   // worth losing to make a string match a heading.
@@ -77,8 +112,8 @@ export const GENERAL_PANEL: SidePanelSpec = {
   defaultWidth: 288,
   minWidth: 200,
   maxWidth: 560,
-  closeIcon: 'panel-left-close',
-  openIcon: 'panel-left-open',
+  closeIcon: 'file-cog',
+  openIcon: 'file-cog',
   keys: 'b',
 }
 
@@ -201,6 +236,8 @@ export class SidePanel {
   readonly toggle: HTMLButtonElement
 
   private readonly body = el('div', { class: 'panel-column-body' })
+  /** What a folded column shows instead of itself; see the file header. */
+  private readonly tab: HTMLButtonElement
   private collapsed: boolean
   private width: number
   private available = false
@@ -221,6 +258,7 @@ export class SidePanel {
     this.collapsed = readFlag(spec.key)
     this.width = readWidth(spec) ?? spec.defaultWidth
 
+    this.tab = this.spine()
     this.el = el(
       'div',
       // The title is also the identifying class, so a stylesheet can name one
@@ -239,6 +277,7 @@ export class SidePanel {
       ),
       this.body,
       this.handle(),
+      this.tab,
     )
     this.el.style.order = String(spec.order)
 
@@ -247,14 +286,50 @@ export class SidePanel {
       type: 'button',
       attrs: { 'aria-label': `${spec.title} panel` },
     })
-    this.toggle.addEventListener('click', () => {
-      this.collapsed = !this.collapsed
-      writeFlag(this.spec.key, this.collapsed)
-      this.paint()
-      this.onResize()
-    })
+    this.toggle.addEventListener('click', () => this.fold(!this.collapsed))
 
     this.paint()
+  }
+
+  /**
+   * The tab a folded column stands on its edge.
+   *
+   * Everything a header button cannot say, in the order it is read going up:
+   * which panel this is, what it is called, the key that opens it, and the
+   * direction it will open in. The chevron points *away from its own edge* — into
+   * the window, which is where the column will appear from — and it is the one
+   * part of the tab drawn upright rather than with the text, because a chevron
+   * turned with the words would point along the spine and mean nothing.
+   */
+  private spine(): HTMLButtonElement {
+    const key = keyLabel(this.spec.keys)
+    const node = el(
+      'button',
+      {
+        class: 'panel-tab',
+        type: 'button',
+        title: withKey(`Show the ${this.spec.title} panel`, this.spec.keys),
+        attrs: { 'aria-label': `Show the ${this.spec.title} panel` },
+      },
+      icon(this.spec.openIcon, { size: 14, class: 'panel-tab-mark' }),
+      el('span', { class: 'panel-tab-title', text: this.spec.title }),
+      el('kbd', { class: 'kbd panel-tab-key', text: key }),
+      icon(this.spec.side === 'left' ? 'chevron-right' : 'chevron-left', {
+        size: 13,
+        class: 'panel-tab-mark panel-tab-chevron',
+      }),
+    )
+    node.addEventListener('click', () => this.fold(false))
+    return node
+  }
+
+  /** Fold or open, and tell the shell the plot has room to re-measure in. */
+  private fold(collapsed: boolean): void {
+    if (collapsed === this.collapsed) return
+    this.collapsed = collapsed
+    writeFlag(this.spec.key, collapsed)
+    this.paint()
+    this.onResize()
   }
 
   /** Fill the column, or empty it. */
@@ -312,9 +387,17 @@ export class SidePanel {
   }
 
   private paint(): void {
-    const hidden = this.collapsed || !this.available
-    this.el.classList.toggle('collapsed', hidden)
-    this.el.style.width = `${this.width}px`
+    // Three states, and the two that look alike to a stylesheet are not alike to
+    // a reader: a panel with nothing in it leaves altogether, and a folded one
+    // stands a named tab where it was. `collapsed` keeps its name because it is
+    // the stylesheet's word for "this column is not showing its cards", and the
+    // analysis drawer uses it for the same thing.
+    this.el.classList.toggle('collapsed', this.collapsed || !this.available)
+    this.el.classList.toggle('is-absent', !this.available)
+    // Inline width for an open column, because that is the reader's own drag;
+    // folded, the strip is one number in the stylesheet and an inline width here
+    // would beat it.
+    this.el.style.width = this.collapsed ? '' : `${this.width}px`
     this.toggle.classList.toggle('hidden', !this.available)
     this.toggle.classList.toggle('is-off', this.collapsed)
     this.toggle.replaceChildren(icon(this.collapsed ? this.spec.openIcon : this.spec.closeIcon))
