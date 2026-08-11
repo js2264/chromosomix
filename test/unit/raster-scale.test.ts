@@ -27,7 +27,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { HeatmapView } from '@/render/heatmap'
+import { HeatmapView, poolDisplay } from '@/render/heatmap'
 import type { DenseMatrix } from '@/types'
 
 beforeAll(() => {
@@ -231,5 +231,71 @@ describe('the raster pyramid', () => {
     heatmap.setScale({ transform: 'log10', colormap: 'default', vmin: 0, vmax: 5 })
     heatmap.draw()
     expect(g['OffscreenCanvas'].made).toBeGreaterThan(first)
+  })
+})
+
+/**
+ * The other half of "what is being filtered": the *shape* of a raster pixel.
+ *
+ * Pooling caps each axis on its own, which is right for a genome pair — the two
+ * axes are two different sequences, and halving the short one to match the long
+ * one loses resolution nothing asked for. It is wrong for a **turned band**,
+ * whose two axes are one measure: the rotation is isometric, so a raster pixel
+ * four cells across and two up is drawn as a rectangle where the geometry
+ * promises a square. Everything downstream then has one decision to make about
+ * two different scales — one filter flag, one pyramid level — so at the crossover
+ * x is magnified through a blur while y is still point-sampled, and past it
+ * nearest neighbour lays cells down two device pixels wide and one tall. On a
+ * picture whose structure runs at 45° that is a staircase of smeared diagonals.
+ */
+describe('the shape of a raster pixel', () => {
+  const scale = { vmin: Number.NaN, vmax: Number.NaN, transform: 'log10' as const, colormap: 'default' }
+
+  /** A band as a turn produces one: twice as wide as the square, and shallow. */
+  function band(cols: number, rows: number): DenseMatrix {
+    return {
+      nrows: rows,
+      ncols: cols,
+      values: new Float32Array(rows * cols),
+      rowExtent: [0, rows],
+      colExtent: [0, cols],
+    }
+  }
+
+  it('is square when the caller says the two axes are one measure', () => {
+    // 9,281 × 4,039 is E. coli at 1 kb, turned: the width needs pooling by three
+    // and the height by one, and a raster of 4 × 2 cells per pixel is what the
+    // reader saw as aliasing while scrolling into it.
+    const pooled = poolDisplay(band(9281, 4039), scale, { isotropic: true })
+    expect(pooled.strideX).toBe(pooled.strideY)
+    expect(pooled.strideX).toBe(3)
+    expect(pooled.isotropic).toBe(true)
+  })
+
+  it('is per-axis otherwise, because a genome pair has two sequences in it', () => {
+    // 600 × 8,141 — the shape of every pair involving a large MAG. One stride
+    // would halve the 600-bin axis to suit the axis that needed pooling.
+    const pooled = poolDisplay(band(600, 8141), scale)
+    expect(pooled.strideX).toBe(1)
+    expect(pooled.strideY).toBe(2)
+    expect(pooled.isotropic).toBe(false)
+  })
+
+  it('leaves a block that fits alone, whichever rule is asked for', () => {
+    for (const isotropic of [true, false]) {
+      const pooled = poolDisplay(band(1000, 400), scale, { isotropic })
+      expect([pooled.strideX, pooled.strideY]).toEqual([1, 1])
+    }
+  })
+
+  it('draws a band with one scale on both axes, so one filter flag serves both', () => {
+    // The property the picture actually depends on: `a` and `d` of the draw
+    // transform are `zoom × stride × dpr`, so equal strides are what make the
+    // two equal — and what makes "is this magnified?" a question with one
+    // answer. Asserted here rather than through a draw because the transform is
+    // the stylesheet-free half: `HeatmapView.draw` multiplies these by one zoom.
+    const pooled = poolDisplay(band(9281, 4039), scale, { isotropic: true })
+    const zoom = 0.31
+    expect(zoom * pooled.strideX).toBeCloseTo(zoom * pooled.strideY, 12)
   })
 })

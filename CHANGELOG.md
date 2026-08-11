@@ -49,6 +49,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A turned map now takes the room it is given, whenever the room changes.** A
+  band's rectangle is the one picture in this app whose size is a number the panel
+  computes rather than a length the stylesheet sets, and only some of the roads
+  into it redrew that number. So the band kept the width of the window it was
+  first drawn in: folding two columns handed it three hundred pixels it never
+  took, pressing the turn toggle drew it to a room measured before the fold, and a
+  window resized around it left it where it was. All four roads — the shell folding
+  a column, the view's own resize observer for a window or a new lane, a turn
+  arriving or leaving, and a deck relaying out — now end in one place that
+  re-measures the room and redraws the box, and the band's depth follows on the
+  next frame as it always did. A width the reader *dragged* is still theirs: it is
+  clamped to the room rather than grown into it, and a double-click on the handle
+  gives back "as much as there is room for".
+
+- **The band on a long chromosome aliased while scrolling into it.** Pooling caps
+  each axis on its own, which is right for a genome pair — the two axes are two
+  different sequences, and halving the short one to suit the long one loses
+  detail nothing asked for. On a **turned** band the two axes are one measure: the
+  rotation is isometric, so a raster pixel four cells across and two up is drawn
+  as a rectangle where the geometry promises a square. E. coli at 1 kb turned is
+  9,281 × 4,039, which pooled to 4 × 2 — and then every decision downstream had
+  one answer for two scales. At the crossover the x axis was *magnified through a
+  blur* while y was still point-sampled; past it, nearest neighbour laid cells
+  down two device pixels wide and one tall. Against structure that runs at 45°
+  that is a cross-hatch of smeared diagonals over the whole band, which is what a
+  reader saw as aliasing at the very zooms they had scrolled in to look closely.
+
+  A turned band now pools with **one stride on both axes**, so its raster pixels
+  are square in matrix space, the filter question has one answer, and the pyramid
+  level is the right one for both directions. It costs no memory (E. coli's band
+  is 4.2 M pixels where it was 4.7 M) and no detail worth having: the axis that
+  loses resolution is the one that was already being drawn at three cells per
+  device pixel, and zooming in re-reads the window at a finer grid anyway.
+
 - **Marks could not be placed by pointing at a turned map, which is every map a
   region view opens.** `pick on map` collected nothing and the right-click *Mark
   this point* menu did not open at all — silently, both of them, because a click
