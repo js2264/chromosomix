@@ -1180,12 +1180,8 @@ Test count went from 235 to 329 passing. New suites: `render-cost`,
   round trip again unless the pooled array is kept on both sides). Left as a
   proposal rather than done badly under the same commit series that just removed
   the round trip.
-- **§8.17 — stream COO → pooled raster, plus a stride-1 re-raster of the visible
-  window.** The chunked read (§8.12) is the prerequisite and is now in place, so
-  this is a smaller change than it was. It still needs a second render path with
-  its own guard semantics, and the dense path below the threshold has to keep
-  working identically — a change to make deliberately, with its own equivalence
-  suite, not as a tail item.
+- ~~**§8.17 — stream COO → pooled raster.**~~ **Landed, and not as a second
+  render path.** See §9.4.
 - **§8.16 — transfer table string columns.** The cheap half landed
   (`transfersFor` no longer walks 1.5 M strings). The packed-UTF-8 + offsets
   representation did not: it changes `TablePayload`, `tableFromPayload` and every
@@ -1198,6 +1194,50 @@ Test count went from 235 to 329 passing. New suites: `render-cost`,
 - **`contigRuns` parallel typed arrays** (§6.9b). Only fires on the dense bin
   path, where the block itself now dominates; deferred behind §8.17, which
   changes that path anyway.
+
+### 9.4 §8.17, revisited — it arrived by another road
+
+§9.2 listed the streaming pooled raster as *not landed*, needing "a second render
+path with its own guard semantics". That entry is now wrong in an instructive
+way: the thing it asked for was built, but as part of the multi-resolution work
+(`MULTIRES-ZOOM.md`) rather than as a render path, and nobody went back to strike
+the row out. Recording what is actually true, because a stale "not done" is how a
+feature gets built twice.
+
+**What the code does today.** `handleMatrix` asks `fitPlan` before it asks for
+anything else. If either axis needs more than `POOLED_CELL_CAP` cells at one bin
+per cell — and `POOLED_CELL_CAP` *is* `RASTER_MAX_DIM`, 4,096 — the read goes to
+`MetaCooler.pooledMatrix`, which accumulates the COO stream straight into the
+cells that will be drawn and **never allocates the rectangle at all**. Only a
+block that already fits a screen takes the dense path, and that block is at most
+4,096² cells: 67 MB, bounded, and not the 2,366 MB §1.2 measured.
+
+So the two questions §1.2 raised are both answered. The dense block is not
+materialised above the pooling threshold, and the guard that used to refuse a
+whole yeast genome at 500 bp never sees one — `fitPlan` has routed it away before
+`checkBrowserDenseSize` is consulted.
+
+**What was genuinely missing was the check, not the code.** §8.17's own caveat —
+"the dense path below the threshold has to keep working identically ... with its
+own equivalence suite" — was the part still outstanding, and it is now
+`test/unit/pooled-equivalence.test.ts`: the two paths compared cell for cell over
+five block shapes, three pooling strides, with and without balancing.
+
+Writing it surfaced the one thing about the pooled path that is genuinely easy to
+get wrong, and it is worth stating here rather than only in the test. **A dense
+on-diagonal block is mirrored, and a pooled one is not.** Summing a diagonal cell
+straight off the dense block counts every contact inside it twice;
+`aggregateDense` reads only `j >= i` there and `pixelAccumulator` places each
+stored pixel once and mirrors at the end. The two conventions agree, and the
+first draft of the equivalence test did not — it asserted the doubled answer, and
+would have "proved" the reader wrong. A doubled diagonal is the failure the
+README already names as reading like *the diagonal is strong* rather than like a
+bug, and it is now pinned from both sides.
+
+**Still open, and now small.** `contigRuns`' parallel typed arrays (§6.9b) were
+deferred behind §8.17 on the grounds that it changes the dense path. It does not,
+so that deferral no longer holds; it is simply a small win on a path that is now
+bounded at 4,096².
 
 ### 9.3 The brief's two questions, answered in code
 
