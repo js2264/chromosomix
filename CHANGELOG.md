@@ -316,8 +316,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the moment the hand starts travelling, because naming a window is what
   selecting text does.
 
-### Changed
-
 - **A deck's two shared settings are presses, not switches, and the first map's
   resolution takes the deck with it.**
 
@@ -372,8 +370,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   quiet, borderless form, which reads as an afterthought or a link rather than
   as the other half of a choice.
 
-### Changed
-
 - **Dropping a contact map adds it to the deck instead of replacing what is
   open.** It was the one route in this app where a drop destroyed something: a
   track dropped on a map is added to it, a `chrom.sizes` dropped on a browser
@@ -425,6 +421,360 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   number down rather than letting each panel derive one; it now measures both
   sides of it, and the empty card is the size of the maps beside it whatever
   shape they are.
+
+- **Half of this application is cards, panels and dialogs, and it is tested
+  now.** The jsdom scaffolding landed with the Sequences card; what it was
+  reaching was seven files. `VirtualTable` — which is under both tables, and so
+  under where a reader of a metagenome spends most of their time — had none at
+  all, and every one of its behaviours was asserted by reading it. Twelve more
+  DOM files cover the table (filters, the sort cycle, the header box that speaks
+  for what the filters left rather than for the file, keyboard walking, what
+  virtualisation actually builds, what it remembers, and what it must forget),
+  the genomes table's two structural spec rules, the one search box four views
+  share, the modal and the context menu and every way each of them closes, the
+  small shared controls with `ui/dom.ts` underneath them, the ruler's clip, the
+  analysis parameter memory end to end, the breadcrumb, the error view, the info
+  panel's §7.4 statistic and the two controls a colour scale is set from. Five of
+  the fixes above were found by writing them.
+
+- **Dead code taken out.** Nine exported symbols with no caller anywhere in the
+  repository, plus `VirtualTable.setRows`, which was a public method nothing
+  called and which cleared the selection without telling the toolbar that reads
+  it. `magBalance` is the one worth naming: it says "params helper shared by the
+  runners" and the runners have always read the parameter themselves.
+  `mergeParams` went with the drawer's own parameter scope, which is what it
+  existed to serve. Out with `setRows` goes the sort cache's `source` field,
+  which existed only to be invalidated by it.
+
+- **Non-ASCII names are not supported, and are no longer tested as though they
+  were.** `/contigs` *is* cooler's `/chroms`, and cooler decodes every column of
+  it with an ASCII `.astype("U")`, so metacooler refuses to write a non-ASCII
+  `/contigs` or `/genomes` name at all — `check_ascii_names` before the first
+  write and `schema.validate` after the last. Two fixtures here had exactly that
+  shape, and the cost of keeping them had already come due: `make_fixtures.py`
+  could no longer build them, so `npm run fixtures` stopped after two of eleven
+  files and the full `npm test` was unrunnable from a fresh clone. One of the two
+  also had no Python oracle at all — the reference implementation cannot open it
+  — and the *partial golden* the whole toolchain carried existed for that one
+  file: a `coverage` field, a `golden: 'partial'` branch in `make_golden.py`, a
+  `python_open` failure record, a `full` flag on every golden map and a `full:
+  true` filter at three call sites. Fixtures, goldens, manifest rows, the
+  suites that read them and that machinery are all gone; the generator now lets
+  a fixture Python cannot open raise, because that is a broken fixture rather
+  than a documented limitation.
+
+  **What is kept is the decode.** An extra `/genomes` column may still hold an
+  accented taxonomy — legal metadata cooler never sees — so `decodeFixedStrings`
+  is now tested directly, over bytes, for the three things that go wrong: a
+  multi-byte character read back as itself rather than as mojibake, NUL padding
+  stripped, and a record sized in bytes rather than in characters. No fixture is
+  needed to hold them, which is the point.
+
+- **The goldens were built from fixtures that are no longer there.** Eight of
+  the eleven had moved — `npm run fixtures` rebuilds both halves, and the
+  fixtures a current metacooler writes are not byte-identical to the ones the
+  committed oracles were made from. Almost everything still matched, which is
+  what made it dangerous: what did not was whatever the two versions happened to
+  disagree about — a root attribute stored as `int32` in one and `int64` in the
+  other — and it surfaced as one deep object comparison failing in the middle of
+  an otherwise green suite, which reads as a bug in the reader and is not one.
+  The goldens are regenerated, so the two halves are one set; the only
+  substantive change in them is `floatcount.metacool`'s `bin-size`, now recorded
+  as the `int64` the file actually holds. And the skew is now checked before any
+  comparison is made: the manifest already records the byte size of every fixture
+  as it went in, so a fixture that has moved is named, with the command that
+  fixes it.
+
+- **Three docblocks in `metacooler/aggregate.ts` had drifted off their
+  functions.** The paragraphs describing `aggregateMatrix` and `sparseAggregator`
+  were stacked above `coarsenGrouping`, which has its own; the two exported
+  functions they belong to had none where they are. Moved, unchanged.
+
+- **The pooled read's own test asserted an invariant the rule does not have.**
+  `pooling.test.ts` required `contigsPerCell === 1` for every whole-file pooled
+  read, which was true of the *old* two-regime rule and is not true of the
+  capacity rule that replaced it: a sequence shorter than a cell shares one with
+  the neighbours it is beside, so `ladder.mmetacool::entries/4000` — which holds
+  two single-bin contigs of one genome side by side — reports two at a stride of
+  two, correctly. The assertion is now that the read used the grouping `poolBins`
+  built, which is what it actually owes the caller. `npm test` was red on `main`
+  because of it; the cell-for-cell comparison against the dense oracle beside it
+  was passing throughout.
+
+- **The analysis panel stopped asking questions it can answer itself.** A
+  parameter is a question the reader is entitled to a different answer to;
+  everything with one right answer per file belongs to the file. Going through
+  the catalogue on that rule took a control off nearly every task.
+
+  **Balancing is the case that settles it.** "Use balancing weights" was a
+  tickbox on six tasks, off by default on five of them, and it is the one
+  setting in the panel where the wrong answer produces a figure that looks
+  entirely reasonable — an unbalanced P(s), insulation track or 4C profile is a
+  plausible shape, and nothing in the picture says which one was asked for. A
+  reader who opened a balanced file answered the question by opening it. It is
+  now derived from the file's weights and shown nowhere, on P(s), diamond
+  insulation, 4C, compartments and APA. It is still a parameter in every other
+  sense, so the runners are unchanged and an exported TSV still says what the
+  numbers were computed with — and on the four MAG tasks too, which share the
+  panel with them and would otherwise be one tickbox among nine rows that no
+  longer have one. **Coverage keeps its tickbox**, because there it is a
+  diagnostic rather than a choice: a balanced file should have a flat total, so
+  one that does not is a file whose weights do not fit it.
+
+  **Distances are asked for in bins.** P(s)'s minimum separation and diamond
+  insulation's window and call spacing were typed in base pairs and immediately
+  divided by the bin size. The near-diagonal is a fact about the grid rather than
+  about the genome, and the same typed number meant three bins at one resolution
+  and one at the next — so they are counts now, and the diamond's default (10
+  bins) is exactly what `10 × binsize` used to resolve to.
+
+  **A whole-sequence picker starts on every sequence.** It was seeded from the
+  map's framing, which silently narrowed P(s), insulation and compartments to
+  whichever chromosome happened to be on screen and then reported the result as
+  though the reader had chosen it. Empty is an answer for those controls — it is
+  the entry the list itself offers first — so it is left alone. A *locus* box is
+  the opposite case and still starts where the map is: 4C's anchor is a place.
+
+  **P(s) draws every sequence.** The *Sequences to draw* box kept the largest N
+  and said how many it had dropped, which turned "how does contact fall with
+  distance, on each of my sequences" into a question about a number nobody had a
+  reason to pick. All the curves are computed and all are drawn; what is capped
+  is the *legend*, at three lines with a `+N more`, by the drawer that has to fit
+  it.
+
+  **Compartments takes a set of sequences** rather than refusing until one is
+  named — see the entry below. Its *Quality* section is gone: the balancing
+  tickbox is derived, and the minimum row coverage is a threshold below which a
+  row is noise rather than a knob that changes an answer.
+
+  **Coverage starts with the total marginal alone**, which is what the task is
+  opened for; the cis fraction is a second lane arriving unasked. **Track
+  correlation** bins at 100 bp rather than 10 kb — 10 kb windows smear a
+  promoter-width peak into its neighbourhood before the arithmetic starts — and
+  no longer prints "1 bin at 10.0 kb" beside the box, a caption measured against
+  a contact map this task does not read and need not have open.
+
+  **Domains (CIDs) is withheld from the panel.** Everything it does is reachable:
+  diamond insulation calls the same boundaries from the same diamond and exports
+  them as a BED, and the pileup over those calls is what APA does over any
+  interval set. The descriptor is left whole, so bringing the row back is one
+  line.
+
+- **Compartments correlates several chromosomes at once, cis and trans.** It
+  took one sequence, and before that it refused until one was named, on the
+  argument that compartments are a property of one chromosome. That argument is
+  about the *expectation* — which really is per chromosome and stays per
+  chromosome — and it does not carry to the correlation: two chromosomes in the
+  same compartment **touch each other in trans**, and a square holding those
+  trans blocks is where a genome-wide eigenvector's signal actually comes from.
+  So the control is now a list of tick boxes with **All** and **None** beside
+  it, every sequence is ticked to begin with, and what comes back is one E1 over
+  all of them rather than one per chromosome. Ticking a single sequence gives
+  the per-chromosome answer as the degenerate case of the same arithmetic.
+
+  The two denominators are the whole of the difference and are kept apart: a
+  **cis** cell is divided by its own sequence's decay at that separation — never
+  a pooled curve, which would divide a small chromosome by the average behaviour
+  of the large ones and read as a gradient along the eigenvector — while a
+  **trans** cell has no separation at all, so it is divided by the mean of its
+  own pair's block, per pair rather than one global trans mean.
+
+  **And which halves it reads is a control:** *cis only* — the default — *cis and
+  trans*, or *trans only*. These are three computations rather than one with a
+  filter over it. **Cis only** changes the *shape* of the run: one correlation
+  per sequence rather than one across them, because a single square with its
+  trans blocks removed correlates to a block-diagonal matrix whose leading
+  eigenvector lives entirely on one chromosome and is zero on the rest — a
+  genome-wide cis run done that way returns one chromosome's compartments and
+  fifteen flat lines, which is wrong in a way that looks like data. It is the
+  default because it is what people mean by "the compartment track", and because
+  it is far the cheapest of the three: the correlation is cubic, so sixteen
+  squares of 1,500 bins is a fraction of one of 24,000. It is priced against the
+  largest sequence and gated per sequence, which makes it the one mode that still
+  runs at a resolution the other two are refused at — and their refusal says so.
+  **Trans only** is the other standard call: the cis blocks carry a near-diagonal
+  that dominates every row, and leaving them out makes the eigenvector a
+  statement about which sequences share a nuclear compartment and nothing else.
+  It needs two sequences by definition and says so.
+
+  What it reads is the coalesced runs of what was ticked, so everything ticked
+  is a single read of the whole file rather than 136 rectangles, and a scattered
+  subset pays a rectangle per pair of runs instead of reading the gaps between
+  them. The bin-count gate now counts the *whole* ticked set — a yeast genome is
+  12,100 bins at 1 kb and 1,210 at 10 kb — and the refusal says to untick some or
+  open the file coarser. The correlation is cubic in the bin count and now says
+  so beside the megabytes, reports progress from inside its own loop, and can be
+  cancelled there.
+
+- **`ignore_diags`, on compartments and on insulation.** cooltools' setting,
+  spelled the same way and meaning the same thing: `0` counts every cell, `1`
+  drops the main diagonal, `2` drops it and the two beside it — `|col − row| < n`
+  — and **2 is the default**, which is cooltools' default and what the numbers a
+  reader compares against were computed with.
+
+  It is not a tidiness knob. The near-diagonal is where self-ligation and
+  unligated fragments end up; those cells are the largest in the matrix and the
+  least structural. In a **compartment** run a row's correlation with its
+  neighbours is carried disproportionately by the two or three cells nearest the
+  diagonal, which say only that the bins are adjacent — and every chromosome's
+  rows agree about that, so it enters the eigenvector as a component that is
+  really a picture of the diagonal. In an **insulation** run the diamond never
+  touches the main diagonal, so what the setting trims is its *inner corner*; at
+  a small window that corner can be most of the sum, and a track carried by it is
+  a picture of how deep the near-diagonal is rather than of what crosses the bin.
+  The diamond's coverage threshold is measured against the cells it is allowed to
+  count, so raising the cut does not quietly raise the bar a bin has to clear.
+
+  Trans cells have no separation for a diagonal to be measured from, so they are
+  never affected — and the control is hidden under *trans only*, where there is
+  nothing for it to do.
+
+- **A/B compartments come out as segments, not only as an eigenvector.** E1 is a
+  number per bin and the thing that gets cited is the interval — *this arm is A,
+  that half-megabase is B* — and getting from one to the other meant exporting
+  the bigWig and thresholding it in another tool. It is one comparison against
+  zero, and this app can make it without the ambiguity a downstream threshold
+  introduces, because it knows which bins were excluded and does not have to
+  guess whether a gap is a zero. So a run now produces an overlay of A and B
+  runs beside the track, with the mean of E1 over each run as its score, exported
+  as a BED like every other called interval set. A gap in the usable bins ends a
+  run rather than being bridged: a segment drawn across bins that took no part in
+  the calculation would be asserting a compartment where nothing was measured.
+
+- **Pick on map is one gesture.** The 4C anchor was picked with a Shift-drag,
+  which is a held modifier on top of a mode that already has a lit button and a
+  changed cursor — asking twice. While it is armed an ordinary drag names the
+  band, a tap names the bin under the pointer, and neither zooms, pans, nor
+  navigates: the only thing the gesture does is answer the question the form
+  asked. It still disarms after one pick and on Escape.
+
+- **A saddle is a square.** The two cell sizes of a matrix figure were computed
+  independently, each filling its own axis, so the aspect of a saddle or a
+  correlation heatmap was decided by how wide the drawer had been dragged. That
+  is a picture whose shape carries no information and reads as one whose shape
+  does — a saddle is read by comparing its two corners, and a corner stretched
+  40% along one axis looks stronger than the one opposite it. Cells are square
+  now, so an `n × n` matrix comes out square in any panel and a non-square one
+  keeps its own aspect exactly.
+
+- **The Sequences card is how a cooler's map picks its chromosomes.** The card
+  the 1D browser has always had — every sequence, its length, a bar for the
+  shape of the assembly and a tick box beside each — is now in the **General**
+  column whenever a cooler is open, and beside a map the ticks are the picture:
+  none is the whole genome, one is that chromosome's block, several are those
+  chromosomes against each other. It replaces the **Chromosome** card, which sat
+  in the same place describing the one sequence the breadcrumb already named,
+  from a table the reader can open in full, and offered no way to change it.
+
+  The binding runs both ways, which is the whole of the design. A tick
+  navigates; a navigation re-ticks — so the breadcrumb, the Chromosomes table,
+  the back button and a pasted link all move the boxes with the picture, and the
+  card can never say "showing 1 of 16" over a whole-genome map. A table view is
+  the one thing that leaves the ticks alone rather than clearing them: nothing
+  is drawn there to disagree with, and clearing would throw away a selection
+  being made on the way to the map. Ticking is also order-free — the axis comes
+  out in the file's order however the boxes were clicked, rather than in the
+  order they were clicked in.
+
+  The **Chromosomes table** is untouched, and it is still where columns are
+  sorted, filtered and read; what moved is only the picking. A `.metacool` keeps
+  its **Contig** card and its genomes table: there the unit is the genome, and a
+  picker with a hundred thousand tick boxes in it is not a picker.
+
+- **The virtual 4C lane is gone, and Shift-drag is a zoom.** Shift-dragging on a
+  map used to conjure a strip beside it summing that band of the matrix. Every
+  part of that the **4C task** now does better: it reads the pixel table rather
+  than whatever block happened to be loaded, it produces a track with a row on a
+  card and a bigWig to export, and it carries a provenance line saying what it
+  is. A dimmer second copy of the same answer, appearing without being asked for
+  and redrawing itself on every pan, is worth removing even when it works — and
+  the two disagreed at every level but the finest.
+
+  What replaces it is the gesture the picture was missing. **Shift-drag names a
+  band of one axis and zooms to it**, on the map, on the track lanes beside it,
+  and in the 1D browser — one conversion from pixels to bins behind all three, so
+  a stretch dragged out next to the map is the stretch the map goes to. The axis
+  follows the hand, so a drag a few degrees off vertical still means what it
+  plainly meant, and the axis nobody dragged keeps its centre.
+
+  **And every one of these gestures copies what it framed.** Shift-drag writes
+  `chrIV:500001-510000`: no thousands separators, a plain hyphen, 1-based
+  inclusive — the difference between a string that pastes into samtools,
+  bedtools, IGV and this app's own locus boxes and one that only looks right.
+  Option-drag, which selects a box, writes both axes as
+  `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what
+  that stretch would produce on its own.
+
+  Nothing else about lanes changed, because the lane was never the point: the
+  `viewpoint` kind and card are gone from the store, and the four edges, the
+  drag-to-another-edge, the tooltip and the exported figure are the code they
+  already were.
+
+- A shared link carries the two new readings, because both are part of what is
+  being looked at rather than how it is shaded: `oe` for the baseline and `op`
+  for the comparison. The normalisation needed no key of its own — it is a
+  `score`, and resolves through the same list the picker is built from, so a hash
+  naming one this build cannot serve lands on counts rather than on a read that
+  cannot be answered.
+
+- Adding or closing a map no longer rebuilds the one beside it. `maps` names what
+  is on screen *beside* this view, and the deck reconciles itself from it before
+  the render path decides anything — so the lead has nothing to be rebuilt for.
+  Left out of that list, every press of `+` cost a worker round trip and threw
+  away the reader's pan and zoom for a change that happened in another panel;
+  drawing a 2 × 2 deck paid it four times, and on a gated whole-genome map (§7.3)
+  each one would have put the pixel scan back behind its button.
+
+- **The turn and O/E are toggles, side by side, in one row of the Map card.** They
+  are the two controls that change *what picture this is* — one the geometry, one
+  the units — as against the score and the clip, which change what a number is
+  worth, and the overlays, which change what is drawn over it. They were an icon
+  button that looked identical before and after it had been pressed, and a
+  tickbox beside it that made the same kind of setting look like a different kind
+  of thing. Both are now lit the way every overlay toggle is. The turn's mark is
+  **the shape it will give you** — a triangle while the map is square, a square
+  once it is turned — rather than a mark for the state it is in, which is the one
+  reading that needs a second glance at the picture to interpret. O/E's mark is
+  the two letters, because a ratio has no shape and the nearest drawn thing is a
+  division sign that would say "divide" without saying by what.
+
+- **No drawn pointer where a guide line is already pointing.** The crosshair is
+  the better instrument of the two — it is drawn at the cell the app has actually
+  resolved, it runs the width and height of the picture, and it continues into
+  every track — while the arrowhead beside it is a second, blunter mark for the
+  same position, sitting on top of the pixel it names. So it goes, exactly where
+  the line comes: on the map while the crosshair is on and the pointer is over a
+  cell, in the 1D browser while it is on and the pointer is on the axis rather
+  than in the name column, and on a lane stack always, since a lane answers a
+  pointer with a hairline whatever the preference says. The transient cursors
+  stay — the closed hand while panning, the crosshair while a selection is about
+  to be drawn — because those say what is *happening*, which no guide line does.
+
+- **The deck's bar reads from the left**, with the one control that ends the deck
+  at the far right. The spacer used to sit second, which split a row of one kind
+  of thing into a chain on the left and three controls floated against the
+  right-hand edge — on a wide window, a screen apart, so reading the bar meant
+  looking in two places and which half a control was in said nothing about what
+  it did.
+
+- **The README no longer says balancing is unavailable.** It has been built since
+  0.2 — `/bins/weight`, two bounded slices for the bins on screen, `raw · wᵢ · wⱼ`,
+  and a control that became the score picker in 0.9 — and the paragraph claiming
+  otherwise had outlived the divergence it described by seven releases. Since
+  every analysis task wants balanced input, a stale line saying it cannot be had
+  was one misreading away from someone concluding these numbers are computed on
+  raw counts. The layering rule above it is corrected in the same way: no
+  *coordinate* ever comes from `/bins`, which is what §3.3 says and what
+  `bins-guard.test.ts` proves, and the weight column is the one bounded exception.
+
+- **"No write access" now says what it always meant.** The viewer has produced
+  files since 0.2 — PNG and PDF, then a saved session, then a BED of hand-drawn
+  marks in 0.5 — and a bigWig is one more of them: new bytes handed to the
+  browser as a download, needing no server, touching nothing that was opened. The
+  non-feature is *editing an input*, never *authoring an output*, and SPECS §13
+  says so now rather than leaving a reader to reconcile the two. Which is also
+  why there is still no writing of `.cool`, `.mcool` or `.metacool` — h5wasm
+  could create one, so that is a decision and not a limitation.
 
 ### Fixed
 
@@ -1265,364 +1615,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   analysis task, effect on the view — 0 dropped frames, 0 blocked reader
   requests*.
 
-### Changed
-
-- **Half of this application is cards, panels and dialogs, and it is tested
-  now.** The jsdom scaffolding landed with the Sequences card; what it was
-  reaching was seven files. `VirtualTable` — which is under both tables, and so
-  under where a reader of a metagenome spends most of their time — had none at
-  all, and every one of its behaviours was asserted by reading it. Twelve more
-  DOM files cover the table (filters, the sort cycle, the header box that speaks
-  for what the filters left rather than for the file, keyboard walking, what
-  virtualisation actually builds, what it remembers, and what it must forget),
-  the genomes table's two structural spec rules, the one search box four views
-  share, the modal and the context menu and every way each of them closes, the
-  small shared controls with `ui/dom.ts` underneath them, the ruler's clip, the
-  analysis parameter memory end to end, the breadcrumb, the error view, the info
-  panel's §7.4 statistic and the two controls a colour scale is set from. Five of
-  the fixes above were found by writing them.
-
-- **Dead code taken out.** Nine exported symbols with no caller anywhere in the
-  repository, plus `VirtualTable.setRows`, which was a public method nothing
-  called and which cleared the selection without telling the toolbar that reads
-  it. `magBalance` is the one worth naming: it says "params helper shared by the
-  runners" and the runners have always read the parameter themselves.
-  `mergeParams` went with the drawer's own parameter scope, which is what it
-  existed to serve. Out with `setRows` goes the sort cache's `source` field,
-  which existed only to be invalidated by it.
-
-- **Non-ASCII names are not supported, and are no longer tested as though they
-  were.** `/contigs` *is* cooler's `/chroms`, and cooler decodes every column of
-  it with an ASCII `.astype("U")`, so metacooler refuses to write a non-ASCII
-  `/contigs` or `/genomes` name at all — `check_ascii_names` before the first
-  write and `schema.validate` after the last. Two fixtures here had exactly that
-  shape, and the cost of keeping them had already come due: `make_fixtures.py`
-  could no longer build them, so `npm run fixtures` stopped after two of eleven
-  files and the full `npm test` was unrunnable from a fresh clone. One of the two
-  also had no Python oracle at all — the reference implementation cannot open it
-  — and the *partial golden* the whole toolchain carried existed for that one
-  file: a `coverage` field, a `golden: 'partial'` branch in `make_golden.py`, a
-  `python_open` failure record, a `full` flag on every golden map and a `full:
-  true` filter at three call sites. Fixtures, goldens, manifest rows, the
-  suites that read them and that machinery are all gone; the generator now lets
-  a fixture Python cannot open raise, because that is a broken fixture rather
-  than a documented limitation.
-
-  **What is kept is the decode.** An extra `/genomes` column may still hold an
-  accented taxonomy — legal metadata cooler never sees — so `decodeFixedStrings`
-  is now tested directly, over bytes, for the three things that go wrong: a
-  multi-byte character read back as itself rather than as mojibake, NUL padding
-  stripped, and a record sized in bytes rather than in characters. No fixture is
-  needed to hold them, which is the point.
-
-- **The goldens were built from fixtures that are no longer there.** Eight of
-  the eleven had moved — `npm run fixtures` rebuilds both halves, and the
-  fixtures a current metacooler writes are not byte-identical to the ones the
-  committed oracles were made from. Almost everything still matched, which is
-  what made it dangerous: what did not was whatever the two versions happened to
-  disagree about — a root attribute stored as `int32` in one and `int64` in the
-  other — and it surfaced as one deep object comparison failing in the middle of
-  an otherwise green suite, which reads as a bug in the reader and is not one.
-  The goldens are regenerated, so the two halves are one set; the only
-  substantive change in them is `floatcount.metacool`'s `bin-size`, now recorded
-  as the `int64` the file actually holds. And the skew is now checked before any
-  comparison is made: the manifest already records the byte size of every fixture
-  as it went in, so a fixture that has moved is named, with the command that
-  fixes it.
-
-- **Three docblocks in `metacooler/aggregate.ts` had drifted off their
-  functions.** The paragraphs describing `aggregateMatrix` and `sparseAggregator`
-  were stacked above `coarsenGrouping`, which has its own; the two exported
-  functions they belong to had none where they are. Moved, unchanged.
-
-- **The pooled read's own test asserted an invariant the rule does not have.**
-  `pooling.test.ts` required `contigsPerCell === 1` for every whole-file pooled
-  read, which was true of the *old* two-regime rule and is not true of the
-  capacity rule that replaced it: a sequence shorter than a cell shares one with
-  the neighbours it is beside, so `ladder.mmetacool::entries/4000` — which holds
-  two single-bin contigs of one genome side by side — reports two at a stride of
-  two, correctly. The assertion is now that the read used the grouping `poolBins`
-  built, which is what it actually owes the caller. `npm test` was red on `main`
-  because of it; the cell-for-cell comparison against the dense oracle beside it
-  was passing throughout.
-
-- **The analysis panel stopped asking questions it can answer itself.** A
-  parameter is a question the reader is entitled to a different answer to;
-  everything with one right answer per file belongs to the file. Going through
-  the catalogue on that rule took a control off nearly every task.
-
-  **Balancing is the case that settles it.** "Use balancing weights" was a
-  tickbox on six tasks, off by default on five of them, and it is the one
-  setting in the panel where the wrong answer produces a figure that looks
-  entirely reasonable — an unbalanced P(s), insulation track or 4C profile is a
-  plausible shape, and nothing in the picture says which one was asked for. A
-  reader who opened a balanced file answered the question by opening it. It is
-  now derived from the file's weights and shown nowhere, on P(s), diamond
-  insulation, 4C, compartments and APA. It is still a parameter in every other
-  sense, so the runners are unchanged and an exported TSV still says what the
-  numbers were computed with — and on the four MAG tasks too, which share the
-  panel with them and would otherwise be one tickbox among nine rows that no
-  longer have one. **Coverage keeps its tickbox**, because there it is a
-  diagnostic rather than a choice: a balanced file should have a flat total, so
-  one that does not is a file whose weights do not fit it.
-
-  **Distances are asked for in bins.** P(s)'s minimum separation and diamond
-  insulation's window and call spacing were typed in base pairs and immediately
-  divided by the bin size. The near-diagonal is a fact about the grid rather than
-  about the genome, and the same typed number meant three bins at one resolution
-  and one at the next — so they are counts now, and the diamond's default (10
-  bins) is exactly what `10 × binsize` used to resolve to.
-
-  **A whole-sequence picker starts on every sequence.** It was seeded from the
-  map's framing, which silently narrowed P(s), insulation and compartments to
-  whichever chromosome happened to be on screen and then reported the result as
-  though the reader had chosen it. Empty is an answer for those controls — it is
-  the entry the list itself offers first — so it is left alone. A *locus* box is
-  the opposite case and still starts where the map is: 4C's anchor is a place.
-
-  **P(s) draws every sequence.** The *Sequences to draw* box kept the largest N
-  and said how many it had dropped, which turned "how does contact fall with
-  distance, on each of my sequences" into a question about a number nobody had a
-  reason to pick. All the curves are computed and all are drawn; what is capped
-  is the *legend*, at three lines with a `+N more`, by the drawer that has to fit
-  it.
-
-  **Compartments takes a set of sequences** rather than refusing until one is
-  named — see the entry below. Its *Quality* section is gone: the balancing
-  tickbox is derived, and the minimum row coverage is a threshold below which a
-  row is noise rather than a knob that changes an answer.
-
-  **Coverage starts with the total marginal alone**, which is what the task is
-  opened for; the cis fraction is a second lane arriving unasked. **Track
-  correlation** bins at 100 bp rather than 10 kb — 10 kb windows smear a
-  promoter-width peak into its neighbourhood before the arithmetic starts — and
-  no longer prints "1 bin at 10.0 kb" beside the box, a caption measured against
-  a contact map this task does not read and need not have open.
-
-  **Domains (CIDs) is withheld from the panel.** Everything it does is reachable:
-  diamond insulation calls the same boundaries from the same diamond and exports
-  them as a BED, and the pileup over those calls is what APA does over any
-  interval set. The descriptor is left whole, so bringing the row back is one
-  line.
-
-- **Compartments correlates several chromosomes at once, cis and trans.** It
-  took one sequence, and before that it refused until one was named, on the
-  argument that compartments are a property of one chromosome. That argument is
-  about the *expectation* — which really is per chromosome and stays per
-  chromosome — and it does not carry to the correlation: two chromosomes in the
-  same compartment **touch each other in trans**, and a square holding those
-  trans blocks is where a genome-wide eigenvector's signal actually comes from.
-  So the control is now a list of tick boxes with **All** and **None** beside
-  it, every sequence is ticked to begin with, and what comes back is one E1 over
-  all of them rather than one per chromosome. Ticking a single sequence gives
-  the per-chromosome answer as the degenerate case of the same arithmetic.
-
-  The two denominators are the whole of the difference and are kept apart: a
-  **cis** cell is divided by its own sequence's decay at that separation — never
-  a pooled curve, which would divide a small chromosome by the average behaviour
-  of the large ones and read as a gradient along the eigenvector — while a
-  **trans** cell has no separation at all, so it is divided by the mean of its
-  own pair's block, per pair rather than one global trans mean.
-
-  **And which halves it reads is a control:** *cis only* — the default — *cis and
-  trans*, or *trans only*. These are three computations rather than one with a
-  filter over it. **Cis only** changes the *shape* of the run: one correlation
-  per sequence rather than one across them, because a single square with its
-  trans blocks removed correlates to a block-diagonal matrix whose leading
-  eigenvector lives entirely on one chromosome and is zero on the rest — a
-  genome-wide cis run done that way returns one chromosome's compartments and
-  fifteen flat lines, which is wrong in a way that looks like data. It is the
-  default because it is what people mean by "the compartment track", and because
-  it is far the cheapest of the three: the correlation is cubic, so sixteen
-  squares of 1,500 bins is a fraction of one of 24,000. It is priced against the
-  largest sequence and gated per sequence, which makes it the one mode that still
-  runs at a resolution the other two are refused at — and their refusal says so.
-  **Trans only** is the other standard call: the cis blocks carry a near-diagonal
-  that dominates every row, and leaving them out makes the eigenvector a
-  statement about which sequences share a nuclear compartment and nothing else.
-  It needs two sequences by definition and says so.
-
-  What it reads is the coalesced runs of what was ticked, so everything ticked
-  is a single read of the whole file rather than 136 rectangles, and a scattered
-  subset pays a rectangle per pair of runs instead of reading the gaps between
-  them. The bin-count gate now counts the *whole* ticked set — a yeast genome is
-  12,100 bins at 1 kb and 1,210 at 10 kb — and the refusal says to untick some or
-  open the file coarser. The correlation is cubic in the bin count and now says
-  so beside the megabytes, reports progress from inside its own loop, and can be
-  cancelled there.
-
-- **`ignore_diags`, on compartments and on insulation.** cooltools' setting,
-  spelled the same way and meaning the same thing: `0` counts every cell, `1`
-  drops the main diagonal, `2` drops it and the two beside it — `|col − row| < n`
-  — and **2 is the default**, which is cooltools' default and what the numbers a
-  reader compares against were computed with.
-
-  It is not a tidiness knob. The near-diagonal is where self-ligation and
-  unligated fragments end up; those cells are the largest in the matrix and the
-  least structural. In a **compartment** run a row's correlation with its
-  neighbours is carried disproportionately by the two or three cells nearest the
-  diagonal, which say only that the bins are adjacent — and every chromosome's
-  rows agree about that, so it enters the eigenvector as a component that is
-  really a picture of the diagonal. In an **insulation** run the diamond never
-  touches the main diagonal, so what the setting trims is its *inner corner*; at
-  a small window that corner can be most of the sum, and a track carried by it is
-  a picture of how deep the near-diagonal is rather than of what crosses the bin.
-  The diamond's coverage threshold is measured against the cells it is allowed to
-  count, so raising the cut does not quietly raise the bar a bin has to clear.
-
-  Trans cells have no separation for a diagonal to be measured from, so they are
-  never affected — and the control is hidden under *trans only*, where there is
-  nothing for it to do.
-
-- **A/B compartments come out as segments, not only as an eigenvector.** E1 is a
-  number per bin and the thing that gets cited is the interval — *this arm is A,
-  that half-megabase is B* — and getting from one to the other meant exporting
-  the bigWig and thresholding it in another tool. It is one comparison against
-  zero, and this app can make it without the ambiguity a downstream threshold
-  introduces, because it knows which bins were excluded and does not have to
-  guess whether a gap is a zero. So a run now produces an overlay of A and B
-  runs beside the track, with the mean of E1 over each run as its score, exported
-  as a BED like every other called interval set. A gap in the usable bins ends a
-  run rather than being bridged: a segment drawn across bins that took no part in
-  the calculation would be asserting a compartment where nothing was measured.
-
-- **Pick on map is one gesture.** The 4C anchor was picked with a Shift-drag,
-  which is a held modifier on top of a mode that already has a lit button and a
-  changed cursor — asking twice. While it is armed an ordinary drag names the
-  band, a tap names the bin under the pointer, and neither zooms, pans, nor
-  navigates: the only thing the gesture does is answer the question the form
-  asked. It still disarms after one pick and on Escape.
-
-- **A saddle is a square.** The two cell sizes of a matrix figure were computed
-  independently, each filling its own axis, so the aspect of a saddle or a
-  correlation heatmap was decided by how wide the drawer had been dragged. That
-  is a picture whose shape carries no information and reads as one whose shape
-  does — a saddle is read by comparing its two corners, and a corner stretched
-  40% along one axis looks stronger than the one opposite it. Cells are square
-  now, so an `n × n` matrix comes out square in any panel and a non-square one
-  keeps its own aspect exactly.
-
-- **The Sequences card is how a cooler's map picks its chromosomes.** The card
-  the 1D browser has always had — every sequence, its length, a bar for the
-  shape of the assembly and a tick box beside each — is now in the **General**
-  column whenever a cooler is open, and beside a map the ticks are the picture:
-  none is the whole genome, one is that chromosome's block, several are those
-  chromosomes against each other. It replaces the **Chromosome** card, which sat
-  in the same place describing the one sequence the breadcrumb already named,
-  from a table the reader can open in full, and offered no way to change it.
-
-  The binding runs both ways, which is the whole of the design. A tick
-  navigates; a navigation re-ticks — so the breadcrumb, the Chromosomes table,
-  the back button and a pasted link all move the boxes with the picture, and the
-  card can never say "showing 1 of 16" over a whole-genome map. A table view is
-  the one thing that leaves the ticks alone rather than clearing them: nothing
-  is drawn there to disagree with, and clearing would throw away a selection
-  being made on the way to the map. Ticking is also order-free — the axis comes
-  out in the file's order however the boxes were clicked, rather than in the
-  order they were clicked in.
-
-  The **Chromosomes table** is untouched, and it is still where columns are
-  sorted, filtered and read; what moved is only the picking. A `.metacool` keeps
-  its **Contig** card and its genomes table: there the unit is the genome, and a
-  picker with a hundred thousand tick boxes in it is not a picker.
-
-- **The virtual 4C lane is gone, and Shift-drag is a zoom.** Shift-dragging on a
-  map used to conjure a strip beside it summing that band of the matrix. Every
-  part of that the **4C task** now does better: it reads the pixel table rather
-  than whatever block happened to be loaded, it produces a track with a row on a
-  card and a bigWig to export, and it carries a provenance line saying what it
-  is. A dimmer second copy of the same answer, appearing without being asked for
-  and redrawing itself on every pan, is worth removing even when it works — and
-  the two disagreed at every level but the finest.
-
-  What replaces it is the gesture the picture was missing. **Shift-drag names a
-  band of one axis and zooms to it**, on the map, on the track lanes beside it,
-  and in the 1D browser — one conversion from pixels to bins behind all three, so
-  a stretch dragged out next to the map is the stretch the map goes to. The axis
-  follows the hand, so a drag a few degrees off vertical still means what it
-  plainly meant, and the axis nobody dragged keeps its centre.
-
-  **And every one of these gestures copies what it framed.** Shift-drag writes
-  `chrIV:500001-510000`: no thousands separators, a plain hyphen, 1-based
-  inclusive — the difference between a string that pastes into samtools,
-  bedtools, IGV and this app's own locus boxes and one that only looks right.
-  Option-drag, which selects a box, writes both axes as
-  `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what
-  that stretch would produce on its own.
-
-  Nothing else about lanes changed, because the lane was never the point: the
-  `viewpoint` kind and card are gone from the store, and the four edges, the
-  drag-to-another-edge, the tooltip and the exported figure are the code they
-  already were.
-
-- A shared link carries the two new readings, because both are part of what is
-  being looked at rather than how it is shaded: `oe` for the baseline and `op`
-  for the comparison. The normalisation needed no key of its own — it is a
-  `score`, and resolves through the same list the picker is built from, so a hash
-  naming one this build cannot serve lands on counts rather than on a read that
-  cannot be answered.
-
-- Adding or closing a map no longer rebuilds the one beside it. `maps` names what
-  is on screen *beside* this view, and the deck reconciles itself from it before
-  the render path decides anything — so the lead has nothing to be rebuilt for.
-  Left out of that list, every press of `+` cost a worker round trip and threw
-  away the reader's pan and zoom for a change that happened in another panel;
-  drawing a 2 × 2 deck paid it four times, and on a gated whole-genome map (§7.3)
-  each one would have put the pixel scan back behind its button.
-
-- **The turn and O/E are toggles, side by side, in one row of the Map card.** They
-  are the two controls that change *what picture this is* — one the geometry, one
-  the units — as against the score and the clip, which change what a number is
-  worth, and the overlays, which change what is drawn over it. They were an icon
-  button that looked identical before and after it had been pressed, and a
-  tickbox beside it that made the same kind of setting look like a different kind
-  of thing. Both are now lit the way every overlay toggle is. The turn's mark is
-  **the shape it will give you** — a triangle while the map is square, a square
-  once it is turned — rather than a mark for the state it is in, which is the one
-  reading that needs a second glance at the picture to interpret. O/E's mark is
-  the two letters, because a ratio has no shape and the nearest drawn thing is a
-  division sign that would say "divide" without saying by what.
-
-- **No drawn pointer where a guide line is already pointing.** The crosshair is
-  the better instrument of the two — it is drawn at the cell the app has actually
-  resolved, it runs the width and height of the picture, and it continues into
-  every track — while the arrowhead beside it is a second, blunter mark for the
-  same position, sitting on top of the pixel it names. So it goes, exactly where
-  the line comes: on the map while the crosshair is on and the pointer is over a
-  cell, in the 1D browser while it is on and the pointer is on the axis rather
-  than in the name column, and on a lane stack always, since a lane answers a
-  pointer with a hairline whatever the preference says. The transient cursors
-  stay — the closed hand while panning, the crosshair while a selection is about
-  to be drawn — because those say what is *happening*, which no guide line does.
-
-- **The deck's bar reads from the left**, with the one control that ends the deck
-  at the far right. The spacer used to sit second, which split a row of one kind
-  of thing into a chain on the left and three controls floated against the
-  right-hand edge — on a wide window, a screen apart, so reading the bar meant
-  looking in two places and which half a control was in said nothing about what
-  it did.
-
-- **The README no longer says balancing is unavailable.** It has been built since
-  0.2 — `/bins/weight`, two bounded slices for the bins on screen, `raw · wᵢ · wⱼ`,
-  and a control that became the score picker in 0.9 — and the paragraph claiming
-  otherwise had outlived the divergence it described by seven releases. Since
-  every analysis task wants balanced input, a stale line saying it cannot be had
-  was one misreading away from someone concluding these numbers are computed on
-  raw counts. The layering rule above it is corrected in the same way: no
-  *coordinate* ever comes from `/bins`, which is what §3.3 says and what
-  `bins-guard.test.ts` proves, and the weight column is the one bounded exception.
-
-- **"No write access" now says what it always meant.** The viewer has produced
-  files since 0.2 — PNG and PDF, then a saved session, then a BED of hand-drawn
-  marks in 0.5 — and a bigWig is one more of them: new bytes handed to the
-  browser as a download, needing no server, touching nothing that was opened. The
-  non-feature is *editing an input*, never *authoring an output*, and SPECS §13
-  says so now rather than leaving a reader to reconcile the two. Which is also
-  why there is still no writing of `.cool`, `.mcool` or `.metacool` — h5wasm
-  could create one, so that is a decision and not a limitation.
-
-### Fixed
-
 - **Analysis outputs name your tracks, not `a1, a2, a3`.** A task is handed the
   *ids* of the entries it reads — that is the right thing internally, since an id
   is stable across a rename and a label is not — and then wrote those ids into
@@ -2036,89 +2028,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `docs/hosting.md` has the two-action IAM policy and the CORS policy a
   credentialed preflight needs.
 
-### Changed
-
-- **A track dragged out of the Tracks card onto an edge turns its axis**, which a
-  track dragged there by the handle on its own picture has always done. The two
-  gestures mean the same thing and now take the same road; the card's own
-  location control has always taken it.
-
-- **The demo datasets moved to S3, and the app got 14× lighter.** The five
-  published maps and eleven track resources are no longer copied into the
-  bundle out of `public/demo/`; they live on the lab bucket at
-  `https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`, one folder per
-  dataset, uploaded by `scripts/publish-demo.sh`. A `npm run build` is **19 MB
-  instead of ~265 MB**, and 12 MB of what is left is the source map.
-
-  Size was the smaller half of it. Same-origin hosting waived the CORS
-  requirements of §11 and failed a different one: GitHub Pages gzips
-  `application/octet-stream`, which is what it served every `.metacool` and
-  `.mcool` as, and a `Range` over a compressed body addresses the octets of the
-  *compressed* stream. Every demo therefore opened through the whole-object
-  fallback — the probe saw `Content-Encoding`, refused the ranged path, and the
-  worker downloaded the entire file into memory. The landing page was
-  demonstrating the escape hatch rather than the reader. S3 does not compress
-  that type, so the demos now take the bounded-range path: the one a reader's
-  own bucket will take. What comes back is the CORS half — a preflight, and
-  `Content-Length` and `Content-Range` exposed to JavaScript — which
-  `publish-demo.sh` configures and then verifies with hosting.md's three `curl`
-  calls before it reports success.
-
-  **No `.metacooler.json` changed a line.** The names inside a published
-  session are relative and are resolved against the session's own URL, so
-  moving the folder moved the session with it — which is the property that made
-  the whole change three edits instead of thirty, and the reason a dataset
-  folder stays something you can copy to another bucket.
-
-  The datasets stay checked out in the repository, under `demo/`, because that
-  directory is both what the sync uploads and what
-  `test/unit/demo-examples.test.ts` reads: disk and bucket are one tree, so a
-  renamed file is a red CI run rather than a landing page where every choice
-  404s. They are in git history either way — removing them from the tree would
-  not shrink a clone.
-
-  Two build configs lost a special case with it. The desktop build no longer
-  needs `__DEMO_BASE__` pointed at the website (and no longer trips over the
-  Pages 301 that carries no `Access-Control-Allow-Origin`), and the archived
-  pinned build no longer points its examples back at the site root. Both now
-  read the same URLs the web build does.
-
-### Changed
-
-- **The 1D browser's crosshair and readout follow the pointer below the tracks
-  too.** The canvas used to stop at the foot of the last lane, so the space under
-  the stack belonged to the column rather than to the plot and the pointer moved
-  over it silently — which is a lot of dead surface on a view with two tracks in
-  a tall window. The canvas now reaches the foot of the column, and pointing
-  anywhere in it names a coordinate and reads every track at it, exactly as
-  pointing at a track does.
-
-  **Not before the axis begins.** The strip at the left is the handles' margin
-  and, when it is on, the track names' column, and neither is a position: the
-  crosshair stops at the axis and the readout says nothing there, rather than
-  naming a base pair while the arrowhead is on a word. That was true of the
-  readout already and is now true of the line as well.
-
-  **Only what follows the pointer goes down there.** The sequence boundaries and
-  the name column's own edge stop with the tracks: a boundary is a mark *on* the
-  tracks, and a rule carrying it through a screen's worth of blank space is a
-  divider between two things that are not there.
-
-  Only on screen. A figure is a picture of the tracks, and blank paper under them
-  is not part of it, so an exported one is unchanged.
-
-### Fixed
-
-- **The last lane of a stack shows the rule on its resize border**, which it
-  never has. The rule is drawn a pixel *outside* the lane, in the gap before the
-  next one — and the last lane has no gap, because its far edge is the canvas's
-  own end: the whole two-pixel stroke landed outside the canvas and was clipped
-  away. The drag went on working perfectly, which is the worst of the two
-  failures, because a gesture that is never announced is one a reader finds by
-  accident or not at all. It is now held inside the canvas by its own half-width,
-  which costs every other lane nothing since they are nowhere near either end.
-
-### Added
 
 - **The example list is a shelf of sessions.** Every entry in the landing
   page's dropdown is now a `.metacooler.json` published beside the data it
@@ -2366,7 +2275,85 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   arrows together, which is what the pair actually does. The old mark was a
   different glyph that had to be read rather than seen.
 
+### Changed
+
+- **A track dragged out of the Tracks card onto an edge turns its axis**, which a
+  track dragged there by the handle on its own picture has always done. The two
+  gestures mean the same thing and now take the same road; the card's own
+  location control has always taken it.
+
+- **The demo datasets moved to S3, and the app got 14× lighter.** The five
+  published maps and eleven track resources are no longer copied into the
+  bundle out of `public/demo/`; they live on the lab bucket at
+  `https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/`, one folder per
+  dataset, uploaded by `scripts/publish-demo.sh`. A `npm run build` is **19 MB
+  instead of ~265 MB**, and 12 MB of what is left is the source map.
+
+  Size was the smaller half of it. Same-origin hosting waived the CORS
+  requirements of §11 and failed a different one: GitHub Pages gzips
+  `application/octet-stream`, which is what it served every `.metacool` and
+  `.mcool` as, and a `Range` over a compressed body addresses the octets of the
+  *compressed* stream. Every demo therefore opened through the whole-object
+  fallback — the probe saw `Content-Encoding`, refused the ranged path, and the
+  worker downloaded the entire file into memory. The landing page was
+  demonstrating the escape hatch rather than the reader. S3 does not compress
+  that type, so the demos now take the bounded-range path: the one a reader's
+  own bucket will take. What comes back is the CORS half — a preflight, and
+  `Content-Length` and `Content-Range` exposed to JavaScript — which
+  `publish-demo.sh` configures and then verifies with hosting.md's three `curl`
+  calls before it reports success.
+
+  **No `.metacooler.json` changed a line.** The names inside a published
+  session are relative and are resolved against the session's own URL, so
+  moving the folder moved the session with it — which is the property that made
+  the whole change three edits instead of thirty, and the reason a dataset
+  folder stays something you can copy to another bucket.
+
+  The datasets stay checked out in the repository, under `demo/`, because that
+  directory is both what the sync uploads and what
+  `test/unit/demo-examples.test.ts` reads: disk and bucket are one tree, so a
+  renamed file is a red CI run rather than a landing page where every choice
+  404s. They are in git history either way — removing them from the tree would
+  not shrink a clone.
+
+  Two build configs lost a special case with it. The desktop build no longer
+  needs `__DEMO_BASE__` pointed at the website (and no longer trips over the
+  Pages 301 that carries no `Access-Control-Allow-Origin`), and the archived
+  pinned build no longer points its examples back at the site root. Both now
+  read the same URLs the web build does.
+
+- **The 1D browser's crosshair and readout follow the pointer below the tracks
+  too.** The canvas used to stop at the foot of the last lane, so the space under
+  the stack belonged to the column rather than to the plot and the pointer moved
+  over it silently — which is a lot of dead surface on a view with two tracks in
+  a tall window. The canvas now reaches the foot of the column, and pointing
+  anywhere in it names a coordinate and reads every track at it, exactly as
+  pointing at a track does.
+
+  **Not before the axis begins.** The strip at the left is the handles' margin
+  and, when it is on, the track names' column, and neither is a position: the
+  crosshair stops at the axis and the readout says nothing there, rather than
+  naming a base pair while the arrowhead is on a word. That was true of the
+  readout already and is now true of the line as well.
+
+  **Only what follows the pointer goes down there.** The sequence boundaries and
+  the name column's own edge stop with the tracks: a boundary is a mark *on* the
+  tracks, and a rule carrying it through a screen's worth of blank space is a
+  divider between two things that are not there.
+
+  Only on screen. A figure is a picture of the tracks, and blank paper under them
+  is not part of it, so an exported one is unchanged.
+
 ### Fixed
+
+- **The last lane of a stack shows the rule on its resize border**, which it
+  never has. The rule is drawn a pixel *outside* the lane, in the gap before the
+  next one — and the last lane has no gap, because its far edge is the canvas's
+  own end: the whole two-pixel stroke landed outside the canvas and was clipped
+  away. The drag went on working perfectly, which is the worst of the two
+  failures, because a gesture that is never announced is one a reader finds by
+  accident or not at all. It is now held inside the canvas by its own half-width,
+  which costs every other lane nothing since they are nowhere near either end.
 
 - **A marquee dragged off the map stays alive.** The gesture is followed on the
   window until the button comes up, with every position clamped into the plot, so
