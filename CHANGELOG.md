@@ -10,6 +10,60 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **Marks could not be placed by pointing at a turned map, which is every map a
+  region view opens.** `pick on map` collected nothing and the right-click *Mark
+  this point* menu did not open at all — silently, both of them, because a click
+  that places nothing looks exactly like a click that missed. Typing coordinates
+  worked and the marks drew correctly once they existed, so the feature looked
+  broken in the one presentation it is most useful in.
+
+  One conversion is behind both gestures: a cell into the pair of loci a mark
+  names, one per axis, which is what lets a single click serve a line, a
+  crosshair and a loop. It read the loci off the axes the *picture* is drawn
+  against, and on a turned map the row axis of that pair is deliberately absent —
+  y there is distance from the diagonal, which is not a place, and x is counted
+  in half bins. The cell is now taken back to the square it was rotated out of
+  and read against that block's own two axes, which is what the tooltip, the
+  readout and the region-opening selection have always done. Clicking a dot in
+  the band therefore marks the loop it *is*: the two ends of the contact, 10 kb
+  apart at ten rows up, rather than nothing at all.
+
+- **The three track tasks failed with "nothing is open" in a session that has
+  no contact map.** A metaplot, a track correlation and an interval overlap read
+  the loaded tracks and never touch a matrix (§18.3) — the 1D browser session is
+  exactly where a reader has the bigWigs and not the map, and the panel is
+  offered there deliberately. Everything on the way was ready for it: the context
+  is built without a file, the framing falls back to one over the tracks. The
+  last line still assuming a matrix was the *target* a result is filed under,
+  which came from the open file and so from nothing at all.
+
+  It now comes from the genome the tracks were loaded against, and a target with
+  no file behind it is no longer a broken target: a chain that mounts nothing
+  does not need something to mount. A map task that reaches one refuses in its
+  own words — *Diamond insulation reads a contact map, and this session is
+  browsing a genome without one* — instead of the queue's old "nothing is open"
+  for a session with a genome and nine tracks in it.
+
+- **The map aliased near the diagonal on screen while the exported figure did
+  not.** A canvas filter is one bilinear tap: it reads a 2 × 2 neighbourhood per
+  destination pixel, which is a filter down to a halving and a fiction past it.
+  A whole chromosome at 1 kb is a 3,000-pixel raster drawn into 460, so seven
+  cells of every eight were never read — and on a turned map, whose lattice is
+  half a bin and shifts parity row by row, what beat against the pixel grid was a
+  moiré of diagonal stripes across the band. The export was spared because 300
+  dpi is three times the density: the same tap had a fifth of the work to do.
+
+  The view now keeps **halved copies** of the raster and samples the one nearest
+  the size it is drawing, so the filter is never asked to reduce by more than a
+  half — which is the one reduction it does honestly. Levels are built on demand
+  and dropped with the raster: a region view drawn a pixel per bin builds none,
+  and no level is ever built for a frame that does not ask for it. Magnified
+  pictures are untouched, still nearest-neighbour, still crisp to the bin.
+
 ## [0.10.0] - 2026-08-11
 
 ### Added

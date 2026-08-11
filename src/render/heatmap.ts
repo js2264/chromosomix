@@ -477,6 +477,43 @@ export function separatorBlocks(seps: readonly Separator[], n: number): LabelBlo
 type RasterCanvas = HTMLCanvasElement | OffscreenCanvas
 
 /**
+ * How many halvings of the raster the view will keep; see
+ * {@link HeatmapView.rasterFor}.
+ *
+ * Four is a sixteen-fold reduction, which is a whole yeast genome at 500 bp in a
+ * thumbnail. Past it the level is smaller than the plot's own margins and there
+ * is nothing left to filter.
+ */
+const MAX_RASTER_LEVELS = 4
+
+/** Below this many pixels on an axis, a level is not halved again. */
+const MIN_RASTER_LEVEL = 8
+
+/**
+ * One level of the pyramid: `from`, averaged down by two on both axes.
+ *
+ * The averaging is the canvas's own, and at exactly one half a bilinear tap
+ * *is* the mean of the 2 × 2 block it covers — which is why this is the one
+ * reduction the filter can be trusted with, and why the pyramid is built out of
+ * halvings rather than by scaling straight to the size wanted. Transparency
+ * averages with everything else, so the empty corners of a turned block stay
+ * empty and the cells beside them are not dimmed towards paper.
+ *
+ * `null` where the platform hands back no context, which the caller answers by
+ * drawing from the level above — a softer picture, never a missing one.
+ */
+function halveRaster(from: RasterCanvas): RasterCanvas | null {
+  const width = Math.max(1, Math.ceil(from.width / 2))
+  const height = Math.max(1, Math.ceil(from.height / 2))
+  const canvas = createRasterCanvas(width, height)
+  const ctx = (canvas as HTMLCanvasElement).getContext('2d')
+  if (ctx === null) return null
+  ctx.imageSmoothingEnabled = true
+  ctx.drawImage(from as CanvasImageSource, 0, 0, from.width, from.height, 0, 0, width, height)
+  return canvas
+}
+
+/**
  * A canvas sized to the matrix, for the `putImageData` step. `OffscreenCanvas`
  * where it exists (it does in every browser the app targets, and in workers);
  * a detached `<canvas>` otherwise.
@@ -1269,6 +1306,14 @@ export class HeatmapView {
     | { transform: Transform; balanced: boolean; centre: number | null; range: ValueRange }
     | null = null
   private offscreen: RasterCanvas | null = null
+  /**
+   * Halved copies of {@link offscreen}, coarsest last, built on demand.
+   *
+   * Dropped whole whenever the raster is rebuilt: a level is a summary of
+   * particular pixels, and a stale one would be the previous colormap — or the
+   * previous *block* — drawn under this one's ticks. See {@link rasterFor}.
+   */
+  private mips: RasterCanvas[] = []
   /** Handle of a frame this view scheduled for itself; see {@link changed}. */
   private selfFrame = 0
   /** Cached canvas origin; see {@link clientRect}. `null` means "re-measure". */
@@ -2803,6 +2848,18 @@ export class HeatmapView {
     // 300 dpi figure was being smoothed as though it were a screen.
     ctx.imageSmoothingEnabled = this.zoom * Math.min(sx, sy) * this.dpr < 1
 
+    // …and *what* it filters, which is the other half of that sentence and was
+    // missing. A canvas filter is one bilinear tap: it reads a 2 × 2
+    // neighbourhood per destination pixel, which is right down to a halving and
+    // a fiction beyond it. A whole chromosome at 1 kb is a 3,000-pixel raster in
+    // 460, so seven cells out of eight were never read — and on a turned map,
+    // whose lattice is half a bin and shifts parity row by row
+    // (`render/rotate.ts`), what beats against the pixel grid is a moiré of
+    // diagonal stripes across the band. The pyramid is what makes the filter
+    // true: every level is a real average of the one above it, so the level this
+    // picks is at most a halving away from the pixels it is drawn into.
+    const source = this.rasterFor(this.zoom * Math.max(sx, sy) * this.dpr) ?? offscreen
+
     ctx.setTransform(
       this.zoom * sx * this.dpr,
       0,
@@ -2811,7 +2868,13 @@ export class HeatmapView {
       originX + this.dpr * (plot.x - this.originX * this.zoom),
       originY + this.dpr * (plot.y - this.originY * this.zoom)
     )
-    ctx.drawImage(offscreen, 0, 0)
+    // Onto the footprint the *full* raster covers, whichever level is being
+    // sampled: the transform is the matrix's, so a level has to be stretched
+    // back over the block it summarises or the picture would shrink by the
+    // rounding of its own last row. That keeps every level registered to the
+    // same pixels as level 0, which is what the ticks, the separators and the
+    // overlays are placed against.
+    ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, offscreen.width, offscreen.height)
     ctx.restore()
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, originX, originY)
@@ -2829,6 +2892,40 @@ export class HeatmapView {
     // Last, so it is over everything including the border: it is not part of the
     // picture, it is a statement about the picture's state.
     this.drawSpinner()
+  }
+
+  /**
+   * Which copy of the raster to sample, for a draw that shrinks it by `scale`.
+   *
+   * `scale` is destination pixels per raster pixel on the axis that is shrunk
+   * *least* — the level halves both axes at once, so taking the other one would
+   * blur the sharper axis to suit the softer one. One or more is a magnification
+   * and answers with the raster itself; below that it answers with the level
+   * whose own pixels land between a half and one destination pixel, which is
+   * where a bilinear tap is a filter rather than a sample.
+   *
+   * **Built here rather than in {@link rasterizeNow}**, because most pictures
+   * never need a level: a region view is drawn a pixel or more per bin and every
+   * level built for it would be a canvas allocated, filled and never read. Each
+   * one costs a quarter of the one above it and they are dropped whole whenever
+   * the raster is rebuilt, so a colormap change pays for at most what the next
+   * frame actually asks for.
+   */
+  private rasterFor(scale: number): RasterCanvas | null {
+    const base = this.offscreen
+    if (base === null || !(scale > 0) || scale >= 1) return base
+    const wanted = Math.min(MAX_RASTER_LEVELS, Math.floor(Math.log2(1 / scale)))
+    while (this.mips.length < wanted) {
+      const from = this.mips[this.mips.length - 1] ?? base
+      // A level small enough that halving it again would be averaging away the
+      // picture rather than the noise in it. The cap above says the same thing
+      // for a raster that starts small.
+      if (from.width <= MIN_RASTER_LEVEL || from.height <= MIN_RASTER_LEVEL) break
+      const next = halveRaster(from)
+      if (next === null) break
+      this.mips.push(next)
+    }
+    return this.mips[Math.min(wanted, this.mips.length) - 1] ?? base
   }
 
   /**
@@ -3295,6 +3392,8 @@ export class HeatmapView {
     ctx.putImageData(new ImageData(bytes, raster.width, raster.height), 0, 0)
     this.raster = raster
     this.offscreen = canvas
+    // Every level summarised the pixels that have just been overwritten.
+    this.mips = []
     this.dirtyRaster = false
   }
 

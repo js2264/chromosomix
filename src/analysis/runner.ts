@@ -239,7 +239,17 @@ export interface RunTarget {
   /** Which map, for filing what the run produces (`annotations/placement.ts`). */
   map: MapId
   uri: string
-  source: SourceSpec
+  /**
+   * How the analysis worker would mount this file, where there is one to mount.
+   *
+   * Absent in a session with no contact map, which is not a broken target: the
+   * three track tasks (§18.3) read the loaded tracks in the *other* worker and
+   * this one is never opened for them ({@link AnalysisRunner.mount}). A map task
+   * that reaches a target without one fails by name, which is the honest answer
+   * — and the one this used to give as "nothing is open", to every track task in
+   * a 1D browser session.
+   */
+  source?: SourceSpec
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -382,10 +392,6 @@ export class AnalysisRunner {
       return
     }
     const where = target ?? this.hostTarget(framing)
-    if (where === null) {
-      this.setState(task.id, { status: 'failed', message: 'nothing is open' })
-      return
-    }
     // A second press while the same task is already on the worker is a reader
     // wondering whether the first one registered, not a request for two runs of
     // it. A press while it is still *queued* is a change of mind about the
@@ -444,14 +450,21 @@ export class AnalysisRunner {
     return this.targets().find((target) => target.map === map) ?? null
   }
 
-  /** The one map a plain Run goes to: whatever the session says is current. */
-  private hostTarget(framing: AnalysisFraming): RunTarget | null {
+  /**
+   * The one map a plain Run goes to: whatever the session says is current.
+   *
+   * A session with nothing to *mount* still has a target, and that is the whole
+   * of what a track task needed: the framing is what it is a measurement of, and
+   * a genome browser has one of those without having a contact map. Where the
+   * host does answer with a file — which is every session with a map, and the
+   * starred one in a deck — that file is what the target names.
+   */
+  private hostTarget(framing: AnalysisFraming): RunTarget {
     const source = this.host.source()
-    if (source === null) return null
     return {
       map: this.host.targetMap?.() ?? LEAD_MAP,
-      uri: source.uri,
-      source: source.source,
+      uri: source?.uri ?? framing.uri,
+      ...(source === null ? {} : { source: source.source }),
       label: framing.uri,
     }
   }
@@ -634,6 +647,16 @@ export class AnalysisRunner {
     // changed while this job was queued* — since there is no moving answer left
     // for a job to disagree with.
     const source = job.target
+    // A target with no file behind it: a session browsing a genome, reached by a
+    // task that reads the matrix. Said by name and in the task's own terms,
+    // because the reader's way out is to open a cooler — which is a different
+    // sentence from the one the queue used to give ("nothing is open") for a
+    // session that plainly had a genome and nine tracks in it.
+    if (source.source === undefined) {
+      throw new Error(
+        `${job.task.title} reads a contact map, and this session is browsing a genome without one.`,
+      )
+    }
     if (this.mounted === source.uri) return
     this.setState(job.task.id, {
       status: 'running',

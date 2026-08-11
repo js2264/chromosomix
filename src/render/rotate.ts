@@ -53,7 +53,7 @@
  * improvement; nothing here pretends they are zeros.
  */
 
-import { LocusAxis } from './locus'
+import { LocusAxis, type Locus } from './locus'
 
 /** The part of a read this module needs. */
 export interface RotatableBlock {
@@ -207,6 +207,40 @@ export function cellAt(
   const j = i + separation
   if (!Number.isInteger(i) || i < 0) return null
   return { row: i, col: j, separation }
+}
+
+/**
+ * The two loci a cell names, whichever way the block it is in is drawn.
+ *
+ * The pointer's counterpart of {@link turnedPlace}, and the piece that was
+ * missing. A mark is placed at a *pair* of loci — one per axis, which is what
+ * makes one gesture serve a line, a crosshair and a loop — and on a turned map
+ * neither of the picture's own axes can answer for one: y is distance from the
+ * diagonal, which is not a place, and x is counted in half bins. So the cell is
+ * taken back to the square it was rotated out of ({@link cellAt}) and read
+ * against *that* block's two axes, which every other reader of a turned map
+ * already does — the tooltip, the readout, and the selection that opens a region.
+ *
+ * `square` is the untured block's pair. On a square map `turned` is `null`, the
+ * cell is already the square's, and this is two axis lookups.
+ *
+ * Half a cell is added on each axis because a click lands *inside* a cell and its
+ * left edge is not where the reader aimed: on a 10 kb grid that is the difference
+ * between a mark on the boundary of a domain and one 5 kb short of it.
+ */
+export function cellLoci(
+  square: { rows: LocusAxis | null; cols: LocusAxis | null },
+  turned: Pick<
+    RotatedBlock,
+    'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'
+  > | null,
+  cell: { row: number; col: number },
+): { rows: Locus; cols: Locus } | null {
+  const at = turned === null ? cell : cellAt(turned, cell.row, cell.col)
+  if (at === null) return null
+  const rows = square.rows?.unitToLocus(at.row + 0.5) ?? null
+  const cols = square.cols?.unitToLocus(at.col + 0.5) ?? null
+  return rows === null || cols === null ? null : { rows, cols }
 }
 
 /**

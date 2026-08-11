@@ -233,6 +233,8 @@ function harness(
   vectors: Map<string, Float32Array> | null = null,
   targets: readonly RunTarget[] = [],
   onScreen: { block: BlockInput | null; map: string } = { block: null, map: 'lead' },
+  /** Whatever this test needs the session to answer differently. */
+  over: Partial<RunnerHost> = {},
 ): Harness {
   const fake = new FakeAnalysisWorker()
   const finished: Array<{ task: string; result: TaskResult; map: string }> = []
@@ -249,9 +251,27 @@ function harness(
     ...(vectors === null
       ? {}
       : { vector: (entryId: string) => Promise.resolve(vectors.get(entryId)) }),
+    ...over,
   }
   const client = clientOver(fake)
   return { runner: new AnalysisRunner(host, () => client), fake, finished, catalogue }
+}
+
+/** What the *other* worker answers a run with; see the annotations venue. */
+function trackResult(id: string): TaskResult {
+  return {
+    outputs: [],
+    provenance: {
+      task: id,
+      taskVersion: 0,
+      params: {},
+      framing: FRAMING,
+      app: '0.0.0-test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    notes: [],
+    ms: 7,
+  }
 }
 
 /** Let every reply and every `await` in the runner land. */
@@ -657,6 +677,78 @@ describe('a view with no map', () => {
     const state = runner.stateOf('insulation')
     expect(state.status).toBe('failed')
     expect(runner.busy).toBe(false)
+    expect(fake.seen).toHaveLength(0)
+    runner.destroy()
+  })
+
+  /**
+   * …and the three tasks that are *not* about a map run there anyway (§18.3).
+   *
+   * A 1D browser session is where a reader has the bigWigs and not the matrix,
+   * which is precisely the session a metaplot, a track correlation and an
+   * interval overlap are for. Two things have to be true for one to run: the
+   * framing falls back to the tracks, and the *target* — the pair a result is
+   * filed under — comes from whatever the session has open, which there is a
+   * genome rather than a file. The second was missing, so all three failed as
+   * "nothing is open" in the one session shape they exist for.
+   */
+  it('runs a track-only task against the genome, with no file to mount', async () => {
+    const sent: unknown[] = []
+    const tracks = {
+      request: (payload: unknown) => {
+        sent.push(payload)
+        return Promise.resolve(trackResult('metaplot'))
+      },
+    }
+    const { runner, fake, finished } = harness(null, null, [], { block: null, map: 'lead' }, {
+      // The genome the tracks were loaded against: a bigWig, and not a cooler.
+      source: () => ({ uri: 'peaks.bw', source: { kind: 'remote', url: 'peaks.bw' } }),
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+
+    runner.run(task('metaplot', { group: 'tracks', venue: 'annotations' }), {})
+    await settle()
+
+    expect(runner.stateOf('metaplot').status).toBe('done')
+    expect(sent).toHaveLength(1)
+    // Filed, and against the map the session named — a browser has one lane
+    // list like a map does, and a computed track goes on it.
+    expect(finished.map((one) => one.task)).toEqual(['metaplot'])
+    // Nothing was opened in the analysis worker: a track-only chain has no file
+    // for it to hold, and opening one would be a wasm instance and a range cache
+    // for a job that asks them nothing.
+    expect(fake.seen).toHaveLength(0)
+    runner.destroy()
+  })
+
+  it('runs one even where the session can name no file at all', async () => {
+    // The other half of the same rule, and the one that keeps it from coming
+    // back: what a track task needs is tracks. A target with no byte source is
+    // not a broken target here, because nothing in this chain mounts one.
+    const tracks = { request: () => Promise.resolve(trackResult('trackcorr')) }
+    const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
+      source: () => null,
+      annotations: () => tracks as unknown as ReturnType<NonNullable<RunnerHost['annotations']>>,
+    })
+    runner.run(task('trackcorr', { group: 'tracks', venue: 'annotations' }), {})
+    await settle()
+    expect(runner.stateOf('trackcorr').status).toBe('done')
+    runner.destroy()
+  })
+
+  it('refuses a map task that reaches a genome, in the task’s own terms', async () => {
+    // `framing` non-null with nothing to mount is not a state the app can reach
+    // — a framing comes from a panel and a panel comes from a file — so this is
+    // the type being honest rather than a case a reader meets. What matters is
+    // that it is a sentence about the task, not "nothing is open".
+    const { runner, fake } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => null,
+    })
+    runner.run(task('insulation', { title: 'Diamond insulation' }), {})
+    await settle()
+    const state = runner.stateOf('insulation')
+    expect(state.status).toBe('failed')
+    expect(state.status === 'failed' && state.message).toContain('Diamond insulation')
     expect(fake.seen).toHaveLength(0)
     runner.destroy()
   })

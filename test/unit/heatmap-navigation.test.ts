@@ -32,7 +32,9 @@ beforeAll(() => {
     width = 0
     height = 0
     getContext(): unknown {
-      return { putImageData: () => {} }
+      // `drawImage` as well as `putImageData`: a minified draw halves the raster
+      // into canvases of this kind (`HeatmapView.rasterFor`).
+      return { putImageData: () => {}, drawImage: () => {}, imageSmoothingEnabled: false }
     }
   }
 })
