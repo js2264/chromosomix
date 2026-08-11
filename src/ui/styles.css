@@ -344,18 +344,26 @@ p {
   letter-spacing: -0.015em;
 }
 
-.brand-sub {
-  color: var(--text-faint);
-  font-size: var(--step--1);
-}
-
-/* Title block, with the sidebar fold button to its left: the control points at
-   the panel it folds. */
+/* The title block, and the four panel buttons after it. In that order because
+   the name is what says which application this is and the buttons are furniture
+   over its columns; a row that opened with four unlabelled marks made a reader
+   identify them before reaching the thing they act on. */
 .head-left {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
+}
+
+/* Set apart from the name rather than merely spaced from it: they are a group of
+   four, and the gap has to read as a gap between *two things* — the app, and the
+   controls over its window — rather than as a wider gap in one row of five. */
+.head-panels {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: 0.9rem;
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--border);
 }
 
 .head-actions {
@@ -1267,10 +1275,130 @@ p {
   border-left: 1px solid var(--border);
 }
 
-/* Folded, or nothing to show. One rule, because the reader cannot tell the
-   difference and should not have to: an empty named column is worse than none. */
+/* Folded: a strip of the column, with its tab standing on the bottom of it.
+
+   Not `display: none`, which is what this was. A column that leaves the layout
+   entirely leaves the header's four buttons as the only sign it exists, and
+   those say neither which column is folded nor what is in it. The strip is the
+   narrowest thing that can carry a name — a quarter-turn is what buys the room —
+   and being *in the flow* is the whole of the nesting: `order` puts the columns
+   outermost-first from each edge, so two folded panels are two tabs side by side
+   at the screen edge, and opening the outer one pushes the inner one's tab out
+   to stand against it. Nothing measures anything.
+
+   The width is here rather than inline so it wins over the reader's drag, which
+   `SidePanel.paint` clears for exactly that reason. */
 .panel-column.collapsed {
+  width: var(--tab-thickness);
+  padding: 0;
+  overflow: visible;
+}
+
+/* Its cards, its heading and its drag handle, all of which belong to the open
+   column. `> *` rather than a list, so a part added later is folded away with
+   the rest instead of appearing edge-on in a 28-pixel strip. */
+.panel-column.collapsed > *:not(.panel-tab) {
   display: none;
+}
+
+/* Nothing to show at all, which is not the same thing: no cards, no strip, no
+   tab. A tab is an invitation and one that opens an empty column is worse than
+   the column's absence. */
+.panel-column.is-absent {
+  display: none;
+}
+
+.panel-column .panel-tab {
+  display: none;
+}
+
+/* The tab itself, turned a quarter-turn anticlockwise so its name reads
+   bottom-to-top up the side of the window.
+
+   Out of flow and anchored to the bottom-left corner of its own strip: a rotated
+   element keeps its unrotated box for layout, so a tab left in the flow would
+   reserve a row as tall as it is *wide*.
+
+   The transform is two steps and both are needed. `rotate(-90deg)` about
+   `left bottom` swings the box up the screen from that corner — and also to the
+   *left* of it, since the element's own height goes where its negative x used to
+   be, which is off the edge of the window for a panel at x = 0. The
+   `translateY(100%)` before it (transforms apply right to left) drops the box by
+   its own height first, so the turn lands that height inside the strip instead:
+   the tab ends up bottom-aligned, one thickness wide, and as long as its text
+   needs. Both sides use it unchanged — the strip is what moves, not the tab in
+   it — and the content reads from the bottom up, which is why the mark is the
+   first child and the chevron the last. */
+.panel-column.collapsed > .panel-tab {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  transform-origin: left bottom;
+  transform: rotate(-90deg) translateY(100%);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--tab-thickness);
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--step--1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Which of its four edges is the one facing into the window, which is the edge a
+   tab is rounded on — the other three read as the side of the window it is
+   attached to. The quarter-turn is what makes this two rules rather than one: the
+   element's own top edge lands on the *left* of the screen and its bottom edge on
+   the right, so the sides swap between a column on the left and one on the
+   right. */
+.panel-column-left > .panel-tab {
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.panel-column-right > .panel-tab {
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.panel-column.collapsed > .panel-tab:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.panel-column.collapsed > .panel-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The strip carries the tab's thickness too, so the two cannot drift. */
+.panel-column {
+  --tab-thickness: 1.85rem;
+}
+
+/* Upright again, against the window rather than along the spine: a mark turned
+   with the words is a document lying on its side, and a chevron turned with them
+   points up the strip instead of into the window it will open. */
+.panel-tab-mark {
+  transform: rotate(90deg);
+  flex: 0 0 auto;
+}
+
+/* Upright too, and for the reason the mark is: a key cap is a picture of a key,
+   and one lying on its side is a letter to be worked out rather than read. */
+.panel-tab-key {
+  transform: rotate(90deg);
+  opacity: 0.75;
+}
+
+.panel-tab-chevron {
+  opacity: 0.75;
 }
 
 /* The column's own heading. Quieter than a card's, because it names the column
@@ -3801,6 +3929,14 @@ canvas.is-frozen {
   .panel-column-handle {
     display: none;
   }
+  /* Stacked, a folded column leaves altogether again. The tabs are a *side*
+     affordance — turned a quarter-turn to stand up the edge of the window — and
+     the same strip in a column layout is a full-width row with a word lying on
+     its side in it, which is neither a tab nor a column. The header's four
+     buttons are the way back in this layout, as they were before the tabs. */
+  .panel-column.collapsed {
+    display: none;
+  }
 }
 
 /* The view's own sidebar: colour controls on top, contig list underneath. */
@@ -4591,10 +4727,13 @@ canvas.is-frozen {
     gap: 0.5rem;
   }
 
-  /* The strapline is the first thing to go: it explains the app to someone who
-     has already opened it, and it costs the whole width of a phone. */
-  .brand-sub {
-    display: none;
+  /* The rule the four panel buttons are set apart by: on a phone the header has
+     one row of room and a divider in it is a line asking for width the columns
+     it points at do not have. */
+  .head-panels {
+    margin-left: 0.35rem;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .content {

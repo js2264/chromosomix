@@ -33,7 +33,7 @@ import {
 } from '../ui/SidePanel'
 import { StatusBar } from '../ui/StatusBar'
 import { ThemeToggle } from '../ui/ThemeToggle'
-import { IS_DESKTOP, desktop } from '../desktop'
+import { desktop } from '../desktop'
 import {
   KEYS,
   isChord,
@@ -179,10 +179,6 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-left' },
-          this.generalPanel.toggle,
-          this.annotationsPanel.toggle,
-          this.aestheticsPanel.toggle,
-          this.analysisPanel.toggle,
           el(
             'div',
             { class: 'brand' },
@@ -192,17 +188,21 @@ export class App implements SessionHost {
             // a 16 px name is the proportion a favicon has to a tab title.
             appMark(26),
             home,
-            el('span', {
-              class: 'brand-sub',
-              // The one string that genuinely differs between the targets.
-              // "in the browser" is the web app's hook -- it is the surprising
-              // half of what it does -- and it is simply false in a window that
-              // is not one. Everything else about privacy is reworded to be
-              // true of both rather than branched; see `FilePicker.ts`.
-              text: IS_DESKTOP
-                ? '(multi-genome) cool files, on your machine'
-                : '(multi-genome) cool files, in the browser',
-            }),
+          ),
+          // …and the four columns after it, not before. They are controls over
+          // the window's own furniture, and a row that opens with four unlabelled
+          // marks makes a reader identify them before reaching the thing that
+          // says what they are looking at. The strapline that used to hold this
+          // side of the header is gone with them: it explained the app to
+          // somebody who has already opened it, and this is the row where the
+          // panels are reached from.
+          el(
+            'div',
+            { class: 'head-panels' },
+            this.generalPanel.toggle,
+            this.annotationsPanel.toggle,
+            this.aestheticsPanel.toggle,
+            this.analysisPanel.toggle,
           ),
         ),
         palette,

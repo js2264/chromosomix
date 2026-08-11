@@ -83,6 +83,11 @@ const LUCIDE = [
   // The card headings. One mark per card in the three panels, so a column of
   // five is scanned by shape before it is read: see `ui/icons.ts` -> cardTitle.
   'file',
+  // The General panel's own mark: what is in that column is the file and the
+  // settings read off it, which is a document with a cog on it rather than the
+  // fold arrow it used to carry — an arrow said only *this panel folds*, which
+  // is true of all four of them.
+  'file-cog',
   'palette',
   'sliders-horizontal',
   'pencil',
