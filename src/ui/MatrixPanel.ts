@@ -87,6 +87,7 @@ import {
   anchorRays,
   binsForColumns,
   cellAt,
+  cellLoci,
   isTurnable,
   rotateBlock,
   rowForSeparation,
@@ -937,6 +938,23 @@ export class MatrixPanel {
    * mapping is exactly what §8.4 exists to prevent.
    */
   private locusAxes: OverlayAxes = { rows: null, cols: null }
+  /**
+   * The **square** block's two axes, kept under a turn as well.
+   *
+   * {@link locusAxes} is what the picture is drawn against, and on a turned map
+   * its rows are deliberately `null`: y is distance from the diagonal, which is
+   * not a place, and a lane or an overlay asking that axis for a locus is asking
+   * the wrong question (`render/rotate.ts`).
+   *
+   * A **click** is not that question. It lands on a cell, and a cell of a turned
+   * band is a cell of the square underneath it ({@link squareCell}) — which has a
+   * row coordinate and a column coordinate like any other. This is the pair that
+   * turns it back into two loci, and it is the same pair the readout uses, for
+   * the same reason: one coordinate system for the pointer, whichever way the map
+   * is drawn. Without it, `pick on map` and the right-click menu were silently
+   * dead on every turned map, which is the presentation a region view opens in.
+   */
+  private squareAxes: OverlayAxes = { rows: null, cols: null }
   /**
    * The block the colour range is measured from, and how much genome it covers.
    *
@@ -3024,14 +3042,22 @@ export class MatrixPanel {
    * The cell's *centre*, not its corner: a click lands somewhere inside a cell,
    * and reporting its left edge would put every hand-placed mark half a bin
    * earlier than where the reader aimed.
+   *
+   * **Through the square**, exactly as the readout is ({@link describe}) and for
+   * the same reason: a turned cell's row is a separation and its column is half a
+   * bin, so neither is a coordinate of anything a mark can name. Read off the
+   * drawn axes it answered `null` on every turned map — which took `pick on map`
+   * and the whole right-click menu away in the presentation a region view opens
+   * in, silently, since a click that places nothing looks exactly like a click
+   * that missed. The arithmetic is `render/rotate.ts`'s, beside the rotation it
+   * inverts.
    */
   private locusOf(cell: Cell): { rows: ManualPoint; cols: ManualPoint } | null {
-    const rows = this.locusAxes.rows?.unitToLocus(cell.row + 0.5) ?? null
-    const cols = this.locusAxes.cols?.unitToLocus(cell.col + 0.5) ?? null
-    if (rows === null || cols === null) return null
+    const at = cellLoci(this.squareAxes, this.turned, cell)
+    if (at === null) return null
     return {
-      rows: { contig: rows.contig, bp: Math.round(rows.bp) },
-      cols: { contig: cols.contig, bp: Math.round(cols.bp) },
+      rows: { contig: at.rows.contig, bp: Math.round(at.rows.bp) },
+      cols: { contig: at.cols.contig, bp: Math.round(at.cols.bp) },
     }
   }
 
@@ -3901,7 +3927,9 @@ export class MatrixPanel {
         ? null
         : { maxSeparation: turned.maxSeparation, direction: turned.direction },
     )
-    this.locusAxes = this.locusAxesOf(data, turned)
+    const axes = this.locusAxesOf(data, turned)
+    this.locusAxes = axes.drawn
+    this.squareAxes = axes.square
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -3966,9 +3994,11 @@ export class MatrixPanel {
     const { dense, gauge, presentationMoved, turned } = this.derive(data, second)
 
     const axes = this.locusAxesOf(data, turned)
-    const cols = spanOnAxis(axes.cols, want.cols, dense.ncols)
+    const cols = spanOnAxis(axes.drawn.cols, want.cols, dense.ncols)
     const rows =
-      turned === null ? spanOnAxis(axes.rows, want.rows, dense.nrows) : ([0, dense.nrows] as const)
+      turned === null
+        ? spanOnAxis(axes.drawn.rows, want.rows, dense.nrows)
+        : ([0, dense.nrows] as const)
     if (cols === null || rows === null) {
       // Put back what was moved. `derive` has already written `this.square`,
       // `this.drawn` and `this.second`, so the caller must re-run it — which
@@ -4004,7 +4034,8 @@ export class MatrixPanel {
         ? null
         : { maxSeparation: turned.maxSeparation, direction: turned.direction },
     )
-    this.locusAxes = axes
+    this.locusAxes = axes.drawn
+    this.squareAxes = axes.square
     if (presentationMoved) {
       this.options.onScaleChange?.({
         transform: this.transform,
@@ -4125,13 +4156,25 @@ export class MatrixPanel {
    * It is also what a {@link regrid} converts the reader's window through. A
    * window held in base pairs is the only form that survives a change of bin
    * size, and this is the object that turns base pairs back into cells.
+   *
+   * Two pairs come back, and they are the same object on a square map. The
+   * *drawn* pair is the picture's, and under a turn it says out loud that there
+   * is no row axis; the *square* pair is the block's, and it is what a pointer is
+   * resolved through however the picture is arranged ({@link squareAxes}).
    */
-  private locusAxesOf(data: MatrixResult, turned: RotatedBlock | null): OverlayAxes {
+  private locusAxesOf(
+    data: MatrixResult,
+    turned: RotatedBlock | null,
+  ): { drawn: OverlayAxes; square: OverlayAxes } {
     const context = this.options.annotations
     const shared = {
       level: data.level,
       binsize: this.options.binsize,
       contigLength: context?.contigLength ?? ((): number | undefined => undefined),
+    }
+    const square: OverlayAxes = {
+      rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
+      cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
     }
     // A turned block has one genomic axis and one that is not: x is position,
     // measured in the half-bin columns the rotation produced, and y is distance
@@ -4139,23 +4182,22 @@ export class MatrixPanel {
     // is exactly right for the lanes — a stack drawn against a genomic axis has
     // nothing to draw itself against up the side, which is why a turn moves
     // every track to the bottom.
-    return turned === null
-      ? {
-          rows: locusAxisFrom({ ...shared, runs: data.rowGroups, blockStart: data.rowExtent[0] }),
-          cols: locusAxisFrom({ ...shared, runs: data.colGroups, blockStart: data.colExtent[0] }),
-        }
-      : {
-          rows: null,
-          cols: this.turnedLocus(turned, data),
-          // What an overlay is placed by once there is no row axis to ask: a
-          // mark names one locus or two, and the turn is a function of those
-          // two (`render/overlays.ts`).
-          turn: {
-            maxSeparation: turned.maxSeparation,
-            direction: turned.direction,
-            binsize: this.options.binsize,
-          },
-        }
+    if (turned === null) return { drawn: square, square }
+    return {
+      drawn: {
+        rows: null,
+        cols: this.turnedLocus(turned, data),
+        // What an overlay is placed by once there is no row axis to ask: a
+        // mark names one locus or two, and the turn is a function of those
+        // two (`render/overlays.ts`).
+        turn: {
+          maxSeparation: turned.maxSeparation,
+          direction: turned.direction,
+          binsize: this.options.binsize,
+        },
+      },
+      square,
+    }
   }
 
   /** Show or hide the "loading" veil; the canvas keeps its last picture. */

@@ -39,7 +39,10 @@ beforeAll(() => {
     width = 0
     height = 0
     getContext(): unknown {
-      return { putImageData: () => {} }
+      // `drawImage` is what a halving of the raster costs — the blocks below are
+      // magnified, so no level is built, but a stub that could not take one
+      // would fail on a block size rather than on a rasterisation count.
+      return { putImageData: () => {}, drawImage: () => {}, imageSmoothingEnabled: false }
     }
   }
 })

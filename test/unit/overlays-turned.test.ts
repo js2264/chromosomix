@@ -31,7 +31,7 @@ import {
 } from '@/render/overlays'
 import { LocusAxis } from '@/render/locus'
 import { Scale } from '@/render/scale'
-import { BIN_FRACTION } from '@/render/rotate'
+import { BIN_FRACTION, cellLoci } from '@/render/rotate'
 import { emptyFeatureSet } from '@/annotations/featureset'
 import type { FeatureSet, PairSet } from '@/annotations/types'
 import type { ManualArrowhead, ManualLine } from '@/annotations/manual'
@@ -398,5 +398,78 @@ describe('the square map, unchanged', () => {
       { id: 'm', kind: 'line', axis: 'both', at: { contig: 'chrI', bp: 25_000 }, colour: '#f00' },
     ])
     expect(rec.moves).toHaveLength(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Placing one, which is the other direction through the same geometry
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a click lands, in loci.
+ *
+ * The drawing above is only half the feature: a reader who cannot *put* a mark
+ * on a turned map has no use for one that would be drawn correctly. Both ways in
+ * that involve pointing — `pick on map`, and the right-click menu — end at one
+ * conversion from a cell to a pair of loci, and it used to read the loci off the
+ * axes the *picture* is drawn against. On a turned map the row axis of that pair
+ * is deliberately `null`, so the conversion answered `null`, so the click placed
+ * nothing and the menu never opened. Silently, both of them, in the presentation
+ * a region view opens in.
+ */
+describe('a mark placed by pointing at a turned map', () => {
+  /** The square block the band was rotated out of: 100 bins of `chrI`. */
+  const squarePair = (): { rows: LocusAxis; cols: LocusAxis } => {
+    const axis = new LocusAxis([
+      {
+        contig: 'chrI',
+        unitStart: 0,
+        unitEnd: 100,
+        bpStart: 0,
+        bpPerUnit: BINSIZE,
+        contigLength: 100 * BINSIZE,
+      },
+    ])
+    return { rows: axis, cols: axis }
+  }
+  const turnedBlock = {
+    nrows: MAX_SEPARATION + 1,
+    ncols: NCOLS,
+    maxSeparation: MAX_SEPARATION,
+    direction: 'up' as const,
+    originBin: 0,
+  }
+
+  it('names the two ends of the contact under the pointer', () => {
+    // The bottom row is separation zero and column 50 is bin 25, so this is the
+    // diagonal cell at 25 kb: one place, named twice, which is what a line or a
+    // crosshair dropped on the diagonal is.
+    const onDiagonal = cellLoci(squarePair(), turnedBlock, { row: MAX_SEPARATION, col: 50 })
+    expect(onDiagonal?.rows).toEqual({ contig: 'chrI', bp: 25_500 })
+    expect(onDiagonal?.cols).toEqual({ contig: 'chrI', bp: 25_500 })
+
+    // Ten rows up is ten bins of separation: the two ends are 10 kb apart and
+    // straddle the column the pointer is over, which is the loop that dot *is*.
+    const aLoop = cellLoci(squarePair(), turnedBlock, { row: MAX_SEPARATION - 10, col: 50 })
+    expect(aLoop?.rows).toEqual({ contig: 'chrI', bp: 20_500 })
+    expect(aLoop?.cols).toEqual({ contig: 'chrI', bp: 30_500 })
+  })
+
+  it('is the middle of the cell, not its left edge', () => {
+    // Half a bin in, because a click lands inside a cell: reporting the edge
+    // would put every hand-placed mark half a bin before where it was aimed.
+    const at = cellLoci(squarePair(), turnedBlock, { row: MAX_SEPARATION, col: 0 })
+    expect(at?.cols.bp).toBe(BINSIZE / 2)
+  })
+
+  it('answers nothing off the end of the band', () => {
+    expect(cellLoci(squarePair(), turnedBlock, { row: MAX_SEPARATION + 5, col: 50 })).toBeNull()
+    expect(cellLoci(squarePair(), turnedBlock, { row: 0, col: NCOLS + 1 })).toBeNull()
+  })
+
+  it('is two axis lookups on a square map, cell for cell', () => {
+    const at = cellLoci(squarePair(), null, { row: 3, col: 7 })
+    expect(at?.rows).toEqual({ contig: 'chrI', bp: 3_500 })
+    expect(at?.cols).toEqual({ contig: 'chrI', bp: 7_500 })
   })
 })

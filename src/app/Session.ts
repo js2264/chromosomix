@@ -459,6 +459,18 @@ export class Session {
    */
   private assembly: Assembly | null = null
   /**
+   * The file {@link assembly} was read from, in the shape a worker opens.
+   *
+   * The assembly itself carries a URI and no handle, and a name is not something
+   * a browser can read bytes through. Kept beside it because a session with no
+   * contact map still *runs tasks* — a metaplot, a track correlation, an interval
+   * overlap (§18.3) — and every result is a record that names the file it is a
+   * measurement of. Without it the runner had a framing and no target, and each
+   * of those three failed with "nothing is open" in the one session shape they
+   * exist for.
+   */
+  private assemblySource: SourceSpec | null = null
+  /**
    * Where the map goes back to while the browser is on screen.
    *
    * Non-null is the whole of "there is a map behind this": {@link file} and the
@@ -1669,6 +1681,7 @@ export class Session {
       this.carry(uri)
       this.tearDown()
       this.assembly = assembly
+      this.assemblySource = source
       this.setUpBrowserAnnotations(assembly)
       // The file that named the genome is also its first track — unless it was a
       // `chrom.sizes`, which declares an assembly and draws nothing.
@@ -2455,6 +2468,10 @@ export class Session {
     this.reader?.terminate()
     this.reader = null
     this.assembly = assembly
+    // The cooler's own, because that is where these lengths came from: a task
+    // run after the map is closed is still a measurement of that file, and its
+    // record should say so rather than naming a genome with no file behind it.
+    this.assemblySource = file.source
     if (held === null) this.setUpBrowserAnnotations(assembly)
     else {
       this.compareCard = this.newCompareCard(assembly.uri)
@@ -2487,6 +2504,9 @@ export class Session {
     this.wholeFile = null
     this.file = null
     this.assembly = null
+    // Held only so a task can name what it measured, and a `File` is a handle:
+    // released with the genome it belonged to rather than kept for the next one.
+    this.assemblySource = null
     this.sequenceListener?.()
     this.sequenceListener = null
     this.sequences = null
@@ -3503,6 +3523,7 @@ export class Session {
     if (state === null) {
       this.file = null
       this.assembly = null
+      this.assemblySource = null
       this.mounted = null
       this.breadcrumb = null
       this.breadcrumbHost.replaceChildren()
@@ -4645,7 +4666,24 @@ export class Session {
         const starred = this.starredFacts()
         if (starred !== null) return { uri: starred.uri, source: starred.source }
         const file = this.file
-        return file === null ? null : { uri: file.uri, source: file.source }
+        if (file !== null) return { uri: file.uri, source: file.source }
+        // **The genome, where there is no map.** Three tasks run entirely on
+        // loaded tracks and a 1D browser session is exactly where a reader has
+        // the tracks and not the matrix (§18.3) — `analysisContext` says so and
+        // builds them a context, and the runner answers a missing framing with
+        // one over the tracks. This was the last line still assuming a matrix:
+        // with none, every one of the three failed as *nothing is open*, in the
+        // session shape they were written for.
+        //
+        // Nothing mounts this. A track-only chain never opens a file in the
+        // analysis worker (`AnalysisRunner.mount`), so what the pair is for is
+        // the record: a result names the file it is a measurement of, and here
+        // that is the genome the tracks were loaded against.
+        const assembly = this.assembly
+        const source = this.assemblySource
+        return assembly === null || source === null
+          ? null
+          : { uri: assembly.uri, source }
       },
       context: () => this.analysisContext(),
       // Read fresh on every call rather than cached: `Run` takes the framing at

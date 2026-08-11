@@ -27,7 +27,10 @@ beforeAll(() => {
     width = 0
     height = 0
     getContext(): unknown {
-      return { putImageData: () => {} }
+      // `drawImage` because the raster is halved into canvases of this kind on
+      // the way to a minified draw (`HeatmapView.rasterFor`); a no-op leaves the
+      // levels blank, which nothing here reads.
+      return { putImageData: () => {}, drawImage: () => {}, imageSmoothingEnabled: false }
     }
   }
 })
