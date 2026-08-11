@@ -12,6 +12,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **A square map is resized by dragging any of its four edges**, as a band has
+  been by three of its own. The handles are the same bars, faint until they are
+  approached and lit under the hand, and a **double-click on any of them** — or
+  `Home` with one focused, since they answer the keyboard too — gives back as much
+  room as there is.
+
+  It is **one number, and every edge sets it**. A band has a width and a depth
+  because it is *cut* to fill them; a square block has no shape to choose, so a
+  box of any other shape is paper down two sides of the picture. The two ends move
+  it at twice the hand, because the box is centred in its column and the edge under
+  the pointer has to stay under it; the top and bottom move it at once, and the
+  picture grows downward from the stack above it rather than floating in a
+  reserved column with its tracks detached.
+
+  The size is a **preference about the window**, like the band's box and the theme:
+  it is remembered in `localStorage`, it is shared by every map on screen so a deck
+  stays one shape, and it survives the navigation that rebuilds the panel — which
+  is the gesture anybody who has just sized a map is about to make. It is clamped
+  to the room rather than stored as what was drawn, so a size chosen in a tall
+  window comes back in full when that window comes back, and a narrower one draws
+  as much of it as fits.
+
 ### Changed
 
 - **A folded column leaves a tab rather than nothing.** Folding one used to take
