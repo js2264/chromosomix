@@ -9,6 +9,7 @@
 
 import { registerThread } from '../perf/threads'
 import { withCredential } from '../s3/attach'
+import { spawnReaderWorker } from './spawn'
 import {
   reviveError,
   type ProgressHandler,
@@ -38,13 +39,10 @@ export class ReaderClient {
   /** This worker's line in the status bar's CPU figure. */
   private readonly thread = registerThread('reader')
 
-  /**
-   * `new URL(..., import.meta.url)` is the form the bundler rewrites, and the
-   * module worker type is what lets the worker use `import` at all.
-   */
+  /** Constructed through `worker/spawn.ts`, which is the seam the standalone
+   * build swaps: a `file://` page cannot construct a module worker at all. */
   constructor(worker?: Worker) {
-    this.worker =
-      worker ?? new Worker(new URL('./reader.worker.ts', import.meta.url), { type: 'module' })
+    this.worker = worker ?? spawnReaderWorker()
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => this.receive(event.data)
     this.worker.onerror = (event) => this.failAll(new Error(`reader worker failed: ${event.message}`))
   }

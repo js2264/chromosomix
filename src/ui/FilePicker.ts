@@ -14,6 +14,7 @@
  */
 
 import { IS_DESKTOP } from '../desktop'
+import { IS_STANDALONE } from '../version'
 import { iconButton } from './icons'
 import { button, el } from './dom'
 import { appMark } from './mark'
@@ -154,7 +155,7 @@ export class FilePicker {
       })
     }
     const examples =
-      props.examples && props.examples.length > 0
+      !IS_STANDALONE && props.examples && props.examples.length > 0
         ? el(
             'div',
             { class: 'examples' },
@@ -194,14 +195,34 @@ export class FilePicker {
         el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: '(meta)cooler' })),
         el('p', {
           class: 'picker-tagline',
-          text: IS_DESKTOP
-            ? '(multi-genome) cool files, on your machine'
-            : '(multi-genome) cool files, in the browser',
+          text:
+            IS_DESKTOP || IS_STANDALONE
+              ? '(multi-genome) cool files, on your machine'
+              : '(multi-genome) cool files, in the browser',
         }),
       ),
       this.drop,
       fileInput,
-      el(
+      // A single-file page has an opaque origin, so every remote read fails
+      // before a byte moves. §8.5's doctrine: a control that cannot keep its
+      // promise is absent, not disabled. What replaces it is one sentence
+      // saying which build this is and where the other one is, because a
+      // reader who wanted a URL box should be told it exists somewhere.
+      IS_STANDALONE
+        ? el(
+            'div',
+            { class: 'remote-box' },
+            el('h3', { text: 'This copy opens local files only' }),
+            el('p', {
+              class: 'hint',
+              text:
+                'It is one HTML file with no server behind it, so the browser gives it no origin ' +
+                'and refuses every network read. Nothing it opens can leave this machine, which ' +
+                'is the point. For remote files, published datasets and the examples, use the ' +
+                'hosted viewer.',
+            }),
+          )
+        : el(
         'div',
         { class: 'remote-box' },
         el('h3', { text: 'Or open a remote file' }),

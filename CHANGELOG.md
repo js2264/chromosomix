@@ -310,6 +310,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as much of it as fits. It works in a **deck** too, from any panel: the number is
   shared, so one drag resizes every map on screen and they stay comparable.
 
+- **The whole viewer as one HTML file you double-click.** `npm run
+  build:standalone` emits a single `dist-standalone/index.html` — every script,
+  stylesheet, worker and icon inlined, h5wasm included — and it is attached to
+  every release as `metacooler-viewer-<tag>.html`, so nobody has to build it.
+  No server, no install, no npm, no clone. Put it on a USB stick or in an
+  attachment; the reader opens it and drops a file on it.
+
+  Three situations the site, the PWA and the installers between them do not
+  cover: an **air-gapped or HPC machine** with no route to the website, a
+  **reviewer** who will not install an unsigned binary, and a **laptop holding
+  unpublished patient-derived data** whose owner would rather not take anybody's
+  word about what leaves it. Nothing is uploaded from any build of this app, and
+  §11 has said so from the start — but this is the build where that is not a
+  claim. There is no origin to upload *to*.
+
+  **Four things a `file://` page cannot do**, each measured in Chromium before a
+  line of the config was written, and each absolute rather than degraded: it
+  cannot construct a module worker, cannot fetch a sibling `.js`, cannot reach
+  the network at all, and cannot register a service worker. So the workers are
+  classic ones over blob URLs (`?worker&inline`, `worker.format: 'iife'`), the
+  whole graph is one chunk (`inlineDynamicImports`), and the interface is honest
+  about the third: remote URLs, the published examples and the version picker
+  are **absent** in this build rather than present and failing. The fourth needed
+  no change — `pwa.ts` already treats a refused registration as "this page has
+  no cache".
+
+  The one thing that turned out not to be a problem is the largest: h5wasm ships
+  its wasm base64-inlined in its own JavaScript, so there is no `.wasm` to fetch
+  and nothing to work around. It is also why the file is about 11 MB, four fifths
+  of it that runtime, appearing twice because two workers need it and a `file://`
+  page has no shared chunk to give them. It gzips to about a fifth of that in
+  transit; on open it is roughly a second of parsing with no HTTP cache behind
+  it.
+
+  `scripts/standalone-shape.mjs` states the shape as rules the build enforces and
+  a test holds, because **every one of these failures is silent**: a page that
+  kept a `<script src>` paints its shell and then stops, and one that kept the
+  module worker format looks completely normal until a file is dropped on it.
+  One file, within a size band, no external reference, no root-absolute path, no
+  `{type:"module"}` worker. `scripts/smoke-standalone.mjs` then drives a real
+  Chromium at a real `file://` URL and opens a real `.hic` through a real worker,
+  because every one of those rules can pass on a page that does not run.
+
 ### Changed
 
 - **A folded column leaves a tab rather than nothing.** Folding one used to take
