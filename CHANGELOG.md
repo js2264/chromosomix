@@ -14,6 +14,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Share: the whole session as a link.** §5.5 says the URL carries what is being
+  looked at and the session *file* says the rest; both stay true, and neither
+  serves the case between them — somebody wants to send a colleague what they are
+  looking at, right now. A link carries none of the work, and a file has to be
+  attached, downloaded and dropped, by which time the moment has gone.
+
+  So the session — the view, the tracks with their colours and limits, the marks,
+  the bookmarks — is deflated and base64url-encoded into the **fragment**. That
+  choice is the privacy property, not an implementation detail: a fragment is
+  never sent on navigation, so what somebody is looking at never reaches the host
+  serving the page. Nothing holds the link, so it cannot expire, cannot be taken
+  down, works offline and works in the desktop build.
+
+  What it costs is length, and length is the cheapest of those to give up — a few
+  hundred characters for a view, a few thousand for a workspace. The dialog says
+  the number when it gets large rather than guessing on the reader's behalf: they
+  know where they are about to paste it and the app does not.
+
+  **A third-party shortener is offered beside it, never instead of it**, and is
+  named in the button rather than hidden behind a verb, because it breaks two of
+  those properties: the link starts depending on somebody else's service, and the
+  address of the file being viewed leaves the browser. It is refused outright for
+  a session over a local file — the long link is still worth having there, the
+  recipient getting the tracks and the marks and being asked for the file, but
+  shortening it would post a filename to a stranger in exchange for nothing. If
+  the service cannot be reached the long link is untouched and stays on screen.
+
 - **bedGraph and wig open as tracks**, which closes an asymmetry that was
   invisible and slightly embarrassing: the app *wrote* bedGraph — every analysis
   result offers the button — and could not read one back. A four-column bedGraph
