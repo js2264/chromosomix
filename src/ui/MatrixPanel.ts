@@ -708,8 +708,6 @@ export class MatrixPanel {
   /** Where another panel's pointer is *on a track*, in this panel's cells. */
   private laneEcho: { axis: 'rows' | 'cols'; unit: number } | null = null
   private units = ''
-  /** Where the next block should stand, once; see {@link standOn}. */
-  private pendingStand: { contig: string; start: number; end: number } | null = null
   /** What the score is called, where nothing here chose it. */
   private scoreLabel = ''
   /**
@@ -4087,40 +4085,7 @@ export class MatrixPanel {
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
-    // Last, and after the rulers it is measured against: whoever asked for this
-    // block asked for it to arrive standing somewhere ({@link standOn}).
-    const stand = this.pendingStand
-    this.pendingStand = null
-    if (stand !== null) this.showLocus(stand)
     this.schedule()
-  }
-
-  /**
-   * Stand the **next** block on this window, once.
-   *
-   * `setMatrix` refits, which is right for a new place and wrong for the same
-   * place read again — and "the same place read again" is most of what a reader
-   * does: switching the score, turning the map, changing what the cells are. Each
-   * of those is answered by a fresh read of a block the reader is already looking
-   * at, and each of them used to hand back the whole chromosome, so the fifty
-   * kilobases they had zoomed into had to be found again by hand.
-   *
-   * A window in **base pairs**, never in cells, for the reason {@link regrid}
-   * gives at length: a cell is a different number of base pairs on every grid,
-   * so a window kept as cell indices comes back showing half as much genome the
-   * moment the incoming block is read finer.
-   *
-   * One shot, and cleared whether or not it could be placed. A window that
-   * outlived the block it was taken from would put every later navigation back
-   * where the reader used to be — which is the opposite of the bug this fixes.
-   */
-  standOn(window: { contig: string; start: number; end: number } | null): void {
-    this.pendingStand = window
-  }
-
-  /** Where the picture is standing, in the shape {@link standOn} takes back. */
-  framedWindow(): { contig: string; start: number; end: number } | null {
-    return this.framedRegion()
   }
 
   /**
@@ -5146,7 +5111,7 @@ export class MatrixPanel {
     derive: DerivePresentation | undefined,
     compare?: ComparePresentation,
     turn?: TurnPresentation,
-  ): boolean {
+  ): void {
     const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
     if (compare !== undefined) this.options.compare = compare
@@ -5155,26 +5120,15 @@ export class MatrixPanel {
     // builds a fresh presentation object on every render and hands it over
     // whether or not a reader touched anything, and recomputing a 16 M-cell
     // block for an equal object would make every unrelated repaint expensive.
-    if (data === null || (unchanged && compare === undefined)) return true
+    if (data === null || (unchanged && compare === undefined)) return
     if (turnMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
       // axes change meaning, and the view has to be refitted around them.
       // Re-run from the top, which is one pass over a block already in memory
       // and still costs no read.
-      //
-      // **Standing where it was standing.** A turn is a change of presentation,
-      // not a navigation: the reader pressed a button that says "draw this the
-      // other way up", and answering it with the whole chromosome throws away
-      // the one thing they did not ask to change. Carried in base pairs off the
-      // column axis, which is the axis that means *position* in both shapes — so
-      // the square's on-diagonal window becomes the band's stretch of genome and
-      // back again, and a round trip lands where it started. `null` where the
-      // window spans more than one sequence, and there the refit stands: a
-      // whole-genome picture is not at a location, and there is nothing to carry.
-      const held = this.framedRegion()
       this.setData(data, this.lastTitle, this.second?.data)
-      return held !== null && this.showLocus(held)
+      return
     }
     // At the depth the band already has, not the one the box would cut now: this
     // is the in-place swap, and an array of another length read with the grid's
@@ -5199,8 +5153,6 @@ export class MatrixPanel {
       })
     }
     this.schedule()
-    // The in-place swap moves nothing, so the picture is where it was.
-    return true
   }
 
   setBusy(busy: boolean, message = 'loading…'): void {

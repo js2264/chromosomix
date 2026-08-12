@@ -981,12 +981,6 @@ export class MapPanel {
     this.scoreOverride = id
     this.panel?.applyScale({ ...this.look, vmin: undefined, vmax: undefined })
     this.look = { ...this.look, vmin: undefined, vmax: undefined }
-    // The window this panel is standing on, carried across the read. A score is
-    // a question about the numbers, not about where to look — and a refit here
-    // costs more than one panel's zoom: this map is on the deck's lock, so the
-    // fitted view it came back with would be reported as a gesture and take
-    // every other panel with it.
-    this.panel?.standOn(this.panel.framedWindow())
     if (this.state !== null) void this.load(this.state)
   }
 

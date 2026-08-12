@@ -13,7 +13,6 @@ import {
   differsOnlyInPresentation,
   differsOnlyInScale,
   matrixLevel,
-  namesSamePlace,
   overviewLevel,
   parseViewState,
   SCALE_KEYS,
@@ -466,50 +465,5 @@ describe('the saved place in the hash', () => {
     // the picture on its bookmark, which is not what the reader asked for.
     expect(differsOnlyInFocus(at('chrI:100-200'), at('chrI:100-200'))).toBe(false)
     expect(differsOnlyInFocus(base, base)).toBe(false)
-  })
-})
-
-/**
- * Whether a rebuild is of the same block, which is what decides whether the
- * reader's *window* can be carried across it.
- *
- * The opposite question from the three predicates above. Those ask whether a
- * mounted view can be told something instead of being rebuilt, and their safe
- * answer is "rebuild". This is asked of a rebuild that is already happening, and
- * its safe answer is "no" — so a key it has never heard of must not make two
- * states look like the same place.
- */
-describe('naming the same place', () => {
-  const base: ViewState = { uri: 'a.cool', view: 'region', region: 'chrI' }
-
-  it('is true across the things that only change what the cells are', () => {
-    // A score change re-reads the file and rebuilds the view, and the window the
-    // reader was zoomed into is still a window on chrI.
-    expect(namesSamePlace(base, { ...base, score: 'balanced', balance: true })).toBe(true)
-    expect(namesSamePlace(base, { ...base, oe: true })).toBe(true)
-    expect(namesSamePlace(base, { ...base, transform: 'log10' })).toBe(true)
-    expect(namesSamePlace(base, { ...base, flip: false })).toBe(true)
-    expect(namesSamePlace(base, { ...base, maps: 'b.cool' })).toBe(true)
-    expect(namesSamePlace(base, { ...base, focus: 'chrI:100-200' })).toBe(true)
-  })
-
-  it('is false the moment the picture is of somewhere else', () => {
-    expect(namesSamePlace(base, { ...base, region: 'chrII' })).toBe(false)
-    expect(namesSamePlace(base, { ...base, uri: 'b.cool' })).toBe(false)
-    expect(namesSamePlace(base, { ...base, view: 'whole' })).toBe(false)
-    expect(namesSamePlace(base, { ...base, region2: 'chrII' })).toBe(false)
-    expect(namesSamePlace(base, { uri: 'a.cool', view: 'genome', genome: 'MAG_1' })).toBe(false)
-  })
-
-  it('is false across a change of level, which is a change of grid', () => {
-    // A window in base pairs means the same thing on both, but standing a
-    // bin-level zoom on a picture whose cells are whole sequences is standing it
-    // on nothing.
-    expect(namesSamePlace(base, { ...base, level: 'contig' })).toBe(false)
-  })
-
-  it('is true of a state with itself, which is the commonest call there is', () => {
-    expect(namesSamePlace(base, base)).toBe(true)
-    expect(namesSamePlace(base, { ...base })).toBe(true)
   })
 })

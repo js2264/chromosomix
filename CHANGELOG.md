@@ -593,31 +593,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   where the two are the same place, which is exactly what the panel under the
   pointer was already doing with its own crosshair.
 
-- **Turning a map, and changing what its cells are, threw away the window you
-  were looking at.** A block arrives through a call that refits — right for a
-  new place, wrong for the same place read again, and "the same place read
-  again" is most of what a reader does. Pressing the turn toggle, switching the
-  score, ticking a derivation on: each of those answered with the whole
-  chromosome, so fifty kilobases somebody had zoomed into had to be found by
-  hand again, and a round trip — turn, turn back — did it twice.
-
-  A panel now carries its own window across a turn, and the shell hands the
-  outgoing picture's window to the incoming one whenever a rebuild is of the
-  same block. Both carry **base pairs**, never cells: a cell is a different
-  number of base pairs on every grid — half a bin under a turn — so a window
-  kept as indices comes back showing the wrong stretch of genome, confidently.
-  The column axis is what is carried, because it is the axis that means
-  *position* in both shapes, so a square's on-diagonal window becomes a band's
-  stretch of genome and back again and a round trip lands where it started.
-
-  A bookmarked view keeps the stronger reading of the two: what is restored is
-  the zoom the reader **arrived at**, not the saved place they may have zoomed
-  in from. The bookmark is the fall-back for the one case a window cannot be
-  carried — a picture spanning more than one sequence, which is not at a
-  location at all. And a companion that changes its own score stands still for a
-  further reason: it is on the deck's navigation lock, so a fitted view coming
-  back would be reported as a gesture and take every other panel with it.
-
 - **The desktop app's header carried a broken image, in every release that had
   one.** `publicDir` is off for that target — deliberately, and it is one of the
   two guards that no dataset reaches the installer — so the one file from
