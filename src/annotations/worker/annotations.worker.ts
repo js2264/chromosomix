@@ -13,6 +13,14 @@
  */
 
 import { BigBed, BigWig } from '@gmod/bbi'
+import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
+import {
+  IntervalTrack,
+  parseBedGraph,
+  parseWig,
+  sniffSignal,
+  type SignalFormat,
+} from '../signal'
 import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
 
@@ -56,6 +64,18 @@ interface OpenTrack {
 }
 
 const tracks = new Map<string, OpenTrack>()
+
+/**
+ * The text signal files open here — bedGraph and wig.
+ *
+ * A fourth store beside the bigWigs, the sequences and the computed vectors, and
+ * it earns its place the same way the third one did: `sample` looks here too, so
+ * a bedGraph answers the request a bigWig answers and every lane, every control
+ * and every renderer above is unchanged (§8.2). What it cannot borrow is the
+ * bigWig's on-disk zoom levels, so {@link IntervalTrack} computes the summary
+ * for the window it is asked about instead.
+ */
+const signals = new Map<string, IntervalTrack>()
 
 /**
  * The sequences of every open FASTA, by the entry that owns them.
@@ -173,6 +193,7 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       if (store !== undefined && recentFasta?.store === store) recentFasta = null
       sequences.delete(request.entry)
       vectors.delete(request.entry)
+      signals.delete(request.entry)
       return null
     }
   }
@@ -312,6 +333,26 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
     return { format: 'sizes', contigs: parseChromSizes(text), origin: 'sizes', exact: true }
   }
 
+  // Same order as `load`, and for the same reason: a bedGraph is BED-shaped and
+  // would otherwise declare its assembly as a feature file's. The lengths are a
+  // lower bound either way, so the answer is the same shape — but the *format*
+  // is what routes the drop, and getting it wrong here sends a signal file to
+  // the segments path.
+  const signal = sniffSignal(text)
+  if (signal !== null) {
+    const set = signal === 'wig' ? parseWig(text) : parseBedGraph(text)
+    recent = { key: cacheKey(source), format: signal, features: null }
+    const ends = new Map<string, number>()
+    for (const contig of set.contigs) {
+      // The furthest *end*, not the last one: the intervals are sorted by start,
+      // and a long interval early in a contig outruns every short one after it.
+      let furthest = 0
+      for (const end of contig.ends) if (end > furthest) furthest = end
+      note(ends, contig.name, furthest)
+    }
+    return { format: signal, contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   const format = sniffFormat(text, source.name)
   if (format === 'bedpe') {
     const data = parseBedpe(text)
@@ -404,6 +445,84 @@ function handleFor(source: WireSource): BlobFile | RemoteFile {
 }
 
 /**
+ * The text of just the sequences this map is about, or `null` to read it whole.
+ *
+ * Four conditions, and every one of them falls back rather than failing: there
+ * has to be a sidecar, it has to inflate, it has to be a tabix index, and the
+ * file itself has to be BGZF. A plain `.gz` with a `.tbi` beside it is a
+ * mislabelled pair and is read whole, which is what happened before this
+ * function existed.
+ */
+async function tryIndexedText(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+  head: Uint8Array,
+  mapContigs: string[],
+): Promise<string | null> {
+  const indexSource = indexSourceFor(source)
+  if (indexSource === null) return null
+  if (!isBgzf(head)) return null
+  try {
+    const indexBytes = await inflateBgzf(await handleFor(indexSource).readFile())
+    const index = parseTabix(indexBytes)
+    const size = await sizeOf(handle)
+    if (size === null) return null
+    const spans = spansFor(index, matchNames(index, mapContigs), size)
+    if (spans.length === 0) return null
+    // A "saving" that reads most of the file is not one, and the cost of finding
+    // out was one small request. Below a fifth the index has earned its round
+    // trip; above it the whole-file read is simpler and no slower.
+    const bytes = spans.reduce((sum, span) => sum + (span.to - span.from), 0)
+    if (bytes > size * 0.8) return null
+    const parts: string[] = []
+    for (const span of spans) {
+      const compressed = await handle.read(span.to - span.from, span.from)
+      // `span.lastBlock` is where the records stop mattering; everything past it
+      // is the slack the fetch had to over-ask for. Fetched, not decoded.
+      parts.push(
+        new TextDecoder().decode(await inflateBgzf(compressed, span.lastBlock - span.from)),
+      )
+    }
+    return parts.join('\n')
+  } catch {
+    // Every failure here is "this index did not work", and the answer to that is
+    // the read that always worked. A sidecar that is corrupt, truncated, for a
+    // different file or in a format this does not know must never be the reason
+    // a track cannot be opened.
+    return null
+  }
+}
+
+/** The sidecar named beside this source, as a source of its own. */
+function indexSourceFor(source: WireSource): WireSource | null {
+  if (source.kind === 'local') {
+    return source.index === undefined
+      ? null
+      : { kind: 'local', file: source.index, name: source.index.name }
+  }
+  if (source.index === undefined) return null
+  return {
+    kind: 'remote',
+    url: source.index,
+    name: source.index,
+    ...(source.credential === undefined ? {} : { credential: source.credential }),
+  }
+}
+
+/** The file's length, however the handle knows it. */
+async function sizeOf(handle: BlobFile | RemoteFile): Promise<number | null> {
+  const stat = (handle as { stat?: () => Promise<{ size: number }> }).stat
+  if (typeof stat === 'function') {
+    try {
+      return (await stat.call(handle)).size
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
  * Identify a file and read it, however it identifies itself.
  *
  * The first four bytes are read before anything else, and they are the whole of
@@ -438,10 +557,27 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
     return featureResult(cached.format, cached.features, mapContigs)
   }
 
-  const bytes = await decodeAnnotationBytes(await handle.readFile())
-  if (looksLikeFasta(bytes)) return loadFasta(entry, keepFasta(source, bytes), mapContigs)
-  const text = new TextDecoder().decode(bytes)
+  // The whole point of the index: read the sequences the map is about, and not
+  // the other twenty-three. Falls through to the whole-file read below whenever
+  // there is no sidecar, the sidecar is not a tabix index, or the file is a
+  // plain `.gz` rather than a BGZF one — every one of which used to be the only
+  // path and still is a working one (`annotations/tabix.ts`).
+  const indexed = await tryIndexedText(source, handle, head, mapContigs)
+  const bytes = indexed === null ? await decodeAnnotationBytes(await handle.readFile()) : null
+  if (bytes !== null && looksLikeFasta(bytes)) {
+    return loadFasta(entry, keepFasta(source, bytes), mapContigs)
+  }
+  const text = indexed ?? new TextDecoder().decode(bytes as Uint8Array)
   if (text.trim() === '') throw new Error('This file is empty.')
+
+  // Asked before the feature sniffer, because the two overlap: a four-column
+  // bedGraph is BED-shaped and `sniffFormat` would call it a BED, putting its
+  // value column in `name` and drawing a lane of featureless boxes. The signal
+  // sniffer is the stricter of the two — exactly four columns, numeric on every
+  // row it looks at, or a declaration line saying so — which is what lets it go
+  // first without capturing anything that is really a BED.
+  const signal = sniffSignal(text)
+  if (signal !== null) return loadSignal(entry, signal, text, mapContigs)
 
   const format: DetectedFormat = sniffFormat(text, source.name)
   if (format === 'bedpe') {
@@ -708,6 +844,65 @@ async function loadBigWig(
   }
 }
 
+/**
+ * Read a bedGraph or a wig, and keep it.
+ *
+ * Unlike every other text format, the parsed result is **not** returned to the
+ * main thread. It is a track, and a track's data lives in the worker and is
+ * sampled per view — which is the whole reason a bedGraph gets a range, a
+ * ceiling and an autoscale without one line of new UI.
+ */
+function loadSignal(
+  entry: string,
+  format: SignalFormat,
+  text: string,
+  mapContigs: string[],
+): LoadResult {
+  const set = format === 'wig' ? parseWig(text) : parseBedGraph(text)
+  if (set.length === 0) {
+    throw new Error(
+      `This looks like a ${format === 'wig' ? 'wig' : 'bedGraph'} but holds no usable intervals.`,
+    )
+  }
+  const track = new IntervalTrack(set)
+  signals.set(entry, track)
+  const contigs = track.contigNames
+  const { min, max } = track.extent
+  const usable = Number.isFinite(min) && Number.isFinite(max) && max > min
+  return {
+    format,
+    contigs,
+    overlap: overlapWith(contigs, mapContigs),
+    summary:
+      `${count(track.length)} intervals · ${count(contigs.length)} contigs` +
+      (usable ? ` · ${trim(min)} to ${trim(max)}` : ''),
+    ...(usable ? { fileExtent: { min, max } } : {}),
+  }
+}
+
+/** One `sample` answer from a text signal file. */
+function signalSamples(
+  track: IntervalTrack,
+  regions: readonly Region[],
+  basesPerPixel: number,
+): TrackSampleSet {
+  const out: TrackSamples[] = []
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const region of regions) {
+    if (!track.has(region.contig) || region.end <= region.start) continue
+    const got = track.samples(region.contig, region.start, region.end, basesPerPixel)
+    if (got === null) continue
+    for (const value of got.values) {
+      if (!Number.isFinite(value)) continue
+      if (value < min) min = value
+      if (value > max) max = value
+    }
+    out.push({ contig: region.contig, start: region.start, end: region.end, ...got })
+  }
+  return { basesPerPixel, regions: out, extent: min <= max ? { min, max } : null }
+}
+
 // ---------------------------------------------------------------------------
 // Sampling
 // ---------------------------------------------------------------------------
@@ -736,6 +931,11 @@ async function sample(
   // other computes its summary from the residues it is holding.
   const sequence = sequences.get(entry)
   if (sequence !== undefined) return gcSamples(sequence, regions, basesPerPixel)
+
+  // A text signal file is the fourth, and the closest of them to a bigWig: the
+  // same intervals-and-values answer, summarised here rather than on disk.
+  const signal = signals.get(entry)
+  if (signal !== undefined) return signalSamples(signal, regions, basesPerPixel)
 
   // And a computed vector is the third: no file, no zoom levels, a summary
   // built for the window it was asked about (§18.5, `binVector.ts`). It is

@@ -33,6 +33,7 @@ import type { DetectedFormat, WireSource } from './worker/protocol'
 function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.bedpe(\.gz)?$/i.test(name)) return { card: 'overlay', kind: 'pairs' }
   if (/\.(bw|bigwig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(bdg|bedgraph|wig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
   if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
   return { card: 'linear', kind: 'segments' }
@@ -70,7 +71,17 @@ export class AnnotationLoader {
    * file dropped anywhere else omits it and takes the default.
    */
   addFiles(files: readonly File[], placement?: Placement): void {
+    // A tabix sidecar is not a track and is never a row of its own: it is the
+    // index for the file dropped beside it, and pairing them here is what makes
+    // "select both and drag" the whole of the gesture. A `.tbi` dropped alone
+    // has nothing to index and is passed through to be refused by name, which
+    // is more use than silently doing nothing.
+    const indexes = new Map<string, File>()
     for (const file of files) {
+      if (/\.tbi$/i.test(file.name)) indexes.set(file.name.replace(/\.tbi$/i, ''), file)
+    }
+    const paired = files.filter((file) => !(/\.tbi$/i.test(file.name) && hasBase(files, file)))
+    for (const file of paired) {
       const held = this.store.entries.find(
         (entry) => entry.status === 'detached' && entry.source.name === file.name,
       )
@@ -78,7 +89,13 @@ export class AnnotationLoader {
         this.reattach(held.id, file)
         continue
       }
-      this.begin({ kind: 'local', file, name: file.name }, undefined, undefined, placement)
+      this.begin(
+        { kind: 'local', file, name: file.name },
+        undefined,
+        undefined,
+        placement,
+        indexes.get(file.name),
+      )
     }
   }
 
@@ -216,6 +233,7 @@ export class AnnotationLoader {
     label?: string,
     stored?: StoredEntry,
     placement?: Placement,
+    index?: File,
   ): AnnotationEntry {
     const guess = guessOf(source.name)
     const entry = this.store.begin({
@@ -238,7 +256,7 @@ export class AnnotationLoader {
     })
     // `stored === undefined` is what makes the style a *guess*: a restored row
     // brings the settings a reader chose, and those are never re-derived.
-    void this.read(entry.id, toWire(source), stored === undefined)
+    void this.read(entry.id, toWire(source, index), stored === undefined)
     return entry
   }
 
@@ -311,9 +329,34 @@ export class AnnotationLoader {
  * source with an `undefined` URL, which is what the previous two-case ternary
  * would have done the moment the third case existed.
  */
-function toWire(source: AnnotationSource): WireSource {
-  if (source.kind === 'local') return { kind: 'local', file: source.file, name: source.name }
-  if (source.kind === 'remote') return { kind: 'remote', url: source.url, name: source.name }
+/** Whether the file this `.tbi` names was dropped alongside it. */
+function hasBase(files: readonly File[], index: File): boolean {
+  const base = index.name.replace(/\.tbi$/i, '')
+  return files.some((file) => file.name === base)
+}
+
+function toWire(source: AnnotationSource, index?: File): WireSource {
+  if (source.kind === 'local') {
+    return {
+      kind: 'local',
+      file: source.file,
+      name: source.name,
+      ...(index === undefined ? {} : { index }),
+    }
+  }
+  if (source.kind === 'remote') {
+    return {
+      kind: 'remote',
+      url: source.url,
+      name: source.name,
+      // Named optimistically rather than probed. A `HEAD` to find out costs the
+      // same round trip as the miss does, and the worker treats *every* index
+      // failure — absent, corrupt, for another file — as "read it whole", which
+      // is what would have happened anyway. Only offered for a `.gz`, so an
+      // uncompressed file never asks.
+      ...(/\.gz$/i.test(source.url) ? { index: `${source.url}.tbi` } : {}),
+    }
+  }
   throw new Error(`${source.name} is a computed track and has no file to load.`)
 }
 
@@ -331,6 +374,8 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
       return 'overlay'
     case 'bigwig':
     case 'bigbed':
+    case 'bedgraph':
+    case 'wig':
     case 'gtf':
     case 'bed':
     case 'fasta':
@@ -349,7 +394,10 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
  */
 export function kindFor(card: AnnotationCard, format: DetectedFormat): AnnotationKind | null {
   if (card === 'linear') {
-    if (format === 'bigwig') return 'track'
+    // A bedGraph and a wig are a bigWig written out, and become the same kind
+    // of thing: values sampled per view, with a range, a ceiling, an autoscale
+    // and every other affordance a bigWig lane already has.
+    if (format === 'bigwig' || format === 'bedgraph' || format === 'wig') return 'track'
     if (format === 'fasta') return 'sequence'
     if (format === 'gtf') return 'gtf'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is

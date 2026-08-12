@@ -38,6 +38,11 @@ import type { AssemblyOrigin, Contig } from '../../genome/assembly'
 export type DetectedFormat =
   | 'bigwig'
   | 'bigbed'
+  // The two text signal formats. They resolve to a `track` exactly as a bigWig
+  // does — a bedGraph *is* a bigWig written out — so nothing downstream of
+  // `kindFor` learns they exist. See `annotations/signal.ts`.
+  | 'bedgraph'
+  | 'wig'
   | 'gtf'
   | 'bed'
   | 'bedpe'
@@ -52,10 +57,16 @@ export type DetectedFormat =
  * `worker/protocol.ts`'s `SourceSpec`: the worker has no credential store and
  * no `localStorage` to build one from, so the one key the URL needs travels
  * with the URL. Absent means an unsigned request, which is every public track.
+ *
+ * `index` is a tabix sidecar (`annotations/tabix.ts`), and it travels the same
+ * way for the same reason: the worker cannot go looking for a `File` the drop
+ * target was handed, and probing a URL for one is the *caller's* network call to
+ * account for. Absent means the file is read whole, which is what always
+ * happened and still works.
  */
 export type WireSource =
-  | { kind: 'local'; file: File; name: string }
-  | { kind: 'remote'; url: string; name: string; credential?: S3Credential }
+  | { kind: 'local'; file: File; name: string; index?: File }
+  | { kind: 'remote'; url: string; name: string; credential?: S3Credential; index?: string }
 
 export interface LoadResult {
   format: DetectedFormat

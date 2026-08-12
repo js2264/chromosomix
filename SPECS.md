@@ -998,6 +998,52 @@ the door a row comes back through is the same one a new row arrives by, and a ne
 tracks restored around it (§3.4) — so changing the resolution quietly undid a reader's "not this
 one", by way of a menu about something else entirely.
 
+### 8.11 bedGraph and wig, and reading part of a file
+
+Two additions to §8.3's list of text formats, and one to how any of them is read.
+
+**bedGraph and wig are tracks, not feature sets.** A bedGraph *is* a bigWig
+written out, so it becomes the same kind of thing: `kind: 'track'`, data held in
+the annotations worker, sampled per view. That is what gives it a range, a
+ceiling, an autoscale, a colour chip, the ⌘-scroll and every other affordance a
+bigWig lane has, none of which had to be written twice. The one thing it cannot
+borrow is the bigWig's on-disk zoom levels, so the summary for a window is
+computed when the window is asked for — the same answer, paid for at read time
+rather than at write time, which is the trade the text format already made.
+
+The asymmetry this removes is worth recording, because it was invisible: **the
+app wrote bedGraph and could not read one.** Every §18 result offers the button,
+and dropping the file back produced a lane of featureless boxes, the value column
+having landed in `name`. The sniffer is asked before the feature sniffer and is
+deliberately the stricter of the two — exactly four columns, numeric on every row
+inspected, or a `fixedStep`/`variableStep`/`track type=` line saying so — because
+a rule that captured real BED4s would be a worse bug than the one it fixes.
+
+wig's 1-based inclusive coordinates become 0-based half-open at the parser, which
+is the one place the file's own numbering is read.
+
+**A tabix sidecar makes any of it bounded.** Every other read in this application
+is: HDF5 through range requests, a bigWig by zoom level and block, a `.hic` by
+the blocks its rectangle covers. A GTF was downloaded whole. Where a `.gz` is
+BGZF and a `.tbi` sits beside it — dropped alongside, or at the conventional
+`<url>.tbi` — the index is read and only the byte spans holding *the sequences
+this map is about* are fetched.
+
+It is **opportunistic in exactly §3.4's sense**, and the fallbacks are the
+feature: a plain GTF still works, a bgzipped one with no index still works, and
+an index that is absent, corrupt, truncated or for another assembly falls back to
+the whole-file read rather than refusing the track. An index that can prevent a
+file from opening is worse than no index. Two further guards follow from that: a
+sidecar is only *asked* for when the file is a `.gz`, and a span set that would
+read more than four fifths of the file is abandoned, because a saving that is not
+one costs a round trip to discover and nothing else.
+
+The resolution is a **contig**, not a region, and that is a decision. §8.4's lanes
+hold a whole `FeatureSet` and draw the part on screen, so region-serving would
+need a second lifecycle — a fetch per pan — for a saving that only appears once
+the per-contig slice is itself large. What the index buys is not reading the other
+twenty-three chromosomes, and that is most of the win.
+
 ### 8.7 bigBed
 
 Read whole, and parsed as the BED it holds. Not a windowed source like a bigWig: a `FeatureSet` lives
