@@ -242,17 +242,21 @@ export function parseLocus(
  * is `NameIndex.find`'s, so the locus box, a companion panel and a dropped
  * track all agree about what a name means.
  *
- * Built per call rather than held on the assembly. An assembly is a value here,
- * rebuilt whenever its lengths are refined, and a cached index on it would be a
- * second thing to keep in step; the lists this walks are a genome's sequences,
- * which is tens to hundreds of names, not a metagenome's.
+ * The index is held against the contig array's own identity rather than built
+ * per call, and that is not an optimisation to skip: the locus box calls this on
+ * **every keystroke**, and a keystroke mid-word is a miss — which is precisely
+ * the path that reaches the index instead of short-circuiting on an exact name.
+ * Rebuilt each time it costs 24 ms at five thousand sequences and most of a
+ * second at a hundred and fifty thousand, which is a box that stops taking
+ * input. An assembly's contigs are never mutated after it is built, which is
+ * what makes holding one safe (see {@link NameIndex.for}).
  */
 export function findContig(assembly: Assembly, name: string): Contig | null {
   const wanted = name.trim()
   if (wanted === '') return null
   const exact = assembly.contigs.find((contig) => contig.name === wanted)
   if (exact !== undefined) return exact
-  const match = NameIndex.of(assembly.contigs).find(wanted)
+  const match = NameIndex.for(assembly.contigs).find(wanted)
   if (match === null) return null
   return assembly.contigs.find((contig) => contig.name === match.name) ?? null
 }

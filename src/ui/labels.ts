@@ -86,7 +86,7 @@ export function contigOf(region: string, names: string[]): string | null {
   const head = colon < 0 ? null : region.slice(0, colon)
   if (head !== null && names.includes(head)) return head
 
-  const index = NameIndex.ofNames(names)
+  const index = NameIndex.for(names)
   const whole = index.find(region)
   if (whole !== null) return whole.name
   if (head === null) return null

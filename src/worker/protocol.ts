@@ -19,7 +19,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
-import type { NameContext } from '../genome/naming'
+import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 
@@ -291,6 +291,16 @@ export interface AxisGroup {
 export interface MatrixResult {
   nrows: number
   ncols: number
+  /**
+   * Names this read answered that this file does not itself write (§5.9).
+   *
+   * A ticked selection resolves its names the same way a region does, and it
+   * has to *report* the same way too: a selection view drawn from names matched
+   * across conventions and saying nothing is precisely the silent rename the
+   * region path was built to prevent. Absent — not empty — where nothing was
+   * matched, which is every read of a file in its own vocabulary.
+   */
+  matched?: NameMatch[]
   /** Row-major, `nrows * ncols` long. Transferred, not copied. */
   values: Float32Array
   rowExtent: Extent

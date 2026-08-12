@@ -18,7 +18,7 @@ import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
-import type { NameContext } from '../genome/naming'
+import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -701,7 +701,8 @@ async function handleSelection(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const id = request.id
-  const units = selectedContigs(mc, request.unit, request.names, request.naming)
+  const matched: NameMatch[] = []
+  const units = selectedContigs(mc, request.unit, request.names, request.naming, matched)
   if (units.length === 0) {
     // `unknown-label` is the code the reader already uses for a name this file
     // does not have; a selection of them is the same failure, several times.
@@ -777,6 +778,7 @@ async function handleSelection(
     contigsPerCell: selected.contigsPerCell,
     rowContigs: units.length,
     colContigs: units.length,
+    ...(matched.length === 0 ? {} : { matched }),
   }
 }
 
@@ -792,6 +794,8 @@ function selectedContigs(
   unit: 'genome' | 'contig',
   names: readonly string[],
   naming?: NameContext,
+  /** Filled with the names that had to be matched across conventions (§5.9). */
+  matched?: NameMatch[],
 ): Array<{ id: number; extent: Extent }> {
   const ids = new Set<number>()
   for (const name of names) {
@@ -811,7 +815,13 @@ function selectedContigs(
       const match = mc.names.find(name, naming === undefined ? {} : { from: naming })
       if (match !== null) {
         const aliased = mc.chromnames.indexOf(match.name)
-        if (aliased >= 0) ids.add(aliased)
+        if (aliased >= 0) {
+          ids.add(aliased)
+          // Reported, not merely resolved. A selection drawn from names matched
+          // across conventions and saying nothing is exactly the silent rename
+          // the region path carries `ParsedRange.matched` to prevent.
+          matched?.push(match)
+        }
       }
       continue
     }

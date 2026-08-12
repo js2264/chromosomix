@@ -57,6 +57,20 @@ import {
   type WireSource,
 } from './protocol'
 
+/**
+ * Rewrite a parsed set's contig table into the map's vocabulary, in place.
+ *
+ * Element by element rather than `splice(0, n, ...names)`, which is the obvious
+ * way to write it and blows the stack: a spread passes every element as an
+ * argument, and a metagenomic BED naming 150 k contigs is 150 k arguments.
+ * `RangeError: Maximum call stack size exceeded`, and the file simply fails to
+ * load — on exactly the files this viewer exists for.
+ */
+function renameContigs(contigs: string[], mapContigs: readonly NamedSequence[]): void {
+  const renamed = renameInto(sequencesOf(contigs), mapContigs).names
+  for (let at = 0; at < renamed.length; at++) contigs[at] = renamed[at]
+}
+
 /** Just the names, for the two helpers that ask about spelling and not size. */
 function namesOf(sequences: readonly NamedSequence[]): string[] {
   return sequences.map((sequence) => sequence.name)
@@ -596,7 +610,7 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   const format: DetectedFormat = sniffFormat(text, source.name)
   if (format === 'bedpe') {
     const data = parseBedpe(text)
-    data.contigs.splice(0, data.contigs.length, ...renameInto(sequencesOf(data.contigs), mapContigs).names)
+    renameContigs(data.contigs, mapContigs)
     return {
       format,
       contigs: data.contigs,
@@ -624,7 +638,7 @@ function featureResult(
   // Rewritten **in place**, which is what makes the rename cost nothing: every
   // row of the set indexes this array by position, so replacing the strings
   // renames every feature at once and no coordinate moves.
-  data.contigs.splice(0, data.contigs.length, ...renameInto(sequencesOf(data.contigs), mapContigs).names)
+  renameContigs(data.contigs, mapContigs)
   return {
     format,
     contigs: data.contigs,

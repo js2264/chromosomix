@@ -539,7 +539,24 @@ Two further list-level rules, and each exists because a real file breaks the obv
   those match `chr1` at the same rung an Ensembl file does, drawing a 4 kb contig under the label of
   chromosome one. Nothing about the string says which it is; the *count* does — no genome has two
   hundred chromosomes, and every draft assembly has thousands of contigs — so past that ceiling a
-  bare number is an id and is matched by its spelling only.
+  bare number is an id and is matched by its spelling only. The ceiling applies per name as well as
+  per list, which is what keeps Ensembl's *Drosophila* working: it carries hundreds of scaffolds
+  named `211000022278279`, and those are neither chromosomes themselves nor evidence about the file
+  that holds them.
+
+Two more rules exist because a name can *look* like a convention without being one, and both were
+found by reading real metagenome headers rather than by reasoning about the conventions:
+
+- **The `chr` prefix comes off only when what is left reads as a chromosome.** `Christensenella_1`
+  begins with `Chr` and `Chromobacterium_ctg1` with `Chrom`; stripped on sight they become
+  `istensenella_1` and `obacterium_ctg1`, two names no file contains and which would then match each
+  other's mangling. So a number, a Roman numeral, a sex letter, an organelle, an accession, UCSC's
+  `Un_…` or a short letter run in front of a number gets the prefix taken off, and everything else
+  keeps its name whole — which is also what a bacterial replicon genuinely called `Chromosome` needs.
+- **Pipe decoration is reduced only when a database tag says so.** `MAG_042|NODE_1` and
+  `MAG_007|NODE_1` are two organisms' first contigs, and reducing both to `NODE_1` would collide them
+  at tier `exact` — the loudest possible version of the one thing this must never do. A header only
+  loses its decoration if it carries one of NCBI's own tags (`gi`, `gb`, `ref`, `gnl`, …).
 
 **Length corroborates; it never matches.** Two sequences of equal length are not the same sequence —
 a metagenome has thousands of equal-length contigs — so no pair is ever matched *because* the lengths

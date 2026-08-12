@@ -311,6 +311,58 @@ describe('what must not be equated', () => {
     expect(contextOf(yeast).xIsTen).toBe(true)
   })
 
+  it('does not mistake a genus beginning “Chr” for a chromosome prefix', () => {
+    // `Christensenella_1` begins with `Chr` and `Chromobacterium_ctg1` with
+    // `Chrom`. Stripped on sight they become `istensenella_1` and
+    // `obacterium_ctg1` — two names no file contains, which would then match
+    // each other's mangling rather than themselves.
+    const mag = ['Christensenella_1', 'Chromobacterium_ctg1', 'Chromosome']
+    for (const name of mag) {
+      expect(canonicalise(name, contextOf(mag)).key).toBe(`raw:${name.toLowerCase()}`)
+      expect(found(mag, name)).toBe(name)
+    }
+    expect(found(mag, 'istensenella_1')).toBeNull()
+    expect(found(mag, '1')).toBeNull()
+    // And the prefix still comes off everything that reads as a chromosome.
+    for (const [name, key] of [
+      ['chr1', 'num:1'],
+      ['chrXVI', 'raw:xvi'],
+      ['chrM', 'org:mito'],
+      ['chrX', 'sex:x'],
+      ['chr2L', 'num:2l'],
+      ['chrUn_GL000220v1', 'acc:gl000220'],
+    ] as const) {
+      expect(canonicalise(name, contextOf(['1', '2']))).toMatchObject({ key })
+    }
+  })
+
+  it('does not reduce a binner’s pipe-delimited contig to its second half', () => {
+    // `MAG_042|NODE_1` and `MAG_007|NODE_1` are two organisms' first contigs.
+    // Reducing both to `NODE_1` collides them at tier `exact`.
+    const binned = ['MAG_042|NODE_1', 'MAG_007|NODE_1']
+    expect(canonicalise(binned[0], contextOf(binned)).key).toBe('raw:mag_042|node_1')
+    expect(found(binned, 'MAG_007|NODE_1')).toBe('MAG_007|NODE_1')
+    expect(found(binned, 'NODE_1')).toBeNull()
+    // A header that carries an NCBI tag is still reduced, which is what the
+    // reduction was for.
+    expect(found(['CM000663.2'], 'gi|568336023|gb|CM000663.2|')).toBe('CM000663.2')
+  })
+
+  it('does not let a scaffold id count as a chromosome ordinal', () => {
+    // Ensembl's *Drosophila* carries hundreds of scaffolds named
+    // `211000022278279`. Counting those as numbered chromosomes would push the
+    // file past the karyotype ceiling and take `2L`, `2R` and `4` with it.
+    const ensemblFly = [
+      '2L', '2R', '3L', '3R', '4', 'X', 'Y', 'mitochondrion_genome',
+      ...Array.from({ length: 400 }, (_, at) => String(211000022278279 + at)),
+    ]
+    expect(contextOf(ensemblFly).ordinals).toBe(true)
+    expect(found(ensemblFly, 'chr2L')).toBe('2L')
+    expect(found(ensemblFly, 'chr4')).toBe('4')
+    // And the scaffold ids themselves stay ids.
+    expect(canonicalise('211000022278279', contextOf(ensemblFly)).opaque).toBe(true)
+  })
+
   it('leaves a linkage group a linkage group', () => {
     // A linkage map is numbered by linkage and an assembly by length; the two
     // orders agree only by luck.

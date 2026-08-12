@@ -903,7 +903,16 @@ export class MapPanel {
    * under a contig-level axis.
    */
   private keyFor(state: ViewState, plan: Exclude<BlockPlan, { kind: 'none' }>, info: OpenResult): string {
-    return JSON.stringify([plan, matrixLevel(state), this.scoreOf(info, state).id])
+    // The lead's naming context is part of the key, because it is part of what
+    // the names *mean* (§5.9): a block resolved before the lead's contigs had
+    // arrived was resolved with no context, and reusing it afterwards would
+    // pin a panel to the reading it made while it was still guessing.
+    return JSON.stringify([
+      plan,
+      matrixLevel(state),
+      this.scoreOf(info, state).id,
+      this.props.naming?.() ?? null,
+    ])
   }
 
   /**
@@ -941,7 +950,7 @@ export class MapPanel {
     const naming = this.props.naming?.()
 
     if (plan.kind === 'selection') {
-      return this.client.request<'selection'>({
+      const result = await this.client.request<'selection'>({
         kind: 'selection',
         unit: plan.unit,
         names: plan.names,
@@ -950,6 +959,11 @@ export class MapPanel {
         ...balance,
         ...value,
       })
+      // Said here too, and this early return is why: a selection that skipped
+      // the note left the previous view's rename standing over an unrelated
+      // picture, which is worse than not saying it at all.
+      this.sayRename(result.matched ?? [])
+      return result
     }
 
     // The resolved ranges are kept whole rather than reduced to their extents: a
@@ -963,7 +977,7 @@ export class MapPanel {
       plan.kind === 'names' && plan.cols !== undefined
         ? await this.client.request<'range'>({ kind: 'range', range: plan.cols, ...(naming === undefined ? {} : { naming }) })
         : null
-    this.sayRename(rowRange?.matched ?? null, colRange?.matched ?? null)
+    this.sayRename([rowRange?.matched, colRange?.matched])
     const rows: [number, number] = rowRange === null ? info.displayExtent : rowRange.extent
     const cols = colRange === null ? {} : { cols: colRange.extent }
 
@@ -1167,15 +1181,17 @@ export class MapPanel {
    * One line naming the sequence this panel actually drew, where that is not
    * the sequence it was asked for by name.
    *
-   * Both axes, because an off-diagonal block between two contigs can have
-   * matched on one axis and not the other, and a note that said only the first
-   * would leave the second silently renamed. Where the lengths disagree the
+   * A list rather than two axes, because the views that reach here differ in
+   * how many names they resolved: an off-diagonal block has two and can have
+   * matched on one axis and not the other, and a ticked selection has as many
+   * as were ticked. A note that covered only the first would leave the rest
+   * silently renamed. Where the lengths disagree the
    * sentence says so and stops short of the word "is": two files that spell one
    * chromosome differently and also size it differently are not obviously
    * describing the same sequence, and the reader is the one who can tell.
    */
-  private sayRename(rows: NameMatch | null, cols: NameMatch | null): void {
-    const seen = [rows, cols].filter((match): match is NameMatch => match !== null)
+  private sayRename(matches: ReadonlyArray<NameMatch | undefined | null>): void {
+    const seen = matches.filter((match): match is NameMatch => match !== null && match !== undefined)
     const parts = seen
       // One sentence for a square block, whose two axes are the same match.
       .filter((match, at) => seen.findIndex((other) => other.asked === match.asked) === at)

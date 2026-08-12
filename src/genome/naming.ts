@@ -165,6 +165,11 @@ const DB_TAGS = new Set([
   'pdb',
   'ena',
   'bbs',
+  // `gnl` is what Prokka emits under `--centre`, and it decorates exactly the
+  // metagenomic contigs whose names must not be reduced by accident.
+  'gnl',
+  'gim',
+  'pat',
 ])
 
 /**
@@ -186,13 +191,22 @@ export function stripDecoration(raw: string): string {
   text = text.replace(/[,;]+$/, '')
   if (text.includes('|')) {
     const parts = text.split('|').filter((part) => part !== '')
-    const useful = parts.filter((part, at) => {
-      if (DB_TAGS.has(part.toLowerCase())) return false
-      // The number in `gi|568336023|…` is an identifier of the *record*, not of
-      // the sequence, and it is the one all-digit token that must not survive.
-      return !(/^[0-9]+$/.test(part) && at > 0 && parts[at - 1].toLowerCase() === 'gi')
-    })
-    if (useful.length > 0) text = useful[useful.length - 1]
+    // **Only where a database tag says so.** A pipe is a legal character in a
+    // contig name and binners use it: `MAG_042|NODE_1` and `MAG_007|NODE_1` are
+    // two organisms' first contigs, and reducing both to `NODE_1` would collide
+    // them at tier `exact` — the loudest possible version of the one thing this
+    // module promises never to do. A header this reduces has to *look* like
+    // NCBI's, which means carrying one of NCBI's tags.
+    if (parts.some((part) => DB_TAGS.has(part.toLowerCase()))) {
+      const useful = parts.filter((part, at) => {
+        if (DB_TAGS.has(part.toLowerCase())) return false
+        // The number in `gi|568336023|…` is an identifier of the *record*, not
+        // of the sequence, and it is the one all-digit token that must not
+        // survive.
+        return !(/^[0-9]+$/.test(part) && at > 0 && parts[at - 1].toLowerCase() === 'gi')
+      })
+      if (useful.length > 0) text = useful[useful.length - 1]
+    }
   }
   return text
 }
@@ -206,6 +220,37 @@ export function stripDecoration(raw: string): string {
  * only its `chr` and keep `omosome_1`.
  */
 const CHROM_PREFIX = /^(?:chromosome|chrom|chr)[ _.-]?/i
+
+/**
+ * Take the chromosome prefix off, or `null` where taking it off would be wrong.
+ *
+ * The prefix cannot be stripped on sight, and the names that prove it are
+ * ordinary ones from an ordinary metagenome: `Christensenella_1` begins with
+ * `Chr`, and `Chromobacterium_ctg1` begins with `Chrom`. Stripped blindly they
+ * become `istensenella_1` and `obacterium_ctg1` — two names no file contains,
+ * which would then match each other's mangling rather than themselves.
+ *
+ * So the prefix comes off only when what is left **reads as a chromosome**:
+ * a number, a Roman numeral, a sex letter, an organelle, an accession, UCSC's
+ * `Un_…`, or a short letter run in front of a number (`LG1`). Everything else
+ * keeps its name whole, which is also what a bacterial replicon genuinely
+ * called `Chromosome` needs.
+ */
+function unprefixed(bare: string): string | null {
+  const rest = bare.replace(CHROM_PREFIX, '')
+  if (rest === '' || rest === bare) return null
+  const lower = rest.toLowerCase()
+  if (/^[0-9]/.test(rest)) return rest
+  if (SEX_LETTERS.has(lower)) return rest
+  if (ORGANELLE_OF.has(lower)) return rest
+  if (romanValue(rest) > 0) return rest
+  if (/^un[_.-]/i.test(rest)) return rest
+  if (/^[A-Za-z]{1,2}[0-9]/.test(rest)) return rest
+  if (REFSEQ_ACCESSION.test(rest) || INSDC_ACCESSION.test(rest.replace(/\.[0-9]+$/, ''))) {
+    return rest
+  }
+  return null
+}
 
 /**
  * The linkage-group prefix, which is a prefix and **not** a chromosome one.
@@ -227,7 +272,7 @@ const GROUP_PREFIX = /^(?:lg|linkage_?group|group)[ _.-]?(?=[0-9])/i
  * chromosome 1 or 6, and equating them would draw a 175 kb scaffold under the
  * label of a 249 Mb chromosome.
  */
-const ROLE_SUFFIX = /_(random|alt|fix|hap\d+|ctg\d+|maternal|paternal)$/i
+const ROLE_SUFFIX = /_(random|alt|fix|hap\d+|maternal|paternal)$/i
 
 /**
  * An INSDC accession as UCSC rewrites it into a name: `GL000220v1`.
@@ -533,8 +578,16 @@ export function contextOf(names: readonly string[]): NameContext {
   const bodies = names.map((name) => bodyOf(name))
   const evidence = bodies.filter((body) => readsAsRoman(body))
   const roman = evidence.length >= 2
-  const numbers = bodies.filter((body) => /^[0-9]+$/.test(body))
-  const ordinals = numbers.length <= MAX_KARYOTYPE
+  // Counted by *plausible ordinal*, not by "is all digits", and the difference
+  // is a real assembly rather than a hypothetical one: Ensembl's *Drosophila*
+  // carries hundreds of scaffolds named `211000022278279`, and counting those
+  // would push the file past the ceiling and take `2L`, `2R` and `4` down with
+  // them. A fifteen-digit number is not a chromosome ordinal under any
+  // convention, so it never was evidence about this list either way.
+  const numbers = bodies.filter(
+    (body) => /^[0-9]+$/.test(body) && Number(body) >= 1 && Number(body) <= MAX_KARYOTYPE,
+  )
+  const ordinals = numbers.length < MAX_KARYOTYPE
   const has = (want: string): boolean => bodies.some((body) => body.toLowerCase() === want)
   // Two, not one: a single `4` beside sixteen Roman numerals is a stray contig,
   // and `I`…`XVI` plus `chr2micron` must not lose its X to it.
@@ -545,12 +598,7 @@ export function contextOf(names: readonly string[]): NameContext {
 /** A name stripped of decoration, chromosome prefix and role suffix. */
 function bodyOf(name: string): string {
   const bare = stripDecoration(name)
-  const unprefixed = bare.replace(CHROM_PREFIX, '')
-  // Never strip a prefix down to nothing: a bacterial replicon genuinely called
-  // `chromosome` is its own name, and an empty key would collide with every
-  // other file's empty key.
-  const core = unprefixed === '' ? bare : unprefixed
-  return core.replace(ROLE_SUFFIX, '')
+  return (unprefixed(bare) ?? bare).replace(ROLE_SUFFIX, '')
 }
 
 /**
@@ -566,10 +614,9 @@ export function canonicalise(name: string, context: NameContext): Canon {
   const bare = stripDecoration(name)
   if (bare !== name.trim()) via.push('decorated')
 
-  const unprefixed = bare.replace(CHROM_PREFIX, '')
-  const prefixed = unprefixed !== bare && unprefixed !== ''
-  const withRole = prefixed ? unprefixed : bare
-  if (prefixed) via.push('prefix')
+  const stripped = unprefixed(bare)
+  const withRole = stripped ?? bare
+  if (stripped !== null) via.push('prefix')
 
   const role = ROLE_SUFFIX.exec(withRole)
   const body = role === null ? withRole : withRole.slice(0, role.index)
@@ -638,7 +685,11 @@ export function canonicalise(name: string, context: NameContext): Canon {
   // chromosome in every file that writes any of them — *provided* this list is
   // a karyotype and not a draft assembly, which is the one thing the string
   // cannot say and the list can. See {@link NameContext.ordinals}.
-  if (/^[0-9]+$/.test(body) && context.ordinals) {
+  // The ceiling is per name as well as per list: a sequence called
+  // `211000022278279` is an Ensembl scaffold id, not the two-hundred-trillionth
+  // chromosome, and keying it as an ordinal would put an id in the karyotype
+  // namespace one name at a time rather than a whole list at a time.
+  if (/^[0-9]+$/.test(body) && context.ordinals && Number(body) <= MAX_KARYOTYPE) {
     if (/^0[0-9]/.test(body)) via.push('padded')
     return { key: `num:${Number(body)}${tail}`, via, version: null, opaque: false }
   }
@@ -723,6 +774,9 @@ function lengthsVerdict(a: number | undefined, b: number | undefined): LengthVer
   return a === b ? 'agree' : 'differ'
 }
 
+/** {@link NameIndex.for}'s memo, keyed on the list's own identity. */
+const INDEX_CACHE = new WeakMap<object, NameIndex>()
+
 /**
  * One file's sequences, indexed every way a foreign name might arrive.
  *
@@ -735,9 +789,22 @@ function lengthsVerdict(a: number | undefined, b: number | undefined): LengthVer
 export class NameIndex {
   /** The file's names, in file order. */
   readonly names: readonly string[]
-  readonly style: NameStyle
   /** What this file decided about its own numerals — see {@link NameContext}. */
   readonly context: NameContext
+  private styleCache: NameStyle | null = null
+
+  /**
+   * The convention this list is written in — computed on first ask.
+   *
+   * Lazy because it is a *reporting* field: the info panel prints it and
+   * nothing else consults it, while every index built to answer a navigation
+   * would otherwise pay for a second full pass over the contig table to
+   * canonicalise every name again.
+   */
+  get style(): NameStyle {
+    this.styleCache ??= styleOf(this.names, this.context)
+    return this.styleCache
+  }
   private readonly exact = new Map<string, NamedSequence>()
   private readonly folded = new Map<string, NamedSequence[]>()
   private readonly keyed = new Map<string, Array<{ sequence: NamedSequence; canon: Canon }>>()
@@ -745,7 +812,6 @@ export class NameIndex {
   private constructor(sequences: readonly NamedSequence[]) {
     this.names = sequences.map((sequence) => sequence.name)
     this.context = contextOf(this.names)
-    this.style = styleOf(this.names, this.context)
     for (const sequence of sequences) {
       // First writer wins throughout. A file with two sequences of one name is
       // corrupt (`parseChromSizes` says so for a `chrom.sizes`), and the first
@@ -764,6 +830,37 @@ export class NameIndex {
   /** Build from names alone — a tabix index, a BED, a bigWig header. */
   static ofNames(names: readonly string[]): NameIndex {
     return new NameIndex(names.map((name) => ({ name })))
+  }
+
+  /**
+   * The index for a list, built once per list.
+   *
+   * Held against the **array's own identity**, which is what makes this safe to
+   * call from a render path: the assembly's contigs, a reader's `chromnames`
+   * and the map's name column are each one array that outlives every question
+   * anybody asks of it, so the second caller and the ten-thousandth get the
+   * first one's index.
+   *
+   * It is not decoration. `findContig` is called on every keystroke in the
+   * locus box, and a keystroke mid-word is a *miss* — which is the path that
+   * reaches the index rather than short-circuiting on an exact name. Building
+   * one per press costs 24 ms at five thousand sequences and 770 ms at a
+   * hundred and fifty thousand, which is a locus box that stops taking input.
+   *
+   * The one rule: **the array must not be mutated afterwards.** Nothing here
+   * does — the two places that rewrite a contig list in place
+   * (`annotations.worker.ts`) build no index from it — and a list that changed
+   * under a cached index would answer with names it no longer has.
+   */
+  static for(list: readonly string[] | readonly NamedSequence[]): NameIndex {
+    const held = INDEX_CACHE.get(list)
+    if (held !== undefined) return held
+    const built =
+      typeof list[0] === 'string'
+        ? NameIndex.ofNames(list as readonly string[])
+        : NameIndex.of(list as readonly NamedSequence[])
+    INDEX_CACHE.set(list, built)
+    return built
   }
 
   /** `true` when this file writes this exact name. */

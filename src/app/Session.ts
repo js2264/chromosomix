@@ -71,7 +71,7 @@ import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
-import { contextOf } from '../genome/naming'
+import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
@@ -3182,9 +3182,12 @@ export class Session {
       onStarChange: () => {
         this.analysis?.refresh()
       },
+      // Through the memoised index rather than `contextOf` directly: this is
+      // asked once per block read per panel, and recomputing it over a 154 k
+      // contig table is 71 ms of a frame that has a matrix to draw.
       leadNaming: () => {
         const names = this.contigNames()
-        return names === null ? undefined : contextOf(names)
+        return names === null ? undefined : NameIndex.for(names).context
       },
       leadLabel: () => fileLabel(this.file?.uri ?? ''),
       // Stripped the same way and for the same two reasons. `onChange` would be
