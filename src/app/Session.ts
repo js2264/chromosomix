@@ -43,6 +43,7 @@ import {
   differsOnlyInPresentation,
   landingState,
   matrixLevel,
+  namesSamePlace,
   overviewLevel,
   selectionOf,
   sequencesShown,
@@ -362,6 +363,16 @@ export class Session {
    * rather than left holding a matrix nobody is looking at.
    */
   private wholeFile: { key: string; view: WholeFileView } | null = null
+  /**
+   * The window the outgoing view was standing on, across one rebuild.
+   *
+   * Held for the length of a render and nothing longer — read off the old
+   * picture before it is torn down, handed to the new one, cleared. A field
+   * rather than an argument because the eight `mount*` methods take a view state
+   * and nothing else, and threading a ninth parameter through all of them to
+   * reach the two that can use it would be worse than one line each side.
+   */
+  private carriedWindow: { contig: string; start: number; end: number } | null = null
   private opening: string | null = null
   private current: {
     destroy?(): void
@@ -3320,11 +3331,21 @@ export class Session {
    *
    * The presentation is rebuilt from the state rather than passed in, so this
    * has one source of truth with every other render.
+   *
+   * @returns whether the picture is still standing where it was — `false` only
+   * when a turn refitted it and the window could not be carried across, which is
+   * the one case the caller has to make good.
    */
-  private rederive(): void {
+  private rederive(): boolean {
     const state = this.store.state
-    if (state === null) return
-    this.current?.panel?.rederive(this.derivePresentation(state), undefined, this.turnPresentation(state))
+    if (state === null) return true
+    return (
+      this.current?.panel?.rederive(
+        this.derivePresentation(state),
+        undefined,
+        this.turnPresentation(state),
+      ) ?? true
+    )
   }
 
   private remount(): void {
@@ -3877,13 +3898,16 @@ export class Session {
       differsOnlyInPresentation(this.mounted, state)
     ) {
       this.current.applyScale?.(this.scaleOf(state))
-      this.rederive()
-      // …and stand back on the saved place, if the view is at one. Turning a map
-      // re-cuts it and therefore refits it — which the reader asked for, and which
-      // on a focused view meant pressing the turn toggle at a bookmark threw you
-      // back to the whole chromosome. `rederive` is synchronous, so the place is
-      // restored in the same frame as the shape and nothing flashes.
-      this.current.showFocus?.(state.focus)
+      // …and stand back where the picture was standing, when a turn re-cut it and
+      // therefore refitted it. The panel carries its own window across the turn
+      // now — in base pairs, off the axis that means position in both shapes —
+      // which is the stronger answer, because it keeps the *zoom the reader
+      // arrived at* rather than the saved place they may have zoomed in from.
+      // The bookmark is the fall-back for the one case the panel cannot carry: a
+      // window spanning more than one sequence, which is not a location at all.
+      // `rederive` is synchronous, so either way the place is restored in the
+      // same frame as the shape and nothing flashes.
+      if (!this.rederive()) this.current.showFocus?.(state.focus)
       this.mounted = state
       this.breadcrumb?.render(state)
       this.host.activity(this)
@@ -3911,6 +3935,27 @@ export class Session {
       this.host.activity(this)
       return
     }
+
+    // What the outgoing picture was standing on, if the incoming one is of the
+    // same block. Read *here*, before anything is torn down, because it is a
+    // measurement of a view that is about to stop existing.
+    //
+    // The rebuild refits, which is right for a new place and wrong for the same
+    // place read again — and most of the reasons a view is rebuilt are the same
+    // place read again: switching the score, changing what the cells are, adding
+    // a second file. Each of those is a question about the *numbers*, and each of
+    // them used to answer by throwing away the window. See
+    // {@link MatrixPanel.standOn} for why it is carried in base pairs.
+    const carried =
+      this.mounted !== null && namesSamePlace(this.mounted, state)
+        ? (this.current?.panel?.framedWindow() ?? null)
+        : null
+    // On the session as well as in hand, because the mount below is the one
+    // thing that reads it and the eight `mount*` methods take a view state and
+    // nothing else. The local is what the line after the switch uses, so a
+    // second render arriving mid-mount cannot pair one render's window with
+    // another render's picture.
+    this.carriedWindow = carried
 
     this.breadcrumb?.render(state)
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
@@ -3942,6 +3987,13 @@ export class Session {
         await this.mountSelection(state)
         break
     }
+    // Handed to the picture that replaced it, whichever view built one. The
+    // region view has already been given it as its focus — it needs the window
+    // on every later reload of the block, not only on the first — so this is
+    // idempotent there and is the only channel for the four views that have no
+    // saved place of their own.
+    if (carried !== null) this.current?.panel?.standOn(carried)
+    this.carriedWindow = null
     // After the switch, not before: a region view reads the contigs table on the
     // way in, and there is no row to show until it has arrived.
     this.infoPanel?.setRecords(this.recordsFor(state))
@@ -4468,7 +4520,20 @@ export class Session {
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
-      ...(state.focus === undefined ? {} : { focus: state.focus }),
+      // Where this picture stands. The carried window first, because it is what
+      // was on screen a moment ago and the saved place is only where the reader
+      // *started* — somebody who bookmarked a chromosome, zoomed into one domain
+      // and then switched the score means the domain. It goes into the prop
+      // rather than only into the panel so that a later reload of this block — a
+      // refine widening past what is held, a change of level — stands on it too,
+      // which is exactly what the prop is for. Nothing is written to the hash: a
+      // zoom inside a block is not a `focus`, and a control that says what the
+      // numbers are should not rewrite the address.
+      ...(this.carriedWindow === null
+        ? state.focus === undefined
+          ? {}
+          : { focus: state.focus }
+        : { focus: formatRegion(this.carriedWindow) }),
       scale: this.scaleOf(state),
       // Typing a new region replaces the whole selection, so the second axis
       // goes with it: `contig_A × contig_B` then `contig_C` means contig_C, not

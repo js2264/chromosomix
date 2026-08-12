@@ -18,6 +18,7 @@ import {
   MAPS_SEPARATOR,
   MAX_PANELS,
   VACANT,
+  carriedUnit,
   columnsFor,
   deepestStacks,
   grownDeck,
@@ -530,5 +531,43 @@ describe('the room every panel leaves', () => {
     // A panel's budget starts at a placeholder rather than at a thickness, and
     // a floor below zero would pull the maps it lines up *out* of line.
     expect(deepestStacks([stack({ top: -1, right: -1, bottom: -1, left: -1 })])).toEqual(stack({}))
+  })
+})
+
+describe('a place carried from one panel to another', () => {
+  it('is the same base pair, whatever each panel calls its cells', () => {
+    // 1 kb bins beside 5 kb bins: cell 50 of the fine panel is 50 kb in, which
+    // is cell 10 of the coarse one. Carried as a cell index it would land five
+    // times too far along.
+    expect(carriedUnit({ unit: 50, bpPerCell: 1000 }, { bpPerCell: 5000, cells: 100 })).toBe(10)
+    expect(carriedUnit({ unit: 10, bpPerCell: 5000 }, { bpPerCell: 1000, cells: 400 })).toBe(50)
+  })
+
+  it('crosses a turn, where a column is half a bin', () => {
+    // The case the deck gets wrong for free: a turned panel counts columns in
+    // half bins (`render/rotate.ts`), so column 100 of a turned 1 kb band is
+    // 50 kb in — cell 50 of the square 1 kb map beside it, not cell 100.
+    expect(carriedUnit({ unit: 100, bpPerCell: 500 }, { bpPerCell: 1000, cells: 400 })).toBe(50)
+    expect(carriedUnit({ unit: 50, bpPerCell: 1000 }, { bpPerCell: 500, cells: 799 })).toBe(100)
+  })
+
+  it('keeps the fraction, because a place is not a cell', () => {
+    expect(carriedUnit({ unit: 10.5, bpPerCell: 1000 }, { bpPerCell: 1000, cells: 400 })).toBe(10.5)
+  })
+
+  it('is nothing at all past the end of a shorter block', () => {
+    // Not the last cell. A mark clamped to the edge says the pointer is over a
+    // place this file has, which is the one thing a deck must not claim.
+    expect(carriedUnit({ unit: 500, bpPerCell: 1000 }, { bpPerCell: 1000, cells: 400 })).toBeNull()
+    expect(carriedUnit({ unit: -1, bpPerCell: 1000 }, { bpPerCell: 1000, cells: 400 })).toBeNull()
+    // The far edge itself is still inside: a position at the end of the last
+    // cell is a position the block covers.
+    expect(carriedUnit({ unit: 400, bpPerCell: 1000 }, { bpPerCell: 1000, cells: 400 })).toBe(400)
+  })
+
+  it('refuses a panel that has not read a block rather than dividing by zero', () => {
+    expect(carriedUnit({ unit: 10, bpPerCell: 1000 }, { bpPerCell: 0, cells: 1 })).toBeNull()
+    expect(carriedUnit({ unit: Number.NaN, bpPerCell: 1000 }, { bpPerCell: 1000, cells: 400 }))
+      .toBeNull()
   })
 })

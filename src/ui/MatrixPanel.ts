@@ -700,11 +700,27 @@ export class MatrixPanel {
    */
   private laneListener: ((geometry: PanelGeometry) => void) | null = null
   private hoverListener: ((cell: { row: number; col: number } | null) => void) | null = null
+  private laneHoverListener:
+    | ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void)
+    | null = null
   /** Where another panel's pointer is, in this panel's cells. */
   private echo: { row: number; col: number } | null = null
+  /** Where another panel's pointer is *on a track*, in this panel's cells. */
+  private laneEcho: { axis: 'rows' | 'cols'; unit: number } | null = null
   private units = ''
+  /** Where the next block should stand, once; see {@link standOn}. */
+  private pendingStand: { contig: string; start: number; end: number } | null = null
   /** What the score is called, where nothing here chose it. */
   private scoreLabel = ''
+  /**
+   * The score picker, where this panel has one, so it can be told what changed.
+   *
+   * A `<select>` holds no state worth keeping — the choice belongs to whoever
+   * reads the file — so this is only ever *written to*, and only from
+   * {@link syncScoreChoice}. `null` on a file with one answer, where offering a
+   * dropdown would be offering a choice that cannot be made.
+   */
+  private scoreSelect: HTMLSelectElement | null = null
   /**
    * The scale menu on the picture, for a panel with no card in a sidebar.
    *
@@ -1415,6 +1431,7 @@ export class MatrixPanel {
     const scores = options.scores
     if (scores !== undefined && scores.choices.length > 1) {
       const select = el('select', { class: 'select' })
+      this.scoreSelect = select
       for (const choice of scores.choices) {
         select.appendChild(el('option', { value: choice.id, text: choice.label }))
       }
@@ -3287,12 +3304,27 @@ export class MatrixPanel {
       // two places it is a contact *between* are two different columns of the
       // track below. One line there would have to be drawn half way between them,
       // where nothing is — see {@link anchorColumns}.
+      //
+      // …except while the next press would name a stretch of the axis rather
+      // than a contact ({@link HeatmapView.spanGuide}). The map draws the edge of
+      // that stretch as one vertical line, and a stack answering it with a
+      // contact's two anchors is the two halves of one instrument disagreeing
+      // about what the hand is doing. `null` puts the ordinary single hairline
+      // under the pointer's own column, which is that edge.
       anchors:
-        this.turned === null || this.hoverCell === null
+        this.turned === null || this.hoverCell === null || this.heatmap.spanGuide
           ? null
           : anchorColumns(this.turned, this.hoverCell.row, this.hoverCell.col),
       crosshair: getPlotOptions().crosshair,
       echo: this.echo,
+      // The same conversion, for the same reason, on the mark another panel's
+      // pointer leaves: the echoed cell is a contact and its column is the
+      // midpoint of two places, so a stack answers it with one tick per anchor.
+      echoAnchors:
+        this.turned === null || this.echo === null
+          ? null
+          : anchorColumns(this.turned, this.echo.row, this.echo.col),
+      laneEcho: this.laneEcho,
       guide: this.laneHover,
       border: this.laneBorder,
       handles: true,
@@ -3796,6 +3828,7 @@ export class MatrixPanel {
       if (before === null || before.edge !== edge || before.along !== along) {
         this.laneHover = { edge, along }
         this.schedule()
+        this.reportLaneHover()
       }
 
       const readout = lanes.readout(edge, x, y, this.laneGeometry())
@@ -3851,6 +3884,9 @@ export class MatrixPanel {
       if (this.laneHover !== null) {
         this.laneHover = null
         this.schedule()
+        // The move off the edge is what takes the other panels' marks away with
+        // the pointer, exactly as {@link describe} reports the move off the map.
+        this.reportLaneHover()
       }
     }
     canvas.addEventListener('mousemove', onMove)
@@ -4051,7 +4087,40 @@ export class MatrixPanel {
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
+    // Last, and after the rulers it is measured against: whoever asked for this
+    // block asked for it to arrive standing somewhere ({@link standOn}).
+    const stand = this.pendingStand
+    this.pendingStand = null
+    if (stand !== null) this.showLocus(stand)
     this.schedule()
+  }
+
+  /**
+   * Stand the **next** block on this window, once.
+   *
+   * `setMatrix` refits, which is right for a new place and wrong for the same
+   * place read again — and "the same place read again" is most of what a reader
+   * does: switching the score, turning the map, changing what the cells are. Each
+   * of those is answered by a fresh read of a block the reader is already looking
+   * at, and each of them used to hand back the whole chromosome, so the fifty
+   * kilobases they had zoomed into had to be found again by hand.
+   *
+   * A window in **base pairs**, never in cells, for the reason {@link regrid}
+   * gives at length: a cell is a different number of base pairs on every grid,
+   * so a window kept as cell indices comes back showing half as much genome the
+   * moment the incoming block is read finer.
+   *
+   * One shot, and cleared whether or not it could be placed. A window that
+   * outlived the block it was taken from would put every later navigation back
+   * where the reader used to be — which is the opposite of the bug this fixes.
+   */
+  standOn(window: { contig: string; start: number; end: number } | null): void {
+    this.pendingStand = window
+  }
+
+  /** Where the picture is standing, in the shape {@link standOn} takes back. */
+  framedWindow(): { contig: string; start: number; end: number } | null {
+    return this.framedRegion()
   }
 
   /**
@@ -5077,7 +5146,7 @@ export class MatrixPanel {
     derive: DerivePresentation | undefined,
     compare?: ComparePresentation,
     turn?: TurnPresentation,
-  ): void {
+  ): boolean {
     const turnMoved = !this.setTurn(turn)
     const unchanged = this.setDerive(derive) && !turnMoved
     if (compare !== undefined) this.options.compare = compare
@@ -5086,15 +5155,26 @@ export class MatrixPanel {
     // builds a fresh presentation object on every render and hands it over
     // whether or not a reader touched anything, and recomputing a 16 M-cell
     // block for an equal object would make every unrelated repaint expensive.
-    if (data === null || (unchanged && compare === undefined)) return
+    if (data === null || (unchanged && compare === undefined)) return true
     if (turnMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
       // axes change meaning, and the view has to be refitted around them.
       // Re-run from the top, which is one pass over a block already in memory
       // and still costs no read.
+      //
+      // **Standing where it was standing.** A turn is a change of presentation,
+      // not a navigation: the reader pressed a button that says "draw this the
+      // other way up", and answering it with the whole chromosome throws away
+      // the one thing they did not ask to change. Carried in base pairs off the
+      // column axis, which is the axis that means *position* in both shapes — so
+      // the square's on-diagonal window becomes the band's stretch of genome and
+      // back again, and a round trip lands where it started. `null` where the
+      // window spans more than one sequence, and there the refit stands: a
+      // whole-genome picture is not at a location, and there is nothing to carry.
+      const held = this.framedRegion()
       this.setData(data, this.lastTitle, this.second?.data)
-      return
+      return held !== null && this.showLocus(held)
     }
     // At the depth the band already has, not the one the box would cut now: this
     // is the in-place swap, and an array of another length read with the grid's
@@ -5119,6 +5199,8 @@ export class MatrixPanel {
       })
     }
     this.schedule()
+    // The in-place swap moves nothing, so the picture is where it was.
+    return true
   }
 
   setBusy(busy: boolean, message = 'loading…'): void {
@@ -5552,6 +5634,67 @@ export class MatrixPanel {
   }
 
   /**
+   * Report which **place** the pointer is over when it is on a track, not a map.
+   *
+   * {@link setHoverListener}'s counterpart, and a second listener rather than a
+   * second shape on the first, because the two carry different facts: a pointer
+   * on the map names a contact — two places — and one on a stack names one. A
+   * deck that folded them together would have to invent the missing half, and
+   * the invention would be drawn on every other panel as though it had been
+   * pointed at.
+   *
+   * Reported in this panel's own matrix units on the axis the stack runs along,
+   * which is the same currency the cell report uses and converts through the
+   * same base pairs (`panels/PanelDeck.ts`).
+   */
+  setLaneHoverListener(
+    listener: ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void) | null,
+  ): void {
+    this.laneHoverListener = listener
+  }
+
+  /**
+   * Show a place another panel's *track* pointer is naming, or stop showing it.
+   *
+   * A tick in the stacks that measure that axis, and on the map the small form
+   * of the guide the panel under the pointer is drawing — two 45° arms off the
+   * diagonal where this map is turned, a cross on the diagonal where it is not
+   * (`HeatmapView.setLaneEcho`).
+   *
+   * The map's half is refused where this block has no diagonal: a contig × contig
+   * picture is of two places, and there is no point on it that is one of them.
+   * The stacks still get their tick, because a track under such a block is drawn
+   * against one axis and that axis does carry the position.
+   */
+  showLaneEcho(at: { axis: 'rows' | 'cols'; unit: number } | null): void {
+    if (this.laneEcho === null && at === null) return
+    this.laneEcho = at
+    const diagonal = this.data !== null && isTurnable(this.data)
+    this.heatmap.setLaneEcho(at === null || !diagonal ? null : at.unit)
+    this.schedule()
+  }
+
+  /** Hand the current lane hover to whoever is listening, in matrix units. */
+  private reportLaneHover(): void {
+    const listen = this.laneHoverListener
+    if (listen === null) return
+    const guide = this.laneHover
+    if (guide === null) {
+      listen(null)
+      return
+    }
+    // The same conversion {@link paintLaneGuide} makes, and for the same reason
+    // it needs none of its own: §8.4 glues the lane canvases to the map's along
+    // the axis they share, so a pixel on the stack is a pixel on the plot.
+    const plot = this.heatmap.plotRect
+    const horizontal = laneIsHorizontal(guide.edge)
+    const unit = horizontal
+      ? this.heatmap.scaleX.toUnit(guide.along - plot.x)
+      : this.heatmap.scaleY.toUnit(guide.along - plot.y)
+    listen({ axis: horizontal ? 'cols' : 'rows', unit })
+  }
+
+  /**
    * Report how much room this panel's lane stacks take, whenever it changes.
    *
    * For a deck, which reserves the same room on every panel beside this one so
@@ -5617,6 +5760,27 @@ export class MatrixPanel {
     if (this.scoreLabel === label) return
     this.scoreLabel = label
     this.painted = null
+  }
+
+  /**
+   * Point the score picker at what is actually being drawn.
+   *
+   * The choice does not always come from the picker. A companion's score is its
+   * own only while the reader has made it so; the rest of the time it follows
+   * the deck (`panels/MapPanel.ts`), and the deck's can move from the lead's own
+   * picker, from a link or from the back button. A dropdown left showing the
+   * previous answer beside a map drawing the new one is a control that lies
+   * about the picture it is over.
+   *
+   * Assignment fires no `change` event, so this cannot loop back through the
+   * listener — the same property {@link applyScale} relies on.
+   */
+  syncScoreChoice(id: string): void {
+    const select = this.scoreSelect
+    if (select === null || select.value === id) return
+    // Only to an option it has: a file that fell back to counts because it has
+    // no such column would otherwise be left with a blank picker.
+    if (Array.from(select.options).some((option) => option.value === id)) select.value = id
   }
 
   /**

@@ -43,6 +43,57 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rows out of twelve as a folder holding three files. Truncation outranks it: a
   prefix past a thousand keys is the one case where the list is not the folder.
 
+- **A second map can be opened by URL, from the deck itself.** The boxes existed
+  — a file chooser, a URL field and an `add` — and nothing on screen opened
+  them: the row was revealed by the command palette alone. So a reader with a
+  published cooler and a deck in front of them had a drop rectangle for a local
+  file and no way at all to name a remote one, which is the road §11 exists for.
+  The deck's bar now opens with **add a map…**, and every empty cell carries its
+  own folded *or open one by URL* under the drop hint — typed there it fills
+  *that* cell rather than the first empty one, which matters in a 2 × 2 with
+  three gaps. The box lives inside the drop zone rather than under it, so an
+  empty cell stays exactly the size of the map it stands in for.
+
+  It is the half that makes a shared deck repairable. A link carries a local
+  companion as `~` (§16.6), so the recipient meets a cell they could previously
+  only fill from their own disk — and the deck they mended could not be sent on.
+
+- **Each map of a deck can be read as its own quantity.** A companion was built
+  with no score picker, on the argument that the score is one of the things a
+  deck *shares*. That is right about the default and wrong about the choice:
+  four replicates should be one quantity unless somebody says otherwise, and
+  "unless somebody says otherwise" needs a control to say it with. Two ordinary
+  cases had none — a companion carrying a `/pixels` column its lead has not got,
+  and a pair a reader wants at two normalisations — and both ended at a picker
+  that does not exist.
+
+  So the corner menu on each map now holds a **score**, built from *that* file's
+  own columns, starting on whatever the deck resolved. Picking one takes that
+  panel off the shared answer and leaves every other panel where it was; the
+  clip goes back to auto with it, because a clip is a pair of numbers in one
+  score's units and a balanced matrix is fractions where counts are integers.
+  A panel nobody has touched follows the deck exactly as before, and its picker
+  follows too — the lead's own control, a link and the back button all move the
+  shared score, and a dropdown left on the previous answer is a control lying
+  about the map it sits on.
+
+- **Pointing at a track is answered on every map on screen.** The deck already
+  echoed a pointer on a *map* to its neighbours (§16.3) and had nothing at all
+  for a pointer on a **track**, which is half the gesture: a hand moving along
+  one profile asking "what is here" is asking it of every profile in the deck.
+  Now the stacks that measure the same axis get a tick at that place, and each
+  map gets the small form of the guide the panel under the pointer is drawing
+  across itself.
+
+  On a turned map that mark is deliberately **not** the little cross the cell
+  echo leaves. A place is not a contact: the contacts it is in leave the
+  diagonal along two 45° rays rather than along an axis, so a cross there would
+  be two arms pointing at nothing — the horizontal one running through contacts
+  between two *other* places, the vertical one through a column that is only a
+  midpoint. The mark is the first few pixels of that V, standing on the diagonal
+  under the position being pointed at. A square map keeps the cross, where its
+  two axes really are the two directions the place is an anchor along.
+
 - **`chr1`, `1`, `01`, `I` and `NC_000001.11` are one chromosome.** Two files of
   the same genome disagree about its names more often than they agree — UCSC
   writes `chr1`, Ensembl writes `1`, a yeast cooler writes `chrI` and the
@@ -441,6 +492,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **On a turned map the guide becomes a vertical line while a stretch is being
+  chosen.** At rest the guide under the pointer is a pair of 45° rays, and that
+  is the honest answer to *what is this cell*: a turned map's two directions are
+  not its two axes, so the cells sharing a place with the contact under the
+  pointer are a ray rather than a column. It is the wrong answer the moment the
+  next press names an **interval** instead — Shift held, Option held, or a form
+  waiting to be pointed at — because then the reader is not choosing a contact,
+  and the mark that says where an interval starts is the edge it starts on. So
+  the rays collapse to one vertical line at the pointer's own column, and the
+  tracks beside the map drop back to a single hairline under it rather than
+  marking the two anchors of a contact nobody is selecting. It answers the
+  modifier rather than the movement, so pressing Shift over a stationary hand
+  changes the guide immediately.
+
 - **Windows installers are temporarily not built.** The `--win` leg of the
   release workflow is commented out, so releases carry the macOS and Linux
   installers and no `.exe`. Nothing about the target changed — `npx
@@ -509,6 +574,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   It now names that line, and says that a bucket serving the demos correctly is
   expected to fail this way. `docs/hosting.md` carried the same claim and no
   longer does.
+
+- **Picking a locus for 4C zoomed the map out from under the pointer.** *Pick on
+  map* is a mode: while it is armed a plain drag names a stretch of genome for
+  the form that asked, and nothing else. It zoomed as well, every time, and the
+  reason is an ordering. The mode disarms itself the moment it has an answer —
+  one pick per arming — and it disarms by calling straight back into the map to
+  say the next drag zooms again. The map then consulted that setting on the line
+  *after* it reported the band, so what it read was the mode the gesture had
+  just left. The reading is now taken before the report, which is the rule the
+  same gesture on a lane stack was already following.
+
+- **A turned map's echo marked a place no track has anything at.** Hovering one
+  map of a deck leaves a tick in the tracks beside every other map, and under a
+  turn that tick was drawn at the column the echoed cell sits in — which is the
+  *midpoint* between the two places the contact is between, and a coordinate the
+  profile below has nothing at. It is two ticks now, one per anchor, and one
+  where the two are the same place, which is exactly what the panel under the
+  pointer was already doing with its own crosshair.
+
+- **Turning a map, and changing what its cells are, threw away the window you
+  were looking at.** A block arrives through a call that refits — right for a
+  new place, wrong for the same place read again, and "the same place read
+  again" is most of what a reader does. Pressing the turn toggle, switching the
+  score, ticking a derivation on: each of those answered with the whole
+  chromosome, so fifty kilobases somebody had zoomed into had to be found by
+  hand again, and a round trip — turn, turn back — did it twice.
+
+  A panel now carries its own window across a turn, and the shell hands the
+  outgoing picture's window to the incoming one whenever a rebuild is of the
+  same block. Both carry **base pairs**, never cells: a cell is a different
+  number of base pairs on every grid — half a bin under a turn — so a window
+  kept as indices comes back showing the wrong stretch of genome, confidently.
+  The column axis is what is carried, because it is the axis that means
+  *position* in both shapes, so a square's on-diagonal window becomes a band's
+  stretch of genome and back again and a round trip lands where it started.
+
+  A bookmarked view keeps the stronger reading of the two: what is restored is
+  the zoom the reader **arrived at**, not the saved place they may have zoomed
+  in from. The bookmark is the fall-back for the one case a window cannot be
+  carried — a picture spanning more than one sequence, which is not at a
+  location at all. And a companion that changes its own score stands still for a
+  further reason: it is on the deck's navigation lock, so a fitted view coming
+  back would be reported as a gesture and take every other panel with it.
 
 - **The desktop app's header carried a broken image, in every release that had
   one.** `publicDir` is off for that target — deliberately, and it is one of the

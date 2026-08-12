@@ -386,6 +386,47 @@ export function differsOnlyInFocus(a: ViewState, b: ViewState): boolean {
   return a.focus !== b.focus && differsOnly(a, b, ['focus'])
 }
 
+/**
+ * The keys that say **which block** is on screen — the picture's *place*.
+ *
+ * Not "everything except the presentation", which is what the three predicates
+ * above are: those decide whether a mounted view can be *told* something instead
+ * of being rebuilt, and their safe answer is "rebuild". This is the opposite
+ * question, asked of a rebuild that is already happening — *is the new picture
+ * of the same place as the old one* — and its safe answer is `false`, so it
+ * lists what must match rather than what may differ.
+ *
+ * `level` is in it because a contig-level block is a different grid: a window in
+ * base pairs means the same thing on both, but standing a bin-level zoom on a
+ * picture whose cells are whole sequences is standing it on nothing.
+ */
+const PLACE_KEYS = [
+  'uri',
+  'view',
+  'region',
+  'region2',
+  'genome',
+  'genome2',
+  'genomes',
+  'regions',
+  'level',
+] as const
+
+/**
+ * `true` when two states name the same block, however differently they draw it.
+ *
+ * What it authorises is one thing: carrying the reader's **window** across a
+ * rebuild. Changing the score re-reads the file and builds a new view, and the
+ * new view fits — so the fifty kilobases somebody had zoomed into came back as
+ * the whole chromosome, from a control that was only ever asked what the numbers
+ * mean. Where this is true the window is still a window on the same sequence and
+ * can simply be handed to the picture that replaces it; where it is false the
+ * reader has gone somewhere else and a carried window would put them back.
+ */
+export function namesSamePlace(a: ViewState, b: ViewState): boolean {
+  return PLACE_KEYS.every((key) => a[key] === b[key])
+}
+
 function differsOnly(a: ViewState, b: ViewState, allowed: readonly string[]): boolean {
   const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)])
   for (const key of keys) {

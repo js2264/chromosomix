@@ -62,7 +62,7 @@ import {
 } from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
-import { el, fmt } from '../ui/dom'
+import { button, el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
@@ -333,6 +333,24 @@ export class MapPanel {
   private read: string | null = null
   /** Colour scale, per panel; see {@link applyLook}. */
   private look: ScaleState = {}
+  /**
+   * A score this panel was told to read, overriding the deck's.
+   *
+   * `null` until the reader picks one here, and that asymmetry is the design.
+   * The score is one of the things a deck shares (§16.2) and it should stay
+   * shared by default: four replicates read as counts while a fifth is balanced
+   * is a row of pictures that cannot be compared, which is the one thing a deck
+   * is for. But *shared* is not the same as *imposed*, and two cases break it —
+   * a companion whose file carries a column the lead has not got, and a
+   * comparison a reader deliberately wants at two normalisations. Both were
+   * unreachable, because the panel simply had no picker.
+   *
+   * So it is an opt-out, per panel, and it is sticky: once this reader has said
+   * what this map's cells are, the deck's later choices are the deck's business.
+   * A `null` here follows the lead exactly as before, which is what every panel
+   * nobody has touched does.
+   */
+  private scoreOverride: string | null = null
   /**
    * The annotation store the current panel draws its lanes from.
    *
@@ -930,9 +948,46 @@ export class MapPanel {
    * cannot serve, which is the same rule a hash naming a missing column meets.
    */
   private scoreOf(info: OpenResult, state: ViewState) {
-    const choices = scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns })
-    const shared = this.props.score()
+    const choices = this.scoreChoicesOf(info)
+    // This panel's own choice first, where the reader has made one: it is the
+    // most specific thing anybody has said about *these* cells, and the deck's
+    // is a default rather than a rule (see {@link scoreOverride}).
+    const shared = this.scoreOverride ?? this.props.score()
     return scoreFor(choices, shared === undefined ? state : { ...state, score: shared })
+  }
+
+  /** What this file's cells could be — its weights, and its extra columns. */
+  private scoreChoicesOf(info: OpenResult) {
+    return scoreChoices({ hasWeights: info.hasWeights, scoreColumns: info.scoreColumns })
+  }
+
+  /**
+   * The reader picked a score for *this* panel, in its corner menu.
+   *
+   * The clip goes back to auto, and that is not tidiness: a clip is a pair of
+   * numbers in one score's units, and a balanced matrix is fractions where a
+   * count matrix is integers. Kept across the switch, a perfectly good map is
+   * drawn as a black rectangle from a control the reader never touched — which
+   * is the same argument {@link show} makes for not lending a companion the
+   * lead's clip when the two are drawing different quantities.
+   *
+   * Nothing is published. The hash carries the deck's score, and a panel that
+   * has stepped off it is in the position a local companion is already in
+   * (§16.6): the link says what it can say honestly, which is where the deck as
+   * a whole was pointed.
+   */
+  private pickScore(id: string): void {
+    if (this.scoreOverride === id) return
+    this.scoreOverride = id
+    this.panel?.applyScale({ ...this.look, vmin: undefined, vmax: undefined })
+    this.look = { ...this.look, vmin: undefined, vmax: undefined }
+    // The window this panel is standing on, carried across the read. A score is
+    // a question about the numbers, not about where to look — and a refit here
+    // costs more than one panel's zoom: this map is on the deck's lock, so the
+    // fitted view it came back with would be reported as a gesture and take
+    // every other panel with it.
+    this.panel?.standOn(this.panel.framedWindow())
+    if (this.state !== null) void this.load(this.state)
   }
 
   private async readBlock(
@@ -1010,12 +1065,21 @@ export class MapPanel {
   /**
    * Put a block on screen, building the map the first time.
    *
-   * The panel is built with **no** annotations, no compare, no level toggle and
-   * no score picker. Not an oversight: each of those is a control over
-   * something the deck shares, and offering five copies of a shared control is
-   * five ways for a reader to put the deck out of step with itself. The one
-   * control a companion keeps is its colour scale, because that is the one
-   * thing §16.2 makes per panel.
+   * The panel is built with **no** annotations, no compare and no level toggle.
+   * Not an oversight: each of those is a control over something the deck shares,
+   * and offering five copies of a shared control is five ways for a reader to
+   * put the deck out of step with itself.
+   *
+   * The **score** used to be on that list and is not any more. The argument for
+   * keeping it off was right about the default and wrong about the choice: the
+   * cells of five replicates should be one quantity unless somebody says
+   * otherwise, and "unless somebody says otherwise" needs a control to say it
+   * with. Two ordinary cases had none — a companion carrying a column its lead
+   * has not got, and a pair a reader wants at two normalisations — and both
+   * ended at a picker that does not exist. So the score is offered here, it
+   * starts on whatever the deck resolved, and picking one takes *this* panel off
+   * the shared answer and leaves every other panel where it was
+   * ({@link scoreOverride}).
    */
   private show(result: MatrixResult, info: OpenResult, state: ViewState): void {
     // Recorded before `setData` reads it and on every block, because a panel
@@ -1080,6 +1144,15 @@ export class MapPanel {
         cornerControls: true,
         hideTitle: true,
         caption: { file: fileLabel(this.uri) },
+        // Built from **this** file's columns, not from the lead's: what a
+        // companion's cells can be is a fact about its own `/pixels`, and a
+        // dropdown offering a column this file has not got would refuse the one
+        // thing it appeared to promise.
+        scores: {
+          choices: this.scoreChoicesOf(info),
+          current: this.scoreOf(info, state).id,
+          onChange: (choice) => this.pickScore(choice.id),
+        },
         // The clip a companion arrives at is its own — see {@link applyLook}.
         onScaleChange: (scale) => {
           this.look = scale
@@ -1104,6 +1177,11 @@ export class MapPanel {
     const score = this.scoreOf(info, state)
     this.panel.setScoreLabel(score.label)
     this.panel.setBalanced(score.balance)
+    // …and the picker, which is not the source of the answer while this panel is
+    // still following the deck: the lead's own picker, a link and the back
+    // button can all move the shared score, and a dropdown left on the previous
+    // one is a control lying about the map it sits on.
+    this.panel.syncScoreChoice(score.id)
     this.say('')
     this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
     // Both on every block, not only at construction: a panel outlives a change
@@ -1241,6 +1319,18 @@ export class VacantPanel {
      */
     origin: VacancyOrigin
     onOpen(file: File): void
+    /**
+     * Fill this cell from a **published** file instead of a local one.
+     *
+     * The half that was missing. Every other place in this app that asks for a
+     * file offers both roads — the picker, the Tracks card, the Compare card —
+     * and an empty cell of a deck offered only the one a link cannot carry (§11),
+     * so a reader following a shared deck with a `~` in it could fill the gap
+     * only from their own disk, and the deck they repaired could not be shared
+     * on. The box is folded away because the drop is the commoner gesture, not
+     * because the URL is the lesser one.
+     */
+    onOpenUrl(url: string): void
     onClose(): void
   }) {
     const drawn = props.origin === 'drawn'
@@ -1249,6 +1339,38 @@ export class VacantPanel {
       const file = input.files?.[0]
       if (file !== undefined) props.onOpen(file)
     })
+
+    // The Tracks card's own shape, and the same words: one gesture in this app
+    // for "I have a URL rather than a file", wherever it is asked for.
+    const url = el('input', {
+      class: 'input input-tiny',
+      type: 'url',
+      placeholder: 'https://bucket.example.org/other.cool',
+    })
+    const submit = (): void => {
+      const value = url.value.trim()
+      if (value === '') return
+      url.value = ''
+      props.onOpenUrl(value)
+    }
+    url.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') submit()
+    })
+    const urlBox = el(
+      'details',
+      { class: 'ann-url deck-vacant-url' },
+      el('summary', { text: 'or open one by URL' }),
+      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+    )
+    // **Inside** the zone rather than under it, so the empty cell stays the size
+    // of the map it stands in for: a strip added below would make this cell
+    // taller than the pictures beside it, and a grid row is as tall as its
+    // tallest cell. Which means the presses have to be stopped here — the zone
+    // opens the file chooser on any click, and a caret placed in the box would
+    // put a file dialog over the box the reader was about to type in.
+    urlBox.addEventListener('click', (event) => event.stopPropagation())
+    urlBox.addEventListener('keydown', (event) => event.stopPropagation())
+
     const zone = el(
       'div',
       { class: 'ann-drop deck-drop deck-vacant', attrs: { tabindex: '0', role: 'button' } },
@@ -1259,14 +1381,16 @@ export class VacantPanel {
       el('span', {
         class: 'ann-drop-hint',
         text: drawn
-          ? 'An empty cell of the deck you drew. Drop a cooler on it, or click to choose one, and ' +
-            'it opens in this position under the same navigation as the maps beside it — same ' +
-            'region, same level, its own colour scale. Leaving it empty is fine; the link keeps it.'
+          ? 'An empty cell of the deck you drew. Drop a cooler on it, click to choose one, or ' +
+            'paste a URL below, and it opens in this position under the same navigation as the ' +
+            'maps beside it — same region, same level, its own colour scale. Leaving it empty is ' +
+            'fine; the link keeps it.'
           : 'The link that opened this deck has a cell here with no file a page can fetch by name ' +
             '(§11) — either a local map the sender had open, or a cell they left empty on ' +
-            'purpose. Drop a file here, or click to choose one, and the panel fills in where it ' +
-            'was; the maps either side keep their order.',
+            'purpose. Drop a file here, click to choose one, or paste the URL of a published ' +
+            'one; the panel fills in where it was and the maps either side keep their order.',
       }),
+      urlBox,
       input,
     )
     zone.addEventListener('click', (event) => {
