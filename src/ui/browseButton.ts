@@ -1,12 +1,12 @@
 /**
  * The button that opens the bucket browser, next to every box that takes a URL.
  *
- * Four boxes ask for one: the picker's *open a remote file*, the Tracks card's
- * fold, the Contact maps card's fold, and the deck's add row. All four ask the
- * same question — *which file* — and until now only one of them had an answer
- * for a reader who did not have the URL in their hand, and that answer was
- * behind a dialog for typing secret keys into. This is the same view, offered
- * where the question is asked.
+ * Five boxes ask for one: the picker's *open a remote file*, the Tracks card's
+ * fold, the Contact maps card's fold, the deck's add row, and the fold under an
+ * empty cell of a deck. All five ask the same question — *which file* — and
+ * until now only one of them had an answer for a reader who did not have the URL
+ * in their hand, and that answer was behind a dialog for typing secret keys
+ * into. This is the same view, offered where the question is asked.
  *
  * ## Why it is always there
  *
@@ -22,7 +22,7 @@
  *
  * So the import can be dynamic. The browser pulls in the listing parser and the
  * modal, ~8 kB that a session opening a public demo never touches, and a static
- * import from four cards would put all of it in the entry chunk to render a
+ * import from five cards would put all of it in the entry chunk to render a
  * button nobody pressed. Nothing here but `dom.ts` and a type.
  */
 

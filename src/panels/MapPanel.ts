@@ -62,6 +62,7 @@ import {
 } from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
+import { bucketBrowseButton } from '../ui/browseButton'
 import { button, el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
@@ -1354,7 +1355,17 @@ export class VacantPanel {
       'details',
       { class: 'ann-url deck-vacant-url' },
       el('summary', { text: 'or open one by URL' }),
-      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+      el(
+        'div',
+        { class: 'ann-url-row' },
+        url,
+        button('add', submit, { class: 'btn' }),
+        // The fifth box that asks for a file URL, and it gets the same answer
+        // the other four do (`ui/browseButton.ts`): a reader repairing a shared
+        // deck is exactly the one who does not have the URL in their hand, since
+        // what the link left here is a `~` where somebody else's file was.
+        bucketBrowseButton((picked) => props.onOpenUrl(picked)),
+      ),
     )
     // **Inside** the zone rather than under it, so the empty cell stays the size
     // of the map it stands in for: a strip added below would make this cell

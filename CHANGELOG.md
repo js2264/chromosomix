@@ -49,10 +49,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   published cooler and a deck in front of them had a drop rectangle for a local
   file and no way at all to name a remote one, which is the road §11 exists for.
   The deck's bar now opens with **add a map…**, and every empty cell carries its
-  own folded *or open one by URL* under the drop hint — typed there it fills
-  *that* cell rather than the first empty one, which matters in a 2 × 2 with
-  three gaps. The box lives inside the drop zone rather than under it, so an
-  empty cell stays exactly the size of the map it stands in for.
+  own folded *or open one by URL* under the drop hint — with a `browse…` beside
+  it, like every other box in the app that takes a file URL. Typed there it
+  fills *that* cell rather than the first empty one, which matters in a 2 × 2
+  with three gaps. The box lives inside the drop zone rather than under it, so
+  an empty cell stays exactly the size of the map it stands in for.
 
   It is the half that makes a shared deck repairable. A link carries a local
   companion as `~` (§16.6), so the recipient meets a cell they could previously
