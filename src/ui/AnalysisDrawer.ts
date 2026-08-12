@@ -81,12 +81,24 @@ import {
   type TaskResult,
 } from '../analysis/types'
 import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
+import { combineResults } from '../analysis/combine'
+import { profileCurve } from './analysisPlots'
+import { interactiveCurve, interactiveMatrix } from './interactivePlot'
+import type { MapId } from '../annotations/placement'
+import type { RunTarget } from '../analysis/runner'
+import type { CurveOutput } from '../analysis/types'
+
+/**
+ * The tab that is not a map: every map's curves on one axis.
+ *
+ * A sentinel rather than `null`, because `null` already means *no choice yet*
+ * and the two lead to different pictures — the first map's, and all of them.
+ */
+const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
 import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText } from './AnalysisPanelCard'
 import {
-  curveFigure,
-  matrixFigure,
   profileFigure,
   tableFigure,
   type PlotFigure,
@@ -333,6 +345,16 @@ function figureBox(host: HTMLElement): { width: number; height: number } {
  * in a directory listing, and two implementations of one naming rule is how one
  * of them stops doing that.
  */
+/** A label as a filename: lower case, words joined by hyphens, nothing else. */
+function plainName(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'figure'
+  )
+}
+
 function exportName(output: TaskOutput, provenance: Provenance, stamp: string, ext: string): string {
   return tsvName(provenance.task, output, stamp).replace(/\.tsv$/, `.${ext}`)
 }
@@ -376,6 +398,13 @@ export class AnalysisDrawer {
     // read as meaning something.
     style: { display: 'flex', flexDirection: 'column', gap: '0.8rem' },
   })
+  /**
+   * One tab per map that has a result for this task, plus *all maps*.
+   *
+   * Hidden with fewer than two, which is every session that is not a deck —
+   * a tab strip over one thing is furniture.
+   */
+  private readonly mapsEl = el('div', { class: 'analysis-maps hidden' })
   /** Where an export that could not be written says so. */
   private readonly statusEl = el('div', { class: 'analysis-note hidden' })
 
@@ -386,6 +415,17 @@ export class AnalysisDrawer {
   private figures: Array<{ destroy(): void }> = []
   /** The result the output blocks were built from, compared by identity. */
   private drawn: TaskResult | null = null
+  /**
+   * Which map's result is on screen — a `MapId`, or `ALL_MAPS` for the overlay.
+   *
+   * Held per task, because walking a deck's panels on one task and then opening
+   * another should not put the reader back on panel one: the choice is about the
+   * *comparison* they are making, and that survives changing which quantity they
+   * are comparing.
+   */
+  private readonly chosenMap = new Map<string, MapId | typeof ALL_MAPS>()
+  /** Set while the combined figure is drawn, so the exports know what they are. */
+  private combined = false
   /** The dragged width, or `null` for "however wide the default says". */
   private width: number | null = readStoredWidth()
 
@@ -471,6 +511,7 @@ export class AnalysisDrawer {
         this.noteEl,
         this.recordEl,
         this.notesEl,
+        this.mapsEl,
         this.outputsEl,
         this.statusEl,
       ),
@@ -557,9 +598,17 @@ export class AnalysisDrawer {
     const context = this.options.context()
     this.titleEl.textContent = task.title
     this.syncForm(task, context)
-    const result = this.options.runner.resultOf(task.id)
-    this.syncOutputs(result)
-    this.syncFraming(result)
+    const across = this.options.runner.resultsFor(task.id)
+    this.syncMaps(task, across)
+    const chosen = this.chosenMap.get(task.id)
+    const result =
+      chosen === ALL_MAPS
+        ? null
+        : (across.find((entry) => entry.target.map === chosen)?.result ??
+          this.options.runner.resultOf(task.id))
+    if (chosen === ALL_MAPS && across.length > 1) this.syncCombined(across)
+    else this.syncOutputs(result)
+    this.syncFraming(result ?? across[0]?.result ?? null)
     this.syncRun(task, context)
   }
 
@@ -814,6 +863,143 @@ export class AnalysisDrawer {
   }
 
   // -------------------------------------------------------------------------
+  // Which map's figures are on screen
+  // -------------------------------------------------------------------------
+
+  /**
+   * The tab strip: one map per tab, `all maps` last, arrows either side.
+   *
+   * Both navigations are here because they answer different questions. A reader
+   * checking whether panel three looks like panel two wants **next** and wants
+   * to press it repeatedly without aiming; a reader who knows they want the
+   * fourth library wants to click its name. Offering only the first makes a deck
+   * of six tedious, and only the second makes a comparison a series of small
+   * aiming tasks.
+   */
+  private syncMaps(
+    task: AnalysisTask,
+    across: ReadonlyArray<{ target: RunTarget; result: TaskResult }>,
+  ): void {
+    if (across.length < 2) {
+      this.mapsEl.classList.add('hidden')
+      this.mapsEl.replaceChildren()
+      // Not remembered: a task whose deck has gone back to one map has one
+      // answer, and a stale `ALL_MAPS` would draw an overlay of one line.
+      this.chosenMap.delete(task.id)
+      return
+    }
+    const stops: Array<MapId | typeof ALL_MAPS> = [
+      ...across.map((entry) => entry.target.map),
+      ALL_MAPS,
+    ]
+    const chosen = this.chosenMap.get(task.id) ?? stops[0]
+    const go = (to: MapId | typeof ALL_MAPS): void => {
+      this.chosenMap.set(task.id, to)
+      // Forced: the next `refresh` compares results by identity, and stepping
+      // from one map to another can land on the *same* object where a composite
+      // reused an upstream. Without this the tab lights up and the figures do
+      // not change, which reads as the tab being broken.
+      this.drawn = null
+      this.refresh()
+    }
+    const step = (by: number): void => {
+      const at = stops.indexOf(chosen)
+      go(stops[(at + by + stops.length) % stops.length])
+    }
+
+    this.mapsEl.classList.remove('hidden')
+    this.mapsEl.replaceChildren(
+      iconButton('chevron-left', 'The previous map', () => step(-1), { class: 'btn-quiet' }),
+      ...across.map((entry) =>
+        button(entry.target.label, () => go(entry.target.map), {
+          class: `btn btn-quiet analysis-map${entry.target.map === chosen ? ' is-on' : ''}`,
+          title: `The result measured on ${entry.target.label}`,
+        }),
+      ),
+      button('all maps', () => go(ALL_MAPS), {
+        class: `btn btn-quiet analysis-map${chosen === ALL_MAPS ? ' is-on' : ''}`,
+        title: 'Every map\u2019s curves on one axis — the comparison the deck was opened for',
+      }),
+      iconButton('chevron-right', 'The next map', () => step(1), { class: 'btn-quiet' }),
+    )
+  }
+
+  /**
+   * The overlay: every map's curves on one set of axes.
+   *
+   * Not a `TaskResult`, and therefore not routed through {@link syncOutputs}: it
+   * has no single provenance, so it has no framing line, no *recompute*, and no
+   * TSV — the per-map tabs are where a number with one origin is exported from.
+   * What it has is the picture, and PNG and PDF of the picture.
+   */
+  private syncCombined(across: ReadonlyArray<{ target: RunTarget; result: TaskResult }>): void {
+    this.drawn = null
+    this.combined = true
+    this.clearFigures()
+    this.setStatus('')
+    this.notesEl.classList.add('hidden')
+    this.recordEl.classList.remove('hidden')
+    this.recordNote.textContent = `${across.length} maps, overlaid`
+
+    const { curves, perMapOnly } = combineResults(
+      across.map((entry) => ({ label: entry.target.label, result: entry.result })),
+      (output) =>
+        output.kind === 'curve'
+          ? output
+          : output.kind === 'profile'
+            ? profileCurve(output)
+            : null,
+    )
+
+    const blocks: HTMLElement[] = curves.map((curve) => this.combinedBlock(curve))
+    if (perMapOnly.length > 0) {
+      blocks.push(
+        el('p', {
+          class: 'analysis-elsewhere',
+          text:
+            `${perMapOnly.join(', ')} ${perMapOnly.length === 1 ? 'is' : 'are'} one picture per ` +
+            'map rather than one across them — a pileup averaged over four libraries would be a ' +
+            'fifth thing nobody asked for. They are on the tabs above.',
+        }),
+      )
+    }
+    if (blocks.length === 0) {
+      blocks.push(
+        el('p', {
+          class: 'analysis-elsewhere',
+          text: 'Nothing this task produces can be drawn across maps. Its tabs are above.',
+        }),
+      )
+    }
+    this.outputsEl.replaceChildren(...blocks)
+    this.paintWidth()
+  }
+
+  /** One overlaid curve, with the two exports that mean anything for it. */
+  private combinedBlock(curve: CurveOutput): HTMLElement {
+    const figure = interactiveCurve(curve)
+    this.figures.push(figure)
+    return el(
+      'div',
+      { class: 'analysis-figure' },
+      el(
+        'div',
+        { class: 'analysis-figure-head' },
+        el('span', { class: 'analysis-figure-title', text: curve.label }),
+        button('PNG', () => void this.savePngPlain(figure, curve.label), {
+          class: 'btn btn-quiet',
+          title: `The figure as a raster, redrawn at ${FIGURE_EXPORT_DPI} dpi`,
+        }),
+        button('PDF', () => void this.savePdfPlain(figure, curve.label), {
+          class: 'btn btn-quiet',
+          title: 'The figure as a true vector page',
+        }),
+      ),
+      figure.el,
+    )
+  }
+
+  // -------------------------------------------------------------------------
   // The framing
   // -------------------------------------------------------------------------
 
@@ -860,7 +1046,8 @@ export class AnalysisDrawer {
    * while the *next* job reports progress.
    */
   private syncOutputs(result: TaskResult | null): void {
-    if (result === this.drawn) return
+    if (result === this.drawn && !this.combined) return
+    this.combined = false
     this.drawn = result
     this.clearFigures()
     this.setStatus('')
@@ -914,13 +1101,18 @@ export class AnalysisDrawer {
     if (output.kind === 'profile' && this.options.hasLanes()) {
       return this.elsewhere(output, provenance)
     }
+    // The interactive wrappers rather than the bare figures, for `curve` and
+    // `matrix`. Both are `PlotFigure`s of a *derived* output, so the PNG and the
+    // PDF below draw whatever the reader has set rather than what the task
+    // returned — which is the point (`ui/interactivePlot.ts`). A profile drawn
+    // here is a curve too, and gets the same controls by the same route.
     const figure: PlotFigure | TableFigure =
       output.kind === 'curve'
-        ? curveFigure(output)
+        ? interactiveCurve(output)
         : output.kind === 'matrix'
-          ? matrixFigure(output)
+          ? interactiveMatrix(output)
           : output.kind === 'profile'
-            ? profileFigure(output)
+            ? interactiveCurve(profileCurve(output))
             : tableFigure(output)
     this.figures.push(figure)
     const drawable = isDrawable(figure) ? figure : null
@@ -1082,6 +1274,47 @@ export class AnalysisDrawer {
    * export at some other width would be a different figure. Only the density
    * changes.
    */
+  /**
+   * PNG and PDF for a figure that is not one run's output.
+   *
+   * The combined overlay has no single provenance — that is what makes it a
+   * comparison rather than a result — so it cannot use {@link exportName}, which
+   * builds a filename out of a task and a framing. It gets the figure's own
+   * label and the timestamp, which is what a reader assembling a figure needs
+   * from a filename anyway.
+   */
+  private async savePngPlain(figure: PlotFigure, label: string): Promise<void> {
+    try {
+      const box = figureBox(figure.el)
+      const scale = scaleForDpi(FIGURE_EXPORT_DPI)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(box.width * scale))
+      canvas.height = Math.max(1, Math.round(box.height * scale))
+      const ctx = canvas.getContext('2d')
+      if (ctx === null) throw new Error('The browser would not give this page a canvas.')
+      ctx.setTransform(scale, 0, 0, scale, 0, 0)
+      figure.draw(ctx, box)
+      downloadBlob(await canvasToPng(canvas), `${plainName(label)}-${fileStamp(new Date())}.png`)
+      this.setStatus('')
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  private async savePdfPlain(figure: PlotFigure, label: string): Promise<void> {
+    try {
+      const box = figureBox(figure.el)
+      const now = new Date()
+      const page = new VectorPage(box.width, box.height)
+      figure.draw(page.ctx, box)
+      const blob = await page.toBlob({ title: label, created: now })
+      downloadBlob(blob, `${plainName(label)}-${fileStamp(now)}.pdf`)
+      this.setStatus('')
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   private async savePng(
     figure: PlotFigure,
     output: TaskOutput,

@@ -6850,3 +6850,102 @@ canvas.is-frozen {
 .share-body .hint.warn {
   color: var(--warn, #b45309);
 }
+
+/* The analysis drawer's map tabs and the interactive plot controls.
+
+   The tab strip only appears with two or more maps, so it never costs a
+   single-map session any height. The controls row is above its figure rather
+   than below because a reader reaches for `log x` before reading the plot, not
+   after. */
+.analysis-maps {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.analysis-map.is-on {
+  border-color: var(--accent, currentColor);
+  font-weight: 600;
+}
+
+.plot-interactive {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.plot-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+}
+
+.plot-controls .btn.is-on {
+  border-color: var(--accent, currentColor);
+  font-weight: 600;
+}
+
+.plot-series.is-off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.plot-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 0.15rem;
+}
+
+.plot-readout {
+  margin-left: auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.72rem;
+  color: var(--fg-quiet, inherit);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plot-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.plot-number {
+  width: 5.5rem;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-inset, var(--bg));
+  color: var(--fg);
+}
+
+.plot-select {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.2rem;
+}
+
+/* The plot body is the positioning context for the drag marquee, which is a
+   plain div rather than something drawn on the canvas: drawing it would mean a
+   redraw per pointer move, and it would then be in the exported figure. */
+.plot-body {
+  position: relative;
+}
+
+.plot-marquee {
+  position: absolute;
+  top: 0;
+  bottom: 1.6rem;
+  background: color-mix(in srgb, var(--accent, #3b82f6) 18%, transparent);
+  border-left: 1px solid var(--accent, #3b82f6);
+  border-right: 1px solid var(--accent, #3b82f6);
+  pointer-events: none;
+}

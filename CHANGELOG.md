@@ -14,6 +14,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A deck's results stop overwriting each other, and become one figure.** Three
+  things, and the first was a defect rather than a gap.
+
+  `runAll` has computed one result per panel since the deck existed, and the
+  runner stored them keyed by **task alone** — so the fourth library overwrote
+  the third overwrote the second. What a batch of four left behind was four
+  synthetic tracks and *one* plot: the tracks were filed per map and the figures
+  were not. The same map also serves as the composite cache (§18.2), and a recipe
+  is params plus framing, and **a batch shares one framing across every target**
+  — it is taken once, when Run is pressed. So the reuse test could not see that
+  cached eigenvectors were measured on a different file, and a saddle run over a
+  deck drew panel B's compartments out of panel A's numbers. Silently, and only
+  for the composites. Results are keyed by map and task now, which fixes both.
+
+  With four results to show, the drawer grew **tabs**: one per map, arrows either
+  side, and `all maps` last. Both navigations, because they answer different
+  questions — a reader checking whether panel three looks like panel two presses
+  *next* repeatedly without aiming, and a reader who wants the fourth library
+  clicks its name.
+
+  `all maps` is the **overlay**: every map's curves on one set of axes, the
+  series named by the map. This is not §18.9's refused differential and the
+  distinction is exact: that declined a *subtraction*, on the grounds it is a
+  worse version of a picture the app can already make. Four P(s) curves on one
+  axis is not a subtraction, derives nothing, and is a picture the app could not
+  make — the single most-drawn figure in the literature and the reason people
+  leave a browser. The machinery was all here and unconnected: `CurveOutput` has
+  been multi-series with a legend and band drawing since it was written.
+
+  A matrix and a table stay per map, and the tab **says which** rather than
+  showing three of a task's five outputs and letting the reader assume that is
+  all there are. A pileup averaged over four libraries would be a fifth thing
+  nobody asked for.
+
+- **The figures answer questions now.** Log toggles per axis, a series picker
+  (alt-click a chip to isolate it), a hover readout, a drag across the plot to
+  zoom an x range, double-click to reset — and, for a pileup or a saddle, its
+  colour range and colormap.
+
+  No chart library, and no second renderer. The whole technique is that **an
+  interactive figure is a plain figure of a derived output**: a log axis is a
+  `CurveOutput` with `xScale: 'log'` handed to the same `drawCurve`, a hidden
+  series is one with fewer entries, a zoom is one whose series are clipped to the
+  dragged range. So the PNG is still a redraw and the PDF is still true vector —
+  and, the property worth the most, **the export is what is on screen**. A reader
+  who zooms into the first decade of a P(s) and presses PDF gets that picture,
+  at vector resolution, with its axes relabelled for the range it shows. A canvas
+  transform would have given them the whole curve behind a clipping rectangle.
+
 - **Share: the whole session as a link.** §5.5 says the URL carries what is being
   looked at and the session *file* says the rest; both stay true, and neither
   serves the case between them — somebody wants to send a colleague what they are
