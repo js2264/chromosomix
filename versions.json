@@ -1,6 +1,13 @@
 {
-  "latest": "b88b825",
+  "latest": "9e9ed3b",
   "versions": [
+    {
+      "commit": "9e9ed3b",
+      "version": "0.10.0",
+      "date": "2026-08-12T12:01:45+02:00",
+      "subject": "Fix the desktop header's broken mark; suspend the Windows release leg",
+      "tag": ""
+    },
     {
       "commit": "b88b825",
       "version": "0.10.0",
