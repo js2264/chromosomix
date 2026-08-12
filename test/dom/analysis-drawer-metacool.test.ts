@@ -144,6 +144,9 @@ function runnerWith(finished: TaskResult, deck: readonly FakeTarget[] = []): Ana
     // Empty is one map, so the drawer offers no batch — see
     // `AnalysisRunner.targets`.
     targets: () => deck,
+    // The batch button counts the grid and waits for it; see `AnalysisRunner`.
+    targetCount: () => deck.length,
+    readyTargets: async () => deck,
     // The starred one, which on this deck is the second.
     target: () => deck[1] ?? null,
     cancel: () => {},

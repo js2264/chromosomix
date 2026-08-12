@@ -110,6 +110,15 @@ describe('a companion’s score picker', () => {
     expect(fit.select().value).toBe('balanced')
   })
 
+  it('leads the menu, in the order the Map card puts the same five fields', () => {
+    // What the numbers *are*, before how they are transformed, ramped and
+    // clipped — the question the other three answer about. A corner menu that
+    // put it last was the same five fields in a different order on a companion.
+    const fit = harness()
+    expect(fieldsIn(fit.panel.el.querySelector('.map-settings'))[0]).toBe('score')
+    expect(fieldsIn(harness({ corner: false }).panel.controlsEl)[0]).toBe('score')
+  })
+
   it('reports the choice, resolved to the entry rather than to its id', () => {
     const fit = harness()
     fit.select().value = 'balanced'

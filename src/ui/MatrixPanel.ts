@@ -1456,17 +1456,22 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      valueFields.push(
-        field(
-          'score',
-          select,
-          'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
-            'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
-            'dropped have no weight and show as blank. Anything below those is a further column ' +
-            'this file carries in /pixels, under its own name.',
-        ),
+      const scoreField = field(
+        'score',
+        select,
+        'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
+          'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
+          'dropped have no weight and show as blank. Anything below those is a further column ' +
+          'this file carries in /pixels, under its own name.',
       )
-      controls.unshift(valueFields[valueFields.length - 1])
+      // **First in both**, and not merely first in the card. It leads the Map
+      // card because it is the question the other three answer *about* — what
+      // the numbers are, before how they are transformed, ramped and clipped —
+      // and a corner menu that put it last was the same five fields in a
+      // different order on a companion. `unshift` on each, so the two lists
+      // cannot drift the next time one of them gains a field.
+      valueFields.unshift(scoreField)
+      controls.unshift(scoreField)
     }
 
     if (options.compare !== undefined) {

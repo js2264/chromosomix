@@ -128,6 +128,10 @@ function runnerWith(entries: Array<{ target: RunTarget; result: TaskResult }>): 
     run: () => {},
     runAll: () => {},
     targets: () => entries.map((entry) => entry.target),
+    // The two the batch button reads: how many maps it will end up covering,
+    // and the list once the ones still opening have answered.
+    targetCount: () => entries.length,
+    readyTargets: async () => entries.map((entry) => entry.target),
     target: () => entries[0]?.target ?? null,
     cancel: () => {},
   } as unknown as AnalysisRunner

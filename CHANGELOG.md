@@ -576,6 +576,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   expected to fail this way. `docs/hosting.md` carried the same claim and no
   longer does.
 
+- **A batch ran on fewer maps than its own button counted.** *Run on all N maps*
+  over a freshly opened deck ran on the ones that happened to be ready and left
+  the rest behind — and said nothing, because a result that never arrives looks
+  exactly like a task that had nothing to report. Pressing again worked, which
+  made a question about timing look like a question about the file.
+
+  A companion opens to *draw a picture*: the two tables an analysis needs are a
+  further pair of reads it makes only when it is starred or batched, so an
+  eight-panel deck does not fetch sixteen tables to show eight rectangles. The
+  batch took the list of maps that could answer *at that instant*. It now waits
+  for the ones still opening — every panel at once, since these are two small
+  reads against workers that already exist — and the button counts every cell in
+  the grid rather than only the ready ones, because every cell is going to be
+  run on. A panel that genuinely cannot answer is still left out, and its own
+  note already says why.
+
 - **Dragging a lane on a companion moved the first map's lane instead.** The
   handle on a track's lane is dragged onto another edge to move it there, and on
   a companion it moved the wrong picture: the track jumped to the edge on the
@@ -611,6 +627,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   lead and a companion is not rearranged: the lead's lane is not going anywhere,
   and moving it to wherever the departing copy sat would be the close changing
   something nobody asked it to.
+
+- **The score sat last in a companion's corner menu and first in the Map card.**
+  The same five fields in two orders, on two maps of one deck. It leads both
+  now, which is where it belongs: what the numbers *are* is the question the
+  transform, the ramp and the clip all answer about.
 
 - **A computed track had no way to say which map it belongs to.** §18.5's whole
   claim is that a per-bin result *is* a track — same colour chip, same name,

@@ -100,6 +100,16 @@ export interface AnalysisWorkspaceHost {
   /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
   allTargets?(): readonly RunTarget[]
   /**
+   * The same, once every map still opening has answered — what a batch runs on.
+   *
+   * See `Session`'s implementation for why the two are not one: the synchronous
+   * answer leaves out a companion whose two tables have not been read, and a
+   * batch that took it would run on fewer maps than its own button counted.
+   */
+  allTargetsReady?(): Promise<readonly RunTarget[]>
+  /** How many maps a batch will end up covering, ready or not. */
+  targetCount?(): number
+  /**
    * Every map a lane may be drawn on, named — what the Tracks card is given.
    *
    * Not {@link allTargets}, which lists the maps an analysis can *run against*
@@ -218,6 +228,12 @@ export class AnalysisWorkspace {
         return out
       },
       allTargets: () => this.host.allTargets?.() ?? [],
+      ...(this.host.allTargetsReady === undefined
+        ? {}
+        : { allTargetsReady: () => this.host.allTargetsReady?.() ?? Promise.resolve([]) }),
+      ...(this.host.targetCount === undefined
+        ? {}
+        : { targetCount: () => this.host.targetCount?.() ?? 0 }),
       finished: (task, result, target) => this.adopt(task, result, target),
     }
     this.runner = new AnalysisRunner(runnerHost)
