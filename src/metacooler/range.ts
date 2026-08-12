@@ -246,9 +246,18 @@ export function parseMetacoolerRange(
   // applies to those names hardest of all.
   const matched = (mc.names ?? indexOf(mc)).find(label, { from: context })
   if (matched !== null) {
+    // Answered here rather than by re-entering this function with the rewritten
+    // string. A second pass would start again at the *genome* test, and in a
+    // metacool whose MAGs are numerically named a contig matched across
+    // conventions would come back as a genome — or, with a coordinate suffix on
+    // it, as `genome-coordinate-suffix`. What was matched is a contig; this
+    // says so, and it is the only way `parseMetacoolerRange` can be reached
+    // twice for one string.
     const suffix = rangeStr.slice(label.length)
     return {
-      ...parseMetacoolerRange(mc, `${matched.name}${suffix}`, context),
+      kind: 'contig',
+      label: matched.name,
+      extent: mc.extent(`${matched.name}${suffix}`),
       matched,
     }
   }

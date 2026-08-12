@@ -165,12 +165,13 @@ const DB_TAGS = new Set([
   'pdb',
   'ena',
   'bbs',
-  // `gnl` is what Prokka emits under `--centre`, and it decorates exactly the
-  // metagenomic contigs whose names must not be reduced by accident.
-  'gnl',
-  'gim',
-  'pat',
 ])
+// **`gnl` is deliberately absent**, and it is the one anybody would add. NCBI's
+// `gnl|db|id` names a sequence by *both* remaining fields, so reducing it to
+// the last one throws the database away — and `gnl|MAG_042|NODE_1` and
+// `gnl|MAG_007|NODE_1` would then both become `NODE_1`, which is two organisms'
+// first contigs collided at tier `exact`. Left unrecognised, the whole string is
+// the name, which is what it is.
 
 /**
  * Strip a name down to the token that identifies it.
@@ -661,7 +662,13 @@ export function canonicalise(name: string, context: NameContext): Canon {
   const refseq = REFSEQ_ACCESSION.exec(unversioned)
   if (refseq !== null) {
     via.push('accession')
-    const chromosome = refseqChromosome(Number(refseq[2]))
+    // **`NC_` only.** The prefixes share one digit space and mean different
+    // things: `NC_000001` is human chromosome one and `NW_000001` is a scaffold
+    // that happens to have been allocated the same number. Reading the digits
+    // without the prefix turns every `NW_`, `NT_`, `NZ_` and `NG_` in the
+    // human and mouse ranges into a chromosome.
+    const chromosome =
+      refseq[1].toLowerCase() === 'nc' ? refseqChromosome(Number(refseq[2])) : null
     // A RefSeq accession this module can name is keyed as the chromosome, so
     // `NC_000001.11` and `chr1` land in one bucket. One it cannot is still an
     // accession, and two files writing the same one still meet.
@@ -924,6 +931,16 @@ export class NameIndex {
     // ten, and the only thing that can say otherwise is the list it came from —
     // which is precisely what this path does not have. `L` goes with it: a
     // fiftieth chromosome is not a thing, so a bare `L` is a name.
+    //
+    // What that leaves reaching this line as a *single letter* is `I` and `V`
+    // and nothing else — `M` and `C` were taken by the organelles long before
+    // here, and `D` is not a numeral in this module at all. Both are allowed on
+    // purpose: a sequence called `I` that is not the first chromosome, or `V`
+    // that is not the fifth, is not a file anybody has. This is deliberately
+    // more permissive than {@link readsAsRoman}, which rejects every single
+    // letter — but that function is *voting on what a list is*, where one
+    // ambiguous letter must not decide anything, and this one is resolving a
+    // name that has already failed every stricter test.
     if (!context.roman) {
       const body = bodyOf(name).toLowerCase()
       if (body !== 'x' && body !== 'l' && romanValue(body) > 0) {
@@ -1149,6 +1166,16 @@ export function renameInto(
     sourceOf.set(match.name, sequence.name)
     return match.name
   })
+  // Every source name also answers to **itself**, where nothing has claimed it.
+  // Without this a reader that can only be queried by `sourceOf` — a bigWig,
+  // whose refNames are a fact about the file — goes silent the moment there is
+  // nothing to align against: an empty map contig list, which is what a failed
+  // contigs read leaves behind, produced an empty translation and a lane that
+  // drew nothing for the rest of the session. Matches are set first and are not
+  // overwritten, so an alignment always wins over the identity.
+  for (const sequence of source) {
+    if (!sourceOf.has(sequence.name)) sourceOf.set(sequence.name, sequence.name)
+  }
   return { names, sourceOf, renamed: alignment.renamed, contested: alignment.contested }
 }
 

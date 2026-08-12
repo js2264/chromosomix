@@ -311,6 +311,47 @@ describe('what must not be equated', () => {
     expect(contextOf(yeast).xIsTen).toBe(true)
   })
 
+  it('reads only NC_ accessions as chromosomes, never their neighbours', () => {
+    // The RefSeq prefixes share one digit space and mean different things.
+    // `NC_000001` is human chromosome one; `NW_000001` is a scaffold that
+    // happens to have been allocated the same number.
+    const human = ['chr1', 'chr2', 'chrX']
+    expect(found(human, 'NC_000001.11')).toBe('chr1')
+    for (const other of ['NW_000001.1', 'NT_000001.1', 'NZ_000001.1', 'NG_000001.1']) {
+      expect(found(human, other), other).toBeNull()
+    }
+    // They are still accessions, so two files writing the same one still meet.
+    expect(found(['NW_000001.1'], 'NW_000001.1')).toBe('NW_000001.1')
+  })
+
+  it('resolves a bare I and V, and nothing else a single letter could be', () => {
+    // Deliberately more permissive than the Roman *vote*, which rejects every
+    // single letter: a sequence called `I` that is not the first chromosome is
+    // not a file anybody has. `X` and `L` stay out — `X` is the sex chromosome
+    // far more often than it is ten, and only its own list can say otherwise.
+    const numbered = ['1', '2', '3', '4', '5', '6', '10']
+    expect(found(numbered, 'I')).toBe('1')
+    expect(found(numbered, 'V')).toBe('5')
+    expect(found(numbered, 'X')).toBeNull()
+    expect(found(numbered, 'L')).toBeNull()
+    expect(found(numbered, 'D')).toBeNull()
+    // And the two that the organelles took first.
+    expect(found([...numbered, 'MT'], 'M')).toBe('MT')
+    expect(found([...numbered, 'Pt'], 'C')).toBe('Pt')
+  })
+
+  it('lets a track answer to its own names when there is nothing to align to', () => {
+    // A bigWig is queried by the file's own refNames, so the translation is the
+    // only way in. An empty map contig list — what a failed contigs read leaves
+    // behind — must not empty it and silence the lane for the session.
+    const renaming = renameInto(sequencesOf(['chr1', 'chr2']), [])
+    expect(renaming.names).toEqual(['chr1', 'chr2'])
+    expect(renaming.sourceOf.get('chr1')).toBe('chr1')
+    // An alignment always wins over the identity.
+    const aligned = renameInto(sequencesOf(['chr1']), sequencesOf(['1']))
+    expect(aligned.sourceOf.get('1')).toBe('chr1')
+  })
+
   it('does not mistake a genus beginning “Chr” for a chromosome prefix', () => {
     // `Christensenella_1` begins with `Chr` and `Chromobacterium_ctg1` with
     // `Chrom`. Stripped on sight they become `istensenella_1` and
@@ -437,7 +478,9 @@ describe('renaming a track into a map’s vocabulary', () => {
     expect(renaming.renamed).toBe(2)
     // The way back, for a reader that cannot be rewritten — a bigWig's refNames.
     expect(renaming.sourceOf.get('1')).toBe('chr1')
-    expect(renaming.sourceOf.has('chrUnplaced')).toBe(false)
+    // An unmatched name still answers to itself, so a track never loses the
+    // ability to be queried by a name it genuinely has.
+    expect(renaming.sourceOf.get('chrUnplaced')).toBe('chrUnplaced')
   })
 
   it('renames nothing where a track is about another genome', () => {

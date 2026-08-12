@@ -80,7 +80,7 @@ export function neighbour(names: string[], current: string, delta: number): stri
  * The name handed back is always **this file's**, whichever spelling arrived,
  * because every caller goes on to index a list with it.
  */
-export function contigOf(region: string, names: string[]): string | null {
+export function contigOf(region: string, names: readonly string[]): string | null {
   if (names.includes(region)) return region
   const colon = region.lastIndexOf(':')
   const head = colon < 0 ? null : region.slice(0, colon)
