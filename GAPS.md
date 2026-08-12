@@ -1,5 +1,22 @@
 # Feature gap analysis
 
+> **Status, 2026-08-12.** Six of the eleven items below are built and on
+> `claude/feature-gap-analysis-ri17pl`: **G1** (`.hic`), **G3** (per-map results,
+> the overlay, interactive figures), **G4** (`metacooler-run`, as a CLI rather
+> than as emitted snippets), **G5** (found already landed; the equivalence suite
+> it was waiting on is now written), **G6** (tabix) and **G8** (bedGraph and
+> wig). A Share button was built in place of G7's embed mode. What remains
+> unbuilt is **G2**, **G7**, **G9**, **G10** and **G11** — and G2 is still the
+> highest-value item in the document.
+>
+> Three defects were found on the way and are worth naming here, because each was
+> silent: `.hic` is little-endian and a self-consistent reader and writer had
+> agreed it was not; a v9 straddle clause lost every near-diagonal block while
+> leaving the distant ones correct; and a deck's analysis results were keyed by
+> task alone, so a batch of four kept one figure and a saddle over a deck drew
+> panel B's compartments out of panel A's numbers.
+
+
 A scan of the source and of every companion document, against one question: **what would a reader
 of this app go and open a different tool for?**
 
