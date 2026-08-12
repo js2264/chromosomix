@@ -355,6 +355,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Windows installers are temporarily not built.** The `--win` leg of the
+  release workflow is commented out, so releases carry the macOS and Linux
+  installers and no `.exe`. Nothing about the target changed — `npx
+  electron-builder --win` still works from a clone — and the leg is left in
+  place, commented, so restoring it is uncommenting three lines. `fail-fast:
+  false` meant the other legs never depended on it, and `collect` attaches
+  whatever artifacts exist. `docs/desktop.md` and the release body say so, and
+  both point Windows readers at the standalone HTML page, which needs no
+  installer anywhere.
+
 - **A folded column leaves a tab rather than nothing.** Folding one used to take
   it out of the layout entirely, which left the four marks up in the header as the
   only sign it existed — and a mark in the window furniture says neither which
@@ -389,6 +399,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   What is behind this one is the file and what can be read off it.
 
 ### Fixed
+
+- **The desktop app's header carried a broken image, in every release that had
+  one.** `publicDir` is off for that target — deliberately, and it is one of the
+  two guards that no dataset reaches the installer — so the one file from
+  `public/` the renderer actually asks for, `icon-192.png`, was never emitted and
+  `markUrl()` resolved to nothing.
+
+  The pinned build had hit this first and solved it privately, with a nine-line
+  plugin inside its own config; the desktop config was written afterwards by
+  somebody who had no way to know there was a problem to solve. So the plugin is
+  now `scripts/shell-icon.mjs` and both configs call it — the same argument
+  `pwa-tags.mjs` makes for itself in its own docstring, arrived at from the other
+  direction. The next config to switch `publicDir` off inherits the fix rather
+  than the bug.
+
+  Emitted rather than inlined as a data URI, which is what the standalone target
+  does: the desktop renderer has no size pressure, `img-src 'self'` already
+  covers it, and there is still exactly one drawing of the mark.
 
 - **Hand-drawn marks were lost on a change of resolution.** Placing two marks on
   a map at 2 kb and picking 5 kb in the breadcrumb drew an unmarked map, in a

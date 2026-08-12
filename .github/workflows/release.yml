@@ -88,9 +88,23 @@ jobs:
           - id: mac
             os: macos-15
             args: --mac
-          - id: win
-            os: windows-latest
-            args: --win
+          # TEMPORARILY DISABLED — Windows installers are not built or attached.
+          #
+          # Commented rather than deleted, and kept in place rather than moved
+          # to the bottom, so restoring it is uncommenting three lines and not
+          # reconstructing them. `fail-fast: false` above means the other legs
+          # were never depending on this one, and `collect` attaches whatever
+          # artifacts exist, so nothing else needs changing either way.
+          #
+          # Two things must come back *with* it: the release-body paragraph
+          # below says which platforms warn about an unsigned installer, and
+          # `docs/desktop.md` documents the Windows SmartScreen click. Both were
+          # narrowed to macOS while this is off; both are wrong the moment it
+          # returns.
+          #
+          # - id: win
+          #   os: windows-latest
+          #   args: --win
           - id: linux
             os: ubuntu-latest
             args: --linux
@@ -276,10 +290,14 @@ jobs:
 
           ---
 
-          **These installers are unsigned.** macOS and Windows will each warn
-          once before running one; [docs/desktop.md](docs/desktop.md) gives
-          both warnings verbatim and the exact click that gets past them. A
-          signature says who published a build, not whether it works.
+          **There is no Windows build in this release.** The Windows leg of the
+          release workflow is temporarily disabled; use the standalone HTML page
+          below, which needs no installer on any platform.
+
+          **These installers are unsigned.** macOS will warn once before running
+          one; [docs/desktop.md](docs/desktop.md) gives the warning verbatim and
+          the exact click that gets past it. A signature says who published a
+          build, not whether it works.
 
           `metacooler-viewer-*.html` is the whole viewer as **one page you
           double-click** — no install, no server, nothing to trust. It opens

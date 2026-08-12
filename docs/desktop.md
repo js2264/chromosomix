@@ -1,6 +1,12 @@
 # The desktop application
 
-The viewer, packaged as an installable application for macOS, Windows and Linux.
+The viewer, packaged as an installable application for macOS and Linux.
+
+> **Windows builds are temporarily suspended.** The Windows leg of the release workflow is disabled,
+> so recent releases carry no `.exe`. The rows and the SmartScreen instructions below are kept
+> because the target still builds — `npx electron-builder --win` works from a clone — and because
+> they come back with the leg. On Windows in the meantime, use the standalone HTML page attached to
+> each release, or the website; both are the same viewer.
 
 **It is a delivery channel, not a second feature set.** It is the same bundle the website serves,
 running the same reader over the same files, and it opens exactly what the web app opens — no more.
@@ -21,7 +27,7 @@ by hand from somebody's laptop.
 |---|---|---|
 | macOS, Apple Silicon | `…-mac-arm64.dmg` | or the `.zip`, if you would rather not mount a disk image |
 | macOS, Intel | `…-mac-x64.dmg` | |
-| Windows | `…-win-x64.exe` | an installer; it will ask where to put the app |
+| Windows | `…-win-x64.exe` | **not currently built** — see the note at the top |
 | Linux | `…-linux-x64.AppImage` | one file, `chmod +x` it and run it |
 | Linux (Debian, Ubuntu) | `…-linux-x64.deb` | |
 
@@ -33,7 +39,7 @@ server to ask whether it is current — which is the same constraint the web app
 
 ## The two warnings, and how to get past them
 
-**These builds are unsigned.** Both platforms will say so, once, the first time you open the app.
+**These builds are unsigned.** Each platform says so, once, the first time you open the app.
 Neither message means the app is broken or that anything is wrong with the file you downloaded: a
 code signature says *who published a build*, not *whether it works*. Signing requires a paid
 developer account with Apple and a certificate authority for Windows, and neither is in place.
