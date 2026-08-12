@@ -33,6 +33,8 @@
  * time, which is the trade the format itself already made.
  */
 
+import { contigIndexOf } from '../genome/naming'
+
 import { isInteger } from './parse'
 
 /** One contig's intervals, sorted by start, with no overlaps assumed. */
@@ -296,6 +298,21 @@ export class IntervalTrack {
     for (const contig of set.contigs) this.byName.set(contig.name, contig)
   }
 
+  /**
+   * This track's contig for a name a lane asked with, whatever spells it.
+   *
+   * Exact first, through the map built above, which is every lane of the map
+   * this track was loaded against. The fallback is for the others: a deck draws
+   * one track beside every panel and each asks by its own file's spelling
+   * (§5.9).
+   */
+  private held(name: string): SignalContig | undefined {
+    const direct = this.byName.get(name)
+    if (direct !== undefined) return direct
+    const at = contigIndexOf(this.set.contigs, name)
+    return at < 0 ? undefined : this.set.contigs[at]
+  }
+
   get contigNames(): string[] {
     return this.set.contigs.map((contig) => contig.name)
   }
@@ -309,7 +326,7 @@ export class IntervalTrack {
   }
 
   has(name: string): boolean {
-    return this.byName.has(name)
+    return this.held(name) !== undefined
   }
 
   /**
@@ -340,7 +357,7 @@ export class IntervalTrack {
     max: Float32Array | null
     summary: boolean
   } | null {
-    const held = this.byName.get(contig)
+    const held = this.held(contig)
     if (held === undefined || end <= start) return null
 
     const from = lowerBound(held.ends, start)

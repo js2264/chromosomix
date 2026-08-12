@@ -30,6 +30,13 @@ import { transfersFor } from '../../worker/protocol'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
+import {
+  contigIndexOf,
+  renameInto,
+  sequencesOf,
+  type NamedSequence,
+  type Renaming,
+} from '../../genome/naming'
 import { binVectorSamples, type BinVector } from './binVector'
 import { TRACK_RUNNERS } from '../../analysis/run/tracks'
 import type { TrackJobContext } from '../../analysis/job'
@@ -43,7 +50,14 @@ import {
   parseGtf,
   sniffFormat,
 } from '../parse'
-import type { BaseRegion, FeatureSet, Region, TrackSamples, TrackSampleSet } from '../types'
+import type {
+  BaseRegion,
+  ContigOverlap,
+  FeatureSet,
+  Region,
+  TrackSamples,
+  TrackSampleSet,
+} from '../types'
 import {
   bbiMagic,
   isHdf5,
@@ -56,11 +70,84 @@ import {
   type WireSource,
 } from './protocol'
 
+/**
+ * Rewrite a parsed set's contig table into the map's vocabulary, in place.
+ *
+ * Element by element rather than `splice(0, n, ...names)`, which is the obvious
+ * way to write it and blows the stack: a spread passes every element as an
+ * argument, and a metagenomic BED naming 150 k contigs is 150 k arguments.
+ * `RangeError: Maximum call stack size exceeded`, and the file simply fails to
+ * load — on exactly the files this viewer exists for.
+ */
+function renameContigs(contigs: string[], mapContigs: readonly NamedSequence[]): Renaming {
+  const renaming = renameInto(sequencesOf(contigs), mapContigs)
+  for (let at = 0; at < renaming.names.length; at++) contigs[at] = renaming.names[at]
+  return renaming
+}
+
+/**
+ * The §8.2 overlap report, with the renames the matcher was unsure of.
+ *
+ * One builder rather than an `overlapWith` call per load path, because the two
+ * halves have to travel together: the rename (§5.9) happens *before* the
+ * overlap is counted, so a cross-convention match makes the report say **fully
+ * matched** — which is right when the two are one sequence and a lie when they
+ * are not. An hg19 track's `MT` against an hg38 map's `chrM` is one name
+ * apiece, one rename, and two sequences two bases apart, and without this the
+ * card would have nothing to say about it.
+ */
+function overlapReport(
+  fileContigs: readonly string[],
+  mapContigs: readonly NamedSequence[],
+  renaming: Renaming | null,
+): ContigOverlap {
+  const overlap = overlapWith(fileContigs, namesOf(mapContigs))
+  const contested = renaming?.contested ?? []
+  if (contested.length === 0) return overlap
+  return {
+    ...overlap,
+    contested: contested.slice(0, 4).map((match) => `${match.asked} → ${match.name}`),
+  }
+}
+
+/**
+ * A sequence's residues, by whichever name the caller has for it.
+ *
+ * Exact first — the map this FASTA was loaded against, renamed at the door —
+ * then the alias ladder, for the other panels of a deck, which sample through
+ * their own blocks' axes and ask by their own files' spellings (§5.9).
+ */
+function basesOf(store: SequenceStore, name: string): Uint8Array | undefined {
+  const direct = store.bases.get(name)
+  if (direct !== undefined) return direct
+  const at = contigIndexOf(store.contigs, name)
+  return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
+}
+
+/** Just the names, for the two helpers that ask about spelling and not size. */
+function namesOf(sequences: readonly NamedSequence[]): string[] {
+  return sequences.map((sequence) => sequence.name)
+}
+
 /** An open bigWig, kept for the life of the entry that owns it. */
 interface OpenTrack {
   bigwig: BigWig
-  /** Contig names as the file spells them, for skipping regions it cannot answer. */
-  contigs: Set<string>
+  /**
+   * The map's name for a sequence → the name **this file** spells it with.
+   *
+   * A map rather than the set of the file's own names it used to be, and the
+   * difference is the whole of §5.9 for a bigWig: a `.bw` written against UCSC
+   * and dropped on an Ensembl cooler is asked for `1` and has to be queried for
+   * `chr1`. It doubles as the filter it replaced — a region the map has that
+   * this file does not is simply absent from the map.
+   */
+  refOf: Map<string, string>
+  /**
+   * The file's own refNames, in file order — what the ladder searches when a
+   * name reaches neither the alignment nor itself. A deck's companions ask by a
+   * spelling the alignment never saw, because it was made against the lead.
+   */
+  refNames: string[]
 }
 
 const tracks = new Map<string, OpenTrack>()
@@ -457,7 +544,7 @@ async function tryIndexedText(
   source: WireSource,
   handle: BlobFile | RemoteFile,
   head: Uint8Array,
-  mapContigs: string[],
+  mapContigs: NamedSequence[],
 ): Promise<string | null> {
   const indexSource = indexSourceFor(source)
   if (indexSource === null) return null
@@ -467,7 +554,7 @@ async function tryIndexedText(
     const index = parseTabix(indexBytes)
     const size = await sizeOf(handle)
     if (size === null) return null
-    const spans = spansFor(index, matchNames(index, mapContigs), size)
+    const spans = spansFor(index, matchNames(index, namesOf(mapContigs)), size)
     if (spans.length === 0) return null
     // A "saving" that reads most of the file is not one, and the cost of finding
     // out was one small request. Below a fifth the index has earned its round
@@ -531,7 +618,7 @@ async function sizeOf(handle: BlobFile | RemoteFile): Promise<number | null> {
  * matters — decoding 23 MB of bigWig as UTF-8 to discover it is not a BED would
  * be both slow and, for a remote file, a whole-file download.
  */
-async function load(entry: string, source: WireSource, mapContigs: string[]): Promise<LoadResult> {
+async function load(entry: string, source: WireSource, mapContigs: NamedSequence[]): Promise<LoadResult> {
   const handle = handleFor(source)
   const head = await handle.read(4, 0)
   const magic = bbiMagic(head)
@@ -582,10 +669,11 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
   const format: DetectedFormat = sniffFormat(text, source.name)
   if (format === 'bedpe') {
     const data = parseBedpe(text)
+    const renaming = renameContigs(data.contigs, mapContigs)
     return {
       format,
       contigs: data.contigs,
-      overlap: overlapWith(data.contigs, mapContigs),
+      overlap: overlapReport(data.contigs, mapContigs, renaming),
       summary: `${count(data.length)} pair${data.length === 1 ? '' : 's'}`,
       payload: { kind: 'pairs', data },
     }
@@ -603,13 +691,17 @@ async function load(entry: string, source: WireSource, mapContigs: string[]): Pr
 function featureResult(
   format: DetectedFormat,
   data: FeatureSet,
-  mapContigs: string[],
+  mapContigs: NamedSequence[],
 ): LoadResult {
   const exons = data.exonStart.length
+  // Rewritten **in place**, which is what makes the rename cost nothing: every
+  // row of the set indexes this array by position, so replacing the strings
+  // renames every feature at once and no coordinate moves.
+  const renaming = renameContigs(data.contigs, mapContigs)
   return {
     format,
     contigs: data.contigs,
-    overlap: overlapWith(data.contigs, mapContigs),
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary:
       format === 'gtf'
         ? `${count(data.length)} transcripts · ${count(exons)} exons`
@@ -665,15 +757,38 @@ function tooLarge(size: number): Error {
 }
 
 /** A FASTA as a row: the sequences stay here, the summary goes back. */
-function loadFasta(entry: string, store: SequenceStore, mapContigs: string[]): LoadResult {
+function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequence[]): LoadResult {
+  const renaming = renameSequences(store, mapContigs)
   sequences.set(entry, store)
   const names = store.contigs.map((contig) => contig.name)
   return {
     format: 'fasta',
     contigs: names,
-    overlap: overlapWith(names, mapContigs),
+    overlap: overlapReport(names, mapContigs, renaming),
     summary: `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp`,
   }
+}
+
+/**
+ * A FASTA's sequences, renamed into the map's vocabulary (§5.9).
+ *
+ * Both halves of the store, because they are looked up by different callers:
+ * `contigs` is what the assembly and the sequence lane are built from, and
+ * `bases` is what {@link gcSamples} indexes by the name of the region it was
+ * asked about — which is the map's. A rename of one and not the other would
+ * leave a sequence lane that draws its ruler and no residues.
+ */
+function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Renaming {
+  const renaming = renameInto(store.contigs, mapContigs)
+  if (renaming.renamed === 0) return renaming
+  const bases = new Map<string, Uint8Array>()
+  store.contigs.forEach((contig, at) => {
+    const held = store.bases.get(contig.name)
+    contig.name = renaming.names[at]
+    if (held !== undefined) bases.set(contig.name, held)
+  })
+  store.bases = bases
+  return renaming
 }
 
 /**
@@ -698,7 +813,7 @@ function gcSamples(
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const region of regions) {
-    const seq = store.bases.get(region.contig)
+    const seq = basesOf(store, region.contig)
     if (seq === undefined || !(region.end > region.start)) continue
     const bins = gcBins(seq, region.start, region.end, basesPerPixel)
     if (bins.values.length === 0) continue
@@ -740,7 +855,7 @@ function bases(entry: string, regions: Region[]): BaseResult {
   const out: BaseRegion[] = []
   let budget = BASES_PER_REQUEST
   for (const region of regions) {
-    const seq = store.bases.get(region.contig)
+    const seq = basesOf(store, region.contig)
     if (seq === undefined) continue
     const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(seq.length, Math.ceil(region.end), start + budget)
@@ -779,7 +894,7 @@ const BIGBED_FEATURE_CAP = 1_000_000
  * behave the same way it does in the text file it came from — one parser, one
  * set of rules, one place where BED's quirks live.
  */
-async function loadBigBed(source: WireSource, mapContigs: string[]): Promise<LoadResult> {
+async function loadBigBed(source: WireSource, mapContigs: NamedSequence[]): Promise<LoadResult> {
   const bigbed = new BigBed({ filehandle: handleFor(source) })
   const header = await bigbed.getHeader()
   const refs = contigsOfHeader(header)
@@ -813,12 +928,26 @@ async function loadBigBed(source: WireSource, mapContigs: string[]): Promise<Loa
 async function loadBigWig(
   entry: string,
   source: WireSource,
-  mapContigs: string[],
+  mapContigs: NamedSequence[],
 ): Promise<LoadResult> {
   const bigwig = new BigWig({ filehandle: handleFor(source) })
   const header = await bigwig.getHeader()
-  const contigs = Object.keys(header.refsByName)
-  tracks.set(entry, { bigwig, contigs: new Set(contigs) })
+  // Renamed into the map's vocabulary at the door (§5.9), so the contig list
+  // this reports, the overlap it is judged by and the regions it is later asked
+  // for are all in one spelling. `sourceOf` is the way back to the file's own,
+  // which is the one thing about a bigWig that cannot be rewritten.
+  // **With the lengths the header carries**, via `contigsOfHeader`. Names alone
+  // leave the matcher with nothing to check itself against: an hg19 track on an
+  // hg38 map would rename `MT` onto `chrM` and report it as an ordinary match,
+  // and a map holding both `chrM` and `chrMT` could not be chosen between at
+  // all (§5.9).
+  const renaming = renameInto(contigsOfHeader(header), mapContigs)
+  const contigs = renaming.names
+  tracks.set(entry, {
+    bigwig,
+    refOf: renaming.sourceOf,
+    refNames: Object.keys(header.refsByName),
+  })
 
   const total = header.totalSummary
   // A file whose header carries no summary block reports zeros; that is not a
@@ -832,7 +961,7 @@ async function loadBigWig(
   return {
     format: 'bigwig',
     contigs,
-    overlap: overlapWith(contigs, mapContigs),
+    overlap: overlapReport(contigs, mapContigs, renaming),
     // The zoom-level count used to lead this line. It is a fact about how the
     // file was built, not about what is in it: nothing the reader can act on,
     // and it pushed the one number they can — the value range — onto a second
@@ -856,7 +985,7 @@ function loadSignal(
   entry: string,
   format: SignalFormat,
   text: string,
-  mapContigs: string[],
+  mapContigs: NamedSequence[],
 ): LoadResult {
   const set = format === 'wig' ? parseWig(text) : parseBedGraph(text)
   if (set.length === 0) {
@@ -864,6 +993,13 @@ function loadSignal(
       `This looks like a ${format === 'wig' ? 'wig' : 'bedGraph'} but holds no usable intervals.`,
     )
   }
+  const renaming = renameInto(
+    set.contigs.map((contig) => ({ name: contig.name })),
+    mapContigs,
+  )
+  set.contigs.forEach((contig, at) => {
+    contig.name = renaming.names[at]
+  })
   const track = new IntervalTrack(set)
   signals.set(entry, track)
   const contigs = track.contigNames
@@ -872,7 +1008,7 @@ function loadSignal(
   return {
     format,
     contigs,
-    overlap: overlapWith(contigs, mapContigs),
+    overlap: overlapReport(contigs, mapContigs, renaming),
     summary:
       `${count(track.length)} intervals · ${count(contigs.length)} contigs` +
       (usable ? ` · ${trim(min)} to ${trim(max)}` : ''),
@@ -948,12 +1084,28 @@ async function sample(
   if (track === undefined) {
     throw new Error('This track is no longer open. Drop the file again.')
   }
-  const wanted = regions.filter((region) => track.contigs.has(region.contig) && region.end > region.start)
+  // `refOf` holds the map this track was loaded against, plus every refName
+  // answering to itself. A *companion* of a deck asks by a third spelling — its
+  // own — so a name that reaches neither gets the ladder (§5.9), and what it
+  // finds is remembered, so the next frame of the same pan is one `Map` probe.
+  const refOf = (name: string): string | undefined => {
+    const held = track.refOf.get(name)
+    if (held !== undefined) return held
+    const at = contigIndexOf(track.refNames, name)
+    if (at < 0) return undefined
+    track.refOf.set(name, track.refNames[at])
+    return track.refNames[at]
+  }
+  const wanted = regions.filter(
+    (region) => refOf(region.contig) !== undefined && region.end > region.start,
+  )
   if (wanted.length === 0) return { basesPerPixel, regions: [], extent: null }
 
   const packed = await track.bigwig.getFeaturesAsArraysMulti(
     wanted.map((region) => ({
-      refName: region.contig,
+      // The file's own spelling goes to the reader; the map's comes back out
+      // below, so nothing downstream of here sees two vocabularies.
+      refName: refOf(region.contig) ?? region.contig,
       start: Math.max(0, Math.floor(region.start)),
       end: Math.ceil(region.end),
     })),

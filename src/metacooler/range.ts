@@ -7,6 +7,7 @@
  */
 
 import { UNBINNED_NAME } from '../constants'
+import { NameIndex, type NameContext } from '../genome/naming'
 import { truncateNames, ViewerError } from '../errors'
 import { pyRepr } from '../format'
 import type { Extent, ParsedRange, Table } from '../types'
@@ -23,6 +24,15 @@ export interface RangeTarget {
   /** `null` for a plain cooler: there are no genome names to resolve. */
   readonly genomes: Table | null
   readonly contigs: Table
+  /**
+   * This file's sequences under every convention that might name one.
+   *
+   * Optional because a synthesised target need not carry one, and because it is
+   * only ever reached on the path where the strict answer was already an error
+   * — see {@link parseMetacoolerRange}. Absent, one is built from the contig
+   * table, which is the same index a moment later and costs the same.
+   */
+  readonly names?: NameIndex
   /** Row indices of {@link genomes} that may be shown (§7.4). */
   displayGenomes(): number[]
   genomeExtent(genome: string): Extent
@@ -172,8 +182,19 @@ export function parseRegion(
  *   raises rather than silently ignoring the suffix, so a user who asks for
  *   part of a genome is told that genome ranges are whole-genome.
  * - anything else → `unknown-label`, listing both namespaces truncated to 20.
+ *
+ * ...except that the last of those three is now tried twice. Before refusing, a
+ * label is offered to {@link NameIndex}, which knows that `chr1`, `1`, `01` and
+ * `I` are one chromosome under four conventions (§5.9). `context` is the naming
+ * context of the file the label came *out of*, where the caller has one — a
+ * companion panel following a lead of another nomenclature — because a Roman
+ * numeral is Roman by virtue of the list it was written in.
  */
-export function parseMetacoolerRange(mc: RangeTarget, rangeStr: string): ParsedRange {
+export function parseMetacoolerRange(
+  mc: RangeTarget,
+  rangeStr: string,
+  context?: NameContext,
+): ParsedRange {
   // No trim: Python splits the raw string, so `' MAG_1'` is genuinely unknown.
   const label = rangeStr.split(':')[0]
   // Membership by scanning the name columns, exactly as `ops/range.py` tests
@@ -207,6 +228,40 @@ export function parseMetacoolerRange(mc: RangeTarget, rangeStr: string): ParsedR
     return { kind: 'contig', label, extent: mc.extent(rangeStr) }
   }
 
+  // Nothing under that spelling. **This, and only this, is where the naming
+  // conventions get a hearing** (§5.9) — after both namespaces have been asked
+  // literally and the answer would otherwise be a refusal.
+  //
+  // Putting it here rather than at the top is the whole of how this stays a
+  // faithful port. Every string the file *does* carry resolves exactly as
+  // `ops/range.py` resolves it, in the same order, with the same genome-wins
+  // rule; a session of one file cannot tell this clause exists. What changes is
+  // only the error case: a deck holding a UCSC `.hic` beside an Ensembl `.cool`
+  // used to answer one of them `unknown-label` and show a blank panel, and now
+  // answers both.
+  //
+  // Contigs only, deliberately. A genome name in a metacool is a MAG somebody
+  // binned, not a chromosome anybody has a convention for, and §8.5's argument
+  // — two independently assembled organisms agree about a name by coincidence —
+  // applies to those names hardest of all.
+  const matched = (mc.names ?? indexOf(mc)).find(label, { from: context })
+  if (matched !== null) {
+    // Answered here rather than by re-entering this function with the rewritten
+    // string. A second pass would start again at the *genome* test, and in a
+    // metacool whose MAGs are numerically named a contig matched across
+    // conventions would come back as a genome — or, with a coordinate suffix on
+    // it, as `genome-coordinate-suffix`. What was matched is a contig; this
+    // says so, and it is the only way `parseMetacoolerRange` can be reached
+    // twice for one string.
+    const suffix = rangeStr.slice(label.length)
+    return {
+      kind: 'contig',
+      label: matched.name,
+      extent: mc.extent(`${matched.name}${suffix}`),
+      matched,
+    }
+  }
+
   // The genome list is the *displayable* one: `__unbinned__` is not selectable
   // in any view (§7.4), so offering it as an available name would contradict
   // the refusal a user gets the moment they take the suggestion.
@@ -217,6 +272,13 @@ export function parseMetacoolerRange(mc: RangeTarget, rangeStr: string): ParsedR
       `  Contigs: ${truncateNames(contigNames)}`,
     { label, region: rangeStr },
   )
+}
+
+/** A name index over a target that did not bring one. */
+function indexOf(mc: RangeTarget): NameIndex {
+  const names = mc.contigs.strings('name')
+  const lengths = mc.contigs.numbers('length')
+  return NameIndex.of(names.map((name, i) => ({ name, length: lengths[i] })))
 }
 
 /**

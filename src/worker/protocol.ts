@@ -19,6 +19,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 
@@ -290,6 +291,16 @@ export interface AxisGroup {
 export interface MatrixResult {
   nrows: number
   ncols: number
+  /**
+   * Names this read answered that this file does not itself write (§5.9).
+   *
+   * A ticked selection resolves its names the same way a region does, and it
+   * has to *report* the same way too: a selection view drawn from names matched
+   * across conventions and saying nothing is precisely the silent rename the
+   * region path was built to prevent. Absent — not empty — where nothing was
+   * matched, which is every read of a file in its own vocabulary.
+   */
+  matched?: NameMatch[]
   /** Row-major, `nrows * ncols` long. Transferred, not copied. */
   values: Float32Array
   rowExtent: Extent
@@ -462,7 +473,22 @@ export type WorkerRequest =
   | { id: number; kind: 'open'; uri: string; source: SourceSpec }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
-  | { id: number; kind: 'range'; range: string; rung?: string }
+  | {
+      id: number
+      kind: 'range'
+      range: string
+      rung?: string
+      /**
+       * The naming context of the file the range string came **out of**.
+       *
+       * Two booleans, and they travel because a name cannot carry them: `X` is
+       * chromosome ten in a file counting `I`…`XVI` and the sex chromosome
+       * everywhere else, and only the list it was written in can say which
+       * (§5.9). A companion following a lead of another nomenclature is the
+       * whole reason this field exists; a session of one file never sets it.
+       */
+      naming?: NameContext
+    }
   // `balance` multiplies each cell by its two bin weights, which is cooler's
   // own definition of a balanced matrix (§6.4). Off by default, matching
   // `metacooler show`, and offered only when the file carries the column.
@@ -535,6 +561,13 @@ export type WorkerRequest =
       kind: 'selection'
       unit: 'genome' | 'contig'
       names: string[]
+      /**
+       * The naming context of the file the names came out of — see the `range`
+       * request, which carries it for the same reason. A ticked selection is a
+       * shared view exactly as a region is, so it has to cross nomenclatures
+       * exactly as one does (§5.9).
+       */
+      naming?: NameContext
       balance?: boolean
       /** `/pixels` column the values come from; `count` when absent. */
       value?: string

@@ -6,6 +6,7 @@
  */
 
 import type { StorageMode } from './constants'
+import type { NameMatch } from './genome/naming'
 
 // ---------------------------------------------------------------------------
 // Byte sources (spec §6.1)
@@ -190,6 +191,16 @@ export interface ParsedRange {
   /** The matched genome or contig name. */
   label: string
   extent: Extent
+  /**
+   * Present only where the name asked for is not the name this file writes.
+   *
+   * A companion panel following `chr1` into a file that calls it `1` resolves,
+   * and this is the record of what it took — which spelling arrived, which one
+   * answered, and by which rule. It exists so the panel can *say so*: a map
+   * that silently answers a name it does not have is the one way this feature
+   * can be quietly wrong (§5.9).
+   */
+  matched?: NameMatch
 }
 
 // ---------------------------------------------------------------------------

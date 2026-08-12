@@ -1321,17 +1321,37 @@ function cssEscape(value: string): string {
  * disagree about names". The two failures want different fixes and are
  * therefore worded differently: no overlap at all is a naming convention
  * mismatch, and partial overlap is usually a partial annotation.
+ *
+ * Since §5.9 the first of those two is a much smaller category, and the wording
+ * had to move with it. A track spelling its sequences `chr1` against a map
+ * spelling them `1` is now *renamed on the way in* and matches in full, so a
+ * zero here no longer means "these two use different conventions" — that case
+ * is handled. It means the matcher looked and found nothing it could justify,
+ * which is a different and more serious claim: two files about different
+ * genomes. Telling a reader to go and rename their chromosomes would now be
+ * advice for a problem they do not have.
  */
 export function overlapWarning(overlap: ContigOverlap | undefined): string | null {
   if (overlap === undefined || overlap.total === 0) return null
   if (overlap.matched === 0) {
     const sample = overlap.extra.length > 0 ? ` This file names ${overlap.extra.join(', ')}…` : ''
     return `No contig in this file matches the map (0 of ${fmt.int(overlap.total)}).${sample} ` +
-      'Nothing will be drawn until the two use the same names.'
+      'The usual naming conventions were tried, so this is likely a file about another genome.'
   }
   if (overlap.matched < overlap.total) {
     return `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} contigs matched; ` +
       `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`
+  }
+  // Matched in full, and *that is the problem*: a rename this file was not sure
+  // of counts as a match, so the two clauses above go quiet on the one case
+  // that most warrants a word. hg19's `MT` against hg38's `chrM` is one name
+  // apiece and two sequences (§5.9).
+  if (overlap.contested !== undefined && overlap.contested.length > 0) {
+    return (
+      `Matched across two naming conventions, but the sequences are different ` +
+      `lengths: ${overlap.contested.join(', ')}. Two assembly versions would look ` +
+      `exactly like this — the coordinates still land, they just may not mean the same place.`
+    )
   }
   return null
 }

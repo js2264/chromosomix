@@ -207,16 +207,46 @@ describe('compareRefusal', () => {
     expect(refusal).toContain('5,000')
   })
 
-  it('refuses a renamed chromosome, naming both spellings', () => {
+  it('accepts one assembly written in two conventions', () => {
+    // The `chr` prefix is a spelling, not a chromosome. Refusing this pair was
+    // refusing the commonest thing anybody has: the same genome out of two
+    // pipelines (§5.9).
+    expect(
+      compareRefusal(opened(), opened(), {
+        primary: CONTIGS,
+        second: [
+          ['chrI', 1000],
+          ['chrII', 2000],
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('refuses a genuinely different chromosome, naming both spellings', () => {
     const refusal = compareRefusal(opened(), opened(), {
       primary: CONTIGS,
       second: [
-        ['chrI', 1000],
+        ['scaffold_7', 1000],
         ['II', 2000],
       ],
     })
     expect(refusal).toContain('I')
-    expect(refusal).toContain('chrI')
+    expect(refusal).toContain('scaffold_7')
+    expect(refusal).toContain('not two spellings')
+  })
+
+  it('refuses two spellings of one name over sequences of different lengths', () => {
+    // The check the relaxation must not lose: hg19's `chr1` and hg38's `chr1`
+    // are one name and two sequences, and so are `I` and `chrI` here.
+    const refusal = compareRefusal(opened(), opened(), {
+      primary: CONTIGS,
+      second: [
+        ['chrI', 1200],
+        ['II', 2000],
+      ],
+    })
+    expect(refusal).toContain('1,200')
+    expect(refusal).toContain('different sequence')
   })
 
   it('refuses a chromosome of a different length, which would not line up', () => {

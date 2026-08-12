@@ -496,7 +496,11 @@ function splitNames(value: string | undefined): string[] {
  * may legally be called `NODE_1:2` (`ui/labels.ts`).
  */
 export function sequencesShown(state: ViewState, names: readonly string[]): string[] | null {
-  const known = [...names]
+  // The list itself, not a copy of it. `contigOf` holds its name index against
+  // the array's own identity (§5.9), and a fresh copy per call is a fresh index
+  // per call — which on a 154 k-contig file is most of a second, in a function
+  // the card calls on every render.
+  const known = names
   switch (state.view) {
     case 'whole':
     case 'overview':

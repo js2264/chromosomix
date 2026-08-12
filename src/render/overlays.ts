@@ -15,6 +15,8 @@
  * either (§8.4).
  */
 
+import { contigIndexOf } from '../genome/naming'
+
 import { featureRange } from '../annotations/featureset'
 import type { ManualArrowhead, ManualLine } from '../annotations/manual'
 import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
@@ -195,7 +197,9 @@ export function drawDiagonalFeatures(
   // for a row coordinate. Either axis would do on a symmetric view; the column
   // axis is the one whose windows are already what a track would have queried.
   for (const window of cols.windows(frame.colScale.domain)) {
-    const contig = set.contigs.indexOf(window.contig)
+    // Alias-aware, for the reason `render/features.ts` gives: one set, one
+    // spelling, and as many asking vocabularies as the deck has panels (§5.9).
+    const contig = contigIndexOf(set.contigs, window.contig)
     if (contig < 0) continue
     const [from, to] = featureRange(set, contig, window.start, window.end)
     for (let i = from; i < to; i++) {

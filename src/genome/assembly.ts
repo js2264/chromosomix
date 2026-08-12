@@ -17,6 +17,7 @@
  */
 
 import { LocusAxis, type LocusSegment } from '../render/locus'
+import { NameIndex } from './naming'
 
 /** One sequence, as every source of an assembly reports one. */
 export interface Contig {
@@ -182,8 +183,9 @@ export interface LocusRange {
  *
  * The name is matched **whole first**, because a sequence may legally be called
  * `NODE_1:2` — the same care `contigOf` takes for the same reason — and then
- * case-insensitively with and without a `chr` prefix, because half the world
- * writes `chr1` and the other half writes `1` and neither is going to stop.
+ * through {@link findContig}, which knows that half the world writes `chr1`,
+ * a quarter writes `1`, and the rest write `01`, `I` or `NC_000001.11`, and
+ * that none of them is going to stop (§5.9).
  */
 export function parseLocus(
   text: string,
@@ -231,20 +233,32 @@ export function parseLocus(
 /**
  * Find a sequence by the name someone typed.
  *
- * Exact, then case-insensitive, then with a `chr` prefix added or removed. The
- * ladder is ordered so that a genuine name always wins over a lenient match:
- * a file that really does contain both `1` and `chr1` resolves each to itself.
+ * Exact, then case-insensitive, then every convention the world writes a
+ * chromosome in: `chr1`, `1`, `01`, `I`, `NC_000001.11` and `chrM`, `MT`,
+ * `MtDNA` are each one sequence under several spellings, and {@link NameIndex}
+ * is where the argument for that lives (§5.9). The ladder is ordered so that a
+ * genuine name always wins over an interpreted one — a file that really does
+ * contain both `1` and `chr1` resolves each to itself — and the ladder itself
+ * is `NameIndex.find`'s, so the locus box, a companion panel and a dropped
+ * track all agree about what a name means.
+ *
+ * The index is held against the contig array's own identity rather than built
+ * per call, and that is not an optimisation to skip: the locus box calls this on
+ * **every keystroke**, and a keystroke mid-word is a miss — which is precisely
+ * the path that reaches the index instead of short-circuiting on an exact name.
+ * Rebuilt each time it costs 24 ms at five thousand sequences and most of a
+ * second at a hundred and fifty thousand, which is a box that stops taking
+ * input. An assembly's contigs are never mutated after it is built, which is
+ * what makes holding one safe (see {@link NameIndex.for}).
  */
 export function findContig(assembly: Assembly, name: string): Contig | null {
   const wanted = name.trim()
   if (wanted === '') return null
   const exact = assembly.contigs.find((contig) => contig.name === wanted)
   if (exact !== undefined) return exact
-  const lower = wanted.toLowerCase()
-  const insensitive = assembly.contigs.find((contig) => contig.name.toLowerCase() === lower)
-  if (insensitive !== undefined) return insensitive
-  const other = lower.startsWith('chr') ? lower.slice(3) : `chr${lower}`
-  return assembly.contigs.find((contig) => contig.name.toLowerCase() === other) ?? null
+  const match = NameIndex.for(assembly.contigs).find(wanted)
+  if (match === null) return null
+  return assembly.contigs.find((contig) => contig.name === match.name) ?? null
 }
 
 /**

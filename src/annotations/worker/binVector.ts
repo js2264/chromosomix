@@ -20,6 +20,7 @@
  * it was thrown away.
  */
 
+import { contigIndexOf } from '../../genome/naming'
 import type { Region, TrackSampleSet, TrackSamples } from '../types'
 
 /** One sequence of the assembly a vector is laid out over. */
@@ -63,9 +64,21 @@ export interface BinVector {
  */
 const MAX_INTERVALS = 4096
 
-/** The contig of that name, or `undefined`. */
+/**
+ * The contig of that name, or `undefined`.
+ *
+ * Through {@link contigIndexOf} rather than by name, and this is the whole of
+ * why a synthetic track works in a deck at all (§5.9). A vector is laid out over
+ * the grid of the map it was **computed on** — `AnalysisWorkspace.grid` — and a
+ * deck then draws it beside every panel, each of which samples through its own
+ * block's axis and therefore asks by the name *its* file writes. A diamond
+ * insulation profile computed on a UCSC lead and drawn beside an Ensembl
+ * companion was asked for `1` against a grid holding `chr1`, matched nothing,
+ * and the companion's lane stayed empty with nothing on screen to say why.
+ */
 function contigOf(vector: BinVector, name: string): BinVectorContig | undefined {
-  return vector.contigs.find((contig) => contig.name === name)
+  const at = contigIndexOf(vector.contigs, name)
+  return at < 0 ? undefined : vector.contigs[at]
 }
 
 /**

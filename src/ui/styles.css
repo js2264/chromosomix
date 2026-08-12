@@ -6098,6 +6098,16 @@ canvas.is-frozen {
   color: var(--danger);
 }
 
+/* A panel showing a sequence under a name it does not itself write (§5.9).
+   Not `--danger`: a cross-convention match is the feature working, and colouring
+   it like a refusal would teach a reader to distrust the commonest case. It is
+   marked rather than plain because the one way this can be quietly wrong is by
+   not being noticed. */
+.deck-rename-note {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
 .deck-panel.is-unlocked .deck-lock {
   color: var(--text-faint);
 }

@@ -21,6 +21,7 @@ import type { AnalysisFraming, Params, TaskResult } from '../../analysis/types'
 import type { TaskInputs } from '../../analysis/worker/protocol'
 import type { S3Credential } from '../../s3/sigv4'
 import type { AssemblyOrigin, Contig } from '../../genome/assembly'
+import type { NamedSequence } from '../../genome/naming'
 
 /**
  * What a file turned out to be, decided by its bytes (§8.3).
@@ -115,7 +116,22 @@ export interface AnnotationResultMap {
 export type AnnotationRequestKind = keyof AnnotationResultMap
 
 export type AnnotationRequest =
-  | { id: number; kind: 'load'; entry: string; source: WireSource; mapContigs: string[] }
+  | {
+      id: number
+      kind: 'load'
+      entry: string
+      source: WireSource
+      /**
+       * The map's sequences, **with their lengths** where the map knows them.
+       *
+       * Names alone would do for the §8.2 overlap report, and did. The lengths
+       * are what {@link renameInto} needs: matching a track's names onto the
+       * map's under another convention (§5.9) is only safe while a length that
+       * disagrees can veto it, and a map that hands over names alone gets a
+       * matcher with nothing to check its own guesses against.
+       */
+      mapContigs: NamedSequence[]
+    }
   // What genome is this file on, and is it even one of ours? The one request
   // that may be made about a file nothing has decided to open yet — it is what
   // routes a drop between the reader worker and the genome browser.

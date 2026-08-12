@@ -18,6 +18,7 @@ import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
+import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
 import {
@@ -700,7 +701,8 @@ async function handleSelection(
 ): Promise<MatrixResult> {
   const { mc } = requireSession()
   const id = request.id
-  const units = selectedContigs(mc, request.unit, request.names)
+  const matched: NameMatch[] = []
+  const units = selectedContigs(mc, request.unit, request.names, request.naming, matched)
   if (units.length === 0) {
     // `unknown-label` is the code the reader already uses for a name this file
     // does not have; a selection of them is the same failure, several times.
@@ -776,6 +778,7 @@ async function handleSelection(
     contigsPerCell: selected.contigsPerCell,
     rowContigs: units.length,
     colContigs: units.length,
+    ...(matched.length === 0 ? {} : { matched }),
   }
 }
 
@@ -790,12 +793,36 @@ function selectedContigs(
   mc: MetaCooler,
   unit: 'genome' | 'contig',
   names: readonly string[],
+  naming?: NameContext,
+  /** Filled with the names that had to be matched across conventions (§5.9). */
+  matched?: NameMatch[],
 ): Array<{ id: number; extent: Extent }> {
   const ids = new Set<number>()
   for (const name of names) {
     if (unit === 'contig') {
       const id = mc.chromnames.indexOf(name)
-      if (id >= 0) ids.add(id)
+      if (id >= 0) {
+        ids.add(id)
+        continue
+      }
+      // Not under that spelling. The same second chance `parseMetacoolerRange`
+      // gives a region, for the same reason and in the same order: **after**
+      // exact membership has failed, never before it. A selection is the other
+      // half of a shared view — tick four chromosomes in the lead and every
+      // companion draws those four — so a deck whose files disagree about
+      // nomenclature would otherwise navigate by region and go blank the moment
+      // anybody ticked a box.
+      const match = mc.names.find(name, naming === undefined ? {} : { from: naming })
+      if (match !== null) {
+        const aliased = mc.chromnames.indexOf(match.name)
+        if (aliased >= 0) {
+          ids.add(aliased)
+          // Reported, not merely resolved. A selection drawn from names matched
+          // across conventions and saying nothing is exactly the silent rename
+          // the region path carries `ParsedRange.matched` to prevent.
+          matched?.push(match)
+        }
+      }
       continue
     }
     const genome = mc.genomeNames.indexOf(name)
@@ -1081,7 +1108,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       // Resolved against the rung the caller named, because a range is a bin
       // extent and bin extents are per level. Absent, it is the open map's, as
       // every call but a zoom-driven one leaves it.
-      return parseMetacoolerRange(await mapFor(request.rung), request.range)
+      return parseMetacoolerRange(await mapFor(request.rung), request.range, request.naming)
     case 'matrix':
       return handleMatrix(request)
     case 'aggregate':

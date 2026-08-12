@@ -299,7 +299,16 @@ exist. See SPECS §8.5.
 **Two files compared, not N.** The second map goes in the half of the square the first one was
 mirroring, and there is no third half. It must be a cooler with the same chromosomes and the same bin
 size, because every coordinate in the picture is an index into one list of sequences and one grid
-cannot be two resolutions. See SPECS §5.7.
+cannot be two resolutions. Same chromosomes, not the same *spellings* — see below. SPECS §5.7.
+
+**Nomenclature is not a compatibility problem.** `chr1`, `1`, `01`, `I` and `NC_000001.11` are the
+same chromosome, and files that name it differently open side by side, navigate as one deck and take
+each other's tracks. `chrM`, `MT` and `MtDNA` are one mitochondrion; `chrXII` is `12`;
+`chrUn_GL000220v1` is `GL000220.1`. What it will not do is guess: `2L` is not `2`, a `NODE_1` out of
+an assembler is nobody's chromosome one, and where the two files also disagree about a sequence's
+*length* the match is reported rather than taken quietly — hg19's `chrM` and hg38's `chrM` are one
+name and two sequences. There is no alias table to download and no assembly to declare; `X` is read
+as the tenth chromosome or as the sex chromosome according to what else is in the file. SPECS §5.9.
 
 **cool and mcool are whole-genome only where it fits, and this is not a HiGlass replacement.** The
 entry point is the contigs table; a `chrom:start-end` selection loads through the same bounded-read
