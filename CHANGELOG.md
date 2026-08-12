@@ -575,6 +575,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   expected to fail this way. `docs/hosting.md` carried the same claim and no
   longer does.
 
+- **A task run across a deck skipped the file that spells its chromosomes
+  differently.** Three `.cool` files and a `.hic` beside them, Run pressed on
+  compartments: three tracks and three sets of A/B intervals came back, and the
+  `.hic` produced nothing at all.
+
+  A batch (§18.2) runs *one* set of parameters against every panel, and those
+  parameters were filled in against the **starred** map — so the ticked sequence
+  list is that map's spellings, a typed region is, and a loaded BED was renamed
+  into the session's on the way in. The worker then matched them by string.
+  `MetaCooler.contigId` is a faithful port of cooler's own lookup and knows only
+  what the file writes, so on the panel that writes `1` where the others write
+  `chr1` every name matched nothing, and the run ended on *none of the ticked
+  sequences has any bins in it* — true, and not the reason.
+
+  Names that arrive from outside the file now go through the same door §5.9
+  gives every other holder of a name list: the literal answer first, the
+  conventions only where that would otherwise be a refusal, and the naming
+  context of the list the name *came out of* carried with it — a ticked list is
+  the source file's own spellings, so it is what says whether its numerals are
+  Roman. Compartments, insulation, P(s) and APA all read through it, so a
+  region, a ticked sequence and a BED anchor each resolve on every panel of a
+  deck.
+
+  **And a short run now says why it was short.** A sequence a file has not got
+  is not an error — a deck holds different assemblies on purpose — but the ones
+  that were left out are named, and a run that matched nothing says so and lists
+  what the file does have, rather than reporting a clean result over nothing.
+  The one thing still refused is a bare `X` with no list behind it: it is the
+  sex chromosome far more often than it is the tenth, and only the list it was
+  written in can say which.
+
 - **Picking a locus for 4C zoomed the map out from under the pointer.** *Pick on
   map* is a mode: while it is armed a plain drag names a stretch of genome for
   the form that asked, and nothing else. It zoomed as well, every time, and the

@@ -30,6 +30,7 @@
  */
 
 import type { Region, TrackSampleSet } from '../annotations/types'
+import type { NameContext } from '../genome/naming'
 import type { MetaCooler } from '../metacooler/MetaCooler'
 import type { AnalysisFraming, Params, ParamValue, TaskOutput } from './types'
 import type { TaskInputs } from './worker/protocol'
@@ -153,6 +154,69 @@ export function missingInput(
 ): string | null {
   if (found.value !== undefined) return null
   return found.chosen ? what.gone : what.unchosen
+}
+
+// ---------------------------------------------------------------------------
+// Naming (§5.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * This file's id for a sequence somebody **else** named, or `-1`.
+ *
+ * The read side of §5.9, in the one worker that had none. Every name a task
+ * acts on that did not come out of the file it is running against arrives in
+ * another file's vocabulary: a ticked sequence list is the *starred* map's
+ * spellings, a BED was renamed into the *session's* on the way in, and a region
+ * was typed against whatever the reader was looking at. Run a batch across a
+ * deck (§18.2) and all three are then asked of every panel — including the
+ * `.hic` that writes `1` where the `.cool` beside it writes `chr1`.
+ *
+ * `MetaCooler.contigId` is deliberately literal — it is a port of cooler's own
+ * lookup and refuses anything the file does not spell — so a task that used it
+ * on a foreign name matched nothing and said so in whatever words it had for an
+ * empty run: *none of the ticked sequences has any bins in it*, *no anchors fell
+ * inside a sequence*, *unknown label*. Three sentences, all true, none of them
+ * the reason. This is the one place that gets a second opinion, exactly as
+ * `parseMetacoolerRange` does for a range and for the same reason: after the
+ * literal answer, never instead of it.
+ *
+ * `from` is the naming context of the list the name **came out of**, where the
+ * caller has one — a Roman numeral is Roman by virtue of the list it was
+ * written in, and `X` is the tenth chromosome only in a list that also counts
+ * past nine that way. Omitted, this file's own context stands in, and the
+ * ambiguous single letters are refused rather than guessed (`NameIndex.find`).
+ */
+export function contigIdFor(mc: MetaCooler, name: string, from?: NameContext): number {
+  if (mc.hasContig(name)) return mc.contigId(name)
+  const matched = mc.names.find(name, ...(from === undefined ? [] : [{ from }]))
+  return matched === null || !mc.hasContig(matched.name) ? -1 : mc.contigId(matched.name)
+}
+
+/**
+ * The same, for a list — and the names that found nothing, to be said out loud.
+ *
+ * Both halves are needed by every caller. A sequence the reader ticked that this
+ * file has not got is not an error — a deck holds files of different assemblies
+ * on purpose — but a run that quietly drops half of what was asked for and
+ * reports a clean number is the failure §5.9 is written against.
+ *
+ * Ids come back **ascending**, whatever order the names were in: a caller
+ * walking them is walking the file's own layout, which is what makes a run of
+ * bins a contiguous span.
+ */
+export function contigIdsFor(
+  mc: MetaCooler,
+  names: readonly string[],
+  from?: NameContext,
+): { ids: number[]; missing: string[] } {
+  const ids = new Set<number>()
+  const missing: string[] = []
+  for (const name of names) {
+    const cid = contigIdFor(mc, name, from)
+    if (cid < 0) missing.push(name)
+    else ids.add(cid)
+  }
+  return { ids: [...ids].sort((a, b) => a - b), missing }
 }
 
 // ---------------------------------------------------------------------------

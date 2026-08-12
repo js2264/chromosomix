@@ -22,6 +22,7 @@
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
 import { DETAIL_SEP } from '../../annotations/types'
+import { contextOf, type NameContext } from '../../genome/naming'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import {
@@ -36,6 +37,7 @@ import { ExpectedAccumulator, expectedAt } from '../expected'
 import {
   boolParam,
   chosenInput,
+  contigIdFor,
   idParam,
   missingInput,
   numParam,
@@ -289,9 +291,13 @@ interface Anchor {
 
 function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
   const out: Anchor[] = []
+  // The set's own list is what says how *it* spells sequences, and a `.bedpe`
+  // loaded against a `chr1` lead is walked here against whichever panel of the
+  // deck this job is running on (§18.2). Computed once per set, not per row.
+  const from = contextOf(set.contigs)
   for (let i = 0; i < set.length; i++) {
-    const a = binOf(job, set.contigs[set.contig1[i]], set.start1[i], set.end1[i])
-    const b = binOf(job, set.contigs[set.contig2[i]], set.start2[i], set.end2[i])
+    const a = binOf(job, set.contigs[set.contig1[i]], set.start1[i], set.end1[i], from)
+    const b = binOf(job, set.contigs[set.contig2[i]], set.start2[i], set.end2[i], from)
     // Both anchors on one sequence, because a pileup off the diagonal between
     // two *different* sequences is a trans pileup and a different question — one
     // no loop caller emits and no APA convention describes.
@@ -311,8 +317,9 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
 
 function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
   const out: Anchor[] = []
+  const from = contextOf(set.contigs)
   for (let i = 0; i < set.length; i++) {
-    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i])
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from)
     if (at === null) continue
     const span = Math.max(1, job.toBins(set.end[i] - set.start[i]))
     out.push({
@@ -326,19 +333,29 @@ function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
   return out
 }
 
-/** The bin an interval's centre falls in, and the sequence's bin bounds. */
+/**
+ * The bin an interval's centre falls in, and the sequence's bin bounds.
+ *
+ * `named` is the naming context of the *set* the interval came out of, so a BED
+ * of `chr1` loci resolves against a file that writes `1` (§5.9). The sequence
+ * comes back under **this file's** spelling rather than the set's, which is what
+ * makes the two anchors of a pair comparable: two names that resolve to one
+ * sequence are one sequence, and comparing the strings would call them cis and
+ * trans by turns.
+ */
 function binOf(
   job: JobContext,
   contig: string,
   start: number,
   end: number,
+  named?: NameContext,
 ): { bin: number; bounds: Span; contig: string } | null {
-  if (!job.mc.hasContig(contig)) return null
-  const cid = job.mc.contigId(contig)
+  const cid = contigIdFor(job.mc, contig, named)
+  if (cid < 0) return null
   const [from, to] = job.mc.contigExtent(cid)
   const bin = job.mc.coords.binIndex(cid, Math.round((start + end) / 2))
   if (bin < from || bin >= to) return null
-  return { bin, bounds: { from, to }, contig }
+  return { bin, bounds: { from, to }, contig: job.mc.chromnames[cid] }
 }
 
 /** The anchor groups a run draws, after ranking and subsetting. */
