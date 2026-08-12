@@ -38,12 +38,25 @@ import { defaultStyle, placementOn } from '../annotations/types'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
+import { mapsOrLead, placementField } from './lanePlacement'
 
 /** The three formats a per-bin result can leave the app as (§18.7). */
 export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
 
 export interface SyntheticCardOptions {
   store: AnnotationStore
+  /**
+   * Every map a lane may be drawn on, named — the deck's list, or absent.
+   *
+   * The one control this card was missing, and the one §18.5 is most explicit
+   * about: a computed track is a track like any other, and where a track is
+   * drawn is a property of the *lane* rather than of the row
+   * (`annotations/placement.ts`). Without it the only way to move an eigenvector
+   * off the left-hand edge of the map it was computed on was to find the lane
+   * and drag it, and there was no way at all to say *also draw it beside the
+   * second replicate*.
+   */
+  maps?(): Array<{ id: string; label: string }>
   onExport(entry: AnnotationEntry, format: SyntheticFormat): void
   onRecompute(entry: AnnotationEntry): void
 }
@@ -146,6 +159,11 @@ export class SyntheticCard {
       row.appendChild(el('p', { class: 'ann-origin', text: framing, title: framing }))
     }
 
+    // Where it is drawn, before what it can be exported as: the first is about
+    // the picture in front of the reader and the second is about what leaves the
+    // app. The same control the Tracks card carries, from the same module, so a
+    // computed lane and a loaded one are moved by one gesture and not two.
+    row.appendChild(placementField(this.options.store, entry, mapsOrLead(this.options.maps)))
     row.appendChild(entry.status === 'detached' ? this.recompute(entry) : this.exports(entry))
     return row
   }

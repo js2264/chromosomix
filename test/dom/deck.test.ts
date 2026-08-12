@@ -86,6 +86,10 @@ function leadPanel(
     floors: 0,
     /** The deck's lane listener, so a test can make the lead report geometry. */
     lanes: null as ((geometry: unknown) => void) | null,
+    /** The deck's lane-hover listener, so a test can point at a track. */
+    laneHover: null as ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void) | null,
+    /** Every mark the deck asked this map to show for another map's pointer. */
+    laneEchoes: [] as Array<{ axis: 'rows' | 'cols'; unit: number } | null>,
     /** Which of the two scales the deck asked for, and how often. */
     askedShown: 0,
     askedSet: 0,
@@ -96,6 +100,12 @@ function leadPanel(
       state.lanes = listener
     },
     setHoverListener: () => {},
+    setLaneHoverListener: (listener: (at: { axis: 'rows' | 'cols'; unit: number } | null) => void) => {
+      state.laneHover = listener
+    },
+    showLaneEcho: (at: { axis: 'rows' | 'cols'; unit: number } | null) => {
+      state.laneEchoes.push(at)
+    },
     turnReach: () => options.reach ?? null,
     setLaneFloor: () => {
       state.floors++
@@ -140,6 +150,10 @@ interface Made {
   published: Array<string | undefined>
   stars: number
   kept: Array<string[]>
+  /** What the deck told the store each cell is showing, per render. */
+  noted: Array<string[]>
+  /** Every `map=uri` the deck asked the store to give a parked lane back to. */
+  adopted: string[]
   /** What the session's own map is at, and what the deck asked it to move to. */
   leadBinsize: number | undefined
   askedBinsize: number[]
@@ -154,6 +168,8 @@ function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
     published: [],
     stars: 0,
     kept: [],
+    noted: [],
+    adopted: [],
     leadBinsize: undefined,
     askedBinsize: [],
     leadCanMove: true,
@@ -162,6 +178,15 @@ function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
   const store = {
     keepMaps: (maps: ReadonlySet<MapId>) => {
       made.kept.push([...maps].sort())
+    },
+    // The two halves of "a lane finds its way home": the deck tells the store
+    // which file each cell is showing while it is alive, and asks for whatever
+    // was parked under that file when one arrives (`annotations/store.ts`).
+    noteMapFiles: (files: ReadonlyMap<MapId, string>) => {
+      made.noted.push([...files].map(([map, uri]) => `${map}=${uri}`).sort())
+    },
+    adoptHome: (map: MapId, uri: string) => {
+      made.adopted.push(`${map}=${uri}`)
     },
   }
   made.deck = new PanelDeck({
@@ -277,14 +302,15 @@ describe('the deck’s bar', () => {
     })
 
     it('read the deck from left to right in the order the work is done', () => {
-      // Put the maps on one footing, decide whether they move together, arrange
-      // them, take the picture — and the one control that ends the deck across
-      // the gap at the far end.
+      // Get the maps on screen, put them on one footing, decide whether they
+      // move together, arrange them, take the picture — and the one control that
+      // ends the deck across the gap at the far end.
       const { deck } = make()
       const bar = all<HTMLElement>(deck.el, '.deck-bar > *').map((node) => node.className)
-      expect(bar[0]).toContain('deck-share')
-      expect(bar[1]).toContain('deck-resolutions')
-      expect(bar[2]).toContain('deck-lock')
+      expect(bar[0]).toContain('deck-add-toggle')
+      expect(bar[1]).toContain('deck-share')
+      expect(bar[2]).toContain('deck-resolutions')
+      expect(bar[3]).toContain('deck-lock')
       expect(bar[bar.length - 1]).toContain('deck-close')
     })
 
@@ -435,6 +461,80 @@ describe('growing the deck', () => {
   })
 })
 
+/**
+ * Opening a map that lives on a server, which is the road a *link* travels
+ * (§11) and the one the deck had no control for.
+ *
+ * The boxes existed — a file chooser, a URL field, an `add` — and nothing on
+ * screen opened them: the row was revealed by the command palette alone, so a
+ * reader with a published cooler and a deck in front of them had a drop
+ * rectangle for a local file and no way at all to name a remote one. What is
+ * asserted here is that both roads are reachable from the deck itself and that
+ * a URL typed into either produces a companion the hash can carry.
+ */
+describe('adding a map by URL', () => {
+  /** The row of boxes, and whether the reader can see it. */
+  function addRow(deck: PanelDeck): HTMLElement {
+    const node = deck.el.querySelector<HTMLElement>('.deck-add')
+    if (node === null) throw new Error('the deck has no add row')
+    return node
+  }
+
+  it('is opened by a button in the bar, not by the command palette alone', () => {
+    const { deck } = make()
+    expect(addRow(deck).classList.contains('hidden')).toBe(true)
+    barButton(deck, 'add-toggle').click()
+    expect(addRow(deck).classList.contains('hidden')).toBe(false)
+  })
+
+  it('is put away again by the same button', () => {
+    const { deck } = make()
+    barButton(deck, 'add-toggle').click()
+    barButton(deck, 'add-toggle').click()
+    expect(addRow(deck).classList.contains('hidden')).toBe(true)
+  })
+
+  it('opens the map the URL names, and puts the row away', () => {
+    const { deck, published } = make()
+    barButton(deck, 'add-toggle').click()
+    const url = deck.el.querySelector<HTMLInputElement>('.deck-url')
+    if (url === null) throw new Error('the add row has no URL box')
+    url.value = 'https://x.example.org/b.cool'
+    url.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(cellNames(deck)).toEqual(['lead.cool', 'b.cool'])
+    // A remote companion is carried by name, which is the whole point of the
+    // road: the deck the reader repaired can be shared on.
+    expect(published[published.length - 1]).toBe('https://x.example.org/b.cool')
+    expect(addRow(deck).classList.contains('hidden')).toBe(true)
+  })
+
+  it('is offered on an empty cell too, and fills that cell rather than the first', () => {
+    const { deck, published } = make()
+    // Two empty cells; the URL is typed into the second.
+    deck.grow('beside')
+    deck.grow('beside')
+    expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'empty'])
+    const boxes = all<HTMLInputElement>(deck.el, '.deck-vacant-url input[type="url"]')
+    expect(boxes).toHaveLength(2)
+    boxes[1].value = 'https://x.example.org/b.cool'
+    boxes[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'b.cool'])
+    // The vacancy is still published as `~`, in its own place, so the link says
+    // what is on screen.
+    expect(published[published.length - 1]).toBe('~|https://x.example.org/b.cool')
+  })
+
+  it('ignores an empty box rather than opening a panel with no file', () => {
+    const { deck } = make()
+    deck.grow('beside')
+    const box = deck.el.querySelector<HTMLInputElement>('.deck-vacant-url input[type="url"]')
+    if (box === null) throw new Error('the empty cell has no URL box')
+    box.value = '   '
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(cellNames(deck)).toEqual(['lead.cool', 'empty'])
+  })
+})
+
 describe('the star', () => {
   it('starts on the lead, which is therefore the one dead star', () => {
     const { deck } = make()
@@ -554,6 +654,35 @@ describe('the lanes a track may be on', () => {
     made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     barButton(made.deck, 'close').click()
     expect(made.kept[made.kept.length - 1]).toEqual(['lead'])
+  })
+
+  /**
+   * The other half of the same reconciliation, and what makes a lane survive a
+   * deck being put down and opened again.
+   *
+   * A `MapId` is a slot id minted per deck and never minted again, so a lane
+   * parked under one could never be given back. What identifies "that map" to a
+   * reader is the **file** it is showing, so that is what the deck tells the
+   * store while the cell is alive, and what it asks for when one arrives.
+   */
+  it('tells the store which file each cell is showing, while it can', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const last = made.noted[made.noted.length - 1]
+    expect(last).toHaveLength(1)
+    expect(last[0]).toContain('https://x.example.org/b.cool')
+  })
+
+  it('asks for whatever was parked under that file, on every render', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(made.adopted.some((each) => each.endsWith('=https://x.example.org/b.cool'))).toBe(true)
+  })
+
+  it('says nothing about an empty cell, which is showing no file at all', () => {
+    const made = make()
+    made.deck.grow('beside')
+    expect(made.noted[made.noted.length - 1]).toEqual([])
   })
 })
 

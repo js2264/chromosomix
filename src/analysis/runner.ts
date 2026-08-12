@@ -98,6 +98,10 @@ export interface RunnerHost {
   targetMap?(): MapId
   /** Every map on screen, in reading order, for {@link AnalysisRunner.runAll}. */
   allTargets?(): readonly RunTarget[]
+  /** The same, once every map still opening has answered; see {@link AnalysisRunner.readyTargets}. */
+  allTargetsReady?(): Promise<readonly RunTarget[]>
+  /** How many maps a batch will end up covering, ready or not. */
+  targetCount?(): number
   block(): BlockInput | null
   payload(entryId: string): AnnotationPayload | undefined
   vector?(entryId: string): Promise<Float32Array | undefined>
@@ -504,6 +508,36 @@ export class AnalysisRunner {
    */
   targets(): readonly RunTarget[] {
     return this.host.allTargets?.() ?? []
+  }
+
+  /**
+   * Every map a batch will run on, once the ones still opening have answered.
+   *
+   * {@link targets} is the synchronous reading and is what the drawer prices,
+   * orders results by and finds the star in. It is the wrong list to *run* from:
+   * a companion opens to draw a picture, and the two tables an analysis needs
+   * are a further pair of reads it only makes when starred or batched — so on a
+   * freshly opened deck the first press of **Run on all maps** found some of
+   * them missing and quietly ran on the rest. Pressing again worked, which made
+   * a timing question look like a question about the files.
+   *
+   * Falls back to the synchronous list where a host has no answer, which is
+   * every session with no deck: there is one map, it is open, and there is
+   * nothing to wait for.
+   */
+  async readyTargets(): Promise<readonly RunTarget[]> {
+    return (await this.host.allTargetsReady?.()) ?? this.targets()
+  }
+
+  /**
+   * How many maps a batch will end up covering — what the button counts.
+   *
+   * Not `targets().length`: a deck of four with one still opening offered "run
+   * on all 3 maps" and then ran four. Counting the grid is the honest number,
+   * because {@link readyTargets} waits for every cell in it.
+   */
+  targetCount(): number {
+    return this.host.targetCount?.() ?? this.targets().length
   }
 
   /**

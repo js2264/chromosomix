@@ -698,9 +698,10 @@ describe('closing a deck', () => {
     return entry.id
   }
 
-  it('keeps a companion-only track, drawn nowhere', () => {
+  it('brings a companion-only track to the lead, at the edge it was on', () => {
     const store = freshStore(`deck-${Math.random()}.cool`)
     const id = loaded(store, 'companion.bw', placementOn('bottom'))
+    store.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
     store.placeOn(id, 'slot-2', placementOn('top'))
     store.unplaceFrom(id, LEAD_MAP)
     expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(1)
@@ -708,22 +709,139 @@ describe('closing a deck', () => {
     // The deck goes down: one map left, and the lanes reconciled to it.
     store.keepMaps(new Set([LEAD_MAP]))
     // The import survives — a deck put down is a statement about layout, not
-    // about what the reader has loaded — and it is drawn nowhere, which is one
-    // tick from being on the lead.
+    // about what the reader has loaded — and so does the *work*: it used to be
+    // left drawn nowhere, which reads as the close having deleted it.
     expect(store.entries.map((entry) => entry.id)).toEqual([id])
-    expect(store.placements.filter((lane) => lane.track === id)).toEqual([])
+    expect(store.drawnOnMap(LEAD_MAP, 'top')).toHaveLength(1)
     expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
     expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(0)
+  })
+
+  it('gives it back when a map opens that file again, and takes the loan back', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'companion.bw', placementOn('bottom'))
+    store.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
+    store.placeOn(id, 'slot-2', placementOn('top'))
+    store.unplaceFrom(id, LEAD_MAP)
+    store.keepMaps(new Set([LEAD_MAP]))
+
+    // A new deck: a new slot id, because a slot id is minted per deck and never
+    // minted again. What identifies "that map" is the file it is showing.
+    store.noteMapFiles(new Map([['slot-9', 'rep2.cool']]))
+    store.adoptHome('slot-9', 'rep2.cool')
+
+    expect(store.drawnOnMap('slot-9', 'top')).toHaveLength(1)
+    // …and the lead lane it borrowed while the map was away goes back, or the
+    // track would be drawn twice.
+    expect(store.drawnOnMap(LEAD_MAP, 'top')).toHaveLength(0)
   })
 
   it('leaves a track that was also on the lead exactly where it was', () => {
     const store = freshStore(`deck-${Math.random()}.cool`)
     const id = loaded(store, 'both.bw', placementOn('bottom'))
+    store.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
     store.placeOn(id, 'slot-2', placementOn('top'))
 
     store.keepMaps(new Set([LEAD_MAP]))
+    // The lead's own lane is not rearranged by a close: it is not going
+    // anywhere, and moving it to wherever the departing copy sat would be a
+    // change nobody asked for.
     expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap(LEAD_MAP, 'top')).toHaveLength(0)
     expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(0)
+
+    // And the companion's lane still comes back, without disturbing the lead's.
+    store.adoptHome('slot-9', 'rep2.cool')
+    expect(store.drawnOnMap('slot-9', 'top')).toHaveLength(1)
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+  })
+
+  it('forgets nothing and invents nothing for a map it never learnt a file for', () => {
+    // A cell closed before it had opened anything: the lane still comes to the
+    // lead rather than vanishing, and there is simply no home to send it back to.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'orphan.bw', placementOn('bottom'))
+    store.placeOn(id, 'slot-2', placementOn('left'))
+    store.unplaceFrom(id, LEAD_MAP)
+
+    store.keepMaps(new Set([LEAD_MAP]))
+    expect(store.drawnOnMap(LEAD_MAP, 'left')).toHaveLength(1)
+    store.adoptHome('slot-9', 'rep2.cool')
+    expect(store.drawnOnMap('slot-9', 'left')).toHaveLength(0)
+  })
+})
+
+/**
+ * Moving a lane **on the map the hand is over**.
+ *
+ * `place` is the lead's control: it writes the *track's* default placement, which
+ * is what the row in the Tracks card shows and what a session with no deck
+ * means. A drag made on a companion's edge went through it too, so dragging a
+ * computed track from the left of the third replicate to underneath it rewrote
+ * the track's default, moved the **lead's** lane, and left the picture the hand
+ * was over exactly as it was. §18.5 says a computed track is a track like any
+ * other and `annotations/placement.ts` says an edge belongs to the lane; this is
+ * the call that makes both true at once.
+ */
+describe('moving a lane on one map', () => {
+  function loaded(store: AnnotationStore, name: string, placement: Placement): string {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { ...localSource, name },
+      placement,
+    })
+    store.update(entry.id, { status: 'ready' })
+    return entry.id
+  }
+
+  it('moves the companion’s lane and leaves the lead’s alone', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeOn(id, 'slot-2', placementOn('left'))
+
+    store.placeAt(id, 'slot-2', placementOn('bottom'))
+
+    expect(store.drawnOnMap('slot-2', 'bottom')).toHaveLength(1)
+    expect(store.drawnOnMap('slot-2', 'left')).toHaveLength(0)
+    // The lead is where it was, and so is the track's own default.
+    expect(store.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(1)
+    expect(store.byId(id)?.placement.bottom).toBe(true)
+    expect(store.byId(id)?.placement.left).toBe(false)
+  })
+
+  it('turns the axis on that lane alone, as an override', () => {
+    // A vertical lane grows towards the matrix and a horizontal one grows up the
+    // page, so a lane crossing between them is turned on the way — and on a
+    // companion that turn is the *lane's*, which is exactly why `flip` is one of
+    // the two fields a lane may differ on.
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeOn(id, 'slot-2', placementOn('left'))
+    const before = store.byId(id)?.style.flip
+
+    store.placeAt(id, 'slot-2', placementOn('right'))
+
+    expect(store.byId(id)?.style.flip).toBe(before)
+    const lane = store.placements.find((each) => each.track === id && each.map === 'slot-2')
+    expect(lane?.style?.flip).toBe(!(before ?? false))
+  })
+
+  it('is the lead’s own control when the map is the lead', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeAt(id, LEAD_MAP, placementOn('top'))
+    expect(store.byId(id)?.placement.top).toBe(true)
+    expect(store.drawnOnMap(LEAD_MAP, 'top')).toHaveLength(1)
+  })
+
+  it('puts a track on a map it was not on, which is what a drop onto an edge is', () => {
+    const store = freshStore(`deck-${Math.random()}.cool`)
+    const id = loaded(store, 'coverage', placementOn('bottom'))
+    store.placeAt(id, 'slot-2', placementOn('top'))
+    expect(store.drawnOnMap('slot-2', 'top')).toHaveLength(1)
+    // Nothing was turned: there is no edge it came from.
+    expect(store.placements.find((each) => each.map === 'slot-2')?.style).toBeUndefined()
   })
 })
 

@@ -6174,6 +6174,25 @@ canvas.is-frozen {
   max-height: 60vh;
 }
 
+/* …and the URL box, folded away inside it. Inside rather than under, so the cell
+   stays exactly the size of the map it stands in for: a strip added below would
+   make this cell taller than the pictures beside it, and a grid row is as tall
+   as its tallest cell. Folded because the drop is the commoner gesture, not
+   because the URL is the lesser one — §11 is the road a link travels, and until
+   now an empty cell had no way onto it. */
+.deck-vacant-url {
+  margin-top: auto;
+  align-self: stretch;
+  /* The zone is a button; this is a form inside it, and it takes its own
+     presses (`panels/MapPanel.ts`). */
+  cursor: auto;
+}
+
+.deck-vacant-url .input {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
 /* ---------------------------------------------------------------------------
    The `+` edges, which draw a deck before there is one (§16.9).
 

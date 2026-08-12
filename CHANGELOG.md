@@ -43,6 +43,58 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rows out of twelve as a folder holding three files. Truncation outranks it: a
   prefix past a thousand keys is the one case where the list is not the folder.
 
+- **A second map can be opened by URL, from the deck itself.** The boxes existed
+  — a file chooser, a URL field and an `add` — and nothing on screen opened
+  them: the row was revealed by the command palette alone. So a reader with a
+  published cooler and a deck in front of them had a drop rectangle for a local
+  file and no way at all to name a remote one, which is the road §11 exists for.
+  The deck's bar now opens with **add a map…**, and every empty cell carries its
+  own folded *or open one by URL* under the drop hint — with a `browse…` beside
+  it, like every other box in the app that takes a file URL. Typed there it
+  fills *that* cell rather than the first empty one, which matters in a 2 × 2
+  with three gaps. The box lives inside the drop zone rather than under it, so
+  an empty cell stays exactly the size of the map it stands in for.
+
+  It is the half that makes a shared deck repairable. A link carries a local
+  companion as `~` (§16.6), so the recipient meets a cell they could previously
+  only fill from their own disk — and the deck they mended could not be sent on.
+
+- **Each map of a deck can be read as its own quantity.** A companion was built
+  with no score picker, on the argument that the score is one of the things a
+  deck *shares*. That is right about the default and wrong about the choice:
+  four replicates should be one quantity unless somebody says otherwise, and
+  "unless somebody says otherwise" needs a control to say it with. Two ordinary
+  cases had none — a companion carrying a `/pixels` column its lead has not got,
+  and a pair a reader wants at two normalisations — and both ended at a picker
+  that does not exist.
+
+  So the corner menu on each map now holds a **score**, built from *that* file's
+  own columns, starting on whatever the deck resolved. Picking one takes that
+  panel off the shared answer and leaves every other panel where it was; the
+  clip goes back to auto with it, because a clip is a pair of numbers in one
+  score's units and a balanced matrix is fractions where counts are integers.
+  A panel nobody has touched follows the deck exactly as before, and its picker
+  follows too — the lead's own control, a link and the back button all move the
+  shared score, and a dropdown left on the previous answer is a control lying
+  about the map it sits on.
+
+- **Pointing at a track is answered on every map on screen.** The deck already
+  echoed a pointer on a *map* to its neighbours (§16.3) and had nothing at all
+  for a pointer on a **track**, which is half the gesture: a hand moving along
+  one profile asking "what is here" is asking it of every profile in the deck.
+  Now the stacks that measure the same axis get a tick at that place, and each
+  map gets the small form of the guide the panel under the pointer is drawing
+  across itself.
+
+  On a turned map that mark is deliberately **not** the little cross the cell
+  echo leaves. A place is not a contact: the contacts it is in leave the
+  diagonal along two 45° rays rather than along an axis, so a cross there would
+  be two arms pointing at nothing — the horizontal one running through contacts
+  between two *other* places, the vertical one through a column that is only a
+  midpoint. The mark is the first few pixels of that V, standing on the diagonal
+  under the position being pointed at. A square map keeps the cross, where its
+  two axes really are the two directions the place is an anchor along.
+
 - **`chr1`, `1`, `01`, `I` and `NC_000001.11` are one chromosome.** Two files of
   the same genome disagree about its names more often than they agree — UCSC
   writes `chr1`, Ensembl writes `1`, a yeast cooler writes `chrI` and the
@@ -441,6 +493,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **On a turned map the guide becomes a vertical line while a stretch is being
+  chosen.** At rest the guide under the pointer is a pair of 45° rays, and that
+  is the honest answer to *what is this cell*: a turned map's two directions are
+  not its two axes, so the cells sharing a place with the contact under the
+  pointer are a ray rather than a column. It is the wrong answer the moment the
+  next press names an **interval** instead — Shift held, Option held, or a form
+  waiting to be pointed at — because then the reader is not choosing a contact,
+  and the mark that says where an interval starts is the edge it starts on. So
+  the rays collapse to one vertical line at the pointer's own column, and the
+  tracks beside the map drop back to a single hairline under it rather than
+  marking the two anchors of a contact nobody is selecting. It answers the
+  modifier rather than the movement, so pressing Shift over a stationary hand
+  changes the guide immediately.
+
 - **Windows installers are temporarily not built.** The `--win` leg of the
   release workflow is commented out, so releases carry the macOS and Linux
   installers and no `.exe`. Nothing about the target changed — `npx
@@ -509,6 +575,121 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   It now names that line, and says that a bucket serving the demos correctly is
   expected to fail this way. `docs/hosting.md` carried the same claim and no
   longer does.
+
+- **A batch ran on fewer maps than its own button counted.** *Run on all N maps*
+  over a freshly opened deck ran on the ones that happened to be ready and left
+  the rest behind — and said nothing, because a result that never arrives looks
+  exactly like a task that had nothing to report. Pressing again worked, which
+  made a question about timing look like a question about the file.
+
+  A companion opens to *draw a picture*: the two tables an analysis needs are a
+  further pair of reads it makes only when it is starred or batched, so an
+  eight-panel deck does not fetch sixteen tables to show eight rectangles. The
+  batch took the list of maps that could answer *at that instant*. It now waits
+  for the ones still opening — every panel at once, since these are two small
+  reads against workers that already exist — and the button counts every cell in
+  the grid rather than only the ready ones, because every cell is going to be
+  run on. A panel that genuinely cannot answer is still left out, and its own
+  note already says why.
+
+- **Dragging a lane on a companion moved the first map's lane instead.** The
+  handle on a track's lane is dragged onto another edge to move it there, and on
+  a companion it moved the wrong picture: the track jumped to the edge on the
+  **lead**, and the map the hand was actually over was left exactly as it was.
+
+  One call was doing two jobs. `place` writes the *track's default placement*,
+  which is what the row in the Tracks card shows and what a session with no deck
+  means — and the lead's lane follows it, because that control is the lead's.
+  Every gesture went through it, including the ones made on a picture that is
+  not the lead. Now they go through a call that takes the map they were made on:
+  the drag, the drop of a row onto an edge, the lane's own right-click menu and
+  the location control all move *that* map's lane, and the axis still turns on
+  the way across so the lane arrives reading the same way up as its neighbours —
+  as a lane override on a companion, which is exactly why `flip` is one of the
+  two fields a lane may differ on.
+
+  It bit computed tracks hardest, because a computed track opens on the left and
+  wanting it under the map is the first thing anybody does with one.
+
+- **Closing a deck left a companion's tracks drawn nowhere.** Putting the grid
+  down is a statement about layout, and the two things a reader means by it are
+  that the extra pictures should go and that the work they did on them should
+  not. A coverage track computed on the third replicate simply disappeared —
+  still imported, still in the list, drawn on no map — which reads as the close
+  having deleted it.
+
+  A departing map's lanes now come to the **lead**, at the edge they were on,
+  and the reader gets them back where they were the moment a map opens that file
+  again. Keyed on the **file**, never on the map: a map id is a slot minted per
+  deck and a deck closed and reopened mints new ones, so the id a lane was
+  parked under would never be seen again — what a reader means by "that map" is
+  the file it was showing. A track the reader had deliberately put on *both* the
+  lead and a companion is not rearranged: the lead's lane is not going anywhere,
+  and moving it to wherever the departing copy sat would be the close changing
+  something nobody asked it to.
+
+- **The score sat last in a companion's corner menu and first in the Map card.**
+  The same five fields in two orders, on two maps of one deck. It leads both
+  now, which is where it belongs: what the numbers *are* is the question the
+  transform, the ramp and the clip all answer about.
+
+- **A computed track had no way to say which map it belongs to.** §18.5's whole
+  claim is that a per-bin result *is* a track — same colour chip, same name,
+  same limits, same four edges — and the Synthetic card was the counter-example:
+  it carried the colour, the name, the eye and the exports, and nothing at all
+  about where the lane is drawn. The Tracks card's own location control is now
+  on those rows too, from one module rather than two, so a computed lane and a
+  loaded one are moved by one gesture: four edges, a row per map once a deck has
+  more than one, and *every map* / *no map* beside them.
+
+- **A task run across a deck skipped the file that spells its chromosomes
+  differently.** Three `.cool` files and a `.hic` beside them, Run pressed on
+  compartments: three tracks and three sets of A/B intervals came back, and the
+  `.hic` produced nothing at all.
+
+  A batch (§18.2) runs *one* set of parameters against every panel, and those
+  parameters were filled in against the **starred** map — so the ticked sequence
+  list is that map's spellings, a typed region is, and a loaded BED was renamed
+  into the session's on the way in. The worker then matched them by string.
+  `MetaCooler.contigId` is a faithful port of cooler's own lookup and knows only
+  what the file writes, so on the panel that writes `1` where the others write
+  `chr1` every name matched nothing, and the run ended on *none of the ticked
+  sequences has any bins in it* — true, and not the reason.
+
+  Names that arrive from outside the file now go through the same door §5.9
+  gives every other holder of a name list: the literal answer first, the
+  conventions only where that would otherwise be a refusal, and the naming
+  context of the list the name *came out of* carried with it — a ticked list is
+  the source file's own spellings, so it is what says whether its numerals are
+  Roman. Compartments, insulation, P(s) and APA all read through it, so a
+  region, a ticked sequence and a BED anchor each resolve on every panel of a
+  deck.
+
+  **And a short run now says why it was short.** A sequence a file has not got
+  is not an error — a deck holds different assemblies on purpose — but the ones
+  that were left out are named, and a run that matched nothing says so and lists
+  what the file does have, rather than reporting a clean result over nothing.
+  The one thing still refused is a bare `X` with no list behind it: it is the
+  sex chromosome far more often than it is the tenth, and only the list it was
+  written in can say which.
+
+- **Picking a locus for 4C zoomed the map out from under the pointer.** *Pick on
+  map* is a mode: while it is armed a plain drag names a stretch of genome for
+  the form that asked, and nothing else. It zoomed as well, every time, and the
+  reason is an ordering. The mode disarms itself the moment it has an answer —
+  one pick per arming — and it disarms by calling straight back into the map to
+  say the next drag zooms again. The map then consulted that setting on the line
+  *after* it reported the band, so what it read was the mode the gesture had
+  just left. The reading is now taken before the report, which is the rule the
+  same gesture on a lane stack was already following.
+
+- **A turned map's echo marked a place no track has anything at.** Hovering one
+  map of a deck leaves a tick in the tracks beside every other map, and under a
+  turn that tick was drawn at the column the echoed cell sits in — which is the
+  *midpoint* between the two places the contact is between, and a coordinate the
+  profile below has nothing at. It is two ticks now, one per anchor, and one
+  where the two are the same place, which is exactly what the panel under the
+  pointer was already doing with its own crosshair.
 
 - **The desktop app's header carried a broken image, in every release that had
   one.** `publicDir` is off for that target — deliberately, and it is one of the

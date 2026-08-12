@@ -4906,42 +4906,61 @@ export class Session {
       store: () => this.annotations?.store ?? null,
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
+      // The same list the Tracks card is given, and deliberately not
+      // `allTargets` below: that one leaves out a companion whose two tables
+      // have not been read, which is right for *running* against it and wrong
+      // for *drawing* on it.
+      maps: () =>
+        this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
       /**
-       * Every map on screen, lead first, for a batch (§18.2).
+       * Every map on screen that can be run against **right now**, lead first.
        *
-       * A companion is listed only once it has read the two tables an analysis
-       * needs — those are fetched when a map is starred or a batch is priced,
-       * and a panel that has not answered yet cannot be run against. The
-       * fetching is kicked off here so that pressing the button twice does what
-       * a reader expects: the first press runs what is ready and starts the
-       * rest reading, the second runs all of them.
+       * A companion appears once it has read the two tables an analysis needs,
+       * and the read is kicked off here. That makes this the *synchronous*
+       * answer — what the drawer can price, order results by and find the star
+       * in — and it is deliberately not what a batch runs on: see
+       * {@link allTargetsReady}, which waits.
        */
-      allTargets: () => {
-        const out: RunTarget[] = []
-        const file = this.file
-        if (file !== null) {
-          out.push({
-            map: LEAD_MAP,
-            uri: file.uri,
-            source: file.source,
-            label: fileLabel(file.uri),
-          })
-        }
-        for (const { map, panel } of this.deck?.analysable() ?? []) {
-          const facts = panel.analysisFacts()
-          if (facts === null) {
-            void panel.prepareAnalysis(() => this.analysis?.refresh())
-            continue
-          }
-          out.push({
-            map,
-            uri: facts.uri,
-            source: facts.source,
-            label: fileLabel(facts.uri),
-          })
-        }
-        return out
+      allTargets: () => this.readyTargets({ start: true }),
+      /**
+       * The same list, once every map still opening has answered.
+       *
+       * This is what **Run on all maps** goes through, and it exists because the
+       * synchronous answer above quietly ran on fewer maps than the button said.
+       * A companion is a file and a worker: it opens to draw a picture, and the
+       * two tables an analysis needs are a further pair of reads only a starred
+       * or batched panel ever makes (`panels/MapPanel.ts`). So on a freshly
+       * opened deck the first press found three of four ready, ran three, and
+       * left the fourth reading — with nothing on screen saying so, since the
+       * result that never came looks exactly like the result of a task that had
+       * nothing to say. Pressing again worked, which made it look like the file.
+       *
+       * Awaited rather than polled, and every panel at once rather than in turn:
+       * these are two small reads per file against workers that already exist.
+       * A panel that *cannot* answer — a refusal, a file that will not open —
+       * settles without facts and is simply not in the list, which is the same
+       * answer it gave before and the one its own note already explains.
+       */
+      allTargetsReady: async () => {
+        await Promise.all(
+          (this.deck?.analysable() ?? [])
+            .filter(({ panel }) => panel.analysisFacts() === null)
+            .map(({ panel }) => panel.prepareAnalysis(() => this.analysis?.refresh())),
+        )
+        if (this.destroyed) return []
+        return this.readyTargets({ start: false })
       },
+      /**
+       * How many maps a batch will *end up* covering, ready or not.
+       *
+       * What the button counts, and not `allTargets().length`: a deck of four
+       * with one still opening offered "run on all 3 maps" and then ran four,
+       * which is the button lying about the smaller number rather than the
+       * larger. Every map in the grid is going to be run on — {@link
+       * allTargetsReady} waits for them — so every map in the grid is counted.
+       */
+      targetCount: () =>
+        (this.file === null ? 0 : 1) + (this.deck?.analysable().length ?? 0),
       annotations: () => this.annotations?.client ?? null,
       // Taken rather than read: the rows belong to the first workspace built
       // after the switch, and a second one — a later navigation, a reload of the
@@ -4989,6 +5008,32 @@ export class Session {
    */
   private starredFacts(): AnalysisFacts | null {
     return this.deck?.starredPanel?.analysisFacts() ?? null
+  }
+
+  /**
+   * The maps a task can run against, as the runner's targets.
+   *
+   * One list built two ways, which is the point of the parameter: the
+   * synchronous caller wants whatever is ready *and* wants the rest to start
+   * reading, and the awaiting one has already waited and must not kick off a
+   * second round of the same reads. Both give the lead first, which is the order
+   * a reader looking at the grid expects a batch to follow.
+   */
+  private readyTargets(options: { start: boolean }): RunTarget[] {
+    const out: RunTarget[] = []
+    const file = this.file
+    if (file !== null) {
+      out.push({ map: LEAD_MAP, uri: file.uri, source: file.source, label: fileLabel(file.uri) })
+    }
+    for (const { map, panel } of this.deck?.analysable() ?? []) {
+      const facts = panel.analysisFacts()
+      if (facts === null) {
+        if (options.start) void panel.prepareAnalysis(() => this.analysis?.refresh())
+        continue
+      }
+      out.push({ map, uri: facts.uri, source: facts.source, label: fileLabel(facts.uri) })
+    }
+    return out
   }
 
   private analysisContext(): AnalysisContext | null {

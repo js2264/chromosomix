@@ -389,3 +389,38 @@ export function deepestStacks(
   }
   return room
 }
+
+// ---------------------------------------------------------------------------
+// Pointing (§16.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a place pointed at on one panel's axis lands on another's.
+ *
+ * The deck's currency is **base pairs from each block's own start**, never
+ * cells, and this is that rule written down for the one case where getting it
+ * wrong is invisible: a 1 kb file and a 5 kb file answer the same region with
+ * blocks of different cell counts, and a **turned** panel counts its columns in
+ * half bins on top of that (`render/rotate.ts`). A unit carried across untouched
+ * lands at half the position on a band beside a square, or at twice it the other
+ * way — a mark that is confidently in the wrong place, which is worse than no
+ * mark at all.
+ *
+ * Fractional out as well as in. What is being carried is a *position*, not a
+ * cell: rounding it onto a cell boundary would move the mark by half a bin on
+ * the coarser panel, which is visible at the zoom a reader hovers a track at,
+ * and buys nothing since nothing indexes an array with it.
+ *
+ * `null` is **nothing here** — off the end of a shorter block — and not the
+ * nearest edge. A mark clamped to the last cell would say the pointer is over a
+ * place this file has, which is the one claim a deck must never make.
+ */
+export function carriedUnit(
+  at: { unit: number; bpPerCell: number },
+  theirs: { bpPerCell: number; cells: number },
+): number | null {
+  if (!Number.isFinite(at.unit)) return null
+  const bp = at.unit * at.bpPerCell
+  const unit = bp / (theirs.bpPerCell > 0 ? theirs.bpPerCell : 1)
+  return unit >= 0 && unit <= theirs.cells ? unit : null
+}

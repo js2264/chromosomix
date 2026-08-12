@@ -810,8 +810,29 @@ export class AnalysisDrawer {
     const task = this.current
     if (task === null) return
     this.setStatus('')
-    this.options.runner.runAll(task, this.params, this.options.runner.targets())
-    this.refresh()
+    // **Awaited**, and this is the whole of the fix. A companion opens to draw a
+    // picture; the two tables an analysis needs are a further pair of reads it
+    // makes only when starred or batched (`panels/MapPanel.ts`). So the
+    // synchronous list found a freshly opened deck's fourth map missing, ran the
+    // three that were ready, and left the fourth reading — with nothing on
+    // screen saying so, because a result that never came looks exactly like a
+    // task that had nothing to say. Pressing again worked, which made a timing
+    // question look like a question about the file.
+    //
+    // The button is held down while it waits rather than left live: two presses
+    // would queue the batch twice, and the second `runAll` cancels the first
+    // mid-flight. `refresh` puts it back, whichever way this ends.
+    this.runAllButton.disabled = true
+    void this.options.runner
+      .readyTargets()
+      .then((targets) => {
+        // The reader may have moved on — closed the drawer, chosen another task
+        // — while the tables were read. Running what they have stopped looking
+        // at is worse than not running it.
+        if (this.current !== task) return
+        this.options.runner.runAll(task, this.params, targets)
+      })
+      .finally(() => this.refresh())
   }
 
   private cancel(): void {
@@ -833,7 +854,10 @@ export class AnalysisDrawer {
     // The button appears only where there is more than one map to run on, and
     // is priced by the same refusal: a task this file cannot answer cannot be
     // answered five times either.
-    const maps = this.options.runner.targets().length
+    // Every map in the grid, ready or not: the batch waits for the ones still
+    // opening ({@link runAll}), so counting only the ready ones offered "run on
+    // all 3 maps" over a deck of four and then ran four.
+    const maps = this.options.runner.targetCount()
     this.paintRun(task, maps)
     this.runAllButton.classList.toggle('hidden', maps < 2)
     this.runAllButton.disabled = busy || refusal !== null

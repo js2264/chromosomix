@@ -15,7 +15,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { anchorRays, turnedCentre, type RotateDirection } from './rotate'
+import { anchorRays, rowForSeparation, turnedCentre, type RotateDirection } from './rotate'
 import {
   Scale,
   autoRangeOfDisplay,
@@ -1303,6 +1303,15 @@ export class HeatmapView {
    * the canvas wears while the mode is on.
    */
   private bandMode: 'zoom' | 'pick' = 'zoom'
+  /**
+   * A modifier is down that would make the next press name a span of the x axis.
+   *
+   * Kept because the *guide* has to answer the modifier rather than the
+   * movement: a reader who holds Shift over a band and sees the picture say
+   * nothing has to press and drag to find out what the press was going to do.
+   * See {@link spanGuide}, which is what reads it.
+   */
+  private spanModifier = false
   /** A band being dragged out on a lane stack; see {@link showBandPreview}. */
   private bandPreview: { axis: 'rows' | 'cols'; from: number; to: number } | null = null
   private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
@@ -1385,6 +1394,20 @@ export class HeatmapView {
    * compared.
    */
   private echoCell: { row: number; col: number } | null = null
+  /**
+   * A **place on the genome** being pointed at from a track beside another map
+   * of the deck, in this block's own matrix units.
+   *
+   * The other half of {@link echoCell}, and a different fact rather than the
+   * same one in different clothes: a pointer on a stack names one position, not
+   * a contact between two, so there is no cell to mark and the mark is on the
+   * diagonal — which is where a position stands on a contact map. What is drawn
+   * there is the small form of the guide the panel under the pointer is drawing
+   * across itself: two 45° arms leaving the diagonal on a turned map, a cross on
+   * a square one. `null` where the owner has refused it — see
+   * {@link setLaneEcho}.
+   */
+  private laneEcho: number | null = null
   /** The cell under the pointer, for the crosshair. `null` when outside. */
   private hoverCell: Cell | null = null
   /**
@@ -2024,6 +2047,47 @@ export class HeatmapView {
   }
 
   /**
+   * Whether the guide under the pointer should be the **vertical line** a span
+   * gesture is about to draw, rather than the pair of 45° rays.
+   *
+   * The rays are the honest guide on a turned map at rest: they say *these two
+   * places*, which is what the contact under the pointer is between
+   * (`render/rotate.ts`). They are the wrong answer the moment the next press
+   * names a stretch of the x axis instead — Shift held, Option held, or a form
+   * waiting to be pointed at — because then the reader is not choosing a contact
+   * but an interval, and the mark that says where an interval starts is the edge
+   * it starts on. So the guide becomes the left-hand edge of the band the press
+   * would begin, and the picture tells the hand what it is about to do.
+   *
+   * Only under a turn: on a square map both gestures already read off a cross,
+   * and the column arm of it *is* the edge the band would start at.
+   *
+   * Public because the lane stacks draw the same guide continued off the map
+   * (`ui/MatrixPanel.ts`), and one map showing an interval's edge over tracks
+   * marked with a contact's two anchors is the two halves of one instrument
+   * disagreeing.
+   */
+  get spanGuide(): boolean {
+    return this.spanGestures && (this.bandMode === 'pick' || this.spanModifier)
+  }
+
+  /**
+   * Record whether a span modifier is down, repainting where it shows.
+   *
+   * Cheap to call on every pointer move: nothing happens unless the answer
+   * changed, and nothing is repainted unless there is a guide on screen for it
+   * to change.
+   */
+  private noteSpanModifier(held: boolean): void {
+    if (this.spanModifier === held) return
+    const showed = this.spanGuide
+    this.spanModifier = held
+    if (showed !== this.spanGuide && this.hoverCell !== null && this.plot.crosshair) {
+      this.changed()
+    }
+  }
+
+  /**
    * Fit the whole matrix into the plot area and centre it — or stand it on the
    * edge {@link setAnchor} named, which is what a turned band asks for.
    */
@@ -2532,9 +2596,17 @@ export class HeatmapView {
     const vertical = this.bandIsVertical(x0, y0, x, y)
     const axis = vertical ? 'rows' : 'cols'
     const [a, b] = vertical ? [y0, y] : [x0, x]
+    // **Read before the report, not after it.** The report is what *ends* the
+    // pick: it reaches `ui/mapPick.ts`, which disarms after one locus, which
+    // calls straight back into `setBandMode('zoom')` — so a mode consulted on
+    // the next line is the mode this gesture has just left, and every pick
+    // zoomed the picture the reader was pointing at out from under them. The
+    // lane's copy of this gesture already took the reading first
+    // (`MatrixPanel.bandOnLane`); this is the map's own half of the same rule.
+    const zooming = this.bandMode === 'zoom'
     const span = this.bandAt(axis, a, b)
     if (span !== null) this.onBand?.(axis, span)
-    if (this.bandMode !== 'zoom') return
+    if (!zooming) return
     // A turned map has one axis and a band that stands on an edge, so the zoom
     // is the span's — `clampView` puts the band back on its anchor rather than
     // centring it, which {@link zoomToBand} would. Same reading the selection
@@ -2641,8 +2713,13 @@ export class HeatmapView {
    */
   setBandMode(mode: 'zoom' | 'pick'): void {
     if (this.bandMode === mode) return
+    const showed = this.spanGuide
     this.bandMode = mode
     this.canvas.classList.toggle('picking', mode === 'pick')
+    // Arming is a press on a button in the sidebar, so nothing else is about to
+    // repaint this canvas: without this the guide under a stationary pointer
+    // keeps the shape of the gesture the reader has just left.
+    if (showed !== this.spanGuide) this.changed()
   }
 
   /**
@@ -2945,6 +3022,7 @@ export class HeatmapView {
     if (this.plot.crosshair) {
       this.drawCrosshair()
       this.drawEcho()
+      this.drawLaneEcho()
     }
     this.drawSelection()
     this.drawPlotBorder()
@@ -3588,6 +3666,84 @@ export class HeatmapView {
   }
 
   /**
+   * Mark a place on the genome that a track beside **another** map is naming.
+   *
+   * `unit` is the position on this block's column axis, in matrix units, and the
+   * mark is drawn where a position stands on a contact map, which is the
+   * diagonal. `null` stops it, and is also how the owner refuses a picture that
+   * has no diagonal to stand it on — a contig × contig block is of two places
+   * and there is no point on it that is one of them ({@link setLaneEcho}'s
+   * caller checks `isTurnable`).
+   */
+  setLaneEcho(unit: number | null): void {
+    if (this.laneEcho === unit) return
+    this.laneEcho = unit
+    this.changed()
+  }
+
+  /**
+   * The small form of the guide a pointer on a track draws — see
+   * {@link laneEcho}.
+   *
+   * **Not the cross {@link drawEcho} leaves**, and the difference is the whole
+   * of why this is a second method. That mark answers "the pointer is over this
+   * *cell*", and its two arms are the two axes the cell is read off. Here there
+   * is no cell: the reader is naming one place, and on a turned map the contacts
+   * that place is in leave the diagonal along two 45° rays rather than along an
+   * axis (`render/rotate.ts`). A cross drawn there would be two arms pointing
+   * at nothing — the horizontal one running through contacts between two
+   * *other* places, the vertical one through a column that is a midpoint. So the
+   * mark is the first few pixels of the V the panel under the pointer is drawing
+   * across its own band, which is the same instrument at the size a map nobody
+   * is pointing at deserves.
+   *
+   * A square map keeps the cross, and for the same reason it is right there: its
+   * two axes *are* the two directions the place is an anchor along, and the
+   * point where they meet is the diagonal.
+   */
+  private drawLaneEcho(): void {
+    const unit = this.laneEcho
+    if (unit === null || this.matrix === null) return
+    const plot = this.dataRect
+    if (plot.width <= 0 || plot.height <= 0) return
+    const origin = this.plotRect
+    const x = this.snap(origin.x + this.colScale.toPixel(unit))
+    if (x < plot.x || x > plot.x + plot.width) return
+    const turn = this.turn
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.strokeStyle = this.opts.crosshairColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.beginPath()
+    if (turn === null) {
+      // The diagonal of a square block is where both axes read the same place,
+      // so the row is the column.
+      const y = this.snap(origin.y + this.rowScale.toPixel(unit))
+      if (y >= plot.y && y <= plot.y + plot.height) {
+        ctx.moveTo(x - ECHO_ARM, y)
+        ctx.lineTo(x + ECHO_ARM, y)
+        ctx.moveTo(x, y - ECHO_ARM)
+        ctx.lineTo(x, y + ECHO_ARM)
+      }
+    } else {
+      // The apex is on the diagonal — separation zero, which is the bottom row
+      // of an ordinary band and the top row of the mirrored half — and the two
+      // arms leave it towards the far edge, which is the direction separation
+      // grows in. No snap: a 45° line cannot be put on the device grid.
+      const y = origin.y + this.rowScale.toPixel(rowForSeparation(turn, 0) + 0.5)
+      const away = turn.direction === 'up' ? -1 : 1
+      ctx.moveTo(x - ECHO_ARM, y + away * ECHO_ARM)
+      ctx.lineTo(x, y)
+      ctx.lineTo(x + ECHO_ARM, y + away * ECHO_ARM)
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /**
    * Say which map is turned, so the guides can be drawn as the map is read.
    *
    * `null` for an ordinary square block, which is every map but one.
@@ -3633,6 +3789,13 @@ export class HeatmapView {
       ctx.lineTo(x, plot.y + plot.height)
       ctx.moveTo(plot.x, y)
       ctx.lineTo(plot.x + plot.width, y)
+    } else if (this.spanGuide) {
+      // The edge the band about to be dragged would start at — see
+      // {@link spanGuide}. Snapped, unlike the rays: this one is a straight line
+      // on the device grid and rounding it sharpens rather than moves it.
+      const x = this.snap(origin.x + this.colScale.toPixel(cell.col + 0.5))
+      ctx.moveTo(x, plot.y)
+      ctx.lineTo(x, plot.y + plot.height)
     } else {
       // Both edges of the band, so the pair of rays is a whole X wherever the
       // picture has room for one — and, where it has not, exactly the part of an
@@ -4233,6 +4396,10 @@ export class HeatmapView {
       const [x, y] = local(e)
       const drag = this.drag
       showCursor({ selecting: drag === null ? wantsSelect(e) : drag.mode === 'select' })
+      // Both modifiers, because on a turned map both name the same thing: Option
+      // draws a full-height band and Shift names one for the zoom, so either one
+      // held means the next press is choosing an interval ({@link spanGuide}).
+      this.noteSpanModifier(drag === null && (e.shiftKey || wantsSelect(e)))
       if (drag !== null) {
         if (Math.abs(x - drag.x0) + Math.abs(y - drag.y0) > 2) this.dragMoved = true
         if (drag.mode === 'pan') {
@@ -4301,17 +4468,28 @@ export class HeatmapView {
     }
 
     /**
-     * Shift pressed or released with the pointer standing still.
+     * Shift or Option pressed or released with the pointer standing still.
      *
      * The snap belongs to the modifier rather than to the movement, so it has to
      * happen the moment the key goes down — a reader who presses Shift while
      * hovering and sees nothing move concludes the feature is not there. On the
      * window, because hovering does not take the focus and the canvas would only
      * hear this after a click.
+     *
+     * Option is here for the *guide* alone ({@link spanGuide}) and never reaches
+     * `hoverAt`: the diagonal snap is Option-with-Shift, and a key event says
+     * which key moved rather than which are down, so answering an Option press
+     * with a snap would snap on the modifier that is half of the pair.
      */
     const onShift = (e: KeyboardEvent): void => {
-      if (e.key !== 'Shift' || this.hoverPoint === null || this.drag !== null) return
-      hoverAt(this.hoverPoint.x, this.hoverPoint.y, e.type === 'keydown')
+      if (this.hoverPoint === null || this.drag !== null) return
+      const down = e.type === 'keydown'
+      if (e.key === 'Shift') {
+        this.noteSpanModifier(down || e.altKey)
+        hoverAt(this.hoverPoint.x, this.hoverPoint.y, down)
+        return
+      }
+      if (e.key === 'Alt') this.noteSpanModifier(down || e.shiftKey)
     }
     /**
      * The canvas's own move handler, which steps aside once `follow` is on: the
@@ -4385,6 +4563,10 @@ export class HeatmapView {
       this.setHover(null)
       this.onHover?.(null)
       canvas.classList.remove('on-diagonal')
+      // A modifier released while the pointer is elsewhere is a key event this
+      // canvas may never hear, so a flag left set would decide the shape of the
+      // guide the next time a hand arrives.
+      this.noteSpanModifier(false)
       if (this.drag === null) showCursor({ selecting: false, grabbing: false })
     }
     const onWheel = (e: WheelEvent): void => {

@@ -26,7 +26,14 @@ import {
   insulationScore,
   type Boundary,
 } from '../insulation'
-import { boolParam, numParam, strParam, type JobContext, type TaskRunner } from '../job'
+import {
+  boolParam,
+  contigIdFor,
+  numParam,
+  strParam,
+  type JobContext,
+  type TaskRunner,
+} from '../job'
 import { windowLadder } from '../tasks/insulation'
 import type { ProfileOutput, TaskOutput } from '../types'
 import {
@@ -64,7 +71,13 @@ function planUnits(job: JobContext, region: string): Unit[] {
   }
 
   if (region !== '') {
-    const unit = unitFor(mc.contigId(parseRegionString(region)[0]))
+    // Through {@link contigIdFor}, because the name is the *reader's* rather
+    // than this file's: it was typed against whichever map the Analysis column
+    // is pointed at, and a batch (§18.2) then asks every panel of the deck for
+    // it. `mc.contigId` is literal and threw `unknown-label` on the one panel
+    // that spells the sequence another way (§5.9).
+    const cid = contigIdFor(mc, parseRegionString(region)[0])
+    const unit = cid < 0 ? null : unitFor(cid)
     return unit === null ? [] : [unit]
   }
   const out: Unit[] = []
@@ -107,7 +120,21 @@ export const runInsulation: TaskRunner = async (job) => {
     )
   }
 
-  const units = planUnits(job, strParam(job.params, 'region', '').trim()).filter(
+  const region = strParam(job.params, 'region', '').trim()
+  const planned = planUnits(job, region)
+  // Two ways to end with nothing, and they need two sentences. A region that
+  // named a sequence this file has not got is a batch across a deck of two
+  // assemblies (§18.2), and answering it with the window advice sends the reader
+  // to change a number that was never the problem.
+  if (region !== '' && planned.length === 0) {
+    job.note(
+      `This file has no sequence called ${parseRegionString(region)[0]}, under that spelling or ` +
+        `any this viewer knows of (§5.9). It has ` +
+        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
+    )
+    return []
+  }
+  const units = planned.filter(
     // A sequence with no bin whose whole diamond fits produces a column of NaN
     // at full cost. Dropped here and counted, rather than read and thrown away.
     (unit) => unit.span.to - unit.span.from > widest * 2,

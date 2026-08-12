@@ -136,6 +136,27 @@ export interface LaneGeometry {
    */
   echo: { row: number; col: number } | null
   /**
+   * Where {@link echo} lands on the column axis when **this** map is turned.
+   *
+   * {@link anchors} for the other panel's pointer, and needed for exactly the
+   * same reason: the echoed cell is a contact between two places, so a tick at
+   * the column it sits in marks the midpoint of the two, which is a coordinate
+   * no track has anything at. Two ticks, one per anchor — one where the two are
+   * the same place. `null` on a square map, where the echoed column *is* the
+   * position.
+   */
+  echoAnchors: readonly number[] | null
+  /**
+   * A place on the genome a pointer is naming from a track beside **another**
+   * map of the deck, in this block's matrix units on the axis named.
+   *
+   * The lane stacks' half of {@link HeatmapView.setLaneEcho}: the deck's promise
+   * is that its pictures are of one place, and a hand moving along one profile
+   * asking "what is here" is asking it of every profile on screen. A tick, as
+   * {@link echo} is and for the same reason — one pointer, one rule.
+   */
+  laneEcho: { axis: 'rows' | 'cols'; unit: number } | null
+  /**
    * A pointer over one of the lane stacks, in that stack's own canvas pixels
    * along the shared axis.
    *
@@ -1047,8 +1068,26 @@ export class AnnotationLanes {
       // following their pointer, and one that appears only where they are *not*
       // pointing is that answered backwards.
       if (geometry.crosshair && geometry.echo !== null) {
-        const unit = (laneIsHorizontal(edge) ? geometry.echo.col : geometry.echo.row) + 0.5
-        laneTick(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+        // The two anchors under a turn, exactly as the reader's own pointer gets
+        // them above: an echoed *contact* is between two places, and one tick
+        // half way along the axis between them marks neither.
+        const units = laneIsHorizontal(edge)
+          ? (geometry.echoAnchors ?? [geometry.echo.col + 0.5])
+          : [geometry.echo.row + 0.5]
+        for (const unit of units) {
+          laneTick(ctx, frame, frame.toPixel(unit), geometry.palette.crosshair, dpr)
+        }
+      }
+      // ...and another map's *track* pointer, which names one place rather than
+      // a contact and therefore needs no anchors: the position is the position
+      // on every axis that measures it. Only on the stacks that run along that
+      // axis — a place named on the columns says nothing about a row.
+      if (
+        geometry.crosshair &&
+        geometry.laneEcho !== null &&
+        laneIsHorizontal(edge) === (geometry.laneEcho.axis === 'cols')
+      ) {
+        laneTick(ctx, frame, frame.toPixel(geometry.laneEcho.unit), geometry.palette.crosshair, dpr)
       }
       // ...and the reader's own, from pointing at this stack. Not under the
       // crosshair preference: that option is about what the *map* draws while

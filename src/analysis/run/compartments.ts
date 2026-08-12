@@ -28,6 +28,7 @@
  */
 
 import { FeatureBuilder } from '../../annotations/featureset'
+import { contextOf } from '../../genome/naming'
 import type { FeatureSet } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
@@ -45,6 +46,7 @@ import { ExpectedAccumulator } from '../expected'
 import {
   boolParam,
   chosenInput,
+  contigIdsFor,
   idParam,
   listParam,
   numParam,
@@ -104,11 +106,23 @@ interface Selection {
  * `ExpectedAccumulator` of zero length and a trans block with no cells are two
  * ways to get a `NaN` into the plan for a sequence the reader ticked and cannot
  * see anything wrong with.
+ *
+ * **The names are not necessarily this file's.** They are the *starred* map's —
+ * the form ticks every sequence of whichever file the Analysis column is
+ * pointed at — and a batch then runs the same list against every panel of the
+ * deck (§18.2). Matched by string, a `.hic` writing `1` beside a `.cool` writing
+ * `chr1` matched nothing at all and the run ended on *none of the ticked
+ * sequences has any bins in it*, which is true and is not the reason. So they go
+ * through {@link contigIdsFor}, with the ticked list itself standing in for the
+ * naming context: it *is* the source file's spellings, so it is the thing that
+ * says whether its numerals are Roman (§5.9).
  */
 function selectionOf(job: JobContext, names: readonly string[]): Selection {
+  const { ids } = contigIdsFor(job.mc, names, contextOf(names as string[]))
   const contigs: number[] = []
-  for (let cid = 0; cid < job.mc.chromnames.length; cid++) {
-    if (!names.includes(job.mc.chromnames[cid])) continue
+  // Ascending, which {@link contigIdsFor} guarantees: the square's rows are laid
+  // out in file order, and the groups are contiguous runs of it by construction.
+  for (const cid of ids) {
     const [from, to] = job.mc.contigExtent(cid)
     if (to > from) contigs.push(cid)
   }
@@ -451,9 +465,28 @@ export const runCompartments: TaskRunner = async (job) => {
     job.note('No sequence is ticked, so there is nothing to correlate.')
     return []
   }
+  // Said out loud, and before the run rather than after it. A ticked sequence
+  // this file has not got is not an error — a deck holds files of different
+  // assemblies on purpose, and a batch asks each of them for the same list — but
+  // a run that quietly drops half of what was asked for and reports a clean
+  // eigenvector is the one failure §5.9 exists to prevent. Named up to a handful
+  // so the note stays a sentence.
+  const missing = contigIdsFor(job.mc, names, contextOf(names)).missing
+  if (missing.length > 0 && missing.length < names.length) {
+    const shown = missing.slice(0, 6).join(', ')
+    job.note(
+      `${missing.length} of the ${names.length} ticked ${missing.length === 1 ? 'sequence is' : 'sequences are'} ` +
+        `not in this file and ${missing.length === 1 ? 'was' : 'were'} left out: ` +
+        `${shown}${missing.length > 6 ? ', …' : ''}.`,
+    )
+  }
   const whole = selectionOf(job, names)
   if (whole.n === 0) {
-    job.note('None of the ticked sequences has any bins in it.')
+    job.note(
+      `None of the ${names.length} ticked ${names.length === 1 ? 'sequence' : 'sequences'} is in ` +
+        `this file, under that spelling or any this viewer knows of. It has ` +
+        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
+    )
     return []
   }
 

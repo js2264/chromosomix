@@ -81,6 +81,7 @@ import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
   DECK_DRAG_TYPE,
   MAX_PANELS,
+  carriedUnit,
   grownDeck,
   grownPlacement,
   panelBudgetBytes,
@@ -497,11 +498,13 @@ export class PanelDeck {
       this.lead.setViewportListener(null)
       this.lead.setLaneListener(null)
       this.lead.setHoverListener(null)
+      this.lead.setLaneHoverListener(null)
     }
     this.lead = panel
     this.lock.leave(LEAD)
     panel?.setLaneListener((budget) => this.align(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
+    panel?.setLaneHoverListener((at) => this.echoLaneHover(LEAD, panel, at))
     if (panel === null) {
       this.align({ lanes: { top: 0, right: 0, bottom: 0, left: 0 }, plot: 0, plotHeight: 0 })
       // A table view has no map. The bar still repaints, because the chain on it
@@ -713,10 +716,24 @@ export class PanelDeck {
     for (const slot of this.slots) slot.panel?.useBinsize(binsize)
   }
 
-  /** Show the add row and put the caret in it — the shell's "add a map". */
+  /**
+   * Show the add row and put the caret in it — the shell's "add a map", and the
+   * bar's own button.
+   *
+   * The bar is repainted because the button is a toggle and says which way it
+   * is pointing; that is cheap and it is what {@link paintBar} is for.
+   */
   promptAdd(): void {
     this.addRow.classList.remove('hidden')
+    this.paintBar()
     this.urlInput.focus()
+  }
+
+  /** Put the add row away again, without opening anything. */
+  private hideAdd(): void {
+    if (this.addRow.classList.contains('hidden')) return
+    this.addRow.classList.add('hidden')
+    this.paintBar()
   }
 
   /**
@@ -770,6 +787,7 @@ export class PanelDeck {
     this.lead?.setViewportListener(null)
     this.lead?.setLaneListener(null)
     this.lead?.setHoverListener(null)
+    this.lead?.setLaneHoverListener(null)
     // …and the room it was holding for maps that are no longer beside it, or the
     // last panel put down would leave the first one padded out for ever.
     this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
@@ -815,6 +833,53 @@ export class PanelDeck {
       // file has, which is the one thing a deck must not claim.
       const inside = row >= 0 && col >= 0 && row < extent.rows && col < extent.cols
       panel.showHoverEcho(inside ? { row, col } : null)
+    }
+    show(LEAD, this.lead)
+    for (const slot of this.slots) show(slot.id, slot.panel?.map ?? null)
+  }
+
+  /**
+   * The same, for a pointer on a **track** rather than on a map.
+   *
+   * A hand moving along one profile is asking "what is here" of every profile on
+   * screen — that is what a deck is for — and until now it was asked of one. The
+   * panel under the pointer draws its own full guide; the others get a tick in
+   * the stacks that measure the same axis and a small mark where that place
+   * stands on their picture ({@link MatrixPanel.showLaneEcho}).
+   *
+   * Converted through base pairs from each block's own start, exactly as
+   * {@link echoHover} is and for the same reason — and here the conversion earns
+   * its keep twice over, because a **turned** panel counts its columns in half
+   * bins. A unit carried across untouched would land at half the position on a
+   * band beside a square, or twice it the other way; a base pair is a base pair
+   * on both.
+   *
+   * Fractional at the far end, unlike the cell echo: what is being carried is a
+   * position rather than a cell, and rounding it onto a cell boundary would move
+   * the mark by half a bin on the coarser panel — visible at the zoom a reader
+   * hovers a track at, and pointless, since nothing downstream indexes with it.
+   */
+  private echoLaneHover(
+    from: string,
+    source: MatrixPanel,
+    at: { axis: 'rows' | 'cols'; unit: number } | null,
+  ): void {
+    const bpPerCell = source.bpPerCell()
+    const show = (id: string, panel: MatrixPanel | null): void => {
+      if (panel === null || id === from) return
+      if (at === null) {
+        panel.showLaneEcho(null)
+        return
+      }
+      const extent = panel.cellCount()
+      const unit = carriedUnit(
+        { unit: at.unit, bpPerCell },
+        {
+          bpPerCell: panel.bpPerCell(),
+          cells: at.axis === 'cols' ? extent.cols : extent.rows,
+        },
+      )
+      panel.showLaneEcho(unit === null ? null : { axis: at.axis, unit })
     }
     show(LEAD, this.lead)
     for (const slot of this.slots) show(slot.id, slot.panel?.map ?? null)
@@ -948,6 +1013,10 @@ export class PanelDeck {
       slot.vacancy = new VacantPanel({
         origin,
         onOpen: (file) => this.fill(slot, file),
+        // Through `occupy` like the file road, so the cell the reader typed into
+        // is the cell that opens — {@link add} would look for the *first* empty
+        // one, which in a 2 × 2 with three gaps is not the one they aimed at.
+        onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1053,6 +1122,7 @@ export class PanelDeck {
     })
     map.setViewportListener((rows, cols) => this.lock.report(slot.id, rows, cols))
     map.setHoverListener((cell) => this.echoHover(slot.id, map, cell))
+    map.setLaneHoverListener((at) => this.echoLaneHover(slot.id, map, at))
     // Before the lock and before the note: a panel that has just cut its band
     // from whatever height its cell had while the grid was settling is put on
     // the deck's distance first, so `lockNote` is asked about two bands that
@@ -1426,7 +1496,7 @@ export class PanelDeck {
     const empty = this.slots.find((slot) => slot.ref.kind === 'vacant')
     if (empty !== undefined) {
       this.warn('')
-      this.addRow.classList.add('hidden')
+      this.hideAdd()
       this.occupy(empty, ref, source)
       return
     }
@@ -1441,7 +1511,7 @@ export class PanelDeck {
     this.warn('')
     const slot = this.build(ref, source)
     this.slots.push(slot)
-    this.addRow.classList.add('hidden')
+    this.hideAdd()
     this.paintGrid()
     this.publish()
     if (this.state !== null) slot.panel?.apply(this.state)
@@ -1644,6 +1714,25 @@ export class PanelDeck {
     const filled = this.filled
     const empty = cells - filled
 
+    // The one control that puts a map *into* the deck, and the reason it is
+    // here: the row of boxes below the bar takes a file or a URL, and until now
+    // nothing on screen opened it. It was reachable from the command palette
+    // alone — so a reader with a published cooler and a deck in front of them
+    // had a drop rectangle for a local file and no way at all to name a remote
+    // one, which is the road §11 exists for. A `+` on an edge draws a *cell*
+    // (§16.9); this opens a map.
+    const adding = !this.addRow.classList.contains('hidden')
+    const addMap = button(
+      adding ? 'cancel' : 'add a map…',
+      () => (adding ? this.hideAdd() : this.promptAdd()),
+      {
+        class: `btn deck-add-toggle${adding ? ' is-on' : ''}`,
+        title:
+          'Open one more map beside these: choose a file, or paste the URL of a published one. It ' +
+          'lands in the first empty cell if the deck has one, and at the end if it has not.',
+      },
+    )
+
     // **Two actions, not two modes**, and bordered like the chain beside them
     // because that is what they are: things that *do* something, pressed once
     // and finished, in a bar whose other members are the download and the copy.
@@ -1774,11 +1863,13 @@ export class PanelDeck {
     // which half a control was in said nothing about what it did. Everything
     // that *adjusts* the deck now reads left to right in one run, and the only
     // thing across the gap is the one that ends it.
-    // The two presses first, then the chain, then the shape, then the two
-    // exports — which is the order a reader works in: put the maps on one
-    // footing, decide whether they move together, arrange them, take the
-    // picture. The one control that ends the deck stays across the gap.
+    // Adding a map first, then the two presses, then the chain, then the shape,
+    // then the two exports — which is the order a reader works in: get the maps
+    // on screen, put them on one footing, decide whether they move together,
+    // arrange them, take the picture. The one control that ends the deck stays
+    // across the gap.
     this.toolbar.replaceChildren(
+      addMap,
       share,
       resolutions,
       leadLock,
@@ -1866,7 +1957,24 @@ export class PanelDeck {
   private keepLanesOnLiveMaps(): void {
     const store = this.props.annotations?.(LEAD_MAP)?.store
     if (store === undefined) return
+    // Which file each cell is showing, told to the store *while the cell is
+    // alive* — a slot id is minted per deck and never minted again, so the
+    // moment a map leaves there is nothing left to say which file it was. The
+    // panel's own URI where there is one, so a companion that descended into an
+    // entry of a collection is keyed by the map it is actually drawing.
+    const files = new Map<MapId, string>()
+    for (const slot of this.slots) {
+      const uri = slot.panel?.uri ?? (slot.ref.kind === 'vacant' ? undefined : slot.ref.uri)
+      if (uri !== undefined) files.set(slot.id, uri)
+    }
+    store.noteMapFiles(files)
+    // Parks what left onto the lead, keyed by that file…
     store.keepMaps(new Set<MapId>([LEAD_MAP, ...this.slots.map((slot) => slot.id)]))
+    // …and hands it back to whichever cell is showing that file now, which is
+    // what makes closing a deck and opening it again put the tracks back where
+    // the reader had them. Both directions in one pass, on every render, for
+    // `keepMaps`'s own reason: a reconciliation cannot go stale and an event can.
+    for (const [map, uri] of files) store.adoptHome(map, uri)
   }
 
   /**

@@ -239,6 +239,68 @@ describe('what a drag does', () => {
   })
 })
 
+/**
+ * *Pick on map*: a drag that names a stretch of genome for a form and does
+ * nothing else.
+ *
+ * The mode disarms itself the moment it has an answer (`ui/mapPick.ts` — one
+ * pick per arming), and it disarms by calling back into `setBandMode('zoom')`.
+ * So the report and the decision to zoom are not independent, and the order they
+ * are read in is the whole feature: a mode consulted after the report is the
+ * mode the gesture has just left. That is asserted here with the real callback
+ * shape — the listener disarms, exactly as the module does — because a test that
+ * merely set the mode and dragged passes against either ordering.
+ */
+describe('naming a locus rather than zooming', () => {
+  function armed(): {
+    heatmap: HeatmapView
+    fire: (type: string, event: Record<string, unknown>) => void
+    bands: Array<{ axis: string; span: [number, number] }>
+  } {
+    const { canvas, fire } = harness(400)
+    const bands: Array<{ axis: string; span: [number, number] }> = []
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onBand: (axis, span) => {
+        bands.push({ axis, span })
+        // What the real listener does: one pick per arming, and the disarm
+        // reaches straight back in here.
+        heatmap.setBandMode('zoom')
+      },
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.setBandMode('pick')
+    return { heatmap, fire, bands }
+  }
+
+  it('reports the band and leaves the picture where it is', () => {
+    const { heatmap, fire, bands } = armed()
+    const zoom = heatmap.zoomLevel
+    const plot = heatmap.plotRect
+    const corner = heatmap.cellAt(plot.x + 5, plot.y + 5)
+
+    dragWith(fire, [80, 200], [160, 200])
+
+    expect(bands).toHaveLength(1)
+    expect(bands[0]?.axis).toBe('cols')
+    expect(heatmap.zoomLevel).toBe(zoom)
+    const after = heatmap.cellAt(plot.x + 5, plot.y + 5)
+    expect(after?.row).toBe(corner?.row)
+    expect(after?.col).toBe(corner?.col)
+  })
+
+  it('zooms again on the next drag, the mode having disarmed itself', () => {
+    const { heatmap, fire } = armed()
+    dragWith(fire, [80, 200], [160, 200])
+    const zoom = heatmap.zoomLevel
+
+    dragWith(fire, [80, 200], [160, 200], { shiftKey: true })
+
+    expect(heatmap.zoomLevel).toBeGreaterThan(zoom)
+  })
+})
+
 describe('chrome stops at the data', () => {
   it('shrinks the data rect when the matrix no longer fills the plot', () => {
     const heatmap = view()

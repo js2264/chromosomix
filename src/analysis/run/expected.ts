@@ -46,7 +46,14 @@ import {
   logLogSlope,
   type ExpectedCurve,
 } from '../expected'
-import { boolParam, numParam, strParam, type JobContext, type TaskRunner } from '../job'
+import {
+  boolParam,
+  contigIdFor,
+  numParam,
+  strParam,
+  type JobContext,
+  type TaskRunner,
+} from '../job'
 import {
   displayableContigs,
   spanOfContig,
@@ -140,8 +147,13 @@ function planUnits(mc: MetaCooler, scope: string, region: string): Unit[] {
     // screen but labelled `chrIV` is a different quantity wearing the same name.
     // `analysis/tasks/ps.ts` prices exactly this extent, and the two agreeing is
     // what stops a run being cheaper or dearer than the button said.
-    const cid = mc.contigId(parseRegionString(region)[0])
-    const span = spanOfContig(mc, cid)
+    //
+    // Resolved through {@link contigIdFor} rather than by string, because the
+    // name is the reader's and a batch asks it of every panel of a deck (§18.2):
+    // a `.hic` writing `1` beside a `.cool` writing `chr1` met `unknown-label`
+    // and reported a failure about a file that has the sequence (§5.9).
+    const cid = contigIdFor(mc, parseRegionString(region)[0])
+    const span = cid < 0 ? null : spanOfContig(mc, cid)
     return span === null ? [] : [makeUnit(mc.chromnames[cid], [span])]
   }
 

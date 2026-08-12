@@ -134,7 +134,7 @@ import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/prot
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
-import type { MapId } from '../annotations/placement'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
 import { isArmed, locusText, pickLocus, subscribePick, type PickedLocus } from './mapPick'
 import { Modal } from './Modal'
@@ -700,11 +700,34 @@ export class MatrixPanel {
    */
   private laneListener: ((geometry: PanelGeometry) => void) | null = null
   private hoverListener: ((cell: { row: number; col: number } | null) => void) | null = null
+  private laneHoverListener:
+    | ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void)
+    | null = null
+  /**
+   * Which map of the deck this panel *is*, for the lanes it draws.
+   *
+   * The lead when nothing says otherwise, which is every session with no deck in
+   * it. It is a property of the panel rather than of the gesture, so anything
+   * that moves a lane from here says *which map* it moved it on
+   * (`annotations/store.ts`'s `placeAt`).
+   */
+  private readonly mapId: MapId
   /** Where another panel's pointer is, in this panel's cells. */
   private echo: { row: number; col: number } | null = null
+  /** Where another panel's pointer is *on a track*, in this panel's cells. */
+  private laneEcho: { axis: 'rows' | 'cols'; unit: number } | null = null
   private units = ''
   /** What the score is called, where nothing here chose it. */
   private scoreLabel = ''
+  /**
+   * The score picker, where this panel has one, so it can be told what changed.
+   *
+   * A `<select>` holds no state worth keeping — the choice belongs to whoever
+   * reads the file — so this is only ever *written to*, and only from
+   * {@link syncScoreChoice}. `null` on a file with one answer, where offering a
+   * dropdown would be offering a choice that cannot be made.
+   */
+  private scoreSelect: HTMLSelectElement | null = null
   /**
    * The scale menu on the picture, for a panel with no card in a sidebar.
    *
@@ -1074,6 +1097,7 @@ export class MatrixPanel {
     // and persisting nothing, so the lane machinery below has one object to be
     // built against rather than a `null` to be checked at every use.
     this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
+    this.mapId = options.annotations?.map ?? LEAD_MAP
     this.lanes = new AnnotationLanes({
       store: this.laneStore,
       ...(options.annotations?.map === undefined ? {} : { map: options.annotations.map }),
@@ -1415,6 +1439,7 @@ export class MatrixPanel {
     const scores = options.scores
     if (scores !== undefined && scores.choices.length > 1) {
       const select = el('select', { class: 'select' })
+      this.scoreSelect = select
       for (const choice of scores.choices) {
         select.appendChild(el('option', { value: choice.id, text: choice.label }))
       }
@@ -1431,17 +1456,22 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      valueFields.push(
-        field(
-          'score',
-          select,
-          'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
-            'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
-            'dropped have no weight and show as blank. Anything below those is a further column ' +
-            'this file carries in /pixels, under its own name.',
-        ),
+      const scoreField = field(
+        'score',
+        select,
+        'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
+          'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
+          'dropped have no weight and show as blank. Anything below those is a further column ' +
+          'this file carries in /pixels, under its own name.',
       )
-      controls.unshift(valueFields[valueFields.length - 1])
+      // **First in both**, and not merely first in the card. It leads the Map
+      // card because it is the question the other three answer *about* — what
+      // the numbers are, before how they are transformed, ramped and clipped —
+      // and a corner menu that put it last was the same five fields in a
+      // different order on a companion. `unshift` on each, so the two lists
+      // cannot drift the next time one of them gains a field.
+      valueFields.unshift(scoreField)
+      controls.unshift(scoreField)
     }
 
     if (options.compare !== undefined) {
@@ -1926,7 +1956,9 @@ export class MatrixPanel {
       if (moved !== '') {
         event.preventDefault()
         if (this.laneStore.byId(moved) !== undefined) {
-          this.laneStore.place(moved, placementOn(edge))
+          // This panel's own map, as the grip drag is: a track carried onto the
+          // third replicate's edge belongs on the third replicate.
+          this.laneStore.placeAt(moved, this.mapId, placementOn(edge))
         }
         return
       }
@@ -3287,12 +3319,27 @@ export class MatrixPanel {
       // two places it is a contact *between* are two different columns of the
       // track below. One line there would have to be drawn half way between them,
       // where nothing is — see {@link anchorColumns}.
+      //
+      // …except while the next press would name a stretch of the axis rather
+      // than a contact ({@link HeatmapView.spanGuide}). The map draws the edge of
+      // that stretch as one vertical line, and a stack answering it with a
+      // contact's two anchors is the two halves of one instrument disagreeing
+      // about what the hand is doing. `null` puts the ordinary single hairline
+      // under the pointer's own column, which is that edge.
       anchors:
-        this.turned === null || this.hoverCell === null
+        this.turned === null || this.hoverCell === null || this.heatmap.spanGuide
           ? null
           : anchorColumns(this.turned, this.hoverCell.row, this.hoverCell.col),
       crosshair: getPlotOptions().crosshair,
       echo: this.echo,
+      // The same conversion, for the same reason, on the mark another panel's
+      // pointer leaves: the echoed cell is a contact and its column is the
+      // midpoint of two places, so a stack answers it with one tick per anchor.
+      echoAnchors:
+        this.turned === null || this.echo === null
+          ? null
+          : anchorColumns(this.turned, this.echo.row, this.echo.col),
+      laneEcho: this.laneEcho,
       guide: this.laneHover,
       border: this.laneBorder,
       handles: true,
@@ -3712,7 +3759,12 @@ export class MatrixPanel {
         // Every member, because an overlay group is one lane on screen and would
         // otherwise be split across two edges by a single drag.
         for (const member of lanes.membersOf(edge, drag.id)) {
-          store.place(member.id, placementOn(target))
+          // **On this panel's own map.** The gesture was made on one picture and
+          // it is about that picture: `place` writes the *track's* default and
+          // the lead's lane with it, so a drag on a companion moved the track
+          // out from under the first map and left the one the hand was over
+          // exactly as it was (`annotations/store.ts`'s `placeAt`).
+          store.placeAt(member.id, this.mapId, placementOn(target))
         }
       }
       if (drag.kind === 'grip') {
@@ -3731,7 +3783,7 @@ export class MatrixPanel {
       const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge)
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -3796,6 +3848,7 @@ export class MatrixPanel {
       if (before === null || before.edge !== edge || before.along !== along) {
         this.laneHover = { edge, along }
         this.schedule()
+        this.reportLaneHover()
       }
 
       const readout = lanes.readout(edge, x, y, this.laneGeometry())
@@ -3851,6 +3904,9 @@ export class MatrixPanel {
       if (this.laneHover !== null) {
         this.laneHover = null
         this.schedule()
+        // The move off the edge is what takes the other panels' marks away with
+        // the pointer, exactly as {@link describe} reports the move off the map.
+        this.reportLaneHover()
       }
     }
     canvas.addEventListener('mousemove', onMove)
@@ -5552,6 +5608,67 @@ export class MatrixPanel {
   }
 
   /**
+   * Report which **place** the pointer is over when it is on a track, not a map.
+   *
+   * {@link setHoverListener}'s counterpart, and a second listener rather than a
+   * second shape on the first, because the two carry different facts: a pointer
+   * on the map names a contact — two places — and one on a stack names one. A
+   * deck that folded them together would have to invent the missing half, and
+   * the invention would be drawn on every other panel as though it had been
+   * pointed at.
+   *
+   * Reported in this panel's own matrix units on the axis the stack runs along,
+   * which is the same currency the cell report uses and converts through the
+   * same base pairs (`panels/PanelDeck.ts`).
+   */
+  setLaneHoverListener(
+    listener: ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void) | null,
+  ): void {
+    this.laneHoverListener = listener
+  }
+
+  /**
+   * Show a place another panel's *track* pointer is naming, or stop showing it.
+   *
+   * A tick in the stacks that measure that axis, and on the map the small form
+   * of the guide the panel under the pointer is drawing — two 45° arms off the
+   * diagonal where this map is turned, a cross on the diagonal where it is not
+   * (`HeatmapView.setLaneEcho`).
+   *
+   * The map's half is refused where this block has no diagonal: a contig × contig
+   * picture is of two places, and there is no point on it that is one of them.
+   * The stacks still get their tick, because a track under such a block is drawn
+   * against one axis and that axis does carry the position.
+   */
+  showLaneEcho(at: { axis: 'rows' | 'cols'; unit: number } | null): void {
+    if (this.laneEcho === null && at === null) return
+    this.laneEcho = at
+    const diagonal = this.data !== null && isTurnable(this.data)
+    this.heatmap.setLaneEcho(at === null || !diagonal ? null : at.unit)
+    this.schedule()
+  }
+
+  /** Hand the current lane hover to whoever is listening, in matrix units. */
+  private reportLaneHover(): void {
+    const listen = this.laneHoverListener
+    if (listen === null) return
+    const guide = this.laneHover
+    if (guide === null) {
+      listen(null)
+      return
+    }
+    // The same conversion {@link paintLaneGuide} makes, and for the same reason
+    // it needs none of its own: §8.4 glues the lane canvases to the map's along
+    // the axis they share, so a pixel on the stack is a pixel on the plot.
+    const plot = this.heatmap.plotRect
+    const horizontal = laneIsHorizontal(guide.edge)
+    const unit = horizontal
+      ? this.heatmap.scaleX.toUnit(guide.along - plot.x)
+      : this.heatmap.scaleY.toUnit(guide.along - plot.y)
+    listen({ axis: horizontal ? 'cols' : 'rows', unit })
+  }
+
+  /**
    * Report how much room this panel's lane stacks take, whenever it changes.
    *
    * For a deck, which reserves the same room on every panel beside this one so
@@ -5617,6 +5734,27 @@ export class MatrixPanel {
     if (this.scoreLabel === label) return
     this.scoreLabel = label
     this.painted = null
+  }
+
+  /**
+   * Point the score picker at what is actually being drawn.
+   *
+   * The choice does not always come from the picker. A companion's score is its
+   * own only while the reader has made it so; the rest of the time it follows
+   * the deck (`panels/MapPanel.ts`), and the deck's can move from the lead's own
+   * picker, from a link or from the back button. A dropdown left showing the
+   * previous answer beside a map drawing the new one is a control that lies
+   * about the picture it is over.
+   *
+   * Assignment fires no `change` event, so this cannot loop back through the
+   * listener — the same property {@link applyScale} relies on.
+   */
+  syncScoreChoice(id: string): void {
+    const select = this.scoreSelect
+    if (select === null || select.value === id) return
+    // Only to an option it has: a file that fell back to counts because it has
+    // no such column would otherwise be left with a blank picker.
+    if (Array.from(select.options).some((option) => option.value === id)) select.value = id
   }
 
   /**
@@ -7055,6 +7193,12 @@ export function openLaneMenu(
    * with no visible effect.
    */
   edge: LaneEdge | null,
+  /**
+   * Which map the stack belongs to, so the location block moves *that* map's
+   * lane. The lead when nothing says otherwise, which is every surface with no
+   * deck behind it — see `annotations/store.ts`'s `placeAt`.
+   */
+  map: MapId = LEAD_MAP,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = [
@@ -7112,7 +7256,7 @@ export function openLaneMenu(
         label: EDGE_WORDS[side],
         disabled:
           entry.placement[side] && LANE_EDGES.filter((each) => entry.placement[each]).length === 1,
-        run: () => store.place(entry.id, placementOn(side)),
+        run: () => store.placeAt(entry.id, map, placementOn(side)),
       })),
     )
   }

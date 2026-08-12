@@ -491,6 +491,82 @@ describe('running on every map', () => {
     expect(runner.stateOf('insulation').status).toBe('done')
     runner.destroy()
   })
+
+  /**
+   * The **first** press covers the whole grid.
+   *
+   * A companion opens to draw a picture; the two tables an analysis needs are a
+   * further pair of reads it makes only when it is starred or batched
+   * (`panels/MapPanel.ts`). So `allTargets` — the synchronous answer, and what
+   * the drawer prices and orders results by — leaves out a map that is still
+   * reading, and a batch that took it ran on three of four and left the fourth
+   * behind. Nothing on screen said so: a result that never came looks exactly
+   * like a task that had nothing to report, and pressing Run again worked, which
+   * made a question about timing look like a question about the file.
+   */
+  describe('the maps that are still opening', () => {
+    /** A deck whose third map answers only once its tables have been read. */
+    function opening(): { host: Partial<RunnerHost>; ready(): void } {
+      let read = false
+      return {
+        host: {
+          allTargets: () => (read ? DECK : DECK.slice(0, 2)),
+          allTargetsReady: async () => {
+            read = true
+            return DECK
+          },
+          targetCount: () => DECK.length,
+        },
+        ready: () => {
+          read = true
+        },
+      }
+    }
+
+    it('are waited for, so the first press runs on all of them', async () => {
+      const late = opening()
+      const { runner, fake, finished } = harness(
+        FRAMING,
+        null,
+        DECK,
+        { block: null, map: 'lead' },
+        late.host,
+      )
+      // What the button says, and what the synchronous list would have run.
+      expect(runner.targetCount()).toBe(3)
+      expect(runner.targets()).toHaveLength(2)
+
+      runner.runAll(task('insulation'), {}, await runner.readyTargets())
+      await settle()
+      fake.finish()
+      await settle()
+      fake.finish()
+      await settle()
+      fake.finish()
+      await settle()
+
+      expect(finished.map((entry) => entry.map)).toEqual(['lead', 'p1', 'p2'])
+      runner.destroy()
+    })
+
+    it('are counted before they answer, so the button does not undercount', async () => {
+      const late = opening()
+      const { runner } = harness(FRAMING, null, DECK, { block: null, map: 'lead' }, late.host)
+      // "run on all 3 maps" over a deck of three, while only two can answer yet
+      // — the batch waits for the third, so counting two would be the button
+      // promising the smaller number and delivering the larger.
+      expect(runner.targetCount()).toBe(3)
+      runner.destroy()
+    })
+
+    it('fall back to the synchronous list where a host has nothing to wait for', async () => {
+      // Every session with no deck: one map, open, nothing to wait for.
+      const { runner } = harness(FRAMING, null, [DECK[0]])
+      expect(await runner.readyTargets()).toEqual(runner.targets())
+      expect(runner.targetCount()).toBe(1)
+      runner.destroy()
+    })
+  })
 })
 
 describe('cancelling a job', () => {

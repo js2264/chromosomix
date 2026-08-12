@@ -117,6 +117,9 @@ const RUNNER = {
   runAll: () => {},
   /** One map, so the drawer offers no batch — see `AnalysisRunner.targets`. */
   targets: () => [],
+  // The batch button counts the grid and waits for it; see `AnalysisRunner`.
+  targetCount: () => 0,
+  readyTargets: async () => [],
   cancel: () => {},
 } as unknown as AnalysisRunner
 
