@@ -50,6 +50,8 @@ import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { configFileName } from '../state/SessionConfig'
+import { decodeShare, readShareHash } from '../state/shareLink'
+import { openShareDialog } from '../ui/ShareDialog'
 import { fileLabel } from '../ui/labels'
 import { appMark } from '../ui/mark'
 import {
@@ -212,6 +214,7 @@ export class App implements SessionHost {
           // Save the session, theme, shortcuts, source, about. No "open a
           // file" button: the title is the way back to the picker and says so
           // on hover.
+          iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
           iconButton(
             'save',
             withKey('Save this session as a file, to open again later', KEYS.saveSession),
@@ -345,7 +348,13 @@ export class App implements SessionHost {
    * choice only decides it when the link says nothing.
    */
   private restore(): void {
-    const linked = parseViewState(window.location.hash)
+    // A shared link is not a view state and must not be read as one. It is
+    // opened *after* the tabs are restored and mounted, because opening a
+    // session needs a session to open it into — so the boot proceeds as though
+    // the fragment were empty, and the link lands in the active tab a moment
+    // later.
+    const shared = readShareHash(window.location.hash) !== null
+    const linked = shared ? null : parseViewState(window.location.hash)
     const stored = readSessions()
     reserveSessionIds(highestId(stored.sessions))
 
@@ -380,6 +389,7 @@ export class App implements SessionHost {
     this.active = target >= 0 ? target : 0
     this.paintTabs()
     this.mountActive()
+    if (shared) void this.openSharedHash()
     this.current?.activate()
   }
 
@@ -576,6 +586,58 @@ export class App implements SessionHost {
     )
   }
 
+  /**
+   * The whole session as a link, and the offer to shorten it.
+   *
+   * The same object {@link exportSession} writes to a file — the link and the
+   * file are two encodings of one thing, which is what keeps them from drifting
+   * (`state/shareLink.ts`).
+   */
+  private openShareDialog(): void {
+    const config = this.current?.exportConfig() ?? null
+    if (config === null) {
+      this.warn('There is nothing open in this tab to share.')
+      return
+    }
+    this.modal?.close()
+    this.modal = openShareDialog({
+      config,
+      base: `${window.location.origin}${window.location.pathname}${window.location.search}`,
+    })
+  }
+
+  /**
+   * Open a session that arrived in the fragment.
+   *
+   * Called before anything is mounted and again on every hash change, because a
+   * shared link is as likely to be pasted into the address bar of a running app
+   * as it is to be opened cold.
+   *
+   * The hash is **replaced** once the session is open, and that is deliberate
+   * rather than tidying: leaving a two-kilobyte payload in the bar means every
+   * subsequent navigation writes the view state *over* it, so the link the
+   * reader still has in their history is a session and the one in the bar is a
+   * view — two things that look alike and are not. Replacing it with the
+   * ordinary view state makes the address bar mean one thing again.
+   *
+   * @returns `true` when a session was found and opened.
+   */
+  private async openSharedHash(): Promise<boolean> {
+    const payload = readShareHash(window.location.hash)
+    if (payload === null) return false
+    const config = await decodeShare(payload)
+    if (config === null) {
+      this.warn('That shared link could not be read. It may have been cut short in transit.')
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      return false
+    }
+    this.writingHash = true
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    this.writingHash = false
+    await this.current?.openConfig(config)
+    return true
+  }
+
   // -------------------------------------------------------------------------
   // The address bar
   // -------------------------------------------------------------------------
@@ -599,6 +661,13 @@ export class App implements SessionHost {
    */
   private readHash(): void {
     if (this.writingHash) return
+    // Asked before the view state, because the two live in the same fragment
+    // and a shared session is not a view: `parseViewState` would read `s=…` as
+    // an unknown key, ignore it, and navigate to the default view of nothing.
+    if (readShareHash(window.location.hash) !== null) {
+      void this.openSharedHash()
+      return
+    }
     const session = this.current
     if (session === undefined) return
     const parsed = parseViewState(window.location.hash)
@@ -785,6 +854,13 @@ export class App implements SessionHost {
         title: 'Keyboard shortcuts',
         keys: KEYS.shortcuts,
         run: () => this.openShortcutsDialog(),
+      },
+      {
+        id: 'share',
+        group: 'File',
+        title: 'Share this session as a link',
+        run: () => this.openShareDialog(),
+        enabled: this.current?.exportConfig() !== null,
       },
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
       {

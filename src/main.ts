@@ -17,6 +17,7 @@ import './ui/styles.css'
 
 import { App } from './app/App'
 import { parseViewState } from './state/ViewState'
+import { readShareHash } from './state/shareLink'
 import { initTheme } from './ui/ThemeToggle'
 import { mountPinnedNotice } from './ui/VersionPicker'
 import { recoverPinnedNavigation, registerServiceWorker } from './pwa'
@@ -41,7 +42,18 @@ if (!recoverPinnedNavigation()) {
   if (root !== null) {
     // A hash that carries no `uri` is not a view state; clear it so the picker
     // does not leave a stale fragment in the address bar.
-    if (window.location.hash !== '' && parseViewState(window.location.hash) === null) {
+    //
+    // A **shared session** is the exception, and it has to be made here rather
+    // than downstream: this line runs before `App` exists, so without it a
+    // pasted share link is wiped between the page loading and anything being
+    // able to read it. The symptom is a link that opens the picker, every time,
+    // with no error — which is the hardest possible thing to diagnose from a
+    // bug report.
+    if (
+      window.location.hash !== '' &&
+      readShareHash(window.location.hash) === null &&
+      parseViewState(window.location.hash) === null
+    ) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
     new App(root)
