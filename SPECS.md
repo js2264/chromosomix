@@ -497,6 +497,92 @@ its length against the longest, and a click that shows the whole of it. A filter
 dozen of them and the list is capped, because a `chrom.sizes` is as likely to be forty thousand
 scaffolds as sixteen chromosomes.
 
+### 5.9 One genome, many nomenclatures
+
+Two files of the same genome disagree about its names more often than they agree. UCSC writes `chr1`,
+Ensembl writes `1`, a `.hic` off 4DN writes `1`, a yeast cooler writes `chrI` and the `chrom.sizes`
+beside it writes `01`. Every one of those is the first chromosome, and until this section every one
+of them was a *different sequence*: a companion panel asked for `chr1` against a file calling it `1`
+answered `unknown-label` and showed a blank rectangle under a bar claiming the deck was one
+navigation, and a bigWig of the same assembly drew nothing beside a map that spelled it otherwise.
+
+`src/genome/naming.ts` answers one question — *does this name, in this file, mean the same sequence as
+that name, in that one* — under three constraints, and the constraints are the design.
+
+**It never silently matches two different sequences.** A wrong match is worse than no match: no match
+is a blank panel and a sentence saying why, and a wrong one is somebody else's chromosome drawn under
+your label, which nothing on screen would show. So each step is a rule with a reason, `length` vetoes
+rather than persuades, and a name whose shape the matcher does not recognise is matched **by its
+spelling and not otherwise**. That last clause is what makes this safe on a metacool: assembler
+contigs (`NODE_1_length_…`, `k141_9`, `tig00000001`) are opaque ids from independently assembled
+organisms and two of them agree by coincidence (§8.5), so no numeral, no accession and no organelle
+table is ever applied to one.
+
+**The decisions come from the whole list, not one name at a time.** `X` is the tenth chromosome of
+*S. cerevisiae* and the sex chromosome of everything else, and the string cannot tell you which. The
+list can: a file that also holds `IX` and `XI` is counting in Roman numerals and its `X` is ten; a
+file whose numerals stop at `V` — *C. elegans* is `I`…`V`, `X` — is naming a sex chromosome, and has
+no chromosome ten to be confused with. The same test gets *S. pombe* right and gets every numeric
+assembly right by never reaching the question. This is why the entry point is an index over a whole
+file's sequences rather than a `canonicalise(name)` anybody could call on a string in isolation, and
+why the two booleans it produces are **forwarded with the request**: a companion resolving the lead's
+region has to read the numeral the way the lead wrote it.
+
+**Length corroborates; it never matches.** Two sequences of equal length are not the same sequence —
+a metagenome has thousands of equal-length contigs — so no pair is ever matched *because* the lengths
+agree. The implication runs the other way: where a name match is proposed, both lengths are known and
+they differ, the match is reported as contested rather than taken quietly. hg19's `chrM` and hg38's
+`chrM` are the case that matters — one name, two sequences, two bases apart.
+
+**The ladder**, weakest interpretation first, and every match carries the rung it was reached by:
+
+| tier | example |
+| --- | --- |
+| `exact` | `chr1` = `chr1` |
+| `case` | `Chr1` = `chr1` |
+| `decorated` | `ref\|NC_001133\|` = `NC_001133` |
+| `prefix` | `chr1` = `chrom1` = `chromosome_1` = `1` |
+| `padded` | `01` = `1` |
+| `roman` | `chrXII` = `12` |
+| `organelle` | `chrM` = `MT` = `MtDNA` = `NC_012920.1` |
+| `accession` | `NC_000001.11` = `chr1`; `chrUn_GL000220v1` = `GL000220.1` |
+| `version` | `NC_000001.10` ≈ `NC_000001.11` |
+
+`version` is last and is the only rung known to be shaky: the same locus at two assembly versions is
+two sequences, so it is offered and flagged rather than taken.
+
+Only two ranges of per-species knowledge are hard-coded, and both are arithmetic rather than tables:
+NCBI gave human chromosomes 1–22, X and Y the consecutive block `NC_000001`–`NC_000024`, and mouse
+1–19, X and Y the block `NC_000067`–`NC_000087`. Everything else is a rule. A real alias table for
+every assembly is megabytes, needs a network, and would have to be told which assembly a file is of —
+which is the question this whole section exists to avoid asking (C1, C2).
+
+**What is deliberately not equated.** A chromosome arm is not its chromosome: *Drosophila*'s `2L` and
+`2R` are separate sequences and neither is `2`, which also keeps wheat's `1A`, `1B` and `1D` — three
+homoeologues, one number — apart from each other. `_random`, `_alt`, `_fix` and `_hapN` stay, because
+a patch is not the chromosome it patches. A linkage group keeps its `LG`, because a linkage map is
+numbered by linkage and an assembly by length and the two orders agree only by luck. `C`, `D` and `M`
+are excluded from the Roman numeral system entirely — no genome has a hundredth chromosome, so a `C`
+in a chromosome list is a chloroplast and an `M` a mitochondrion, every time. And **genome names are
+never matched**: a metacool's genome layer is independently assembled organisms, and nothing about
+their names is a convention.
+
+**Where it fires, and where it must not.** In `parseMetacoolerRange` the matcher is consulted *after*
+both namespaces have been asked literally and the answer would otherwise be a refusal. That placement
+is the whole of how the range parser stays a faithful port of `metacooler.ops.range` (§5.4): every
+string a file does carry resolves exactly as Python resolves it, in the same order, with the same
+genome-wins rule, and a session of one file cannot tell the matcher exists. Only the error case
+changed. The same after-the-strict-answer rule governs the ticked selection, the locus box, and
+`contigOf`.
+
+**It says so.** A panel that answered a name it does not itself write prints a line under its heading
+naming both spellings and the rule that joined them, and says separately when the two lengths
+disagree. A track renamed into the map's vocabulary is renamed once at load, so everything downstream
+sees one vocabulary; the §8.2 overlap report is computed after the rename and therefore counts a
+cross-convention match as a match. `compareRefusal` (§5.7) no longer refuses two files for spelling
+one assembly differently — but still requires the same list in the same order, and still refuses two
+sequences of one name at different lengths, which is the check that catches hg19 against hg38.
+
 ---
 
 ## 6. Reader layer

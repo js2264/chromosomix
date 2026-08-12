@@ -52,6 +52,7 @@
  * the dark theme without a rule being written here (`ui/styles.css`).
  */
 
+import type { NameContext } from '../genome/naming'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
@@ -142,6 +143,15 @@ export interface PanelDeckProps {
    * session's business and the deck's only contribution is a name.
    */
   annotations?(map: string): AnnotationContext | undefined
+  /**
+   * How the session's own map names its sequences, for the companions to
+   * follow (§5.9).
+   *
+   * A thunk for the same reason `derive` is one: the lead's contigs arrive
+   * after the deck is built, and a value snapshotted at construction would be
+   * `undefined` for the whole session.
+   */
+  leadNaming?(): NameContext | undefined
   /** What the session's own map is called, for the placement control's rows. */
   leadLabel?(): string
   /**
@@ -957,6 +967,10 @@ export class PanelDeck {
       onStar: () => this.setStarred(slot.id),
       isLocked: () => slot.locked,
       lockNote: () => this.lockNote(slot),
+      // The region names every panel is following are the *lead's*, so the
+      // lead's reading of its own numerals is the one a companion has to
+      // resolve them under.
+      naming: () => this.props.leadNaming?.(),
       derive: () => this.props.derive?.(),
       turn: () => this.props.turn?.(),
       annotations: () => this.props.annotations?.(slot.id),

@@ -40,6 +40,8 @@
  * outside all three. The format is two structures and three hundred lines.
  */
 
+import { NameIndex } from '../genome/naming'
+
 /** A BGZF member header is always at least this long. */
 const BGZF_HEADER_BYTES = 12
 
@@ -295,17 +297,24 @@ export function spansFor(
   return merged
 }
 
-/** The names in `index` that also appear in `wanted`, matching chr-prefix loosely. */
+/**
+ * The names in `index` that also appear in `wanted`, under any convention.
+ *
+ * This used to strip a `chr` prefix and compare, which covered the commonest
+ * disagreement and none of the others — a UCSC-indexed GTF against a yeast
+ * cooler numbering its chromosomes `01`…`16` matched nothing and fell through
+ * to reading the whole file. {@link NameIndex} is the same question asked
+ * properly (§5.9), and getting it right here is worth more than elsewhere: the
+ * answer decides *which bytes are fetched*, so a name that fails to match costs
+ * a whole-file read of a file the sidecar existed to avoid reading.
+ */
 export function matchNames(index: TabixIndex, wanted: readonly string[]): string[] {
   if (wanted.length === 0) return index.names
-  const direct = new Set(wanted)
-  const stripped = new Map<string, string>()
-  for (const name of index.names) stripped.set(name.replace(/^chr/i, ''), name)
+  const held = NameIndex.ofNames(index.names)
   const out = new Set<string>()
-  for (const name of index.names) if (direct.has(name)) out.add(name)
   for (const name of wanted) {
-    const match = stripped.get(name.replace(/^chr/i, ''))
-    if (match !== undefined) out.add(match)
+    const match = held.find(name)
+    if (match !== null) out.add(match.name)
   }
   // Nothing in common is not "read nothing" — it is a file about another
   // assembly, and the caller's overlap report is what should say so. Reading it

@@ -18,6 +18,8 @@
  * what it accepts it reports in one line. The map does the rest.
  */
 
+import { alignNames, type Alignment, type NamedSequence } from '../genome/naming'
+
 import { button, el, fmt } from './dom'
 import { cardTitle, iconButton } from './icons'
 import type { OpenResult } from '../worker/protocol'
@@ -345,7 +347,23 @@ export function compareRefusal(
   return null
 }
 
-/** The first way two chromosome lists disagree, phrased for a reader. */
+/**
+ * The first way two chromosome lists disagree, phrased for a reader.
+ *
+ * **A different spelling is not a disagreement** (§5.9). The two lists are
+ * compared position by position, and where the names differ they are put to
+ * {@link NameIndex} before the refusal is written: `chr1` against `1`, `chrXII`
+ * against `12` and `chrM` against `MT` are the same assembly written by two
+ * tools, and refusing to blend them was refusing the commonest pair of files
+ * anybody actually has.
+ *
+ * What is *not* relaxed is anything the spelling cannot explain. The lists must
+ * still be the same length and in the same order, because every coordinate in
+ * the blended picture is an index into one of them; and two sequences that
+ * match by name must still be the same number of bases, because that is the
+ * check that catches hg19 against hg38 — where `chr1` is `chr1` in both and is
+ * not the same sequence in either.
+ */
 function firstContigMismatch(
   a: Array<[string, number]>,
   b: Array<[string, number]>,
@@ -357,18 +375,33 @@ function firstContigMismatch(
       'to carry the same list, in the same order.'
     )
   }
+  const named = ([name, length]: [string, number]): NamedSequence => ({ name, length })
+  // Built once and only where a name actually differs, which for two files out
+  // of one pipeline is never.
+  let alignment: Alignment | null = null
   for (let i = 0; i < a.length; i++) {
     if (a[i][0] !== b[i][0]) {
-      return (
-        `Chromosome ${fmt.int(i + 1)} is “${a[i][0]}” in this file and “${b[i][0]}” in the ` +
-        'other. The two lists have to match, in order — a renamed or reordered assembly would ' +
-        'draw one file’s chromosome under another’s label.'
-      )
+      alignment ??= alignNames(a.map(named), b.map(named))
+      const match = alignment.pairs.get(a[i][0])
+      if (match?.name === b[i][0]) {
+        // One sequence, two conventions, at the same position in both lists.
+        // The length check below still has to pass.
+      } else {
+        return (
+          `Chromosome ${fmt.int(i + 1)} is “${a[i][0]}” in this file and “${b[i][0]}” in the ` +
+          'other, and they are not two spellings of one name. The two lists have to match, in ' +
+          'order — a renamed or reordered assembly would draw one file’s chromosome under ' +
+          'another’s label.'
+        )
+      }
     }
     if (a[i][1] !== b[i][1]) {
+      const same = a[i][0] === b[i][0]
       return (
-        `“${a[i][0]}” is ${fmt.int(a[i][1])} bp in this file and ${fmt.int(b[i][1])} bp in the ` +
-        'other. Same name, different sequence: the bins would not line up.'
+        `“${a[i][0]}” is ${fmt.int(a[i][1])} bp in this file and ` +
+        `${same ? '' : `“${b[i][0]}” is `}${fmt.int(b[i][1])} bp in the other. ` +
+        `${same ? 'Same name' : 'One sequence by name'}, different sequence: the bins would ` +
+        'not line up.'
       )
     }
   }

@@ -21,6 +21,7 @@ import type { StorageMode } from '../constants'
 import { MetaCoolerFormatError, truncateNames, ViewerError } from '../errors'
 import { pyRepr } from '../format'
 import type { AttrValue, Hdf5Handle } from '../h5/api'
+import { NameIndex } from '../genome/naming'
 import { openHdf5 } from '../h5/Hdf5File'
 import type {
   ByteSource,
@@ -201,6 +202,21 @@ export class MetaCooler {
     this.contigIdCache ??= new Map(this.chromnames.map((name, i) => [name, i]))
     return this.contigIdCache
   }
+
+  /**
+   * This file's sequences, indexed by every convention that might name one.
+   *
+   * Lazy for {@link chromsizes}' reason and consulted for a narrower one: it is
+   * only ever reached where a name has *already failed* to resolve strictly
+   * (`parseMetacoolerRange`), which is to say when a second file with its own
+   * spellings is in the room. A session of one file never builds it.
+   */
+  get names(): NameIndex {
+    this.nameIndexCache ??= NameIndex.of(
+      this.chromnames.map((name, i) => ({ name, length: this.contigLengths[i] })),
+    )
+    return this.nameIndexCache
+  }
   /** Genome names, in file order, `__unbinned__` included; `[]` for a cooler. */
   readonly genomeNames: string[]
   /**
@@ -232,6 +248,7 @@ export class MetaCooler {
   /** Built on the first lookup by name; see {@link contigIds}. */
   private contigIdCache: Map<string, number> | null = null
   private chromsizeCache: Map<string, number> | null = null
+  private nameIndexCache: NameIndex | null = null
   /** `indexes/bin1_offset`, read whole on first use; see {@link binOffsets}. */
   private readonly contigLengths: Float64Array
 

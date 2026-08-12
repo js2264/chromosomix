@@ -71,6 +71,7 @@ import { ReaderClient } from '../worker/client'
 import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
+import { contextOf } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
@@ -1759,9 +1760,10 @@ export class Session {
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
-    const names = assembly.contigs.map((contig) => contig.name)
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
-    const loader = new AnnotationLoader(store, client, names)
+    // An assembly's contigs are already `{ name, length }`, which is what the
+    // loader's rename wants (§5.9).
+    const loader = new AnnotationLoader(store, client, assembly.contigs)
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -2582,7 +2584,14 @@ export class Session {
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
-    const loader = new AnnotationLoader(store, client, names)
+    const loader = new AnnotationLoader(
+      store,
+      client,
+      // Names *and* lengths: the loader renames a track's sequences into this
+      // map's vocabulary (§5.9), and a rename with no length behind it is a
+      // guess nothing can check.
+      names.map((name) => ({ name, length: lengths.get(name) ?? 0 })),
+    )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -3172,6 +3181,10 @@ export class Session {
        */
       onStarChange: () => {
         this.analysis?.refresh()
+      },
+      leadNaming: () => {
+        const names = this.contigNames()
+        return names === null ? undefined : contextOf(names)
       },
       leadLabel: () => fileLabel(this.file?.uri ?? ''),
       // Stripped the same way and for the same two reasons. `onChange` would be

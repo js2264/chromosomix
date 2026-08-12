@@ -14,6 +14,63 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`chr1`, `1`, `01`, `I` and `NC_000001.11` are one chromosome.** Two files of
+  the same genome disagree about its names more often than they agree — UCSC
+  writes `chr1`, Ensembl writes `1`, a yeast cooler writes `chrI` and the
+  `chrom.sizes` beside it writes `01` — and until now every one of those was a
+  *different sequence* to this viewer. A `.hic` off 4DN put beside a `.cool` out
+  of a local pipeline gave a blank rectangle under a bar claiming the deck was
+  one navigation, and the only fix was to go and rewrite one of the files.
+
+  So a deck of files that spell their chromosomes differently is now one deck,
+  a track is renamed into the map's vocabulary as it loads, the locus box takes
+  whichever spelling you have in your hand, and two coolers of one assembly are
+  no longer refused the blended square for the `chr` in front of one of them.
+
+  **The rule is that it never silently matches two different sequences**, and
+  everything else follows from it. `length` vetoes rather than persuades: two
+  sequences of equal length are not the same sequence, so nothing is ever
+  matched *because* the lengths agree, and a match whose two lengths disagree is
+  reported rather than taken — hg19's `chrM` and hg38's `chrM` are one name and
+  two sequences, two bases apart. A name whose shape is not recognised is
+  matched by its spelling and nothing else, which is what makes this safe on a
+  metagenome: `NODE_1_length_338947_cov_15.4` is an opaque id from an
+  independently assembled organism, and two of them agree by coincidence (§8.5).
+
+  **`X` is the hard one, and the list settles it.** `X` is the tenth chromosome
+  of *S. cerevisiae* and the sex chromosome of everything else, and the string
+  cannot tell you which — so the decision is made from the whole file: one that
+  also holds `IX` and `XI` is counting in Roman, and its `X` is ten; one whose
+  numerals stop at `V` is *C. elegans*, and has no chromosome ten to confuse it
+  with. Which is also why the reading travels: a companion panel is told how the
+  lead counts, because a name cannot carry that and a guess would draw
+  chromosome ten under the label `X`.
+
+  Every match says which rule reached it — the `chr` prefix, leading zeros,
+  Roman numerals, an organelle spelled another way, the accession — and a panel
+  that answered a name it does not itself write prints both spellings under its
+  heading. A rename that is invisible is the one way this can be quietly wrong.
+
+  And a good deal is deliberately **not** equated. `2L` is not `2` — a
+  *Drosophila* arm is its own sequence — which is the same rule that keeps
+  wheat's `1A`, `1B` and `1D` apart. `_random`, `_alt` and `_fix` stay, because
+  a patch is not the chromosome it patches. `LG1` keeps its `LG`. `C`, `D` and
+  `M` are not Roman numerals here, because no genome has a hundredth chromosome
+  and `chrM` needs to stay the mitochondrion. Genome and MAG names are never
+  matched at all.
+
+  Two ranges of per-species knowledge are hard-coded and both are arithmetic:
+  human's `NC_000001`–`NC_000024` and mouse's `NC_000067`–`NC_000087`. There is
+  no alias table to download, no assembly to declare and no network call — the
+  three constraints (§1) rule all three out, and a rule that works on a genome
+  nobody has published is worth more than a table of the ones somebody has.
+
+  `parseMetacoolerRange` stays a faithful port of `metacooler.ops.range`: the
+  conventions are consulted **after** both namespaces have been asked literally
+  and the answer would otherwise have been `unknown-label`, so every string a
+  file does carry resolves exactly as it did, and a session of one file cannot
+  tell any of this exists. SPECS §5.9.
+
 - **`metacooler-run`: the Analysis panel, from a shell.** Fourteen tasks, every
   one of them goldened against cooltools, coolpuppy, pyBigWig and numpy — and
   reachable only by clicking. The moment somebody has two hundred files rather

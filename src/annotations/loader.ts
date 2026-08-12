@@ -8,6 +8,8 @@
  * told (spec §8.3).
  */
 
+import type { NamedSequence } from '../genome/naming'
+
 import type { AnnotationStore } from './store'
 import { defaultStyle } from './types'
 import type {
@@ -43,8 +45,12 @@ export class AnnotationLoader {
   constructor(
     private readonly store: AnnotationStore,
     private readonly client: AnnotationClient,
-    /** The map's contig names, for the §8.2 overlap report. */
-    private readonly mapContigs: string[],
+    /**
+     * The map's sequences, for the §8.2 overlap report and for the rename that
+     * precedes it (§5.9). Lengths where the map has them: they are the only
+     * thing that can veto a match made across two nomenclatures.
+     */
+    private readonly mapContigs: NamedSequence[],
   ) {}
 
   /**

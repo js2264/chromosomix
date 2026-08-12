@@ -23,6 +23,7 @@
  */
 
 import { ViewerError } from '../errors'
+import { describeTier, type NameContext, type NameMatch } from '../genome/naming'
 import { DECK_DRAG_TYPE } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
@@ -144,6 +145,16 @@ export interface MapPanelProps {
   onToggleLock(): void
   /** Whether the reader has asked for this panel to follow the deck. */
   isLocked(): boolean
+  /**
+   * The naming context of the map whose region names this panel is following.
+   *
+   * Two booleans out of the lead's own contig list, and the panel forwards them
+   * with every range it resolves. They are what lets a companion read `chrX`
+   * out of a yeast lead as chromosome ten rather than as a sex chromosome the
+   * file has not got (§5.9); a lead that has not read its contigs yet, and a
+   * deck of one, both answer `undefined` and lose nothing by it.
+   */
+  naming?(): NameContext | undefined
   /**
    * Why it is not following anyway, or `null` when it is.
    *
@@ -284,6 +295,16 @@ export class MapPanel {
    * asked for a resolution it *can* reach.
    */
   private readonly resNoteEl = el('p', { class: 'deck-note deck-res-note deck-unlocked hidden' })
+  /**
+   * That this panel answered a name it does not itself write.
+   *
+   * A fourth line, for {@link resNoteEl}'s reason and one of its own: a map
+   * showing somebody else's chromosome under its own label is the single way
+   * §5.9 can be quietly wrong, so the rename is stated on the picture rather
+   * than left in a tooltip. It stands until the next read, which is when it
+   * either happens again or stops being true.
+   */
+  private readonly renameNoteEl = el('p', { class: 'deck-note deck-rename-note hidden' })
   private refusal: string | null = null
   private readonly nameEl: HTMLElement
   private readonly lockButton: HTMLElement
@@ -408,6 +429,7 @@ export class MapPanel {
       this.note,
       this.lockNoteEl,
       this.resNoteEl,
+      this.renameNoteEl,
       this.body,
     )
     this.say('opening…')
@@ -913,28 +935,37 @@ export class MapPanel {
     const value = choice.value === undefined || choice.value === COUNT_SCORE ? {} : { value: choice.value }
     const balance = choice.balance ? { balance: true } : {}
     const budgetBytes = this.props.budgetBytes()
+    // How the map whose names these are counts its own sequences, forwarded to
+    // every request that resolves one. See {@link MapPanelProps.naming}: it is
+    // two booleans, and it is the only thing a name cannot carry (§5.9).
+    const naming = this.props.naming?.()
 
     if (plan.kind === 'selection') {
       return this.client.request<'selection'>({
         kind: 'selection',
         unit: plan.unit,
         names: plan.names,
+        ...(naming === undefined ? {} : { naming }),
         budgetBytes,
         ...balance,
         ...value,
       })
     }
 
-    const rows: [number, number] =
+    // The resolved ranges are kept whole rather than reduced to their extents: a
+    // range that had to be matched across conventions says so, and the panel
+    // prints it.
+    const rowRange =
       plan.kind === 'whole'
-        ? info.displayExtent
-        : (await this.client.request<'range'>({ kind: 'range', range: plan.rows })).extent
-    const cols =
+        ? null
+        : await this.client.request<'range'>({ kind: 'range', range: plan.rows, ...(naming === undefined ? {} : { naming }) })
+    const colRange =
       plan.kind === 'names' && plan.cols !== undefined
-        ? {
-            cols: (await this.client.request<'range'>({ kind: 'range', range: plan.cols })).extent,
-          }
-        : {}
+        ? await this.client.request<'range'>({ kind: 'range', range: plan.cols, ...(naming === undefined ? {} : { naming }) })
+        : null
+    this.sayRename(rowRange?.matched ?? null, colRange?.matched ?? null)
+    const rows: [number, number] = rowRange === null ? info.displayExtent : rowRange.extent
+    const cols = colRange === null ? {} : { cols: colRange.extent }
 
     if (level === 'contig') {
       return this.client.request<'aggregate'>({
@@ -1130,6 +1161,31 @@ export class MapPanel {
   private sayRefusal(): void {
     this.lockNoteEl.textContent = this.refusal ?? ''
     this.lockNoteEl.classList.toggle('hidden', this.refusal === null)
+  }
+
+  /**
+   * One line naming the sequence this panel actually drew, where that is not
+   * the sequence it was asked for by name.
+   *
+   * Both axes, because an off-diagonal block between two contigs can have
+   * matched on one axis and not the other, and a note that said only the first
+   * would leave the second silently renamed. Where the lengths disagree the
+   * sentence says so and stops short of the word "is": two files that spell one
+   * chromosome differently and also size it differently are not obviously
+   * describing the same sequence, and the reader is the one who can tell.
+   */
+  private sayRename(rows: NameMatch | null, cols: NameMatch | null): void {
+    const seen = [rows, cols].filter((match): match is NameMatch => match !== null)
+    const parts = seen
+      // One sentence for a square block, whose two axes are the same match.
+      .filter((match, at) => seen.findIndex((other) => other.asked === match.asked) === at)
+      .map((match) =>
+        match.lengths === 'differ'
+          ? `“${match.asked}” read as “${match.name}” by ${describeTier(match.tier)} — but the two are different lengths`
+          : `“${match.asked}” read as “${match.name}”, by ${describeTier(match.tier)}`,
+      )
+    this.renameNoteEl.textContent = parts.join('; ')
+    this.renameNoteEl.classList.toggle('hidden', parts.length === 0)
   }
 }
 
