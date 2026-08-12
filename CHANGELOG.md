@@ -457,6 +457,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Publishing the demos switched private buckets off, and the error blamed the
+  wrong setting.** An S3 CORS policy is bucket-wide — the rules have no prefix
+  condition — and `put-bucket-cors` replaces the whole document rather than
+  adding to it. `scripts/publish-demo.sh` wrote one rule, correct for public
+  data and naming `Range` in `AllowedHeaders`, so every run wiped whatever
+  allowed signed requests: from then on the landing page and every pasted demo
+  URL worked exactly as before, and no private prefix could be read or browsed
+  from any origin. The policy now carries both rules, and the verify step
+  preflights the signed headers rather than only the unsigned read — the check
+  that would have caught this, and the one nothing above it can, since every
+  other call it makes is answered by the public rule.
+
+  The message shown when the preflight fails sent the reader somewhere else
+  entirely: it said the policy had to name the page in `AllowedOrigins` because
+  `*` "is not enough for a credentialed request". A credentialed request is one
+  carrying cookies or a client certificate; this app sets `Authorization` from
+  script, sends no cookies, and a wildcard origin answers its preflight
+  perfectly well. So the advice was to narrow a list that was not the problem,
+  which changes nothing and leaves the one wrong line — `AllowedHeaders`,
+  missing `Authorization`, `x-amz-date` and `x-amz-content-sha256` — in place.
+  It now names that line, and says that a bucket serving the demos correctly is
+  expected to fail this way. `docs/hosting.md` carried the same claim and no
+  longer does.
+
 - **The desktop app's header carried a broken image, in every release that had
   one.** `publicDir` is off for that target — deliberately, and it is one of the
   two guards that no dataset reaches the installer — so the one file from

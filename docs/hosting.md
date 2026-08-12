@@ -193,11 +193,33 @@ fine for pasted URLs and cannot list, and the app says so rather than reporting 
 ```
 
 **CORS is not the public policy.** A signed request carries an `Authorization` header, which is not
-safelisted, so the browser preflights it — and a preflight for a credentialed request cannot be
-answered by `AllowedOrigins: ["*"]`. Name the app:
+safelisted, so the browser preflights it — and the public policy above names `Range` in
+`AllowedHeaders` and stops there, so the preflight is refused with a 403 the browser reports to the
+page as nothing more than `Failed to fetch`. The headers a signed request needs have to be named:
+
+`AllowedOrigins` is *not* what fails here, and it is worth being exact about why, because widening
+it is the first thing anyone tries. A "credentialed request" in the CORS sense is one carrying
+cookies or TLS client certificates — `fetch` with `credentials: 'include'`. This app never sets
+that; `Authorization` is a plain request header it computes and sets itself. So `["*"]` answers a
+signed preflight perfectly well, and naming the app instead buys defence in depth rather than
+access control: what actually bounds the key is the IAM policy above, since the key lives in the
+browser on the app's own origin and no bucket setting can change that.
+
+Note also that **an S3 CORS policy is bucket-wide.** The rules carry no prefix condition, and
+`put-bucket-cors` replaces the whole document rather than adding to it. One policy therefore has to
+cover the public prefix and the private one at once — which is why the policy below has two rules,
+why `scripts/publish-demo.sh` writes both of them, and why applying a public-data policy on its own
+silently switches private browsing off on a bucket where it was working:
 
 ```json
 [
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
+    "ExposeHeaders": ["Content-Length", "Content-Range", "ETag", "Accept-Ranges"],
+    "MaxAgeSeconds": 86400
+  },
   {
     "AllowedOrigins": ["https://js2264.github.io", "https://jserizay.com"],
     "AllowedMethods": ["GET", "HEAD"],
@@ -210,6 +232,13 @@ answered by `AllowedOrigins: ["*"]`. Name the app:
   }
 ]
 ```
+
+S3 answers a preflight from the **first rule that matches** origin, method and every requested
+header together, so the order matters and the second rule is not redundant: a signed preflight names
+headers the first rule does not have, falls through it, and is answered by the second. An unsigned
+range read from anywhere still matches the first. Add the origin the app is served from — including
+`http://localhost:5173` while developing — to the second rule's `AllowedOrigins`, or set it to
+`["*"]` as well, per the paragraph above.
 
 `MaxAgeSeconds` is doing real work here: without it the browser preflights *every* range request
 rather than once per prefix, which doubles the request count on the one path the §12 budgets are

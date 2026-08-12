@@ -36,8 +36,11 @@
  * safelisted request header, so the browser sends an `OPTIONS` first and will
  * not send the real request until the bucket answers it. The bucket's CORS
  * policy must name `Authorization`, `x-amz-date` and `x-amz-content-sha256` in
- * `AllowedHeaders` — and, because a preflight is per-origin, `AllowedOrigins`
- * has to name the app rather than `*`. `docs/hosting.md` has the policy.
+ * `AllowedHeaders`; a policy written for public data names `Range` and stops
+ * there, so the same bucket serves the demos and refuses every signed request.
+ * `AllowedOrigins` may stay `*` — these headers are set from script and no
+ * cookies ride along, so this is not a *credentialed* request in the CORS sense
+ * and a wildcard origin answers it. `docs/hosting.md` has the policy.
  *
  * **The secret is in the browser.** There is no arrangement in which it is not:
  * the app has no backend by construction (SPECS C1), so whatever signs a request
