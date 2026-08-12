@@ -14,8 +14,21 @@
 
 import { el } from './dom'
 
+/**
+ * A build that carries the mark inline rather than beside it; `''` for the rest.
+ *
+ * Set only by `vite.standalone.config.ts`, and only because that target may not
+ * emit a second file *at all* — which is the one thing `vite.pinned.config.ts`'s
+ * `shellIcon()` plugin does to solve the same problem. Same file, same drawing,
+ * read from `public/` at build time and base64'd; still no second copy of the
+ * shapes, which is what `scripts/make-app-icons.py` exists to prevent.
+ */
+declare const __MARK_URL__: string
+
 /** Where the built icon lives, wherever the app is served from. */
 export function markUrl(): string {
+  // `typeof` because `vitest` applies no `define` block (see `version.ts`).
+  if (typeof __MARK_URL__ !== 'undefined' && __MARK_URL__ !== '') return __MARK_URL__
   return `${import.meta.env.BASE_URL}icon-192.png`
 }
 

@@ -50,8 +50,23 @@ export const COMMIT_DATE: string =
  * the name is never substituted and `typeof` on an undeclared identifier is the
  * only legal way to ask about it.
  */
-export const TARGET: 'web' | 'desktop' =
-  typeof __APP_TARGET__ === 'string' && __APP_TARGET__ === 'desktop' ? 'desktop' : 'web'
+export const TARGET: 'web' | 'desktop' | 'standalone' =
+  typeof __APP_TARGET__ === 'string' && (__APP_TARGET__ === 'desktop' || __APP_TARGET__ === 'standalone')
+    ? __APP_TARGET__
+    : 'web'
+
+/**
+ * The single-file build, opened from a disk rather than served.
+ *
+ * Its origin is opaque, so **every remote read fails** — not slowly, not
+ * partially, but with a `NetworkError` before a byte moves. Three surfaces have
+ * to know: the picker, which must not offer a URL box that cannot work; the
+ * demo catalogue, which is on a bucket; and the service worker, which cannot be
+ * registered at all. §8.5's doctrine applies to all three — a control that
+ * cannot keep its promise is **absent**, not disabled, because a disabled one
+ * spends the reader's attention on discovering why.
+ */
+export const IS_STANDALONE = TARGET === 'standalone'
 
 /**
  * `(meta)cooler 0.2.0`, or `(meta)cooler 0.2.0 desktop` — the name and version,
@@ -61,7 +76,7 @@ export const TARGET: 'web' | 'desktop' =
  * exported PDF's `/Producer` field, and "which build made this figure" is the
  * first question asked when one came out wrong.
  */
-export const PRODUCER = `(meta)cooler ${VERSION}${TARGET === 'desktop' ? ' desktop' : ''}`
+export const PRODUCER = `(meta)cooler ${VERSION}${TARGET === 'web' ? '' : ` ${TARGET}`}`
 
 /**
  * The full build line: `0.2.0 · a1b2c3d · 2026-08-03`, with `· desktop` when
@@ -73,7 +88,7 @@ export const PRODUCER = `(meta)cooler ${VERSION}${TARGET === 'desktop' ? ' deskt
  * says nothing, which keeps the line on the website exactly what it was.
  */
 export function buildLine(): string {
-  return [VERSION, COMMIT, COMMIT_DATE, TARGET === 'desktop' ? 'desktop' : '']
+  return [VERSION, COMMIT, COMMIT_DATE, TARGET === 'web' ? '' : TARGET]
     .filter((part) => part !== '')
     .join(' · ')
 }

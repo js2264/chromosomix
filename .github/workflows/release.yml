@@ -1,8 +1,13 @@
-name: Desktop release
+name: Release artefacts
 
-# Builds the macOS `.app`/`.dmg`, the Windows `.exe` and the Linux
-# `AppImage`/`.deb`, and attaches them to a **draft** release for the tag that
-# triggered it, for a human to look at and then publish.
+# Builds the macOS `.app`/`.dmg`, the Windows `.exe`, the Linux
+# `AppImage`/`.deb` and the standalone single-file HTML page, and attaches them
+# all to a **draft** release for the tag that triggered it, for a human to look
+# at and then publish.
+#
+# Four artefacts, three of which are installers and one of which is a web page a
+# reader opens from their downloads directory. See the `standalone` job for why
+# it is not a fourth leg of the matrix.
 #
 # **The trigger is the tag, and it has to be.** This ran on `release: [created]`
 # for one release, on the stated belief that "`created` fires for a draft
@@ -170,9 +175,64 @@ jobs:
             release/*.deb
           if-no-files-found: error
 
+  # Not a fourth matrix leg, and the reason is that it shares none of the
+  # matrix's shape: no Electron cache, no code signature, no per-platform
+  # packaging, and a build that takes seconds rather than minutes. Folding it in
+  # would mean three `if: matrix.id != 'standalone'` guards on steps that exist
+  # for the installers alone.
+  #
+  # It is also the one artefact here that does not need installing, which is the
+  # point of shipping it beside three that do: a reader who will not run an
+  # unsigned binary gets a file they double-click instead.
+  standalone:
+    name: standalone HTML
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tag, for the same reason the matrix does it: `__APP_COMMIT__`
+          # and `__APP_VERSION__` are baked into the page, and a manual re-run
+          # defaults to the branch.
+          ref: ${{ inputs.tag || github.ref_name }}
+          # `vite.standalone.config.ts` shells out to `git rev-parse` and
+          # `git log -1`, and a depth-1 checkout has both.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # Typechecks, builds, and then `check-standalone-build.mjs` asserts the
+      # thing that matters: one file, self-contained, within the size bounds. A
+      # build that silently stopped inlining still produces an `index.html`, so
+      # without that check this job would go green while uploading a shell.
+      - name: Build the standalone page
+        run: npm run build:standalone
+
+      # Renamed on the way out. `index.html` is what a browser calls every
+      # second page and what a download directory already contains three of; the
+      # asset a reader is emailed should say what it is and which version it is.
+      - name: Name it for a download directory
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: mv dist-standalone/index.html "dist-standalone/metacooler-viewer-${TAG}.html"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: metacooler-viewer-standalone
+          path: dist-standalone/*.html
+          if-no-files-found: error
+          # The default is 9, and this one file compresses to about a fifth of
+          # its size. Worth the seconds on an artefact this large.
+          compression-level: 9
+
   collect:
     name: attach to the release
-    needs: build
+    needs: [build, standalone]
     runs-on: ubuntu-latest
     # The only job in this workflow that can write anything, and it writes one
     # thing: assets onto an existing release. Never `pages:` or `id-token:` —
@@ -220,6 +280,12 @@ jobs:
           once before running one; [docs/desktop.md](docs/desktop.md) gives
           both warnings verbatim and the exact click that gets past them. A
           signature says who published a build, not whether it works.
+
+          `metacooler-viewer-*.html` is the whole viewer as **one page you
+          double-click** — no install, no server, nothing to trust. It opens
+          files from your own disk only; remote URLs and the example datasets
+          need the hosted app, because a page opened from a disk has no origin
+          it is allowed to fetch from.
 
           The web app at https://js2264.github.io/metacooler.js/ is the same
           viewer and needs no installation.

@@ -2655,3 +2655,67 @@ windows are excluded. **Insulation is not**, and cannot be: the two diamonds dif
 diagonals, by a sum against a mean, by a median against a mean, and by a bad-bin mask. The golden lists
 all five, records the correlation *measured* per chromosome and window, and the test asserts that it has
 not degraded — which is a claim that is true, where equality would have been a claim that is false.
+
+---
+
+## 19. Standalone target: one HTML file
+
+A fifth build of the same source, after the site, the archived pin, the desktop shell and the CLI.
+It emits exactly one file, `dist-standalone/index.html`, with every script, stylesheet, worker and
+icon inlined, and it is meant to be opened by double-clicking it out of a downloads directory. As
+with §15 it is a second invocation of the same bundler over the same source and never a change to
+the first: `npm run build` is what the deploy workflow runs and must keep producing the same bytes.
+
+**What it is for is three machines the other four targets do not reach.** An air-gapped or HPC
+login node with no route to the website; a reviewer who will not install an unsigned binary and
+should not have to; a laptop holding unpublished patient-derived data, which is the reader §11 was
+written for. §11's promise — nothing is uploaded — holds in every build, but only in this one is it
+structural rather than a claim, because there is no origin to upload to.
+
+**Four things a `file://` page cannot do.** Each was measured in Chromium before the config was
+written, and each is absolute rather than a degradation:
+
+1. **A module worker cannot be constructed.** This is the same failure §15 records against
+   `file://` for the desktop renderer, and it is why that target registers a privileged scheme
+   instead. Here there is no main process to register one, so the workers change shape:
+   `worker.format: 'iife'` plus `?worker&inline` in `src/worker/spawn.standalone.ts` gives classic
+   workers over blob URLs, which do construct.
+2. **A sibling `.js` cannot be fetched** — the same refusal that blocks a dynamic import.
+   `inlineDynamicImports` collapses the graph to one chunk, at both the app and the worker level,
+   and the build's own plugin folds that chunk into the HTML.
+3. **No network at all.** The origin is opaque, so every remote read fails before it is sent.
+4. **No service worker.** Registration is refused. `pwa.ts` needs no change: it already treats a
+   refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
+
+**The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
+URL box, the published examples and the version picker, and the file picker says in one sentence
+that this copy opens local files only and where to go for the rest. A build that offered a URL field
+which could never succeed would be a worse artefact than one that does not offer it.
+
+**It is about 11 MB and four fifths of that is h5wasm.** The runtime ships its wasm base64-inlined
+in its own JavaScript, which is the reason this target is possible at all — there is no `.wasm` to
+fetch — and the reason it is this size. It appears twice, in the reader worker and in the analysis
+worker, because a `file://` page has no shared chunk to give them; the app chunk itself carries
+none. The size is the price of HDF5 and is not reducible without dropping it. It gzips to about a
+fifth in transit and costs roughly a second of parsing on each open, with no HTTP cache behind it.
+
+**Every way this build can fail is silent, so the shape is a rule the build enforces.** A page that
+kept one `<script src>` paints its shell and stops, with nothing on a console nobody is looking at;
+a page that kept the module worker format looks completely normal until a file is dropped on it.
+`scripts/standalone-shape.mjs` holds the rules — one file, within a size band, no external script or
+stylesheet, no root-absolute reference, no PWA tag, no `{type:"module"}` worker construction, and
+the blob-URL construction present — and `check-standalone-build.mjs` runs them over the directory
+as the last step of `npm run build:standalone`. The lower size bound is as load-bearing as the
+upper: a build whose inlining silently did nothing produces a small, tidy, entirely broken file.
+
+**And the rules can all pass on a page that does not run**, so `scripts/smoke-standalone.mjs` drives
+a real Chromium at a real `file://` URL, mounts the app and opens a `.hic` through a real worker. It
+skips with a named message where the browser is absent, in the same way the fixture-dependent tests
+do.
+
+**Storage is shared with every other `file://` page on the machine**, because they are all one
+origin. Saved sessions and preferences are therefore not isolated between standalone copies, which
+matters only when somebody opens two, and cannot be fixed from inside the page.
+
+**Verified in Chromium.** Firefox and Safari are untested against this target; the constraints above
+are Chromium's, and another engine may impose more.

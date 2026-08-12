@@ -29,6 +29,7 @@ import { registerThread } from '../../perf/threads'
 import { withCredential } from '../../s3/attach'
 import type { Cancellable } from '../../worker/client'
 import { reviveError } from '../../worker/protocol'
+import { spawnAnalysisWorker } from '../../worker/spawn'
 import type {
   AnalysisProgressHandler,
   AnalysisRequest,
@@ -58,13 +59,10 @@ export class AnalysisClient {
    */
   private readonly thread = registerThread('analysis')
 
-  /**
-   * `new URL(..., import.meta.url)` is the form the bundler rewrites, and the
-   * module worker type is what lets the worker use `import` at all.
-   */
+  /** Constructed through `worker/spawn.ts`, the seam the standalone build
+   * swaps; see there. */
   constructor(worker?: Worker) {
-    this.worker =
-      worker ?? new Worker(new URL('./analysis.worker.ts', import.meta.url), { type: 'module' })
+    this.worker = worker ?? spawnAnalysisWorker()
     this.worker.onmessage = (event: MessageEvent<AnalysisResponse>) => this.receive(event.data)
     this.worker.onerror = (event) =>
       this.failAll(new Error(`analysis worker failed: ${event.message}`))

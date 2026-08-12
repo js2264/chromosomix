@@ -13,6 +13,7 @@
 
 import { registerThread, type ThreadHandle } from '../../perf/threads'
 import { withCredential } from '../../s3/attach'
+import { spawnAnnotationsWorker } from '../../worker/spawn'
 import type {
   AnnotationRequest,
   AnnotationRequestKind,
@@ -122,11 +123,8 @@ export class AnnotationClient {
   }
 }
 
-/**
- * `new URL(..., import.meta.url)` is the form the bundler rewrites, and the
- * module worker type is what lets the worker use `import` at all — the same
- * two constraints the reader client works under.
- */
+/** Constructed through `worker/spawn.ts` — see there for why the standalone
+ * build needs a different construction, and only that. */
 function defaultWorker(): Worker {
-  return new Worker(new URL('./annotations.worker.ts', import.meta.url), { type: 'module' })
+  return spawnAnnotationsWorker()
 }

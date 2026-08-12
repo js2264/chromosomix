@@ -101,11 +101,37 @@ node --version   # v24.18.1, npm 11.16
 npm run dev        # vite dev server; open the printed URL and drop a file on the page
 npm run build      # tsc --noEmit && vite build  →  dist/
 npm run build:cli  # the analysis CLI            →  dist-cli/metacooler-run.mjs
+npm run build:standalone   # one self-contained page  →  dist-standalone/index.html
 npm run preview    # serve the built dist/ locally
 npm run typecheck  # tsc --noEmit
 npm test           # vitest run
 npm run fixtures   # regenerate test/fixtures/ and test/golden/
 ```
+
+### One HTML file
+
+`npm run build:standalone` produces a single `index.html` — the whole viewer,
+h5wasm included, with every script, stylesheet, worker and icon inlined. It has
+no server and no install: put it on a USB stick, email it, open it by
+double-clicking, drop a file on it.
+
+It is also attached to every [release](https://github.com/js2264/metacooler.js/releases)
+as `metacooler-viewer-<tag>.html`, so nobody has to build it.
+
+What it is for is the machine the hosted app cannot reach: an air-gapped
+cluster, a reviewer who will not install anything, a laptop holding unpublished
+patient data whose owner would rather not take anybody's word about what gets
+uploaded. Nothing is uploaded from any build of this app, but this is the one
+where that is *visible* — there is no origin to upload to.
+
+The cost is the honest one. A page opened from a disk has an opaque origin, so
+**local files only**: remote URLs, the example datasets and the version picker
+are all absent, not broken. It is about 11 MB, four fifths of it the HDF5
+runtime, parsed on every open with no HTTP cache behind it — roughly a second
+before the page paints. Verified in Chromium; Firefox and Safari are untested.
+Every browser profile on a machine shares one `file://` origin, so its saved
+sessions are shared with any other `file://` page — which matters only if you
+open somebody else's.
 
 ### The analysis from a shell
 
