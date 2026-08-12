@@ -42,11 +42,11 @@
  * one copy of it however many commits are kept.
  */
 
-import { readFileSync } from 'node:fs'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig } from 'vite'
 
 import base from './vite.config'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
+import { shellIcon } from './scripts/shell-icon.mjs'
 
 /**
  * Where this copy will be served from, passed in by the deploy workflow.
@@ -76,37 +76,11 @@ if (!SHAPE.test(PINNED_BASE)) {
  * since it is right even for an archived build opened from a mirror.
  */
 
-/**
- * The one file from `public/` an archived build still needs.
- *
- * `markUrl()` in `src/ui/mark.ts` asks for `<base>icon-192.png`, and with
- * `publicDir` off there is nothing to answer with — a broken image in the
- * header, which is the first thing anyone would notice and the last thing they
- * would attribute to a build flag. Emitted from the same file the site copies,
- * so there is no second drawing of the mark; 15 KB against a 5 MB build.
- *
- * Pointing it back at the site root instead would work today and break the
- * moment someone opens an archived build from a mirror, so the copy stays.
- */
-function shellIcon(): Plugin {
-  return {
-    name: 'metacooler-pinned-shell-icon',
-    apply: 'build',
-    generateBundle() {
-      this.emitFile({
-        type: 'asset',
-        fileName: 'icon-192.png',
-        source: readFileSync(new URL('./public/icon-192.png', import.meta.url)),
-      })
-    },
-  }
-}
-
 export default defineConfig({
   ...base,
   base: PINNED_BASE,
   publicDir: false,
-  plugins: [stripPwaTags(), shellIcon()],
+  plugins: [stripPwaTags(), shellIcon('metacooler-pinned-shell-icon')],
   define: {
     ...base.define,
     // `__DEMO_BASE__` is deliberately *not* overridden. It used to be

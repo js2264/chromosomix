@@ -26,6 +26,7 @@ import { defineConfig } from 'vite'
 
 import base from './vite.config'
 import { stripPwaTags } from './scripts/pwa-tags.mjs'
+import { shellIcon } from './scripts/shell-icon.mjs'
 
 export default defineConfig({
   ...base,
@@ -46,7 +47,14 @@ export default defineConfig({
   // Replaces the web plugin list entirely: the service worker plugin is not
   // here, so `sw.js` is never emitted for this target. That is guard one of
   // three (see `src/pwa.ts`).
-  plugins: [stripPwaTags()],
+  //
+  // `shellIcon()` puts back the one file from `public/` the renderer actually
+  // asks for. Without it `markUrl()` resolves to a file that is not there and
+  // the header carries a broken image — which is what every desktop release
+  // before this one shipped. The pinned config had solved the same problem
+  // privately; the plugin now lives in one place so the next config to switch
+  // `publicDir` off inherits the fix instead of the bug.
+  plugins: [stripPwaTags(), shellIcon('metacooler-desktop-shell-icon')],
   define: {
     ...base.define,
     __APP_TARGET__: JSON.stringify('desktop'),
