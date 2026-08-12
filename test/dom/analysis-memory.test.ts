@@ -111,6 +111,7 @@ const CONTEXT: AnalysisContext = {
 const RUNNER = {
   subscribe: () => () => {},
   resultOf: () => null,
+  resultsFor: () => [],
   stateOf: () => ({ status: 'idle' }),
   run: () => {},
   runAll: () => {},

@@ -235,6 +235,18 @@ interface PlanStep {
  * changed while this job was queued* — because there is no longer a moving
  * answer for it to disagree with.
  */
+/**
+ * The key a result is filed under.
+ *
+ * A NUL between the two halves rather than a slash or a colon: a `MapId` is a
+ * generated identifier and a task id is from a fixed catalogue, but neither is
+ * validated against a separator, and a key collision here shows up as one map's
+ * numbers under another map's tab.
+ */
+export function resultKey(map: MapId, taskId: string): string {
+  return `${map}\u0000${taskId}`
+}
+
 export interface RunTarget {
   /** Which map, for filing what the run produces (`annotations/placement.ts`). */
   map: MapId
@@ -276,7 +288,29 @@ export class AnalysisRunner {
   private mounted: string | null = null
 
   private readonly states = new Map<string, JobState>()
+  /**
+   * Finished results, keyed by **map and task** rather than by task alone.
+   *
+   * Two things depend on the map being in the key, and the second is a defect
+   * that was live.
+   *
+   * A deck's batch (`runAll`) produces one result per panel, and a reader
+   * comparing four libraries wants all four — on their own tabs, or overlaid in
+   * one figure. Keyed by task alone, the fourth overwrote the third overwrote
+   * the second, and what a batch left behind was one plot and four synthetic
+   * tracks: the tracks were filed per map and the *figures* were not.
+   *
+   * And this map is also the composite cache (§18.2): a saddle asks for
+   * eigenvectors and takes them from here when the recipe matches. A recipe is
+   * params plus framing, and **a batch shares one framing across every target**
+   * — it is taken once, when Run is pressed. So the reuse test could not see
+   * that the cached eigenvectors were measured on another file, and a saddle run
+   * over a deck drew panel B's compartments out of panel A's numbers. Silently,
+   * and only for the composites.
+   */
   private readonly results = new Map<string, TaskResult>()
+  /** The target each stored result was measured on, for labelling the tabs. */
+  private readonly resultTargets = new Map<string, RunTarget>()
   private readonly queue: Job[] = []
   private current: Job | null = null
 
@@ -300,8 +334,45 @@ export class AnalysisRunner {
     return this.states.get(taskId) ?? { status: 'idle' }
   }
 
-  resultOf(taskId: string): TaskResult | null {
-    return this.results.get(taskId) ?? null
+  /**
+   * The result for one task on one map; the host's own map when none is named.
+   *
+   * The default is what every existing caller wants and is why they needed no
+   * change: a drawer showing one figure is showing the starred map's.
+   */
+  resultOf(taskId: string, map?: MapId): TaskResult | null {
+    const where = map ?? this.host.targetMap?.() ?? LEAD_MAP
+    return this.results.get(resultKey(where, taskId)) ?? null
+  }
+
+  /**
+   * Every map this task has a result for, in the order the deck holds them.
+   *
+   * What the drawer's tabs are built from, and what the combined figure folds.
+   * Ordered by the host's target list rather than by when each finished, so the
+   * tabs follow the grid and not the queue — a batch reports in reading order
+   * but a re-run of one panel would otherwise jump it to the end.
+   */
+  resultsFor(taskId: string): Array<{ target: RunTarget; result: TaskResult }> {
+    const order = this.host.allTargets?.() ?? []
+    const seen = new Set<MapId>()
+    const out: Array<{ target: RunTarget; result: TaskResult }> = []
+    for (const target of order) {
+      const result = this.results.get(resultKey(target.map, taskId))
+      if (result === undefined) continue
+      seen.add(target.map)
+      out.push({ target, result })
+    }
+    // A result whose map has since left the deck is still a result, and losing
+    // it when a panel is closed would throw away a computation the reader is
+    // looking at. It goes on the end, labelled by the target it was run against.
+    for (const [key, result] of this.results) {
+      const target = this.resultTargets.get(key)
+      if (target === undefined || seen.has(target.map)) continue
+      if (key !== resultKey(target.map, taskId)) continue
+      out.push({ target, result })
+    }
+    return out
   }
 
   subscribe(listener: () => void): () => void {
@@ -585,7 +656,7 @@ export class AnalysisRunner {
         // below never learns whether it was computed now or ten minutes ago
         // (§18.2). The leaf is never taken from the cache: pressing Run means
         // run it.
-        const cached = this.results.get(step.task.id)
+        const cached = this.results.get(resultKey(job.target.map, step.task.id))
         if (
           !leaf &&
           cached !== undefined &&
@@ -596,7 +667,9 @@ export class AnalysisRunner {
         }
 
         const result = await this.runStep(job, client, step, chain, at, upstream, startedAt)
-        this.results.set(step.task.id, result)
+        const key = resultKey(job.target.map, step.task.id)
+        this.results.set(key, result)
+        this.resultTargets.set(key, job.target)
         if (leaf) {
           this.setState(step.task.id, {
             status: 'done',

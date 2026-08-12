@@ -132,6 +132,12 @@ function runnerWith(finished: TaskResult, deck: readonly FakeTarget[] = []): Ana
   return {
     subscribe: () => () => {},
     resultOf: (taskId: string) => (taskId === finished.provenance.task ? finished : null),
+    // One map's worth: this suite is about a `.metacool`, which has one. The
+    // deck-tab behaviour is `analysis-maps.test.ts`'s.
+    resultsFor: (taskId: string) =>
+      taskId === finished.provenance.task && deck.length > 0
+        ? [{ target: deck[0], result: finished }]
+        : [],
     stateOf: () => ({ status: 'idle' }),
     run: () => {},
     runAll: () => {},
