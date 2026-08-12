@@ -104,6 +104,33 @@ describe('the conventions, and that they meet', () => {
     expect(found(plant, 'mitochondria')).toBe('ChrM')
   })
 
+  it('does not let an organelle name swallow a neighbour by prefix', () => {
+    // *S. pombe*'s `MTR` is the mating-type region — twenty kilobases with
+    // nothing mitochondrial about it — and it sits in the same file as `MT`.
+    const pombe = ['I', 'II', 'III', 'MT', 'MTR', 'AB325691']
+    expect(found(pombe, 'chrM')).toBe('MT')
+    expect(found(pombe, 'MTR')).toBe('MTR')
+    expect(canonicalise('MTR', contextOf(pombe)).opaque).toBe(true)
+    // Three chromosomes is enough evidence to be counting in Roman.
+    expect(contextOf(pombe).roman).toBe(true)
+    expect(found(pombe, 'chr3')).toBe('III')
+  })
+
+  it('refuses to choose between two mitochondria in one file', () => {
+    // UCSC's hg19 analysis set carries the legacy chrM beside chrMT (the rCRS)
+    // on purpose, so that reads can be remapped without breaking legacy
+    // coordinates. Both are mitochondria and they are different sequences.
+    const plusMT = NameIndex.of([
+      { name: 'chrM', length: 16_571 },
+      { name: 'chrMT', length: 16_569 },
+    ])
+    expect(plusMT.find('MT')).toBeNull()
+    expect(plusMT.find('MT', { length: 16_569 })?.name).toBe('chrMT')
+    expect(plusMT.find('MT', { length: 16_571 })?.name).toBe('chrM')
+    // An exact spelling is never in doubt.
+    expect(plusMT.find('chrM')?.name).toBe('chrM')
+  })
+
   it('takes the reference organelle accessions, which are organelles first', () => {
     // `NC_012920.1` is the human rCRS. Read as an accession it is a number
     // nothing names; read as an organelle it is `chrM`, which is what it is.
@@ -131,9 +158,9 @@ describe('the conventions, and that they meet', () => {
   })
 
   it('relates a UCSC scaffold name to the accession it was made from', () => {
-    const ucsc = ['chrUn_GL000220v1', 'chr11_KI270733v1_random', 'chr6_GL000250v2_alt']
+    const ucsc = ['chrUn_GL000220v1', 'chr22_KI270733v1_random', 'chr6_GL000250v2_alt']
     expect(found(ucsc, 'GL000220.1')).toBe('chrUn_GL000220v1')
-    expect(found(ucsc, 'KI270733.1')).toBe('chr11_KI270733v1_random')
+    expect(found(ucsc, 'KI270733.1')).toBe('chr22_KI270733v1_random')
     expect(found(ucsc, 'GL000250.2')).toBe('chr6_GL000250v2_alt')
     // And back, which is the direction an Ensembl-named map asks in.
     const ensembl = ['GL000220.1', 'KI270733.1']
@@ -143,7 +170,7 @@ describe('the conventions, and that they meet', () => {
 
 describe('X, and the list that decides what it is', () => {
   it('reads X as ten where the file counts past nine in Roman', () => {
-    expect(contextOf(YEAST_ROMAN)).toEqual({ roman: true, xIsTen: true })
+    expect(contextOf(YEAST_ROMAN)).toEqual({ roman: true, xIsTen: true, ordinals: true })
     expect(canonicalise('chrX', contextOf(YEAST_ROMAN)).key).toBe('num:10')
     expect(found(YEAST_ROMAN, '10')).toBe('chrX')
   })
@@ -151,7 +178,7 @@ describe('X, and the list that decides what it is', () => {
   it('reads X as the sex chromosome where the numerals stop at V', () => {
     // *C. elegans* is I–V and X. There is no chromosome ten to confuse it with,
     // and the absence of `IX` and `XI` is what says so.
-    expect(contextOf(WORM)).toEqual({ roman: true, xIsTen: false })
+    expect(contextOf(WORM)).toEqual({ roman: true, xIsTen: false, ordinals: true })
     expect(canonicalise('X', contextOf(WORM)).key).toBe('sex:x')
     expect(found(WORM, 'chrX')).toBe('X')
     expect(found(WORM, '10')).toBeNull()
@@ -222,6 +249,66 @@ describe('what must not be equated', () => {
     expect(found(mag, '1')).toBeNull()
     expect(found(mag, 'tig1')).toBeNull()
     expect(canonicalise('NODE_1_length_338947_cov_15.4', contextOf(mag)).opaque).toBe(true)
+  })
+
+  it('keeps a draft assembly’s numbered contigs out of the karyotype', () => {
+    // SOAPdenovo, ABySS, Shasta and several binners all number their contigs
+    // `1`, `2`, `3`. Nothing about the string says which it is; the *count*
+    // does, because no genome has two hundred chromosomes.
+    const draft = Array.from({ length: 400 }, (_, at) => String(at + 1))
+    const karyotype = Array.from({ length: 22 }, (_, at) => String(at + 1))
+    expect(contextOf(draft).ordinals).toBe(false)
+    expect(contextOf(karyotype).ordinals).toBe(true)
+    expect(canonicalise('1', contextOf(draft)).opaque).toBe(true)
+
+    // The path that matters is the cross-file one, and it is the one that
+    // stops: a map whose sequences are chromosomes asks its companion for
+    // chromosome one, and a draft assembly's first contig is not that.
+    const fromKaryotype = contextOf(karyotype)
+    expect(into(draft).find('chr1', { from: fromKaryotype })).toBeNull()
+    expect(into(draft).find('01', { from: fromKaryotype })).toBeNull()
+    expect(into(karyotype).find('chr1', { from: fromKaryotype })?.name).toBe('1')
+
+    // Asked in the file's *own* terms — somebody typing into the locus box of
+    // this file — `chr1` still reaches contig `1`, by the prefix and nothing
+    // else. That is the opaque rule, and it is the right reading of a name
+    // typed at a file rather than carried in from another one.
+    expect(into(draft).find('chr1')?.tier).toBe('prefix')
+    expect(into(draft).find('1')?.tier).toBe('exact')
+  })
+
+  it('keeps a FALCON contig out of the arm namespace', () => {
+    // `000001F` is `^([0-9]+)([a-z]{1,2})$` exactly, which is the pattern a
+    // *Drosophila* arm matches. Reading it as chromosome 1 arm F would put an
+    // assembler's contig into the karyotype namespace.
+    const falcon = ['000001F', '000002F', '000123F']
+    expect(canonicalise('000001F', contextOf(falcon)).opaque).toBe(true)
+    expect(into(falcon).find('1F')).toBeNull()
+    expect(into(falcon).find('000001F')?.tier).toBe('exact')
+  })
+
+  it('does not let a spike-in file re-key its host’s X', () => {
+    // A Hi-C library mapped against a host plus a yeast spike-in holds both
+    // notations in one list. The Roman evidence is overwhelming and the wrong
+    // conclusion — that this file's `chrX` is chromosome ten — would re-key the
+    // host's sex chromosome onto the spike-in's tenth.
+    const spiked = [
+      'chr1', 'chr2', 'chr9', 'chr10', 'chr11', 'chrX', 'chrY',
+      'chrI', 'chrII', 'chrIX', 'chrX_yeast', 'chrXI', 'chrXVI',
+    ]
+    const context = contextOf(spiked)
+    expect(context.roman).toBe(true)
+    expect(context.xIsTen).toBe(false)
+    expect(canonicalise('chrX', context).key).toBe('sex:x')
+    // A companion of another convention therefore still gets the sex one.
+    expect(into(['1', '10', 'X']).find('chrX', { from: context })?.name).toBe('X')
+  })
+
+  it('still reads X as ten in a list that is Roman throughout', () => {
+    // The guard above must not cost the case it was built around: `chr2micron`
+    // beside `chrI`…`chrXVI` is one stray number, not a second notation.
+    const yeast = [...YEAST_ROMAN, 'chr2micron']
+    expect(contextOf(yeast).xIsTen).toBe(true)
   })
 
   it('leaves a linkage group a linkage group', () => {

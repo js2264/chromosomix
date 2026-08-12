@@ -525,8 +525,21 @@ file whose numerals stop at `V` — *C. elegans* is `I`…`V`, `X` — is naming
 no chromosome ten to be confused with. The same test gets *S. pombe* right and gets every numeric
 assembly right by never reaching the question. This is why the entry point is an index over a whole
 file's sequences rather than a `canonicalise(name)` anybody could call on a string in isolation, and
-why the two booleans it produces are **forwarded with the request**: a companion resolving the lead's
-region has to read the numeral the way the lead wrote it.
+why what it produces is **forwarded with the request**: a companion resolving the lead's region has
+to read the numeral the way the lead wrote it.
+
+Two further list-level rules, and each exists because a real file breaks the obvious version:
+
+- A Hi-C library mapped against a **host plus a yeast spike-in** carries `chr1`…`chr22`, `chrX`,
+  `chrY` *and* `chrI`…`chrXVI` in one list. The Roman evidence is overwhelming and the conclusion —
+  that this file's `chrX` is chromosome ten — would re-key the host's sex chromosome onto the
+  spike-in's tenth. So a list that numbers chromosomes **both** ways does not get to answer the `X`
+  question at all: in a list that already counts in Arabic, `X` is the sex chromosome.
+- SOAPdenovo, ABySS, Shasta and several binners number their contigs `1`, `2`, `3`. Read as ordinals
+  those match `chr1` at the same rung an Ensembl file does, drawing a 4 kb contig under the label of
+  chromosome one. Nothing about the string says which it is; the *count* does — no genome has two
+  hundred chromosomes, and every draft assembly has thousands of contigs — so past that ceiling a
+  bare number is an id and is matched by its spelling only.
 
 **Length corroborates; it never matches.** Two sequences of equal length are not the same sequence —
 a metagenome has thousands of equal-length contigs — so no pair is ever matched *because* the lengths
@@ -559,13 +572,25 @@ which is the question this whole section exists to avoid asking (C1, C2).
 
 **What is deliberately not equated.** A chromosome arm is not its chromosome: *Drosophila*'s `2L` and
 `2R` are separate sequences and neither is `2`, which also keeps wheat's `1A`, `1B` and `1D` — three
-homoeologues, one number — apart from each other. `_random`, `_alt`, `_fix` and `_hapN` stay, because
-a patch is not the chromosome it patches. A linkage group keeps its `LG`, because a linkage map is
-numbered by linkage and an assembly by length and the two orders agree only by luck. `C`, `D` and `M`
-are excluded from the Roman numeral system entirely — no genome has a hundredth chromosome, so a `C`
-in a chromosome list is a chloroplast and an `M` a mitochondrion, every time. And **genome names are
-never matched**: a metacool's genome layer is independently assembled organisms, and nothing about
-their names is a convention.
+homoeologues, one number — apart from each other. The number in front of that letter is capped at two
+digits, because FALCON writes its contigs `000001F` and reading one as chromosome 1 arm F would put
+an assembler's output into the karyotype namespace. `_random`, `_alt`, `_fix` and `_hapN` stay,
+because a patch is not the chromosome it patches. A linkage group keeps its `LG`, because a linkage
+map is numbered by linkage and an assembly by length and the two orders agree only by luck. `C`, `D`
+and `M` are excluded from the Roman numeral system entirely — no genome has a hundredth chromosome,
+so a `C` in a chromosome list is a chloroplast and an `M` a mitochondrion, every time. Organelle
+spellings are matched whole and never by prefix, because *S. pombe*'s `MTR` is a mating-type region
+sitting in the same file as its `MT`. And **genome names are never matched**: a metacool's genome
+layer is independently assembled organisms, and nothing about their names is a convention.
+
+**What is not attempted.** UCSC's `.1` → `v1` scaffold rewrite belongs to the hg38/mm39 generation;
+the one before it lowercased the accession and *discarded* the version, so `chrUn_gl000220` cannot be
+turned back into `GL000220.1` without knowing the assembly. Those names are left unrecognised rather
+than guessed at, which costs a blank lane and a sentence where a guess would cost a scaffold drawn
+under another scaffold's label. Two mitochondria in one file — UCSC's hg19 analysis set carries the
+legacy `chrM` beside the rCRS as `chrMT`, on purpose — are not resolved either: both land in one
+bucket, which makes the bucket ambiguous, which makes the matcher refuse unless a length settles it.
+That is the general rule doing the work, not a special case.
 
 **Where it fires, and where it must not.** In `parseMetacoolerRange` the matcher is consulted *after*
 both namespaces have been asked literally and the answer would otherwise be a refusal. That placement

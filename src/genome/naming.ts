@@ -236,6 +236,18 @@ const ROLE_SUFFIX = /_(random|alt|fix|hap\d+|ctg\d+|maternal|paternal)$/i
  * between `_` and `G` — `_` is a word character, so a word boundary never fires
  * inside `chrUn_GL000220v1`, which is the only place this pattern is ever
  * looked for.
+ *
+ * **Upper case only, and that is deliberate.** The `.1` → `v1` rewrite belongs
+ * to UCSC's hg38/mm39 generation. The one before it — hg19, mm10 — lowercased
+ * the accession and *discarded the version*: `GL000220.1` became
+ * `chrUn_gl000220`, and `GL000195.1` is `chr7_gl000195_random` in hg19 and
+ * `chrUn_GL000195v1` in hg38, the same sequence under two roles. There is no
+ * closed-form way back from an hg19 name to an accession, because the version
+ * digit is simply gone and which version it was depends on the assembly. So the
+ * old generation is not recognised at all rather than guessed at: an
+ * unrecognised name matches by its spelling and finds nothing, which is a blank
+ * lane and a sentence, where a guess would be a scaffold drawn under the label
+ * of a different one.
  */
 const UCSC_ACCESSION = /(?:^|[_.-])([A-Z]{2}[0-9]{5,6})v([0-9]+)(?:$|[_.-])/
 
@@ -267,6 +279,18 @@ const INSDC_ACCESSION = /^[A-Z]{1,6}[0-9]{5,8}$/
  * The four accessions are the reference organelle sequences a pipeline is
  * likeliest to have written instead of a name: the human rCRS, its GenBank
  * twin, the *S. cerevisiae* mitochondrion and the *A. thaliana* plastid.
+ *
+ * The spellings are matched **whole**, never by prefix, and *S. pombe* is why:
+ * its `MTR` is the mating-type region, twenty kilobases that have nothing to do
+ * with a mitochondrion, and a prefix test on `MT` would swallow it.
+ *
+ * Two mitochondria in one file is a real state, not a corruption, and this
+ * table does not try to resolve it: UCSC's hg19 analysis set carries the legacy
+ * `chrM` (16,571 bp) beside `chrMT` (the rCRS, 16,569) precisely so that reads
+ * can be remapped without breaking legacy coordinates. Both land in this
+ * bucket, which makes the bucket ambiguous, which makes {@link NameIndex.find}
+ * refuse to guess unless a length settles it — the right answer, arrived at by
+ * the general rule rather than by a special case.
  */
 const ORGANELLES: Array<[key: string, spellings: string[]]> = [
   [
@@ -436,7 +460,35 @@ export interface NameContext {
   xIsTen: boolean
   /** `true` where this list counts in Roman numerals at all. */
   roman: boolean
+  /**
+   * `true` where a bare number in this list is a chromosome's *ordinal* rather
+   * than an assembler's *id*.
+   *
+   * The one thing that separates a karyotype from a draft assembly, and it is
+   * not the names — SOAPdenovo, ABySS, Shasta and several binners all emit
+   * contigs called `1`, `2`, `3`. Nothing about the string `1` says which it is,
+   * and read as an ordinal it matches `chr1` at the same rung an Ensembl file
+   * does, which would draw a 4 kb contig under the label of chromosome one.
+   *
+   * What separates them is *how many there are*: no genome has two hundred
+   * chromosomes, and every draft assembly has thousands of contigs. See
+   * {@link MAX_KARYOTYPE}.
+   */
+  ordinals: boolean
 }
+
+/**
+ * More numbered sequences than this and the numbers are ids, not chromosomes.
+ *
+ * Deliberately generous. The largest karyotypes anybody assembles are around a
+ * hundred and twenty, so two hundred leaves every real genome room and still
+ * separates it by an order of magnitude from the draft assemblies this is here
+ * to keep out. The cost of being wrong in each direction is not symmetric: too
+ * high and a metagenome's `1` starts answering to `chr1`, too low and a
+ * hypothetical two-hundred-chromosome genome loses cross-convention matching
+ * and keeps exact matching, which is where it was before this module existed.
+ */
+const MAX_KARYOTYPE = 200
 
 /**
  * Unambiguous Roman numerals — the ones that cannot be read as anything else.
@@ -466,13 +518,28 @@ function readsAsRoman(body: string): boolean {
  * there is no chromosome ten to be confused with. The same test gets
  * *S. pombe* right (`I`, `II`, `III` and no `X` at all) and gets every numeric
  * assembly right by never reaching the question.
+ *
+ * With one exception, and it is a real file rather than a hypothetical: a Hi-C
+ * library mapped against a **host plus a yeast spike-in** has one contig list
+ * holding `chr1`…`chr22`, `chrX`, `chrY` *and* `chrI`…`chrXVI`. The Roman
+ * evidence is overwhelming and the conclusion would be that this file's `chrX`
+ * is chromosome ten — which is the host's sex chromosome, re-keyed onto the
+ * spike-in's tenth. So a list that numbers chromosomes **both** ways does not
+ * get to answer the `X` question at all: in a list that already counts in
+ * Arabic, `X` is the sex chromosome, which is what it is in every genome that
+ * has both notations in it.
  */
 export function contextOf(names: readonly string[]): NameContext {
   const bodies = names.map((name) => bodyOf(name))
   const evidence = bodies.filter((body) => readsAsRoman(body))
   const roman = evidence.length >= 2
+  const numbers = bodies.filter((body) => /^[0-9]+$/.test(body))
+  const ordinals = numbers.length <= MAX_KARYOTYPE
   const has = (want: string): boolean => bodies.some((body) => body.toLowerCase() === want)
-  return { roman, xIsTen: roman && (has('ix') || has('xi')) }
+  // Two, not one: a single `4` beside sixteen Roman numerals is a stray contig,
+  // and `I`…`XVI` plus `chr2micron` must not lose its X to it.
+  const alsoArabic = ordinals && numbers.length >= 2
+  return { roman, ordinals, xIsTen: roman && !alsoArabic && (has('ix') || has('xi')) }
 }
 
 /** A name stripped of decoration, chromosome prefix and role suffix. */
@@ -510,7 +577,7 @@ export function canonicalise(name: string, context: NameContext): Canon {
   const lower = body.toLowerCase()
 
   // An accession UCSC has rewritten into a name — `chrUn_GL000220v1`,
-  // `chr11_KI270733v1_random`. The accession is the identity; the chromosome
+  // `chr22_KI270733v1_random`. The accession is the identity; the chromosome
   // the name hangs it off and the role suffix are both commentary, and Ensembl
   // writes the same sequence as `GL000220.1` with neither.
   const rewritten = UCSC_ACCESSION.exec(withRole)
@@ -568,8 +635,10 @@ export function canonicalise(name: string, context: NameContext): Canon {
   }
 
   // A plain number, with its leading zeros gone. `01`, `1` and `chr1` are one
-  // chromosome in every file that writes any of them.
-  if (/^[0-9]+$/.test(body)) {
+  // chromosome in every file that writes any of them — *provided* this list is
+  // a karyotype and not a draft assembly, which is the one thing the string
+  // cannot say and the list can. See {@link NameContext.ordinals}.
+  if (/^[0-9]+$/.test(body) && context.ordinals) {
     if (/^0[0-9]/.test(body)) via.push('padded')
     return { key: `num:${Number(body)}${tail}`, via, version: null, opaque: false }
   }
@@ -577,9 +646,15 @@ export function canonicalise(name: string, context: NameContext): Canon {
   // A number with a letter welded to it: a *Drosophila* arm (`2L`), a wheat
   // homoeologue (`1A`), a rice pseudomolecule (`01g`). The letter stays. See
   // the module header — an arm is not its chromosome.
-  const armed = /^([0-9]+)([a-z]{1,2})$/i.exec(body)
-  if (armed !== null) {
-    if (/^0[0-9]/.test(armed[1])) via.push('padded')
+  //
+  // **At most two digits**, and that bound is doing real work: FALCON names its
+  // contigs `000001F` and `000123F`, which is this pattern exactly, and reading
+  // one as chromosome 1 arm F would put an assembler's contig into the
+  // karyotype namespace — the one thing this module promises never to do. No
+  // chromosome is numbered past two digits, so nothing real is lost.
+  const armed = /^([0-9]{1,2})([a-z]{1,2})$/i.exec(body)
+  if (armed !== null && context.ordinals) {
+    if (armed[1].startsWith('0')) via.push('padded')
     return {
       key: `num:${Number(armed[1])}${armed[2].toLowerCase()}${tail}`,
       via,
@@ -755,7 +830,7 @@ export class NameIndex {
     if (!context.roman) {
       const body = bodyOf(name).toLowerCase()
       if (body !== 'x' && body !== 'l' && romanValue(body) > 0) {
-        return this.byKey(name, canonicalise(name, { roman: true, xIsTen: false }), length)
+        return this.byKey(name, canonicalise(name, { ...context, roman: true, xIsTen: false }), length)
       }
     }
     return null
