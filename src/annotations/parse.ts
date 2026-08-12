@@ -98,7 +98,7 @@ function firstRow(text: string): string[] | null {
   return found
 }
 
-function isInteger(value: string | undefined): boolean {
+export function isInteger(value: string | undefined): boolean {
   return value !== undefined && /^[+-]?\d+$/.test(value)
 }
 

@@ -14,6 +14,59 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **bedGraph and wig open as tracks**, which closes an asymmetry that was
+  invisible and slightly embarrassing: the app *wrote* bedGraph — every analysis
+  result offers the button — and could not read one back. A four-column bedGraph
+  is BED-shaped, the sniffer knew three formats, and the value column landed in
+  `name`, so the file came back as a lane of featureless grey boxes with no
+  signal in it. Silently, which is the worst of the three ways that could have
+  gone.
+
+  A bedGraph *is* a bigWig written out, so it becomes the same kind of thing:
+  values held in the annotations worker and sampled per view, which is what gives
+  it a range, a ceiling, an autoscale, a colour chip and the ⌘-scroll without one
+  line of new interface. What it cannot borrow is the bigWig's on-disk zoom
+  levels, so the summary for a window — mean, min and max, the mean weighted by
+  covered bases rather than by interval count — is computed when the window is
+  asked for. wig arrives with it, both step styles, its 1-based inclusive
+  coordinates converted at the parser.
+
+  The new sniffer runs *before* the feature sniffer and is deliberately the
+  stricter of the two: exactly four columns, numeric on every row it inspects, or
+  a declaration line saying so. A rule loose enough to capture a real BED4 would
+  turn every peak set into a signal track of NaN, which is a worse bug than the
+  one being fixed, so the suite tests the refusals as hard as the acceptances.
+
+- **A tabix sidecar makes a feature file a bounded read.** Every other read here
+  already was — HDF5 through range requests, a bigWig by zoom level, a `.hic` by
+  the blocks its rectangle covers — and then a GTF was downloaded whole. The demo
+  file is 9.5 MB; GENCODE is five times that.
+
+  Where a `.gz` is BGZF and a `.tbi` is beside it — dropped alongside, or at the
+  conventional `<url>.tbi` — only the byte spans holding the sequences this map is
+  about are fetched. Against a map of one chromosome that is about a twentieth of
+  GENCODE. BGZF and the index are read here rather than depended on, for the
+  reason `hic/format.ts` gives at length: the byte layer, its LRU, its request
+  accounting and its S3 signature belong to `ByteSource`, and a parser that
+  fetches for itself sits outside all three.
+
+  **The fallbacks are the feature.** A plain GTF still works, a bgzipped one with
+  no index still works, and an index that is absent, corrupt, truncated or for
+  another assembly falls back to the whole-file read rather than refusing the
+  track — an index that can prevent a file from opening is worse than no index. A
+  sidecar is only asked for when the file is a `.gz`; a span set covering more
+  than four fifths of the file is abandoned as no saving; and sequence names are
+  matched through the `chr` prefix in both directions, because Ensembl writes `1`
+  where UCSC writes `chr1` and reading the whole file over that would be the
+  index quietly not working.
+
+  One thing worth knowing before touching it: the fetch has to over-ask by up to
+  64 KiB, because a span ends at the *start* of the last block holding a record
+  and a block's length is not knowable without reading its header. The decode is
+  bounded separately. Without that, a one-sequence read on a densely packed file
+  hands back the several sequences that happened to follow it — which the suite
+  caught, and which reads as the index working.
+
 - **`.hic` files open, and nothing downstream can tell.** Versions 7, 8 and 9,
   local and remote, at every base-pair resolution the file carries. This is where
   the published record is: most mammalian Hi-C on 4DN, ENCODE and GEO is
