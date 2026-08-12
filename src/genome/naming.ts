@@ -1208,17 +1208,28 @@ export function contigIndexOf(
   contigs: readonly string[] | readonly NamedSequence[],
   name: string,
 ): number {
-  for (let at = 0; at < contigs.length; at++) {
-    const held = contigs[at]
-    if ((typeof held === 'string' ? held : held.name) === name) return at
-  }
+  const at = positionsOf(contigs)
+  const direct = at.get(name)
+  if (direct !== undefined) return direct
   const match = NameIndex.for(contigs).find(name)
-  if (match === null) return -1
-  for (let at = 0; at < contigs.length; at++) {
-    const held = contigs[at]
-    if ((typeof held === 'string' ? held : held.name) === match.name) return at
-  }
-  return -1
+  return match === null ? -1 : (at.get(match.name) ?? -1)
+}
+
+/** Name → position, held against the list's identity beside its index. */
+const POSITIONS = new WeakMap<object, Map<string, number>>()
+
+function positionsOf(contigs: readonly string[] | readonly NamedSequence[]): Map<string, number> {
+  const held = POSITIONS.get(contigs)
+  if (held !== undefined) return held
+  const built = new Map<string, number>()
+  contigs.forEach((contig, at) => {
+    // First writer wins, as everywhere else here: two rows of one name is a
+    // corrupt list, and the first is what every other index resolves to.
+    const key = typeof contig === 'string' ? contig : contig.name
+    if (!built.has(key)) built.set(key, at)
+  })
+  POSITIONS.set(contigs, built)
+  return built
 }
 
 /**
