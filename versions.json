@@ -1,6 +1,13 @@
 {
-  "latest": "7bb7578",
+  "latest": "17ffa85",
   "versions": [
+    {
+      "commit": "17ffa85",
+      "version": "0.10.0",
+      "date": "2026-08-12T23:42:09+02:00",
+      "subject": "fix(deck): the six things a deck of turned maps got wrong (#24)",
+      "tag": ""
+    },
     {
       "commit": "7bb7578",
       "version": "0.10.0",
