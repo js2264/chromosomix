@@ -14,6 +14,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **`metacooler-run`: the Analysis panel, from a shell.** Fourteen tasks, every
+  one of them goldened against cooltools, coolpuppy, pyBigWig and numpy — and
+  reachable only by clicking. The moment somebody has two hundred files rather
+  than one, clicking stops being the interface and they leave for cooltools,
+  which is the right tool and a *different set of definitions*, so the numbers in
+  the figure and the numbers in the table stop being the same numbers.
+
+  So: the same kernels, the same writers, the same `#` provenance header. Not a
+  port — `RUNNERS` is imported and the job handed to it is built exactly as the
+  analysis worker builds one, so a TSV produced in a batch and a TSV produced by
+  clicking are byte-identical given the same inputs. If the two ever disagree,
+  one of them is wrong and there is a golden that says which.
+
+  ```
+  metacooler-run tasks
+  metacooler-run insulation *.mcool --window chrII --out results/
+  metacooler-run replay session.metacooler.json --over 'data/*.hic'
+  ```
+
+  **`replay` is the half that matters.** It takes the session file the Save
+  button and the Share link already produce, and re-runs the analyses recorded in
+  it — with the parameters recorded in it — over any number of other files. That
+  closes a loop the app was missing at both ends: parameters get chosen the way
+  parameters should be, by looking at a picture and adjusting until it is right,
+  and then applied to the other hundred and ninety-nine with no retyping. A
+  transcription error in a batch of two hundred is two hundred wrong numbers that
+  look right.
+
+  Built by `npm run build:cli` — a fourth invocation of the same bundler over the
+  same source, never an edit to the first. Node needs no loader for it and the
+  CLI needs no dependency beyond the app's own.
+
+  Three refusals, each for a reason. **No remote files**: the reader uses
+  synchronous range requests, which exist in a worker and not in Node, and `curl`
+  is better at the missing half than anything this could contain. **An unknown
+  `--flag` is an error**, never ignored — a typo in a script that runs for an
+  hour must not quietly use the default. And **a task's own parameters win over
+  the CLI's flags** where the names collide, which is `--balance` on six tasks:
+  reserving the name first would have set the framing and left the task at its
+  default, which is exactly the failure the unknown-flag error exists to prevent.
+  The framing's window is `--window` rather than `--region` for the same reason —
+  two tasks already have a `region` parameter meaning *which sequence*.
+
 - **A deck's results stop overwriting each other, and become one figure.** Three
   things, and the first was a defect rather than a gap.
 

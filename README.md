@@ -100,11 +100,30 @@ node --version   # v24.18.1, npm 11.16
 ```bash
 npm run dev        # vite dev server; open the printed URL and drop a file on the page
 npm run build      # tsc --noEmit && vite build  →  dist/
+npm run build:cli  # the analysis CLI            →  dist-cli/metacooler-run.mjs
 npm run preview    # serve the built dist/ locally
 npm run typecheck  # tsc --noEmit
 npm test           # vitest run
 npm run fixtures   # regenerate test/fixtures/ and test/golden/
 ```
+
+### The analysis from a shell
+
+The fourteen tasks are reachable without the panel, over as many files as you
+like, through the same kernels and the same writers:
+
+```bash
+npm run build:cli
+node dist-cli/metacooler-run.mjs tasks
+node dist-cli/metacooler-run.mjs insulation *.mcool --window chrII --out results/
+node dist-cli/metacooler-run.mjs replay session.metacooler.json --over 'data/*.hic'
+```
+
+`replay` takes the session file **Save** and **Share** already produce and
+re-runs the analyses in it, with the parameters in it, over other files —
+parameters chosen by looking at a picture, applied to the other hundred and
+ninety-nine without retyping. Local files only: the reader's range requests are
+synchronous and exist in a worker rather than in Node.
 
 `npm run fixtures` shells out to Python and needs an interpreter with `metacooler` installed:
 
