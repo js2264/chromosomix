@@ -1,0 +1,94 @@
+/**
+ * The CLI build — a fourth invocation of the same bundler over the same source.
+ *
+ * The rule `vite.desktop.config.ts` states applies here unchanged: `build` is
+ * the command line the deploy workflow runs and it must keep working byte for
+ * byte, so this is a *second reading* of `src/` and never an edit to the first.
+ * What comes out is one ESM file under `dist-cli/`, and what goes into it is the
+ * same `RUNNERS`, the same `MetaCooler` and the same writers the tab uses.
+ *
+ * ## Why a bundle rather than running the TypeScript
+ *
+ * Node 22 strips types from a `.ts` file without a loader, which would have been
+ * the shortest possible answer. It only handles **erasable** syntax, and this
+ * repo uses parameter properties — `constructor(private readonly source:
+ * ByteSource)` — in a dozen places, which are not. Rewriting a dozen
+ * constructors to avoid a build step would be the tail wagging the dog.
+ *
+ * ## What stays external
+ *
+ * `h5wasm` and `@gmod/bbi` are marked external and resolved from `node_modules`
+ * at run time, because both ship a `.wasm` or a native-adjacent asset that a
+ * single-file bundle cannot carry. That is also why the CLI is run from a clone
+ * rather than published as a standalone binary — the same decision, and the same
+ * reason, as `package.json`'s `private`.
+ */
+
+import { builtinModules } from 'node:module'
+import { defineConfig } from 'vite'
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+const VERSION = (
+  JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+    version?: string
+  }
+).version ?? '0.0.0'
+
+function gitCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    // A source tarball has no git. The version alone is what the provenance line
+    // then carries, which `analysis/worker` already handles by filtering empties.
+    return ''
+  }
+}
+
+export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(VERSION),
+    __APP_COMMIT__: JSON.stringify(gitCommit()),
+    __APP_COMMIT_DATE__: JSON.stringify(''),
+    __APP_TARGET__: JSON.stringify('cli'),
+    __DEMO_BASE__: JSON.stringify(''),
+  },
+  // Nothing in `public/` belongs beside a command-line program; without this
+  // the icons and the web manifest are copied into `dist-cli/`.
+  publicDir: false,
+  resolve: {
+    alias: { '@': new URL('./src', import.meta.url).pathname },
+  },
+  build: {
+    ssr: true,
+    target: 'node22',
+    outDir: 'dist-cli',
+    emptyOutDir: true,
+    minify: false,
+    sourcemap: false,
+    lib: {
+      entry: new URL('./src/cli/main.ts', import.meta.url).pathname,
+      formats: ['es'],
+      fileName: () => 'metacooler-run.mjs',
+    },
+    rollupOptions: {
+      // `lib.fileName` is not consulted under `ssr: true`, which names the
+      // output after the entry instead — so the command would have been
+      // `dist-cli/main.js`. Said here as well, where it is obeyed.
+      output: {
+        entryFileNames: 'metacooler-run.mjs',
+        banner: '#!/usr/bin/env node',
+      },
+      external: [
+        ...builtinModules,
+        ...builtinModules.map((name) => `node:${name}`),
+        'h5wasm',
+        'h5wasm/node',
+        '@gmod/bbi',
+        'generic-filehandle2',
+      ],
+    },
+  },
+})
