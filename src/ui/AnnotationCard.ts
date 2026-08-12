@@ -40,6 +40,7 @@ import {
 } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt, trimNumber } from './dom'
 import { cardTitle, icon, iconButton } from './icons'
+import { bucketBrowseButton } from './browseButton'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
 
@@ -1427,7 +1428,16 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
         'details',
         { class: 'ann-url' },
         el('summary', { text: 'or open one by URL' }),
-        el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
+        el(
+          'div',
+          { class: 'ann-url-row' },
+          url,
+          button('add', submit, { class: 'btn' }),
+          // A track's URL is the one nobody has in their hand: a map is opened
+          // from a link or an example, and the bigWigs beside it are keys in a
+          // prefix whose names came off a run sheet.
+          bucketBrowseButton((picked) => loader.addUrl(picked)),
+        ),
       ),
     ],
   }

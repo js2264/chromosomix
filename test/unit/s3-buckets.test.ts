@@ -395,11 +395,20 @@ describe('listing a prefix', () => {
     ).rejects.toThrow(/s3:ListBucket/)
   })
 
+  /**
+   * And names `AllowedHeaders`, which is the setting that is actually wrong.
+   *
+   * The message used to send the reader to `AllowedOrigins` and tell them `*`
+   * could not answer a "credentialed" request. It can: credentialed means
+   * cookies, and there are none here — `Authorization` is set from script like
+   * any other header. Following that advice narrows the origin list, changes
+   * nothing, and leaves the one broken line untouched.
+   */
   it('names the preflight when the request never got a status at all', async () => {
     await expect(
       listPrefix(scope(), 'collections/', {
         fetchImpl: (() => Promise.reject(new TypeError('Failed to fetch'))) as never,
       }),
-    ).rejects.toThrow(/AllowedOrigins/)
+    ).rejects.toThrow(/AllowedHeaders/)
   })
 })

@@ -23,6 +23,15 @@ BUCKET="${DEMO_BUCKET:-rsglab-data}"
 PREFIX="${DEMO_PREFIX:-demo}"
 REGION="${DEMO_REGION:-eu-west-3}"
 
+# The origins allowed to make *signed* requests — the private-prefix half of the
+# CORS policy, spliced into `apply_cors` as the body of a JSON array. The dev
+# server is in the list because a private bucket that can only be browsed from
+# the published site cannot be debugged from a checkout.
+DEFAULT_APP_ORIGINS='"https://js2264.github.io", "https://jserizay.com", "http://localhost:5173"'
+APP_ORIGINS="${DEMO_APP_ORIGINS:-$DEFAULT_APP_ORIGINS}"
+# The one the verify step preflights with; must be among APP_ORIGINS.
+CHECK_ORIGIN="${DEMO_CHECK_ORIGIN:-https://js2264.github.io}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/demo"
 
@@ -81,7 +90,23 @@ command -v aws >/dev/null || {
 #
 # `AllowedOrigins` is `*` because this prefix is public demonstration data —
 # reproductions of published datasets, all with an accession in their `note`.
-# A private prefix must not copy this line; see docs/hosting.md.
+#
+# The second rule is here because **an S3 CORS policy is bucket-wide and this
+# call replaces all of it.** A rule has no prefix condition, so there is no such
+# thing as "the CORS for demo/", and a one-rule policy written for the demos
+# takes the private prefixes down with it: signing sends `Authorization`, which
+# is not safelisted, so every read and every listing under a private prefix
+# preflights, and a preflight naming headers no rule allows is refused with a
+# 403 that reaches the page as an unexplained `Failed to fetch`. The symptom is
+# a bucket that serves the landing page perfectly and cannot browse a folder.
+#
+# S3 answers with the first rule matching origin, method and every requested
+# header at once, so the rules do not interfere: an unsigned range read matches
+# the first, a signed request falls through it and matches the second. Origins
+# are named there rather than wildcarded — not because a wildcard would fail,
+# it would not (the request carries no cookies, so it is not credentialed in
+# the CORS sense), but because there is no reason to advertise the signed path
+# to origins that will never legitimately use it. Add yours to APP_ORIGINS.
 #
 # A failure here does **not** abort the script, and that is deliberate: it runs
 # after the upload, so aborting would throw away the verification of 250 MB that
@@ -100,6 +125,16 @@ apply_cors() {
           "AllowedOrigins": ["*"],
           "AllowedMethods": ["GET", "HEAD"],
           "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
+          "ExposeHeaders": ["Content-Length", "Content-Range", "ETag", "Accept-Ranges"],
+          "MaxAgeSeconds": 86400
+        },
+        {
+          "AllowedOrigins": ['"$APP_ORIGINS"'],
+          "AllowedMethods": ["GET", "HEAD"],
+          "AllowedHeaders": [
+            "Range", "If-Match", "If-None-Match",
+            "Authorization", "x-amz-date", "x-amz-content-sha256", "x-amz-security-token"
+          ],
           "ExposeHeaders": ["Content-Length", "Content-Range", "ETag", "Accept-Ranges"],
           "MaxAgeSeconds": 86400
         }
@@ -210,4 +245,24 @@ if ! grep -qi '^access-control-expose-headers:.*content-range' <<<"$ranged"; the
   exit 1
 fi
 
-echo "==> ok: ranged, uncompressed, and readable cross-origin"
+# The signed path, asked the way a browser asks it: the `OPTIONS` the browser
+# sends before any request carrying `Authorization`. Nothing above touches it —
+# every check so far is an unsigned read, which the first CORS rule answers — so
+# a policy that lost its second rule passes all of them and takes private
+# browsing down anyway. That is exactly the regression this call exists to
+# catch, and it needs no credential: a preflight is unauthenticated by
+# definition, so this tests the bucket's CORS and nothing about IAM.
+preflight="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS "$URL" \
+  -H "Origin: $CHECK_ORIGIN" \
+  -H 'Access-Control-Request-Method: GET' \
+  -H 'Access-Control-Request-Headers: authorization,x-amz-date,x-amz-content-sha256')"
+if [ "$preflight" != "200" ]; then
+  echo "FAIL: a signed request would be blocked before it is sent — the preflight for" >&2
+  echo "      authorization/x-amz-date/x-amz-content-sha256 from $CHECK_ORIGIN got" >&2
+  echo "      $preflight. No CORS rule names those headers for that origin, so private" >&2
+  echo "      prefixes cannot be read or browsed; the demos are unaffected. Re-run with" >&2
+  echo "      --cors, or see docs/hosting.md#private-files." >&2
+  exit 1
+fi
+
+echo "==> ok: ranged, uncompressed, readable cross-origin, and signed requests preflight"

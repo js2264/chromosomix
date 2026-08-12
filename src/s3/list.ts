@@ -32,7 +32,7 @@
  */
 
 import { ViewerError } from '../errors'
-import { addressOf, type BucketScope } from './credentials'
+import { addressOf, credentialOf, type BucketScope } from './credentials'
 import { signS3Request } from './sigv4'
 
 /** A sub-prefix: a folder, in the sense the UI means. */
@@ -131,12 +131,7 @@ export async function listPrefix(
   url.searchParams.set('prefix', prefix)
   url.searchParams.set('max-keys', '1000')
 
-  const credential = {
-    accessKeyId: scope.accessKeyId,
-    secretAccessKey: scope.secretAccessKey,
-    region: scope.region,
-    ...(scope.sessionToken === undefined ? {} : { sessionToken: scope.sessionToken }),
-  }
+  const credential = credentialOf(scope)
 
   let response: Response
   try {
@@ -152,9 +147,12 @@ export async function listPrefix(
     throw new ViewerError(
       'remote-cors',
       `Could not list ${prefix === '' ? scope.base : prefix} on ${address.bucket}. A signed ` +
-        'request is preflighted, so the bucket CORS policy has to allow the `Authorization`, ' +
-        '`x-amz-date` and `x-amz-content-sha256` headers and name this page in ' +
-        '`AllowedOrigins` — a policy of `*` is not enough for a credentialed request. ' +
+        'request is preflighted, so the bucket CORS policy has to name `Authorization`, ' +
+        '`x-amz-date` and `x-amz-content-sha256` in `AllowedHeaders`. A public-data policy ' +
+        'names `Range` and nothing else, which answers every unsigned read and refuses every ' +
+        'signed one — so a bucket that serves the demos perfectly still fails here. ' +
+        '`AllowedOrigins: ["*"]` is fine: the request sets `Authorization` from script and ' +
+        'sends no cookies, so it is not credentialed in the CORS sense. ' +
         `Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`,
       { base: scope.base, prefix },
     )

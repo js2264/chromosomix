@@ -179,19 +179,33 @@ export function scopeFor(url: string, scopes: readonly BucketScope[] = readScope
   return best
 }
 
-/** The credential covering `url`, in the shape the signer wants, or `null`. */
-export function credentialFor(
-  url: string,
-  scopes: readonly BucketScope[] = readScopes(),
-): S3Credential | null {
-  const scope = scopeFor(url, scopes)
-  if (scope === null) return null
+/**
+ * The signing half of a scope, without the label and the id.
+ *
+ * A scope is what the *user* fills in; a credential is what the signer takes,
+ * and the difference is three fields nobody outside this module should be
+ * copying by hand. It was being copied by hand in four places — the lookup
+ * below, the listing request, and both of the screens that open a file they
+ * have just listed — and the spread that carries `sessionToken` only when it is
+ * present is exactly the line an omission hides in: a temporary credential
+ * signed without its token is a 403 that names nothing.
+ */
+export function credentialOf(scope: BucketScope): S3Credential {
   return {
     accessKeyId: scope.accessKeyId,
     secretAccessKey: scope.secretAccessKey,
     region: scope.region,
     ...(scope.sessionToken === undefined ? {} : { sessionToken: scope.sessionToken }),
   }
+}
+
+/** The credential covering `url`, in the shape the signer wants, or `null`. */
+export function credentialFor(
+  url: string,
+  scopes: readonly BucketScope[] = readScopes(),
+): S3Credential | null {
+  const scope = scopeFor(url, scopes)
+  return scope === null ? null : credentialOf(scope)
 }
 
 // ---------------------------------------------------------------------------

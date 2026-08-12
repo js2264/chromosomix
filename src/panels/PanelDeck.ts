@@ -75,6 +75,7 @@ import {
 } from '../ui/export'
 import { KEYS, withKey } from '../ui/commands'
 import { iconButton } from '../ui/icons'
+import { bucketBrowseButton } from '../ui/browseButton'
 import { DeckFrame } from './DeckFrame'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
@@ -398,6 +399,7 @@ export class PanelDeck {
       button('choose a file…', () => fileInput.click(), { class: 'btn' }),
       this.urlInput,
       button('add', () => this.addUrl(), { class: 'btn' }),
+      bucketBrowseButton((url) => this.add({ kind: 'remote', uri: url })),
       fileInput,
     )
     this.urlInput.addEventListener('keydown', (event) => {
