@@ -856,6 +856,10 @@ export class MapPanel {
       this.panel?.destroy()
       this.panel = null
       this.say(plan.reason)
+      // Cleared here and in the catch below, for the reason the selection
+      // branch of `readBlock` gives: a rename note left standing over a panel
+      // that now says "nothing to draw" describes a picture that is gone.
+      this.sayRename([])
       this.props.onSettled()
       return
     }
@@ -876,6 +880,7 @@ export class MapPanel {
       this.props.onSettled()
     } catch (err) {
       if (this.disposed) return
+      this.sayRename([])
       // The key is *kept*. Every refusal a companion meets is deterministic — a
       // name this file has not got, a block this share of the budget will not
       // lend — so clearing it would re-issue the same refused read on every

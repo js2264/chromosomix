@@ -455,6 +455,20 @@ export interface ContigOverlap {
   missing: string[]
   /** Up to a handful of this file's contigs the map has never heard of. */
   extra: string[]
+  /**
+   * Sequences matched across two conventions whose **lengths disagree**.
+   *
+   * The one hole the rename (§5.9) would otherwise open in §8.2's promise. A
+   * track renamed into the map's vocabulary is renamed *before* the overlap is
+   * counted, so a cross-convention match then reports as a full match and this
+   * warning goes quiet — which is right when the two are the same sequence and
+   * a lie when they are not. An hg19 track's `MT` against an hg38 map's `chrM`
+   * is the case: one name apiece, one rename, and two sequences two bases
+   * apart. Named here, so the card can say so.
+   *
+   * Written as `asked → answered`, ready to print.
+   */
+  contested?: string[]
 }
 
 export type AnnotationStatus = 'loading' | 'ready' | 'error' | 'detached'

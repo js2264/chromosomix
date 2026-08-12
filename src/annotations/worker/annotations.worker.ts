@@ -30,7 +30,13 @@ import { transfersFor } from '../../worker/protocol'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
-import { renameInto, sequencesOf, type NamedSequence } from '../../genome/naming'
+import {
+  contigIndexOf,
+  renameInto,
+  sequencesOf,
+  type NamedSequence,
+  type Renaming,
+} from '../../genome/naming'
 import { binVectorSamples, type BinVector } from './binVector'
 import { TRACK_RUNNERS } from '../../analysis/run/tracks'
 import type { TrackJobContext } from '../../analysis/job'
@@ -44,7 +50,14 @@ import {
   parseGtf,
   sniffFormat,
 } from '../parse'
-import type { BaseRegion, FeatureSet, Region, TrackSamples, TrackSampleSet } from '../types'
+import type {
+  BaseRegion,
+  ContigOverlap,
+  FeatureSet,
+  Region,
+  TrackSamples,
+  TrackSampleSet,
+} from '../types'
 import {
   bbiMagic,
   isHdf5,
@@ -66,9 +79,49 @@ import {
  * `RangeError: Maximum call stack size exceeded`, and the file simply fails to
  * load — on exactly the files this viewer exists for.
  */
-function renameContigs(contigs: string[], mapContigs: readonly NamedSequence[]): void {
-  const renamed = renameInto(sequencesOf(contigs), mapContigs).names
-  for (let at = 0; at < renamed.length; at++) contigs[at] = renamed[at]
+function renameContigs(contigs: string[], mapContigs: readonly NamedSequence[]): Renaming {
+  const renaming = renameInto(sequencesOf(contigs), mapContigs)
+  for (let at = 0; at < renaming.names.length; at++) contigs[at] = renaming.names[at]
+  return renaming
+}
+
+/**
+ * The §8.2 overlap report, with the renames the matcher was unsure of.
+ *
+ * One builder rather than an `overlapWith` call per load path, because the two
+ * halves have to travel together: the rename (§5.9) happens *before* the
+ * overlap is counted, so a cross-convention match makes the report say **fully
+ * matched** — which is right when the two are one sequence and a lie when they
+ * are not. An hg19 track's `MT` against an hg38 map's `chrM` is one name
+ * apiece, one rename, and two sequences two bases apart, and without this the
+ * card would have nothing to say about it.
+ */
+function overlapReport(
+  fileContigs: readonly string[],
+  mapContigs: readonly NamedSequence[],
+  renaming: Renaming | null,
+): ContigOverlap {
+  const overlap = overlapWith(fileContigs, namesOf(mapContigs))
+  const contested = renaming?.contested ?? []
+  if (contested.length === 0) return overlap
+  return {
+    ...overlap,
+    contested: contested.slice(0, 4).map((match) => `${match.asked} → ${match.name}`),
+  }
+}
+
+/**
+ * A sequence's residues, by whichever name the caller has for it.
+ *
+ * Exact first — the map this FASTA was loaded against, renamed at the door —
+ * then the alias ladder, for the other panels of a deck, which sample through
+ * their own blocks' axes and ask by their own files' spellings (§5.9).
+ */
+function basesOf(store: SequenceStore, name: string): Uint8Array | undefined {
+  const direct = store.bases.get(name)
+  if (direct !== undefined) return direct
+  const at = contigIndexOf(store.contigs, name)
+  return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
 }
 
 /** Just the names, for the two helpers that ask about spelling and not size. */
@@ -89,6 +142,12 @@ interface OpenTrack {
    * this file does not is simply absent from the map.
    */
   refOf: Map<string, string>
+  /**
+   * The file's own refNames, in file order — what the ladder searches when a
+   * name reaches neither the alignment nor itself. A deck's companions ask by a
+   * spelling the alignment never saw, because it was made against the lead.
+   */
+  refNames: string[]
 }
 
 const tracks = new Map<string, OpenTrack>()
@@ -610,11 +669,11 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   const format: DetectedFormat = sniffFormat(text, source.name)
   if (format === 'bedpe') {
     const data = parseBedpe(text)
-    renameContigs(data.contigs, mapContigs)
+    const renaming = renameContigs(data.contigs, mapContigs)
     return {
       format,
       contigs: data.contigs,
-      overlap: overlapWith(data.contigs, namesOf(mapContigs)),
+      overlap: overlapReport(data.contigs, mapContigs, renaming),
       summary: `${count(data.length)} pair${data.length === 1 ? '' : 's'}`,
       payload: { kind: 'pairs', data },
     }
@@ -638,11 +697,11 @@ function featureResult(
   // Rewritten **in place**, which is what makes the rename cost nothing: every
   // row of the set indexes this array by position, so replacing the strings
   // renames every feature at once and no coordinate moves.
-  renameContigs(data.contigs, mapContigs)
+  const renaming = renameContigs(data.contigs, mapContigs)
   return {
     format,
     contigs: data.contigs,
-    overlap: overlapWith(data.contigs, namesOf(mapContigs)),
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary:
       format === 'gtf'
         ? `${count(data.length)} transcripts · ${count(exons)} exons`
@@ -699,13 +758,13 @@ function tooLarge(size: number): Error {
 
 /** A FASTA as a row: the sequences stay here, the summary goes back. */
 function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequence[]): LoadResult {
-  renameSequences(store, mapContigs)
+  const renaming = renameSequences(store, mapContigs)
   sequences.set(entry, store)
   const names = store.contigs.map((contig) => contig.name)
   return {
     format: 'fasta',
     contigs: names,
-    overlap: overlapWith(names, namesOf(mapContigs)),
+    overlap: overlapReport(names, mapContigs, renaming),
     summary: `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp`,
   }
 }
@@ -719,9 +778,9 @@ function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequenc
  * asked about — which is the map's. A rename of one and not the other would
  * leave a sequence lane that draws its ruler and no residues.
  */
-function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): void {
+function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Renaming {
   const renaming = renameInto(store.contigs, mapContigs)
-  if (renaming.renamed === 0) return
+  if (renaming.renamed === 0) return renaming
   const bases = new Map<string, Uint8Array>()
   store.contigs.forEach((contig, at) => {
     const held = store.bases.get(contig.name)
@@ -729,6 +788,7 @@ function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): voi
     if (held !== undefined) bases.set(contig.name, held)
   })
   store.bases = bases
+  return renaming
 }
 
 /**
@@ -753,7 +813,7 @@ function gcSamples(
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const region of regions) {
-    const seq = store.bases.get(region.contig)
+    const seq = basesOf(store, region.contig)
     if (seq === undefined || !(region.end > region.start)) continue
     const bins = gcBins(seq, region.start, region.end, basesPerPixel)
     if (bins.values.length === 0) continue
@@ -795,7 +855,7 @@ function bases(entry: string, regions: Region[]): BaseResult {
   const out: BaseRegion[] = []
   let budget = BASES_PER_REQUEST
   for (const region of regions) {
-    const seq = store.bases.get(region.contig)
+    const seq = basesOf(store, region.contig)
     if (seq === undefined) continue
     const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(seq.length, Math.ceil(region.end), start + budget)
@@ -876,9 +936,18 @@ async function loadBigWig(
   // this reports, the overlap it is judged by and the regions it is later asked
   // for are all in one spelling. `sourceOf` is the way back to the file's own,
   // which is the one thing about a bigWig that cannot be rewritten.
-  const renaming = renameInto(sequencesOf(Object.keys(header.refsByName)), mapContigs)
+  // **With the lengths the header carries**, via `contigsOfHeader`. Names alone
+  // leave the matcher with nothing to check itself against: an hg19 track on an
+  // hg38 map would rename `MT` onto `chrM` and report it as an ordinary match,
+  // and a map holding both `chrM` and `chrMT` could not be chosen between at
+  // all (§5.9).
+  const renaming = renameInto(contigsOfHeader(header), mapContigs)
   const contigs = renaming.names
-  tracks.set(entry, { bigwig, refOf: renaming.sourceOf })
+  tracks.set(entry, {
+    bigwig,
+    refOf: renaming.sourceOf,
+    refNames: Object.keys(header.refsByName),
+  })
 
   const total = header.totalSummary
   // A file whose header carries no summary block reports zeros; that is not a
@@ -892,7 +961,7 @@ async function loadBigWig(
   return {
     format: 'bigwig',
     contigs,
-    overlap: overlapWith(contigs, namesOf(mapContigs)),
+    overlap: overlapReport(contigs, mapContigs, renaming),
     // The zoom-level count used to lead this line. It is a fact about how the
     // file was built, not about what is in it: nothing the reader can act on,
     // and it pushed the one number they can — the value range — onto a second
@@ -939,7 +1008,7 @@ function loadSignal(
   return {
     format,
     contigs,
-    overlap: overlapWith(contigs, namesOf(mapContigs)),
+    overlap: overlapReport(contigs, mapContigs, renaming),
     summary:
       `${count(track.length)} intervals · ${count(contigs.length)} contigs` +
       (usable ? ` · ${trim(min)} to ${trim(max)}` : ''),
@@ -1015,8 +1084,20 @@ async function sample(
   if (track === undefined) {
     throw new Error('This track is no longer open. Drop the file again.')
   }
+  // `refOf` holds the map this track was loaded against, plus every refName
+  // answering to itself. A *companion* of a deck asks by a third spelling — its
+  // own — so a name that reaches neither gets the ladder (§5.9), and what it
+  // finds is remembered, so the next frame of the same pan is one `Map` probe.
+  const refOf = (name: string): string | undefined => {
+    const held = track.refOf.get(name)
+    if (held !== undefined) return held
+    const at = contigIndexOf(track.refNames, name)
+    if (at < 0) return undefined
+    track.refOf.set(name, track.refNames[at])
+    return track.refNames[at]
+  }
   const wanted = regions.filter(
-    (region) => track.refOf.has(region.contig) && region.end > region.start,
+    (region) => refOf(region.contig) !== undefined && region.end > region.start,
   )
   if (wanted.length === 0) return { basesPerPixel, regions: [], extent: null }
 
@@ -1024,7 +1105,7 @@ async function sample(
     wanted.map((region) => ({
       // The file's own spelling goes to the reader; the map's comes back out
       // below, so nothing downstream of here sees two vocabularies.
-      refName: track.refOf.get(region.contig) ?? region.contig,
+      refName: refOf(region.contig) ?? region.contig,
       start: Math.max(0, Math.floor(region.start)),
       end: Math.ceil(region.end),
     })),

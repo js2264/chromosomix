@@ -1185,6 +1185,43 @@ export function sequencesOf(names: readonly string[]): NamedSequence[] {
 }
 
 /**
+ * Which of a track's own sequences a caller's name refers to, or `-1`.
+ *
+ * The **read** side of §5.9, and it exists because renaming a track once at
+ * load is not enough on its own. A track is loaded against the session's map
+ * and renamed into *its* vocabulary — but a deck draws the same track beside
+ * every panel, and each panel samples through its own block's axis, so a
+ * companion asks for the sequence by the name **its** file writes. One track,
+ * three vocabularies, and the rename can only ever have chosen one of them.
+ *
+ * So every place a held track is asked for a name goes through here: the
+ * bigWig's refNames, a bedGraph's contigs, a FASTA's sequences, a computed
+ * vector's grid, and the feature sets the renderer walks. Exact first — which
+ * is every lane of the map the track was loaded against, and costs one `Map`
+ * probe — and the index behind it is held against the list's own identity, so a
+ * lane redrawing at sixty frames a second builds nothing.
+ *
+ * Takes the list a track already has rather than a prepared index, because that
+ * list is the thing every one of those callers is holding.
+ */
+export function contigIndexOf(
+  contigs: readonly string[] | readonly NamedSequence[],
+  name: string,
+): number {
+  for (let at = 0; at < contigs.length; at++) {
+    const held = contigs[at]
+    if ((typeof held === 'string' ? held : held.name) === name) return at
+  }
+  const match = NameIndex.for(contigs).find(name)
+  if (match === null) return -1
+  for (let at = 0; at < contigs.length; at++) {
+    const held = contigs[at]
+    if ((typeof held === 'string' ? held : held.name) === match.name) return at
+  }
+  return -1
+}
+
+/**
  * How a match reads in a sentence, for the info panel and the panel's own bar.
  *
  * Every tier gets its own words rather than a generic "matched loosely",

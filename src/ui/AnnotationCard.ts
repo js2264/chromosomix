@@ -1342,6 +1342,17 @@ export function overlapWarning(overlap: ContigOverlap | undefined): string | nul
     return `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} contigs matched; ` +
       `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`
   }
+  // Matched in full, and *that is the problem*: a rename this file was not sure
+  // of counts as a match, so the two clauses above go quiet on the one case
+  // that most warrants a word. hg19's `MT` against hg38's `chrM` is one name
+  // apiece and two sequences (§5.9).
+  if (overlap.contested !== undefined && overlap.contested.length > 0) {
+    return (
+      `Matched across two naming conventions, but the sequences are different ` +
+      `lengths: ${overlap.contested.join(', ')}. Two assembly versions would look ` +
+      `exactly like this — the coordinates still land, they just may not mean the same place.`
+    )
+  }
   return null
 }
 

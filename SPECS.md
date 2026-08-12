@@ -617,11 +617,22 @@ genome-wins rule, and a session of one file cannot tell the matcher exists. Only
 changed. The same after-the-strict-answer rule governs the ticked selection, the locus box, and
 `contigOf`.
 
+**Renaming at load is not enough on its own, and this is the part that is easy to get wrong.** A track
+is loaded against the session's map and renamed into *its* vocabulary — but a deck draws the same
+track beside every panel, and each panel samples through its own block's axis, so a companion asks
+for a sequence by the name **its** file writes. One track, three vocabularies, and the rename can only
+ever have chosen one of them. So every place a held track is asked for a name resolves as well as the
+range does: the bigWig's refNames, a bedGraph's contigs, a FASTA's sequences, the feature sets the
+renderer walks, and — the one with no file behind it at all — a synthetic track's grid, which is laid
+out over the map the analysis was *computed on* and drawn beside every other.
+
 **It says so.** A panel that answered a name it does not itself write prints a line under its heading
 naming both spellings and the rule that joined them, and says separately when the two lengths
-disagree. A track renamed into the map's vocabulary is renamed once at load, so everything downstream
-sees one vocabulary; the §8.2 overlap report is computed after the rename and therefore counts a
-cross-convention match as a match. `compareRefusal` (§5.7) no longer refuses two files for spelling
+disagree; the line is cleared whenever the panel stops drawing that picture. The §8.2 overlap report
+is computed after the rename and therefore counts a cross-convention match as a match — which is
+right when the two are one sequence and a lie when they are not, so a rename whose two lengths
+disagree is carried into the report and named there. Without that, the one case most warranting a
+word would be the one case that reported a clean bill. `compareRefusal` (§5.7) no longer refuses two files for spelling
 one assembly differently — but still requires the same list in the same order, and still refuses two
 sequences of one name at different lengths, which is the check that catches hg19 against hg38.
 

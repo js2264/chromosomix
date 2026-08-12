@@ -15,6 +15,8 @@
  * same bargain the matrix raster makes when it pools (`poolDisplay`).
  */
 
+import { contigIndexOf } from '../genome/naming'
+
 import { featureRange } from '../annotations/featureset'
 import type { FeatureSet } from '../annotations/types'
 import {
@@ -81,7 +83,10 @@ export function layoutFeatures(
   let total = 0
 
   for (const window of axis.windows(frame.domain)) {
-    const contig = set.contigs.indexOf(window.contig)
+    // Alias-aware, because a deck draws one feature set beside every panel and
+    // each asks by the name *its* own file writes (§5.9). The set carries the
+    // spelling of the map it was loaded against, which is one of them at most.
+    const contig = contigIndexOf(set.contigs, window.contig)
     if (contig < 0) continue
     const segment = axis.segmentOf(window.contig)
     if (segment === null || !(segment.bpPerUnit > 0)) continue

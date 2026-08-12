@@ -1953,7 +1953,11 @@ export class Session {
     const file = this.file
     const selection = this.sequences
     if (file === null || selection === null || file.info.hasGenomes) return
-    const names = contigPairs(file.contigs).map(([name]) => name)
+    // The file's own name column, not a list derived per call: `sequencesShown`
+    // resolves through `contigOf`, whose index is held against the array's own
+    // identity (§5.9), and a fresh array per render is a fresh whole-table index
+    // per render. `contigNames` hands back the column itself.
+    const names = this.contigNames() ?? contigPairs(file.contigs).map(([name]) => name)
     const shown = sequencesShown(state, names)
     if (shown === null) return
     this.echoingSequences = true
