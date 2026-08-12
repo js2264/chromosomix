@@ -99,6 +99,15 @@ export interface AnalysisWorkspaceHost {
   targetMap?(): MapId
   /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
   allTargets?(): readonly RunTarget[]
+  /**
+   * Every map a lane may be drawn on, named — what the Tracks card is given.
+   *
+   * Not {@link allTargets}, which lists the maps an analysis can *run against*
+   * and therefore leaves out a companion whose two tables have not been read
+   * yet. Where a track may be **drawn** is a question about the grid, and a
+   * panel that is still opening its file is very much a cell of it.
+   */
+  maps?(): Array<{ id: string; label: string }>
   /** The worker a bin vector is registered with, so `sample` can answer for it. */
   annotations(): AnnotationClient | null
   /** The assembly, for the two writers that lay a vector out over it. */
@@ -240,6 +249,10 @@ export class AnalysisWorkspace {
         ? null
         : new SyntheticCard({
             store,
+            // The same list the Tracks card is given, so §18.5's claim that a
+            // computed track is a track like any other holds for the one
+            // control it was still missing: which map, and which edge of it.
+            ...(host.maps === undefined ? {} : { maps: () => host.maps?.() ?? [] }),
             onExport: (entry, format) => void this.export(entry, format),
             onRecompute: (entry) => this.recompute(entry),
           })

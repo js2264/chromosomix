@@ -575,6 +575,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   expected to fail this way. `docs/hosting.md` carried the same claim and no
   longer does.
 
+- **Dragging a lane on a companion moved the first map's lane instead.** The
+  handle on a track's lane is dragged onto another edge to move it there, and on
+  a companion it moved the wrong picture: the track jumped to the edge on the
+  **lead**, and the map the hand was actually over was left exactly as it was.
+
+  One call was doing two jobs. `place` writes the *track's default placement*,
+  which is what the row in the Tracks card shows and what a session with no deck
+  means — and the lead's lane follows it, because that control is the lead's.
+  Every gesture went through it, including the ones made on a picture that is
+  not the lead. Now they go through a call that takes the map they were made on:
+  the drag, the drop of a row onto an edge, the lane's own right-click menu and
+  the location control all move *that* map's lane, and the axis still turns on
+  the way across so the lane arrives reading the same way up as its neighbours —
+  as a lane override on a companion, which is exactly why `flip` is one of the
+  two fields a lane may differ on.
+
+  It bit computed tracks hardest, because a computed track opens on the left and
+  wanting it under the map is the first thing anybody does with one.
+
+- **Closing a deck left a companion's tracks drawn nowhere.** Putting the grid
+  down is a statement about layout, and the two things a reader means by it are
+  that the extra pictures should go and that the work they did on them should
+  not. A coverage track computed on the third replicate simply disappeared —
+  still imported, still in the list, drawn on no map — which reads as the close
+  having deleted it.
+
+  A departing map's lanes now come to the **lead**, at the edge they were on,
+  and the reader gets them back where they were the moment a map opens that file
+  again. Keyed on the **file**, never on the map: a map id is a slot minted per
+  deck and a deck closed and reopened mints new ones, so the id a lane was
+  parked under would never be seen again — what a reader means by "that map" is
+  the file it was showing. A track the reader had deliberately put on *both* the
+  lead and a companion is not rearranged: the lead's lane is not going anywhere,
+  and moving it to wherever the departing copy sat would be the close changing
+  something nobody asked it to.
+
+- **A computed track had no way to say which map it belongs to.** §18.5's whole
+  claim is that a per-bin result *is* a track — same colour chip, same name,
+  same limits, same four edges — and the Synthetic card was the counter-example:
+  it carried the colour, the name, the eye and the exports, and nothing at all
+  about where the lane is drawn. The Tracks card's own location control is now
+  on those rows too, from one module rather than two, so a computed lane and a
+  loaded one are moved by one gesture: four edges, a row per map once a deck has
+  more than one, and *every map* / *no map* beside them.
+
 - **A task run across a deck skipped the file that spells its chromosomes
   differently.** Three `.cool` files and a `.hic` beside them, Run pressed on
   compartments: three tracks and three sets of A/B intervals came back, and the

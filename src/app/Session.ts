@@ -4906,6 +4906,12 @@ export class Session {
       store: () => this.annotations?.store ?? null,
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
+      // The same list the Tracks card is given, and deliberately not
+      // `allTargets` below: that one leaves out a companion whose two tables
+      // have not been read, which is right for *running* against it and wrong
+      // for *drawing* on it.
+      maps: () =>
+        this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
       /**
        * Every map on screen, lead first, for a batch (§18.2).
        *

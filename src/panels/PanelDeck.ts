@@ -1957,7 +1957,24 @@ export class PanelDeck {
   private keepLanesOnLiveMaps(): void {
     const store = this.props.annotations?.(LEAD_MAP)?.store
     if (store === undefined) return
+    // Which file each cell is showing, told to the store *while the cell is
+    // alive* — a slot id is minted per deck and never minted again, so the
+    // moment a map leaves there is nothing left to say which file it was. The
+    // panel's own URI where there is one, so a companion that descended into an
+    // entry of a collection is keyed by the map it is actually drawing.
+    const files = new Map<MapId, string>()
+    for (const slot of this.slots) {
+      const uri = slot.panel?.uri ?? (slot.ref.kind === 'vacant' ? undefined : slot.ref.uri)
+      if (uri !== undefined) files.set(slot.id, uri)
+    }
+    store.noteMapFiles(files)
+    // Parks what left onto the lead, keyed by that file…
     store.keepMaps(new Set<MapId>([LEAD_MAP, ...this.slots.map((slot) => slot.id)]))
+    // …and hands it back to whichever cell is showing that file now, which is
+    // what makes closing a deck and opening it again put the tracks back where
+    // the reader had them. Both directions in one pass, on every render, for
+    // `keepMaps`'s own reason: a reconciliation cannot go stale and an event can.
+    for (const [map, uri] of files) store.adoptHome(map, uri)
   }
 
   /**

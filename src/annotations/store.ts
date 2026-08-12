@@ -124,6 +124,31 @@ export class AnnotationStore {
    * things rather than one entry per map.
    */
   private lanes: Lane[] = []
+  /**
+   * Which file each map is showing, so a lane that outlives its map can be
+   * given back to the right one. See {@link noteMapFiles}.
+   */
+  private readonly mapFiles = new Map<MapId, string>()
+  /**
+   * Where a lane was, for a map that has gone.
+   *
+   * Keyed on the **file**, never on the `MapId`: a slot id is minted per deck
+   * and a deck closed and reopened mints new ones, so the id a lane was parked
+   * under would never be seen again. What the reader means by "that map" is the
+   * file it was showing, and that is what comes back.
+   *
+   * Not persisted, and deliberately: a lane is not, either. What survives a
+   * reload is the *import* — see this module's header — and an arrangement of
+   * pictures that no longer exist is not something to restore a reader into.
+   */
+  private homes: Array<{
+    track: string
+    uri: string
+    placement: Placement
+    /** Whether the lead lane it now sits on was borrowed, or already its own. */
+    borrowedLead: boolean
+    style?: Lane['style']
+  }> = []
 
   /** Every placement, for the card that lists where a track is drawn. */
   get placements(): readonly Lane[] {
@@ -250,17 +275,112 @@ export class AnnotationStore {
   }
 
   /**
-   * Drop lanes whose map is gone.
+   * Which file each map of the deck is showing.
+   *
+   * Learnt while a map is *alive*, because that is the only time anybody can
+   * ask. A `MapId` is a slot id minted per deck and never minted again, so the
+   * moment a map leaves there is nothing left to say which of the reader's files
+   * it was — see {@link keepMaps}, which is what needs to know.
+   */
+  noteMapFiles(files: ReadonlyMap<MapId, string>): void {
+    for (const [map, uri] of files) this.mapFiles.set(map, uri)
+  }
+
+  /**
+   * Reconcile the lanes against the maps that exist — **parking** what leaves.
    *
    * Reconciled against the deck rather than driven by an event, for the reason
    * `SampleCache.prune` gives: an event that is not sent leaks a lane for the
    * life of the session, and doing it once per render cannot go stale. Tracks
    * are pruned by {@link remove}, which is the only way one leaves.
+   *
+   * A departing map's lane used to be *dropped*, which left the track imported
+   * and drawn nowhere — "one tick from being on the lead", and that tick is the
+   * problem. Closing a deck is a statement about layout, and the two things a
+   * reader means by it are that the extra pictures should go and that the work
+   * they did on them should not: a coverage track computed on the third
+   * replicate disappearing when the grid does reads as the close having deleted
+   * it. So the lane is **moved to the lead**, at the same edge it was on, and a
+   * note of where it came from is kept against the *file* that map was showing
+   * ({@link noteMapFiles}). Open a deck on that file again and {@link adoptHome}
+   * puts it back where it was.
+   *
+   * A track whose *import* is gone is dropped either way: a lane is a placement
+   * of something, and {@link remove} is the one door a track leaves by.
    */
   keepMaps(maps: ReadonlySet<MapId>): void {
+    const tracks = new Set(this.items.map((entry) => entry.id))
+    const leaving = this.lanes.filter(
+      (lane) => tracks.has(lane.track) && !maps.has(lane.map) && lane.map !== LEAD_MAP,
+    )
     const before = this.lanes.length
-    this.lanes = pruneLanes(this.lanes, new Set(this.items.map((entry) => entry.id)), maps)
-    if (this.lanes.length !== before) this.changed()
+    this.lanes = pruneLanes(this.lanes, tracks, maps)
+    let moved = this.lanes.length !== before
+    for (const lane of leaving) {
+      const uri = this.mapFiles.get(lane.map)
+      // Nothing to key the memory on — a map that left before it had opened
+      // anything. The lane still comes to the lead rather than vanishing; it
+      // simply has no home to be sent back to.
+      const borrowedLead = laneOf(this.lanes, lane.track, LEAD_MAP) === undefined
+      if (uri !== undefined) {
+        this.homes = [
+          ...this.homes.filter((home) => !(home.uri === uri && home.track === lane.track)),
+          {
+            track: lane.track,
+            uri,
+            placement: lane.placement,
+            borrowedLead,
+            ...(lane.style === undefined ? {} : { style: lane.style }),
+          },
+        ]
+      }
+      // Only where the lead had none. A track the reader had deliberately put on
+      // *both* is already visible and already arranged, and moving its lead lane
+      // to wherever the departing copy happened to sit would be the close
+      // rearranging a map that is not going anywhere.
+      //
+      // At the edge it was on otherwise, not at the lead's default: a stack the
+      // reader arranged on one map is the arrangement they meant, and dropping
+      // it onto whichever edge the track happens to default to is a second
+      // change they did not ask for.
+      if (borrowedLead) this.lanes = place(this.lanes, lane.track, LEAD_MAP, lane.placement)
+      moved = true
+    }
+    if (moved) this.changed()
+  }
+
+  /**
+   * A map opened this file: put back whatever was parked for it.
+   *
+   * The other half of {@link keepMaps}, and idempotent by construction — it runs
+   * once per render of the deck and does nothing at all unless something is
+   * actually parked under this URI.
+   *
+   * The lead lane the parking borrowed is handed back at the same time, and only
+   * where it *was* borrowed: a track the reader had deliberately put on both the
+   * lead and a companion must come back on both.
+   */
+  adoptHome(map: MapId, uri: string): void {
+    if (map === LEAD_MAP || this.homes.length === 0) return
+    const coming = this.homes.filter((home) => home.uri === uri)
+    if (coming.length === 0) return
+    this.homes = this.homes.filter((home) => home.uri !== uri)
+    let moved = false
+    for (const home of coming) {
+      if (!this.items.some((row) => row.id === home.track)) continue
+      this.lanes = place(this.lanes, home.track, map, home.placement)
+      if (home.style !== undefined) {
+        const held = laneOf(this.lanes, home.track, map)
+        if (held !== undefined) {
+          this.lanes = this.lanes.map((lane) =>
+            lane === held ? { ...lane, style: home.style } : lane,
+          )
+        }
+      }
+      if (home.borrowedLead) this.lanes = unplace(this.lanes, home.track, LEAD_MAP)
+      moved = true
+    }
+    if (moved) this.changed()
   }
 
   /** The rows one card shows, in load order. */
@@ -505,9 +625,57 @@ export class AnnotationStore {
       ...(turned ? { style: { ...entry.style, flip: !entry.style.flip } } : {}),
     })
     // The lead's own lane follows, because this control *is* the lead's. A
-    // companion's placement is its own and is moved from the track's row in the
-    // Tracks card, not from here.
+    // companion's placement is its own — see {@link placeAt}, which is what a
+    // drag on a companion's edge goes through.
     this.lanes = place(this.lanes, id, LEAD_MAP, whole)
+  }
+
+  /**
+   * The same move, made **on one map** rather than on the track.
+   *
+   * {@link place} is the lead's control and writes the *track's* default
+   * placement, which is right for the row in the Tracks card and for the
+   * session's own map. It is the wrong door for a gesture made on a companion:
+   * dragging a lane's handle from the left of the third replicate to underneath
+   * it rewrote the track's default and moved the **lead's** lane, so the track
+   * appeared below the first map and stayed exactly where it was on the one the
+   * hand was over. §18.5 says a computed track is a track like any other, and
+   * `annotations/placement.ts` says an edge is a property of the *lane*; this is
+   * the one call that makes both true at once.
+   *
+   * A track not drawn on that map yet gets a lane, which is the same gesture
+   * arriving from the other direction: a row carried from the Tracks card onto
+   * the third replicate's edge is a reader saying *put it there*, and there is
+   * nothing to turn because there is no edge it is coming from.
+   *
+   * The turn {@link place} performs is performed here too, and as a **lane
+   * override** — `flip` is one of the two fields a lane may differ on precisely
+   * because which way a lane grows is a fact about the edge it is on, and the
+   * edge is the lane's (`annotations/placement.ts`'s `LANE_OVERRIDES`).
+   */
+  placeAt(id: string, map: MapId, placement: Partial<Placement>): void {
+    if (map === LEAD_MAP) {
+      this.place(id, placement)
+      return
+    }
+    const entry = this.byId(id)
+    if (entry === undefined) return
+    const lane = laneOf(this.lanes, id, map)
+    const whole = normalisePlacement(placement)
+    const was = lane === undefined ? 'neither' : sideOf(lane.placement)
+    const now = sideOf(whole)
+    const turned =
+      was !== 'neither' && now !== 'neither' && laneStartsFlipped(was) !== laneStartsFlipped(now)
+    this.lanes = place(this.lanes, id, map, whole)
+    if (!turned || lane === undefined) {
+      this.changed()
+      return
+    }
+    // Read through the cascade, so a lane that has said nothing about `flip`
+    // turns away from whatever its *track* says rather than from `false`.
+    const flip = resolveStyle(entry.style, lane).flip === true
+    // Announces on its own, which is why nothing follows it.
+    this.overrideOn(id, map, { flip: !flip })
   }
 
   /** Merge a patch into one row's style. */

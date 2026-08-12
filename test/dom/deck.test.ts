@@ -150,6 +150,10 @@ interface Made {
   published: Array<string | undefined>
   stars: number
   kept: Array<string[]>
+  /** What the deck told the store each cell is showing, per render. */
+  noted: Array<string[]>
+  /** Every `map=uri` the deck asked the store to give a parked lane back to. */
+  adopted: string[]
   /** What the session's own map is at, and what the deck asked it to move to. */
   leadBinsize: number | undefined
   askedBinsize: number[]
@@ -164,6 +168,8 @@ function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
     published: [],
     stars: 0,
     kept: [],
+    noted: [],
+    adopted: [],
     leadBinsize: undefined,
     askedBinsize: [],
     leadCanMove: true,
@@ -172,6 +178,15 @@ function make(props: { leadName?: string; withStore?: boolean } = {}): Made {
   const store = {
     keepMaps: (maps: ReadonlySet<MapId>) => {
       made.kept.push([...maps].sort())
+    },
+    // The two halves of "a lane finds its way home": the deck tells the store
+    // which file each cell is showing while it is alive, and asks for whatever
+    // was parked under that file when one arrives (`annotations/store.ts`).
+    noteMapFiles: (files: ReadonlyMap<MapId, string>) => {
+      made.noted.push([...files].map(([map, uri]) => `${map}=${uri}`).sort())
+    },
+    adoptHome: (map: MapId, uri: string) => {
+      made.adopted.push(`${map}=${uri}`)
     },
   }
   made.deck = new PanelDeck({
@@ -639,6 +654,35 @@ describe('the lanes a track may be on', () => {
     made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
     barButton(made.deck, 'close').click()
     expect(made.kept[made.kept.length - 1]).toEqual(['lead'])
+  })
+
+  /**
+   * The other half of the same reconciliation, and what makes a lane survive a
+   * deck being put down and opened again.
+   *
+   * A `MapId` is a slot id minted per deck and never minted again, so a lane
+   * parked under one could never be given back. What identifies "that map" to a
+   * reader is the **file** it is showing, so that is what the deck tells the
+   * store while the cell is alive, and what it asks for when one arrives.
+   */
+  it('tells the store which file each cell is showing, while it can', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    const last = made.noted[made.noted.length - 1]
+    expect(last).toHaveLength(1)
+    expect(last[0]).toContain('https://x.example.org/b.cool')
+  })
+
+  it('asks for whatever was parked under that file, on every render', () => {
+    const made = make()
+    made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(made.adopted.some((each) => each.endsWith('=https://x.example.org/b.cool'))).toBe(true)
+  })
+
+  it('says nothing about an empty cell, which is showing no file at all', () => {
+    const made = make()
+    made.deck.grow('beside')
+    expect(made.noted[made.noted.length - 1]).toEqual([])
   })
 })
 

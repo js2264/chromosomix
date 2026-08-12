@@ -134,7 +134,7 @@ import { BLOCK_COPY_LIMIT_BYTES, type BlockInput } from '../analysis/worker/prot
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
-import type { MapId } from '../annotations/placement'
+import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
 import { isArmed, locusText, pickLocus, subscribePick, type PickedLocus } from './mapPick'
 import { Modal } from './Modal'
@@ -703,6 +703,15 @@ export class MatrixPanel {
   private laneHoverListener:
     | ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void)
     | null = null
+  /**
+   * Which map of the deck this panel *is*, for the lanes it draws.
+   *
+   * The lead when nothing says otherwise, which is every session with no deck in
+   * it. It is a property of the panel rather than of the gesture, so anything
+   * that moves a lane from here says *which map* it moved it on
+   * (`annotations/store.ts`'s `placeAt`).
+   */
+  private readonly mapId: MapId
   /** Where another panel's pointer is, in this panel's cells. */
   private echo: { row: number; col: number } | null = null
   /** Where another panel's pointer is *on a track*, in this panel's cells. */
@@ -1088,6 +1097,7 @@ export class MatrixPanel {
     // and persisting nothing, so the lane machinery below has one object to be
     // built against rather than a `null` to be checked at every use.
     this.laneStore = options.annotations?.store ?? new AnnotationStore('', { persist: false })
+    this.mapId = options.annotations?.map ?? LEAD_MAP
     this.lanes = new AnnotationLanes({
       store: this.laneStore,
       ...(options.annotations?.map === undefined ? {} : { map: options.annotations.map }),
@@ -1941,7 +1951,9 @@ export class MatrixPanel {
       if (moved !== '') {
         event.preventDefault()
         if (this.laneStore.byId(moved) !== undefined) {
-          this.laneStore.place(moved, placementOn(edge))
+          // This panel's own map, as the grip drag is: a track carried onto the
+          // third replicate's edge belongs on the third replicate.
+          this.laneStore.placeAt(moved, this.mapId, placementOn(edge))
         }
         return
       }
@@ -3742,7 +3754,12 @@ export class MatrixPanel {
         // Every member, because an overlay group is one lane on screen and would
         // otherwise be split across two edges by a single drag.
         for (const member of lanes.membersOf(edge, drag.id)) {
-          store.place(member.id, placementOn(target))
+          // **On this panel's own map.** The gesture was made on one picture and
+          // it is about that picture: `place` writes the *track's* default and
+          // the lead's lane with it, so a drag on a companion moved the track
+          // out from under the first map and left the one the hand was over
+          // exactly as it was (`annotations/store.ts`'s `placeAt`).
+          store.placeAt(member.id, this.mapId, placementOn(target))
         }
       }
       if (drag.kind === 'grip') {
@@ -3761,7 +3778,7 @@ export class MatrixPanel {
       const hit = lanes.laneAt(edge, event.clientX - box.left, event.clientY - box.top)
       if (hit === null) return
       event.preventDefault()
-      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge)
+      openLaneMenu(event.clientX, event.clientY, hit.entry, store, edge, this.mapId)
     }
 
     canvas.addEventListener('pointerdown', onDown)
@@ -7171,6 +7188,12 @@ export function openLaneMenu(
    * with no visible effect.
    */
   edge: LaneEdge | null,
+  /**
+   * Which map the stack belongs to, so the location block moves *that* map's
+   * lane. The lead when nothing says otherwise, which is every surface with no
+   * deck behind it — see `annotations/store.ts`'s `placeAt`.
+   */
+  map: MapId = LEAD_MAP,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = [
@@ -7228,7 +7251,7 @@ export function openLaneMenu(
         label: EDGE_WORDS[side],
         disabled:
           entry.placement[side] && LANE_EDGES.filter((each) => entry.placement[each]).length === 1,
-        run: () => store.place(entry.id, placementOn(side)),
+        run: () => store.placeAt(entry.id, map, placementOn(side)),
       })),
     )
   }
