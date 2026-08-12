@@ -1,6 +1,13 @@
 {
-  "latest": "32ab9ec",
+  "latest": "7bb7578",
   "versions": [
+    {
+      "commit": "7bb7578",
+      "version": "0.10.0",
+      "date": "2026-08-12T18:50:58+02:00",
+      "subject": "Add bucket browser to every URL input box (#23)",
+      "tag": ""
+    },
     {
       "commit": "32ab9ec",
       "version": "0.10.0",
@@ -133,13 +140,6 @@
       "date": "2026-08-06T12:37:43+02:00",
       "subject": "0.7.0",
       "tag": "v0.7.0"
-    },
-    {
-      "commit": "139b8ca",
-      "version": "0.6.1",
-      "date": "2026-08-06T12:36:04+02:00",
-      "subject": "fix: the selection axis, its read, and __unbinned__",
-      "tag": ""
     },
     {
       "commit": "e98eaf7",
