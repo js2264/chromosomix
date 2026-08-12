@@ -1,6 +1,13 @@
 {
-  "latest": "9e9ed3b",
+  "latest": "32ab9ec",
   "versions": [
+    {
+      "commit": "32ab9ec",
+      "version": "0.10.0",
+      "date": "2026-08-12T15:07:12+02:00",
+      "subject": "Support chromosome naming conventions across genome files (#22)",
+      "tag": ""
+    },
     {
       "commit": "9e9ed3b",
       "version": "0.10.0",
