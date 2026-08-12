@@ -5721,6 +5721,41 @@ canvas.is-frozen {
   border-top: 1px solid var(--border);
 }
 
+/* Which bucket, when a reader has more than one key. A row of buttons rather
+   than a select: the labels are short, there are rarely more than three, and
+   the one being browsed has to stay legible while the list under it changes. */
+.bucket-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.bucket-pick.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bucket-filter-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.bucket-filter {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The line under the list — a count, a truncation warning, or a listing that
+   failed. Reserving no height when it is empty, because the common case is a
+   folder small enough to have nothing to say about it. */
+.bucket-note-line:empty {
+  display: none;
+}
+
+.bucket-note-line {
+  margin: 0;
+}
+
 .bucket-crumbs {
   display: flex;
   flex-wrap: wrap;

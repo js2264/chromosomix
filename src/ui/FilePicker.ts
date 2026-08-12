@@ -17,6 +17,8 @@ import { IS_DESKTOP } from '../desktop'
 import { IS_STANDALONE } from '../version'
 import { iconButton } from './icons'
 import { button, el } from './dom'
+import { bucketBrowseButton } from './browseButton'
+import { credentialOf, type BucketScope } from '../s3/credentials'
 import { appMark } from './mark'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
@@ -232,7 +234,13 @@ export class FilePicker {
             'The host must serve byte ranges and allow cross-origin GET and HEAD. ' +
             'Add ::entries/<name> to address one entry of an .mmetacool.',
         }),
-        el('div', { class: 'remote-row' }, this.urlInput, button('open', () => this.openRemote())),
+        el(
+          'div',
+          { class: 'remote-row' },
+          this.urlInput,
+          button('open', () => this.openRemote()),
+          bucketBrowseButton((url, scope) => this.openPicked(url, scope)),
+        ),
         // Beside the URL box rather than in a settings screen, because it is
         // the same gesture as the box: "open a file that is not on this
         // machine". A key configured here also makes the box itself work on a
@@ -322,6 +330,25 @@ export class FilePicker {
       ),
     )
     return note
+  }
+
+  /**
+   * A file chosen from a bucket listing rather than typed.
+   *
+   * Carries the scope's own credential, unlike {@link openRemote} below: the
+   * lookup at the worker boundary would resolve the same key from the same URL,
+   * but a file reached *through* a key should be opened with that key rather
+   * than with whatever a second resolution picks. `scope` is `null` when the
+   * choice came back through the credentials dialog, where there is no listing
+   * behind it — and there the boundary lookup is the right answer.
+   */
+  private openPicked(url: string, scope: BucketScope | null): void {
+    const { path } = splitUri(url)
+    this.props.onOpen(url, {
+      kind: 'remote',
+      url: path,
+      ...(scope === null ? {} : { credential: credentialOf(scope) }),
+    })
   }
 
   private openRemote(): void {

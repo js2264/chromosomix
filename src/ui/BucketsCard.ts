@@ -29,14 +29,20 @@
  * credential, the same signature and the same preflight as every later read —
  * and a separate probe would be a second code path whose passing would mean
  * nothing about the first.
+ *
+ * And not the folder view's own code: that is `ui/bucketBrowse.ts`, because the
+ * question it answers — *which file* — is asked at every URL box in the
+ * application and none of those is a place to be looking at an access key. This
+ * screen keeps it inline for the reason above, as the check on a key just typed.
  */
 
 import { Modal } from './Modal'
-import { button, el, field, fmt } from './dom'
+import { button, el, field } from './dom'
 import { icon, iconButton } from './icons'
-import { listPrefix, type BucketListing } from '../s3/list'
+import { BucketBrowseView } from './bucketBrowse'
 import {
   addressOf,
+  credentialOf,
   normaliseBase,
   readScopes,
   writeScopes,
@@ -80,11 +86,26 @@ class BucketsBody {
   readonly el: HTMLElement
   private scopes: BucketScope[]
   private readonly listEl: HTMLElement
-  private readonly browseEl: HTMLElement
-  /** Which scope is being browsed, and how deep into it. `null` when none is. */
-  private browsing: { scope: BucketScope; prefix: string } | null = null
-  /** Bumped on every navigation, so a slow listing cannot overwrite a fast one. */
-  private navigation = 0
+  /**
+   * The same folder view the URL boxes open in a modal (`ui/bucketBrowse.ts`),
+   * inline here — where it doubles as the check that the key just typed works,
+   * against the same signature and the same preflight as every later read.
+   */
+  private readonly browser = new BucketBrowseView({
+    onPick: (object, scope) => {
+      // Opened with the credential already attached, rather than left to the
+      // lookup in `s3/attach.ts`. The lookup would find the same one — the URL
+      // is under this scope's prefix by construction — but a file the user
+      // reached *through* a key should be opened with that key rather than with
+      // whatever a second resolution happens to pick.
+      this.close()
+      this.props.onOpen(object.url, {
+        kind: 'remote',
+        url: object.url,
+        credential: credentialOf(scope),
+      })
+    },
+  })
 
   constructor(
     private readonly props: BucketsProps,
@@ -92,7 +113,6 @@ class BucketsBody {
   ) {
     this.scopes = readScopes()
     this.listEl = el('div', { class: 'bucket-list' })
-    this.browseEl = el('div', { class: 'bucket-browse hidden' })
 
     this.el = el(
       'div',
@@ -107,7 +127,7 @@ class BucketsBody {
       this.listEl,
       this.addForm(),
       this.securityNote(),
-      this.browseEl,
+      this.browser.el,
     )
     this.renderList()
   }
@@ -139,9 +159,11 @@ class BucketsBody {
             // permissions problem rather than as a typo four fields up.
             el('span', { class: 'bucket-row-meta', text: `${scope.region} · ${scope.accessKeyId}` }),
           ),
-          button('browse', () => void this.browse(scope, addressOf(scope.base)?.prefix ?? ''), {
-            class: 'btn',
-          }),
+          button(
+            'browse',
+            () => void this.browser.browse(scope, addressOf(scope.base)?.prefix ?? ''),
+            { class: 'btn' },
+          ),
           iconButton('x', `Remove ${scope.label}`, () => this.remove(scope.id), {
             class: 'btn-close',
             size: 15,
@@ -154,7 +176,9 @@ class BucketsBody {
   private remove(id: string): void {
     this.scopes = this.scopes.filter((scope) => scope.id !== id)
     writeScopes(this.scopes)
-    if (this.browsing?.scope.id === id) this.stopBrowsing()
+    // A listing left on screen under a key that has just been deleted is a
+    // folder view of a bucket this app can no longer read.
+    if (this.browser.isShowing(id)) this.browser.clear()
     this.renderList()
   }
 
@@ -254,126 +278,5 @@ class BucketsBody {
         }),
       ),
     )
-  }
-
-  // -------------------------------------------------------------------------
-  // Browsing
-  // -------------------------------------------------------------------------
-
-  private stopBrowsing(): void {
-    this.browsing = null
-    this.browseEl.classList.add('hidden')
-    this.browseEl.replaceChildren()
-  }
-
-  private async browse(scope: BucketScope, prefix: string): Promise<void> {
-    this.browsing = { scope, prefix }
-    const token = ++this.navigation
-    this.browseEl.classList.remove('hidden')
-    this.browseEl.replaceChildren(
-      this.crumbs(scope, prefix),
-      el('p', { class: 'hint', text: 'Listing…' }),
-    )
-
-    let listing: BucketListing
-    try {
-      listing = await listPrefix(scope, prefix)
-    } catch (err) {
-      // A stale failure must not replace a newer view either: clicking two
-      // folders quickly and having the first one's 403 land on the second is
-      // an error message about a folder that is not on screen.
-      if (token !== this.navigation) return
-      this.browseEl.replaceChildren(
-        this.crumbs(scope, prefix),
-        el('p', {
-          class: 'hint bucket-error',
-          text: err instanceof Error ? err.message : String(err),
-        }),
-      )
-      return
-    }
-    if (token !== this.navigation) return
-
-    // Folders first, then files — S3 returns them as two separate lists and
-    // interleaving them by name would be inventing an order the bucket does not
-    // have. Within each, S3's order is lexicographic and is left alone.
-    const rows: HTMLElement[] = listing.folders.map((folder) => {
-      const row = el(
-        'button',
-        { class: 'bucket-entry', type: 'button' },
-        icon('chevron-right', { size: 14 }),
-        el('span', { class: 'bucket-entry-name', text: `${folder.name}/` }),
-      )
-      row.addEventListener('click', () => void this.browse(scope, folder.prefix))
-      return row
-    })
-
-    for (const object of listing.objects) {
-      const row = el(
-        'button',
-        { class: 'bucket-entry bucket-entry-file', type: 'button' },
-        el('span', { class: 'bucket-entry-name', text: object.name }),
-        el('span', { class: 'bucket-entry-size', text: fmt.bytes(object.size) }),
-      )
-      row.addEventListener('click', () => {
-        // Opened with the credential already attached, rather than left to the
-        // lookup in `s3/attach.ts`. The lookup would find the same one — the
-        // URL is under this scope's prefix by construction — but a file the
-        // user reached *through* a key should be opened with that key rather
-        // than with whatever a second resolution happens to pick.
-        const credential = {
-          accessKeyId: scope.accessKeyId,
-          secretAccessKey: scope.secretAccessKey,
-          region: scope.region,
-          ...(scope.sessionToken === undefined ? {} : { sessionToken: scope.sessionToken }),
-        }
-        this.close()
-        this.props.onOpen(object.url, { kind: 'remote', url: object.url, credential })
-      })
-      rows.push(row)
-    }
-
-    if (rows.length === 0) {
-      rows.push(el('p', { class: 'hint', text: 'Nothing under this prefix.' }))
-    }
-    if (listing.truncated) {
-      rows.push(
-        el('p', {
-          class: 'hint',
-          // Said rather than paged, for now. A partial folder that does not say
-          // it is partial makes "my file is not here" and "my file is past the
-          // first thousand keys" look identical, which is the one outcome worth
-          // avoiding; a Load-more button can follow if a real prefix hits it.
-          text:
-            'S3 returned the first 1,000 entries and there are more. Narrow the prefix, or ' +
-            'paste the file URL into the box on the picker.',
-        }),
-      )
-    }
-
-    this.browseEl.replaceChildren(this.crumbs(scope, prefix), el('div', { class: 'bucket-entries' }, ...rows))
-  }
-
-  /**
-   * The path back up, as clickable segments.
-   *
-   * Rooted at the scope's *own* prefix rather than at the bucket root: the key
-   * may well not be allowed to list above it, so offering a crumb that leads
-   * there would be offering a click that 403s.
-   */
-  private crumbs(scope: BucketScope, prefix: string): HTMLElement {
-    const root = addressOf(scope.base)?.prefix ?? ''
-    const rest = prefix.slice(root.length).split('/').filter((part) => part !== '')
-    const nodes: HTMLElement[] = [
-      button(scope.label, () => void this.browse(scope, root), { class: 'btn-link' }),
-    ]
-    let walked = root
-    for (const part of rest) {
-      walked = `${walked}${part}/`
-      const target = walked
-      nodes.push(el('span', { class: 'bucket-crumb-sep', text: '/' }))
-      nodes.push(button(part, () => void this.browse(scope, target), { class: 'btn-link' }))
-    }
-    return el('div', { class: 'bucket-crumbs' }, ...nodes)
   }
 }

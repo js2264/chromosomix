@@ -14,6 +14,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every box that takes a file URL now has a `browse…` beside it.** The bucket
+  browser existed and was reachable from one place: the picker's *private
+  buckets…* dialog, the screen for typing secret keys into. So a reader with a
+  map open and four bigWigs on a private prefix had to go back to the landing
+  page, open a credentials form, scroll past an access key to the folder view
+  underneath it, and pick a file — which then opened as a *map*, because that
+  dialog belongs to the picker and the picker opens maps. The way to load them
+  as tracks was to copy four URLs out of the AWS console.
+
+  The folder view is now a component and the four URL boxes all offer it: the
+  picker's *open a remote file*, the Tracks card's fold, the Contact maps card's
+  fold, and the deck's add row. Each opens the same listing and does its own
+  thing with what comes back — a track stays a track, a map added to the deck
+  lands in the next empty cell the reader left. The credentials dialog keeps it
+  inline, where it still doubles as the check that a key just typed works.
+
+  **A picked file is opened with the key that listed it**, rather than by the
+  lookup at the worker boundary. That lookup resolves the same key today, since
+  a listed URL is under its scope's prefix by construction — but two scopes may
+  overlap, longest-prefix wins between them, and a file reached *through* one
+  key should not open under the other.
+
+  There is a filter over a listing, and it is a filter rather than a search:
+  `ListObjectsV2` matches a key prefix and never a substring, so what it narrows
+  is the level on screen. The line under the list says how many of how many are
+  showing, because the failure worth designing against is a reader reading three
+  rows out of twelve as a folder holding three files. Truncation outranks it: a
+  prefix past a thousand keys is the one case where the list is not the folder.
+
 - **`chr1`, `1`, `01`, `I` and `NC_000001.11` are one chromosome.** Two files of
   the same genome disagree about its names more often than they agree — UCSC
   writes `chr1`, Ensembl writes `1`, a yeast cooler writes `chrI` and the

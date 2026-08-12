@@ -32,7 +32,7 @@
  */
 
 import { ViewerError } from '../errors'
-import { addressOf, type BucketScope } from './credentials'
+import { addressOf, credentialOf, type BucketScope } from './credentials'
 import { signS3Request } from './sigv4'
 
 /** A sub-prefix: a folder, in the sense the UI means. */
@@ -131,12 +131,7 @@ export async function listPrefix(
   url.searchParams.set('prefix', prefix)
   url.searchParams.set('max-keys', '1000')
 
-  const credential = {
-    accessKeyId: scope.accessKeyId,
-    secretAccessKey: scope.secretAccessKey,
-    region: scope.region,
-    ...(scope.sessionToken === undefined ? {} : { sessionToken: scope.sessionToken }),
-  }
+  const credential = credentialOf(scope)
 
   let response: Response
   try {

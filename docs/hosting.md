@@ -173,6 +173,16 @@ scoped as below.
 `s3:ListBucket` on the bucket, which is a different permission — a key with only the first works
 fine for pasted URLs and cannot list, and the app says so rather than reporting a broken bucket.
 
+**Browsing is offered wherever a URL is.** Every box in the application that takes a file URL — the
+picker's *open a remote file*, the Tracks card, the Contact maps card, the deck's add row — carries
+a `browse…` button beside its *add*, and all four open the same folder view. That is what the
+`s3:ListBucket` half of the policy buys: the bigWigs beside a map are keys whose names came off a
+run sheet, and nobody is holding their URLs. A file chosen from a listing is opened with the key
+that listed it, rather than by a second lookup that could in principle resolve elsewhere. The filter
+above a listing narrows **the level on screen** — S3 matches a key prefix and never a substring, so
+there is no bucket-wide search to offer, and the line under the list says how many of how many are
+showing rather than letting "not in this folder" read as "not in the bucket".
+
 ```json
 {
   "Version": "2012-10-17",
