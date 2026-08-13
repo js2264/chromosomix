@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { FOURC_TASK } from '@/analysis/tasks/fourc'
+import { paramDerived, paramVisible } from '@/analysis/types'
 import type { AnalysisContext, AnalysisFraming } from '@/analysis/types'
 import { LocusAxis } from '@/render/locus'
 import { bandRegion } from '@/ui/MatrixPanel'
@@ -106,21 +107,41 @@ describe('the 4C anchor', () => {
     FOURC_TASK.estimate?.(context(over), { anchor, cis: true })
 
   it('takes a genome, which is what a click on a genome × genome map means', () => {
-    // The runner has always resolved one — cis is then the whole MAG — and the
-    // estimate refused it, so the name the picture is labelled with could not
-    // be used on the picture it came from.
+    // The runner has always resolved one — the profile is then over the whole
+    // MAG — and the estimate refused it, so the name the picture is labelled
+    // with could not be used on the picture it came from.
     const cost = estimate('MAG_2')
     expect(cost?.refusal).toBeUndefined()
+  })
+
+  it('still takes a sequence', () => {
+    expect(estimate('NODE_3')?.refusal).toBeUndefined()
+  })
+
+  it('prices a metagenome as the walk it is, whatever “cis” says', () => {
+    // `cis` is not a control on a metacool and not an answer either: the runner
+    // reads the whole file there. Pricing the params' leftover `true` as four
+    // range requests would quote a bounded read for a pass over half the file.
+    const cost = estimate('MAG_2')
+    expect(cost?.class).toBe('scan')
+    expect(cost?.note).toContain('half the file')
+    expect(cost?.note).toContain('leave this genome')
+  })
+
+  it('prices a cooler’s cis run as the bounded read it is', () => {
+    const cool = { genomes: null, hasGenomes: false } as Partial<AnalysisContext>
+    const cost = FOURC_TASK.estimate?.(context(cool), { anchor: 'NODE_3', cis: true })
     expect(cost?.class).toBe('bounded')
-    expect(cost?.note).toContain('the whole of MAG_2')
+    expect(cost?.note).toContain('NODE_3')
     expect(cost?.note).toContain('20 bins')
   })
 
-  it('still takes a sequence, and prices it as it did', () => {
-    const cost = estimate('NODE_3')
-    expect(cost?.refusal).toBeUndefined()
-    expect(cost?.note).toContain('NODE_3')
-    expect(cost?.note).not.toContain('the whole of')
+  it('is free on a cooler when the block on screen already covers the anchor', () => {
+    const cost = FOURC_TASK.estimate?.(
+      context({ genomes: null, hasGenomes: false, blockLoaded: true, framing: framing('bin', [20, 40]) }),
+      { anchor: 'NODE_3', cis: true },
+    )
+    expect(cost?.class).toBe('free')
   })
 
   it('refuses a name that is neither, and says both words on a metagenome', () => {
@@ -135,12 +156,12 @@ describe('the 4C anchor', () => {
     )
   })
 
-  it('is free when the block on screen already covers the genome', () => {
-    // The same test the contig path gets: a whole-MAG anchor is exactly the
-    // block a genome view is showing, and reading it again would be a second
-    // read for a picture already in memory.
+  it('is never free on a metagenome, even with the whole MAG on screen', () => {
+    // The block on screen is one MAG against itself, and that is precisely the
+    // half of the answer a metagenomic 4C is *not* about. Free would be a quote
+    // for a picture already in memory, against a run that reads the file.
     const cost = estimate('MAG_1', { blockLoaded: true, framing: framing('bin', [0, 20]) })
-    expect(cost?.class).toBe('free')
+    expect(cost?.class).toBe('scan')
   })
 })
 
@@ -185,10 +206,23 @@ describe('a band dragged across a whole-file picture', () => {
 })
 
 describe('the 4C form', () => {
-  it('offers the anchor and the balance switch, and nothing else', () => {
-    // *Cis only* and *Normalisation* were switches over what the task is for,
-    // and the profile a reader comes here for is the cis one. The arithmetic
-    // behind both is kept and still goldened; what changed is what is asked.
-    expect(FOURC_TASK.params.map((param) => param.key)).toEqual(['anchor', 'balance'])
+  /** The rows a reader is actually shown: not the derived ones, not the hidden. */
+  const asked = (over: Partial<AnalysisContext> = {}) =>
+    FOURC_TASK.params
+      .filter((spec) => !paramDerived(spec) && paramVisible(spec, { cis: true }, context(over)))
+      .map((spec) => spec.key)
+
+  it('asks a cooler every question it always did', () => {
+    // *Cis only* and *Normalisation* are real questions on a file of
+    // chromosomes: cis is the commonest reading and the cheap one, and a
+    // chromosome's own P(s) is the curve to divide by. Nothing here changed.
+    expect(asked({ genomes: null, hasGenomes: false })).toEqual(['anchor', 'normalise', 'cis'])
+  })
+
+  it('asks a metagenome for the anchor and nothing else', () => {
+    // Neither question survives contact with a metacool: the reading wanted is
+    // what a MAG touches *elsewhere*, and one assembly's decay is not the
+    // expectation for contact between assemblies. The runner settles both.
+    expect(asked()).toEqual(['anchor'])
   })
 })

@@ -2,7 +2,12 @@
  * The 4C task, run.
  *
  * Two paths, and the difference between them is the whole design of the task
- * (`analysis/tasks/fourc.ts`). The cis path shares `bandSums` with
+ * (`analysis/tasks/fourc.ts`) — on a cooler. **A metagenome always takes the
+ * second**, whatever the parameters say, because the contacts a MAG makes with
+ * the rest of the community are the reading such a file exists for and the cis
+ * half alone is one assembly pretending it was sequenced on its own.
+ *
+ * The cis path shares `bandSums` with
  * `render/viewpoint.ts` — the *same function* the lane on the map uses, imported
  * rather than reimplemented, so the exported bigWig and the strip above the
  * picture cannot disagree about what a band sum is. The trans path cannot: there
@@ -70,8 +75,17 @@ export const runFourC: TaskRunner = async (job) => {
     return []
   }
   const balance = boolParam(job.params, 'balance', false)
-  const cis = boolParam(job.params, 'cis', true)
-  const overExpected = strParam(job.params, 'normalise', 'none') === 'ps'
+  // **A metagenome is read whole, and raw.** Neither key is offered on such a
+  // file (`tasks/fourc.ts`) and neither is trusted here: a stored session, a
+  // form filled in on a cooler and a default all leave `cis` sitting at `true`,
+  // and honouring it would give back the profile a reader has just told us is
+  // the wrong one — one MAG against itself, with the rest of the community, the
+  // thing the map is *of*, left as gaps. `normalise` goes the same way: the
+  // decay of one assembly's contigs is not the expectation for contact between
+  // assemblies, so the ratio would carry two meanings in one track.
+  const whole = job.mc.hasGenomes
+  const cis = !whole && boolParam(job.params, 'cis', true)
+  const overExpected = !whole && strParam(job.params, 'normalise', 'none') === 'ps'
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const anchor = resolveAnchor(job, text)
 
@@ -82,7 +96,10 @@ export const runFourC: TaskRunner = async (job) => {
   const profile: ProfileOutput = {
     kind: 'profile',
     id: `fourc-${anchor.band.from}-${anchor.band.to}`,
-    label: `4C · ${text}${cis ? '' : ' (with trans)'}${overExpected ? ' · O/E' : ''}`,
+    // The suffix marks a *choice*, so a metagenome — where every 4C is over the
+    // whole file — does not carry it. There it would name the only thing the
+    // task does, on every track, which is a label that distinguishes nothing.
+    label: `4C · ${text}${cis || whole ? '' : ' (with trans)'}${overExpected ? ' · O/E' : ''}`,
     values,
     extent: [0, job.mc.nBins],
     binsize: job.mc.binsize,

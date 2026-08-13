@@ -56,17 +56,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   string on the clipboard. A band is now clamped to the sequence it began in,
   and never runs past the end of it.
 
-- **The 4C form asks for the anchor and nothing else.** *Cis only* and
-  *Normalisation* are gone. The profile a reader comes here for is the one along
-  the anchor's own sequence — that is what a 4C experiment produces and what a
-  bigWig of one holds — and the two extra rows made the commonest run a
-  three-decision form, one of them mispricing it by looking ordinary beside the
-  anchor: *with trans* turns a handful of range requests into a walk over half
-  the file. Both computations are kept and still goldened; the runner reads the
-  keys with the defaults the form used to supply, so what changed is what is
-  asked rather than what is computed. A stored session carrying either key no
-  longer reaches the runner behind a form that cannot show it: a parameter with
-  no spec is dropped when the form resolves its defaults.
+- **4C on a metagenome reads the whole community, and asks one question.** A
+  MAG's contacts with everything else in the tube are the reading a metagenomic
+  map exists for, and the task was giving back the other one: a profile
+  restricted to the anchor's own assembly, with the rest of the file left as
+  gaps — one organism pictured as though it had been sequenced on its own. So on
+  a `.metacool` the run is now always the whole-file pass, cis and trans
+  together, across every contig.
+
+  *Cis only* and *Normalisation* are gone from the form **there, and only
+  there**. On a cooler both are real questions and both are unchanged: a
+  chromosome is a self-contained thing, cis is the commonest reading and the
+  bounded one, and that chromosome's own P(s) is the curve to divide by. On a
+  metacool neither survives contact with the file — an anchor is one MAG among
+  hundreds, and a decay accumulated from one assembly's contigs is not an
+  expectation for contact *between* assemblies, so the ratio would carry two
+  meanings in one track.
+
+  The runner settles both keys itself on such a file rather than trusting what a
+  stored session or a form filled in on a cooler left behind, and the estimate
+  prices the pass it will actually make instead of the four range requests the
+  absent toggle would have implied. The arithmetic of both switches is untouched
+  and still goldened; what varies by file is which of it is offered. A stored
+  session carrying a key for a control the form no longer has at all is dropped
+  when the form resolves its defaults.
 
 - **A metagenome is read by genome, and now the gestures agree.** Four things
   on a `.metacool` said otherwise.

@@ -26,6 +26,13 @@
  *
  * One task with a toggle rather than two tasks, because they answer the same
  * question and the toggle is the honest way to show what the second one costs.
+ *
+ * **On a metagenome there is no toggle**, and the run is always the second one.
+ * A MAG's contacts with the rest of the community are the reading a metagenomic
+ * map exists for, and the cheap half — one assembly against itself — is a
+ * picture of a genome pretending it was sequenced alone. The cost is stated the
+ * same way; what is gone is the offer to pay less for an answer to a different
+ * question. See {@link PARAMS}.
  */
 
 import { contigNamed, framingCovers } from '../context'
@@ -88,20 +95,26 @@ function anchorSpan(
 }
 
 /**
- * The anchor, and whether to balance. **Two controls that were here are not.**
+ * The anchor, whether to balance, and **two controls a metagenome does not get.**
  *
- * *Cis only* and *Normalisation* were both switches over what the task is for,
- * and neither earned its place in the form. The profile a reader comes here to
- * get is the one along the anchor's own sequence — that is what a 4C experiment
- * produces and what a bigWig of one holds — and the two extra rows made the
- * commonest run a three-decision form. What they did instead of helping was
- * price it: *with trans* turns a handful of range requests into a walk over
- * half the file, offered as an ordinary toggle beside the anchor.
+ * *Cis only* and *Normalisation* are real questions on a cooler. A chromosome is
+ * a self-contained thing, most of what a locus touches is on it, and the P(s)
+ * decay of that chromosome is the expectation to divide by; cis is then both the
+ * commonest reading and the cheap one, and the toggle is the honest way to show
+ * what leaving it costs.
  *
- * The arithmetic behind both is kept and still goldened (`run/fourc.ts`,
- * `test/unit/analysis-fourc.test.ts`): the runner reads `cis` and `normalise`
- * with the defaults this form used to supply, so removing the controls changed
- * what is *offered* and nothing about what is computed.
+ * On a metacool neither question survives contact with the file. An anchor there
+ * is one MAG among hundreds sharing a tube, and the reading that is *wanted* —
+ * what this organism touches — is the trans one; a profile restricted to the
+ * anchor's own assembly answers a question about a genome in isolation, which is
+ * not why anybody opened a metagenomic map. And a decay curve accumulated from
+ * one MAG's contigs is not an expectation for contact *between* MAGs, so the
+ * ratio it would produce is a number with two meanings in one track. So both are
+ * absent there and the runner settles them: always trans, never O/E.
+ *
+ * `needsNoGenomes` rather than two descriptors, and rather than a `when` over
+ * some hidden parameter: the file decides, the rule is written where the control
+ * is, and the arithmetic behind both is untouched and still goldened.
  */
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -114,8 +127,69 @@ const PARAMS: readonly ParamSpec[] = [
       'a whole genome — then the profile is over the whole MAG rather than one of its contigs. ' +
       'Type it, or press “Pick on map” and drag along either axis.',
   },
+  {
+    kind: 'choice',
+    key: 'normalise',
+    label: 'Normalisation',
+    default: 'none',
+    needsNoGenomes: true,
+    settled: 'none',
+    /**
+     * A 4C profile is a slice of the map, and a slice of a Hi-C map is mostly
+     * P(s): contact falls by orders of magnitude with distance, so the profile's
+     * shape is dominated by *how far away* each bin is rather than by whether
+     * anything is happening there. On a log axis that is a clean triangle with
+     * the anchor at its apex, and the loops a reader ran the task to find are
+     * bumps on its flanks — visible near the anchor, invisible a megabase out.
+     *
+     * Dividing by the decay is the standard way to see past it, and the curve is
+     * taken from **the anchor's own sequence**, accumulated from the square this
+     * task is already reading. Not the P(s) task's genome-wide curve: a small
+     * chromosome divided by the average behaviour of the large ones comes out
+     * with a slope that is a property of the *set* rather than of this locus.
+     *
+     * `none` stays the default because the raw profile is what a bigWig of a 4C
+     * experiment holds and what a reader comparing against one expects — and
+     * because a ratio is a derived quantity that should be asked for.
+     */
+    options: [
+      {
+        value: 'none',
+        label: 'None',
+        hint: 'Contacts as they were counted.',
+      },
+      {
+        value: 'ps',
+        label: 'By P(s)',
+        hint: 'Observed over expected at that separation, from this sequence’s own decay.',
+      },
+    ],
+  },
+  {
+    kind: 'toggle',
+    key: 'cis',
+    label: 'Cis only',
+    needsNoGenomes: true,
+    // What a metagenome's run *is*, so that is what its provenance says.
+    settled: false,
+    hint:
+      'On, this reads one sequence and costs a handful of requests. Off, it walks the pixel ' +
+      'table to reach the contacts leaving that sequence.',
+    default: true,
+  },
   BALANCE_PARAM,
 ]
+
+/**
+ * Whether this run stays on the anchor's own sequence.
+ *
+ * The file has the last word, and it is the same word the runner says: a
+ * metagenome is always read whole, whatever a stored session or a form on
+ * another file left in `cis`. See {@link PARAMS}.
+ */
+function cisRun(context: AnalysisContext, params: Params): boolean {
+  return !context.hasGenomes && cisOnly(params)
+}
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const anchor = anchorSpan(context, params)
@@ -143,21 +217,21 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   const balance = params.balance === true
-  // Priced, and no longer reachable from the form: **cis only** and
-  // **normalisation** are gone from {@link PARAMS} (see its note). The branch
-  // stays because the *runner* still reads both keys and the arithmetic behind
-  // them is goldened, so a params object that carries one — a stored session
-  // written by an older build, a test — is priced as it always was rather than
-  // being run under a cost this function did not quote.
-  if (!cisOnly(params)) {
+  // The metagenome's run is priced here too, and it is the same price: the walk
+  // is the walk whether a toggle asked for it or the file settled it. What must
+  // not happen is quoting four range requests for a pass the runner is going to
+  // make over half the file, which is what pricing `cis` from the params alone
+  // would do on a metacool — the key is still there, still `true` by default,
+  // and no longer the answer.
+  if (!cisRun(context, params)) {
     return {
       class: 'scan',
       requests: null,
       bytes: null,
       note:
         'Walks the pixel table as far as the anchor, which is about half the file, to reach the ' +
-        'contacts that leave this sequence. Progress is reported as it goes and it can be ' +
-        'cancelled at any point.',
+        `contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}. Progress is ` +
+        'reported as it goes and it can be cancelled at any point.',
     }
   }
 

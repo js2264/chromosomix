@@ -376,11 +376,17 @@ export function resolveEntryDefaults(
 ): Params {
   // **Only what this task has parameters for.** The incoming record is a stored
   // session's (`analysis/memory.ts`), and a task's parameters are not fixed for
-  // all time: the 4C task dropped *cis only* and *normalisation*, and a value
-  // remembered under either key would otherwise have gone on reaching the
-  // runner — which still reads both — from a form with no control for it. A key
-  // with no spec is not a parameter of this task, and is dropped rather than
-  // carried; the CLI makes the same judgement louder, by refusing to start.
+  // all time: one renamed or retired between builds leaves a value remembered
+  // under a key this form has no control for, which would then go on reaching a
+  // runner that still reads it. A key with no spec is not a parameter of this
+  // task, and is dropped rather than carried; the CLI makes the same judgement
+  // louder, by refusing to start.
+  //
+  // A key whose spec exists but is *hidden on this file* (`needsNoGenomes`) is
+  // deliberately not touched here. It is still a parameter of the task, the
+  // reader may have set it on another file, and the runner — which is the one
+  // that knows what a metagenome makes of it — settles it there rather than
+  // depending on this function to have deleted it.
   const known = new Set(specs.map((spec) => spec.key))
   const out: Record<string, ParamValue> = {}
   for (const [key, held] of Object.entries(value)) {
@@ -406,6 +412,14 @@ export function resolveEntryDefaults(
   // weights support, whatever a form somewhere once said.
   for (const spec of specs) {
     if (spec.kind === 'toggle' && spec.derive !== undefined) out[spec.key] = spec.derive(context)
+  }
+  // And the controls this file is not asked about at all: they keep a value,
+  // that value is written into the provenance of the run and into the header of
+  // every table exported from it, and a default left sitting there says the run
+  // was something it was not. See {@link ParamBase.settled}.
+  for (const spec of specs) {
+    if (spec.settled === undefined) continue
+    if (spec.needsNoGenomes === true && context.hasGenomes) out[spec.key] = spec.settled
   }
   // After the entries, because a choice can be filtered by what is loaded and
   // the entry repair above is what decides whether anything is.
@@ -763,7 +777,7 @@ export class ParamForm {
       const section = control.spec.section ?? ''
       const rows = this.groups.get(section)
       if (rows === undefined) continue
-      const shown = paramVisible(control.spec, this.params)
+      const shown = paramVisible(control.spec, this.params, this.context)
       const ref = after.get(section) ?? null
       if (shown && !control.shown) rows.insertBefore(control.wrapper, ref)
       else if (!shown && control.shown) control.wrapper.remove()
