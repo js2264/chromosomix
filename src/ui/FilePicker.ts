@@ -17,6 +17,7 @@ import { IS_DESKTOP } from '../desktop'
 import { IS_STANDALONE } from '../version'
 import { iconButton } from './icons'
 import { button, el } from './dom'
+import { chooseFiles, filesFrom } from './chooseFiles'
 import { bucketBrowseButton } from './browseButton'
 import { credentialOf, type BucketScope } from '../s3/credentials'
 import { appMark } from './mark'
@@ -92,16 +93,18 @@ export class FilePicker {
       }),
     )
 
-    const fileInput = el('input', { class: 'hidden-input', type: 'file' })
-    fileInput.multiple = true
-    fileInput.addEventListener('change', () => {
-      const files = Array.from(fileInput.files ?? [])
+    // `chooseFiles` rather than an `<input>` held in the tree, so that a file
+    // *chosen* is remembered as readily as one dropped: in Chromium it goes
+    // through the picker that hands back a grant, and everywhere else it falls
+    // back to exactly the input this used to be. It also takes a focusable
+    // hidden node out of the page's tab order for the whole of its life.
+    const choose = async (): Promise<void> => {
+      const files = await chooseFiles({ multiple: true })
       if (files.length > 0) this.props.onOpenFiles(files)
-      fileInput.value = ''
-    })
-    this.drop.addEventListener('click', () => fileInput.click())
+    }
+    this.drop.addEventListener('click', () => void choose())
     this.drop.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') fileInput.click()
+      if (event.key === 'Enter' || event.key === ' ') void choose()
     })
     this.drop.addEventListener('dragover', (event) => {
       event.preventDefault()
@@ -111,7 +114,7 @@ export class FilePicker {
     this.drop.addEventListener('drop', (event) => {
       event.preventDefault()
       this.drop.classList.remove('over')
-      const files = Array.from(event.dataTransfer?.files ?? [])
+      const files = filesFrom(event.dataTransfer)
       if (files.length > 0) this.props.onOpenFiles(files)
     })
 
@@ -204,7 +207,6 @@ export class FilePicker {
         }),
       ),
       this.drop,
-      fileInput,
       // A single-file page has an opaque origin, so every remote read fails
       // before a byte moves. §8.5's doctrine: a control that cannot keep its
       // promise is absent, not disabled. What replaces it is one sentence

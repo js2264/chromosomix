@@ -32,6 +32,7 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
+import { chooseFiles, filesFrom } from './chooseFiles'
 import { cardTitle, icon, iconButton } from './icons'
 import { bucketBrowseButton } from './browseButton'
 import { mapsOrLead, placementField } from './lanePlacement'
@@ -207,7 +208,7 @@ export class AnnotationCard {
       event.preventDefault()
       event.stopPropagation()
       zone.classList.remove('over')
-      const files = Array.from(event.dataTransfer?.files ?? [])
+      const files = filesFrom(event.dataTransfer)
       if (files.length > 0) this.props.loader.addFiles(files)
     })
   }
@@ -1142,14 +1143,13 @@ export function overlapWarning(overlap: ContigOverlap | undefined): OverlapNote 
  * says so rather than leaving the reader to aim.
  */
 function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLElement } {
-  const input = el('input', { class: 'hidden-input', type: 'file' })
-  input.multiple = true
-  input.addEventListener('change', () => {
-    const files = Array.from(input.files ?? [])
+  // Through `chooseFiles` so a track *chosen* is remembered as readily as one
+  // dropped — the picker hands back a grant where the browser has one, and falls
+  // back to the input this used to hold everywhere else.
+  const choose = async (): Promise<void> => {
+    const files = await chooseFiles({ multiple: true })
     if (files.length > 0) loader.addFiles(files)
-    // Cleared so choosing the same file twice fires `change` the second time.
-    input.value = ''
-  })
+  }
 
   const zone = el(
     'div',
@@ -1161,13 +1161,12 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
         'bigWig, bigBed, GTF, BED, BEDPE or FASTA. Click to choose, or drop one anywhere on ' +
         'this card — what it is and where it is drawn come from the file itself.',
     }),
-    input,
   )
-  zone.addEventListener('click', () => input.click())
+  zone.addEventListener('click', () => void choose())
   zone.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      input.click()
+      void choose()
     }
   })
   // No drop handling of its own: the card around it takes a file anywhere on

@@ -51,6 +51,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   applied into memory *before* the first tab is primed, which is also the order
   `applyConfig` already required for its own reason.
 
+- **A local file you have already opened reopens itself after a reload.** In
+  Chromium and in the desktop build, dropping or choosing a file now also hands
+  the page a `FileSystemFileHandle` — a *capability*, not a path and not a copy —
+  and that is what is kept. A reload, a restored tab or a reopened workspace
+  resolves the grant and reads the same file, with no drag and, while the browser
+  session lasts, no prompt.
+
+  Nothing about how the file is read changes: what comes back is the same `File`
+  object a drop produces, read a slice at a time by the same `LocalFileSource` as
+  before. No bytes are stored, nothing is uploaded and nothing is duplicated on
+  disk, so §11 and §12 stand exactly as written. Firefox and Safari have no such
+  grant to give, and there a local file comes back detached as it always has.
+
+  Two things this deliberately does **not** do. It does not put local file names
+  into the URL hash: this browser being able to reopen `rep1.cool` says nothing
+  about anybody else's, so the shareability test the hash is gated on is
+  unchanged, and a link still carries only what a recipient can act on. And it
+  does not ask for permission on the boot path, because a permission request
+  without a user gesture resolves without ever showing a dialog — the reader is
+  asked when they click, and never by a page that is merely loading.
+
+  A grant is keyed by the file rather than by the tab, so two tabs on one file
+  share it and one `.mcool` at five resolutions is one grant. The row also
+  records the file's name, size and modification time, because a local file's URI
+  is its bare name and two `rep1.cool` from two directories would otherwise
+  collide: a name that no longer matches is refused outright rather than opened,
+  since showing the wrong file with every label on screen agreeing is worse than
+  asking for it again. A file that has merely *changed* is not refused — a re-run
+  pipeline overwriting a file somebody is reading is a legitimate thing to do.
+
 - **A screen that says what this browser is remembering, and a button that ends
   it.** Reachable from the command palette. It lists the durable workspace, the
   per-window entries, the preferences, and — named outright rather than counted —

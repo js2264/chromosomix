@@ -46,6 +46,7 @@ import {
 } from '../ui/commands'
 import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
+import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
@@ -62,6 +63,7 @@ import {
   type WorkspaceSession,
 } from '../state/workspace'
 import { forgetEverything, storedItems } from '../state/stored'
+import { hydrateHandles } from '../state/handles'
 import { openStoredData, restoreBanner } from '../ui/RestoreCard'
 import { decodeShare, readShareHash } from '../state/shareLink'
 import { openShareDialog } from '../ui/ShareDialog'
@@ -361,11 +363,18 @@ export class App implements SessionHost {
       ) {
         return
       }
-      const files = Array.from(event.dataTransfer?.files ?? [])
+      const files = filesFrom(event.dataTransfer)
       if (files.length === 0) return
       event.preventDefault()
       void this.current?.dropFiles(files)
     })
+
+    // Started here and deliberately **not** awaited. Reading the granted files
+    // into memory is what lets a tab's tooltip be written synchronously and what
+    // keeps a permission prompt off the far side of a storage read — but a
+    // database that is slow, or refuses to open, must not hold up the picker.
+    // Anything that genuinely needs the answer awaits the same promise.
+    void hydrateHandles()
 
     this.restore()
   }

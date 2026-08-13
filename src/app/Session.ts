@@ -119,6 +119,9 @@ import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
+import { inferSource, mayResolve, resolveSource } from './resolve'
+import { rememberHandle } from '../state/handles'
+import { grantFor } from '../ui/chooseFiles'
 
 /**
  * What the shell does for a session, and the only direction the coupling runs.
@@ -381,6 +384,22 @@ export class Session {
    */
   private wholeFile: { key: string; view: WholeFileView } | null = null
   private opening: string | null = null
+  /**
+   * The URI a *resolve* is in flight for, which is one step earlier than
+   * {@link opening}.
+   *
+   * Asking whether this browser still holds a grant for a local file is
+   * asynchronous, and the question is asked from inside `render` — between the
+   * `opening` guard and the call it protects. Without a latch of its own, two
+   * renders both pass that guard, both resolve, and both open: two workers, two
+   * h5wasm instances, and every panel's memory budget halved, with nothing
+   * thrown and nothing logged.
+   *
+   * Mirrors `opening` rather than reusing it, because the two mean different
+   * things to everything else that reads them — a session that is *resolving* is
+   * not yet opening anything and must not be described as busy with a file.
+   */
+  private resolving: string | null = null
   private current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
@@ -656,10 +675,21 @@ export class Session {
     const state = this.store.state
     if (state === null) return 'Nothing open here yet — drop a file, or pick one from the list.'
     if (this.primed) {
-      return inferSource(state.uri) === null
-        ? `${state.uri} — a local file, remembered from an earlier visit. ` +
+      // Three answers where there used to be two, and the middle one is the
+      // point of the whole feature: a local file this browser still holds a
+      // grant for opens on a click like a remote one, so saying "drop it again"
+      // would be sending the reader to find a file the app can already reach.
+      //
+      // `mayResolve` rather than the async resolver, because this is a getter
+      // read in a loop by `App.paintTabs` on every state change — see
+      // `app/resolve.ts`. It may be optimistic: a grant can have been revoked
+      // since, and being wrong costs one click while being pessimistic costs
+      // the feature.
+      if (inferSource(state.uri) !== null) return `${state.uri} — remembered, not yet read. Click to open it.`
+      return mayResolve(state.uri)
+        ? `${state.uri} — a local file, remembered from an earlier visit. Click to open it again.`
+        : `${state.uri} — a local file, remembered from an earlier visit. ` +
             'Click, then drop the same file again to follow it; the view will be restored.'
-        : `${state.uri} — remembered, not yet read. Click to open it.`
     }
     return state.uri
   }
@@ -1273,6 +1303,56 @@ export class Session {
   // Opening
   // -------------------------------------------------------------------------
 
+  /**
+   * The bytes for a URI that arrived in a view state, or `null` for the picker.
+   *
+   * The one place `render` asks. A remote URL is answered synchronously and
+   * costs nothing, which keeps every demo, every published session and every
+   * shared link on exactly the path they were on before this existed; only a
+   * local name reaches storage.
+   *
+   * **No `prompt`.** Rendering is not a gesture — the boot path reaches here
+   * through `App.restore` → `activate` → `render` with no activation at all —
+   * and asking for permission without it resolves without ever showing a
+   * dialog. So this asks whether the grant is *already* good; re-granting one
+   * that has lapsed is a click's work, and the picker's note is where the click
+   * lives.
+   */
+  /**
+   * Write down the grant behind a local file, so a reload can reopen it.
+   *
+   * Called where a file is **opened**, not where it arrives. A reader who drags
+   * a folder onto the window and opens one file out of it has chosen to look at
+   * one file; recording the other nine would be keeping a list of everything
+   * they ever dragged, which is not what they asked for and not what §11
+   * promises.
+   *
+   * Fire and forget, on both counts. There is no grant at all in Firefox and
+   * Safari, and where there is one the reader is waiting on a map rather than on
+   * storage — a failed write costs them the *memory* of this file and nothing
+   * about the file itself.
+   */
+  private noteGrant(uri: string, source: SourceSpec): void {
+    if (source.kind !== 'local') return
+    void grantFor(source.file).then(
+      (handle) => {
+        if (handle !== null) void rememberHandle(uri, handle, source.file)
+      },
+      () => undefined,
+    )
+  }
+
+  private async sourceFor(uri: string): Promise<SourceSpec | null> {
+    const remote = inferSource(uri)
+    if (remote !== null) return remote
+    this.resolving = uri
+    try {
+      return await resolveSource(uri)
+    } finally {
+      this.resolving = null
+    }
+  }
+
   /** The worker, built the first time anything needs one. */
   private clientOf(): ReaderClient {
     this.reader ??= new ReaderClient()
@@ -1337,13 +1417,18 @@ export class Session {
    * The workspace is written into memory *before* the file is opened, because
    * that is where the view reads it from on its way up: the tracks arrive with
    * the picture rather than a gesture later. A remote file opens outright; a
-   * local one cannot — no browser reads a file it was not handed — so the
-   * session comes up asking for it, and everything else waits in
-   * {@link pendingConfig} for the moment it arrives.
+   * local one opens too where this browser still holds a grant for it, and
+   * otherwise the session comes up asking, with everything else waiting in
+   * {@link pendingConfig} for the moment the file arrives.
+   *
+   * `prompt` is on because every road here is a gesture — a dropped config, a
+   * pasted link, a pressed example — so a permission dialog has the activation
+   * it needs and appears where the reader is expecting to be asked for a file.
    */
   async openConfig(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
-    const source = inferSource(config.state.uri)
+    const source = await resolveSource(config.state.uri, { prompt: true })
+    if (this.destroyed) return
     if (source === null) {
       this.pendingConfig = config
       this.showContent(this.pickerWithConfig(config))
@@ -1553,6 +1638,7 @@ export class Session {
     // the tracks were drawn against it.
     this.carry(uri)
     this.opening = uri
+    this.noteGrant(uri, source)
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
     this.host.sessionChanged(this)
     try {
@@ -1766,6 +1852,7 @@ export class Session {
   ): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
+    this.noteGrant(uri, source)
     this.showContent(loading(`Reading ${fileLabel(uri)}`))
     this.host.sessionChanged(this)
     const client = new AnnotationClient()
@@ -3952,8 +4039,9 @@ export class Session {
         this.hideMap()
         return
       }
-      if (this.opening !== null) return
-      const source = inferSource(state.uri)
+      if (this.opening !== null || this.resolving !== null) return
+      const source = await this.sourceFor(state.uri)
+      if (this.destroyed || this.store.state !== state) return
       if (source === null) {
         this.showContent(this.pickerWithNote(state.uri))
         return
@@ -3980,8 +4068,9 @@ export class Session {
     }
 
     if (this.file === null || this.file.uri !== state.uri) {
-      if (this.opening !== null) return
-      const source = inferSource(state.uri)
+      if (this.opening !== null || this.resolving !== null) return
+      const source = await this.sourceFor(state.uri)
+      if (this.destroyed || this.store.state !== state) return
       if (source === null) {
         this.showContent(this.pickerWithNote(state.uri))
         return
@@ -5470,19 +5559,6 @@ function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): Sc
   if (state.vmin !== undefined) scale.vmin = state.vmin
   if (state.vmax !== undefined) scale.vmax = state.vmax
   return scale
-}
-
-/**
- * Work out how to obtain the bytes for a URI that arrived in a link.
- *
- * A remote URL is re-openable from the hash alone; a local file is not — the
- * browser gives no way to re-read a dropped file without another gesture, which
- * is a privacy property rather than a limitation. Returning `null` sends the
- * user to the picker with an explanation.
- */
-export function inferSource(uri: string): SourceSpec | null {
-  const { path } = splitUri(uri)
-  return /^https?:\/\//i.test(path) ? { kind: 'remote', url: path } : null
 }
 
 /**

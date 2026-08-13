@@ -30,6 +30,7 @@
  */
 
 import { clearAll as clearDurableStores } from './idb'
+import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { readWorkspace } from './workspace'
 
 /** The one prefix every key this app writes begins with. */
@@ -90,6 +91,18 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
+  await hydrateHandles()
+  const granted = handleRows()
+  if (granted.length > 0) {
+    items.push({
+      label: 'Files you allowed',
+      // Named rather than counted, because the names are the sensitive part:
+      // a reader on a borrowed machine is owed the chance to see that
+      // `patient_04_hic.cool` is in the list before deciding what to do.
+      detail: granted.map((row) => row.name).join(', '),
+    })
+  }
+
   const session = sessionKeys()
   if (session.length > 0) {
     items.push({
@@ -142,5 +155,10 @@ export async function forgetEverything(): Promise<void> {
       /* as above */
     }
   }
+  // Both halves of the durable side. `clearDurableStores` empties the object
+  // stores; this also drops the copy `handles.ts` holds in memory, without which
+  // the sweep would report success while the current page went on offering to
+  // reopen files whose grants it had just deleted.
+  await forgetAllHandles()
   await clearDurableStores()
 }
