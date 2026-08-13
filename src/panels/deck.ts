@@ -144,6 +144,67 @@ export function parseMaps(value: string | undefined): PanelRef[] {
 }
 
 /**
+ * A local companion, by the place it sits in the deck.
+ *
+ * By **index** and not by name, because the index is what `maps` preserves: a
+ * local companion is written as {@link VACANT}, so the hash already says *there
+ * is a panel here and it is not one you can open*. This says which file that was
+ * on the machine it was written on.
+ */
+export interface DeckLocal {
+  index: number
+  uri: string
+}
+
+/**
+ * The local companions of a deck, for a session's own private memory.
+ *
+ * **Not for the hash, and this is the whole reason the pair below exists rather
+ * than a change to {@link serialiseMaps}.** The `~` placeholder is a promise to
+ * a *recipient* (§16.6): it keeps the count and the order so a shared link
+ * arrives with a drop rectangle where the sender's file was, rather than
+ * silently one map short. Spelling the file name into the hash instead would
+ * post a private filename to a stranger — which `state/shareLink.ts` already
+ * refuses to do — and their deck would try to *fetch* it, against the site root
+ * on the web and against `app://viewer/` in the desktop build.
+ *
+ * So the name lives beside the hash, in this session's own memory, where it is
+ * as private as the file it names.
+ */
+export function localCompanions(refs: readonly PanelRef[]): DeckLocal[] {
+  const locals: DeckLocal[] = []
+  for (const [index, ref] of refs.entries()) {
+    if (ref.kind === 'local') locals.push({ index, uri: ref.uri })
+  }
+  return locals
+}
+
+/**
+ * Put remembered local companions back into a list parsed from the hash.
+ *
+ * A vacancy at a remembered index becomes a local companion again; everything
+ * else is left exactly as it came. **Only a vacancy** is promoted, which is what
+ * makes a stale record harmless rather than dangerous: a remembered index that
+ * now holds a remote map cannot displace it, and an index past the end of the
+ * list is dropped. Both failures degrade to today's behaviour — a drop
+ * rectangle where a map was — rather than to a new one.
+ */
+export function withLocalCompanions(
+  refs: readonly PanelRef[],
+  locals: readonly DeckLocal[] | undefined,
+): PanelRef[] {
+  if (locals === undefined || locals.length === 0) return [...refs]
+  const next = [...refs]
+  for (const local of locals) {
+    if (!Number.isInteger(local.index) || local.index < 0 || local.index >= next.length) continue
+    if (typeof local.uri !== 'string' || local.uri === '') continue
+    if (next[local.index].kind !== 'vacant') continue
+    next[local.index] = { kind: 'local', uri: local.uri }
+  }
+  return next
+}
+
+/**
  * `true` when two companion lists name the same files in the same order.
  *
  * Identity of the list, not of the panels: this is what tells a re-render that

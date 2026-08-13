@@ -1285,8 +1285,18 @@ export class MapPanel {
   }
 }
 
-/** Why a cell of the deck is empty — see {@link VacantPanel}. */
-export type VacancyOrigin = 'drawn' | 'link'
+/**
+ * Why a cell of the deck is empty — see {@link VacantPanel}.
+ *
+ * `remembered` is the third, and it is the one that names a file: this session
+ * knows a local map sat here, because it wrote the name into its own memory
+ * (`panels/deck.ts`), and the grant behind it did not answer — the file has
+ * moved, or this browser never had one to give (§11). It is a different sentence
+ * from `link`'s for the same reason `link` is a different sentence from
+ * `drawn`'s: telling a reader "a map was here" about a file that is on their own
+ * disk, and naming it, are not the same help.
+ */
+export type VacancyOrigin = 'drawn' | 'link' | 'remembered'
 
 /**
  * Where a link left an empty cell, or where a reader drew one.
@@ -1315,6 +1325,8 @@ export class VacantPanel {
      * cannot tell them apart, which is why the link's wording covers both.
      */
     origin: VacancyOrigin
+    /** The file this cell held, when `origin` is `remembered`. */
+    name?: string
     onOpen(file: File): void
     /**
      * Fill this cell from a **published** file instead of a local one.
@@ -1331,6 +1343,7 @@ export class VacantPanel {
     onClose(): void
   }) {
     const drawn = props.origin === 'drawn'
+    const remembered = props.origin === 'remembered' && props.name !== undefined
     const input = el('input', { class: 'hidden-input', type: 'file' })
     input.addEventListener('change', () => {
       const file = input.files?.[0]
@@ -1383,7 +1396,7 @@ export class VacantPanel {
       { class: 'ann-drop deck-drop deck-vacant', attrs: { tabindex: '0', role: 'button' } },
       el('span', {
         class: 'ann-drop-label',
-        text: drawn ? 'Drop a map here' : 'A map was here',
+        text: drawn ? 'Drop a map here' : remembered ? (props.name as string) : 'A map was here',
       }),
       el('span', {
         class: 'ann-drop-hint',
@@ -1392,10 +1405,14 @@ export class VacantPanel {
             'paste a URL below, and it opens in this position under the same navigation as the ' +
             'maps beside it — same region, same level, its own colour scale. Leaving it empty is ' +
             'fine; the link keeps it.'
-          : 'The link that opened this deck has a cell here with no file a page can fetch by name ' +
-            '(§11) — either a local map the sender had open, or a cell they left empty on ' +
-            'purpose. Drop a file here, click to choose one, or paste the URL of a published ' +
-            'one; the panel fills in where it was and the maps either side keep their order.',
+          : remembered
+            ? 'This cell held that file, and it could not be re-opened — it has been moved or ' +
+              'renamed, or this browser cannot remember files (§11). Drop it here again and the ' +
+              'panel comes back where it was, with the maps either side keeping their order.'
+            : 'The link that opened this deck has a cell here with no file a page can fetch by ' +
+              'name (§11) — either a local map the sender had open, or a cell they left empty on ' +
+              'purpose. Drop a file here, click to choose one, or paste the URL of a published ' +
+              'one; the panel fills in where it was and the maps either side keep their order.',
       }),
       urlBox,
       input,

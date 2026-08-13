@@ -25,6 +25,7 @@
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
+import type { DeckLocal } from '../panels/deck'
 import type { StoredEntry } from '../annotations/types'
 import type { Bookmark } from '../annotations/bookmarks'
 import type { ManualMark } from '../annotations/manual'
@@ -95,7 +96,17 @@ export interface SessionConfig {
    * (`keepStarPresent`). A second copy of those two rules here would be a second
    * place to keep them in step with the deck they are about.
    */
-  deck: { starred?: string; columns?: number }
+  deck: { starred?: string; columns?: number; locals?: DeckLocal[] }
+  /**
+   * The local second file, which the hash has never carried (§11, §5.7).
+   *
+   * `state.uri2` names a *remote* comparison, because that is the only kind a
+   * recipient could open. A local one is as much part of the session as the
+   * tracks are, and as private as they are, so it travels here — where a config
+   * this browser wrote, or a workspace it remembered, can put it back and a
+   * shared link still cannot.
+   */
+  compare?: string
   /**
    * What each analysis task was last run with, by task id (§18.2).
    *
@@ -129,14 +140,45 @@ function tableOf(
 function deckOf(
   starred: string | null | undefined,
   columns: number | null | undefined,
+  locals?: DeckLocal[] | null,
 ): SessionConfig['deck'] {
   return {
+    ...(Array.isArray(locals) && locals.length > 0 ? { locals } : {}),
     // An empty star is no star, matching the guard `PanelDeck`'s constructor
     // reads it back through; a non-finite column count is not a deck anybody
     // drew, and `recallColumns` would refuse it on the way back in anyway.
     ...(typeof starred === 'string' && starred !== '' ? { starred } : {}),
     ...(typeof columns === 'number' && Number.isFinite(columns) ? { columns } : {}),
   }
+}
+
+/** `{ compare: … }` when a local second file was open, and nothing when not. */
+function compareOf(uri: string | null | undefined): { compare?: string } {
+  return typeof uri === 'string' && uri !== '' ? { compare: uri } : {}
+}
+
+/**
+ * A `deck.locals` list, checked member by member.
+ *
+ * Untrusted like every other field read here, and with one consequence worth
+ * naming: a member that survives this is only *well-formed*, not *current*. An
+ * index pointing past the end of the deck it arrives beside is caught where the
+ * two lists meet (`Session.rememberedCompanions`), because only there is it
+ * knowable which of them is the newer.
+ */
+function localsOf(value: unknown): DeckLocal[] {
+  if (!Array.isArray(value)) return []
+  return (value as unknown[]).filter((local): local is DeckLocal => {
+    if (typeof local !== 'object' || local === null) return false
+    const row = local as Partial<DeckLocal>
+    return (
+      typeof row.uri === 'string' &&
+      row.uri !== '' &&
+      typeof row.index === 'number' &&
+      Number.isInteger(row.index) &&
+      row.index >= 0
+    )
+  })
 }
 
 /** The `UiMemory` scopes one session's workspace is spread across. */
@@ -153,6 +195,8 @@ const SCOPES = {
   analysis: ANALYSIS_SCOPE,
   starred: 'deck:starred',
   columns: 'deck:columns',
+  locals: 'deck:locals',
+  compareLocal: 'compare:local',
 } as const
 
 /**
@@ -187,7 +231,12 @@ export function buildConfig(options: {
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
     },
     analysis: recall<AnalysisMemory>(key, SCOPES.analysis) ?? {},
-    deck: deckOf(recall<string>(key, SCOPES.starred), recall<number>(key, SCOPES.columns)),
+    deck: deckOf(
+      recall<string>(key, SCOPES.starred),
+      recall<number>(key, SCOPES.columns),
+      recall<DeckLocal[]>(key, SCOPES.locals),
+    ),
+    ...compareOf(recall<string>(key, SCOPES.compareLocal)),
     plot: options.plot,
   }
 }
@@ -225,6 +274,8 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   // clearing the deck's arrangement to nothing.
   if (config.deck?.starred !== undefined) remember(key, SCOPES.starred, config.deck.starred)
   if (config.deck?.columns !== undefined) remember(key, SCOPES.columns, config.deck.columns)
+  if (config.deck?.locals !== undefined) remember(key, SCOPES.locals, config.deck.locals)
+  if (config.compare !== undefined) remember(key, SCOPES.compareLocal, config.compare)
 }
 
 /**
@@ -295,7 +346,9 @@ export function parseConfig(text: string): SessionConfig | null {
     deck: deckOf(
       typeof deck['starred'] === 'string' ? deck['starred'] : undefined,
       typeof deck['columns'] === 'number' ? deck['columns'] : undefined,
+      localsOf(deck['locals']),
     ),
+    ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
     plot: (typeof row['plot'] === 'object' && row['plot'] !== null
       ? row['plot']
       : {}) as PlotOptions,

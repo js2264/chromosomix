@@ -28,6 +28,8 @@ import {
   parseMaps,
   sameRefs,
   serialiseMaps,
+  localCompanions,
+  withLocalCompanions,
   type PanelRef,
 } from '../../src/panels/deck'
 import { planFor } from '../../src/panels/MapPanel'
@@ -98,6 +100,89 @@ describe('the maps key', () => {
   it('survives a URI containing a comma', () => {
     const refs = [remote('https://b.example.org/sample,rep1.cool'), remote('https://b.example.org/x.cool')]
     expect(parseMaps(serialiseMaps(refs))).toEqual(refs)
+  })
+})
+
+/**
+ * The half of a deck the hash cannot carry.
+ *
+ * A local companion is `~` in `maps` and always will be: the placeholder is a
+ * promise to a *recipient* (§16.6), and spelling the sender's filename there
+ * instead would post a private name to a stranger and leave their deck trying to
+ * fetch it. So the name lives beside the hash, in the session's own memory, and
+ * these two functions are the whole of the bridge between them.
+ */
+describe('remembering local companions beside the hash', () => {
+  it('records them by the place they sit in', () => {
+    const refs: PanelRef[] = [
+      remote('https://b.example.org/a.cool'),
+      { kind: 'local', uri: 'rep2.cool' },
+      { kind: 'vacant' },
+      { kind: 'local', uri: 'rep4.cool' },
+    ]
+    expect(localCompanions(refs)).toEqual([
+      { index: 1, uri: 'rep2.cool' },
+      { index: 3, uri: 'rep4.cool' },
+    ])
+    // A deck of remote maps and drawn vacancies has nothing private in it.
+    expect(localCompanions([remote('a.cool'), { kind: 'vacant' }])).toEqual([])
+  })
+
+  it('does not change the hash by one character', () => {
+    // The load-bearing assertion of this whole feature. Everything above and
+    // below may move; this may not, because it is what a link means.
+    const refs: PanelRef[] = [remote('https://b.example.org/a.cool'), { kind: 'local', uri: 'rep2.cool' }]
+    expect(serialiseMaps(refs)).toBe(`https://b.example.org/a.cool${MAPS_SEPARATOR}${VACANT}`)
+    expect(parseMaps(serialiseMaps(refs))[1]).toEqual({ kind: 'vacant' })
+  })
+
+  it('puts a remembered companion back into a vacancy', () => {
+    const parsed = parseMaps(`https://b.example.org/a.cool${MAPS_SEPARATOR}${VACANT}`)
+    expect(withLocalCompanions(parsed, [{ index: 1, uri: 'rep2.cool' }])).toEqual([
+      remote('https://b.example.org/a.cool'),
+      { kind: 'local', uri: 'rep2.cool' },
+    ])
+  })
+
+  it('round-trips a mixed deck through the hash and the note beside it', () => {
+    const refs: PanelRef[] = [
+      remote('https://b.example.org/a.cool'),
+      { kind: 'local', uri: 'rep2.cool' },
+      remote('https://b.example.org/c.cool'),
+    ]
+    const back = withLocalCompanions(parseMaps(serialiseMaps(refs)), localCompanions(refs))
+    expect(back).toEqual(refs)
+  })
+
+  it('leaves everything alone when there is nothing remembered', () => {
+    const parsed = parseMaps(`a.cool${MAPS_SEPARATOR}${VACANT}`)
+    expect(withLocalCompanions(parsed, undefined)).toEqual(parsed)
+    expect(withLocalCompanions(parsed, [])).toEqual(parsed)
+  })
+
+  /**
+   * A stale note must degrade to today's behaviour, never to a new one. Each of
+   * these is a deck that changed after the note was written, and in every case
+   * the answer is the drop rectangle a reader already knows.
+   */
+  it('never displaces a real map, and drops what it cannot place', () => {
+    const parsed: PanelRef[] = [remote('https://b.example.org/a.cool'), { kind: 'vacant' }]
+
+    // The remembered cell now holds a published map. The link wins.
+    expect(withLocalCompanions(parsed, [{ index: 0, uri: 'rep1.cool' }])).toEqual(parsed)
+    // Past the end of a deck that has since shrunk.
+    expect(withLocalCompanions(parsed, [{ index: 7, uri: 'rep8.cool' }])).toEqual(parsed)
+    // Nonsense that survived a hand-edited or older record.
+    expect(withLocalCompanions(parsed, [{ index: -1, uri: 'x.cool' }])).toEqual(parsed)
+    expect(withLocalCompanions(parsed, [{ index: 1.5, uri: 'x.cool' }])).toEqual(parsed)
+    expect(withLocalCompanions(parsed, [{ index: 1, uri: '' }])).toEqual(parsed)
+  })
+
+  it('does not mutate the list it is given', () => {
+    const parsed: PanelRef[] = [{ kind: 'vacant' }]
+    const back = withLocalCompanions(parsed, [{ index: 0, uri: 'rep1.cool' }])
+    expect(parsed[0]).toEqual({ kind: 'vacant' })
+    expect(back[0]).toEqual({ kind: 'local', uri: 'rep1.cool' })
   })
 })
 

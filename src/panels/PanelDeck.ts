@@ -90,6 +90,8 @@ import {
   sameRefs,
   serialiseMaps,
   swapItems,
+  localCompanions,
+  withLocalCompanions,
   type GrowDirection,
   type PanelRef,
 } from './deck'
@@ -101,6 +103,22 @@ import { fileLabel } from '../ui/labels'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
+
+/**
+ * A remembered local companion, once the session has asked whether it can still
+ * be opened.
+ *
+ * `source: null` is a real answer and not an absence: it means *this cell held a
+ * file and the grant did not answer*, which is what earns the vacancy the
+ * `remembered` wording and the file's own name. The asking happens in
+ * `Session.syncDeck`, before the deck is handed the state, because it is
+ * asynchronous and nothing inside this class may be.
+ */
+export interface ResolvedLocal {
+  index: number
+  uri: string
+  source: SourceSpec | null
+}
 
 export interface PanelDeckProps {
   /**
@@ -575,7 +593,7 @@ export class PanelDeck {
    * of them reads anything; then the view, which each panel resolves against
    * its own file.
    */
-  apply(state: ViewState): void {
+  apply(state: ViewState, locals: readonly ResolvedLocal[] = []): void {
     // A different block is a different place, and the lock's currency is base
     // pairs *from each block's own first cell* — so a window carried across a
     // navigation still parses and means somewhere else. Cleared before anything
@@ -599,8 +617,18 @@ export class PanelDeck {
 
     this.state = state
     if (this.published === null || this.published.value !== state.maps) {
-      const wanted = parseMaps(state.maps)
-      if (!sameRefs(wanted, this.slots.map((slot) => slot.ref))) this.adopt(wanted)
+      // The hash says `~` for a local companion, which is all it can honestly
+      // say (§16.6). What this session privately remembers about those cells is
+      // merged back in here — resolved ones become live panels again, and the
+      // rest stay vacancies that at least know what they were.
+      const wanted = withLocalCompanions(
+        parseMaps(state.maps),
+        locals.filter((local) => local.source !== null),
+      )
+      if (!sameRefs(wanted, this.slots.map((slot) => slot.ref))) this.adopt(wanted, locals)
+      // The **hash** value, never the merged list's. They serialise the same —
+      // a local ref becomes `~` again — but recording what was merged would
+      // make the next render see a difference and reconcile the deck away.
       this.published = { value: state.maps }
     }
     for (const slot of this.slots) slot.panel?.apply(state)
@@ -967,7 +995,7 @@ export class PanelDeck {
    * here, which is the one place a companion's worker is released other than
    * {@link destroy}.
    */
-  private adopt(wanted: readonly PanelRef[]): void {
+  private adopt(wanted: readonly PanelRef[], locals: readonly ResolvedLocal[] = []): void {
     // A *queue* per URI, not one slot per URI. The same file twice is a
     // legitimate deck — the plainest way to read one map at two colour scales —
     // and keyed one-to-one the second slot overwrote the first, so the first
@@ -983,7 +1011,7 @@ export class PanelDeck {
     }
     const reused = new Set<Slot>()
     const next: Slot[] = []
-    for (const ref of wanted.slice(0, MAX_PANELS - 1)) {
+    for (const [index, ref] of wanted.slice(0, MAX_PANELS - 1).entries()) {
       if (ref.kind !== 'vacant') {
         const existing = spare.get(ref.uri)?.shift()
         if (existing !== undefined) {
@@ -992,7 +1020,24 @@ export class PanelDeck {
           continue
         }
       }
-      next.push(this.build(ref))
+      const local = locals.find((entry) => entry.index === index)
+      // A local ref reaching `build` **must** carry its source. Without one it
+      // falls through to the remote default, which would fetch a bare file name
+      // — against the site root on the web, against `app://viewer/` in the
+      // desktop build — and fail in a way that looks like a broken deck rather
+      // than a spent grant. `withLocalCompanions` only ever promotes a cell that
+      // has one, so this pairing holds by construction; the `??` is the belt.
+      if (ref.kind === 'local' && (local?.source ?? null) === null) {
+        next.push(this.build({ kind: 'vacant' }, undefined, 'remembered', ref.uri))
+        continue
+      }
+      next.push(
+        local === undefined
+          ? this.build(ref)
+          : local.source === null
+            ? this.build(ref, undefined, 'remembered', local.uri)
+            : this.build(ref, local.source),
+      )
     }
     // Swept over what was actually held rather than over what is left in the
     // reuse map, which is what brings vacancies into the sweep: a vacancy has no
@@ -1012,11 +1057,18 @@ export class PanelDeck {
     this.paintGrid()
   }
 
-  private build(ref: PanelRef, source?: SourceSpec, origin: VacancyOrigin = 'link'): Slot {
+  private build(
+    ref: PanelRef,
+    source?: SourceSpec,
+    origin: VacancyOrigin = 'link',
+    /** The file a `remembered` vacancy is standing in for. */
+    name?: string,
+  ): Slot {
     const slot: Slot = { id: `p${nextSlotId++}`, ref, panel: null, vacancy: null, locked: true }
     if (ref.kind === 'vacant') {
       slot.vacancy = new VacantPanel({
         origin,
+        ...(name === undefined ? {} : { name }),
         onOpen: (file) => this.fill(slot, file),
         // Through `occupy` like the file road, so the cell the reader typed into
         // is the cell that opens — {@link add} would look for the *first* empty
@@ -1602,8 +1654,14 @@ export class PanelDeck {
    * looking at is untouched. See {@link serialiseMaps}.
    */
   private publish(): void {
-    const value = serialiseMaps(this.slots.map((slot) => slot.ref))
+    const refs = this.slots.map((slot) => slot.ref)
+    const value = serialiseMaps(refs)
     this.published = { value }
+    // …and the half the hash cannot carry, into this session's own memory
+    // beside the columns and the star. Written on every publish rather than on
+    // a save, for the reason every other scope here is: what storage holds *is*
+    // the session, so a reload and an exported workspace restore the same deck.
+    remember(this.props.memoryKey(), 'deck:locals', localCompanions(refs))
     this.paintBar()
     this.props.onMapsChange(value)
   }

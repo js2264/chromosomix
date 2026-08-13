@@ -87,7 +87,7 @@ import { CompareCard, compareRefusal } from '../ui/CompareCard'
 import type { CompareRead } from '../ui/compare'
 import { PanelDeck } from '../panels/PanelDeck'
 import { DeckFrame } from '../panels/DeckFrame'
-import { MAX_PANELS, parseMaps, type GrowDirection } from '../panels/deck'
+import { MAX_PANELS, parseMaps, type DeckLocal, type GrowDirection } from '../panels/deck'
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
@@ -3170,6 +3170,11 @@ export class Session {
       // is deliberately kept out of the hash rather than written as a name
       // nobody's browser can act on.
       if (inferSource(uri) !== null) this.store.patch({ uri2: uri })
+      // …and remembered *here* instead, in this session's own memory, where a
+      // file name is as private as the file. The hash stays exactly as honest
+      // as it was; what changes is that this browser can put the comparison
+      // back on a reload, the way it now puts the first file back.
+      else remember(this.memoryKey(this.store.state?.uri ?? uri), 'compare:local', uri)
       this.remount()
     } catch (err) {
       client.terminate()
@@ -3304,12 +3309,43 @@ export class Session {
     return this.store.state?.op ?? 'split'
   }
 
+  /**
+   * Put a remembered local comparison back, or forget it.
+   *
+   * Silent on failure, and that is the right shape: the reader did not ask for
+   * this file *now* — they asked for it last week and closed their browser — so
+   * a grant that has lapsed is not an error to report, it is a comparison that
+   * simply is not there. The note is dropped with it so the next render does not
+   * try again, and the Compare card is where they were always going to re-open
+   * it from.
+   */
+  private async reopenCompare(uri: string): Promise<void> {
+    const source = await resolveSource(uri)
+    if (this.destroyed) return
+    const held = this.store.state?.uri
+    if (source === null) {
+      if (held !== undefined) remember(this.memoryKey(held), 'compare:local', undefined)
+      return
+    }
+    // Re-checked after the await: the reader may have opened one by hand, or
+    // navigated to another file entirely, while the grant was being asked for.
+    if (this.compare !== null || this.compareOpening !== null) return
+    await this.openCompare(uri, source)
+  }
+
   private dropCompare(): void {
+    const local = this.compare !== null && this.compare.source.kind === 'local'
     this.compare?.client.terminate()
     this.compare = null
     this.compareHidden = false
     this.compareCard?.set({ kind: 'empty' })
     this.infoPanel?.setCompare(null)
+    // Closing a local comparison has to forget it as well as put it down, or the
+    // next reload would open again the one thing the reader just closed — the
+    // `uri2` half of the same act is a patch on the hash, and this is its
+    // counterpart for the half the hash never held.
+    const uri = this.store.state?.uri
+    if (local && uri !== undefined) remember(this.memoryKey(uri), 'compare:local', undefined)
   }
 
   /**
@@ -3379,15 +3415,52 @@ export class Session {
    * before panels existed, which is the property that makes this feature
    * additive rather than a rewrite of the router.
    */
-  private syncDeck(state: ViewState): void {
+  /**
+   * The local companions this session wrote down, still in range of the hash.
+   *
+   * The hash keeps a `~` for each of them (§16.6) and this says which file each
+   * `~` was, so the two have to agree about *how many* cells there are: a
+   * remembered index past the end of the current `maps` is from a deck that has
+   * since shrunk, and promoting it would grow the deck back by a cell the reader
+   * closed. Filtered here rather than in `withLocalCompanions`, which is a pure
+   * function over one list and cannot know which is the newer.
+   */
+  private rememberedCompanions(state: ViewState): Array<{ index: number; uri: string }> {
+    const width = parseMaps(state.maps).length
+    if (width === 0) return []
+    const stored = recall<DeckLocal[]>(this.memoryKey(state.uri), 'deck:locals')
+    if (!Array.isArray(stored)) return []
+    return stored.filter(
+      (local) =>
+        typeof local?.uri === 'string' &&
+        local.uri !== '' &&
+        Number.isInteger(local?.index) &&
+        local.index >= 0 &&
+        local.index < width,
+    )
+  }
+
+  private async syncDeck(state: ViewState): Promise<void> {
     // A hash naming companions is not a reason to build a deck the file cannot
     // have (§16, {@link deckIsPossible}). A link outlives the file it was made
     // from, and one made against a cooler and opened on a metagenome would
     // otherwise put five panels round a map none of them can follow.
     if (this.file?.info.hasGenomes === true) return
-    if (this.deck === null && parseMaps(state.maps).length === 0) return
+    const remembered = this.rememberedCompanions(state)
+    if (this.deck === null && parseMaps(state.maps).length === 0 && remembered.length === 0) return
+    // Asked *before* the deck is handed the state, because resolving a grant is
+    // asynchronous and nothing inside `PanelDeck` may be. All of them at once:
+    // four companions are four independent files and there is nothing to gain
+    // from asking one after another.
+    const locals = await Promise.all(
+      remembered.map(async (local) => ({
+        ...local,
+        source: await resolveSource(local.uri),
+      })),
+    )
+    if (this.destroyed) return
     const deck = this.ensureDeck()
-    deck.apply(state)
+    deck.apply(state, locals)
     if (!deck.isEmpty) return
     deck.destroy()
     this.deck = null
@@ -4149,6 +4222,17 @@ export class Session {
       }
     }
 
+    // …and the half the hash never carried. A local comparison this session
+    // wrote down is re-opened here, once, when nothing is holding the triangle
+    // — which is the state a reload leaves. Guarded on `compareOpening` as well
+    // as on `compare`, because the open is asynchronous and `render` runs many
+    // times before it lands; without it a reload would start the same file four
+    // times and each would terminate the last one's worker.
+    if (this.compare === null && this.compareOpening === null && state.uri2 === undefined) {
+      const local = recall<string>(this.memoryKey(state.uri), 'compare:local')
+      if (typeof local === 'string' && local !== '') void this.reopenCompare(local)
+    }
+
     // …and the same reconciliation for the deck (§16), one line lower because
     // it is the same question asked of N files rather than of one: the hash
     // names the companions, and this is where a pasted link, a restored tab and
@@ -4156,7 +4240,7 @@ export class Session {
     // below, because a deck follows the *view* and a colour-only change is
     // still a view its panels have to be handed — a link that pins `vmax` and
     // nothing else must not leave four maps unreconciled.
-    this.syncDeck(state)
+    await this.syncDeck(state)
 
     // A colour change is a repaint, not a navigation.
     //
