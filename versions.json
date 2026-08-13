@@ -1,6 +1,13 @@
 {
-  "latest": "dd5ae83",
+  "latest": "815b0ad",
   "versions": [
+    {
+      "commit": "815b0ad",
+      "version": "0.11.0",
+      "date": "2026-08-14T01:14:35+02:00",
+      "subject": "0.11.0",
+      "tag": ""
+    },
     {
       "commit": "dd5ae83",
       "version": "0.10.0",
@@ -132,13 +139,6 @@
       "version": "0.9.0",
       "date": "2026-08-09T22:54:23+02:00",
       "subject": "feat(overview): land on bin × bin, gate it, and read it by genome",
-      "tag": ""
-    },
-    {
-      "commit": "39848e4",
-      "version": "0.9.0",
-      "date": "2026-08-09T21:14:06+02:00",
-      "subject": "fix(analysis): find the set the form chose, and quiet the waiting rows",
       "tag": ""
     },
     {
