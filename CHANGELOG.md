@@ -14,6 +14,57 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Closing the browser no longer ends the session — it offers it back.** The tab
+  strip has always lived in `sessionStorage`, which is a deliberate rule and not
+  an oversight: a set of open files is a train of thought, it belongs to the
+  window it was opened in, and closing the tab is meant to end it. That rule is
+  unchanged, and `sessionStorage` still wins whenever it is present — a reload
+  reads it and never looks anywhere else. What is new is an answer for the one
+  case it cannot cover, because the storage is gone with the window: the browser
+  was closed.
+
+  Alongside it there is now a durable record — every tab, its file, its tracks
+  with their colours and limits, its marks, bookmarks, ticked sequences, table
+  filters and analysis recipes — written to IndexedDB on a debounce and flushed
+  when the page goes away. On the first screen of a browser that was closed with
+  work in it, a row above the picker says what was open and when, and offers to
+  bring it back.
+
+  **Offered, never applied**, and that is two decisions rather than one. Silently
+  reopening six files a week later reverses the decision the reader made by
+  closing them; and on a shared machine it would put somebody's unpublished
+  figure on screen for whoever sat down next, which is the reader §11 is written
+  for. *Start fresh* is a real answer and it deletes the record rather than
+  hiding the note, because an offer that returns tomorrow having been declined
+  today is not an offer.
+
+  The record holds no file contents and never will. A local file still comes back
+  detached, exactly as it does from a reload, so this stage changes nothing about
+  what is read or copied — §11 and §12 are untouched, and every browser gets it,
+  not only the ones with a file-handle API.
+
+  One trap is worth recording because its failure would have been silent and
+  permanent. A restored tab is *primed* — it holds a view state and has read
+  nothing — and a config is built by reading that tab's session memory, which
+  after a browser restart is empty. So the first click would have gathered eight
+  empty configs and written them over the good record. The workspace is therefore
+  applied into memory *before* the first tab is primed, which is also the order
+  `applyConfig` already required for its own reason.
+
+- **A screen that says what this browser is remembering, and a button that ends
+  it.** Reachable from the command palette. It lists the durable workspace, the
+  per-window entries, the preferences, and — named outright rather than counted —
+  any bucket access keys, which are stored in plain text and which a reader
+  deciding what to clear on a borrowed machine should not have to press the
+  button to discover.
+
+  *Forget everything* means everything: both web storages and both IndexedDB
+  stores, swept by one rule over the prefix every key this app writes shares.
+  A rule rather than a list of names, because a list only covers the keys
+  somebody remembered to add to it — and a sweep that quietly missed one while
+  telling the reader it had cleared everything would be worse than no button at
+  all. A test reads every `setItem` in `src/` and holds the rule to it.
+
 - **Recentre on the diagonal**, a button in Aesthetics → Map between the turn and
   `O/E`. It slides the view onto the nearest on-diagonal window at the zoom it is
   already at — the perpendicular foot of the picture's own centre on the line the
