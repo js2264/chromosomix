@@ -5471,15 +5471,6 @@ canvas.is-frozen {
   background: color-mix(in srgb, var(--accent, #1f5fa9) 16%, var(--bg));
 }
 
-/* A gesture that has taken one click and is waiting for the other: the corner a
-   box will be drawn from. Dim, and it takes no room while it is empty — the row
-   appears with the state it is reporting and goes away with it. */
-.manual-hint:not(:empty) {
-  font-size: var(--step--2, 0.72rem);
-  color: var(--text-dim);
-  line-height: 1.3;
-}
-
 .manual-where {
   flex: 1 1 auto;
   min-width: 0;

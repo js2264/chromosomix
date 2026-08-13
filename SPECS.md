@@ -1067,10 +1067,16 @@ nothing in it comes from a file.
 The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
 third is two intervals rather than one interval and a shape, because the boxes people draw are not
 one shape: a domain is a square on the diagonal, a corner peak is a small square off it, and a locus
-against a whole arm is neither. A rectangle is picked with **two clicks**, one per corner, which is
-the smallest number a box can be drawn in; the other two kinds stay one click, and all three place as
-many marks as the reader wants before the mode is put down. An on-diagonal rectangle is drawn as the
-same triangle a BED domain is on a turned map, since that is what it is.
+against a whole arm is neither. An on-diagonal rectangle is drawn as the same triangle a BED domain
+is on a turned map, since that is what it is.
+
+**Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
+and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
+a **drag**: press at one corner, let go at the other, with the map's own marquee and its coordinate
+chips showing what is about to exist. Holding Shift while drawing locks the box to the diagonal, so a
+domain is one gesture; on a turned map every drag is that, the band being the only thing there with
+coordinates on it. All three modes stay on for as many marks as the reader wants, and a click while
+the map is waiting for a drag places nothing rather than navigating.
 
 A hand-drawn mark never sits on the pixel it is about (§8.1's rule for overlays generally). For the
 arrowhead that means the glyph is stood off the cell along its own 45° axis **and** by a pixel square

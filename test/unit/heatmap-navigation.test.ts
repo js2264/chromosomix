@@ -733,6 +733,74 @@ describe('a band along one axis', () => {
   })
 
   /**
+   * A box drawn *for a form*, which is the gesture a hand already makes for a
+   * rectangle: press at one corner, let go at the other.
+   *
+   * The mode has to outrank the drag's ordinary meaning — a plain drag pans —
+   * because a reader who has pressed a button that says "draw on map" is going
+   * to drag on the map, and asking for a modifier on top of an armed mode with a
+   * lit button and a changed cursor is asking twice.
+   */
+  it('draws a box on a plain drag, and does not move the picture', () => {
+    const drawn: SelectionBox[] = []
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onDrawn: (box) => drawn.push(box),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.setDrawMode(true)
+    const plot = heatmap.plotRect
+    const zoom = heatmap.zoomLevel
+    const before = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+
+    // Four pixels a cell at the fitted zoom: columns 20–40 by rows 40–60.
+    dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 160, plot.y + 240])
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]?.cols).toEqual([20, 40])
+    expect(drawn[0]?.rows).toEqual([40, 60])
+    // Neither zoomed nor panned: the reader is drawing *on* the picture, and
+    // every one of the three things a released marquee usually does would move
+    // it out from under what they have just drawn.
+    expect(heatmap.zoomLevel).toBe(zoom)
+    expect(heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)).toEqual(before)
+  })
+
+  it('keeps Shift’s diagonal lock, so a domain is one gesture', () => {
+    const drawn: SelectionBox[] = []
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onDrawn: (box) => drawn.push(box),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.setDrawMode(true)
+    const plot = heatmap.plotRect
+    // Well off the diagonal at both ends; each corner is walked back onto it.
+    dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 160, plot.y + 240], { shiftKey: true })
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]?.rows).toEqual(drawn[0]?.cols)
+  })
+
+  it('pans again once the mode is off', () => {
+    const drawn: SelectionBox[] = []
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onDrawn: (box) => drawn.push(box),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    heatmap.setDrawMode(true)
+    heatmap.setDrawMode(false)
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 160, plot.y + 240])
+    expect(drawn).toHaveLength(0)
+  })
+
+  /**
    * The conversion the lane stacks share (§8.4 glues their pixels to the map's
    * along the axis they have in common), so a band dragged out beside the map
    * names the same stretch as the same band dragged out on it.

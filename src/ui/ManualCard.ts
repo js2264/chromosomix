@@ -18,7 +18,6 @@ import {
   formatPoint,
   formatSpan,
   mintMarkId,
-  orderedSpan,
   parsePoint,
   parseSpan,
   type LineAxis,
@@ -31,6 +30,7 @@ import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
 import { button, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { cardTitle, iconButton } from './icons'
+import type { PickHandlers } from './mapPick'
 
 /**
  * How the card reaches the mounted plot.
@@ -44,8 +44,11 @@ export interface MapPicker {
   /** `true` when there is a plot to click on. */
   available(): boolean
   /**
-   * Turn on picking. Every click on the plot reports one point *per axis*, for
-   * as long as the mode lasts.
+   * Turn on picking, for as long as the mode lasts.
+   *
+   * Which gesture the mode listens for is decided by what the form hands over:
+   * `point` takes every click as one locus per axis, `box` takes every drag as
+   * one stretch per axis ({@link PickHandlers}).
    *
    * `onEnd` fires exactly once, however the mode ends — the returned stop
    * function, Escape, another gesture arming over this one, or the plot going
@@ -54,10 +57,7 @@ export interface MapPicker {
    *
    * @returns a function that ends the mode.
    */
-  start(
-    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    onEnd: () => void,
-  ): () => void
+  start(handlers: PickHandlers, onEnd: () => void): () => void
 }
 
 export interface ManualCardProps {
@@ -150,8 +150,8 @@ export class ManualCard {
     // Read from the select on every click rather than captured once: the mode
     // now outlives a single mark, so a reader may well place two verticals,
     // switch to horizontal and place a third without leaving it.
-    const pick = this.pickButton('pick on map', (point) => {
-      add(axis.value === 'horizontal' ? point.rows : point.cols)
+    const pick = this.pickButton('pick on map', {
+      point: (at) => add(axis.value === 'horizontal' ? at.rows : at.cols),
     })
 
     return el(
@@ -190,9 +190,7 @@ export class ManualCard {
 
     // One click is a cell, and a cell already has both coordinates — so an
     // arrowhead is one click, not two.
-    const pick = this.pickButton('pick on map', (point) => {
-      add(point.rows, point.cols)
-    })
+    const pick = this.pickButton('pick on map', { point: (at) => add(at.rows, at.cols) })
 
     return el(
       'div',
@@ -214,16 +212,20 @@ export class ManualCard {
    * the diagonal and is not worth making anybody type twice; it is the same
    * courtesy the arrowhead form does for a cell on the diagonal.
    *
-   * Picking one takes **two clicks**, which is the smallest number a box can be
-   * drawn in: a click is a cell, and one cell is a corner. The pending corner is
-   * held here rather than in the store — a half-drawn box is not a mark, it is a
-   * gesture in progress, and a mark list that flickered with one would be a list
-   * of things the reader has to un-place.
+   * **Drawn with a drag**, which is the gesture a hand already makes for a box:
+   * press at one corner, let go at the other, and the marquee the map draws
+   * while the button is down is the mark that is about to exist. It used to be
+   * two clicks, and two clicks made the reader hold a corner in their head
+   * between them — the card had to say which one it was holding, because the
+   * picture could not.
+   *
+   * Holding **Shift** while drawing locks the box to the diagonal, so a domain
+   * is one gesture. On a turned map every drag is that, the band being the only
+   * thing there with coordinates on it.
    */
   private rectForm(): HTMLElement {
     const first = el('input', { class: 'input', type: 'text', placeholder: 'I:120000-180000 (rows)' })
     const second = el('input', { class: 'input', type: 'text', placeholder: 'I:340000-400000 (columns)' })
-    const hint = el('span', { class: 'manual-hint' })
     const add = (a: ManualSpan, b: ManualSpan): void => {
       this.props.store.add({
         id: mintMarkId(),
@@ -249,42 +251,9 @@ export class ManualCard {
       })
     }
 
-    let corner: { rows: ManualPoint; cols: ManualPoint } | null = null
-    const forget = (): void => {
-      corner = null
-      hint.textContent = ''
-    }
-    const pick = this.pickButton(
-      'pick corners',
-      (point) => {
-        if (corner === null) {
-          corner = point
-          // Said on the card, because the map shows nothing yet: a mode that has
-          // taken one click and is waiting for the second has to say so
-          // somewhere, or a reader whose second click lands on the sidebar
-          // cannot tell whether the first one registered.
-          hint.textContent = `from ${formatPoint(point.rows)} × ${formatPoint(point.cols)} — click the opposite corner`
-          return
-        }
-        // A span names one sequence. Two corners in different blocks of a
-        // whole-genome view name four, and there is no box with four sides on
-        // two axes — so the first corner is kept and the reader is told, rather
-        // than a box being invented across a boundary they can see.
-        if (corner.rows.contig !== point.rows.contig || corner.cols.contig !== point.cols.contig) {
-          hint.textContent = 'both corners must be on the same pair of sequences'
-          return
-        }
-        // The same cell twice is not a box. Kept armed with the corner it
-        // already has, so the second click is simply the one that missed.
-        if (corner.rows.bp === point.rows.bp && corner.cols.bp === point.cols.bp) return
-        add(
-          orderedSpan(corner.rows.contig, corner.rows.bp, point.rows.bp),
-          orderedSpan(corner.cols.contig, corner.cols.bp, point.cols.bp),
-        )
-        forget()
-      },
-      forget,
-    )
+    const pick = this.pickButton('draw on map', {
+      box: (at) => add(at.rows, at.cols),
+    })
 
     return el(
       'div',
@@ -292,7 +261,6 @@ export class ManualCard {
       el('span', { class: 'manual-form-title', text: 'Rectangles' }),
       el('div', { class: 'manual-row' }, first, second),
       el('div', { class: 'manual-row' }, typed, pick),
-      hint,
     )
   }
 
@@ -305,28 +273,28 @@ export class ManualCard {
    * why both run {@link end}.
    *
    * The mode is *not* ended by placing a mark. Marking up a figure means placing
-   * several — the corners of four domains, every loop worth an arrowhead — and
-   * the round trip to the sidebar between each one was the whole cost of doing
-   * it here rather than by typing coordinates.
+   * several — four domains boxed, every loop worth an arrowhead — and the round
+   * trip to the sidebar between each one was the whole cost of doing it here
+   * rather than by typing coordinates.
    *
-   * `forget` is for a form that carries state *between* clicks: the box form
-   * holds one corner while it waits for the other, and a mode that ended with a
-   * corner still pending would take the reader's next arming and quietly draw a
-   * box to somewhere they pointed at before they changed their mind.
+   * What the mode listens for is whatever the form handed over: a click for the
+   * two marks that name a place, a drag for the one that names an extent. The
+   * button says which in its own hint, since a reader who clicks at a map that
+   * is waiting for a drag has been given no way to find that out.
    */
-  private pickButton(
-    label: string,
-    place: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    forget: () => void = () => {},
-  ): HTMLButtonElement {
+  private pickButton(label: string, handlers: PickHandlers): HTMLButtonElement {
+    const hint =
+      handlers.box === undefined
+        ? 'Then click the plot, as often as you like. Escape or Done stops.'
+        : 'Then drag a box on the plot, as many as you like — Shift keeps it on the diagonal. ' +
+          'Escape or Done stops.'
     let stop: (() => void) | null = null
 
     const rest = (): void => {
       stop = null
-      forget()
       node.classList.remove('is-armed')
       node.textContent = label
-      node.title = 'Then click the plot, as often as you like. Escape or Done stops.'
+      node.title = hint
       // Every pick button on the card comes back at once: only one mode can be
       // on, so arming the other one has just ended this.
       this.refresh()
@@ -345,13 +313,10 @@ export class ManualCard {
         // Set before `start`, so a picker that ends the mode synchronously —
         // because there is no plot — still finds something to clear.
         stop = () => {}
-        const end = this.props.picker.start(place, rest)
+        const end = this.props.picker.start(handlers, rest)
         if (stop !== null) stop = end
       },
-      {
-        class: 'btn',
-        title: 'Then click the plot, as often as you like. Escape or Done stops.',
-      },
+      { class: 'btn', title: hint },
     )
     node.disabled = !this.props.picker.available()
     this.buttons.push(node)

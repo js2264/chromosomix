@@ -26,10 +26,12 @@
 import {
   formatPoint,
   mintMarkId,
+  orderedSpan,
   type ManualArrowhead,
   type ManualLine,
   type ManualMark,
   type ManualPoint,
+  type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
 import type { GroupSettings } from '../annotations/groups'
@@ -145,7 +147,14 @@ import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
-import { isArmed, locusText, pickLocus, subscribePick, type PickedLocus } from './mapPick'
+import {
+  isArmed,
+  locusText,
+  pickLocus,
+  subscribePick,
+  type PickedLocus,
+  type PickHandlers,
+} from './mapPick'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
 import {
@@ -1036,12 +1045,10 @@ export class MatrixPanel {
   /** The open map's own bin size — see {@link openBinsize}. */
   private readonly baseBinsize: number
   /** A picking mode in progress; see {@link armPicking}. */
-  private picking: {
-    /** Called once per click, for as long as the mode is on. */
-    onPoint(point: { rows: ManualPoint; cols: ManualPoint }): void
+  private picking: (PickHandlers & {
     /** Called once when the mode ends, however it ends. */
     end(): void
-  } | null = null
+  }) | null = null
   /** The tooltip's fixed nodes; only their text changes (see {@link describe}). */
   private readonly tip: {
     matrix: HTMLElement
@@ -1172,6 +1179,10 @@ export class MatrixPanel {
       // the axes — and a locus is what both a clipboard and a form want. The
       // renderer has already zoomed, or not, according to its band mode.
       onBand: (axis, span) => this.bandDragged(axis, span),
+      // A box drawn for a form that asked for one. Resolved here, like the band
+      // above and for the same reason: the renderer knows cells and this is the
+      // object that knows which sequence and which base pair they are.
+      onDrawn: (box: SelectionBox) => this.boxDrawn(box),
       // Only wired when the view wants it; without it a drag zooms, which is
       // the renderer's own behaviour.
       ...(options.onSelectRegion === undefined
@@ -3163,15 +3174,20 @@ export class MatrixPanel {
    * column, a horizontal one the row, and an arrowhead wants both — so the panel
    * hands over both and lets the card take what it means.
    *
+   * **A box is a drag**, and a form asking for one says so by handing over a
+   * `box` handler instead of a `point` one ({@link PickHandlers}). Then a plain
+   * drag draws a marquee rather than panning, and its release is reported as a
+   * stretch per axis. A click in that mode does nothing — there is no rectangle
+   * in it — rather than falling back to navigating, which would take the picture
+   * out from under a reader who had merely twitched.
+   *
    * @returns a function that ends the mode, for a card being torn down.
    */
-  armPicking(
-    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    onEnd: () => void = () => {},
-  ): () => void {
+  armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
     this.picking?.end()
-    this.picking = { onPoint, end: onEnd }
+    this.picking = { ...handlers, end: onEnd }
     this.canvas.classList.add('picking')
+    this.heatmap.setDrawMode(handlers.box !== undefined)
     return () => this.cancelPicking()
   }
 
@@ -3180,6 +3196,7 @@ export class MatrixPanel {
     const picking = this.picking
     this.picking = null
     this.canvas.classList.remove('picking')
+    this.heatmap.setDrawMode(false)
     picking?.end()
   }
 
@@ -3280,6 +3297,44 @@ export class MatrixPanel {
       rows: { contig: at.rows.contig, bp: Math.round(at.rows.bp) },
       cols: { contig: at.cols.contig, bp: Math.round(at.cols.bp) },
     }
+  }
+
+  /**
+   * A box drawn on the map, as a stretch of genome per axis.
+   *
+   * The 2D counterpart of {@link bandDragged}, and the same conversion the
+   * region selection makes ({@link emitSelection}) — one derivation, so a box
+   * that opens a region and a box that becomes a mark cannot come to name
+   * different stretches.
+   *
+   * **Turned, it is the on-diagonal square.** A band over a turned map names one
+   * stretch of the genome and nothing up the side is a place, so the box it
+   * stands for is that stretch against itself — which is the domain a reader
+   * drawing on a turned map is drawing, and the reading the region selection
+   * already takes there.
+   *
+   * Silent above bin level, where a cell is a whole sequence: a rectangle whose
+   * corners are contigs has no base pairs in it, and inventing some would put a
+   * mark on the map at coordinates nobody chose.
+   */
+  private boxDrawn(box: SelectionBox): void {
+    const handler = this.picking?.box
+    const data = this.data
+    if (handler === undefined || data === null || data.level !== 'bin') return
+    const span = (axis: SelectedAxis | null): ManualSpan | null =>
+      axis?.range === undefined ? null : orderedSpan(axis.label, axis.range[0], axis.range[1])
+
+    if (this.turned !== null) {
+      const only = span(this.turnedAxisSelection(box))
+      if (only !== null) handler({ rows: only, cols: { ...only } })
+      return
+    }
+    const rowGroup = groupAt(data.rowGroups, box.anchor.row)
+    const colGroup = groupAt(data.colGroups, box.anchor.col)
+    if (rowGroup === undefined || colGroup === undefined) return
+    const rows = span(this.axisSelection(rowGroup, box.rows, data.rowExtent[0]))
+    const cols = span(this.axisSelection(colGroup, box.cols, data.colExtent[0]))
+    if (rows !== null && cols !== null) handler({ rows, cols })
   }
 
   /**
@@ -6233,10 +6288,14 @@ export class MatrixPanel {
     // the mark on a view the reader can no longer see. The mode stays on after
     // the mark is placed: it ends when the card or Escape says so, not when a
     // click lands.
+    //
+    // Including a mode that has no use for a click: a form waiting for a box
+    // swallows one rather than letting it navigate, because a press that did not
+    // travel is a drag the reader gave up on, not a request to go somewhere.
     const picking = this.picking
     if (picking !== null) {
       const point = this.locusOf(cell)
-      if (point !== null) picking.onPoint(point)
+      if (point !== null) picking.point?.(point)
       return
     }
     // Through the square, for the readout's reason: a turned cell's row is a

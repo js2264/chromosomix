@@ -53,7 +53,7 @@ export interface AnalysisFacts {
 }
 import type { AnnotationStore } from '../annotations/store'
 import type { LaneEdge } from '../annotations/types'
-import type { ManualPoint } from '../annotations/manual'
+import type { PickHandlers } from '../ui/mapPick'
 import {
   MatrixPanel,
   type AnnotationContext,
@@ -712,11 +712,8 @@ export class MapPanel {
    * A panel that is still reading has no map to arm and answers with a cancel
    * that does nothing, which is the same shape a torn-down panel answers with.
    */
-  armPicking(
-    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    onEnd: () => void = () => {},
-  ): () => void {
-    return this.panel?.armPicking(onPoint, onEnd) ?? ((): void => {})
+  armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
+    return this.panel?.armPicking(handlers, onEnd) ?? ((): void => {})
   }
 
   remeasure(): void {

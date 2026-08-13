@@ -1,24 +1,29 @@
 // @vitest-environment jsdom
 /**
- * The Manual annotations card (§8.1), and the box that takes two clicks.
+ * The Manual annotations card (§8.1), and the two gestures it asks the map for.
  *
- * A line and an arrowhead are each one gesture — one coordinate typed, or one
- * cell clicked — and the card's own state is nothing between them. A rectangle
- * is the first mark here that is *two* of something, and everything worth
- * asserting follows from that: the mode has to survive between the clicks, say
- * which corner it is holding, refuse a pair it cannot make a box out of, and
- * forget the half-drawn one when it ends. A pending corner that outlived its
- * mode would draw a box to somewhere the reader pointed before they changed
- * their mind, and nothing on screen would say why.
+ * A line and an arrowhead are each *a place*, and the gesture for a place is a
+ * click. A rectangle is *an extent*, and the gesture for an extent is a drag —
+ * press at one corner, let go at the other, which is what a hand does to draw a
+ * box. What is worth asserting here is that each form asks for the right one and
+ * makes the right mark of what comes back, since a form that asked for clicks
+ * while the map was waiting for a drag would be a mode that swallowed
+ * everything and produced nothing.
  *
  * The picker is a stand-in for the mounted plot, which is what the card talks to
- * in the app: it hands back the two loci a click lands on, one per axis, and it
- * is the same object a whole deck of maps is armed through.
+ * in the app: it takes the handlers the form hands over and is the same object a
+ * whole deck of maps is armed through.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { ManualStore, type ManualPoint, type ManualRect } from '@/annotations/manual'
+import {
+  ManualStore,
+  type ManualPoint,
+  type ManualRect,
+  type ManualSpan,
+} from '@/annotations/manual'
+import type { PickHandlers } from '@/ui/mapPick'
 import { ManualCard, type MapPicker } from '@/ui/ManualCard'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -40,6 +45,16 @@ const cell = (row: number, col: number, contig = 'I'): { rows: ManualPoint; cols
   cols: { contig, bp: col },
 })
 
+/** A drag on the map, as the panel reports one: a stretch on each axis. */
+const drawn = (
+  rows: [number, number],
+  cols: [number, number],
+  contig = 'I',
+): { rows: ManualSpan; cols: ManualSpan } => ({
+  rows: { contig, from: rows[0], to: rows[1] },
+  cols: { contig, from: cols[0], to: cols[1] },
+})
+
 interface Mounted {
   store: ManualStore
   /** The form with this title, which is where its own controls are. */
@@ -48,21 +63,24 @@ interface Mounted {
   type(title: string, values: [string, string?]): void
   /** Click the plot, as the armed mode sees it. */
   click(at: { rows: ManualPoint; cols: ManualPoint }): void
+  /** Drag a box out on the plot, as the armed mode sees it. */
+  draw(at: { rows: ManualSpan; cols: ManualSpan }): void
+  /** What the armed mode is listening for, which is what the form asked for. */
+  listening(): Array<'point' | 'box'>
   /** End the mode the way the plot does — Escape, or a torn-down view. */
   endMode(): void
-  hint(title: string): string
   bad(title: string): boolean[]
   armed(title: string): boolean
 }
 
 function mount(): Mounted {
   const store = new ManualStore(`card-${Math.random()}.cool`)
-  let live: { onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void; onEnd: () => void } | null = null
+  let live: { handlers: PickHandlers; onEnd: () => void } | null = null
   const picker: MapPicker = {
     available: () => true,
-    start: (onPoint, onEnd) => {
+    start: (handlers, onEnd) => {
       live?.onEnd()
-      live = { onPoint, onEnd }
+      live = { handlers, onEnd }
       return () => {
         const mode = live
         live = null
@@ -100,15 +118,22 @@ function mount(): Mounted {
     },
     click: (at) => {
       if (live === null) throw new Error('no picking mode is armed')
-      live.onPoint(at)
+      live.handlers.point?.(at)
+    },
+    draw: (at) => {
+      if (live === null) throw new Error('no picking mode is armed')
+      live.handlers.box?.(at)
+    },
+    listening: () => {
+      if (live === null) throw new Error('no picking mode is armed')
+      return (['point', 'box'] as const).filter((key) => live?.handlers[key] !== undefined)
     },
     endMode: () => {
       const mode = live
       live = null
       mode?.onEnd()
     },
-    hint: (title) => form(title).querySelector('.manual-hint')?.textContent ?? '',
-    bad: (title) => boxes(title).map((box) => box.classList.contains('is-bad')),
+      bad: (title) => boxes(title).map((box) => box.classList.contains('is-bad')),
     armed: (title) =>
       Array.from(form(title).querySelectorAll('button')).some((button) =>
         button.classList.contains('is-armed'),
@@ -148,90 +173,76 @@ describe('typing a rectangle', () => {
   })
 })
 
-describe('picking a rectangle on the map', () => {
-  it('takes two clicks, and says which corner it is holding', () => {
+describe('drawing a rectangle on the map', () => {
+  it('asks the map for a drag rather than for clicks', () => {
+    // Which is the whole difference between this form and the two above it: a
+    // box is an extent, and an extent is one press and one release.
     const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(120_000, 340_000))
-    // Nothing yet: half a box is a gesture in progress, not a mark, and a list
-    // that flickered with one would be a list of things to un-place.
-    expect(card.store.marks).toHaveLength(0)
-    expect(card.hint('Rectangles')).toContain('I:120000')
+    card.press('Rectangles', 'draw on map')
+    expect(card.listening()).toEqual(['box'])
+    card.press('Lines', 'pick on map')
+    expect(card.listening()).toEqual(['point'])
+  })
 
-    card.click(cell(180_000, 400_000))
+  it('makes one box of one drag, both axes as drawn', () => {
+    const card = mount()
+    card.press('Rectangles', 'draw on map')
+    card.draw(drawn([120_000, 180_000], [340_000, 400_000]))
     expect(card.store.rects).toHaveLength(1)
     expect(card.store.rects[0]).toMatchObject({
       a: { contig: 'I', from: 120_000, to: 180_000 },
       b: { contig: 'I', from: 340_000, to: 400_000 },
     })
     // Ready for the next box rather than done: marking up a figure is several.
-    expect(card.hint('Rectangles')).toBe('')
     expect(card.armed('Rectangles')).toBe(true)
   })
 
-  it('puts the corners in order, whichever one was clicked first', () => {
+  it('stays on for as many boxes as the reader draws', () => {
     const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(180_000, 400_000))
-    card.click(cell(120_000, 340_000))
+    card.press('Rectangles', 'draw on map')
+    card.draw(drawn([1_000, 2_000], [1_000, 2_000]))
+    card.draw(drawn([3_000, 4_000], [9_000, 9_500]))
+    expect(card.store.rects).toHaveLength(2)
+    expect(card.armed('Rectangles')).toBe(true)
+  })
+
+  it('takes a box across two sequences, which the map can hand it', () => {
+    // A drag over the trans corner of a whole-genome view names two different
+    // sequences, one per axis, and that is a rectangle like any other — the two
+    // sides of a box were never required to be the same sequence.
+    const card = mount()
+    card.press('Rectangles', 'draw on map')
+    card.draw({
+      rows: { contig: 'I', from: 120_000, to: 180_000 },
+      cols: { contig: 'IV', from: 340_000, to: 400_000 },
+    })
     expect(card.store.rects[0]).toMatchObject({
-      a: { contig: 'I', from: 120_000, to: 180_000 },
-      b: { contig: 'I', from: 340_000, to: 400_000 },
+      a: { contig: 'I' },
+      b: { contig: 'IV' },
     })
   })
 
-  it('refuses two corners on different sequences, and keeps the first', () => {
-    // A side of a box names one sequence, so a pair of corners in two different
-    // blocks of a whole-genome view names four and is not a box at all.
+  it('places nothing on a click, since a click is not a box', () => {
     const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(120_000, 340_000, 'I'))
-    card.click(cell(180_000, 400_000, 'IV'))
-    expect(card.store.marks).toHaveLength(0)
-    expect(card.hint('Rectangles')).toContain('same pair of sequences')
-
-    // The corner it already had is still the corner, so the second click is
-    // simply the one that missed.
-    card.click(cell(180_000, 400_000, 'I'))
-    expect(card.store.rects).toHaveLength(1)
-  })
-
-  it('does not make a box out of one cell clicked twice', () => {
-    const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(120_000, 340_000))
+    card.press('Rectangles', 'draw on map')
     card.click(cell(120_000, 340_000))
     expect(card.store.marks).toHaveLength(0)
-    card.click(cell(180_000, 400_000))
-    expect(card.store.rects).toHaveLength(1)
   })
 
-  it('forgets a half-drawn box when the mode ends', () => {
+  it('gives the button back however the mode ends', () => {
     const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(120_000, 340_000))
+    card.press('Rectangles', 'draw on map')
+    expect(card.armed('Rectangles')).toBe(true)
     card.endMode()
-    expect(card.hint('Rectangles')).toBe('')
-
-    // Armed again, the next click is a *first* corner. Otherwise the box would
-    // be drawn to somewhere the reader pointed before they changed their mind.
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(500_000, 900_000))
-    expect(card.store.marks).toHaveLength(0)
-    expect(card.hint('Rectangles')).toContain('I:500000')
-  })
-
-  it('is ended by arming another kind, which the plot allows one of', () => {
-    const card = mount()
-    card.press('Rectangles', 'pick corners')
-    card.click(cell(120_000, 340_000))
-    card.press('Lines', 'pick on map')
-    expect(card.hint('Rectangles')).toBe('')
     expect(card.armed('Rectangles')).toBe(false)
 
-    // And the line mode is a line mode: one click, one mark.
+    // And arming another form ends this one, the map having only one mode.
+    card.press('Rectangles', 'draw on map')
+    card.press('Arrowheads', 'pick on map')
+    expect(card.armed('Rectangles')).toBe(false)
+    expect(card.armed('Arrowheads')).toBe(true)
     card.click(cell(120_000, 340_000))
-    expect(card.store.lines).toHaveLength(1)
+    expect(card.store.arrowheads).toHaveLength(1)
   })
 })
 

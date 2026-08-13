@@ -42,14 +42,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   second box left empty means *the same stretch on both axes*, the same courtesy
   the arrowhead form does for a cell on the diagonal.
 
-  **Picked in two clicks**, one per corner, which is the smallest number a box
-  can be drawn in; the mode stays on afterwards, as the other two do, because
-  marking up a figure is several marks. The corner it is holding is named on the
-  card while it waits for the second click — a mode that has taken one click and
-  shows nothing cannot be told from one that missed — and it is forgotten when
-  the mode ends, so a box is never drawn to somewhere the reader pointed before
-  they changed their mind. Two corners in different sequences are refused and
-  said so, a side of a box naming one sequence.
+  **Drawn with a drag**, which is the gesture a hand already makes for a box:
+  press at one corner, let go at the other, with the map's own marquee and its
+  coordinate chips showing what is about to exist. Holding Shift while drawing
+  locks it to the diagonal, so a domain is one gesture; on a turned map every
+  drag is that, the band being the only thing there with coordinates on it. The
+  mode stays on afterwards, as the other two do, because marking up a figure is
+  several marks — and a click while the map is waiting for a drag places nothing
+  rather than navigating away from the picture being drawn on.
+
+  Which gesture a form asks for is now part of what it hands the map: the two
+  marks that name a place take clicks, the one that names an extent takes drags.
+  A plain drag draws the box rather than panning, because a reader who has just
+  pressed a button that says *draw on map* is going to drag on the map, and
+  asking for a modifier on top of an armed mode with a lit button and a changed
+  cursor is asking twice.
 
   On a **turned** map a box is drawn as the contacts it names rather than as its
   own outline, which is the same rule every other mark there follows: off the

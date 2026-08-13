@@ -1081,6 +1081,15 @@ export interface HeatmapOptions {
    */
   onBand?: (axis: 'rows' | 'cols', span: [number, number]) => void
   /**
+   * A drag drew a box **for a form that asked for one**.
+   *
+   * Only while {@link HeatmapView.setDrawMode} is on, and then instead of
+   * everything a released marquee usually does: it does not zoom, it does not
+   * open a region, and it is not copied. The box is the answer to a question
+   * somebody else asked, and the picture stays where the reader left it.
+   */
+  onDrawn?: (selection: SelectionBox) => void
+  /**
    * What the two spans of a drag say, per axis, already formatted.
    *
    * The renderer owns *where* the numbers go and the caller owns *what they
@@ -1155,6 +1164,7 @@ type ResolvedOptions = Required<
     | 'onSelect'
     | 'onSelectionMade'
     | 'onBand'
+    | 'onDrawn'
     | 'selectionLabel'
     | 'onHover'
     | 'plotOptions'
@@ -1297,6 +1307,7 @@ export class HeatmapView {
   private readonly onSelect: ((selection: SelectionBox) => void) | null
   private readonly onSelectionMade: ((selection: SelectionBox) => void) | null
   private onBand: ((axis: 'rows' | 'cols', span: [number, number]) => void) | null
+  private readonly onDrawn: ((selection: SelectionBox) => void) | null
   /**
    * What a Shift-drag does when it is let go.
    *
@@ -1307,6 +1318,17 @@ export class HeatmapView {
    * the canvas wears while the mode is on.
    */
   private bandMode: 'zoom' | 'pick' = 'zoom'
+  /**
+   * A form is waiting for a **box**, so a plain drag draws one.
+   *
+   * The 2D counterpart of `bandMode === 'pick'`, and a separate flag rather than
+   * a third value of it because they answer different gestures: that one changes
+   * what a *Shift*-drag does when it lands, and this one changes what a drag
+   * with nothing held down *is*. Drawing a rectangle on the map is the gesture a
+   * hand already makes for it, and asking for a modifier on top of an armed mode
+   * with a lit button and a changed cursor would be asking twice.
+   */
+  private drawMode = false
   /**
    * A modifier is down that would make the next press name a span of the x axis.
    *
@@ -1518,6 +1540,7 @@ export class HeatmapView {
     this.onSelect = options.onSelect ?? null
     this.onSelectionMade = options.onSelectionMade ?? null
     this.onBand = options.onBand ?? null
+    this.onDrawn = options.onDrawn ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
 
@@ -2074,7 +2097,7 @@ export class HeatmapView {
    * disagreeing.
    */
   get spanGuide(): boolean {
-    return this.spanGestures && (this.bandMode === 'pick' || this.spanModifier)
+    return this.spanGestures && (this.bandMode === 'pick' || this.drawMode || this.spanModifier)
   }
 
   /**
@@ -2804,6 +2827,23 @@ export class HeatmapView {
   }
 
   /**
+   * Whether a plain drag draws a box for a form, or pans.
+   *
+   * On, every primary drag is a marquee and its release goes to {@link onDrawn}
+   * instead of zooming or opening a region — the picture does not move, because
+   * a reader drawing a rectangle *on* something is not asking to be taken
+   * somewhere else. Panning is not lost so much as postponed: the mode is one
+   * button press wide, and the reader ends it when they have drawn what they
+   * came to draw.
+   *
+   * The cursor is the owner's business, as it is for a picking mode: the panel
+   * that arms this already puts its own class on the canvas.
+   */
+  setDrawMode(on: boolean): void {
+    this.drawMode = on
+  }
+
+  /**
    * What a released selection does: hand the box to the owner, or zoom.
    *
    * The box is squared first, so what is acted on is what was drawn. Handing it
@@ -2814,6 +2854,14 @@ export class HeatmapView {
    */
   private finishSelection(x0: number, y0: number, x: number, y: number): void {
     const found = this.boxFrom(x0, y0, x, y)
+    // A box drawn *for a form* is none of the three things a selection is: it
+    // does not zoom, it does not open a region, and it is not copied. The reader
+    // is drawing on the picture, and every one of those would move the picture
+    // out from under what they have just drawn.
+    if (this.drawMode) {
+      if (found !== null) this.onDrawn?.(found.box)
+      return
+    }
     // Before either outcome, and regardless of which: what was framed is the
     // same fact whether the box then zooms or opens a region.
     if (found !== null) this.onSelectionMade?.(found.box)
@@ -4444,8 +4492,19 @@ export class HeatmapView {
       // it without zooming — the only thing the gesture does is answer the
       // question the form asked. It disarms on the first pick, so the next drag
       // is an ordinary pan again (`ui/mapPick.ts`).
-      const mode =
-        this.bandMode === 'pick' ? 'band' : wantsSelect(e) ? 'select' : e.shiftKey ? 'band' : 'pan'
+      // …and **drawing outranks all of it**: a form has asked for a box, the
+      // button that asked says so and the cursor has changed, so the drag the
+      // reader is about to make is the box. Holding Shift still locks it to the
+      // diagonal below, which is how a domain gets drawn in one gesture.
+      const mode = this.drawMode
+        ? 'select'
+        : this.bandMode === 'pick'
+          ? 'band'
+          : wantsSelect(e)
+            ? 'select'
+            : e.shiftKey
+              ? 'band'
+              : 'pan'
       // …except on a turned map, where the diagonal is the bottom edge of the
       // picture and a corner snapped to it would be a corner snapped to the
       // frame. The selection is already the on-diagonal one there, whichever
