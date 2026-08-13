@@ -42,6 +42,7 @@ const LUCIDE = [
   'zoom-out',
   'maximize',
   'crosshair',
+  'move-diagonal-2',
   'git-compare',
   'dna',
   'trash-2',

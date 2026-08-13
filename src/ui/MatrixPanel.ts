@@ -263,6 +263,16 @@ const TURN_HINT =
   'Available on one sequence against itself, which is the only block that has a diagonal ' +
   'to measure from.'
 
+/** A double arrow along the main diagonal: the line the view is put back on. */
+const DIAGONAL_ICON = 'move-diagonal-2'
+
+const DIAGONAL_HINT =
+  'Recentre on the diagonal. Slides the view onto the nearest on-diagonal window at the zoom ' +
+  'it is already at, without changing the region or the resolution. Every gesture that lands ' +
+  'off the diagonal — a pan, a box, a zoom around the pointer — takes several more to come ' +
+  'back from, and no drag can say “here, but on the diagonal”. Greyed on a block that has no ' +
+  'diagonal, and while the map is turned, where the picture already is one.'
+
 /** The band, as an ordinary dense block the renderer can be handed. */
 function turnedDense(turned: RotatedBlock): DenseMatrix {
   return {
@@ -845,6 +855,8 @@ export class MatrixPanel {
   private turned: RotatedBlock | null = null
   /** The turn control, greyed while the block on screen has no diagonal. */
   private turnButton: HTMLElement | null = null
+  /** The recentre control, greyed where there is no diagonal to go to. */
+  private diagonalButton: HTMLElement | null = null
   /** The adaptive-resolution switch, and its unsubscribe. */
   private refineButton: HTMLElement | null = null
   private stopRefineWatch: (() => void) | null = null
@@ -1615,6 +1627,30 @@ export class MatrixPanel {
       this.turnButton = button
       this.paintTurn(turn.on === true)
       picture.push(button)
+
+      // Beside the turn, and offered by whoever offers it: the turn *makes* a
+      // picture of the diagonal and this one *goes to* it, and in a deck the
+      // panels' windows are locked together, so one of them moving to the
+      // diagonal takes the rest with it. A companion, which draws the turn
+      // without owning the control, has no more business owning this one.
+      //
+      // An action rather than a toggle — there is no state to read off it — so
+      // it takes neither `btn-toggle` nor a lit state, and it is the one mark in
+      // these rows that means "do this" instead of "this is on".
+      const diagonalButton = iconButton(
+        DIAGONAL_ICON,
+        DIAGONAL_HINT,
+        () => {
+          this.heatmap.centreOnDiagonal()
+        },
+        { class: 'btn btn-icon', size: 15 },
+      )
+      this.diagonalButton = diagonalButton
+      // Disabled until a block says otherwise: the panel is built before
+      // anything is read, and a control that is live before there is a picture
+      // to move is one that does nothing when pressed.
+      this.paintDiagonal(false)
+      picture.push(diagonalButton)
     }
 
     // The baseline. A control of its own rather than an entry in the score
@@ -2268,6 +2304,24 @@ export class MatrixPanel {
     button.title = `${label}. ${TURN_HINT}`
     button.setAttribute('aria-label', label)
     button.replaceChildren(icon(on ? TURN_ICONS.on : TURN_ICONS.off, { size: 15 }))
+  }
+
+  /**
+   * Offer the recentre control, or grey it.
+   *
+   * Greyed rather than hidden, on the same rule the turn beside it follows: a
+   * reader looking at the trans corner of two chromosomes should be able to see
+   * that the control exists and find out from its hint what it wants of them.
+   *
+   * Off while the map is turned as well as on a block with no diagonal, and the
+   * second is not a technicality: a turned picture *is* the diagonal, so the
+   * button would be offering to move the view to where it already is.
+   */
+  private paintDiagonal(possible: boolean): void {
+    const button = this.diagonalButton
+    if (button === null) return
+    button.classList.toggle('is-disabled', !possible)
+    if (button instanceof HTMLButtonElement) button.disabled = !possible
   }
 
   /**
@@ -4612,6 +4666,15 @@ export class MatrixPanel {
           )
         : null
     if (turned !== null) out = turnedDense(turned)
+    // The recentre control asks a weaker question than the turn: not "are the
+    // two axes the same stretch" but "do they meet at all", since a view can be
+    // put back on a diagonal that only crosses a corner of the block. Off under
+    // a turn, where the picture already is the diagonal.
+    this.paintDiagonal(
+      turned === null &&
+        Math.max(data.rowExtent[0], data.colExtent[0]) <
+          Math.min(data.rowExtent[1], data.colExtent[1]),
+    )
     // The **square** block's values, even under a turn, because the one reader
     // of this indexes it by square row and column ({@link derivedReading}). It
     // used to be `out`, which on a turned map is a band of a different shape
@@ -6373,7 +6436,7 @@ export class MatrixPanel {
     return { label: group.label, range: [start, end] }
   }
 
-  private describe(cell: Cell | null, at?: { x: number; y: number }): void {
+  private describe(cell: Cell | null, at?: { x: number; y: number; span?: boolean }): void {
     // Recorded whatever happens: the lanes continue the crosshair through the
     // hovered column, and they can only do that if they are told it has moved.
     const moved =
@@ -6407,6 +6470,18 @@ export class MatrixPanel {
     const colStart = data.colExtent[0]
     const rowLabel = describeAxis(rowGroup, square.row, data.level, this.options.binsize, rowStart)
     const colLabel = describeAxis(colGroup, square.col, data.level, this.options.binsize, colStart)
+
+    // A turned map with a span modifier held is a reader about to name a stretch
+    // of the genome, and the whole of what they are pointing at is *where along
+    // the bottom* the pointer is. The pair of loci and the distance between them
+    // answer the question the pointer was asking a moment ago — they are a fact
+    // about the cell under it, and the cell is not what the next drag will
+    // select. The crosshair already says so, standing up as one vertical line
+    // where the readout went on describing a contact ({@link spanGuide}).
+    if (at?.span === true && this.turned !== null) {
+      this.describeAlong(square, data, at)
+      return
+    }
     // `cell.value` is what was *drawn*, which below the diagonal of a compared
     // map is the second file's count with any gain already in it. Neither half
     // of that is what a reader is asking about, so the numbers here come from
@@ -6500,12 +6575,68 @@ export class MatrixPanel {
     // compared map is asked at every position is how the two differ *here*, and
     // answering it with only the visible half would mean reading the picture
     // twice, once on each side of the diagonal, to compare one locus.
+    tip.count.classList.remove('hidden')
     tip.count.textContent = counts
+    this.showTip(at)
+  }
 
-    // The one gate for the card on this surface. Everything above it still runs
-    // — the readout the status line shows is the same measurement — so turning
-    // the card off costs a hover nothing and gives back the few hundred square
-    // pixels it was covering.
+  /**
+   * The readout for a pointer naming a **place** rather than a cell.
+   *
+   * One coordinate, because that is the whole of what the gesture is about: a
+   * span drag on a turned map names a stretch of the genome, and where the
+   * pointer is along the bottom is the only thing about it that is being chosen.
+   * The midpoint of the cell's two ends *is* that position — a turned column
+   * stands over the middle of the pair it draws (`render/rotate.ts`) — so this
+   * is the same number the ruler under the pointer is printing, and the same one
+   * the guide is standing on.
+   *
+   * No distance and no count. Both are facts about the cell, both were on the
+   * card a moment ago, and leaving them there while the crosshair has already
+   * become a single vertical line is the card describing a different gesture
+   * from the one the hand is making.
+   */
+  private describeAlong(
+    square: { row: number; col: number },
+    data: MatrixResult,
+    at?: { x: number; y: number },
+  ): void {
+    const along = alongAxis(square)
+    // The group is asked for at a whole cell — a midpoint may land half way
+    // between two — while the *position* is measured at the midpoint itself.
+    const group = groupAt(data.rowGroups, Math.floor(along))
+    const start = data.rowExtent[0]
+    const genome = groupAt(data.rowGenomes, Math.floor(along))?.label
+    setReadout(describeAxis(group, along, data.level, this.options.binsize, start))
+
+    const tip = this.tip
+    tip.rowName.textContent = group?.label ?? '—'
+    tip.times.classList.add('hidden')
+    tip.colName.classList.add('hidden')
+    const pos = positionIn(group, along, data.level, this.options.binsize, start)
+    tip.pos.classList.toggle('hidden', pos === null)
+    if (pos !== null) tip.pos.textContent = pos
+    tip.genomes.classList.toggle('hidden', genome === undefined)
+    if (genome !== undefined) {
+      tip.rowGenome.textContent = genome
+      tip.genomeTimes.classList.add('hidden')
+      tip.colGenome.classList.add('hidden')
+    }
+    tip.distance.classList.add('hidden')
+    tip.count.classList.add('hidden')
+    this.showTip(at)
+  }
+
+  /**
+   * Put the card up where the pointer is, or leave it down.
+   *
+   * The one gate for the card on this surface, and it is deliberately the last
+   * thing rather than the first: everything above it still runs, because the
+   * readout on the status line is the same measurement, so turning the card off
+   * costs a hover nothing and gives back the few hundred square pixels it was
+   * covering.
+   */
+  private showTip(at?: { x: number; y: number }): void {
     if (!getPlotOptions().tooltip) {
       this.tooltip.classList.add('hidden')
       return
@@ -6574,6 +6705,21 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
 }
 
 /** Which group covers a block-local offset. Absent list, absent answer. */
+/**
+ * Where a cell of a turned map stands on the genomic axis, in cells of the
+ * square block it was turned out of.
+ *
+ * The **midpoint** of the pair it is a contact between, which is what a turned
+ * column is: the rotation puts the cell for `(i, j)` over `(i + j) / 2` and its
+ * height carries the rest (`render/rotate.ts`). Half-integers are the ordinary
+ * case rather than an edge one — a column is half a bin — and are passed on
+ * rather than rounded, since the arithmetic below them is linear and the reader
+ * is being told a position, not a bin.
+ */
+export function alongAxis(square: { row: number; col: number }): number {
+  return (square.row + square.col) / 2
+}
+
 export function groupAt(
   groups: AxisGroup[] | undefined,
   offset: number,

@@ -1106,8 +1106,12 @@ export interface HeatmapOptions {
    * `at` is the pointer in canvas CSS pixels, so a tooltip can be positioned
    * without the listener re-deriving coordinates the view has already computed.
    * Absent on the leave event, where there is no position.
+   *
+   * `span` reports {@link spanGuide}: the reader is holding the modifier that
+   * makes the next drag name a stretch of one axis, so what they are pointing at
+   * is a place on the genome rather than a cell.
    */
-  onHover?: (cell: Cell | null, at?: { x: number; y: number }) => void
+  onHover?: (cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void
 }
 
 // `plotOptions` is resolved into its own field rather than into `opts`,
@@ -1315,7 +1319,9 @@ export class HeatmapView {
   /** A band being dragged out on a lane stack; see {@link showBandPreview}. */
   private bandPreview: { axis: 'rows' | 'cols'; from: number; to: number } | null = null
   private readonly selectionLabel: ((selection: SelectionBox) => SelectionText | null) | null
-  private readonly onHover: ((cell: Cell | null, at?: { x: number; y: number }) => void) | null
+  private readonly onHover:
+    | ((cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void)
+    | null
 
   private matrix: DenseMatrix | null = null
   /** Base-pair mapping per axis; `null` where the axis has no single one. */
@@ -2661,15 +2667,85 @@ export class HeatmapView {
   }
 
   /**
+   * `col - row` on the diagonal, or `null` for a block that has none.
+   *
+   * The diagonal is where the two axes name the *same* bin, which is not the
+   * geometric 45° line through the corner unless the two blocks start together:
+   * on a chrII×chrI panel the row at matrix index 0 is a different bin from the
+   * column at matrix index 0. So `col = row + offset`, and where the two axes
+   * hold stretches that do not overlap at all — the trans corner of a
+   * whole-genome view, `chrI × chrII` opened as its own block — there is no
+   * diagonal in the picture and the answer is `null` rather than a line drawn
+   * through where one would be.
+   *
+   * The same fact {@link isTurnable} gates the turn on, asked more weakly: that
+   * one needs the two axes to be the *same* stretch, and this one only needs
+   * them to meet.
+   */
+  private diagonalOffset(): number | null {
+    const matrix = this.matrix
+    if (matrix === null) return null
+    const lo = Math.max(matrix.rowExtent[0], matrix.colExtent[0])
+    const hi = Math.min(matrix.rowExtent[1], matrix.colExtent[1])
+    return hi > lo ? matrix.rowExtent[0] - matrix.colExtent[0] : null
+  }
+
+  /** `true` where this block has a diagonal to be put on. */
+  get hasDiagonal(): boolean {
+    return this.diagonalOffset() !== null
+  }
+
+  /**
+   * Slide the view onto the diagonal, at the zoom it is already at.
+   *
+   * The perpendicular foot of the picture's own centre on `col = row + offset`,
+   * which is the least the view has to move to be looking at the diagonal —
+   * {@link onDiagonal}'s arithmetic, applied to the middle of the plot instead
+   * of to a pointer.
+   *
+   * Why a control at all: every gesture that *lands* off the diagonal — a pan, a
+   * box selection, a zoom around the pointer — leaves the reader somewhere that
+   * takes several more of the same gestures to get back from, and a contact map
+   * read about its diagonal is a contact map whose diagonal wants to be on
+   * screen. There is no way to express "here, but on the diagonal" as a drag.
+   *
+   * `false`, and nothing moved, where the block has no diagonal to go to.
+   */
+  centreOnDiagonal(): boolean {
+    const offset = this.diagonalOffset()
+    if (offset === null) return false
+    const plot = this.plotRect
+    const halfCols = plot.width / this.zoom / 2
+    const halfRows = plot.height / this.zoom / 2
+    const row = (this.originY + halfRows + this.originX + halfCols - offset) / 2
+    this.originY = row - halfRows
+    this.originX = row + offset - halfCols
+    this.clampView()
+    this.syncScales()
+    this.changed()
+    return true
+  }
+
+  /**
    * Zoom so that a stretch of **one** axis fills the plot along that axis.
    *
-   * The other axis keeps its centre and takes the same zoom, because it has no
-   * choice: one scalar drives both, which is what keeps a cell square
-   * (`imshow(aspect="equal")`). So this is a 1D gesture with a 2D consequence,
-   * and stating it that way is the honest description — on a map read about its
-   * diagonal the consequence is the square a reader wanted anyway, and off the
-   * diagonal it is "this stretch of that sequence, against as much of the other
-   * as fits".
+   * The other axis takes the same zoom, because it has no choice: one scalar
+   * drives both, which is what keeps a cell square (`imshow(aspect="equal")`).
+   * So this is a 1D gesture with a 2D consequence.
+   *
+   * That consequence is **the diagonal**. The other axis used to keep whatever
+   * centre it happened to have, which made the gesture's outcome depend on where
+   * the view had been panned to rather than on what was dragged: naming a
+   * stretch of chromosome I could land on that stretch against a megabase
+   * somewhere else, and nothing on screen said which. What a reader dragging a
+   * band out of a contact map means is *this stretch, against itself* — the
+   * square on the diagonal — so the other axis is centred on the same stretch
+   * and the picture that comes back is the on-diagonal one.
+   *
+   * Where the block has no diagonal — a `chrI × chrII` panel — the other axis
+   * keeps its centre, as it always did: there is no square on the diagonal to
+   * open, and pulling that axis to a bin it does not contain would only jam it
+   * against an edge.
    *
    * `from` and `to` are canvas CSS pixels along the named axis, in either order.
    */
@@ -2687,7 +2763,12 @@ export class HeatmapView {
     const near = vertical ? this.originY : this.originX
     const far = vertical ? this.originX : this.originY
     const centre = near + (lo - origin) / this.zoom + cells / 2
-    const centreOther = far + other / this.zoom / 2
+    const offset = this.diagonalOffset()
+    const centreOther =
+      offset === null
+        ? far + other / this.zoom / 2
+        : // The same place on the genome on the other axis: `col = row + offset`.
+          centre + (vertical ? offset : -offset)
 
     this.zoom = clamp(extent / cells, this.minZoom(), this.maxZoom())
     const half = extent / this.zoom / 2
@@ -2832,13 +2913,12 @@ export class HeatmapView {
   /**
    * The point on the map's diagonal nearest a pointer, in canvas pixels.
    *
-   * The diagonal is where the two axes name the *same* bin, which is not the
-   * geometric 45° line through the corner unless the two blocks start together:
-   * on a chrII×chrI panel the row at matrix index 0 is a different bin from the
-   * column at matrix index 0, and the locus a reader means by "the diagonal" is
-   * offset by the difference. `offset` is that difference, so the line this
-   * projects onto is `col = row + offset` and an off-diagonal panel — where the
-   * diagonal is nowhere on screen — falls out as an interval with nothing in it.
+   * The line is `col = row + offset` — {@link diagonalOffset} says why it is not
+   * simply the 45° line through the corner — and an off-diagonal panel, where
+   * the diagonal is nowhere on screen, falls out as an interval with nothing in
+   * it. Taken here as arithmetic rather than through that accessor: this one
+   * still answers for a panel with no diagonal, and a snapped point nobody can
+   * see beats a point that is not on the line.
    *
    * The projection is the perpendicular foot in *matrix* coordinates, which is
    * the honest reading of "the nearest coordinate along the diagonal", and then
@@ -4429,21 +4509,25 @@ export class HeatmapView {
         return
       }
       this.hoverPoint = { x, y }
-      hoverAt(x, y, wantsSelect(e) && e.shiftKey)
+      hoverAt(x, y, e.shiftKey)
     }
 
     /**
-     * Report the cell under a point, snapping onto the diagonal while the
-     * diagonal-locked marquee's modifiers are held.
+     * Report the cell under a point, snapping onto the diagonal while **Shift**
+     * is held.
      *
-     * The same rule that marquee follows, applied to the pointer
-     * before a drag has begun — so the reading a reader gets is the reading the
-     * gesture would select from, and they can see *where on the diagonal* they
-     * are about to start before pressing the button. It answers the question a
-     * hand hovering over a contact map is usually asking anyway: contact at this
-     * locus with itself is the reference every off-diagonal cell is read
-     * against, and finding the diagonal by eye at a fitted whole-genome view is
-     * a two-pixel target on a 45° line.
+     * Shift is the map's on-diagonal modifier throughout, and this is the half
+     * of it that reads: a Shift-drag names a stretch and opens it on the
+     * diagonal ({@link zoomToBand}), and hovering with Shift down says which
+     * stretch that would be. Answering the two differently is what made the
+     * feature look broken — the snap arrived on the key press and left again on
+     * the first pixel of movement, because the press asked for Shift and the
+     * move asked for Option-with-Shift.
+     *
+     * It answers the question a hand hovering over a contact map is usually
+     * asking anyway: contact at this locus with itself is the reference every
+     * off-diagonal cell is read against, and finding the diagonal by eye at a
+     * fitted whole-genome view is a two-pixel target on a 45° line.
      *
      * Only the *readout* moves, not the pointer: the arrowhead stays where the
      * hand put it, and the crosshair — which is what says "this is the cell I am
@@ -4464,7 +4548,12 @@ export class HeatmapView {
         'linking',
         cell === null && this.onLabelClick !== null && this.labelAt(x, y) !== null,
       )
-      this.onHover?.(cell, { x: hx, y: hy })
+      // `span` is what the readout needs to know that the gesture in the
+      // reader's hand is about *one axis*: on a turned map a held modifier means
+      // the next drag names a stretch of the genome, and a card answering that
+      // with a pair of loci and a distance is answering the question the pointer
+      // was asking a moment ago.
+      this.onHover?.(cell, { x: hx, y: hy, span: this.spanGuide })
     }
 
     /**
@@ -4476,20 +4565,20 @@ export class HeatmapView {
      * window, because hovering does not take the focus and the canvas would only
      * hear this after a click.
      *
-     * Option is here for the *guide* alone ({@link spanGuide}) and never reaches
-     * `hoverAt`: the diagonal snap is Option-with-Shift, and a key event says
-     * which key moved rather than which are down, so answering an Option press
-     * with a snap would snap on the modifier that is half of the pair.
+     * A key event says which key *moved*; the other one is read off the event's
+     * own modifier state, so both are known and the two are answered by the same
+     * two calls a pointer move makes. Option matters here for the span guide,
+     * which either modifier arms, and Shift for the diagonal snap, which is
+     * Shift's alone.
      */
     const onShift = (e: KeyboardEvent): void => {
       if (this.hoverPoint === null || this.drag !== null) return
+      if (e.key !== 'Shift' && e.key !== 'Alt') return
       const down = e.type === 'keydown'
-      if (e.key === 'Shift') {
-        this.noteSpanModifier(down || e.altKey)
-        hoverAt(this.hoverPoint.x, this.hoverPoint.y, down)
-        return
-      }
-      if (e.key === 'Alt') this.noteSpanModifier(down || e.shiftKey)
+      const shift = e.key === 'Shift' ? down : e.shiftKey
+      const alt = e.key === 'Alt' ? down : e.altKey
+      this.noteSpanModifier(shift || alt)
+      hoverAt(this.hoverPoint.x, this.hoverPoint.y, shift)
     }
     /**
      * The canvas's own move handler, which steps aside once `follow` is on: the

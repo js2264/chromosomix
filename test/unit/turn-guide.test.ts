@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The guide under the pointer on a **turned** map, and the one gesture that
- * changes its shape.
+ * The guide under the pointer on a **turned** map, the one gesture that changes
+ * its shape, and what the readout beside it is told.
+ *
+ * The two halves are here together because they were what came apart: the
+ * crosshair stood up as a single vertical line the moment a modifier went down,
+ * saying "the next drag names a stretch of the genome", while the card beside it
+ * went on printing a pair of loci and the distance between them — a fact about
+ * the cell, which is not what the gesture is about to select. A picture and a
+ * caption describing two different gestures is worse than either one alone.
  *
  * At rest a turned map's guide is a pair of 45° rays: the picture's two
  * directions are not its two axes, so the cells sharing a place with the contact
@@ -21,6 +28,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { CROSSHAIR_COLOR, HeatmapView } from '@/render/heatmap'
+import { alongAxis } from '@/ui/MatrixPanel'
 import { BIN_FRACTION } from '@/render/rotate'
 import type { DenseMatrix } from '@/types'
 
@@ -59,6 +67,8 @@ interface Harness {
   fire(type: string, event: Record<string, unknown>): void
   /** Every line stroked in the crosshair's colour on one frame. */
   guide(): Segment[]
+  /** What the last hover told the readout, which is the card's whole input. */
+  told(): { cell: { row: number; col: number } | null; span: boolean } | null
 }
 
 /** How many bins the square block behind the band has. */
@@ -146,10 +156,17 @@ function harness(size = 400): Harness {
     style: {},
   } as unknown as HTMLCanvasElement
 
+  let hover: { cell: { row: number; col: number } | null; span: boolean } | null = null
   const heatmap = new HeatmapView(canvas, {
     devicePixelRatio: 1,
     // Everything but the guide off, so the strokes on the page are the subject.
     plotOptions: { crosshair: true, dividers: false, breaks: false, labels: false, ticks: false },
+    onHover: (cell, at) => {
+      hover = {
+        cell: cell === null ? null : { row: cell.row, col: cell.col },
+        span: at?.span === true,
+      }
+    },
   })
   // The order the panel uses, and the same four calls: the presentation first,
   // then the block it was chosen for (`ui/MatrixPanel.setData`).
@@ -167,6 +184,7 @@ function harness(size = 400): Harness {
       heatmap.draw()
       return segments.filter((segment) => segment.colour === CROSSHAIR_COLOR)
     },
+    told: () => hover,
   }
 }
 
@@ -354,5 +372,62 @@ describe('a place pointed at from a track beside another map', () => {
     expect(fit.guide()).toHaveLength(2)
     fit.heatmap.setPlotOptions({ crosshair: false })
     expect(fit.guide()).toHaveLength(0)
+  })
+})
+
+/**
+ * The other half of the same modifier: what the card is told.
+ *
+ * The guide's shape and the readout's contents are one answer to one question —
+ * *what am I about to select* — and a reader looking at a vertical line over a
+ * card describing a contact has been given two.
+ */
+describe('what a turned map tells the readout', () => {
+  it('names a cell at rest, as every map always has', () => {
+    const fit = harness()
+    hover(fit)
+    // Drawn as well as told: the two are one answer, and the assertions below
+    // are that they agree. (It also flushes the frame the hover scheduled.)
+    expect(fit.guide().every(diagonal)).toBe(true)
+    expect(fit.told()?.span).toBe(false)
+    expect(fit.told()?.cell).not.toBeNull()
+  })
+
+  it('says a place is being named while Shift is held', () => {
+    const fit = harness()
+    hover(fit, { shiftKey: true })
+    expect(fit.guide().filter(vertical)).toHaveLength(1)
+    expect(fit.told()?.span).toBe(true)
+  })
+
+  it('says the same while Option is held, which draws the same guide', () => {
+    const fit = harness()
+    hover(fit, { altKey: true })
+    expect(fit.guide().filter(vertical)).toHaveLength(1)
+    expect(fit.told()?.span).toBe(true)
+  })
+
+  it('goes back to naming a cell when the modifier is let go', () => {
+    const fit = harness()
+    hover(fit, { shiftKey: true })
+    hover(fit)
+    expect(fit.guide().every(diagonal)).toBe(true)
+    expect(fit.told()?.span).toBe(false)
+  })
+
+  /**
+   * Where along the bottom that place is: the midpoint of the pair the cell
+   * under the pointer is a contact between, which is what a turned column
+   * stands over. Either end of the pair would be a coordinate the reader is not
+   * pointing at — on a band nine bins deep, up to nine bins away from the line
+   * the guide is drawn on.
+   */
+  it('puts the position half way between the contact’s two ends', () => {
+    expect(alongAxis({ row: 10, col: 30 })).toBe(20)
+    // On the diagonal the two ends are one place, and the midpoint is it.
+    expect(alongAxis({ row: 7, col: 7 })).toBe(7)
+    // Half-integers are ordinary here — a turned column is half a bin — and are
+    // passed on rather than rounded to a bin the reader did not point at.
+    expect(alongAxis({ row: 10, col: 11 })).toBe(10.5)
   })
 })

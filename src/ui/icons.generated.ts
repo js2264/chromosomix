@@ -178,6 +178,13 @@ export const GENERATED_ICONS = {
     ['line', {"x1":"12","x2":"12","y1":"22","y2":"18"}],
     ],
   },
+  'move-diagonal-2': {
+    shapes: [
+    ['path', {"d":"M19 13v6h-6"}],
+    ['path', {"d":"M5 11V5h6"}],
+    ['path', {"d":"m5 5 14 14"}],
+    ],
+  },
   'git-compare': {
     shapes: [
     ['circle', {"cx":"18","cy":"18","r":"3"}],

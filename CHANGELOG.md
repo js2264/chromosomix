@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Recentre on the diagonal**, a button in Aesthetics → Map between the turn and
+  `O/E`. It slides the view onto the nearest on-diagonal window at the zoom it is
+  already at — the perpendicular foot of the picture's own centre on the line the
+  two axes name the same bin, which is the least it has to move — without
+  touching the region or the resolution.
+
+  Every gesture that lands off the diagonal takes several more of the same
+  gestures to come back from, and none of them can be asked for directly: a pan
+  is relative, a box is where the hand drew it, and a wheel zoom is around the
+  pointer. There is no drag that says *here, but on the diagonal*. Greyed where
+  the block has no diagonal — the trans corner of two chromosomes — and while the
+  map is turned, where the picture already is one.
+
 - **Rectangles, in the Manual annotations card.** The card drew two of the three
   things people put on a contact map by hand: a line says *this coordinate* and
   an arrowhead says *this cell*, and there was no way at all to say *this block
@@ -749,7 +762,41 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and an arrow said only "this panel folds", which is true of all four of them.
   What is behind this one is the file and what can be read off it.
 
+### Changed
+
+- **A Shift-drag now opens the stretch it named on the diagonal.** The gesture
+  names a band of one axis and zooms to it; the axis nobody dragged took the same
+  zoom and kept whatever centre it happened to have. So the same drag over the
+  same stretch of chromosome I landed on a different picture depending on where
+  the view had been panned to — that stretch against a megabase somewhere else —
+  and nothing on screen said which. What a reader dragging a band out of a
+  contact map means is *this stretch, against itself*, so the other axis is now
+  centred on the same stretch and what comes back is the on-diagonal square.
+
+  Unchanged where the block has no diagonal to open, which is a `chrI × chrII`
+  panel: there the other axis keeps its centre, since pulling it to a bin the
+  block does not contain would only jam it against an edge.
+
 ### Fixed
+
+- **Shift stopped sticking the readout to the diagonal as soon as the pointer
+  moved.** Shift is the map's on-diagonal modifier — a Shift-drag names a stretch
+  and opens it there — and holding it snaps the crosshair and the coordinates
+  onto the diagonal so the reader can see which stretch that would be. Pressing
+  the key snapped them; the first pixel of movement put them back, because the
+  key press asked for Shift and the pointer move asked for Option-with-Shift.
+  That is the one shape of bug a reader cannot report: it worked until they
+  moved. Both now ask the same question, and a key event reconstructs the state
+  of the modifier it did not carry rather than assuming it is up.
+
+- **A turned map's card went on describing a cell while the pointer was naming a
+  place.** With a modifier down the crosshair stands up as a single vertical line
+  — the edge a band would begin on — and the card beside it still printed the two
+  loci under the pointer and the distance between them, which is a fact about the
+  cell and not about what the next drag would select. Held, the readout now names
+  the position along the bottom and nothing else: the midpoint of the pair, which
+  is what a turned column stands over and the same number the ruler is printing.
+  Let go, it is a card about a cell again.
 
 - **An arrowhead sat on a corner of the very cell it pointed at.** The glyph is
   stood off along its own 45° axis, which puts it four pixels from the mark's

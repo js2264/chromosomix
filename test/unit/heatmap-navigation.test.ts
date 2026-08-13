@@ -600,12 +600,45 @@ describe('a band along one axis', () => {
   })
 
   // One scalar drives both axes, which is what keeps a cell square. So a 1D
-  // gesture has a 2D consequence, and the axis nobody dragged keeps its centre.
-  it('keeps the other axis where it was', () => {
+  // gesture has a 2D consequence, and that consequence is the diagonal: what a
+  // reader dragging a band out of a contact map means is *this stretch, against
+  // itself*. The axis nobody dragged used to keep whatever centre it happened to
+  // have, which made the outcome depend on where the view had been panned to —
+  // the same drag landing on a different picture each time, with nothing on
+  // screen saying which.
+  it('brings the other axis onto the diagonal', () => {
     const { fire, heatmap } = banded()
     const plot = heatmap.plotRect
+    // Cells 20–40 across, dragged out well below the diagonal.
+    dragWith(fire, [plot.x + 80, plot.y + 300], [plot.x + 160, plot.y + 310], { shiftKey: true })
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.col).toBeCloseTo(30, 0)
+    expect(centre?.row).toBeCloseTo(30, 0)
+  })
+
+  it('does the same for a band dragged down the side', () => {
+    const { fire, heatmap } = banded()
+    const plot = heatmap.plotRect
+    dragWith(fire, [plot.x + 300, plot.y + 80], [plot.x + 310, plot.y + 160], { shiftKey: true })
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(centre?.row).toBeCloseTo(30, 0)
+    expect(centre?.col).toBeCloseTo(30, 0)
+  })
+
+  // A block whose two axes hold different stretches has no diagonal to open, so
+  // the axis nobody dragged keeps its centre — pulling it to a bin the block does
+  // not contain would only jam it against an edge.
+  it('leaves the other axis alone where the block has no diagonal', () => {
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    heatmap.setMatrix(
+      { nrows: 100, ncols: 100, values: new Float32Array(100 * 100), rowExtent: [500, 600], colExtent: [0, 100] },
+      [],
+    )
+    heatmap.attach()
+    const plot = heatmap.plotRect
     const before = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
-    dragWith(fire, [plot.x + 80, plot.y + 200], [plot.x + 160, plot.y + 210], { shiftKey: true })
+    dragWith(fire, [plot.x + 80, plot.y + 300], [plot.x + 160, plot.y + 310], { shiftKey: true })
     const after = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
     expect(after?.row).toBeCloseTo(before?.row ?? -1, 0)
   })
@@ -632,6 +665,71 @@ describe('a band along one axis', () => {
       { altKey: true, shiftKey: true },
     )
     expect(bands).toEqual([])
+  })
+
+  /**
+   * The readout half of the same modifier.
+   *
+   * Shift is the map's on-diagonal modifier: a Shift-drag names a stretch and
+   * opens it on the diagonal, and hovering with Shift down says which stretch
+   * that would be. The two used to disagree — the snap arrived on the key press
+   * and left again on the first pixel of movement, because the press asked for
+   * Shift and the move asked for Option-with-Shift — so the feature looked
+   * broken in the one way a reader cannot report: it worked until they moved.
+   */
+  it('snaps the readout onto the diagonal while Shift is held', () => {
+    const seen: Array<{ row: number; col: number } | null> = []
+    const { canvas, fire } = harness(400)
+    const heatmap = new HeatmapView(canvas, {
+      devicePixelRatio: 1,
+      onHover: (cell) => seen.push(cell === null ? null : { row: cell.row, col: cell.col }),
+    })
+    heatmap.setMatrix(block(100), [])
+    heatmap.attach()
+    const plot = heatmap.plotRect
+    // Four pixels a cell: column 20, row 75 — well below the diagonal. The
+    // perpendicular foot of that on `row = col` is 47½.
+    const at = { clientX: plot.x + 80, clientY: plot.y + 300, button: 0 }
+    fire('mousemove', at)
+    expect(seen.pop()).toEqual({ row: 75, col: 20 })
+
+    // And it holds through a move, which is the half that was lost: two of them,
+    // because one is the press and the second is where the bug lived.
+    fire('mousemove', { ...at, shiftKey: true })
+    fire('mousemove', { ...at, clientX: plot.x + 84, shiftKey: true })
+    for (const cell of seen.splice(0, seen.length)) {
+      expect(cell?.row).toBe(cell?.col)
+    }
+  })
+
+  it('slides the view onto the diagonal at the zoom it is already at', () => {
+    const heatmap = view()
+    const plot = heatmap.plotRect
+    // Rows 70–90 against columns 10–30: a window as far off the diagonal as a
+    // pan can leave one, and no drag can say "here, but on the diagonal".
+    heatmap.zoomToBox(plot.x + 40, plot.y + 280, plot.x + 120, plot.y + 360)
+    const zoom = heatmap.zoomLevel
+    expect(heatmap.centreOnDiagonal()).toBe(true)
+    expect(heatmap.zoomLevel).toBe(zoom)
+    const centre = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    // The perpendicular foot of (80, 20) is 50 on both axes: the least the view
+    // has to move to be looking at the diagonal.
+    expect(centre?.row).toBeCloseTo(50, 0)
+    expect(centre?.col).toBeCloseTo(50, 0)
+  })
+
+  it('refuses to recentre a block that has no diagonal, and moves nothing', () => {
+    const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    heatmap.setMatrix(
+      { nrows: 100, ncols: 100, values: new Float32Array(100 * 100), rowExtent: [500, 600], colExtent: [0, 100] },
+      [],
+    )
+    const plot = heatmap.plotRect
+    const before = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(heatmap.centreOnDiagonal()).toBe(false)
+    expect(heatmap.hasDiagonal).toBe(false)
+    const after = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
+    expect(after).toEqual(before)
   })
 
   /**

@@ -1363,8 +1363,28 @@ pressed.
 Freed of the anchor, **Shift-drag names a band of one axis and zooms to it**. Which axis is decided
 by which way the hand went, so a drag a few degrees off vertical still means what it plainly meant.
 Zoom is one scalar for both axes, because that is what keeps a cell square (`imshow(aspect="equal")`),
-so a 1D gesture has a 2D consequence: the axis nobody dragged keeps its centre and takes the same
-zoom. On a map read about its diagonal that is the square the reader wanted anyway.
+so a 1D gesture has a 2D consequence — and **that consequence is the diagonal**: the axis nobody
+dragged is centred on the same stretch, so what comes back is the on-diagonal square. It used to keep
+whatever centre it happened to have, which made the same drag land on a different picture depending on
+where the view had been panned to, with nothing on screen saying which. Where the block has no
+diagonal — a `chrI × chrII` panel — that axis keeps its centre, since there is no square to open and
+pulling it to a bin the block does not contain would only jam it against an edge.
+
+**Shift is the map's on-diagonal modifier throughout**, and the pointer says so before the drag
+begins: while it is held the readout and the crosshair snap onto the diagonal — the perpendicular foot
+of the pointer on the line the two axes name the same bin — so the reader can see which stretch a
+Shift-drag would open. Only the reading moves; the cursor stays where the hand put it. It answers the
+question a hand hovering over a contact map is usually asking anyway, and finding the diagonal by eye
+at a fitted whole-genome view is a two-pixel target on a 45° line. Off on a turned map, where every
+reading is already measured from the diagonal and the snap would be onto the picture's own bottom
+edge.
+
+**Recentre on the diagonal** is the same idea as a control: a button in Aesthetics → Map, between the
+turn and `O/E`, that slides the view onto the nearest on-diagonal window at the zoom it is already at
+— the perpendicular foot of the *picture's* centre, which is the least it has to move. Every gesture
+that lands off the diagonal takes several more of the same gestures to come back from, and no drag can
+say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
+where the picture already is one.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -2353,6 +2373,13 @@ picture, so snapping a corner onto it would be snapping to the frame.
 The arithmetic is the rotation's, halved — a column is half a bin — and the rounding goes outward at
 both ends. A reader who drags across a feature means the bins their band *touched*, not the bins it
 wholly contained, and a band narrower than one bin is still a band.
+
+**With a modifier down, the readout says one place.** The crosshair has already become a single
+vertical line standing where a band would begin, and the card beside it went on printing the pair of
+loci under the pointer and the distance between them — a fact about the cell, which is not what the
+next drag will select. Held, it names the position along the bottom and nothing else: the midpoint of
+the pair, which is what a turned column stands over, and the same number the ruler under the pointer
+is printing. No distance, no count. Let go, the card is a card about a cell again.
 
 The same inverse serves the readout, and has to: the two names, the separation, the pair of positions
 and the value are all questions about the square block, and anything that answers one of them from a
