@@ -78,6 +78,32 @@ export interface SessionConfig {
    * knowing.
    */
   commit?: string
+  /**
+   * Which file this session was made *from*, when that file was a local one.
+   *
+   * Not decoration, and not for display first: it closes a hole. A config names
+   * its file by URI, and for a local file that URI is the bare filename. Opening
+   * one goes through the grant store, which is keyed on that bare name and whose
+   * collision guard compares only the name (`state/handles.ts`) — so a config
+   * received from a colleague and naming `rep1.cool` opens **this** browser's
+   * `rep1.cool`, with the sender's marks, bookmarks and colour limits drawn over
+   * somebody else's data and every label on screen agreeing.
+   *
+   * The size and the modification time are what tell the two apart. They also
+   * catch the quieter case of the same file re-run through a pipeline: same
+   * name, same path, different numbers.
+   *
+   * **It informs and never vetoes.** `handles.ts` deliberately blesses a re-run
+   * overwriting a file somebody is reading — the reader asked for *that file* —
+   * and nothing here can distinguish that from a different file on another
+   * machine. So a mismatch is said once, where the file is asked for, and the
+   * session opens.
+   *
+   * Absent for a remote file, whose identity is its URL, and absent from a
+   * shared link, where it would be metadata about a private machine that a
+   * recipient can do nothing with (`state/shareLink.ts`).
+   */
+  source?: { name: string; size?: number; lastModified?: number }
   /** What is being looked at: the same object the URL hash carries. */
   state: ViewState
   /** Every loaded annotation, exactly as session storage keeps them (§8.6). */
@@ -192,6 +218,31 @@ function lanesOf(lanes: StoredLane[] | null | undefined): { lanes?: StoredLane[]
   return Array.isArray(lanes) && lanes.length > 0 ? { lanes } : {}
 }
 
+/**
+ * A `source` block, checked field by field.
+ *
+ * The name is the only required part: a file with no size recorded is still a
+ * file this session was made from, and saying so is better than saying nothing.
+ * A size or a time that is not a number is dropped rather than repaired, because
+ * a wrong number here would report a mismatch against a file that matches.
+ */
+function sourceOf(value: unknown): { source?: SessionConfig['source'] } {
+  if (typeof value !== 'object' || value === null) return {}
+  const row = value as Record<string, unknown>
+  if (typeof row['name'] !== 'string' || row['name'] === '') return {}
+  return {
+    source: {
+      name: row['name'],
+      ...(typeof row['size'] === 'number' && Number.isFinite(row['size'])
+        ? { size: row['size'] }
+        : {}),
+      ...(typeof row['lastModified'] === 'number' && Number.isFinite(row['lastModified'])
+        ? { lastModified: row['lastModified'] }
+        : {}),
+    },
+  }
+}
+
 /** `{ compare: … }` when a local second file was open, and nothing when not. */
 function compareOf(uri: string | null | undefined): { compare?: string } {
   return typeof uri === 'string' && uri !== '' ? { compare: uri } : {}
@@ -253,6 +304,14 @@ export function buildConfig(options: {
   memoryKey: string
   plot: PlotOptions
   now: Date
+  /**
+   * The local file this session is of, when it is one — see {@link
+   * SessionConfig.source}. Passed in rather than read out of storage, which is
+   * the one exception to this function's own rule, because the identity of a
+   * `File` is not something any store holds: it is on the object the drop
+   * handed over, and nowhere else.
+   */
+  source?: { name: string; size?: number; lastModified?: number }
 }): SessionConfig {
   const key = options.memoryKey
   return {
@@ -263,6 +322,7 @@ export function buildConfig(options: {
     // own docstrings for why absent beats empty.
     producer: PRODUCER,
     ...(COMMIT === '' ? {} : { commit: COMMIT }),
+    ...(options.source === undefined ? {} : { source: options.source }),
     state: options.state,
     tracks: recall<StoredEntry[]>(key, SCOPES.tracks) ?? [],
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
@@ -444,6 +504,7 @@ export function readConfig(text: string): SessionConfig | ConfigRefusal {
     ...(typeof row['commit'] === 'string' && row['commit'] !== ''
       ? { commit: row['commit'] }
       : {}),
+    ...sourceOf(row['source']),
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
     state: state as ViewState,
     tracks: list<StoredEntry>(row['tracks']),
@@ -577,9 +638,13 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
 
   // `deck` minus its `locals`, keeping the arrangement. Written out rather than
   // spread-and-delete so the omission is visible at the call site.
+  // `?? {}` for the reason `forSharing` has one: this takes whatever it is
+  // handed, and refusing to resolve a published session because it omits a field
+  // would be a worse failure than the one being fixed.
+  const held = config.deck ?? {}
   const deck: SessionConfig['deck'] = {
-    ...(config.deck.starred === undefined ? {} : { starred: config.deck.starred }),
-    ...(config.deck.columns === undefined ? {} : { columns: config.deck.columns }),
+    ...(held.starred === undefined ? {} : { starred: held.starred }),
+    ...(held.columns === undefined ? {} : { columns: held.columns }),
   }
 
   const resolved: SessionConfig = {

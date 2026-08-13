@@ -1405,11 +1405,25 @@ export class Session {
   exportConfig(): SessionConfig | null {
     const state = this.store.state
     if (state === null) return null
+    // Which file this is *of*, when it is a local one. A browser session has no
+    // `file` and carries its source separately, and both are asked, because a
+    // 1D browser opened from a dropped bigWig is as much "made from a file" as a
+    // map is. A remote file needs none of this: its identity is its URL.
+    const opened = this.file?.source ?? this.assemblySource
+    const source =
+      opened?.kind === 'local'
+        ? {
+            name: opened.file.name,
+            size: opened.file.size,
+            lastModified: opened.file.lastModified,
+          }
+        : undefined
     return buildConfig({
       state,
       memoryKey: this.memoryKey(state.uri),
       plot: getPlotOptions(),
       now: new Date(),
+      ...(source === undefined ? {} : { source }),
     })
   }
 

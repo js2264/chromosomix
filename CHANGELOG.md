@@ -974,6 +974,45 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in the one place where the fallback was meant to be the calm one. Found while
   giving the header's new add button the same rule to follow.
 
+- **A shared link carried three things it promised not to.** Two comments in the
+  codebase already stated the rule — a session's `compare` field says "a shared
+  link still cannot" carry a local second file, and the deck's own module says
+  spelling a companion's name into a link "would post a private filename to a
+  stranger, which `shareLink.ts` already refuses to do". Neither was true. A link
+  carried the local compared file, the deck's local companions, and (once
+  sessions began recording it) the size and modification time of the sender's own
+  file.
+
+  Worse than useless to a recipient: those names are bare filenames, and opening
+  one goes through a grant store keyed on the bare name whose guard compares only
+  the name — so somebody who had ever granted their own `rep2.cool` would have
+  opened **their** file in the sender's slot, with every label on screen
+  agreeing. The redaction now happens inside the encoder rather than at its call
+  site, so a second caller cannot forget it, and the test asserts against the
+  encoded payload rather than the decoded object: the point is that the name
+  never leaves the machine, not that the far end ignores it.
+
+  A **local track is kept**, and the rule that decides all of it is now written
+  down in both places: a private name is stripped only where the structure
+  survives without it. A dropped companion costs a label — the `~` placeholder
+  keeps the slot, the count and the order — while a dropped track costs the row.
+
+### Added
+
+- **A saved session records which file it was made from.** Name, size and
+  modification time, for a local file. It reads as bookkeeping and it closes a
+  real hole: a config names its file by URI, that URI is the bare filename for a
+  local file, and opening one goes through a grant store keyed on exactly that
+  name. So a session received from a colleague and naming `rep1.cool` opened
+  **this** browser's `rep1.cool` — somebody else's data under the sender's marks,
+  bookmarks and colour limits, with nothing on screen disagreeing.
+
+  It informs and never vetoes. A re-run pipeline overwriting a file somebody is
+  reading is a legitimate thing to do, and the app cannot tell that from a
+  different file on another machine — so a mismatch is said once and the session
+  opens. Absent for a remote file, whose identity is its URL, and stripped from
+  shared links, where it would be metadata about a private disk.
+
 - **A session file from a newer build was read as though it were current.** The
   format carries a version, and `CONFIG_VERSION`'s own docstring says the number
   is bumped only when a field **changes meaning** — so the single situation it

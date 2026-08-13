@@ -98,8 +98,57 @@ async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
  * mismatch would give and is reached without paying for one.
  */
 export async function encodeShare(config: SessionConfig): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(config))
+  const json = new TextEncoder().encode(JSON.stringify(forSharing(config)))
   return toBase64Url(await deflate(json))
+}
+
+/**
+ * A session with the parts a link may not carry taken out.
+ *
+ * Applied **inside** {@link encodeShare} rather than at its call site, and that
+ * placement is the point: a second caller cannot forget it. Three fields go, and
+ * all three are already *claimed* to be absent from links by comments elsewhere
+ * in this codebase — `SessionConfig.compare` says "a shared link still cannot",
+ * and `panels/deck.ts` says spelling a companion's name into one "would post a
+ * private filename to a stranger — which `state/shareLink.ts` already refuses to
+ * do". Neither was true. One function makes both honest.
+ *
+ * - **`compare`** and **`deck.locals`** are bare local filenames. A recipient
+ *   cannot open them under any resolution, and worse than useless: the grant
+ *   store is keyed on the bare name and its guard compares only the name, so a
+ *   recipient who has ever granted their own `rep2.cool` would open *their* file
+ *   in the sender's slot with every label agreeing (`state/handles.ts`).
+ * - **`source`** is the size and modification time of a file on somebody's own
+ *   machine. It exists to catch a wrong file locally; in a link it is metadata
+ *   about a private disk that the recipient can do nothing with.
+ *
+ * A **local track is kept**, and the rule that decides all four is the one
+ * `resolveConfig` states: a private name is stripped only where the structure
+ * survives without it. A dropped companion costs a label — `state.maps` still
+ * carries `~`, so the slot, the count and the order remain — while a dropped
+ * track costs the row, and a recipient silently receiving seven where eight were
+ * sent is exactly what that placeholder exists to prevent.
+ */
+export function forSharing(config: SessionConfig): SessionConfig {
+  // `?? {}` because this takes whatever it is handed. Everything `parseConfig`
+  // and `buildConfig` produce has a `deck`, but a link is encoded from an object
+  // that has passed through other hands, and a share button that threw on a
+  // config missing one field would be a worse failure than the one this function
+  // exists to prevent.
+  const deck = config.deck ?? {}
+  const shared: SessionConfig = {
+    ...config,
+    deck: {
+      ...(deck.starred === undefined ? {} : { starred: deck.starred }),
+      ...(deck.columns === undefined ? {} : { columns: deck.columns }),
+    },
+  }
+  // Deleted rather than set to `undefined`: a key holding nothing is a third
+  // state, it survives `JSON.stringify` as an absence anyway, and every reader
+  // downstream treats absence as the answer.
+  delete shared.compare
+  delete shared.source
+  return shared
 }
 
 /** The inverse. `null` for anything that is not one, rather than a throw. */

@@ -24,6 +24,7 @@ import {
   shareUrl,
   shortenable,
 } from '@/state/shareLink'
+import { MAPS_SEPARATOR, VACANT } from '@/panels/deck'
 import {
   CONFIG_KIND,
   CONFIG_VERSION,
@@ -163,6 +164,53 @@ describe('reading a link', () => {
   it('answers null for something that is not one at all', async () => {
     expect(await decodeShare('not-base64-and-not-deflate')).toBeNull()
     expect(await decodeShare('')).toBeNull()
+  })
+
+  it('carries none of the three things a link may not carry', async () => {
+    // Each of these is already *claimed* to be absent from a link by a comment
+    // somewhere else in the codebase, and none of them was. A local companion
+    // and a local compared file are bare filenames from the sender's disk: a
+    // recipient who has ever granted their own `rep2.cool` would open *their*
+    // file in the sender's slot, because the grant store is keyed on the bare
+    // name. `source` is the size and mtime of a private disk.
+    const config = configOf({
+      compare: 'secret.cool',
+      source: { name: 'rep1.cool', size: 4_200_000_000, lastModified: 1_700_000_000_000 },
+      deck: { starred: 'p2', columns: 3, locals: [{ index: 1, uri: 'rep2.cool' }] },
+      state: { uri: 'lead.cool', view: 'region', maps: `a.cool${MAPS_SEPARATOR}${VACANT}` },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    // Asserted against the *encoded text* as well as the decoded object: the
+    // point is that the name never leaves the machine, not merely that the
+    // reader on the other end ignores it.
+    const json = JSON.stringify(decoded(await decodeShare(payload)))
+    expect(json).not.toContain('secret.cool')
+    expect(json).not.toContain('rep2.cool')
+    expect(json).not.toContain('rep1.cool')
+
+    const back = decoded(await decodeShare(payload))
+    expect(back?.compare).toBeUndefined()
+    expect(back?.source).toBeUndefined()
+    expect(back?.deck.locals).toBeUndefined()
+    // The arrangement is not private and stays.
+    expect(back?.deck).toEqual({ starred: 'p2', columns: 3 })
+    // …and the slot the dropped companion held is still in the deck, so the
+    // recipient gets a drop rectangle rather than a deck one map short.
+    expect(back?.state.maps).toBe(`a.cool${MAPS_SEPARATOR}${VACANT}`)
+  })
+
+  it('keeps a local track, because dropping one would lose the row', async () => {
+    // The rule that decides all four: a private name is stripped only where the
+    // structure survives without it.
+    const config = configOf({
+      tracks: [
+        { id: 'a1', card: 'linear', kind: 'track', label: 'dropped', visible: true, placement: {}, style: {}, source: { kind: 'local', name: 'ATAC.bw' } },
+      ] as unknown as SessionConfig['tracks'],
+    })
+    const back = decoded(await decodeShare(await encodeShare(config)))
+    expect(back?.tracks).toHaveLength(1)
+    expect(back?.tracks[0].source).toEqual({ kind: 'local', name: 'ATAC.bw' })
   })
 
   /** Deflate and base64url an arbitrary object, as `encodeShare` would. */
