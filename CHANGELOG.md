@@ -90,6 +90,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   asking for it again. A file that has merely *changed* is not refused — a re-run
   pipeline overwriting a file somebody is reading is a legitimate thing to do.
 
+- **The deck and the comparison come back too, and the tracks land on the right
+  panels.** These were the two files a reload lost most quietly. A local
+  companion is destroyed at *serialisation* — `maps` writes `~` for one — and a
+  local second file was never in the hash at all, so neither could even be
+  refused: by the time anything could ask, the name was gone.
+
+  Neither is fixed by changing the hash, and that is the design. The `~` is a
+  promise to a **recipient** (§16.6): it keeps the count and the order, so a
+  shared deck arrives with a drop rectangle where the sender's file was rather
+  than silently one map short. Putting a filename there instead would post a
+  private name to a stranger and leave their deck trying to *fetch* it. So the
+  names live beside the hash, in the session's own memory, as private as the
+  files they name — which means a plain reload restores them as well as a
+  remembered workspace does.
+
+  A stale note can only ever degrade to today's behaviour: a remembered cell that
+  now holds a published map is left alone, and one past the end of a deck that
+  has since shrunk is dropped. A companion whose file cannot be re-opened comes
+  back as a cell that **names it**, rather than as the link's "a map was here" —
+  which is true of a stranger's deck and misleading about a file on your own
+  disk.
+
+  And **where a track was drawn is remembered with it**. Until now a restored
+  deck put every track back on the first map, however carefully they had been
+  arranged across the panels. What is stored is keyed by the *file* each
+  companion was showing rather than by its panel id, because panel ids are minted
+  per deck and one written down today names nothing tomorrow — so it is seeded
+  into the same parking mechanism that already hands a lane back when a map
+  reopens its file. Where the companions do not come back, the tracks park onto
+  the lead exactly as they always have.
+
 - **A screen that says what this browser is remembering, and a button that ends
   it.** Reachable from the command palette. It lists the durable workspace, the
   per-window entries, the preferences, and — named outright rather than counted —

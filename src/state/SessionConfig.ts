@@ -27,6 +27,7 @@ import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
 import type { DeckLocal } from '../panels/deck'
 import type { StoredEntry } from '../annotations/types'
+import type { StoredLane } from '../annotations/store'
 import type { Bookmark } from '../annotations/bookmarks'
 import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
@@ -108,6 +109,16 @@ export interface SessionConfig {
    */
   compare?: string
   /**
+   * Where each track was drawn, when the answer is not "on the lead" (§16.8).
+   *
+   * Keyed by the *file* each companion was showing rather than by its panel id,
+   * because a panel id is minted per deck and would name nothing in the window
+   * that opens this. Restored as a **seed**: the store parks them and puts each
+   * one back as the matching companion opens, so a deck that comes back gets its
+   * arrangement and one that does not leaves the tracks on the lead.
+   */
+  lanes?: StoredLane[]
+  /**
    * What each analysis task was last run with, by task id (§18.2).
    *
    * Carried for the reason the tracks are: reproducing a figure should be
@@ -150,6 +161,11 @@ function deckOf(
     ...(typeof starred === 'string' && starred !== '' ? { starred } : {}),
     ...(typeof columns === 'number' && Number.isFinite(columns) ? { columns } : {}),
   }
+}
+
+/** `{ lanes: … }` when tracks were drawn on companions, and nothing when not. */
+function lanesOf(lanes: StoredLane[] | null | undefined): { lanes?: StoredLane[] } {
+  return Array.isArray(lanes) && lanes.length > 0 ? { lanes } : {}
 }
 
 /** `{ compare: … }` when a local second file was open, and nothing when not. */
@@ -197,6 +213,7 @@ const SCOPES = {
   columns: 'deck:columns',
   locals: 'deck:locals',
   compareLocal: 'compare:local',
+  lanes: 'deck:lanes',
 } as const
 
 /**
@@ -237,6 +254,7 @@ export function buildConfig(options: {
       recall<DeckLocal[]>(key, SCOPES.locals),
     ),
     ...compareOf(recall<string>(key, SCOPES.compareLocal)),
+    ...lanesOf(recall<StoredLane[]>(key, SCOPES.lanes)),
     plot: options.plot,
   }
 }
@@ -276,6 +294,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   if (config.deck?.columns !== undefined) remember(key, SCOPES.columns, config.deck.columns)
   if (config.deck?.locals !== undefined) remember(key, SCOPES.locals, config.deck.locals)
   if (config.compare !== undefined) remember(key, SCOPES.compareLocal, config.compare)
+  if (config.lanes !== undefined) remember(key, SCOPES.lanes, config.lanes)
 }
 
 /**
@@ -349,6 +368,7 @@ export function parseConfig(text: string): SessionConfig | null {
       localsOf(deck['locals']),
     ),
     ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
+    ...lanesOf(Array.isArray(row['lanes']) ? (row['lanes'] as StoredLane[]) : undefined),
     plot: (typeof row['plot'] === 'object' && row['plot'] !== null
       ? row['plot']
       : {}) as PlotOptions,

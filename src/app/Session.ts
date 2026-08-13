@@ -2968,6 +2968,13 @@ export class Session {
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
     loader.restore(AnnotationStore.stored(scope))
+    // Where the tracks were *drawn*, when the answer is not "on the lead".
+    // Seeded rather than placed: the lanes go into the store's parking, and
+    // `adoptHome` — which already runs once per render for every live cell —
+    // puts each one back the moment a panel opens the file it belongs to. So a
+    // companion that comes back gets its tracks, and one that does not leaves
+    // them on the lead, which is exactly what closing a cell has always done.
+    store.seedHomes(AnnotationStore.storedLanes(scope))
     this.restoreMetadata(scope)
     // …and what this session was already holding, when the file under it has
     // just changed. Dropping a cooler on a genome browser is the case: the

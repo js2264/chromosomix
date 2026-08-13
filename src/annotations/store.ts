@@ -63,6 +63,38 @@ export const ANNOTATION_PALETTE = [
   '#5b6169', // grey
 ] as const
 
+/**
+ * One lane on a companion map, written down.
+ *
+ * Keyed by the **file** the map was showing rather than by its `MapId`, which is
+ * what makes it worth persisting: a slot id is minted per deck (`PanelDeck`), so
+ * an id recorded today names nothing tomorrow. The file is what the reader means
+ * by "that map" anyway.
+ */
+export interface StoredLane {
+  track: string
+  uri: string
+  placement: Placement
+  /** Whether the lead lane it now sits on was borrowed, or already its own. */
+  borrowedLead: boolean
+  style?: Lane['style']
+}
+
+/** Untrusted, like every other stored shape: checked field by field. */
+function isStoredLane(value: unknown): value is StoredLane {
+  if (typeof value !== 'object' || value === null) return false
+  const row = value as Partial<StoredLane>
+  return (
+    typeof row.track === 'string' &&
+    row.track !== '' &&
+    typeof row.uri === 'string' &&
+    row.uri !== '' &&
+    typeof row.placement === 'object' &&
+    row.placement !== null &&
+    typeof row.borrowedLead === 'boolean'
+  )
+}
+
 export type AnnotationListener = (entries: readonly AnnotationEntry[]) => void
 
 let nextId = 1
@@ -137,18 +169,23 @@ export class AnnotationStore {
    * under would never be seen again. What the reader means by "that map" is the
    * file it was showing, and that is what comes back.
    *
-   * Not persisted, and deliberately: a lane is not, either. What survives a
-   * reload is the *import* — see this module's header — and an arrangement of
-   * pictures that no longer exist is not something to restore a reader into.
+   * **Now persisted, and the reversal is worth arguing rather than deleting.**
+   * This said, correctly, that a lane is not persisted either: what survives a
+   * reload is the *import*, and an arrangement of pictures that no longer exist
+   * is not something to restore a reader into. The premise was that the pictures
+   * no longer exist. A deck of local companions now comes back
+   * (`panels/deck.ts`), so they do — and a restored deck that put every track on
+   * the lead would be the one part of the session that did not return.
+   *
+   * The old decision still holds wherever the premise still holds: where the
+   * companions do *not* come back, {@link keepMaps} parks these lanes onto the
+   * lead exactly as it always has, and nothing here changes that.
+   *
+   * Keyed on the **file**, never on the `MapId`, which is what makes persisting
+   * it possible at all: a slot id is minted per deck, so an id written down
+   * today would name nothing tomorrow.
    */
-  private homes: Array<{
-    track: string
-    uri: string
-    placement: Placement
-    /** Whether the lead lane it now sits on was borrowed, or already its own. */
-    borrowedLead: boolean
-    style?: Lane['style']
-  }> = []
+  private homes: StoredLane[] = []
 
   /** Every placement, for the card that lists where a track is drawn. */
   get placements(): readonly Lane[] {
@@ -840,6 +877,71 @@ export class AnnotationStore {
   private persist(): void {
     if (this.options.persist === false) return
     remember(this.uri, STORE_SCOPE, this.items.filter(persistable).map(toStored))
+    remember(this.uri, LANES_SCOPE, this.parkedFor())
+  }
+
+  /**
+   * Every lane that is on a companion, in the shape {@link homes} keeps.
+   *
+   * The live lanes and the parked ones in one list, because from the outside
+   * they are one fact — *where the reader put this track* — and which of the two
+   * a given lane is in depends only on whether its map happens to be on screen
+   * at this instant. Persisting only `homes` would write down the tracks whose
+   * maps had been *closed* and forget the ones still open, which is exactly
+   * backwards.
+   *
+   * Keyed by file and track, so a lane that is both live and parked — the same
+   * file open in a cell *and* remembered from a closed one — is written once,
+   * with the live placement winning.
+   */
+  parkedFor(): StoredLane[] {
+    const out = new Map<string, StoredLane>()
+    for (const home of this.homes) out.set(`${home.uri} ${home.track}`, home)
+    for (const lane of this.lanes) {
+      if (lane.map === LEAD_MAP) continue
+      const uri = this.mapFiles.get(lane.map)
+      // A map that left before it had opened anything: nothing to key on, which
+      // is the same case {@link keepMaps} declines to record.
+      if (uri === undefined) continue
+      out.set(`${uri} ${lane.track}`, {
+        track: lane.track,
+        uri,
+        placement: lane.placement,
+        // The same question `keepMaps` asks: would putting this lane back have
+        // to borrow a lead lane, or does the reader already have one there?
+        borrowedLead: laneOf(this.lanes, lane.track, LEAD_MAP) === undefined,
+        ...(lane.style === undefined ? {} : { style: lane.style }),
+      })
+    }
+    return [...out.values()]
+  }
+
+  /**
+   * Adopt an arrangement a previous visit wrote down.
+   *
+   * A **seed**, not a restore: nothing is placed here. The lanes go into the
+   * parking, and {@link adoptHome} — which already runs once per render for
+   * every live cell — puts each one back at the moment a panel opens the file it
+   * belongs to. So a companion that comes back gets its tracks, one that does
+   * not leaves them on the lead, and neither case needs a second code path.
+   *
+   * Existing entries win: this is called on the way up, and anything already
+   * parked was parked by *this* session, which is newer than the record.
+   */
+  seedHomes(homes: readonly StoredLane[]): void {
+    if (homes.length === 0) return
+    const held = new Set(this.homes.map((home) => `${home.uri} ${home.track}`))
+    this.homes = [
+      ...this.homes,
+      ...homes.filter((home) => !held.has(`${home.uri} ${home.track}`)),
+    ]
+  }
+
+  /** What a previous visit remembered about where the tracks were drawn. */
+  static storedLanes(uri: string): StoredLane[] {
+    const raw = recall<unknown>(uri, LANES_SCOPE)
+    if (!Array.isArray(raw)) return []
+    return (raw as unknown[]).filter(isStoredLane)
   }
 
   /**
@@ -869,6 +971,16 @@ export class AnnotationStore {
 }
 
 const STORE_SCOPE = 'annotations'
+
+/**
+ * Where the tracks were drawn, when the answer is not "on the lead".
+ *
+ * Its own scope rather than a field on {@link StoredEntry}, because a track is
+ * on 0..N maps — each with its own placement *and* its own optional style patch
+ * — and one `map` string on the entry could express neither. See
+ * `annotations/placement.ts`.
+ */
+const LANES_SCOPE = 'deck:lanes'
 
 /** An entry worth remembering: one that finished loading from a nameable source. */
 function persistable(entry: AnnotationEntry): boolean {
