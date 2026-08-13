@@ -1,6 +1,13 @@
 {
-  "latest": "8fc7f1e",
+  "latest": "ceefc81",
   "versions": [
+    {
+      "commit": "ceefc81",
+      "version": "0.10.0",
+      "date": "2026-08-13T15:21:43+02:00",
+      "subject": "Add durable workspace recovery across browser restarts (#27)",
+      "tag": ""
+    },
     {
       "commit": "8fc7f1e",
       "version": "0.10.0",
@@ -132,13 +139,6 @@
       "version": "0.8.0",
       "date": "2026-08-07T10:01:02+02:00",
       "subject": "fix(publish-demo): run on the bash macOS actually ships",
-      "tag": ""
-    },
-    {
-      "commit": "428e526",
-      "version": "0.8.0",
-      "date": "2026-08-06T22:13:46+02:00",
-      "subject": "feat(examples): draw the strain's own sequence in both yeast sessions",
       "tag": ""
     },
     {
