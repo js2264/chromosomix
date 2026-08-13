@@ -35,6 +35,7 @@ import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
 import { createSource, releaseSources } from '../../worker/sources'
+import { correlationField, type CorrelationField } from '../compartments'
 import { abortError, type JobContext } from '../job'
 import { RUNNERS } from '../run/index'
 import type { TaskResult } from '../types'
@@ -209,6 +210,52 @@ async function handleRun(
   }
 }
 
+/**
+ * The correlation of a square the view handed over.
+ *
+ * The one handler that needs **no mount**, and the only one: everything it works
+ * on arrived in the message. So it deliberately does not call `requireSession`
+ * — a reader who turns the map's correlation toggle on should not thereby open a
+ * second HDF5 handle on their file, and would be very surprised to be told the
+ * worker had not been opened yet.
+ *
+ * Progress and cancellation come from the row hook `correlationMatrix` already
+ * takes for exactly this, and the yield is what makes the cancel real: a `cancel`
+ * message cannot be *delivered* to a thread that never returns to its event
+ * loop, so a check without a yield asks about a message that could not have
+ * arrived (`analysis/job.ts`). Every sixty-fourth row, which is the same batch
+ * size the task runner breathes on — the round trip is paid once a batch instead
+ * of `m` times.
+ */
+async function handleCorrelate(request: Extract<AnalysisRequest, { kind: 'correlate' }>): Promise<
+  CorrelationField
+> {
+  const id = request.id
+  const total = request.n
+  const field = await correlationField(request.values, request.n, async (row) => {
+    if (row % CORRELATE_BATCH_ROWS !== 0) return
+    await yieldToEventLoop()
+    if (cancelled.has(id)) throw abortError()
+    post({ type: 'progress', id, done: row, total, note: 'correlating' })
+  })
+  // As `handleRun` does, and for its reason: a job whose last row finished just
+  // as the cancel landed would otherwise deliver a full square to a reader who
+  // has already switched the toggle off.
+  if (cancelled.has(id)) throw abortError()
+  return field
+}
+
+/**
+ * Rows between yields while correlating.
+ *
+ * The trade is the same one everywhere in this file: yielding per row turns an
+ * `m`-row job into `m` round trips through the event loop, and yielding never
+ * makes the cancel a lie. Sixty-four rows of a thousand-bin square is a few tens
+ * of milliseconds, which is the granularity a reader experiences as "it stopped
+ * when I asked".
+ */
+const CORRELATE_BATCH_ROWS = 64
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -219,6 +266,8 @@ async function dispatch(request: AnalysisRequest): Promise<unknown> {
       return handleOpen(request)
     case 'run':
       return handleRun(request)
+    case 'correlate':
+      return handleCorrelate(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

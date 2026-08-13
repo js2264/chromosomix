@@ -10,7 +10,13 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor } from '@/ui/scores'
+import {
+  BALANCED_SCORE,
+  CORRELATION_SCORE,
+  COUNT_SCORE,
+  scoreChoices,
+  scoreFor,
+} from '@/ui/scores'
 
 describe('what the cells can be', () => {
   // The plainest file there is — no weights, no extra columns — and it still has
@@ -31,7 +37,17 @@ describe('what the cells can be', () => {
 
   it('adds balanced where there are weights, next to the counts it transforms', () => {
     const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count'] })
-    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, BALANCED_SCORE, 'vc', 'vcsqrt', 'ice'])
+    expect(choices.map((c) => c.id)).toEqual([
+      COUNT_SCORE,
+      BALANCED_SCORE,
+      'vc',
+      'vcsqrt',
+      'ice',
+      // Needs the weights too, and for a reason of its own: a correlation of
+      // unbalanced O/E is a correlation of the coverage bias, which is per-bin
+      // and therefore looks exactly like a compartment.
+      CORRELATION_SCORE,
+    ])
     expect(choices[1].balance).toBe(true)
     // Balancing is a transform, not a column: nothing else is read for it.
     expect(choices[1].value).toBeUndefined()
@@ -68,10 +84,11 @@ describe('what the cells can be', () => {
       'vc',
       'vcsqrt',
       'ice',
+      CORRELATION_SCORE,
       'expected',
       'qvalue',
     ])
-    expect(choices[5]).toMatchObject({ value: 'expected', balance: false })
+    expect(choices[6]).toMatchObject({ value: 'expected', balance: false })
   })
 
   it('resolves what a link asks for', () => {
@@ -123,11 +140,26 @@ describe('a choice unflattened, which is what an analysis needs', () => {
     const balanced = choices.find((c) => c.id === BALANCED_SCORE)
     expect(balanced?.balance).toBe(true)
     expect(balanced?.normalise).toBeUndefined()
-    // …and every other entry leaves it off, so `balance` is never two things.
+    // …and `balance` is never two things: the only other entry that sets it is
+    // the correlation, which sets it because its pipeline genuinely starts at
+    // balanced counts — not as a second meaning for the field.
     for (const choice of choices) {
-      if (choice.id === BALANCED_SCORE) continue
+      if (choice.id === BALANCED_SCORE || choice.correlate === true) continue
       expect(choice.balance).toBe(false)
     }
+    const correlation = choices.find((c) => c.id === CORRELATION_SCORE)
+    expect(correlation).toMatchObject({ balance: true, correlate: true })
+    // It is a pipeline, not a column and not one of the normalisations computed
+    // from counts: the only field it adds is its own.
+    expect(correlation?.value).toBeUndefined()
+    expect(correlation?.normalise).toBeUndefined()
+  })
+
+  it('offers the correlation only where there are weights to balance with', () => {
+    const bare = scoreChoices({ hasWeights: false, scoreColumns: ['count'] })
+    expect(bare.some((c) => c.correlate === true)).toBe(false)
+    // And it is the only entry that is a pipeline rather than a reading.
+    expect(choices.filter((c) => c.correlate === true)).toHaveLength(1)
   })
 
   it('marks the computed ones, which no read can ask the file for', () => {

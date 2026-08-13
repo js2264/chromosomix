@@ -83,6 +83,7 @@ import {
   COMPARE_OPS,
   alignable,
   combine,
+  depthMatchDefault,
   isCompareOp,
   matchGain,
   type CompareOp,
@@ -92,8 +93,12 @@ import {
   preferredTransform,
   type AxisRun,
   type DerivedValues,
+  type Derivation,
   type Normalisation,
 } from '../render/derive'
+import { SMOOTH_RADII, smoothLabel } from '../render/smooth'
+import type { CorrelationField } from '../analysis/compartments'
+import { isCancellation, type Cancellable } from '../worker/client'
 import {
   BIN_FRACTION,
   anchorColumns,
@@ -577,7 +582,98 @@ export interface DerivePresentation {
    * control, and the values are still derived.
    */
   onExpectedChange?(on: boolean): void
+  /**
+   * Radius of the despeckling window; `0` for none (`render/smooth.ts`).
+   *
+   * Shared and applied exactly as {@link expected} is, including on a companion
+   * that draws it without offering the control — a deck whose panels smoothed
+   * differently would be five pictures that could not be compared, which is the
+   * one thing a deck is for.
+   */
+  smooth: number
+  /** Absent on a panel that applies the smoothing but does not own it. */
+  onSmoothChange?(radius: number): void
+  /**
+   * Whether the square is replaced by the correlation between its rows.
+   *
+   * Implies {@link expected}: a correlation of anything but observed-over-expected
+   * is a correlation of the distance decay, in which every pair of rows agrees
+   * and the picture says nothing. The panel forces it rather than refusing, so
+   * the toggle is one click and the caption says both were applied.
+   */
+  correlate: boolean
+  /** Absent on a panel that draws a correlation but does not own the control. */
+  onCorrelateChange?(on: boolean): void
+  /**
+   * Compute one, off the main thread.
+   *
+   * A callback rather than a client, so this file keeps knowing nothing about
+   * workers: the session owns the thread, the panel owns the block and the
+   * cache, and the seam between them is one array in and one array out. Absent
+   * where nothing can compute one, which is what greys the control.
+   */
+  correlateBlock?(
+    values: Float32Array,
+    n: number,
+    onProgress?: (done: number, total: number) => void,
+  ): Cancellable<CorrelationField>
+  /**
+   * A correlation failed for a reason that was not a cancellation.
+   *
+   * Reported rather than swallowed, and reported to the *session*, because the
+   * panel's own places to put a message are both wrong for it: the veil is over
+   * the map a reader is trying to look at, and the view note is rewritten on
+   * every render. The toggle is switched off before this is called, so the
+   * message describes something that is over.
+   */
+  onCorrelateFailure?(message: string): void
 }
+
+/**
+ * The largest square the map will correlate, per axis.
+ *
+ * The correlation is `m²` correlations of `m` cells each — the one **cubic**
+ * step in the viewer, where everything else it draws is linear in the cells on
+ * screen. That changes what a limit is for: the other budgets in this file trade
+ * detail against milliseconds, and this one is the difference between a wait and
+ * a coffee break.
+ *
+ * Measured on an *E. coli* square, which is the shape the arithmetic cares about
+ * and not the organism: **232 bins in 32 ms, 464 in 232 ms, 929 in 2.8 s**. That
+ * is the clean eightfold per doubling the exponent promises, and extrapolating
+ * it puts this cap at about **twelve seconds** — the most a reader will ever be
+ * asked to wait, and only at the very top of the range.
+ *
+ * Twelve is tolerable here and would not be for a toggle that blocked: the job
+ * is on the analysis thread, it reports a percentage, and unticking the box
+ * cancels it. What the cap is really protecting against is the other end of the
+ * curve — the block cap is 4,096 a side, which is **four minutes**, and a reader
+ * who flipped a switch has not agreed to that.
+ *
+ * The number itself comes from what the picture is *for*. A compartment is a
+ * megabase-scale object read at 50–500 kb bins, where a whole human chromosome
+ * is 500–5,000 bins and a bacterial genome is well under a thousand; nobody
+ * reads compartments at the resolution where this would be slow. Above the cap
+ * the control is greyed **and says why**, which is a better answer than a
+ * progress bar that never ends.
+ *
+ * `MAX_CORRELATION_BINS` in the compartments task is 8,192 for the same
+ * quantity, and the difference is not an inconsistency: there a reader has
+ * asked for a number and is waiting for it on purpose, and here they have
+ * flipped a switch on a map they were reading.
+ */
+export const MAP_CORRELATION_BINS = 1500
+
+const CORRELATE_HINT =
+  'Replace the square by the Pearson correlation between its rows — the object a compartment ' +
+  'eigenvector is computed from (§18.8). Two bins correlate when they contact the rest of the ' +
+  'sequence in the same pattern, so the checkerboard this draws *is* the A/B compartments, and ' +
+  'it is the same matrix the Compartments task solves. Implies `O/E`, since a correlation of ' +
+  'anything else is a correlation of the distance decay, and balanced counts, since a ' +
+  'correlation of unbalanced O/E is a correlation of the coverage bias. One file, square blocks, and up to ' +
+  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side: it is the one cubic step in the viewer, ` +
+  'so it runs off the main thread — about 3 seconds at a thousand bins a side and eight times ' +
+  'that for each doubling. Choosing another score cancels it.'
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
@@ -586,13 +682,17 @@ export interface ComparePresentation {
   op: CompareOp
   onOpChange(op: CompareOp): void
   /**
-   * Whether the second file's counts are scaled to the first's bright end.
+   * Whether the second file's counts are scaled to the first's bright end, or
+   * `undefined` where the reader has not said and the default stands.
    *
-   * Off by default, because one scale for both is the stronger claim: the same
-   * colour is the same number of contacts, wherever it is. On when the two
-   * files differ enough in depth that the shallower is a blank triangle.
+   * Three states rather than two, because the default is not a constant: it
+   * depends on the operation and on whether the cells are balanced, and a plain
+   * boolean could not tell "the reader wants it off" from "nobody has chosen
+   * yet" — which is what made a ratio silently rescale itself. See
+   * {@link HeatmapPanel.compareNormalising} for the rule and for why balanced
+   * values want the opposite default from raw counts.
    */
-  normalise: boolean
+  normalise?: boolean
   onNormaliseChange(on: boolean): void
 }
 
@@ -892,6 +992,42 @@ export class MatrixPanel {
   private stopRefineWatch: (() => void) | null = null
   /** The O/E control, lit from {@link setDerive} rather than from its own click. */
   private expectedButton: HTMLElement | null = null
+
+  /**
+   * The despeckle picker, lit from {@link setDerive} for the O/E toggle's
+   * reason: the setting is the session's and can move from a link.
+   *
+   * `null` on a panel that was not given {@link DerivePresentation.onSmoothChange}
+   * — a deck companion, which draws the smoothing and does not offer it.
+   */
+  private smoothSelect: HTMLSelectElement | null = null
+
+  /**
+   * Which block the values in {@link correlation} were measured on.
+   *
+   * Bumped on every {@link setData}, and that is what the counter is *for*: the
+   * cache key is otherwise made of shapes and extents, and a reader switching
+   * from balanced counts to raw ones is re-read on the identical grid. Every
+   * field of the key would match and the correlation of the previous quantity
+   * would be drawn under the new one's caption.
+   */
+  private blockGeneration = 0
+
+  /** The last correlation computed, and the key it answers. */
+  private correlation: { key: string; field: CorrelationField } | null = null
+
+  /** The one in flight, if any, and the key it will answer. */
+  private correlating: { key: string; job: Cancellable<CorrelationField> } | null = null
+
+  /**
+   * The veil's text while a correlation runs, or `null`.
+   *
+   * Held apart from {@link setBusy}'s own argument because the two waits nest:
+   * `setData` clears the veil as it finishes, and the job it started on the way
+   * through has seconds still to run. Without this the map came back from a read
+   * looking finished and then changed under the reader some seconds later.
+   */
+  private correlationNote: string | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /** The room the box has, measured once per resize. See {@link measureRoom}. */
@@ -1305,6 +1441,39 @@ export class MatrixPanel {
         this.clip.el,
       ),
     ]
+
+    // Ahead of the transform in the row, because it is a question about the
+    // *numbers* and the two after it are questions about the picture — and
+    // because it belongs beside the score and the baseline, which is where a
+    // reader looks for "what am I being shown". Offered only where this panel
+    // owns the setting, on {@link DerivePresentation.onExpectedChange}'s rule.
+    const onSmoothChange = options.derive?.onSmoothChange
+    if (onSmoothChange !== undefined) {
+      const smoothSelect = el('select', { class: 'select' })
+      this.smoothSelect = smoothSelect
+      for (const radius of SMOOTH_RADII) {
+        smoothSelect.appendChild(
+          el('option', { value: String(radius), text: radius === 0 ? 'off' : smoothLabel(radius) }),
+        )
+      }
+      smoothSelect.value = String(options.derive?.smooth ?? 0)
+      smoothSelect.addEventListener('change', () => {
+        onSmoothChange(Number(smoothSelect.value))
+      })
+      controls.unshift(
+        field(
+          'smooth',
+          smoothSelect,
+          'Replace each cell by the mean of the cells around it, leaving its own value out — ' +
+            '`terra::focal` with a zero centre weight, the despeckle Hi-C figures are usually ' +
+            'made with. Applied to each file before two are compared, so a ratio is ' +
+            '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
+            'and the saturated single pixels a sparse ratio is made of are never produced. ' +
+            'Single-cell features are averaged away with them, which is why it is off by default.',
+        ),
+      )
+    }
+
     valueFields.push(...controls)
 
     /**
@@ -1523,7 +1692,12 @@ export class MatrixPanel {
       const select = el('select', { class: 'select' })
       this.scoreSelect = select
       for (const choice of scores.choices) {
-        select.appendChild(el('option', { value: choice.id, text: choice.label }))
+        const option = el('option', { value: choice.id, text: choice.label })
+        // One entry in this list is a pipeline rather than a reading, and the
+        // field's own hint below has no room to say what it does or what it
+        // refuses. Per-option, because it is the only one that needs it.
+        if (choice.correlate === true) option.title = CORRELATE_HINT
+        select.appendChild(option)
       }
       select.value = scores.current
       select.addEventListener('change', () => {
@@ -1558,21 +1732,28 @@ export class MatrixPanel {
 
     if (options.compare !== undefined) {
       const compare = options.compare
-      // Only under the split. A ratio and a difference force it on, because
-      // there the depth scalar is a nuisance parameter with no reading at all
-      // ({@link compareNormalising}), and a control whose setting cannot change
-      // the picture is worse than no control.
-      if (compare.op === 'split') {
+      // Under every operation, not only the split. It used to be hidden under a
+      // ratio and a difference on the grounds that they force it on — but the
+      // force was itself the bug ({@link compareNormalising}), and a rescale a
+      // reader can neither see nor switch off is the one kind of arithmetic a
+      // viewer must not do to a quantitative field. The setting now starts where
+      // the operation and the units say it should and moves when they say so.
+      {
         const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
-        normalise.checked = compare.normalise
+        normalise.checked = this.compareNormalising(compare.op)
         normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
         controls.unshift(
           field(
             'match depth',
             normalise,
-            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s, ` +
-              'so the two triangles saturate together. Off, one colour is one count on both sides of ' +
-              'the diagonal — the stronger claim, and wrong to read when the files differ in depth.',
+            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s. ` +
+              'Under `split` that makes the two triangles saturate together; off, one colour is one ' +
+              'count on both sides of the diagonal — the stronger claim, and wrong to read when the ' +
+              'files differ in depth. Under `ratio` and `difference` it divides that difference out ' +
+              'of every cell, which raw counts want and balanced values do not: balanced matrices ' +
+              'already share ICE`s normalisation, and the factor is measured on the near-diagonal ' +
+              'cells where two conditions actually differ — so it shifts the whole map by the ' +
+              'finding. On for counts, off for balanced, unless set here.',
           ),
         )
       }
@@ -2396,6 +2577,164 @@ export class MatrixPanel {
     button.classList.toggle('is-on', on)
   }
 
+  /**
+   * Why this block cannot be correlated, or `null` when it can.
+   *
+   * Three refusals, and each is about the *object* rather than about the cost
+   * except the last.
+   *
+   * A **pair of files** has none: the correlation of a ratio is not a quantity
+   * anybody reads, and correlating each file and dividing is worse — a ratio of
+   * two correlation coefficients is not a correlation of anything.
+   *
+   * A block whose **two axes are different stretches** has none either. "The
+   * correlation between rows `i` and `j`" is a statement about two bins of one
+   * sequence measured against the same set of partners, and on a `contig_A ×
+   * contig_B` block the rows and the columns are not the same bins at all.
+   *
+   * And **size**, which is the one that is only a budget — see
+   * {@link MAP_CORRELATION_BINS}. Worded rather than hidden, because a greyed
+   * control that does not say what it wants is a control a reader concludes is
+   * broken.
+   */
+  private correlationRefusal(data: MatrixResult, second: MatrixResult | undefined): string | null {
+    if (this.options.derive?.correlateBlock === undefined) {
+      return 'not available in this view'
+    }
+    if (second !== undefined && (this.options.compare?.op ?? 'split') !== 'split') {
+      return 'one file at a time — the correlation of a ratio is not a correlation'
+    }
+    const square =
+      data.nrows === data.ncols &&
+      data.rowExtent[0] === data.colExtent[0] &&
+      data.rowExtent[1] === data.colExtent[1]
+    if (!square) return 'needs a square block — both axes over the same bins'
+    if (data.nrows > MAP_CORRELATION_BINS) {
+      return `${data.nrows.toLocaleString()} bins a side is past the ${MAP_CORRELATION_BINS.toLocaleString()}-bin limit — open the file at a coarser resolution`
+    }
+    return null
+  }
+
+  /** What identifies the square a correlation was measured on. */
+  private correlationKey(data: MatrixResult, derivation: Derivation): string {
+    return [
+      this.blockGeneration,
+      data.nrows,
+      data.rowExtent[0],
+      data.rowExtent[1],
+      derivation.normalise ?? '',
+      String(derivation.expected === true),
+      derivation.smooth ?? 0,
+    ].join('|')
+  }
+
+  /**
+   * The correlation of this block if it is already computed, or the block
+   * unchanged with a job started to compute it.
+   *
+   * Returning the operand while the answer is on its way is the deliberate part.
+   * The alternative — blank until it lands — throws away a real picture of the
+   * same region for several seconds to avoid showing the reader the thing their
+   * correlation is *of*, and the veil already says what is happening.
+   */
+  private correlated(data: MatrixResult, derivation: Derivation, mine: DerivedValues): DerivedValues {
+    const key = this.correlationKey(data, derivation)
+    const held = this.correlation
+    if (held !== null && held.key === key) {
+      const { field } = held
+      return {
+        values: field.values,
+        // Centred on zero, not on one: this is a correlation coefficient and its
+        // neutral is no correlation. `preferredTransform` reads that and leaves
+        // the values linear, which is right — a coefficient on `log2` would be
+        // undefined over half its own range.
+        neutral: 0,
+        label: `${mine.label} · correlation`,
+        // What a reader has to know to believe the picture, and the one thing
+        // the map itself cannot show: a dropped bin is drawn blank, and blank is
+        // also what a sparse corner looks like.
+        scope:
+          field.dropped > 0
+            ? `${field.dropped.toLocaleString()} of ${(field.kept + field.dropped).toLocaleString()} bins had too little data to correlate`
+            : mine.scope,
+      }
+    }
+    this.startCorrelation(key, mine.values, data.nrows)
+    return mine
+  }
+
+  /** Ask for one, unless the same one is already on its way. */
+  private startCorrelation(key: string, values: Float32Array, n: number): void {
+    if (this.correlating?.key === key) return
+    const run = this.options.derive?.correlateBlock
+    if (run === undefined) return
+    // The block moved under a job that is still running, so its answer is about
+    // a square nobody is looking at.
+    this.correlating?.job.cancel()
+
+    const job = run(values, n, (done, total) => {
+      if (this.correlating?.key !== key) return
+      this.showCorrelating(`correlating… ${Math.round((100 * done) / Math.max(1, total))}%`)
+    })
+    this.correlating = { key, job }
+    this.showCorrelating('correlating…')
+
+    job.promise.then(
+      (field) => {
+        // A late answer to a superseded question. Dropped rather than cached:
+        // the key it belongs to may never be asked for again, and holding it
+        // would mean the cache answered for a block that is no longer read.
+        if (this.correlating?.key !== key) return
+        this.correlating = null
+        this.correlation = { key, field }
+        this.showCorrelating(null)
+        this.redraw()
+      },
+      (err: unknown) => {
+        if (this.correlating?.key !== key) return
+        this.correlating = null
+        this.showCorrelating(null)
+        // A cancelled correlation is a reader who moved on, which is not an
+        // error and must not draw one (`worker/client.ts`).
+        if (!isCancellation(err)) {
+          this.options.derive?.onCorrelateChange?.(false)
+          this.options.derive?.onCorrelateFailure?.(
+            err instanceof Error ? err.message : String(err),
+          )
+        }
+      },
+    )
+  }
+
+  /** Put the correlation's own wait on the veil, or take it off. */
+  private showCorrelating(note: string | null): void {
+    this.correlationNote = note
+    if (note === null) this.setBusy(false)
+    else this.setBusy(true, note)
+  }
+
+  /** Drop any held or running correlation — the block it was about has gone. */
+  private forgetCorrelation(): void {
+    this.correlating?.job.cancel()
+    this.correlating = null
+    this.correlation = null
+    this.showCorrelating(null)
+  }
+
+  /**
+   * Show the despeckle radius the panel is drawing. {@link paintExpected}'s
+   * counterpart, and silent on a companion, which has no picker to set.
+   *
+   * Programmatic assignment to a `<select>` fires no `change` event, so this
+   * cannot loop back through the handler that called it.
+   */
+  private paintSmooth(radius: number): void {
+    const select = this.smoothSelect
+    if (select === null) return
+    select.value = String(radius)
+  }
+
+
   /** Reflect the shared overlay state on the buttons. */
   private paintPlotOptions(options: PlotOptions): void {
     for (const [key, nodes] of this.optionButtons) {
@@ -2407,6 +2746,11 @@ export class MatrixPanel {
   destroy(): void {
     this.stopRefineWatch?.()
     this.stopRefineWatch = null
+    // A correlation running for a panel that is going away is seconds of a
+    // worker thread spent on a picture nobody will see. Cancelled rather than
+    // left to resolve into a dead panel, and the client itself is the session's
+    // to close.
+    this.forgetCorrelation()
     setReadout('')
     this.featureDialog?.close()
     this.featureDialog = null
@@ -4249,6 +4593,12 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    // Before the derivation below, which builds the correlation's cache key out
+    // of it. A block arriving is the one event the key cannot infer: a reader
+    // moving from balanced counts to raw ones is re-read on the identical grid,
+    // so every other part of the key matches and the previous quantity's
+    // correlation would be drawn under the new one's caption.
+    this.blockGeneration++
     this.lastTitle = title
     // Blanked rather than left to the next frame: the outgoing block's window
     // under the incoming block's bin count is a line describing two pictures.
@@ -4732,11 +5082,47 @@ export class MatrixPanel {
       rows: data.rowGroups,
       cols: data.colGroups,
     }
-    const derivation = {
+    const wantsCorrelation = this.options.derive?.correlate === true
+    // Asked before the derivation rather than after, because the answer decides
+    // what the derivation *is*: a refused correlation is not a correlation drawn
+    // badly, it is O/E with a sentence attached.
+    const refusal = wantsCorrelation ? this.correlationRefusal(data, second) : null
+    const correlating = wantsCorrelation && refusal === null
+
+    const derivation: Derivation = {
       normalise: this.options.derive?.normalise,
-      expected: this.options.derive?.expected === true,
+      // A correlation *of* observed-over-expected, always. The distance decay is
+      // the largest thing in a contact map by far, so every pair of rows in a
+      // raw or balanced square correlates near 1 and the picture is a uniform
+      // wash — the correlation is only a compartment object once the decay has
+      // been divided out (§18.8). Carried by the score rather than asked for
+      // separately (`ui/scores.ts`), and the caption names both steps.
+      //
+      // On `wantsCorrelation` and not on `correlating`, so a *refused* one still
+      // draws the O/E underneath it. That is the nearest true picture to what
+      // was asked for, and dropping back to plain counts would change the map
+      // twice — once for the refusal and once for a baseline nobody withdrew.
+      expected: wantsCorrelation || this.options.derive?.expected === true,
+      // Applied inside `deriveBlock`, which is what puts it on *each file* and
+      // ahead of `combine` — the whole reason a ratio can be smoothed at all
+      // (`render/smooth.ts`).
+      smooth: this.options.derive?.smooth ?? 0,
     }
-    const mine = deriveBlock(data, derivation, runs)
+    const derived = deriveBlock(data, derivation, runs)
+    // The correlation replaces the whole field, which is why it is applied here
+    // rather than inside `deriveBlock`: every step in there is synchronous and
+    // this one is not, so the panel is the only place that can hold the answer
+    // between the request and the frame that draws it.
+    const mine = correlating
+      ? this.correlated(data, derivation, derived)
+      : refusal === null
+        ? derived
+        : // Said in the caption, which is the only place that survives an export.
+          // A correlation the reader picked and did not get has to be visible on
+          // the figure: the O/E under it is a real picture and looks like one, so
+          // nothing else on screen would betray that it is not what was asked for.
+          { ...derived, scope: `correlation not drawn — ${refusal}` }
+    if (!correlating && this.correlating !== null) this.forgetCorrelation()
     this.derived = mine
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
     const theirs =
@@ -5382,12 +5768,17 @@ export class MatrixPanel {
     const held = this.options.derive
     const same =
       held?.normalise === derive?.normalise &&
-      (held?.expected === true) === (derive?.expected === true)
+      (held?.expected === true) === (derive?.expected === true) &&
+      (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
+      (held?.correlate === true) === (derive?.correlate === true)
     this.options.derive = derive
     // The toggle holds no state of its own — the setting is the session's, and
     // it can move from the command palette or from a link as easily as from a
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
-    this.paintExpected(derive?.expected === true)
+    // The O/E light follows the correlation, which forces it on: a lit map with
+    // an unlit toggle is the picture disagreeing with the control that made it.
+    this.paintExpected(derive?.expected === true || derive?.correlate === true)
+    this.paintSmooth(derive?.smooth ?? 0)
     return same
   }
 
@@ -5455,6 +5846,21 @@ export class MatrixPanel {
       this.setData(data, this.lastTitle, this.second?.data)
       return
     }
+    this.redraw()
+  }
+
+  /**
+   * Re-run the derivation over the block in hand and swap the values in.
+   *
+   * {@link rederive}'s tail, split out because it has a second caller that
+   * cannot go through the front door: a correlation lands *after* the render
+   * that asked for it, with every setting exactly as it was, and `rederive`'s
+   * own equality gate would correctly conclude that nothing had changed and
+   * return. What changed is not a setting — it is that the answer arrived.
+   */
+  private redraw(): void {
+    const data = this.data
+    if (data === null) return
     // At the depth the band already has, not the one the box would cut now: this
     // is the in-place swap, and an array of another length read with the grid's
     // stride is rows of the wrong separation with unwritten memory under them.
@@ -5481,6 +5887,14 @@ export class MatrixPanel {
   }
 
   setBusy(busy: boolean, message = 'loading…'): void {
+    // A correlation outlives the read that started it — see
+    // {@link correlationNote} — so a clear arriving from `setData` puts the
+    // longer wait back rather than taking the veil away.
+    if (!busy && this.correlationNote !== null) {
+      this.overlay.textContent = this.correlationNote
+      this.overlay.classList.remove('hidden')
+      return
+    }
     this.overlay.textContent = message
     this.overlay.classList.toggle('hidden', !busy)
   }
@@ -5503,17 +5917,39 @@ export class MatrixPanel {
   /**
    * Whether the second file's counts are scaled to the first's bright end.
    *
-   * The reader's choice under the split, and **not** a choice under a ratio or a
-   * difference, where it is forced on. Two libraries at different depth differ
-   * by roughly a scalar; under the split that scalar is a real reading about two
-   * real files and the honest default is to leave it in, but a ratio *is* that
-   * scalar everywhere — a flat wash whose colour is the depth difference and
-   * whose structure is invisible — and a difference of raw counts is dominated
-   * by it just as completely. There the depth is a nuisance parameter with no
-   * reading at all, so the control is hidden rather than left to be got wrong.
+   * The reader's choice everywhere, and only the *default* differs by operation.
+   * Two libraries at different depth differ by roughly a scalar; under the split
+   * that scalar is a real reading about two real files and the honest default is
+   * to leave it in, while a ratio of raw counts *is* that scalar everywhere — a
+   * flat wash whose colour is the depth difference and whose structure is
+   * invisible — so there it is divided out unless the reader says otherwise.
+   *
+   * **Balanced values are the exception, and they are the common case.** ICE
+   * puts every bin's marginal at 1, so two balanced matrices already carry one
+   * normalisation and there is no depth left in them to correct: on an E. coli
+   * pair at 5 kb the two marginals agree to 0.2%, and matching the 99th
+   * percentiles on top of that rescaled the second file by 1.48 — a uniform
+   * `log2` shift of −0.56 applied to every cell of the ratio. On the ±1 scale a
+   * ratio map is drawn with, that is a quarter of the picture's whole range: the
+   * near-diagonal band that a separate tool draws at +0.60 came out at +0.04,
+   * white instead of red, and the map disagreed with the same comparison made
+   * anywhere else.
+   *
+   * The reason it fails there is worth naming, because it is not a matter of
+   * degree. The 99th percentile of a Hi-C map lives entirely in the first few
+   * diagonals, which is exactly where two conditions differ — so matching on it
+   * does not remove a depth difference, it removes the finding. It is the right
+   * statistic for the split, whose question is "can I see both triangles", and
+   * the wrong one for a ratio, whose question is "by how much do these differ".
+   *
+   * Forced off for neither: a reader comparing two raw-count files still has the
+   * tickbox, which is now offered under all three operations rather than hidden
+   * under two of them.
    */
   private compareNormalising(op: CompareOp): boolean {
-    return op !== 'split' || this.options.compare?.normalise === true
+    const chosen = this.options.compare?.normalise
+    if (chosen !== undefined) return chosen
+    return depthMatchDefault(op, this.options.balance === true)
   }
 
   /**

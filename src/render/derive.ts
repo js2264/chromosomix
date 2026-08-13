@@ -27,6 +27,8 @@
  * the pooling layer and the reader unaware that derived values exist.
  */
 
+import { smoothLabel, smoothValues } from './smooth'
+
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
   nrows: number
@@ -604,18 +606,36 @@ export interface Derivation {
   normalise?: Normalisation
   /** Divide by what the genomic distance predicts. */
   expected?: boolean
+  /**
+   * Radius of the despeckling window, in cells; `0` or absent for none
+   * (`render/smooth.ts`).
+   */
+  smooth?: number
 }
 
 /**
- * Apply a normalisation and then a baseline, in that order, and describe the
- * result.
+ * Apply a normalisation, then a baseline, then the despeckle, in that order,
+ * and describe the result.
  *
- * The order is not a preference. Both steps are estimates *from the block*, and
- * the distance-decay curve is an average over cells — so measuring it before the
- * coverage bias has been taken out means measuring it partly on the bias, and
- * every cell of a badly-covered bin is then compared against a baseline its own
- * under-coverage helped set. Normalise first, and the curve is a statement about
- * distance alone. It is also the order cooltools uses, for the same reason.
+ * The order is not a preference. The first two are estimates *from the block*,
+ * and the distance-decay curve is an average over cells — so measuring it before
+ * the coverage bias has been taken out means measuring it partly on the bias,
+ * and every cell of a badly-covered bin is then compared against a baseline its
+ * own under-coverage helped set. Normalise first, and the curve is a statement
+ * about distance alone. It is also the order cooltools uses, for the same
+ * reason.
+ *
+ * The despeckle goes **last**, and by the same argument turned around: the other
+ * two are estimators and this is not. A coverage marginal and a distance curve
+ * are sums over many cells and are already as smooth as their sample size makes
+ * them, so feeding them pre-averaged cells would not steady them — it would only
+ * make each cell's own neighbours count twice toward the baseline it is then
+ * compared against. Smoothing is a statement about the picture, so it is applied
+ * to the picture.
+ *
+ * It is applied here, per file, rather than after two files are combined, which
+ * is the whole reason it can be applied to a ratio at all — see
+ * `render/smooth.ts`.
  *
  * The identity case returns the block's own array rather than a copy. Nothing
  * downstream mutates it, and the alternative is a needless pass over up to 16 M
@@ -660,13 +680,32 @@ export function deriveBlock(
     parts.push('O/E')
   }
 
+  const radius = derivation.smooth ?? 0
+  // Named in the label like the steps above it, because it is the one of the
+  // three that a reader cannot see they asked for: a normalisation changes the
+  // numbers and a baseline changes the ramp, while a despeckled map looks like a
+  // map. A figure exported without the word on it is a claim about single-cell
+  // features that were averaged away.
+  //
+  // Appended *after* the name is settled rather than pushed onto `parts`, and
+  // that is the difference between an operation and an annotation: the steps
+  // above change what the quantity **is**, so any of them makes the word
+  // `counts` wrong; this one leaves it exactly what it was and says something
+  // about how it was measured. Pushed into `parts` it produced `smoothed 3 × 3`
+  // on a colourbar over a block of plain counts — a legend that had lost the
+  // name of its own quantity.
+  const suffix = radius >= 1 ? ` · smoothed ${smoothLabel(radius)}` : ''
+  if (radius >= 1) values = smoothValues({ ...block, values }, radius)
+
   return {
     values,
     // Only the baseline produces a middle. A normalisation rescales a count and
     // leaves it a count — still a quantity with a floor at zero — which is why
-    // `VC` alone stays on a sequential ramp and `O/E` does not.
+    // `VC` alone stays on a sequential ramp and `O/E` does not. The despeckle is
+    // not in this either: a mean of neighbours is in the units of its
+    // neighbours, so it moves no floor and creates no middle.
     neutral: derivation.expected === true ? 1 : null,
-    label: parts.length === 0 ? 'counts' : parts.join(' · '),
+    label: (parts.length === 0 ? 'counts' : parts.join(' · ')) + suffix,
     scope,
   }
 }

@@ -26,6 +26,8 @@ import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
+import { AnalysisClient } from '../analysis/worker/client'
+import type { CorrelationField } from '../analysis/compartments'
 import { buildAnalysisContext } from '../analysis/context'
 import type { AnalysisContext } from '../analysis/types'
 import type {
@@ -66,7 +68,7 @@ import type { Normalisation } from '../render/derive'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
-import { ReaderClient } from '../worker/client'
+import { ReaderClient, type Cancellable } from '../worker/client'
 import type {
   ContigsResult,
   GenomesResult,
@@ -865,6 +867,8 @@ export class Session {
     this.annotations = null
     this.compare?.client.terminate()
     this.compare = null
+    this.correlator?.terminate()
+    this.correlator = null
     this.assembly = null
     this.sequenceListener?.()
     this.sequenceListener = null
@@ -3566,9 +3570,15 @@ export class Session {
    * not what is in it, and it is per session because it is a fact about *these
    * two files* — one being shallower than the other — rather than about the
    * viewer.
+   *
+   * `undefined` where nothing has been remembered, and the panel takes it from
+   * there: the sensible default differs between the split and the derived
+   * operations and between balanced values and raw counts, and only the panel
+   * knows which of those it is drawing. Collapsing the absent case to `false`
+   * here would hand it a choice the reader never made.
    */
-  private normalising(): boolean {
-    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') === true
+  private normalising(): boolean | undefined {
+    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') ?? undefined
   }
 
   /** What a heatmap view needs to read and label the second file, or `undefined`. */
@@ -4213,7 +4223,67 @@ export class Session {
         this.store.patch({ oe: on ? true : undefined })
         this.rederive()
       },
+      // From the score rather than from a key of its own: the correlation *is*
+      // one of the answers to "what are these numbers", and it carries the
+      // balancing and the baseline it needs with it (`ui/scores.ts`).
+      correlate: this.scoreOf(state).correlate === true,
+      onCorrelateChange: (on) => {
+        // There is no correlation toggle to flip any more, so the only caller is
+        // the failure path below, and the only thing "off" can mean is the score
+        // it was standing on: balanced counts, which is what it was computed
+        // from and the nearest picture to what the reader asked for.
+        if (!on) this.store.patch({ score: BALANCED_SCORE })
+        this.rederive()
+      },
+      correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+      onCorrelateFailure: (message) => {
+        // The panel has already asked for the score to move, so this only says
+        // what happened. Without the move the next render would ask for the
+        // correlation again and the failure would repeat once per frame.
+        this.host.notify(`Correlation failed: ${message}`)
+      },
+      smooth: state.smooth ?? 0,
+      onSmoothChange: (radius) => {
+        // `0` is written as *absent*, like `oe`'s `false`: the two mean the same
+        // thing and a hash carrying `smooth=0` would be a link saying it had
+        // chosen the default.
+        this.store.patch({ smooth: radius > 0 ? radius : undefined })
+        this.rederive()
+      },
     }
+  }
+
+  /**
+   * The worker the map's correlation toggle runs on, opened on first use.
+   *
+   * **A client of its own, not the analysis panel's.** The runner's client
+   * belongs to `analysis/workspace.ts` and lives and dies with the drawer, so a
+   * map whose correlation vanished because somebody folded a panel away would be
+   * a coupling nobody could see. It is also the wrong *queue*: a correlation
+   * would sit behind whatever insulation pass the reader started, and the map
+   * would wait minutes on work it has nothing to do with.
+   *
+   * Lazy for {@link AnalysisClient}'s own reason — the worker pulls in a chunk
+   * measured in megabytes, and a reader who never turns this on never pays for
+   * it. **Never opened**, either: `correlate` is the one request that needs no
+   * mount, so this thread holds no file handle and no range cache.
+   */
+  private correlator: AnalysisClient | null = null
+
+  /**
+   * Correlate a square the view is holding, off the main thread.
+   *
+   * The array is *copied* into the worker rather than transferred: transferring
+   * would neuter the block the heatmap is drawing from, which is the one
+   * optimisation here that would blank the map.
+   */
+  private correlate(
+    values: Float32Array,
+    n: number,
+    onProgress?: (done: number, total: number) => void,
+  ): Cancellable<CorrelationField> {
+    this.correlator ??= new AnalysisClient()
+    return this.correlator.cancellable<'correlate'>({ kind: 'correlate', values, n }, onProgress)
   }
 
   /** What every map view needs to build its score picker. */

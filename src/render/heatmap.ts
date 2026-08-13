@@ -394,7 +394,18 @@ export function colorize(
     // dividing by zero, so a constant matrix renders as the colormap's low
     // end. `-Infinity` — a zero cell under `log10` of a balanced block — is
     // below every bound there is, which is that same low end.
-    const k = colormapIndex(span > 0 && Number.isFinite(best) ? (best - vmin) / span : 0)
+    //
+    // `+Infinity` is the *other* end, and sending it to the low one as well was
+    // a real misreading on every ratio map: `4 / 0` is "present in the first
+    // file and absent in the second", which is the strongest possible statement
+    // in the numerator's favour, and it was drawn in the colour that means the
+    // opposite. On a sparse pair the two arms are the same size — 7.7% of cells
+    // each on an E. coli pair at 5 kb — so half the saturated cells of the map
+    // carried the wrong sign. The normalised position carries the distinction
+    // for free: `(Infinity - vmin) / span` is `Infinity` and its negative
+    // counterpart is `-Infinity`, so only the sign has to be read off.
+    const t = span > 0 ? (best - vmin) / span : 0
+    const k = colormapIndex(Number.isFinite(t) ? t : t > 0 ? 1 : 0)
     if (k < 0) {
       data[o] = 0
       data[o + 1] = 0

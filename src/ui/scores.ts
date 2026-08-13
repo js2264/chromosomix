@@ -34,6 +34,17 @@
  * (the standard pipeline is O/E *of* balanced counts). Folding it in would make
  * `balanced` and `O/E` mutually exclusive, which is not a limitation of the
  * arithmetic but only of the control; it gets a toggle of its own.
+ *
+ * **The correlation is in the list, and the O/E argument is exactly why.** It is
+ * the one derived field that does not compose with anything: the cell no longer
+ * holds a contact at all, it holds a coefficient between −1 and 1 for a *pair of
+ * bins' whole rows*. There is no such thing as the correlation of a VC-corrected
+ * map beside the correlation of a balanced one — the pipeline that gives the
+ * A/B compartments is fixed at balanced → O/E → correlate, so the entry carries
+ * all three and the reader picks one thing. That is the same flattening
+ * `balanced` gets two paragraphs above, applied to a longer pipeline: a control
+ * per step would be three controls whose only legal combination is the one this
+ * entry already is.
  */
 
 import type { Normalisation } from '../render/derive'
@@ -58,12 +69,25 @@ export interface ScoreChoice {
    * enforce.
    */
   normalise?: Normalisation
+  /**
+   * Replace the square by the correlation between its rows, over balanced
+   * observed-over-expected (§18.8).
+   *
+   * The only entry that is a *pipeline* rather than a reading, and the only one
+   * that can be refused: it needs a square block of one file, and it is cubic in
+   * the bins, so `ui/MatrixPanel.ts` gates it and says so in the caption when it
+   * cannot be drawn. Carried here rather than as a key of its own so that
+   * picking it is one act — see this module's header.
+   */
+  correlate?: boolean
 }
 
 /** The id of the plain, always-present choice. */
 export const COUNT_SCORE = 'count'
 /** The id of "counts, weighted" — a transform rather than a column. */
 export const BALANCED_SCORE = 'balanced'
+/** The id of the compartment pipeline: balanced, over expected, correlated. */
+export const CORRELATION_SCORE = 'correlation'
 
 /**
  * Everything this file can be drawn from, in the order it should be offered.
@@ -94,6 +118,15 @@ export function scoreChoices(info: {
     { id: 'vc', label: 'VC', balance: false, normalise: 'vc' as const },
     { id: 'vcsqrt', label: 'VC √', balance: false, normalise: 'vcsqrt' as const },
     { id: 'ice', label: 'ICE', balance: false, normalise: 'ice' as const },
+    // Only on a file that carries weights, and that is the pipeline's own
+    // requirement rather than a preference: a correlation of unbalanced O/E is a
+    // correlation of the coverage bias, which is per-bin and therefore looks
+    // exactly like a compartment. Beside `balanced` in what it needs and after
+    // `ICE` in the list, because it is the furthest of these from the numbers in
+    // the file and the list runs outward.
+    ...(info.hasWeights
+      ? [{ id: CORRELATION_SCORE, label: 'correlation', balance: true, correlate: true }]
+      : []),
     ...extras.map((key) => ({ id: key, label: key, balance: false, value: key })),
   ]
 }

@@ -18,11 +18,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COLORMAP_NAMES,
+  COLORMAP_SIZE,
   DEFAULT_COLORMAP,
   DEFAULT_UI_COLORMAP,
   applyColormap,
   colormapIndex,
   isColormap,
+  isDivergingColormap,
 } from '@/render/colormaps'
 import { formatCount, keyContent, keyTitle } from '@/render/legend'
 import { rasterize, separatorBlocks } from '@/render/heatmap'
@@ -57,6 +59,39 @@ describe('colormaps', () => {
     expect(COLORMAP_NAMES).toContain('cividis')
     expect(isColormap('afmhot_r')).toBe(true)
     expect(isColormap('jet')).toBe(false)
+  })
+
+  it('puts BuWtRd’s white on the middle of the scale, not on its fifth stop', () => {
+    expect(COLORMAP_NAMES).toContain('BuWtRd')
+    expect(isDivergingColormap('BuWtRd')).toBe(true)
+    const lut = applyColormap('BuWtRd')
+    expect(lut.length).toBe(1024)
+
+    // The two ends are the first and last stops, exactly.
+    expect([...lut.slice(0, 4)]).toEqual([0x16, 0x59, 0xb1, 255])
+    expect([...lut.slice(255 * 4, 255 * 4 + 4)]).toEqual([0xee, 0x22, 0x2a, 255])
+
+    // Eight stops spread evenly would put the white at 4/7 of the ramp, and
+    // `colorize` sends the neutral value to 0.5 — so a map of two identical
+    // files would have come out faintly blue everywhere. It is anchored
+    // instead, and the whitest entry in the table is the middle one. Asserted
+    // by finding it rather than by reading one index, because that is the claim
+    // (under even spacing the brightest entry sits at 146, not at 128) and
+    // because the white stop falls exactly between samples 127 and 128 — neither
+    // is a pure `#FFFFFF`, both are one rounding step from it.
+    let whitest = 0
+    for (let i = 1; i < COLORMAP_SIZE; i++) {
+      const sum = lut[i * 4] + lut[i * 4 + 1] + lut[i * 4 + 2]
+      if (sum > lut[whitest * 4] + lut[whitest * 4 + 1] + lut[whitest * 4 + 2]) whitest = i
+    }
+    expect(Math.abs(whitest - (COLORMAP_SIZE - 1) / 2)).toBeLessThanOrEqual(1)
+    const mid = colormapIndex(0.5)
+    for (let c = 0; c < 3; c++) expect(lut[mid * 4 + c]).toBeGreaterThanOrEqual(253)
+
+    // …and the arms go the right way round: blue below, red above.
+    const warmth = (i: number): number => lut[i * 4] - lut[i * 4 + 2]
+    expect(warmth(colormapIndex(0.1))).toBeLessThan(-40)
+    expect(warmth(colormapIndex(0.9))).toBeGreaterThan(40)
   })
 
   it('opens on the viewer ramp, which the picker lists first', () => {

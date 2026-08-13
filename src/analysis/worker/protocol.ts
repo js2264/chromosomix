@@ -31,6 +31,7 @@
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
 import type { SerialisedError, SourceSpec } from '../../worker/protocol'
+import type { CorrelationField } from '../compartments'
 import type { AnalysisFraming, Params, TaskResult } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,7 @@ export interface TaskInputs {
 export interface AnalysisResultMap {
   open: { nBins: number; binsize: number }
   run: TaskResult
+  correlate: CorrelationField
   cancel: null
   close: null
 }
@@ -147,6 +149,28 @@ export type AnalysisRequest =
       framing: AnalysisFraming
       inputs: TaskInputs
     }
+  /**
+   * The correlation of a square the **view already holds**, for the map's own
+   * correlation toggle rather than for a task.
+   *
+   * Beside `run` rather than inside it, and that is not a shortcut. A task is a
+   * measurement of a *file*: it names a mount, it carries a framing and a set of
+   * parameters, and it comes back as a `TaskResult` with provenance attached
+   * because somebody is going to put it in a paper. This is a different kind of
+   * thing — one array in, one array out, over cells that are on screen at this
+   * moment — and routing it through the catalogue would mean mounting the file a
+   * second time to compute something that needs nothing from it.
+   *
+   * It is here rather than on the reader's thread because it is the one piece of
+   * arithmetic in the viewer that is **cubic**: measured at 2.8 s for a 929-bin
+   * square and eight times that per doubling, so four minutes at the block cap.
+   * That is exactly the shape §18.3 gives this thread — the work measured in
+   * seconds, so that the thread answering frames never queues behind it.
+   *
+   * `values` is copied rather than transferred, for {@link BlockInput}'s reason:
+   * transferring would neuter the array the heatmap is drawing from.
+   */
+  | { id: number; kind: 'correlate'; values: Float32Array; n: number }
   // Cooperative, exactly as the reader's is: the worker checks between pixel
   // chunks, so a scan stops at the next chunk boundary rather than being killed
   // mid-write.
@@ -191,7 +215,7 @@ export type AnalysisProgressHandler = (done: number, total: number, note?: strin
 export function analysisTransfers(payload: unknown): Transferable[] {
   const out: Transferable[] = []
   const result = payload as TaskResult | null
-  if (result === null || typeof result !== 'object' || !Array.isArray(result.outputs)) return out
+  if (result === null || typeof result !== 'object') return out
   const take = (view: ArrayBufferView | undefined): void => {
     if (view === undefined) return
     const buffer = view.buffer
@@ -199,6 +223,16 @@ export function analysisTransfers(payload: unknown): Transferable[] {
     // rather than being ignored — a profile and its own extent can share one.
     if (buffer instanceof ArrayBuffer && !out.includes(buffer)) out.push(buffer)
   }
+  // A correlation field, which is not a `TaskResult` and has no `outputs`. Safe
+  // to transfer where the *request's* array was not: this one is allocated by
+  // the job and nothing on the far side keeps a reference, so moving it saves a
+  // copy of up to 9 MB at the bin cap instead of neutering a block being drawn.
+  const field = payload as Partial<CorrelationField>
+  if (field.values instanceof Float32Array) {
+    take(field.values)
+    return out
+  }
+  if (!Array.isArray(result.outputs)) return out
   for (const output of result.outputs) {
     switch (output.kind) {
       case 'profile':

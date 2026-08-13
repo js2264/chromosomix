@@ -66,6 +66,52 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   right and the glossary is a bug — is the reason that is part of this change
   rather than a follow-up.
 
+### Fixed
+
+- **A ratio drew "present here, absent there" in the colour that means the
+  opposite.** `x / 0` is `Infinity`, and it is a real reading — the strongest
+  statement a ratio can make in the numerator's favour. The raster tested the
+  pooled value with `Number.isFinite` and sent everything that failed to the
+  **bottom** of the ramp. That is right for `-Infinity`, which is what `0 / x`
+  becomes on `log2`, and it is exactly backwards for `+Infinity`: the cells where
+  the first file has contacts and the second has none were painted the second
+  file's colour.
+
+  The two arms are the same size — on an *E. coli* pair at 5 kb, 7.7% of cells
+  each — so **half of every saturated cell in the picture carried the wrong
+  sign**, and the half that was wrong was the half worth looking at. It could
+  only be caught at the pointer, where two adjacent cells reading `0.001 · 0` and
+  `0 · 0.001` were the same shade of dark blue.
+
+- **A ratio of two balanced maps was silently rescaled, and the rescale ate the
+  finding.** `ratio` and `difference` forced the depth match on and hid its
+  tickbox, on the grounds that two libraries of different depth differ by a
+  scalar and a ratio *is* that scalar everywhere. True of raw counts. Not true of
+  balanced ones: ICE puts every bin's marginal at 1, so two balanced matrices
+  arrive on one normalisation with nothing left to correct — on the pair above,
+  the two marginals agree to 0.2%.
+
+  Matching them again was not a no-op, because `matchGain` does not measure
+  depth. It measures the 99th percentile, and the 99th percentile of a Hi-C map
+  is made entirely of near-diagonal cells — which is where two conditions differ.
+  It returned **1.478** and shifted every cell of the ratio by **−0.56 in
+  `log2`**, a quarter of the ±1 range such a map is drawn on: a near-diagonal
+  band that another tool puts at +0.60 came out at +0.04, white instead of red,
+  and the same comparison made anywhere else disagreed with the viewer. It also
+  moved with the viewport, since the gain is measured on the block that was read
+  — the same cell reported a different ratio at different zooms.
+
+  Depth matching is now **off by default on balanced values** and on as before
+  for raw counts, and the tickbox is offered under all three operations instead
+  of being hidden under two of them.
+
+- **The hover readout printed most of a balanced map as `0`.** `fmt.num` rounded
+  to three decimal places, and a balanced cell is a fraction — at 5 kb on a
+  bacterial genome the typical value is a few times `1e-4`. Two cells three-fold
+  apart printed the same string, so a reader checking a ratio against the counts
+  under it was shown a pair that could not have produced it. Values below a
+  thousandth now keep three *significant* digits, and below `1e-7` an exponent.
+
 ### Added
 
 - **Connect a folder, and browse it in a panel — a directory on this machine, or
@@ -131,6 +177,87 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The dialog behind *private buckets…* is now just **Buckets**, since it lists
   both kinds, and its add form is the one the Connect dialog uses — one
   implementation, so the two cannot come to disagree about what a valid entry is.
+
+- **`correlation`, a new entry in the score picker: the square replaced by the
+  Pearson correlation between its rows.** Two bins correlate when they contact
+  the rest of the sequence in the same pattern, so the checkerboard this draws
+  *is* the A/B compartments — and it is drawn through the same
+  `correlationMatrix` and the same `usableBins` the Compartments task solves for
+  its eigenvector, not a second implementation "for display" that would agree
+  with the first until it did not.
+
+  **It is one entry rather than three controls**, and it belongs in that list for
+  the reason O/E is kept out of it. O/E is excluded because it *composes* — the
+  standard pipeline is O/E of balanced counts, and folding it in would make
+  `balanced` and `O/E` mutually exclusive for no reason but the control. The
+  correlation composes with nothing: the cell no longer holds a contact at all,
+  it holds a coefficient between −1 and 1 for a pair of bins' whole rows, and the
+  pipeline that produces the compartments is fixed at balanced → O/E →
+  correlate. So the entry carries all three steps and the reader picks one thing;
+  a control per step would be three controls with exactly one legal combination.
+  Offered only on a file that carries weights, since a correlation of unbalanced
+  O/E is a correlation of the coverage bias — which is per-bin, and therefore
+  looks exactly like a compartment. The caption names every step that was
+  applied.
+
+  **A dropped bin comes back as a gap**, not as a zero. A zeroed row asserts that
+  its bin is uncorrelated with everything, which is a strong and false claim; on
+  a map it would be a stripe of definite colour across the checkerboard. The
+  scope line says how many were dropped, because a blank row and a sparse corner
+  look the same.
+
+  It is the one **cubic** step in the viewer, so it runs on the analysis thread
+  — its own client, not the drawer's, so a correlation never queues behind
+  somebody's insulation pass — reports a percentage, and is cancelled by picking
+  another score. Measured at 32 ms for 232 bins, 232 ms for 464 and 2.8 s for
+  929, so the map caps at 1,500 a side.
+
+  Where it cannot be drawn — a second file open under `ratio`, a `contig_A ×
+  contig_B` block whose rows and columns are not the same bins, or a square past
+  the cap — the map falls back to the O/E underneath it and **the caption says
+  so**. That is deliberate: the O/E is a real picture and looks like one, so
+  nothing else on screen would betray that it is not what was asked for, and the
+  caption is the only part that survives an export.
+
+- **A despeckle, in the `smooth` picker beside the transform.** Each cell
+  replaced by the mean of the cells around it with **its own value left out** —
+  `terra::focal` with a zero centre weight, which is the filter Hi-C figures are
+  usually made with. Off, `3 × 3`, `5 × 5`, `7 × 7`; carried in the link, and
+  written into the colourbar caption (`counts · smoothed 3 × 3`), because a
+  smoothed map otherwise looks exactly like a map.
+
+  Leaving the centre out is what makes it a despeckle rather than a blur: a cell
+  that disagrees with all eight of its neighbours is evidence about the
+  neighbourhood and not about itself, and a filter that kept a ninth of its own
+  value would carry a wild pixel into the result at a ninth strength instead of
+  removing it.
+
+  **It is applied per file, before two files are combined**, which is what makes
+  it useful on a ratio rather than merely cosmetic. Smoothing the ratio would
+  have to average the `Infinity` and `0` that `x / 0` and `0 / x` produce, and one
+  infinite cell poisons every window it falls in; smoothing the inputs makes
+  those cells finite *before* the division, because a zero cell with contacts
+  around it is no longer zero. On the *E. coli* pair at 5 kb it takes the
+  saturated cells of the ratio from **15.3% to none at all** at `3 × 3`, while
+  the 0.43% that are genuinely unbalanced bins stay blank.
+
+  Two departures from the R original, both about edges. The divisor is the number
+  of cells that contributed rather than the fixed `(2r+1)² - 1`, because here the
+  boundary is the *viewport* and the alternative is a dark frame that moves when
+  the map is panned; and a `NaN` cell keeps none, because filling it from its
+  neighbours paints a measurement over the one place the map is saying it has
+  none.
+
+  Cost is flat in the radius — a separable running window rather than `(2r+1)²`
+  reads per cell — so `7 × 7` is no dearer than `3 × 3`.
+
+- **A blue–white–red diverging ramp, `BuWtRd`.** Higher contrast than `RdBu_r`
+  and with more of its range spent away from the centre, which suits a sparse
+  ratio map: most cells sit near neutral, so a ramp that stays pale through the
+  first third of each arm spends its colour where there is least to say. Its
+  white is anchored to the **middle** of the scale rather than to the fifth of
+  its eight stops — spread evenly that would land at `4/7`, and a map of two
+  identical files would have come out faintly blue everywhere.
 
 - **A button that adds a file to the tab you are in.** Dropping a file on the
   page has always *added* rather than replaced — a second cooler comes up beside

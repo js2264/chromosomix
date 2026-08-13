@@ -11,7 +11,13 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { alignable, blendAcrossDiagonal, matchGain } from '../../src/render/compare'
+import {
+  alignable,
+  blendAcrossDiagonal,
+  combine,
+  depthMatchDefault,
+  matchGain,
+} from '../../src/render/compare'
 import { compareRefusal } from '../../src/ui/CompareCard'
 import type { OpenResult } from '../../src/worker/protocol'
 
@@ -129,6 +135,46 @@ describe('matchGain', () => {
     const a = block(8, 8, (r, c) => (r + c === 0 ? Number.NaN : (r + c) * 2))
     const b = block(8, 8, (r, c) => (r + c === 0 ? Number.NaN : r + c))
     expect(matchGain(a, b)).toBeCloseTo(2, 6)
+  })
+
+  it('measures the near diagonal, so a near-diagonal difference is what it removes', () => {
+    // Two maps of equal total mass that differ only close to the diagonal —
+    // the shape of every condition-versus-control comparison there is. The
+    // 99th percentile of a contact map is entirely made of these cells, so
+    // matching on it does not correct a depth difference: it cancels the one
+    // thing the ratio was opened to look at.
+    const decay = (r: number, c: number): number => 100 / (1 + Math.abs(r - c))
+    const control = block(32, 32, decay)
+    const condition = block(32, 32, (r, c) => decay(r, c) * (Math.abs(r - c) <= 2 ? 2 : 1))
+
+    const gain = matchGain(condition, control)
+    expect(gain).toBeGreaterThan(1.9)
+
+    // Applied, the two-fold near-diagonal enrichment reads as no enrichment.
+    const { values } = combine(condition, control, { op: 'ratio', gain })
+    expect(values[0]).toBeCloseTo(1, 2)
+    // …while the far field, which agreed, is pushed to a halving that is not there.
+    expect(values[31]).toBeCloseTo(0.5, 2)
+  })
+})
+
+describe('depthMatchDefault', () => {
+  it('leaves the split alone, whatever the units', () => {
+    expect(depthMatchDefault('split', false)).toBe(false)
+    expect(depthMatchDefault('split', true)).toBe(false)
+  })
+
+  it('matches depth on raw counts under a derived operation', () => {
+    expect(depthMatchDefault('ratio', false)).toBe(true)
+    expect(depthMatchDefault('difference', false)).toBe(true)
+  })
+
+  it('leaves balanced values alone, which already share a normalisation', () => {
+    // The regression: a ratio of two balanced matrices was rescaled by the
+    // gain above, with no control to turn it off and nothing on screen to say
+    // it had happened.
+    expect(depthMatchDefault('ratio', true)).toBe(false)
+    expect(depthMatchDefault('difference', true)).toBe(false)
   })
 })
 

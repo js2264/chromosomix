@@ -98,6 +98,16 @@ export function clear(node: Node): void {
 
 const INTEGER = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 })
 const DECIMAL = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 })
+/**
+ * Three *significant* digits, for values too small to have three decimal ones.
+ *
+ * A balanced cell is a fraction — the whole matrix sums to about one contact
+ * per bin — so at 5 kb on a bacterial genome the typical value is a few times
+ * `1e-4` and every number in the readout rounded to `0` or `0.001`. Two cells
+ * three-fold apart printed the same string, and a reader checking a ratio
+ * against the counts under it was shown a pair that could not produce it.
+ */
+const SIGNIFICANT = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 3 })
 
 export const fmt = {
   /** `4573673` → `4,573,673`. */
@@ -105,10 +115,18 @@ export const fmt = {
     if (!Number.isFinite(value)) return '—'
     return INTEGER.format(value)
   },
-  /** Compact but honest: integers keep their separators, floats keep 3 places. */
+  /**
+   * Compact but honest: integers keep their separators, floats keep 3 places —
+   * and floats too small for three decimal places keep three significant ones
+   * instead, down to `1e-7`, below which the digits go in an exponent rather
+   * than behind a run of zeros nobody can count.
+   */
   num(value: number): string {
     if (!Number.isFinite(value)) return '—'
-    return Number.isInteger(value) ? INTEGER.format(value) : DECIMAL.format(value)
+    if (Number.isInteger(value)) return INTEGER.format(value)
+    const size = Math.abs(value)
+    if (size >= 1e-3) return DECIMAL.format(value)
+    return size >= 1e-7 ? SIGNIFICANT.format(value) : value.toExponential(2)
   },
   /** `0.083` → `8.3%`. */
   pct(fraction: number, digits = 1): string {
