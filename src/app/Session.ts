@@ -2355,8 +2355,10 @@ export class Session {
    */
   async addRemote(uri: string, source: SourceSpec): Promise<void> {
     const { path } = splitUri(uri)
-    // A saved session names a whole tab rather than a file to put in one, and
-    // the door that knows that is the picker's own.
+    // A saved workspace names whole *tabs* rather than a file to put in one, so
+    // it goes to the door that knows that. It keeps this button's promise
+    // rather than breaking it: `App.openWorkspaceFile` appends its tabs beside
+    // whatever is open, so *and this too* is exactly what a reader gets.
     if (looksLikeConfig(path)) {
       await this.openPicked(uri, source)
       return

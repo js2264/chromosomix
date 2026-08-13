@@ -295,9 +295,13 @@ export class App implements SessionHost {
           // Share one tab as a link, save the whole window as a file, theme,
           // shortcuts, source, about. The two leftmost are a deliberate pair and
           // say different things: a link is *what is being looked at* (§5.5) and
-          // there is one of those on screen, while a file is the window. No
-          // "open a file" button: the title is the way back to the picker and
-          // says so on hover.
+          // there is one of those on screen, while a file is the window.
+          //
+          // Nothing here *opens* a file, and the two doors that do are both on
+          // the other side of the row: the `+` adds one to this tab, and the
+          // brand — whose hover says so — goes back to the picker and replaces.
+          // That is the same add-versus-replace line this side draws between a
+          // dropped workspace and the startup offer.
           iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
           iconButton(
             'save',

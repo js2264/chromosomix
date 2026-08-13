@@ -50,6 +50,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `replay` moved with it — `replay` takes a workspace and re-runs the tab that
   was in front, or the one `--tab <n>` names.
 
+  `GLOSSARY.md` moved with it too. It had *session file* as one of the senses of
+  **session** and gave the saved file to `SessionConfig`; there is no such thing
+  any more, so **workspace file** is now its own entry and a config is what one
+  holds. The glossary's own rule — where it and the code disagree, the code is
+  right and the glossary is a bug — is the reason that is part of this change
+  rather than a follow-up.
+
 ### Added
 
 - **A button that adds a file to the tab you are in.** Dropping a file on the
