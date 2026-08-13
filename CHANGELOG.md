@@ -64,6 +64,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   disk, so §11 and §12 stand exactly as written. Firefox and Safari have no such
   grant to give, and there a local file comes back detached as it always has.
 
+  **The tracks come back too**, which is the larger half of what a reload used to
+  cost: a map is one drop and the bigWigs beside it are eight. A restored track
+  with a grant behind it says *reopening…* and fills itself in, keeping its id —
+  so it does not jump to the bottom of the card — along with its colour, its
+  limits, its height and its edge. They resolve in parallel rather than one after
+  another, and a grant that turns out to be spent puts the row back exactly where
+  it used to land, with the *re-open this file* button that has always been the
+  way back.
+
   Two things this deliberately does **not** do. It does not put local file names
   into the URL hash: this browser being able to reopen `rep1.cool` says nothing
   about anybody else's, so the shareability test the hash is gated on is
