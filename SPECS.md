@@ -2536,10 +2536,15 @@ no contact at all has no cis *fraction*, because zero of zero is not zero and
 drawing it at the floor would put a bin that never touched anything in the same
 place as one that only ever reaches other sequences.
 
-**On a file with no annotation layer the drawer is the lane.** A `.metacool` carries no annotations at
-all (§8.5), so it has no Tracks card, no synthetic card and nowhere for a per-bin result to be a row —
-and three of the tasks offered on one produce exactly that: coverage and marginals, diamond insulation,
-and MAG purity's per-contig track. There the drawer draws the profile itself, bucketed to the width it
+**On a file with no annotation *worker* the drawer is the lane.** This used to read "no annotation
+layer", and §8.12 made the distinction load-bearing: a `.metacool` now has a store, a placement model
+and a card, for its own metadata columns. What it still has no worker for is a **profile**, whose
+values live in the annotations worker and are sampled from there like a bigWig's — so a row there
+would be an empty strip under a sentence saying where to find it. Three of the tasks offered on one
+produce exactly that: coverage and marginals, diamond insulation, and MAG purity's per-contig track.
+A called **interval set** is the other half of the split and goes the other way: its coordinates are
+on the entry itself, so a store is the whole of what it needs, and insulation's boundaries are drawn
+on a metagenome's map like any other overlay. There the drawer draws the profile itself, bucketed to the width it
 has with a min–max band so a spike inside a bucket is visible rather than sampled away, and carries the
 exports the row would have carried: bigWig, bedGraph and TSV beside the PNG and the vector PDF. This is
 not a second opinion about the rule above — wherever there *is* a card the profile goes to it and is a

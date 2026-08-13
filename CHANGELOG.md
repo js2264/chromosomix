@@ -60,6 +60,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   covers, widened by half so panning costs nothing. A window too large to read
   at once is refused in the row, with the number.
 
+  Giving a metacool a store had one consequence worth naming: the analysis
+  drawer decides where a computed result goes by asking whether there is
+  somewhere to put it, and "a store exists" is not the same question as "a lane
+  can draw". A profile's values live in the annotations worker, which a metacool
+  still has none of, so the question is now the second one — profiles stay in
+  the drawer that drew them, and a called interval set, whose coordinates are on
+  the entry itself, becomes an overlay on the map (§18.5).
+
   Each column exports as a TSV at **its own** granularity — one row per genome,
   sequence or bin, under `#` lines naming the file, the table and the column —
   because a lane is drawn at whatever level the view is, and checking a bar
