@@ -237,6 +237,72 @@ export async function correlationMatrix(
   return out
 }
 
+/** What {@link correlationField} produces: a square the map can draw. */
+export interface CorrelationField {
+  /** `n * n`, row-major, `NaN` in every row and column that was dropped. */
+  values: Float32Array
+  /** Bins that took part. */
+  kept: number
+  /** Bins dropped for having too little data to correlate on. */
+  dropped: number
+}
+
+/**
+ * {@link correlationMatrix} over a **full square**, put back on the grid it came
+ * from — the correlation map as a picture rather than as the eigensolver's
+ * input.
+ *
+ * The same three steps the compartment chain takes, in the same order and
+ * through the same two functions, which is the point: a reader looking at this
+ * map is looking at the object their eigenvector was computed from, and a second
+ * implementation "for display" would be a second answer that agreed with the
+ * first until it did not.
+ *
+ * What is different is only the last step. The chain hands the correlation
+ * straight to the solver over the usable index and expands the *eigenvector*
+ * afterwards; a picture has to be expanded itself, and the expansion restores
+ * the dropped bins **as gaps**. A dropped row drawn as zero would be a stripe of
+ * "uncorrelated with everything" across a compartment map — the same false, and
+ * far more visible, claim this module's header refuses to make about the track.
+ *
+ * `NaN` fills what the correlation could not reach. The raster draws it
+ * transparent (§6.4), so a blank row on a correlation map means exactly what a
+ * blank row on a balanced map means, and neither is a value.
+ */
+export async function correlationField(
+  oe: Float32Array,
+  n: number,
+  onRow?: (row: number) => void | Promise<void>,
+): Promise<CorrelationField> {
+  const index = usableBins(oe, n)
+  const m = index.length
+  const values = new Float32Array(n * n).fill(Number.NaN)
+  // Two bins cannot be correlated against each other and one cannot be
+  // correlated at all. Returning the empty field rather than throwing: a block
+  // with nothing usable in it is a legitimate thing to point the toggle at — a
+  // sparse trans corner — and it should draw as blank, not as an error card.
+  if (m < 2) return { values, kept: m, dropped: n - m }
+
+  // The usable submatrix, packed. `Float64Array` because that is what
+  // `correlationMatrix` takes, and it takes it because the sums inside `pearson`
+  // are over `m` terms of a ratio whose tail is long.
+  const packed = new Float64Array(m * m)
+  for (let r = 0; r < m; r++) {
+    const from = index[r] * n
+    const to = r * m
+    for (let c = 0; c < m; c++) packed[to + c] = oe[from + index[c]]
+  }
+
+  const correlation = await correlationMatrix(packed, m, onRow)
+
+  for (let r = 0; r < m; r++) {
+    const to = index[r] * n
+    const from = r * m
+    for (let c = 0; c < m; c++) values[to + index[c]] = correlation[from + c]
+  }
+  return { values, kept: m, dropped: n - m }
+}
+
 /** A signal the sign of a component is attached to, over the same bins. */
 export interface PhasingSignal {
   name: string

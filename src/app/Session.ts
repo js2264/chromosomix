@@ -26,6 +26,8 @@ import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
+import { AnalysisClient } from '../analysis/worker/client'
+import type { CorrelationField } from '../analysis/compartments'
 import { buildAnalysisContext } from '../analysis/context'
 import type { AnalysisContext } from '../analysis/types'
 import type {
@@ -66,7 +68,7 @@ import type { Normalisation } from '../render/derive'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
-import { ReaderClient } from '../worker/client'
+import { ReaderClient, type Cancellable } from '../worker/client'
 import type {
   ContigsResult,
   GenomesResult,
@@ -862,6 +864,8 @@ export class Session {
     this.annotations = null
     this.compare?.client.terminate()
     this.compare = null
+    this.correlator?.terminate()
+    this.correlator = null
     this.assembly = null
     this.sequenceListener?.()
     this.sequenceListener = null
@@ -4124,6 +4128,19 @@ export class Session {
         this.store.patch({ oe: on ? true : undefined })
         this.rederive()
       },
+      correlate: state.corr === true,
+      onCorrelateChange: (on) => {
+        this.store.patch({ corr: on ? true : undefined })
+        this.rederive()
+      },
+      correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+      onCorrelateFailure: (message) => {
+        // The panel has already switched the toggle off, so the hash has to
+        // follow or the next render would ask for the correlation again and the
+        // failure would repeat once per frame.
+        this.store.patch({ corr: undefined })
+        this.host.notify(`Correlation failed: ${message}`)
+      },
       smooth: state.smooth ?? 0,
       onSmoothChange: (radius) => {
         // `0` is written as *absent*, like `oe`'s `false`: the two mean the same
@@ -4133,6 +4150,39 @@ export class Session {
         this.rederive()
       },
     }
+  }
+
+  /**
+   * The worker the map's correlation toggle runs on, opened on first use.
+   *
+   * **A client of its own, not the analysis panel's.** The runner's client
+   * belongs to `analysis/workspace.ts` and lives and dies with the drawer, so a
+   * map whose correlation vanished because somebody folded a panel away would be
+   * a coupling nobody could see. It is also the wrong *queue*: a correlation
+   * would sit behind whatever insulation pass the reader started, and the map
+   * would wait minutes on work it has nothing to do with.
+   *
+   * Lazy for {@link AnalysisClient}'s own reason — the worker pulls in a chunk
+   * measured in megabytes, and a reader who never turns this on never pays for
+   * it. **Never opened**, either: `correlate` is the one request that needs no
+   * mount, so this thread holds no file handle and no range cache.
+   */
+  private correlator: AnalysisClient | null = null
+
+  /**
+   * Correlate a square the view is holding, off the main thread.
+   *
+   * The array is *copied* into the worker rather than transferred: transferring
+   * would neuter the block the heatmap is drawing from, which is the one
+   * optimisation here that would blank the map.
+   */
+  private correlate(
+    values: Float32Array,
+    n: number,
+    onProgress?: (done: number, total: number) => void,
+  ): Cancellable<CorrelationField> {
+    this.correlator ??= new AnalysisClient()
+    return this.correlator.cancellable<'correlate'>({ kind: 'correlate', values, n }, onProgress)
   }
 
   /** What every map view needs to build its score picker. */

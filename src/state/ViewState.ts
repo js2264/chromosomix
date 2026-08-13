@@ -60,6 +60,7 @@ const KEY_ORDER = [
   'score',
   'oe',
   'smooth',
+  'corr',
   'op',
   'flip',
 ] as const
@@ -85,6 +86,7 @@ const OPTIONAL_KEYS = [
   'score',
   'oe',
   'smooth',
+  'corr',
   'op',
   'flip',
 ] as const
@@ -244,6 +246,9 @@ export function parseViewState(hash: string): ViewState | null {
     }
   }
 
+  const corr = raw.get('corr')
+  if (corr !== undefined) state.corr = corr === '1' || corr === 'true'
+
   const op = raw.get('op')
   if (op !== undefined && isCompareOp(op)) state.op = op
 
@@ -318,7 +323,7 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * force decides which controls the panel draws — the depth tickbox is offered
  * under one and not the others — and controls are built once, at construction.
  */
-export const DERIVED_KEYS = ['oe', 'smooth', 'flip'] as const
+export const DERIVED_KEYS = ['oe', 'smooth', 'corr', 'flip'] as const
 
 /**
  * The keys that name what is on screen **beside** this view (§16).
@@ -390,7 +395,7 @@ export const COMPANION_KEYS = ['maps', 'uri2'] as const
  * rule and with the same exception: a state that has said something about the
  * key is believed, including having said `false`.
  */
-export const READING_KEYS = ['flip', 'oe', 'smooth'] as const
+export const READING_KEYS = ['flip', 'oe', 'smooth', 'corr'] as const
 
 /**
  * `true` when two states select the same block and differ only in how it is

@@ -105,6 +105,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A `correlation` toggle: the square replaced by the Pearson correlation
+  between its rows.** Two bins correlate when they contact the rest of the
+  sequence in the same pattern, so the checkerboard this draws *is* the A/B
+  compartments — and it is drawn through the same `correlationMatrix` and the
+  same `usableBins` the Compartments task solves for its eigenvector, not a
+  second implementation "for display" that would agree with the first until it
+  did not.
+
+  **It implies `O/E`**, and forces it rather than refusing: the distance decay is
+  the largest thing in a contact map, so every pair of rows in a raw or balanced
+  square correlates near 1 and the picture is a uniform wash. The caption says
+  both were applied.
+
+  **A dropped bin comes back as a gap**, not as a zero. A zeroed row asserts that
+  its bin is uncorrelated with everything, which is a strong and false claim; on
+  a map it would be a stripe of definite colour across the checkerboard. The
+  scope line says how many were dropped, because a blank row and a sparse corner
+  look the same.
+
+  It is the one **cubic** step in the viewer, so it runs on the analysis thread
+  — its own client, not the drawer's, so a correlation never queues behind
+  somebody's insulation pass — reports a percentage, and cancels when the box is
+  unticked. Measured at 32 ms for 232 bins, 232 ms for 464 and 2.8 s for 929, so
+  the map caps at 1,500 a side and greys the control **with the reason** above
+  it. One file and square blocks only: the correlation of a ratio is not a
+  correlation, and rows and columns have to be the same bins.
+
 - **A despeckle, in the `smooth` picker beside the transform.** Each cell
   replaced by the mean of the cells around it with **its own value left out** —
   `terra::focal` with a zero centre weight, which is the filter Hi-C figures are
