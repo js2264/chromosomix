@@ -974,6 +974,45 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in the one place where the fallback was meant to be the calm one. Found while
   giving the header's new add button the same rule to follow.
 
+- **A session published beside its data broke the moment it named a deck.**
+  `resolveConfig` points a config's relative file names at wherever the config
+  itself was found — that is what makes `demo/yeast/` a folder anyone can copy to
+  a bucket, to a colleague's bucket, or to a laptop. It resolved the map, the
+  compared file and the tracks, and it had never been taught the three fields a
+  session grew when decks, lanes and local companions started travelling. So a
+  published session naming a companion `rep2.cool` handed the deck a bare name,
+  which was fetched **against the site root** — a 404 on the website, and
+  `app://viewer/rep2.cool` in the desktop build. It read as a broken panel rather
+  than as an unresolved name.
+
+  `state.maps` now resolves through the deck's own parser rather than a second
+  `|` splitter written beside it: the rule that a raw pipe separates and a `%7C`
+  inside a member is data lives in one place, and a second copy of it fails by
+  resolving to a *different number of maps* than were written.
+
+  `lanes[].uri` resolves through the **same** call, and that pairing is
+  load-bearing. A lane names the *file* its companion was showing and is matched
+  by string equality, so resolving one and not the other would put every placed
+  track back on the first map — a perfectly legal lane, drawn without complaint,
+  and not where the sender put it. The test asserts the two against each other
+  rather than against a literal, so it cannot pass with both halves wrong.
+
+  **Two fields are now dropped rather than resolved**, and that is the more
+  interesting half. A local compared file and a deck's local companions are bare
+  filenames from the sender's own disk. Left alone they reach the grant lookup,
+  which is keyed on the bare name and whose guard compares only the name — so a
+  recipient who had ever granted their own `rep2.cool` would open **their** file
+  in the sender's slot, with every label on screen agreeing with them. Resolving
+  them instead would mint a URL for a file that was never published. Dropping
+  them costs only a label: the `~` placeholder still holds the slot, so the
+  count, the order and the drop rectangle all survive.
+
+  A *local track* is kept, and the rule that decides both is now written down: a
+  private name is stripped only where the structure survives without it. A
+  dropped companion costs a label; a dropped track costs the row, and a recipient
+  silently receiving seven tracks where eight were sent is the exact failure the
+  placeholder exists to prevent.
+
 - **Which score the cells were drawn from did not survive a link, a reload or the
   back button.** `score` has been in `KEY_ORDER` since the field existed, so
   every hash the app wrote carried it — and `parseViewState` never read it back.

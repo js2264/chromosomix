@@ -17,7 +17,9 @@ import {
   looksLikeConfig,
   parseConfig,
   resolveConfig,
+  type SessionConfig,
 } from '@/state/SessionConfig'
+import { MAPS_SEPARATOR, VACANT, parseMaps, type PanelRef } from '@/panels/deck'
 import { recall, remember } from '@/state/UiMemory'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
 import type { ViewState } from '@/types'
@@ -235,6 +237,11 @@ describe('parseConfig', () => {
  * desktop build — so it names them relatively and this is where they are made
  * real again.
  */
+/** A ref's URI, or `undefined` for a vacancy — which has none by construction. */
+function uriOf(ref: PanelRef | undefined): string | undefined {
+  return ref === undefined || ref.kind === 'vacant' ? undefined : ref.uri
+}
+
 describe('resolveConfig', () => {
   const base = 'https://example.org/app/demo/session.metacooler.json'
   const relative = parseConfig(
@@ -287,6 +294,99 @@ describe('resolveConfig', () => {
     expect(resolveConfig(pair as NonNullable<typeof pair>, base).state.uri2).toBe(
       'https://example.org/app/demo/b.cool',
     )
+  })
+
+  /**
+   * The deck, which is the half a published session used to lose entirely.
+   *
+   * `state.maps` was not resolved at all, so a session published beside its data
+   * handed `PanelDeck.build` a bare `rep2.cool` — fetched against the *site
+   * root* on the web and against `app://viewer/` in the desktop build. The
+   * companion cell simply failed to load, and it read as a broken deck rather
+   * than as an unresolved name.
+   */
+  const deckConfig = (over: Record<string, unknown> = {}) =>
+    parseConfig(
+      JSON.stringify({
+        kind: CONFIG_KIND,
+        state: {
+          uri: 'lead.cool',
+          view: 'region',
+          maps: `rep2.cool${MAPS_SEPARATOR}${VACANT}${MAPS_SEPARATOR}https://other.org/rep4.cool`,
+        },
+        ...over,
+      }),
+    ) as SessionConfig
+
+  it('resolves every map of a deck, and leaves a vacancy vacant', () => {
+    const refs = parseMaps(resolveConfig(deckConfig(), base).state.maps)
+    expect(refs).toEqual([
+      { kind: 'remote', uri: 'https://example.org/app/demo/rep2.cool' },
+      { kind: 'vacant' },
+      // Already absolute: an exported session is untouched, and a published one
+      // may legitimately mix the two.
+      { kind: 'remote', uri: 'https://other.org/rep4.cool' },
+    ])
+  })
+
+  it('keeps a map name that contains an escaped separator intact', () => {
+    // The reason this goes through `parseMaps`/`serialiseMaps` rather than a
+    // second `|` split written here: a raw pipe separates and `%7C` inside a
+    // member is data, and a second copy of that rule fails by resolving to a
+    // *different number of maps* than were written.
+    const odd = parseConfig(
+      JSON.stringify({
+        kind: CONFIG_KIND,
+        state: { uri: 'lead.cool', view: 'region', maps: 'we%7Cird.cool' },
+      }),
+    ) as SessionConfig
+    expect(parseMaps(resolveConfig(odd, base).state.maps)).toEqual([
+      { kind: 'remote', uri: 'https://example.org/app/demo/we|ird.cool' },
+    ])
+  })
+
+  it('puts a lane on the same map the deck resolved', () => {
+    // Written as a property rather than against a literal, because the failure
+    // it guards is *both halves disagreeing*: a `StoredLane.uri` is matched
+    // against the companion's file URI by string equality in `adoptHome`, so
+    // resolving `maps` and not `lanes` puts every placed track on the lead —
+    // a perfectly legal lane, drawn without complaint, and wrong.
+    const withLanes = deckConfig({
+      lanes: [{ track: 'a1', uri: 'rep2.cool', placement: { bottom: true }, borrowedLead: true }],
+    })
+    const out = resolveConfig(withLanes, base)
+    expect(out.lanes?.[0].uri).toBe(uriOf(parseMaps(out.state.maps)[0]))
+    expect(out.lanes?.[0].uri).toBe('https://example.org/app/demo/rep2.cool')
+  })
+
+  it('drops the private names a recipient could only mistake for their own', () => {
+    // `compare` and `deck.locals` are bare local filenames. Resolved, they would
+    // mint a URL for a file that was never published; left alone, they reach
+    // `resolveHandle`, whose grants are keyed on the bare name and whose guard
+    // compares only `file.name` — so a recipient who has ever granted their own
+    // `rep2.cool` opens *their* file in the sender's slot, with every label on
+    // screen agreeing. Dropping costs only a label: `~` still holds the slot.
+    const private_ = deckConfig({
+      compare: 'secret.cool',
+      deck: { starred: 'p2', columns: 3, locals: [{ index: 0, uri: 'rep2.cool' }] },
+    })
+    const out = resolveConfig(private_, base)
+    expect(out.compare).toBeUndefined()
+    expect('compare' in out).toBe(false)
+    expect(out.deck.locals).toBeUndefined()
+    // The arrangement is not private and is kept.
+    expect(out.deck).toEqual({ starred: 'p2', columns: 3 })
+    // …and the slot the dropped companion held is still there.
+    expect(parseMaps(out.state.maps)).toHaveLength(3)
+  })
+
+  it('keeps a local track, because dropping one would lose the row', () => {
+    // The rule that decides both cases above: a private name is stripped only
+    // where the structure survives without it. A recipient silently receiving
+    // seven tracks where eight were sent is the failure `~` exists to prevent.
+    const config = resolveConfig(relative as NonNullable<typeof relative>, base)
+    expect(config.tracks).toHaveLength(2)
+    expect(config.tracks[1].source).toEqual({ kind: 'local', name: 'dropped.bw' })
   })
 })
 

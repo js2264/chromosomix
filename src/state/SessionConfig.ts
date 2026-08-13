@@ -25,7 +25,7 @@
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
-import type { DeckLocal } from '../panels/deck'
+import { parseMaps, serialiseMaps, type DeckLocal } from '../panels/deck'
 import type { StoredEntry } from '../annotations/types'
 import type { StoredLane } from '../annotations/store'
 import type { Bookmark } from '../annotations/bookmarks'
@@ -399,6 +399,32 @@ export function looksLikeConfig(name: string): boolean {
  * The `::entries/rep1` half of a URI is not part of the resolution — it names a
  * group *inside* the file — so it is split off, and put back on, by the reader's
  * own parser rather than by a second one written here.
+ *
+ * ## It also *drops* two fields, which is not the same job
+ *
+ * This function is reached from exactly two places, and both mean **this config
+ * arrived from somewhere that is not this machine**. That is the strongest
+ * signal available about a name, and it licenses more than resolution: a
+ * *private* name — one that can only ever have meant a file on the sender's own
+ * disk — is removed rather than repaired.
+ *
+ * `compare` and `deck.locals` are both bare local filenames, and leaving them is
+ * the worst of the three options. `Session` resolves them through
+ * `resolveSource` → `resolveHandle`, where a grant is keyed on the bare name and
+ * the collision guard compares only `file.name` (`state/handles.ts`). So a
+ * recipient who has ever granted their own `rep2.cool` opens **their** file in
+ * the sender's slot, with every label on screen agreeing with them. Resolving
+ * the names instead would mint a URL for a file that was never published — a 404
+ * where an honest drop rectangle used to be.
+ *
+ * Dropping costs only a *label*: `state.maps` still carries `~` for the slot, so
+ * the count, the order and the drop rectangle all survive (§16.6).
+ *
+ * The rule that decides all of this, and the reason a *local track* is kept:
+ * **a private name is stripped only where the structure survives without it.**
+ * A dropped companion costs a label; a dropped track costs the row, and a
+ * recipient silently receiving seven tracks where eight were sent is the exact
+ * failure the `~` placeholder exists to prevent.
  */
 export function resolveConfig(config: SessionConfig, base: string): SessionConfig {
   const at = (uri: string): string => {
@@ -413,19 +439,59 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
     if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return uri
     return formatUri(new URL(parsed.path, base).href, parsed.group)
   }
-  return {
+
+  // Through the deck's own pair, never a second `|` splitter written here. The
+  // escaping invariant — a raw pipe separates, `%7C` inside a member is data —
+  // lives in `panels/deck.ts`, and its comment says what a second copy costs: a
+  // config that resolves to a *different number of maps* than were written, with
+  // no error anywhere. Two normalisations come with the reuse and are both
+  // already applied downstream by `Session.syncDeck`: empty segments are
+  // dropped, and the list is capped at `MAX_PANELS - 1`.
+  const maps =
+    config.state.maps === undefined
+      ? undefined
+      : serialiseMaps(
+          parseMaps(config.state.maps).map((ref) =>
+            ref.kind === 'remote' ? { ...ref, uri: at(ref.uri) } : ref,
+          ),
+        )
+
+  // `deck` minus its `locals`, keeping the arrangement. Written out rather than
+  // spread-and-delete so the omission is visible at the call site.
+  const deck: SessionConfig['deck'] = {
+    ...(config.deck.starred === undefined ? {} : { starred: config.deck.starred }),
+    ...(config.deck.columns === undefined ? {} : { columns: config.deck.columns }),
+  }
+
+  const resolved: SessionConfig = {
     ...config,
     state: {
       ...config.state,
       uri: at(config.state.uri),
       ...(config.state.uri2 === undefined ? {} : { uri2: at(config.state.uri2) }),
+      ...(maps === undefined ? {} : { maps }),
     },
     tracks: config.tracks.map((track) =>
       track.source.kind !== 'remote' || track.source.url === undefined
         ? track
         : { ...track, source: { ...track.source, url: at(track.source.url) } },
     ),
+    deck,
+    // Through the **same** `at()` as `maps`, and that pairing is load-bearing: a
+    // `StoredLane.uri` is the companion's file URI and `adoptHome` matches it by
+    // string equality, so resolving one and not the other puts every placed
+    // track on the lead — which is a perfectly legal lane, so nothing reports
+    // anything and the deck simply comes back wrong.
+    ...(config.lanes === undefined
+      ? {}
+      : { lanes: config.lanes.map((lane) => ({ ...lane, uri: at(lane.uri) })) }),
   }
+  // Deleted rather than set to `undefined`, so the field is *absent* exactly as
+  // `parseConfig` leaves it for a config that never had one — a key present and
+  // holding nothing is a third state, and every reader here treats absence as
+  // the answer.
+  delete resolved.compare
+  return resolved
 }
 
 /** What one is called on the way out. */
