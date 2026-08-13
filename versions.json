@@ -1,6 +1,13 @@
 {
-  "latest": "47c6ff5",
+  "latest": "304b0d7",
   "versions": [
+    {
+      "commit": "304b0d7",
+      "version": "0.10.0",
+      "date": "2026-08-13T19:34:54+02:00",
+      "subject": "Connect a folder, and browse it: a directory or a bucket, read the same way (#30)",
+      "tag": ""
+    },
     {
       "commit": "47c6ff5",
       "version": "0.10.0",
@@ -133,13 +140,6 @@
       "date": "2026-08-07T17:07:28+02:00",
       "subject": "0.9.0",
       "tag": "v0.9.0"
-    },
-    {
-      "commit": "0d94613",
-      "version": "0.8.0",
-      "date": "2026-08-07T17:05:32+02:00",
-      "subject": "fix(browser): the sequence boundaries stop with the tracks, the crosshair does not",
-      "tag": ""
     },
     {
       "commit": "4c7b3f7",
