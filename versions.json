@@ -1,6 +1,13 @@
 {
-  "latest": "304b0d7",
+  "latest": "9183f4c",
   "versions": [
+    {
+      "commit": "9183f4c",
+      "version": "0.10.0",
+      "date": "2026-08-13T20:13:29+02:00",
+      "subject": "Add correlation map and despeckle smoothing to matrix view (#31)",
+      "tag": ""
+    },
     {
       "commit": "304b0d7",
       "version": "0.10.0",
