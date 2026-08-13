@@ -57,6 +57,7 @@ import {
   flushWorkspace,
   forgetWorkspace,
   readWorkspace,
+  recordAction,
   summariseWorkspace,
   writeWorkspace,
   type Workspace,
@@ -111,6 +112,15 @@ export class App implements SessionHost {
    * picker, and the reader's other six tabs are exactly as worth offering then.
    */
   private readonly restoreSlot = el('div', { class: 'restore-slot' })
+  /**
+   * Whether the durable record may be written to yet.
+   *
+   * `false` for the moment between the shell existing and the boot deciding
+   * what to do about a previous workspace. See {@link rememberDurably}.
+   */
+  private durableSettled = false
+  /** `true` while the offer is on screen and has not been answered. */
+  private offering = false
   private readonly breadcrumbSlot: HTMLElement
   /**
    * Where the active session parents its Analysis drawer.
@@ -307,9 +317,23 @@ export class App implements SessionHost {
     // into the back/forward cache too, and it does not make the browser offer to
     // block the navigation. `visibilitychange` covers the mobile case, where a
     // tab is often never "hidden" so much as switched away from and reaped.
-    window.addEventListener('pagehide', () => void flushWorkspace())
+    //
+    // Both handlers **rebuild** the record before flushing it, and that is not
+    // belt and braces. `remember()` runs on a *view state* change, and most of
+    // what a workspace is does not touch the view state at all: loading eight
+    // tracks, placing a mark, saving a bookmark, filtering a table. Each of
+    // those persists itself into session memory and none of them navigates, so
+    // a record written at the last navigation would come back to a reader
+    // missing every one of them — the session as it was ten minutes before they
+    // closed the window. Rebuilding here costs one pass over the open tabs at
+    // the one moment it is certainly worth paying for.
+    const save = (): void => {
+      this.rememberDurably()
+      void flushWorkspace()
+    }
+    window.addEventListener('pagehide', save)
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') void flushWorkspace()
+      if (document.visibilityState === 'hidden') save()
     })
 
     document.addEventListener('dragover', (event) => event.preventDefault())
@@ -444,7 +468,13 @@ export class App implements SessionHost {
     // closed" — a reload has its own, fresher answer above and must not be
     // asked a question it already knows. Last, and asynchronous, so a database
     // that is slow or refuses to open delays nothing on the boot path.
-    if (stored.sessions.length === 0) void this.offerWorkspace()
+    //
+    // A reload settles immediately: there is no question to ask, so the record
+    // may be written from this moment. The other branch settles when the read
+    // comes back, which is what keeps an empty startup window from deleting the
+    // workspace it is about to be offered.
+    if (stored.sessions.length > 0) this.durableSettled = true
+    else void this.offerWorkspace()
   }
 
   /**
@@ -461,22 +491,35 @@ export class App implements SessionHost {
    * state every browser was in before this existed.
    */
   private async offerWorkspace(): Promise<void> {
-    const workspace = await readWorkspace()
+    let workspace: Workspace | null = null
+    try {
+      workspace = await readWorkspace()
+    } finally {
+      // Whatever the answer, the question has now been asked, so the record may
+      // be written from here on — including when the read failed, where the
+      // right behaviour is simply the app as it was before any of this existed.
+      this.durableSettled = true
+    }
     if (workspace === null) return
     // The reader has been working while the record was read. Whatever they have
     // done since is theirs, and an offer to replace it would be an interruption
     // rather than a courtesy.
     if (this.sessions.some((session) => session.state !== null)) return
+    this.offering = true
+    const answered = (): void => {
+      this.offering = false
+      this.restoreSlot.replaceChildren()
+    }
     this.restoreSlot.replaceChildren(
       restoreBanner({
         summary: summariseWorkspace(workspace),
         savedAt: workspace.savedAt,
         onRestore: () => {
-          this.restoreSlot.replaceChildren()
-          this.adoptWorkspace(workspace)
+          answered()
+          this.adoptWorkspace(workspace as Workspace)
         },
         onDismiss: () => {
-          this.restoreSlot.replaceChildren()
+          answered()
           void forgetWorkspace()
         },
       }),
@@ -651,9 +694,18 @@ export class App implements SessionHost {
       if (config === null) continue
       sessions.push({ id: session.id, config })
     }
+    // The rule, and why an empty window is not always a reason to forget, is in
+    // `recordAction` — it is subtle enough to be worth a pure function and a
+    // test rather than three conditions here.
+    const action = recordAction({
+      settled: this.durableSettled,
+      offering: this.offering,
+      tabs: sessions.length,
+    })
+    if (action === 'wait') return
     // A window emptied down to the picker is a reader who closed everything, and
     // offering it back next week would be offering them nothing.
-    if (sessions.length === 0) {
+    if (action === 'forget') {
       void forgetWorkspace()
       return
     }
@@ -671,6 +723,13 @@ export class App implements SessionHost {
 
   sessionChanged(session: Session): void {
     this.paintTabs()
+    // The durable record follows the *workspace*, not only the view state.
+    // Loading a track, placing a mark and saving a bookmark all arrive here and
+    // none of them navigates, so without this the record would describe the
+    // session as it stood at the last navigation — which for a reader who spent
+    // ten minutes arranging tracks is everything they did. Debounced downstream,
+    // and cheap: it reads session memory rather than the live objects.
+    this.rememberDurably()
     if (session !== this.current) return
     document.title =
       session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`

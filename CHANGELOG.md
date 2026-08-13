@@ -43,13 +43,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   what is read or copied — §11 and §12 are untouched, and every browser gets it,
   not only the ones with a file-handle API.
 
-  One trap is worth recording because its failure would have been silent and
-  permanent. A restored tab is *primed* — it holds a view state and has read
-  nothing — and a config is built by reading that tab's session memory, which
-  after a browser restart is empty. So the first click would have gathered eight
-  empty configs and written them over the good record. The workspace is therefore
-  applied into memory *before* the first tab is primed, which is also the order
-  `applyConfig` already required for its own reason.
+  Two traps are worth recording, because both failed silently and both were
+  found by driving the real application rather than by reading the code.
+
+  A restored tab is *primed* — it holds a view state and has read nothing — and a
+  config is built by reading that tab's session memory, which after a browser
+  restart is empty. So the first click would have gathered eight empty configs
+  and written them over the good record. The workspace is therefore applied into
+  memory *before* the first tab is primed, which is also the order `applyConfig`
+  already required for its own reason.
+
+  And **a window with nothing open is two different facts.** After the reader
+  closes their last tab it means *forget this*; at startup it means *nothing has
+  been restored yet* — and acting on the second deletes the record while the read
+  that would have offered it back is still in flight. A race, resolving
+  differently on a warm cache than a cold one, so the workspace disappeared on
+  some loads and not others with nothing in the console either way. The rule is
+  now a pure function with a test rather than three conditions in the shell.
+
+  A third thing that had to change for any of it to be true: the record follows
+  the **workspace**, not the view state. Loading a track, placing a mark and
+  saving a bookmark are most of what a session *is* and none of them navigate, so
+  a record written at the last navigation came back missing everything the reader
+  had done since.
 
 - **A local file you have already opened reopens itself after a reload.** In
   Chromium and in the desktop build, dropping or choosing a file now also hands

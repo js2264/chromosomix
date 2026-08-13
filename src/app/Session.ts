@@ -1961,6 +1961,14 @@ export class Session {
     // one would name a place this one has never heard of. See `setUpAnnotations`.
     resetPick()
     const store = new AnnotationStore(scope)
+    // The durable workspace is rebuilt from session memory, and almost nothing
+    // that fills it is a *navigation*: eight tracks, a mark, a bookmark, a
+    // filter. Without this the record would be the session as it stood at the
+    // last time the view state moved, and a reader who spent ten minutes
+    // arranging tracks and then closed the window would get none of it back.
+    // The write itself is debounced, so a track landing costs no more than the
+    // colour slider already does.
+    store.subscribe(() => this.host.sessionChanged(this))
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
@@ -2812,6 +2820,14 @@ export class Session {
 
     const scope = this.memoryKey(uri)
     const store = new AnnotationStore(scope)
+    // The durable workspace is rebuilt from session memory, and almost nothing
+    // that fills it is a *navigation*: eight tracks, a mark, a bookmark, a
+    // filter. Without this the record would be the session as it stood at the
+    // last time the view state moved, and a reader who spent ten minutes
+    // arranging tracks and then closed the window would get none of it back.
+    // The write itself is debounced, so a track landing costs no more than the
+    // colour slider already does.
+    store.subscribe(() => this.host.sessionChanged(this))
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const loader = new AnnotationLoader(

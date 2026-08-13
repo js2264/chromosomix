@@ -191,6 +191,35 @@ export async function forgetWorkspace(): Promise<void> {
   await workspaceStore.delete(KEY)
 }
 
+/**
+ * Whether the record may be written, cleared, or neither, right now.
+ *
+ * A pure function because the rule is subtle and the bug it encodes was
+ * invisible: **a window with nothing open is two completely different facts.**
+ * After the reader closes their last tab it means *I am finished, forget this*.
+ * During startup it means *nothing has been restored yet* — and acting on it
+ * there deletes the record while the very read that would have offered it back
+ * is still in flight. That is a race, it resolves differently on a warm cache
+ * than a cold one, and what a reader sees is a workspace that vanishes on some
+ * loads and not others with nothing to show for it.
+ *
+ * `wait` is therefore not an optimisation; it is the whole point.
+ */
+export function recordAction(state: {
+  /** Has the boot decided whether to offer a previous workspace? */
+  settled: boolean
+  /** Is that offer on screen, unanswered? */
+  offering: boolean
+  /** How many open tabs actually hold a file. */
+  tabs: number
+}): 'write' | 'forget' | 'wait' {
+  // Before the question is settled, and while it is on the reader's screen, the
+  // record is not this window's to touch — forgetting it would delete the thing
+  // they are being asked about.
+  if (!state.settled || state.offering) return 'wait'
+  return state.tabs === 0 ? 'forget' : 'write'
+}
+
 /** What the restore card counts, as data rather than as a sentence. */
 export interface WorkspaceSummary {
   tabs: number

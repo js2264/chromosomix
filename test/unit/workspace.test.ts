@@ -21,6 +21,7 @@ import {
   flushWorkspace,
   forgetWorkspace,
   readWorkspace,
+  recordAction,
   summariseWorkspace,
   writeWorkspace,
   type Workspace,
@@ -225,5 +226,43 @@ describe('summariseWorkspace', () => {
       active: 's1',
     })
     expect(summary).toEqual({ tabs: 2, files: ['one.cool', 'two.cool'], tracks: 2 })
+  })
+})
+
+/**
+ * When the record may be written, and when it must be left alone.
+ *
+ * A pure function for a rule that cost a real bug: **a window with nothing open
+ * is two different facts.** After the reader closes their last tab it means
+ * *forget this*; during startup it means *nothing has been restored yet*, and
+ * acting on it there deletes the record while the read that would have offered
+ * it back is still in flight. That race resolves differently on a warm cache
+ * than a cold one, so the symptom is a workspace that vanishes on some loads and
+ * not others, with nothing in the console either way.
+ */
+describe('recordAction', () => {
+  it('waits until the boot has decided about a previous workspace', () => {
+    // The bug. An empty startup window must not answer a question nobody has
+    // asked it yet.
+    expect(recordAction({ settled: false, offering: false, tabs: 0 })).toBe('wait')
+    expect(recordAction({ settled: false, offering: false, tabs: 3 })).toBe('wait')
+  })
+
+  it('waits while the offer is on screen, whatever the window holds', () => {
+    // Forgetting here would delete the very thing the reader is being asked
+    // about, between the question and their answer.
+    expect(recordAction({ settled: true, offering: true, tabs: 0 })).toBe('wait')
+    expect(recordAction({ settled: true, offering: true, tabs: 2 })).toBe('wait')
+  })
+
+  it('forgets an emptied window once the question is settled', () => {
+    // Now it does mean "I am finished": offering these back next week would be
+    // offering the reader nothing.
+    expect(recordAction({ settled: true, offering: false, tabs: 0 })).toBe('forget')
+  })
+
+  it('writes whenever there is something to write', () => {
+    expect(recordAction({ settled: true, offering: false, tabs: 1 })).toBe('write')
+    expect(recordAction({ settled: true, offering: false, tabs: 12 })).toBe('write')
   })
 })
