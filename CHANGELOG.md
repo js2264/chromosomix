@@ -14,6 +14,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **`f` folds the Files panel, and the track-fill overlay has no shortcut.** The
+  single-letter space was down to `q` and `z` when a fifth panel arrived, and
+  neither is a letter anyone reaches for a list of files. Between a column — one
+  of five, in the row of marks at the top of every window, whose four siblings
+  are `b`, `a`, `m` and `j` — and one of eleven overlay toggles whose button is
+  on screen beside the picture it changes, the letter belongs to the column. The
+  fill toggle is untouched and still in the command palette; it is one keystroke
+  that is gone.
+
 - **Save writes the whole window, and the file is now called a workspace.** The
   disk button in the top bar used to write the tab in front of you, which made it
   the third button on that row doing something a reader could reasonably have
@@ -104,6 +113,70 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousandth now keep three *significant* digits, and below `1e-7` an exponent.
 
 ### Added
+
+- **Connect a folder, and browse it in a panel — a directory on this machine, or
+  a bucket, read the same way.** Every door to a file this app had asked *which
+  file* once and then closed: the picker, the header's `+`, the browse button
+  beside a URL box. That is the right shape for opening one thing and the wrong
+  shape for the way people actually work with a directory of data, which is to
+  open one, look, open the next, and keep going for an afternoon. Files on a
+  bucket could only be added one at a time, and a folder on the disk could not be
+  browsed at all.
+
+  A **Connect** button now sits beside the `+` in the header — a plug, because
+  what it attaches is a *place* rather than a file — and what it fills is a fifth
+  side panel, **Files**, folded with `f`. Inside it: the folders you have
+  connected, and the tree of whichever one you are in, with crumbs and a filter.
+  Every file row loads into the tab you are in when you click it or press the
+  `→` at its end, and every file row can be **dragged** — onto the map's edge
+  rectangles for a lane in that stack, onto a companion for a track on that map,
+  onto the Tracks card, onto the page. A dragged row carries a folder and a path
+  rather than bytes; the file behind it is fetched at the drop, once.
+
+  **A local folder and a bucket are one thing to everything above the byte
+  layer.** `browse/folder.ts` is the whole interface — given a path, the
+  sub-folders and the files; given a file, how to open it — and the two backends
+  are the entire difference between them. It is one column, one tree, one set of
+  crumbs, and one filter, over both.
+
+  What a local folder means depends on the browser, and the row says which you
+  got. In Chrome, Edge and the desktop app it is a real connection: this browser
+  keeps permission to *list the folder and read what is in it* — not the files
+  themselves, and nothing is uploaded or copied — so it is still there after a
+  reload, and it picks up a file a pipeline wrote into it five minutes ago.
+  Firefox and Safari have no such thing; there the folder is a **snapshot**
+  taken when you connect it, marked *this visit* on its row, gone after a reload.
+  Offering it in two browsers and not the other two would have taken a working
+  gesture away to avoid writing one sentence.
+
+  A connected folder is a wider grant than a chosen file, so it is listed in
+  **About → what is stored** beside the files you have allowed, disconnectable
+  one at a time and swept by *forget everything*. Nothing about §11 changes: a
+  local folder is read in place by code on your own machine, a bucket is read by
+  your browser from the bucket, and there is no server in between because there
+  is no server.
+
+- **A public bucket needs nothing but its link.** A bucket entry used to demand
+  six fields, five of which are a key — so a reader with a URL out of a paper met
+  a form that read as *you need an AWS account for this*. Public is now the
+  default and it is one field; a key is behind a switch. Everything under a
+  keyless prefix is listed and read unsigned, which is what public data always
+  took.
+
+  One thing to know before pointing it at a bucket: **listing needs
+  `s3:ListBucket` granted to everyone in the bucket policy**, which is a
+  different grant from the `s3:GetObject` that makes files downloadable, and most
+  published buckets grant the second and not the first. A public bucket that
+  refuses to be listed is an ordinary configuration rather than a fault, there is
+  nothing an app with no backend can do about it, and the message says which of
+  the two grants is missing and that files under the prefix still open by URL.
+  `docs/hosting.md` has the policy to paste. Browsing a public prefix needs *no*
+  CORS change: an unsigned listing is a simple request, so it is never
+  preflighted, and the policy that serves public downloads already answers it.
+
+  The dialog behind *private buckets…* is now just **Buckets**, since it lists
+  both kinds, and its add form is the one the Connect dialog uses — one
+  implementation, so the two cannot come to disagree about what a valid entry is.
 
 - **A `correlation` toggle: the square replaced by the Pearson correlation
   between its rows.** Two bins correlate when they contact the rest of the

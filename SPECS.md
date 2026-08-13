@@ -3103,3 +3103,131 @@ matters only when somebody opens two, and cannot be fixed from inside the page.
 
 **Verified in Chromium.** Firefox and Safari are untested against this target; the constraints above
 are Chromium's, and another engine may impose more.
+
+---
+
+## 20. Connected folders
+
+Every door to a file the app had asked *which file* once and then closed: the picker, the header's
+`+`, the modal bucket browser, a URL box. That is the right shape for opening one thing and the
+wrong shape for the way people work with a directory of data, which is to open one, look, open the
+next, and keep going. A **connected folder** is a place the window keeps, browsable in a column, for
+as long as the reader wants it.
+
+Two things are folders, and the whole point is that they are the same thing here:
+
+- a **directory on the machine**, and
+- a **key prefix on a bucket**, public or private.
+
+`browse/folder.ts` is the interface — given a path, the sub-folders and the files; given a file, how
+to open it — and the two backends are the whole of the difference. Nothing above that layer asks
+which kind it is holding, so "a local folder or an S3 bucket, read the same way" is a property of
+that file being small rather than a feature written twice.
+
+### 20.1 One level, never a walk
+
+`list` answers one path with its immediate children. Nothing recurses, and that is a constraint
+rather than an omission: on a bucket a recursive listing is one signed request per prefix against a
+key that may be allowed some of them and not others, and on a disk it is an unbounded walk of
+somebody's home directory to draw a sidebar. The folder view is the folder, not an index of it —
+the same rule the bucket browser's filter already stated about itself.
+
+Both backends stop at **1,000 entries** and say so. S3's own page is a thousand; a local directory
+had no limit at all, which is the wrong asymmetry to leave in, since a `fastq/` directory of forty
+thousand files would build forty thousand rows on a gesture the reader cannot undo. "My file is not
+here" and "my file is past the cap" look identical otherwise, and only one of them is actionable.
+
+### 20.2 The local half, in two shapes
+
+**A grant**, where `showDirectoryPicker` exists — Chromium and the desktop build. The page holds a
+`FileSystemDirectoryHandle`: a capability, not a path and not a copy. Listings are read through it
+when they are asked for, so the folder is live — a file a pipeline writes into it five minutes later
+is simply there — and the handle is structured-cloneable, so it survives in IndexedDB and the folder
+is still connected after a reload.
+
+**A snapshot**, everywhere else. Firefox and Safari have no picker; `<input webkitdirectory>` hands
+back a flat `File[]` carrying `webkitRelativePath`, from which the tree is rebuilt once. It does not
+update and it does not survive a reload, because a `File` is bytes the page was handed rather than
+permission to go and get them.
+
+They are not the same feature and the panel says so on the row, in three words. §8.5's doctrine —
+a control that cannot keep its promise is absent rather than disabled — does *not* apply: the
+gesture works in all four browsers, and what differs is how long the answer lasts. Hiding it in two
+of them would take a working feature away to avoid writing one clause.
+
+Asked in `'read'` mode explicitly. §13's "the app never modifies a file it opened" should be true of
+the question the reader is shown as well as of the code.
+
+### 20.3 The bucket half, and the one thing a public bucket usually cannot do
+
+A scope may now carry **no credential**, and that is a scope over public data rather than a broken
+one. A public bucket costs one field — its URL — instead of six. An unsigned `GET` with no custom
+headers is a *simple* CORS request, so it is not preflighted, which means the ordinary public-data
+policy (`GET`, `HEAD`, `Range`) answers a listing as it stands and the whole class of preflight
+failures the signed path has to explain cannot arise.
+
+What it does need is `s3:ListBucket` granted to `*` in the **bucket policy**, which is a different
+grant from the `s3:GetObject` that makes the objects downloadable — and most published buckets grant
+the second and not the first. **A public bucket that refuses to be listed is a normal
+configuration, not a fault.** With no backend (C1) there is nothing the app can do about it, so the
+403 says which of the two grants is missing and says that files under the prefix still open by URL.
+`docs/hosting.md` has the policy.
+
+The rule inside a scope is **all three signing fields or none**; a row holding one or two is dropped
+rather than downgraded to an unsigned one, because falling back would turn a mistyped secret into a
+bucket that 403s on data the reader believes they have a key for.
+
+### 20.4 The fifth column, and the one that is not about the open file
+
+§16.5 says the side columns are the session's furniture and each describes the one file the session
+is of. **Files is the exception and is meant to be.** What it holds is the places this window is
+connected to, which are the same in every tab and outlive all of them, exactly as the theme is. It
+is therefore built once, never re-parented on a tab switch, and — alone among the five — **available
+with nothing open at all**, because the landing page is precisely where a reader with a folder of
+coolers starts.
+
+`f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
+reaches for a list of files, so `f` came from the `fills` overlay — which keeps its toggle, on
+screen beside the picture it changes, and loses one keystroke. It stays in the command palette,
+which promises to list everything the app can do.
+
+### 20.5 Two verbs on a row
+
+Clicking a file **loads it into the tab that is open**: a second map beside the one that is there,
+anything else drawn on top, an empty tab filled rather than added to — the same routing a dropped
+file takes and the same promise the header's `+` makes. The `→` at the end of the row says it out
+loud.
+
+Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
+stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks card, onto the content
+area, onto the landing page's drop zone — which replaces, because that is what the landing page has
+always meant.
+
+A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
+drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
+are connected. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file
+to the same door a dropped one takes and a remote one to the door a typed URL takes. A third routing
+table is how a `.cool` picked from a folder would come to open somewhere a `.cool` dropped on the
+window does not.
+
+**A file the viewer has no route for is drawn, dimmed and inert, with the reason in its tooltip.**
+Hiding it would make the folder view disagree with the folder, which is the one thing it is for; a
+`.bam` sitting there unhighlighted answers *why is nothing happening when I click it* before it is
+asked.
+
+### 20.6 What a connected folder is, in privacy terms
+
+Wider than a chosen file, and worth being exact about how. The page can see the **names** of
+everything under the directory and read any of them without a further gesture — that is what makes
+browsing possible — and, for the durable shape, it can do so again after a restart.
+
+What has not changed is where the bytes go: **nowhere**. §11 holds exactly as it held for a dropped
+file. A local folder is read in place, a slice at a time, by code on the reader's own machine; a
+bucket is read by the browser from the bucket. There is no server in between because there is no
+server. Every connected folder is a line in the stored-data screen with the file grants, revocable
+one at a time or all at once — which is the same bargain `state/handles.ts` already struck for a
+single file, made visible at the wider grant.
+
+In the standalone build (§19) the bucket half is absent — the origin is opaque, so every remote read
+fails before a byte moves — and the local half is the snapshot shape, since the File System Access
+API is not available to an opaque origin either.

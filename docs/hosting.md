@@ -157,6 +157,59 @@ Local drag-and-drop, same code path, different byte source. Nothing is uploaded,
 accounts, no storage cost and no GDPR review. The UI says so on screen, and the claim is testable:
 a dropped file must render without a single network request leaving the browser.
 
+### Making a public bucket browsable
+
+A public prefix can be **connected as a folder** with nothing but its URL — no key, no region, no
+account. **Connect → a bucket → public**, or the same form under *Buckets*. Everything under it is
+then listed and read unsigned, which is what public data always took, and it shows up in the Files
+panel as a tree beside any local folder you have connected.
+
+One grant decides whether that works, and it is not the one that makes the files downloadable:
+
+| What you want | Grant | Usually present on a published bucket |
+|---|---|---|
+| Open a file whose URL you have | `s3:GetObject` on the objects | yes |
+| **Browse the prefix it lives in** | `s3:ListBucket` **on the bucket** | **no** |
+
+So a bucket that serves every demo perfectly can still refuse to be listed, and that is an ordinary
+configuration rather than a fault. There is nothing the viewer can do about it — it has no backend
+to list on its behalf (SPECS C1) — so it says which of the two grants is missing and reminds you
+that files under the prefix still open by URL.
+
+To grant it, add the second statement to the **bucket policy**:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicRead",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::rsglab-data/demo/*"
+    },
+    {
+      "Sid": "PublicBrowse",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::rsglab-data",
+      "Condition": { "StringLike": { "s3:prefix": ["demo/*"] } }
+    }
+  ]
+}
+```
+
+The `s3:prefix` condition is what keeps this from publishing the names of everything else in the
+bucket: without it, anyone could list the private prefixes' *keys* — not read them, but knowing that
+`collections/hum53/2026-03-run2/` exists is often the sensitive half.
+
+**No CORS change is needed for this.** An unsigned listing is a `GET` with no custom headers, which
+is a *simple* request in the CORS sense and is therefore never preflighted — the public policy below
+(`GET`, `HEAD`, `Range`) already answers it. That is the whole difference from the signed case in
+the next section, which is preflighted and does need its headers named.
+
 ### A private bucket prefix
 
 For data that lives on a bucket and should not be public — a lab's own collections, a dataset under

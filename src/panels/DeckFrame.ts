@@ -34,11 +34,13 @@
 
 import { el } from '../ui/dom'
 import { icon } from '../ui/icons'
+import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
+import type { PickedFile } from '../browse/folder'
 import type { GrowDirection } from './deck'
 
 export interface DeckFrameProps {
   /** `+` was pressed, or a file was dropped on an edge with nothing to fill. */
-  onGrow(direction: GrowDirection, file?: File): void
+  onGrow(direction: GrowDirection, picked?: PickedFile): void
 }
 
 /**
@@ -152,10 +154,23 @@ export class DeckFrame {
     node.addEventListener('dragleave', () => node.classList.remove('over'))
     node.addEventListener('drop', (event) => {
       node.classList.remove('over')
+      // A row dragged out of the Files panel, which is the same instruction with
+      // the bytes somewhere else — and is the drop this edge would otherwise
+      // *swallow*: `.deck-drop` has already taken it away from the content
+      // area's importer, so failing to answer here puts the file on the floor
+      // without a word. Resolved first because it costs a fetch and the branch
+      // below reads a list that is already in hand.
+      if (dragHasFileRow(event)) {
+        event.preventDefault()
+        void readFileDrag(event).then((picked) => {
+          if (picked !== null) this.props.onGrow(direction, picked)
+        })
+        return
+      }
       const file = event.dataTransfer?.files?.[0]
       if (file === undefined) return
       event.preventDefault()
-      this.props.onGrow(direction, file)
+      this.props.onGrow(direction, { uri: file.name, source: { kind: 'local', file } })
     })
     return node
   }

@@ -95,8 +95,8 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    expect(textsOf(view.el, '.bucket-entry-name')).toEqual(['hum53/', 'notes.txt'])
-    expect(textsOf(view.el, '.bucket-entry-size')).toEqual(['2.0 kB'])
+    expect(textsOf(view.el, '.folder-entry-name')).toEqual(['hum53/', 'notes.txt'])
+    expect(textsOf(view.el, '.folder-entry-size')).toEqual(['2.0 kB'])
   })
 
   it('hands a picked file back with the scope that listed it', async () => {
@@ -108,7 +108,7 @@ describe('the browse view', () => {
     await view.browse(scope(), 'collections/')
 
     mounted(view.el, () => {
-      all<HTMLButtonElement>(view.el, '.bucket-entry-file')[0].click()
+      all<HTMLButtonElement>(view.el, '.folder-entry-file')[0].click()
     })
     expect(picked).toHaveLength(1)
     expect(picked[0].object.url).toBe(
@@ -127,11 +127,11 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    const folder = all<HTMLButtonElement>(view.el, '.bucket-entry')[0]
+    const folder = all<HTMLButtonElement>(view.el, '.folder-entry')[0]
     folder.click()
     await vi.waitFor(() => expect(asked).toHaveLength(2))
     expect(prefixOf(asked[1])).toBe('collections/hum53/')
-    await vi.waitFor(() => expect(textsOf(view.el, '.bucket-entry-name')).toEqual(['map.mcool']))
+    await vi.waitFor(() => expect(textsOf(view.el, '.folder-entry-name')).toEqual(['map.mcool']))
   })
 
   it('climbs back up by the breadcrumb, and roots it at the scope’s own prefix', async () => {
@@ -141,7 +141,7 @@ describe('the browse view', () => {
 
     // No crumb above `collections/`: the key may not be allowed to list there,
     // so offering one would be offering a click that 403s.
-    expect(textsOf(view.el, '.bucket-crumbs button')).toEqual([
+    expect(textsOf(view.el, '.folder-crumbs button')).toEqual([
       'lab collections',
       'hum53',
       '2026-03',
@@ -160,16 +160,16 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    const filter = view.el.querySelector<HTMLInputElement>('.bucket-filter')
+    const filter = view.el.querySelector<HTMLInputElement>('.folder-filter')
     expect(filter).not.toBeNull()
-    expect(view.el.querySelector('.bucket-filter-row')?.classList.contains('hidden')).toBe(false)
+    expect(view.el.querySelector('.folder-filter-row')?.classList.contains('hidden')).toBe(false)
 
     filter!.value = 'atac'
     filter!.dispatchEvent(new window.Event('input'))
-    expect(all(view.el, '.bucket-entry')).toHaveLength(3)
+    expect(all(view.el, '.folder-entry')).toHaveLength(3)
     // The count is the honest part: without it, three rows out of twelve reads
     // as a folder holding three files.
-    expect(view.el.querySelector('.bucket-note-line')?.textContent).toContain('3 of 12')
+    expect(view.el.querySelector('.folder-note')?.textContent).toContain('3 of 12')
   })
 
   it('offers no filter for a folder short enough to read', async () => {
@@ -177,7 +177,7 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    expect(view.el.querySelector('.bucket-filter-row')?.classList.contains('hidden')).toBe(true)
+    expect(view.el.querySelector('.folder-filter-row')?.classList.contains('hidden')).toBe(true)
   })
 
   it('reports a refused listing where the list would have been', async () => {
@@ -185,8 +185,8 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    const line = view.el.querySelector('.bucket-note-line')
-    expect(line?.classList.contains('bucket-error')).toBe(true)
+    const line = view.el.querySelector('.folder-note')
+    expect(line?.classList.contains('folder-error')).toBe(true)
     expect(line?.textContent).toContain('AllowedHeaders')
   })
 
@@ -199,15 +199,15 @@ describe('the browse view', () => {
     const view = new BucketBrowseView({ onPick: () => {} })
     await view.browse(scope(), 'collections/')
 
-    const filter = view.el.querySelector<HTMLInputElement>('.bucket-filter')!
+    const filter = view.el.querySelector<HTMLInputElement>('.folder-filter')!
     // Matches the folder and none of the ten files, so the row clicked below is
     // the folder and the file in it matches nothing the filter says.
     filter.value = 'hum'
     filter.dispatchEvent(new window.Event('input'))
-    all<HTMLButtonElement>(view.el, '.bucket-entry')[0].click()
+    all<HTMLButtonElement>(view.el, '.folder-entry')[0].click()
 
     // A filter carried down would hide the one file in the folder just opened.
-    await vi.waitFor(() => expect(textsOf(view.el, '.bucket-entry-name')).toEqual(['x.bw']))
+    await vi.waitFor(() => expect(textsOf(view.el, '.folder-entry-name')).toEqual(['x.bw']))
     expect(filter.value).toBe('')
   })
 })
@@ -219,11 +219,11 @@ describe('the line under the list', () => {
 
   it('counts what a filter is hiding, and says what it read', () => {
     expect(note(12, 3, true, false, 'collections/')).toContain('3 of 12')
-    expect(note(12, 3, true, false, 'collections/')).toContain('not the whole bucket')
+    expect(note(12, 3, true, false, 'collections/')).toContain('not the whole tree')
   })
 
   it('answers an empty prefix as empty rather than as filtered', () => {
-    expect(note(0, 0, false, false, 'collections/')).toBe('Nothing under this prefix.')
+    expect(note(0, 0, false, false, 'collections/')).toBe('Nothing in this folder.')
   })
 
   it('lets truncation outrank the count', () => {
@@ -269,8 +269,8 @@ describe('the dialog behind the browse button', () => {
     openBucketBrowser({ onPick: (url, from) => picked.push([url, from?.id ?? null]) })
 
     const panel = document.querySelector('.modal-backdrop')!
-    await vi.waitFor(() => expect(all(panel, '.bucket-entry-file')).toHaveLength(1))
-    all<HTMLButtonElement>(panel, '.bucket-entry-file')[0].click()
+    await vi.waitFor(() => expect(all(panel, '.folder-entry-file')).toHaveLength(1))
+    all<HTMLButtonElement>(panel, '.folder-entry-file')[0].click()
 
     expect(picked).toEqual([[`${BASE}a.bw`, 'b0']])
     expect(document.querySelector('.modal-backdrop')).toBeNull()

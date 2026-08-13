@@ -183,6 +183,7 @@ import {
   trackHeightField,
 } from './trackControls'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt, trimNumber } from './dom'
+import { dragHasFileRow } from './fileDrag'
 import { filesFrom } from './chooseFiles'
 import { MapKey } from './MapKey'
 import {
@@ -746,6 +747,22 @@ export interface AnnotationContext {
    * what turns the drop rectangles into move-only targets.
    */
   loadOnEdge?(files: readonly File[], edge: LaneEdge): void
+  /**
+   * The same aim, at a row dragged out of the Files panel.
+   *
+   * A second door rather than a widening of {@link loadOnEdge}, because what
+   * arrives is a different thing: that one takes `File`s, which the drop event
+   * already holds, and this one takes the *event*, because the file behind the
+   * row has to be fetched and that cannot happen while a drop handler is
+   * running. Reading the payload here and awaiting it would also mean this panel
+   * knowing how a connected folder is read, which is `browse/`'s business and
+   * the session's.
+   *
+   * Absent for the same reason `loadOnEdge` is: a file that cannot carry
+   * annotations has no stack to aim at, and a rectangle that lights up for a
+   * drop it will not answer is a target that eats the file.
+   */
+  pickOnEdge?(event: DragEvent, edge: LaneEdge): void
 }
 
 export class MatrixPanel {
@@ -2246,6 +2263,16 @@ export class MatrixPanel {
       }
 
       const load = this.options.annotations?.loadOnEdge
+      // A row out of the Files panel: the same aim, at a file whose bytes have
+      // not been fetched yet. Resolved by the session, because resolving it here
+      // would mean this panel knowing how a folder is read.
+      if (dragHasFileRow(event)) {
+        const pick = this.options.annotations?.pickOnEdge
+        if (pick === undefined) return
+        event.preventDefault()
+        pick(event, edge)
+        return
+      }
       const files = filesFrom(event.dataTransfer)
       // Untouched where this file cannot carry tracks at all (§8.5). The shell
       // stands aside for a `.lane-drop` target, so claiming a drop we cannot
@@ -2273,6 +2300,7 @@ export class MatrixPanel {
    */
   private acceptsDrag(event: DragEvent): boolean {
     if (dragHasTrack(event)) return true
+    if (dragHasFileRow(event)) return this.options.annotations?.pickOnEdge !== undefined
     return dragHasFiles(event) && this.options.annotations?.loadOnEdge !== undefined
   }
 

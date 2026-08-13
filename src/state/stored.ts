@@ -30,6 +30,7 @@
  */
 
 import { clearAll as clearDurableStores } from './idb'
+import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { readWorkspace } from './workspace'
 
@@ -103,6 +104,21 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
+  await hydrateDirectories()
+  const folders = directoryRows()
+  if (folders.length > 0) {
+    items.push({
+      label: 'Folders you connected',
+      // Named for the same reason the files are, and with the grant spelled out
+      // because it is wider than the one above: a directory grant is permission
+      // to list *and read whatever is in it*, again after a restart, and a
+      // reader deciding whether to press "forget everything" on a borrowed
+      // machine should not have to infer that from the word "folder".
+      detail: `${folders.map((row) => row.name).join(', ')} — this browser may list and read ` +
+        'what is in them until you disconnect them',
+    })
+  }
+
   const session = sessionKeys()
   if (session.length > 0) {
     items.push({
@@ -156,9 +172,11 @@ export async function forgetEverything(): Promise<void> {
     }
   }
   // Both halves of the durable side. `clearDurableStores` empties the object
-  // stores; this also drops the copy `handles.ts` holds in memory, without which
-  // the sweep would report success while the current page went on offering to
-  // reopen files whose grants it had just deleted.
+  // stores; these also drop the copies `handles.ts` and `directories.ts` hold in
+  // memory, without which the sweep would report success while the current page
+  // went on offering to reopen files whose grants it had just deleted — and, for
+  // the folders, went on listing a directory it no longer had permission for.
   await forgetAllHandles()
+  await forgetAllDirectories()
   await clearDurableStores()
 }

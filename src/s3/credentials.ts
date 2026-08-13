@@ -8,10 +8,28 @@
  * the same app in the same session, with only the requests that need signing
  * signed.
  *
+ * **A scope may carry no key at all**, and that is a scope over public data
+ * rather than a broken one. What a credential buys is a *signature*; what a
+ * scope buys is a *name for a prefix somebody wants to browse*, and those turned
+ * out to be separable the moment folders became a thing the app shows. A public
+ * bucket then costs one field — its URL — instead of six, and everything
+ * downstream of here is unchanged: an unsigned read is what a public object
+ * always took, and {@link credentialOf} answers `null` where it used to answer a
+ * credential nobody could have filled in.
+ *
+ * The keyless half needs one permission it is easy to assume comes free. Reading
+ * a public object is `s3:GetObject` and *listing* the prefix it sits in is
+ * `s3:ListBucket`, and a bucket published for downloads usually grants the first
+ * to `*` and not the second. So a public scope that cannot be browsed is a
+ * normal, correct configuration rather than a fault, `s3/list.ts` says so in
+ * those words, and files under it still open by URL.
+ *
  * **Matching is by longest prefix**, so a scope over `collections/` and a
  * narrower one over `collections/hum53/` can coexist and the narrower one wins.
  * That is the rule that lets a project key with tighter IAM permissions sit
- * inside a general one without either being edited.
+ * inside a general one without either being edited — and it is what lets a
+ * *public* scope over `demo/` sit inside a signed one over the bucket without
+ * the public half acquiring a signature it does not want.
  *
  * ## Where this runs, and where it cannot
  *
@@ -57,11 +75,42 @@ export interface BucketScope {
    * `collections/*` as it should be.
    */
   base: string
-  region: string
-  accessKeyId: string
-  secretAccessKey: string
+  /**
+   * The signing half, and it is **all three fields or none of them**.
+   *
+   * None is a public prefix: nothing is signed, nothing is stored that could
+   * leak, and the scope is a bookmark with a folder view behind it. All three is
+   * the private case this module was written for.
+   *
+   * There is no meaningful state in between, which is why {@link readScopes}
+   * drops a row holding one or two rather than keeping it. A scope with a key id
+   * and no secret cannot sign, and *falling back* to an unsigned request would
+   * turn a mistyped secret into a bucket that 403s on data the reader believed
+   * they had a key for — the failure would be attributed to the bucket, and the
+   * field two lines up would look right.
+   */
+  region?: string
+  accessKeyId?: string
+  secretAccessKey?: string
   /** Present for STS or SSO credentials, absent for a long-lived access key. */
   sessionToken?: string
+}
+
+/**
+ * Whether this scope signs.
+ *
+ * One predicate rather than a check on whichever field a caller happened to
+ * think of: the three travel together by {@link readScopes}'s rule, so any one
+ * of them answers, and naming the question keeps every call site from having to
+ * know that.
+ */
+export function isSigned(scope: BucketScope): boolean {
+  return (
+    scope.accessKeyId !== undefined &&
+    scope.accessKeyId !== '' &&
+    scope.secretAccessKey !== undefined &&
+    scope.secretAccessKey !== ''
+  )
 }
 
 /** Storage that cannot throw — mirrors `state/UiMemory.ts`'s reasoning. */
@@ -81,6 +130,11 @@ function readRaw(): string | null {
  * rather than repaired, because the repair would be a scope that signs with a
  * blank secret — a 403 the user cannot explain, in place of a row that is
  * visibly not there.
+ *
+ * "Missing a field" now means *some of the three*, not *any of them*. A row with
+ * none is a public prefix and is kept, which is also what makes this backwards
+ * compatible in the direction that matters: nothing already stored has an empty
+ * key half, so no reader loses a bucket to this change.
  */
 export function readScopes(): BucketScope[] {
   const raw = readRaw()
@@ -101,19 +155,25 @@ export function readScopes(): BucketScope[] {
     const id = text('id')
     const base = normaliseBase(text('base'))
     if (id === '' || base === null || seen.has(id)) continue
-    if (text('accessKeyId') === '' || text('secretAccessKey') === '' || text('region') === '') {
-      continue
-    }
+    const filled = [text('region'), text('accessKeyId'), text('secretAccessKey')]
+    const given = filled.filter((value) => value !== '').length
+    // All three or none. See {@link BucketScope.region} for why the middle is
+    // dropped rather than downgraded to an unsigned scope.
+    if (given !== 0 && given !== 3) continue
     seen.add(id)
     const token = text('sessionToken')
     out.push({
       id,
       label: text('label') === '' ? base : text('label'),
       base,
-      region: text('region'),
-      accessKeyId: text('accessKeyId'),
-      secretAccessKey: text('secretAccessKey'),
-      ...(token === '' ? {} : { sessionToken: token }),
+      ...(given === 0
+        ? {}
+        : {
+            region: filled[0],
+            accessKeyId: filled[1],
+            secretAccessKey: filled[2],
+            ...(token === '' ? {} : { sessionToken: token }),
+          }),
     })
   }
   return out
@@ -141,10 +201,16 @@ export function writeScopes(scopes: readonly BucketScope[]): void {
  *
  * Two files with the same meaning must not compare unequal, and the ways a
  * typed URL can differ from itself are all here: a missing scheme, a missing
- * trailing slash, a query string or fragment pasted along with it. The scheme
- * must end up `https:` — an `http://` bucket would send the `Authorization`
- * header in clear, which is the one mistake this refuses outright rather than
- * normalising.
+ * trailing slash, a query string or fragment pasted along with it.
+ *
+ * The scheme must end up `https:`, and that holds for a public prefix as much as
+ * a signed one though the reason it started from does not. An `http://` bucket
+ * would send the `Authorization` header in clear, which is what this refused
+ * outright rather than normalising; a keyless scope sends no such header and is
+ * refused all the same, because the page itself is served over `https:` and the
+ * browser blocks a mixed-content read before it is sent. Both roads end at a
+ * request that cannot work, and one refusal at the point of typing beats two
+ * different failures much later.
  */
 export function normaliseBase(value: string): string | null {
   const text = value.trim()
@@ -180,7 +246,7 @@ export function scopeFor(url: string, scopes: readonly BucketScope[] = readScope
 }
 
 /**
- * The signing half of a scope, without the label and the id.
+ * The signing half of a scope, or `null` where there is none.
  *
  * A scope is what the *user* fills in; a credential is what the signer takes,
  * and the difference is three fields nobody outside this module should be
@@ -189,17 +255,33 @@ export function scopeFor(url: string, scopes: readonly BucketScope[] = readScope
  * have just listed — and the spread that carries `sessionToken` only when it is
  * present is exactly the line an omission hides in: a temporary credential
  * signed without its token is a 403 that names nothing.
+ *
+ * `null` for a public prefix, which every caller already had a branch for: the
+ * lookup below has answered `null` for an unknown URL since the day it was
+ * written, and `s3/attach.ts` stamps nothing when it gets one. A public scope is
+ * therefore not a new state anywhere downstream — it is the state a URL under no
+ * scope at all has always been in.
  */
-export function credentialOf(scope: BucketScope): S3Credential {
+export function credentialOf(scope: BucketScope): S3Credential | null {
+  if (!isSigned(scope)) return null
   return {
-    accessKeyId: scope.accessKeyId,
-    secretAccessKey: scope.secretAccessKey,
-    region: scope.region,
+    // Non-null by `isSigned`, which is the predicate that makes the three
+    // travel together. Asserted rather than re-tested, so there is one rule
+    // about what a signed scope is and it is stated once.
+    accessKeyId: scope.accessKeyId as string,
+    secretAccessKey: scope.secretAccessKey as string,
+    region: scope.region as string,
     ...(scope.sessionToken === undefined ? {} : { sessionToken: scope.sessionToken }),
   }
 }
 
-/** The credential covering `url`, in the shape the signer wants, or `null`. */
+/**
+ * The credential covering `url`, in the shape the signer wants, or `null`.
+ *
+ * Two different `null`s, deliberately not told apart: no scope covers this URL,
+ * and a public scope covers it and has no key. Both mean *send this unsigned*,
+ * which is the only thing a caller does with the answer.
+ */
 export function credentialFor(
   url: string,
   scopes: readonly BucketScope[] = readScopes(),

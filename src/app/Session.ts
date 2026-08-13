@@ -77,6 +77,9 @@ import type {
   TablePayload,
 } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
+import type { PickedFile } from '../browse/folder'
+import { routeOf, type FileRoute } from '../browse/route'
+import { readFileDrag } from '../ui/fileDrag'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
@@ -506,7 +509,7 @@ export class Session {
    * same act as pressing it on a map of one.
    */
   private readonly deckEdges = new DeckFrame({
-    onGrow: (direction, file) => this.growDeck(direction, file),
+    onGrow: (direction, picked) => this.growDeck(direction, picked),
   })
   /**
    * The genome this session is browsing, when there is no contact map.
@@ -1381,18 +1384,16 @@ export class Session {
    * — {@link openUnknown} asks the annotations worker what the file actually is
    * and re-routes. Guessing first is what keeps a `.cool` from paying for a
    * second worker and a second read on every open.
+   *
+   * The table itself is `browse/route.ts`, because a folder view has to make the
+   * same judgement — it draws a row per name in a directory nobody has opened,
+   * and decides from the name alone whether that row is worth offering. Two
+   * copies of these regular expressions is how a `.bedpe` comes to be loadable
+   * by dropping and greyed out in a list. This stays as a method because it is
+   * the name eleven call sites in this file already use.
    */
-  private routeOf(uri: string): 'map' | 'genome' | 'unknown' {
-    const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
-    if (/\.(m?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
-    if (
-      /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
-        name,
-      )
-    ) {
-      return 'genome'
-    }
-    return 'unknown'
+  private routeOf(uri: string): FileRoute {
+    return routeOf(uri)
   }
 
   /**
@@ -2052,7 +2053,12 @@ export class Session {
       // they came back to the panel to find, and a list of eight loaded files
       // between the Run button and its result is a scroll nobody should need.
       this.syntheticSlot,
-      new AnnotationCard({ store, loader, context: 'browser' }).el,
+      new AnnotationCard({
+        store,
+        loader,
+        context: 'browser',
+        onPickDropped: (event) => this.pickDropped(event),
+      }).el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
@@ -2345,6 +2351,52 @@ export class Session {
   }
 
   /**
+   * One file out of a connected folder, however the reader aimed it.
+   *
+   * The Files panel's `→` and every drop of one of its rows come through here,
+   * and it is deliberately thin: it decides *nothing*. A folder hands back where
+   * the bytes are, and the two doors that already exist take it from there —
+   * {@link dropFiles} and {@link dropped} for a local file, {@link addRemote}
+   * for an object on a bucket. A third routing table, written here, is how a
+   * `.cool` picked from a folder would come to open somewhere a `.cool` dropped
+   * on the window does not.
+   *
+   * @param placement Which lane stack a *track* should land in, when the drop
+   * said so — the map's two edge rectangles. Passed through the routing rather
+   * than around it, exactly as a dropped file's is.
+   * @param map Which map of a deck the drop landed on, for the same reason.
+   */
+  /**
+   * A row out of the Files panel, dropped somewhere with no aim behind it.
+   *
+   * The Tracks cards' door, and the reason it takes an event: the payload is
+   * readable only while the drop handler runs, and the file behind it arrives a
+   * fetch or a permission check later — by which time this session may be gone,
+   * which is what `destroyed` is re-checked for.
+   */
+  pickDropped(event: DragEvent): void {
+    void readFileDrag(event).then((picked) => {
+      if (picked === null || this.destroyed) return
+      void this.addPicked(picked)
+    })
+  }
+
+  async addPicked(picked: PickedFile, placement?: Placement, map?: string): Promise<void> {
+    if (picked.source.kind === 'local') {
+      // No placement means a drop with no aim behind it — the panel's arrow, or
+      // the content area — and that is exactly `dropFiles`'s case, including the
+      // empty seat it fills rather than adds to.
+      if (placement === undefined && map === undefined) {
+        await this.dropFiles([picked.source.file])
+        return
+      }
+      this.dropped(picked.source.file, placement, map)
+      return
+    }
+    await this.addRemote(picked.uri, picked.source, placement, map)
+  }
+
+  /**
    * {@link dropFiles}, for a file that is somewhere else.
    *
    * The header's `+` offers one box for a URL beside its drop area, and what a
@@ -2356,8 +2408,19 @@ export class Session {
    * `source` is carried rather than rebuilt from `uri`, because a file reached
    * through a bucket listing arrives holding that listing's key (§13, and
    * `ui/FilePicker.ts` beside `openPicked`).
+   *
+   * `placement` and `map` are the aim of a drop, and are absent for every caller
+   * that is a box rather than a gesture. They exist because a row in the Files
+   * panel can be dragged onto a map's edge exactly as a local file can, and a
+   * remote bigWig aimed at the bottom of the third replicate should land there
+   * rather than on the lead with the default placement.
    */
-  async addRemote(uri: string, source: SourceSpec): Promise<void> {
+  async addRemote(
+    uri: string,
+    source: SourceSpec,
+    placement?: Placement,
+    map?: string,
+  ): Promise<void> {
     const { path } = splitUri(uri)
     // A saved workspace names whole *tabs* rather than a file to put in one, so
     // it goes to the door that knows that. It keeps this button's promise
@@ -2393,7 +2456,21 @@ export class Session {
       if (this.file === null && this.assembly === null) await this.open(uri, source)
       return
     }
-    this.annotations.loader.addUrl(path)
+    // The same two steps a dropped track takes in {@link dropped}, and they are
+    // written out again rather than shared because the two differ in the one
+    // line between them: a local track is created from a `File` and a remote one
+    // from a URL. What follows — moving what `begin` just made onto the map the
+    // drop landed on — is the same, and is only reached when a drag said where.
+    const held = this.annotations
+    const before = new Set(held.store.entries.map((entry) => entry.id))
+    held.loader.addUrl(path, undefined, placement)
+    if (map !== undefined && map !== LEAD_MAP) {
+      for (const entry of held.store.entries) {
+        if (before.has(entry.id)) continue
+        held.store.unplaceFrom(entry.id, LEAD_MAP)
+        held.store.placeOn(entry.id, map, entry.placement)
+      }
+    }
   }
 
   /**
@@ -2826,7 +2903,12 @@ export class Session {
       this.setAnnotations([
         this.compareCard.el,
         this.syntheticSlot,
-        new AnnotationCard({ store: held.store, loader: held.loader, context: 'browser' }).el,
+        new AnnotationCard({
+          store: held.store,
+          loader: held.loader,
+          context: 'browser',
+          onPickDropped: (event) => this.pickDropped(event),
+        }).el,
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
     }
@@ -3062,6 +3144,7 @@ export class Session {
       new AnnotationCard({
         store,
         loader,
+        onPickDropped: (event) => this.pickDropped(event),
         // Every map a track could be drawn on. A session with no deck answers
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
@@ -3747,9 +3830,9 @@ export class Session {
    * dropped on the edge rather than a click — goes straight into the first of
    * them, so the impatient gesture and the deliberate one reach the same deck.
    */
-  private growDeck(direction: GrowDirection, file?: File): void {
+  private growDeck(direction: GrowDirection, picked?: PickedFile): void {
     if (this.file === null || !this.deckIsPossible) return
-    this.ensureDeck().grow(direction, file)
+    this.ensureDeck().grow(direction, picked)
   }
 
   /**
@@ -3874,6 +3957,18 @@ export class Session {
           // this one.
           loadOnEdge: (files, edge) => {
             for (const file of files) this.dropped(file, placementOn(edge), map)
+          },
+          // The same aim, at a row out of the Files panel. Resolved here rather
+          // than in the panel that took the drop, because reading the file is a
+          // fetch or a permission check and a drop handler cannot await: the
+          // event's payload is read synchronously and the file arrives later, by
+          // which time the `DataTransfer` is dead and the map may have changed
+          // under it — which is why `destroyed` is re-checked.
+          pickOnEdge: (event, edge) => {
+            void readFileDrag(event).then((picked) => {
+              if (picked === null || this.destroyed) return
+              void this.addPicked(picked, placementOn(edge), map)
+            })
           },
         }
   }

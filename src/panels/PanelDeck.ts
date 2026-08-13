@@ -76,6 +76,7 @@ import {
 import { KEYS, withKey } from '../ui/commands'
 import { iconButton } from '../ui/icons'
 import { bucketBrowseButton } from '../ui/browseButton'
+import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
@@ -431,7 +432,7 @@ export class PanelDeck {
     // The same edges the session was showing a moment ago, now round the grid
     // instead of round one map — which is the whole reason they are a component
     // and not a pair of buttons in each place (`panels/DeckFrame.ts`).
-    this.edges = new DeckFrame({ onGrow: (direction, file) => this.grow(direction, file) })
+    this.edges = new DeckFrame({ onGrow: (direction, picked) => this.grow(direction, picked) })
     this.el = el(
       'div',
       { class: 'deck' },
@@ -1069,7 +1070,7 @@ export class PanelDeck {
       slot.vacancy = new VacantPanel({
         origin,
         ...(name === undefined ? {} : { name }),
-        onOpen: (file) => this.fill(slot, file),
+        onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
         // Through `occupy` like the file road, so the cell the reader typed into
         // is the cell that opens — {@link add} would look for the *first* empty
         // one, which in a 2 × 2 with three gaps is not the one they aimed at.
@@ -1509,8 +1510,12 @@ export class PanelDeck {
   }
 
   /** Turn a vacancy into a map, in the position it was standing in. */
-  private fill(slot: Slot, file: File): void {
-    this.occupy(slot, { kind: 'local', uri: file.name }, { kind: 'local', file })
+  private fill(slot: Slot, picked: PickedFile): void {
+    this.occupy(
+      slot,
+      { kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri },
+      picked.source,
+    )
   }
 
   /** Put a file in a cell that had none, leaving every other cell alone. */
@@ -1533,7 +1538,22 @@ export class PanelDeck {
   }
 
   private addLocal(file: File): void {
-    this.add({ kind: 'local', uri: file.name }, { kind: 'local', file })
+    this.addPicked({ uri: file.name, source: { kind: 'local', file } })
+  }
+
+  /**
+   * One more map from a file that may be anywhere.
+   *
+   * The currency the edges and the vacant cells speak, since a row dragged out
+   * of the Files panel is as likely to be an object on a bucket as a file on the
+   * disk — and a `PickedFile` is exactly the pair `add` already takes, so this
+   * is a rename rather than a second road in.
+   */
+  private addPicked(picked: PickedFile): void {
+    this.add(
+      { kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri },
+      picked.source,
+    )
   }
 
   /**
@@ -1593,7 +1613,7 @@ export class PanelDeck {
    * there the gesture is the tie-breaker: a reader who drops on the right edge
    * of a deck has aimed at the right edge of it.
    */
-  grow(direction: GrowDirection, file?: File): void {
+  grow(direction: GrowDirection, picked?: PickedFile): void {
     const shape = { cells: this.slots.length + 1, columns: this.columnsNow() }
     const next = grownDeck(shape, direction)
     if (next.cells > MAX_PANELS) {
@@ -1601,7 +1621,7 @@ export class PanelDeck {
       // for a cell, but there may be an empty one already — and dropping a
       // cooler on a full deck to be told a number is a worse answer than
       // opening it where the deck has space.
-      if (file !== undefined) this.addLocal(file)
+      if (picked !== undefined) this.addPicked(picked)
       else this.warn(NO_ROOM)
       return
     }
@@ -1635,13 +1655,13 @@ export class PanelDeck {
     // the top of the new column and for `below` the left of the new row, both
     // being the near end of the edge that was pressed.
     const first = opened < 0 ? undefined : this.slots[opened]
-    if (file === undefined || first === undefined) {
+    if (picked === undefined || first === undefined) {
       this.paintGrid()
       this.publish()
     } else {
       // Paints and publishes on its way through, with the cell already filled,
       // so the hash is written once rather than as a vacancy and then a map.
-      this.fill(first, file)
+      this.fill(first, picked)
     }
     this.paintBar()
   }

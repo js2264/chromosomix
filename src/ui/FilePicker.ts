@@ -18,6 +18,7 @@ import { IS_STANDALONE } from '../version'
 import { iconButton } from './icons'
 import { button, el } from './dom'
 import { chooseFiles, filesFrom } from './chooseFiles'
+import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { bucketBrowseButton } from './browseButton'
 import { credentialOf, type BucketScope } from '../s3/credentials'
 import { appMark } from './mark'
@@ -114,6 +115,16 @@ export class FilePicker {
     this.drop.addEventListener('drop', (event) => {
       event.preventDefault()
       this.drop.classList.remove('over')
+      // A row dragged out of the Files panel onto this zone. It lands where a
+      // dropped file lands — `onOpen`, which *replaces* — because this zone is
+      // the landing page and replacing is what it has always meant: there is
+      // nothing here to add to. The panel's own arrow is the add.
+      if (dragHasFileRow(event)) {
+        void readFileDrag(event).then((picked) => {
+          if (picked !== null) this.props.onOpen(picked.uri, picked.source)
+        })
+        return
+      }
       const files = filesFrom(event.dataTransfer)
       if (files.length > 0) this.props.onOpenFiles(files)
     })
@@ -346,10 +357,15 @@ export class FilePicker {
    */
   private openPicked(url: string, scope: BucketScope | null): void {
     const { path } = splitUri(url)
+    // Two ways to have no credential and one behaviour for both: no scope at
+    // all, and a public scope that carries no key. Either way the field is left
+    // off rather than set to `null`, so the message on the wire is the one every
+    // other unsigned open sends.
+    const credential = scope === null ? null : credentialOf(scope)
     this.props.onOpen(url, {
       kind: 'remote',
       url: path,
-      ...(scope === null ? {} : { credential: credentialOf(scope) }),
+      ...(credential === null ? {} : { credential }),
     })
   }
 
