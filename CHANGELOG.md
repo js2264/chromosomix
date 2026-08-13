@@ -801,6 +801,45 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Which score the cells were drawn from did not survive a link, a reload or the
+  back button.** `score` has been in `KEY_ORDER` since the field existed, so
+  every hash the app wrote carried it — and `parseViewState` never read it back.
+  The round trip `state/ViewState.ts` requires of itself in its own header was
+  broken for exactly one of its twenty-two keys, and silently, because what a
+  dropped `score` lands on is `count`: a legal picture of the same region, in the
+  same colours, with nothing on screen saying the quantity had changed.
+
+  Three things it cost, none of which looked like the same bug. A shared link
+  naming `balanced` or `ICE` opened on raw counts for the recipient. A restored
+  tab did the same, because the tab strip stores that very string
+  (`app/sessions.ts`). And the back button did it *within* a session: `readHash`
+  re-parses on every popstate and compares by serialising, so it saw a
+  difference, adopted the parsed state, and redrew a different quantity — press
+  Back after a bookmark and the map changed meaning.
+
+  The parser now reads it, as an open string like `colormap` rather than against
+  a closed list, because which `/pixels` columns exist is a fact about the file
+  and not about this build; an id this file has no column for is repaired by
+  `scoreFor`, exactly as a link naming a missing genome is. The round-trip test
+  gained the case, and a second one that would have caught this on the day it
+  was written: a state with **every** key set at once. Each of the twelve cases
+  there is a picture somebody looks at, which is why none of them covered a key
+  no case happened to use.
+
+- **An exported session forgot how its deck was arranged.** `deck:starred` and
+  `deck:columns` are per-file session memory like the ticked sequences and the
+  table filters beside them, and they were the two scopes `buildConfig` walked
+  straight past. `state.maps` says which maps a session holds, so those came
+  back; the arrangement around them did not. A deck of six exported at three
+  columns reopened at whatever the importing window computed for itself, and the
+  Analysis column reopened pointed at the lead rather than at the map the sender
+  had starred — both silently, because both are legal decks.
+
+  Nothing is validated on the way in, deliberately: `PanelDeck` already refuses a
+  column count it cannot use and already moves a star naming a slot it did not
+  build back onto the lead. A second copy of those rules in the config reader
+  would be a second place to keep them in step.
+
 - **Shift stopped sticking the readout to the diagonal as soon as the pointer
   moved.** Shift is the map's on-diagonal modifier — a Shift-drag names a stretch
   and opens it there — and holding it snaps the crosshair and the coordinates

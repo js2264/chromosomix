@@ -78,6 +78,25 @@ export interface SessionConfig {
   /** Sort, search and column filters for the two tables. */
   tables: { genomes?: TableUiState; contigs?: TableUiState }
   /**
+   * The deck's furniture: the columns it was drawn in, and which panel wears
+   * the star (§16.6).
+   *
+   * `state.maps` says *which* maps and has always travelled in the hash; these
+   * two are the arrangement around them, and they were the one part of a
+   * workspace this file read nothing of. So a deck of six exported at three
+   * columns came back at whatever the importing window happened to compute, and
+   * the Analysis column came back pointed at the lead rather than at the map the
+   * sender was measuring — both silently, because both are legal decks.
+   *
+   * Nothing is validated here, and that is deliberate rather than an omission:
+   * `PanelDeck` already refuses a column count it cannot use (`recallColumns`,
+   * which rejects `0`, `NaN` and anything above `MAX_PANELS`) and already moves
+   * a star naming a slot this deck did not build back onto the lead
+   * (`keepStarPresent`). A second copy of those two rules here would be a second
+   * place to keep them in step with the deck they are about.
+   */
+  deck: { starred?: string; columns?: number }
+  /**
    * What each analysis task was last run with, by task id (§18.2).
    *
    * Carried for the reason the tracks are: reproducing a figure should be
@@ -106,6 +125,20 @@ function tableOf(
   return value === null || value === undefined ? {} : { [which]: value }
 }
 
+/** `{ starred: … }` for whichever of the two the deck actually wrote. */
+function deckOf(
+  starred: string | null | undefined,
+  columns: number | null | undefined,
+): SessionConfig['deck'] {
+  return {
+    // An empty star is no star, matching the guard `PanelDeck`'s constructor
+    // reads it back through; a non-finite column count is not a deck anybody
+    // drew, and `recallColumns` would refuse it on the way back in anyway.
+    ...(typeof starred === 'string' && starred !== '' ? { starred } : {}),
+    ...(typeof columns === 'number' && Number.isFinite(columns) ? { columns } : {}),
+  }
+}
+
 /** The `UiMemory` scopes one session's workspace is spread across. */
 const SCOPES = {
   tracks: 'annotations',
@@ -118,6 +151,8 @@ const SCOPES = {
   genomes: 'table:genomes',
   contigs: 'table:contigs',
   analysis: ANALYSIS_SCOPE,
+  starred: 'deck:starred',
+  columns: 'deck:columns',
 } as const
 
 /**
@@ -152,6 +187,7 @@ export function buildConfig(options: {
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
     },
     analysis: recall<AnalysisMemory>(key, SCOPES.analysis) ?? {},
+    deck: deckOf(recall<string>(key, SCOPES.starred), recall<number>(key, SCOPES.columns)),
     plot: options.plot,
   }
 }
@@ -184,6 +220,11 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   // an empty workspace rather than a broken one — the same tolerance every
   // field above is read with.
   if (config.analysis !== undefined) remember(key, SCOPES.analysis, config.analysis)
+  // Each written only when the config carries it, so importing a session from
+  // before these two existed leaves whatever this tab already had rather than
+  // clearing the deck's arrangement to nothing.
+  if (config.deck?.starred !== undefined) remember(key, SCOPES.starred, config.deck.starred)
+  if (config.deck?.columns !== undefined) remember(key, SCOPES.columns, config.deck.columns)
 }
 
 /**
@@ -223,6 +264,7 @@ export function parseConfig(text: string): SessionConfig | null {
       ? (value as AnalysisMemory)
       : {}
   const tables = record(row['tables']) as Record<string, unknown>
+  const deck = record(row['deck']) as Record<string, unknown>
 
   return {
     kind: CONFIG_KIND,
@@ -247,6 +289,13 @@ export function parseConfig(text: string): SessionConfig | null {
       ...tableOf('genomes', table(tables['genomes'])),
       ...tableOf('contigs', table(tables['contigs'])),
     },
+    // Absent from every config written before the deck's furniture was carried,
+    // and read as "this deck was never arranged" rather than as a broken file —
+    // the same tolerance `analysis` above is read with.
+    deck: deckOf(
+      typeof deck['starred'] === 'string' ? deck['starred'] : undefined,
+      typeof deck['columns'] === 'number' ? deck['columns'] : undefined,
+    ),
     plot: (typeof row['plot'] === 'object' && row['plot'] !== null
       ? row['plot']
       : {}) as PlotOptions,

@@ -78,6 +78,8 @@ describe('buildConfig', () => {
     ])
     remember(key, 'compare:normalise', true)
     remember(key, 'table:contigs', { filters: {}, search: 'chr', sortKey: 'length', sortDir: -1 })
+    remember(key, 'deck:starred', 'p2')
+    remember(key, 'deck:columns', 3)
 
     const config = buildConfig({
       state: STATE,
@@ -104,6 +106,10 @@ describe('buildConfig', () => {
     // Absent rather than present-and-empty: a table nobody sorted has no state,
     // and writing one would put a default back over a later default.
     expect(config.tables.genomes).toBeUndefined()
+    // The deck's furniture (§16.6). `state.maps` says which maps; these two say
+    // how they were arranged and which one the Analysis column was reading, and
+    // they were the two scopes this function used to walk straight past.
+    expect(config.deck).toEqual({ starred: 'p2', columns: 3 })
   })
 
   it('describes an untouched session as an empty workspace, not as nothing', () => {
@@ -145,6 +151,48 @@ describe('the round trip', () => {
     expect(recall('s7|dropped.cool', 'bookmarks')).toEqual([BOOKMARK])
     // The exporting session's own memory is untouched by the import.
     expect(recall(key, 'annotations')).toEqual([TRACK])
+  })
+
+  it('carries the deck’s arrangement into the importing session', () => {
+    const key = 'deck|six.cool'
+    remember(key, 'deck:starred', 'p4')
+    remember(key, 'deck:columns', 2)
+    const config = buildConfig({
+      state: { ...STATE, maps: 'a.cool|b.cool' },
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+
+    const read = parseConfig(JSON.stringify(config))
+    expect(read?.deck).toEqual({ starred: 'p4', columns: 2 })
+    applyConfig(read as NonNullable<typeof read>, 's3|six.cool')
+    expect(recall('s3|six.cool', 'deck:starred')).toBe('p4')
+    expect(recall('s3|six.cool', 'deck:columns')).toBe(2)
+  })
+
+  it('leaves an importing tab’s deck alone when the config predates the field', () => {
+    // A session written before the deck's furniture travelled. The two keys must
+    // be left as they are rather than cleared, because "this file says nothing
+    // about a deck" and "this file says the deck has no star" are different
+    // claims and only the second is a reason to forget one.
+    remember('s4|old.cool', 'deck:starred', 'p1')
+    remember('s4|old.cool', 'deck:columns', 4)
+    const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
+    expect(read?.deck).toEqual({})
+    applyConfig(read as NonNullable<typeof read>, 's4|old.cool')
+    expect(recall('s4|old.cool', 'deck:starred')).toBe('p1')
+    expect(recall('s4|old.cool', 'deck:columns')).toBe(4)
+  })
+
+  it('drops a star and a column count that are not ones', () => {
+    // Stored state outlives the build that wrote it (§8.6), and both of these
+    // reach `PanelDeck` — a `columns` of `NaN` divides the grid into no columns
+    // at all, and an empty star names no map.
+    const read = parseConfig(
+      JSON.stringify({ kind: CONFIG_KIND, state: STATE, deck: { starred: '', columns: 'three' } }),
+    )
+    expect(read?.deck).toEqual({})
   })
 })
 

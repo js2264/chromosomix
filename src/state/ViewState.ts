@@ -202,6 +202,22 @@ export function parseViewState(hash: string): ViewState | null {
   const balance = raw.get('balance')
   if (balance !== undefined) state.balance = balance === '1' || balance === 'true'
 
+  // Any string, like `colormap` and unlike `view`: the id is a `/pixels` column
+  // name, and which columns exist is a fact about the file rather than about
+  // this build, so there is no closed list to check it against. An id this file
+  // has no column for is repaired by `scoreFor` (`ui/scores.ts`), which falls
+  // back to the first choice — the same repair a link naming a missing genome
+  // gets, and the reason dropping it here would be the worse answer.
+  //
+  // This was **missing** while `score` was in `KEY_ORDER` and written by the
+  // serialiser, so the round trip this module's header requires was broken for
+  // it: every shared link and every restored tab came back on `count`, silently,
+  // however the sender had shaded it. Restoring a tab goes through the same
+  // string (`app/sessions.ts`), which is what made it a reload bug as well as a
+  // link bug.
+  const score = raw.get('score')
+  if (score !== undefined) state.score = score
+
   // The two derived readings, for the reason `balance` and `score` are here: a
   // recipient of a link has to see the numbers the sender saw, and "observed
   // over expected" and "the ratio of these two files" are different pictures of
