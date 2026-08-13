@@ -56,7 +56,7 @@ export interface SessionConfig {
   state: ViewState
   /** Every loaded annotation, exactly as session storage keeps them (§8.6). */
   tracks: StoredEntry[]
-  /** Hand-placed lines and arrowheads on the map. */
+  /** Hand-placed lines, arrowheads and rectangles on the map. */
   manual: ManualMark[]
   /**
    * Saved places, with the resolution each was found at (§8.10).

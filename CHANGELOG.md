@@ -14,6 +14,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Rectangles, in the Manual annotations card.** The card drew two of the three
+  things people put on a contact map by hand: a line says *this coordinate* and
+  an arrowhead says *this cell*, and there was no way at all to say *this block
+  of contacts* — which is the mark a domain, a corner peak and a pair of loci
+  worth boxing all want. The workaround was four lines making a box out of
+  crosshairs, which is four marks to move and four to delete.
+
+  A rectangle is **two intervals**, one per axis, rather than an interval and a
+  shape. That is what makes on- and off-diagonal the same mark and any ratio
+  expressible: `I:120000-180000` against itself is a domain, two short stretches
+  a megabase apart is a corner peak, and a short stretch against a long one is a
+  locus against a whole arm — a thing no square could have said. Typed with the
+  second box left empty means *the same stretch on both axes*, the same courtesy
+  the arrowhead form does for a cell on the diagonal.
+
+  **Picked in two clicks**, one per corner, which is the smallest number a box
+  can be drawn in; the mode stays on afterwards, as the other two do, because
+  marking up a figure is several marks. The corner it is holding is named on the
+  card while it waits for the second click — a mode that has taken one click and
+  shows nothing cannot be told from one that missed — and it is forgotten when
+  the mode ends, so a box is never drawn to somewhere the reader pointed before
+  they changed their mind. Two corners in different sequences are refused and
+  said so, a side of a box naming one sequence.
+
+  On a **turned** map a box is drawn as the contacts it names rather than as its
+  own outline, which is the same rule every other mark there follows: off the
+  diagonal that is a parallelogram leaning at 45°, and on it that is exactly the
+  triangle a BED domain gets, because an on-diagonal box *is* a domain drawn by
+  hand. A box drawn across the diagonal has an image on each side of it; where
+  they genuinely fall apart — a locus against a whole arm turns into two stripes
+  leaning opposite ways — both are drawn, and where one falls inside the other,
+  which is every box drawn near the diagonal, only the outer one is, since a
+  second outline in there is the edge of nothing.
+
+  Boxes are anchored in the **lane stacks** the way loops already were, a
+  triangle per edge on each axis: a domain boxed on the map puts its two
+  boundaries under the tracks, in the coordinate the tracks are drawn in, which
+  is where the comparison is actually made. They go out with the loops as
+  **BEDPE**, whose six coordinate columns are exactly a pair of intervals — the
+  row is the box rather than a summary of it — and they are carried in a session
+  file and in per-file session memory like every other mark.
+
 - **bigWigs, gene models and interval sets on a metagenome.** §8.5 gated every
   annotation card on the file having no genome layer, so a `.metacool` had no
   Tracks card, no drop zones and no way to draw a coverage track beside the map
@@ -708,6 +750,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   What is behind this one is the file and what can be read off it.
 
 ### Fixed
+
+- **An arrowhead sat on a corner of the very cell it pointed at.** The glyph is
+  stood off along its own 45° axis, which puts it four pixels from the mark's
+  anchor — and the anchor is the cell's *centre*, so the gap cleared the centre
+  and not the corner. At any zoom where a bin is a handful of pixels, the tip
+  covered the last row and column of the cell the reader was being asked to look
+  at, which is the one thing an overlay here is not allowed to do. The whole
+  glyph now stands a further pixel out, square to the axes: right and up in the
+  upper triangle, left and down in the lower. Turned, where it stands straight
+  over the dot, the extra pixel is vertical only — a sideways nudge there is a
+  nudge to a different separation, and so to a different pair of loci.
 
 - **Publishing the demos switched private buckets off, and the error blamed the
   wrong setting.** An S3 CORS policy is bucket-wide — the rules have no prefix

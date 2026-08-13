@@ -12,8 +12,10 @@ import { kindFor } from '../../src/annotations/loader'
 import {
   ManualStore,
   formatPoint,
+  formatSpan,
   mintMarkId,
   parsePoint,
+  parseSpan,
   type ManualMark,
 } from '../../src/annotations/manual'
 import { LEAD_MAP } from '../../src/annotations/placement'
@@ -421,6 +423,35 @@ describe('manual marks', () => {
     expect(parsePoint(formatPoint(point))).toEqual(point)
   })
 
+  it('reads a box’s side as an interval, however the reader wrote it', () => {
+    expect(parseSpan('I:120000-180000')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
+    expect(parseSpan('I:120 kb - 1.53 Mb')).toEqual({ contig: 'I', from: 120_000, to: 1_530_000 })
+    // The readout writes an en dash and separators; a reader pasting back what
+    // the page showed them is doing the obvious thing.
+    expect(parseSpan('XIII-syn40:964,431–1,000,000')).toEqual({
+      contig: 'XIII-syn40',
+      from: 964_431,
+      to: 1_000_000,
+    })
+  })
+
+  it('puts a box’s ends in order, since a box has no direction', () => {
+    expect(parseSpan('I:180000-120000')).toEqual({ contig: 'I', from: 120_000, to: 180_000 })
+  })
+
+  it('refuses a side that is not an interval', () => {
+    expect(parseSpan('I:120000')).toBeNull()
+    expect(parseSpan('I:120000-')).toBeNull()
+    expect(parseSpan('I:a-b')).toBeNull()
+    expect(parseSpan('120000-180000')).toBeNull()
+    expect(parseSpan(formatPoint({ contig: 'I', bp: 100 }))).toBeNull()
+  })
+
+  it('round-trips a span through its own formatter', () => {
+    const span = { contig: 'NODE_1:2', from: 5_000, to: 40_000 }
+    expect(parseSpan(formatSpan(span))).toEqual(span)
+  })
+
   it('keeps marks, and forgets them on request', () => {
     const store = new ManualStore(`marks-${Math.random()}.cool`)
     const line: ManualMark = {
@@ -438,12 +469,40 @@ describe('manual marks', () => {
       b: { contig: 'I', bp: 2 },
       colour: '#c0392b',
     })
+    store.add({
+      id: mintMarkId(),
+      kind: 'rect',
+      a: { contig: 'I', from: 1, to: 10 },
+      b: { contig: 'I', from: 20, to: 30 },
+      colour: '#1f5fa9',
+    })
     expect(store.lines).toHaveLength(1)
     expect(store.arrowheads).toHaveLength(1)
+    expect(store.rects).toHaveLength(1)
     store.remove(line.id)
     expect(store.lines).toHaveLength(0)
     store.clear()
     expect(store.marks).toHaveLength(0)
+  })
+
+  it('restores a box, which a session file is allowed to carry', () => {
+    // Stored state is untrusted input and every mark is validated on the way
+    // back in, so a kind the validator did not know about is a kind that
+    // silently vanishes on reload.
+    const uri = `boxes-${Math.random()}.cool`
+    const first = new ManualStore(uri)
+    first.add({
+      id: mintMarkId(),
+      kind: 'rect',
+      a: { contig: 'IV', from: 120_000, to: 180_000 },
+      b: { contig: 'IV', from: 340_000, to: 400_000 },
+      colour: '#0f8a5f',
+    })
+    expect(new ManualStore(uri).rects[0]).toMatchObject({
+      kind: 'rect',
+      a: { contig: 'IV', from: 120_000, to: 180_000 },
+      b: { contig: 'IV', from: 340_000, to: 400_000 },
+    })
   })
 
   it('restores what a previous visit left', () => {

@@ -1060,8 +1060,23 @@ find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and 
 because the column descends from what came out of a file to what a reader put there by hand.
 
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
-or both) and arrowheads (on- or off-diagonal), each entered as coordinates or picked by clicking the
-map. This is the card that makes a figure, and nothing in it comes from a file.
+or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
+entered as coordinates or picked by clicking the map. This is the card that makes a figure, and
+nothing in it comes from a file.
+
+The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
+third is two intervals rather than one interval and a shape, because the boxes people draw are not
+one shape: a domain is a square on the diagonal, a corner peak is a small square off it, and a locus
+against a whole arm is neither. A rectangle is picked with **two clicks**, one per corner, which is
+the smallest number a box can be drawn in; the other two kinds stay one click, and all three place as
+many marks as the reader wants before the mode is put down. An on-diagonal rectangle is drawn as the
+same triangle a BED domain is on a turned map, since that is what it is.
+
+A hand-drawn mark never sits on the pixel it is about (§8.1's rule for overlays generally). For the
+arrowhead that means the glyph is stood off the cell along its own 45° axis **and** by a pixel square
+to the axes: the mark is anchored at the cell's centre, so a diagonal gap alone clears the centre and
+not the corner, and at any zoom where a bin is a handful of pixels the tip landed on the last row and
+column of the cell it was pointing at.
 
 ### 8.2 bigWig
 
@@ -2295,7 +2310,15 @@ where a locus is:
 - a **loop** becomes one dot at that height — the pair and its mirror rotate to the same point, so
   the square map's "which half do I ring" question does not arise;
 - an **arrowhead** stands over the dot it names with its tip pointing back at it, square to the axis
-  rather than at 45°, and on the far side from the diagonal so the cell is never under the glyph.
+  rather than at 45°, and on the far side from the diagonal so the cell is never under the glyph —
+  the extra pixel of clearance is vertical only here, a sideways nudge on a turned map being a nudge
+  to a different separation and so to a different pair of loci;
+- a **rectangle** becomes the image of the contacts it names, which is a parallelogram leaning at 45°
+  off the diagonal and the domain triangle on it. A box drawn *across* the diagonal has two such
+  images, one per side, and both are drawn where they genuinely fall apart — a locus against a whole
+  arm turns into two stripes leaning opposite ways, and drawing one of them would be drawing half the
+  contacts the reader boxed. Where one image falls inside the other, which is every box drawn near
+  the diagonal, only the outer is drawn: a second outline in there is the edge of nothing.
 
 A call further out than the band shows is **not drawn**. That is outside the data rather than off
 the edge of the picture, and a dot pinned to the top would claim a depth the map is not showing.

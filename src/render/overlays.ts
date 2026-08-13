@@ -18,7 +18,7 @@
 import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
-import type { ManualArrowhead, ManualLine } from '../annotations/manual'
+import type { ManualArrowhead, ManualLine, ManualRect, ManualSpan } from '../annotations/manual'
 import type { FeatureSet, OverlayShape, PairSet } from '../annotations/types'
 import type { Rect } from './heatmap'
 import type { LocusAxis } from './locus'
@@ -53,7 +53,11 @@ export interface OverlayFrame {
  *   midpoint at the height of its own span;
  * - a **loop** becomes a dot at the height of its own span, which is the single
  *   clearest thing a turned map does — a row of loops at one separation reads as
- *   a row, where on the square it is a smear parallel to the diagonal.
+ *   a row, where on the square it is a smear parallel to the diagonal;
+ * - a **box** becomes a parallelogram leaning at 45°, or — when it sits on the
+ *   diagonal — the same triangle a domain does, which is the shape it should
+ *   have: an on-diagonal box *is* a domain, drawn by hand
+ *   ({@link turnedLobes}).
  */
 export interface OverlayTurn {
   /** Separation, in bins, of the row furthest from the axis. */
@@ -419,12 +423,248 @@ export function drawManualLines(
   ctx.restore()
 }
 
+// ---------------------------------------------------------------------------
+// Hand-drawn boxes
+// ---------------------------------------------------------------------------
+
+/** A corner of a box, as one base-pair coordinate per axis. */
+interface Corner {
+  row: number
+  col: number
+}
+
+/** A drawn point, in canvas pixels. */
+interface Point {
+  x: number
+  y: number
+}
+
+/**
+ * The part of a box on the upper side of the diagonal, in base pairs.
+ *
+ * Sutherland–Hodgman against `col >= row`, which is all the clipping a convex
+ * quadrilateral against one half-plane needs: walk the edges, keep the corners
+ * that are in, and add the crossing wherever an edge changes its mind. Comes
+ * back with three to five corners, or fewer than three where the box is wholly
+ * on the other side and there is nothing up here to draw.
+ */
+function upperHalf(corners: readonly Corner[]): Corner[] {
+  const out: Corner[] = []
+  const side = (corner: Corner): number => corner.col - corner.row
+  for (let i = 0; i < corners.length; i++) {
+    const from = corners[i]
+    const to = corners[(i + 1) % corners.length]
+    const here = side(from)
+    const there = side(to)
+    if (here >= 0) out.push(from)
+    if ((here > 0 && there < 0) || (here < 0 && there > 0)) {
+      const t = here / (here - there)
+      out.push({
+        row: from.row + (to.row - from.row) * t,
+        col: from.col + (to.col - from.col) * t,
+      })
+    }
+  }
+  return out
+}
+
+/** Twice the signed area, whose sign is which way a polygon winds. */
+function windingOf(polygon: readonly Point[]): number {
+  let sum = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i]
+    const b = polygon[(i + 1) % polygon.length]
+    sum += a.x * b.y - b.x * a.y
+  }
+  return sum
+}
+
+/** `true` when every corner of `inner` is inside the convex `outer`. */
+function convexContains(outer: readonly Point[], inner: readonly Point[]): boolean {
+  const winding = windingOf(outer)
+  if (outer.length < 3 || winding === 0) return false
+  const way = Math.sign(winding)
+  for (const point of inner) {
+    for (let i = 0; i < outer.length; i++) {
+      const a = outer[i]
+      const b = outer[(i + 1) % outer.length]
+      const cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)
+      // Half a pixel of slack: a lobe poking out by less than that is not a
+      // shape, it is the rounding on the corner it was clipped at.
+      if (cross * way < -0.5) return false
+    }
+  }
+  return true
+}
+
+/**
+ * The one or two shapes a box turns into, in canvas pixels.
+ *
+ * A turned map draws the upper triangle and nothing else, so what a box shows
+ * there is not the box: it is *the contacts the box names*, which the picture
+ * holds in one place each. The box and its mirror across the diagonal are the
+ * same contacts, and the turn sends them to the same band — so the honest
+ * drawing is the image of `box ∪ mirror(box)`, taken on the side that is drawn.
+ *
+ * Each half of that union is a rectangle clipped to `col >= row` and then sent
+ * through the rotation, which is affine on that side — x is the midpoint of the
+ * two coordinates and y is what they are apart — so corners go to corners and
+ * edges stay straight. Hence **lobes**, plural, and each is a polygon:
+ *
+ * - a box **off** the diagonal has one lobe, a parallelogram leaning at 45°;
+ * - a box **on** it has two that coincide, and they are the domain triangle —
+ *   the two corners that sit on the diagonal land on the axis and the two that
+ *   do not meet over the midpoint at the height of the box's own width;
+ * - a box **across** it has two that overlap, and the containment test drops the
+ *   one inside the other, because a second outline in there reads as a shape
+ *   that is not on the map.
+ *
+ * The one case that keeps both is a box far taller than it is wide — a locus
+ * against a whole arm — whose two halves genuinely rotate into two separate
+ * stripes, one leaning each way. Drawing one of them would be drawing half the
+ * contacts the reader boxed.
+ *
+ * Empty between two sequences, which have no separation and so no place in a
+ * band that counts it — the condition {@link turnedPlace} is gated on too.
+ */
+function turnedLobes(
+  frame: OverlayFrame,
+  cols: LocusAxis,
+  turn: OverlayTurn,
+  rect: ManualRect,
+): Point[][] {
+  if (rect.a.contig !== rect.b.contig) return []
+  const contig = rect.a.contig
+  // One lookup answers for every corner: the axis is linear within a stretch, so
+  // it is `null` for a contig that is off this view and for nothing else.
+  if (cols.locusToUnit(contig, rect.a.from) === null) return []
+  const unit = (bp: number): number => cols.locusToUnit(contig, bp) ?? 0
+  const place = (corner: Corner): Point => ({
+    x: toX(frame, (unit(corner.row) + unit(corner.col)) / 2),
+    // Clipped, `col >= row`, so the separation needs no absolute value. Not
+    // gated on the band's depth: a box deeper than the rows on screen is drawn
+    // and clipped, exactly as a domain triangle wider than the band is.
+    y: toY(frame, rowForSeparation(turn, (corner.col - corner.row) / turn.binsize) + 0.5),
+  })
+
+  const lobes: Point[][] = []
+  for (const [rows, columns] of [
+    [rect.a, rect.b],
+    [rect.b, rect.a],
+  ] as Array<[ManualSpan, ManualSpan]>) {
+    const half = upperHalf([
+      { row: rows.from, col: columns.from },
+      { row: rows.to, col: columns.from },
+      { row: rows.to, col: columns.to },
+      { row: rows.from, col: columns.to },
+    ])
+    if (half.length >= 3) lobes.push(half.map(place))
+  }
+  if (lobes.length === 2) {
+    if (convexContains(lobes[0], lobes[1])) return [lobes[0]]
+    if (convexContains(lobes[1], lobes[0])) return [lobes[1]]
+  }
+  return lobes
+}
+
+/**
+ * Boxes the reader drew: a stretch of rows by a stretch of columns.
+ *
+ * An outline, never a fill, and the same 1.25 px rule an overlay file's elements
+ * are drawn with — a hand-drawn box and a domain out of a BED are the same
+ * assertion about the same block of pixels, and drawing them differently would
+ * suggest one of them means more than the other.
+ *
+ * Clipped to the data on **both** presentations, which the lines above do not
+ * need to be: a line is drawn between the data's own edges, but a box is an
+ * extent the reader chose and is very often bigger than what is on screen —
+ * zoom into a domain and its box surrounds the view. Unclipped, its edges would
+ * be drawn over the rulers and the lanes.
+ */
+export function drawManualRects(
+  ctx: CanvasRenderingContext2D,
+  frame: OverlayFrame,
+  axes: OverlayAxes,
+  rects: readonly ManualRect[],
+): void {
+  const { rows, cols } = axes
+  const turn = axes.turn ?? null
+  if (rects.length === 0 || cols === null || (turn === null && rows === null)) return
+
+  ctx.save()
+  clipToData(ctx, frame)
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = Math.max(1 / frame.dpr, 1.25)
+  for (const rect of rects) {
+    ctx.strokeStyle = rect.colour
+
+    if (turn !== null) {
+      for (const lobe of turnedLobes(frame, cols, turn, rect)) {
+        ctx.beginPath()
+        ctx.moveTo(lobe[0].x, lobe[0].y)
+        for (let i = 1; i < lobe.length; i++) ctx.lineTo(lobe[i].x, lobe[i].y)
+        ctx.closePath()
+        ctx.stroke()
+      }
+      continue
+    }
+
+    const left = cols.locusToUnit(rect.b.contig, rect.b.from)
+    const right = cols.locusToUnit(rect.b.contig, rect.b.to)
+    const top = rows?.locusToUnit(rect.a.contig, rect.a.from) ?? null
+    const bottom = rows?.locusToUnit(rect.a.contig, rect.a.to) ?? null
+    // One end on a sequence this view does not draw is not half a box: on a
+    // `chrI × chrII` block a box of chrI against chrIII has no columns here.
+    if (left === null || right === null || top === null || bottom === null) continue
+    const x0 = toX(frame, Math.min(left, right))
+    const x1 = toX(frame, Math.max(left, right))
+    const y0 = toY(frame, Math.min(top, bottom))
+    const y1 = toY(frame, Math.max(top, bottom))
+    if (x1 < frame.data.x || x0 > frame.data.x + frame.data.width) continue
+    if (y1 < frame.data.y || y0 > frame.data.y + frame.data.height) continue
+    ctx.beginPath()
+    // A floor of two pixels on each side, as a domain's box has: a box one bin
+    // wide on a whole-genome view is sub-pixel, and a mark the reader placed
+    // must not be a mark they cannot find.
+    ctx.rect(
+      snap(x0, frame.dpr),
+      snap(y0, frame.dpr),
+      Math.max(2, x1 - x0),
+      Math.max(2, y1 - y0),
+    )
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+// ---------------------------------------------------------------------------
+// Arrowheads
+// ---------------------------------------------------------------------------
+
 /** How far the arrowhead's tip sits off the cell it names, in CSS pixels. */
 const ARROW_GAP = 4
 /** Tip to base. */
 const ARROW_LENGTH = 13
 /** Half the base's width. */
 const ARROW_HALF = 6.5
+/**
+ * The last pixel between the tip and the cell, square to the axes.
+ *
+ * {@link ARROW_GAP} stands the glyph off along its own 45° axis, which is
+ * `0.707 * 4` on each of x and y — enough to clear the cell's *centre*, which is
+ * where the mark is anchored, and not enough to clear its **corner**. So at any
+ * zoom where a bin is a handful of pixels the tip sat on the last row and column
+ * of the very cell it was pointing at, which is the one thing §8.1 asks an
+ * overlay never to do: it covered a corner of the pixel the reader was being
+ * asked to look at.
+ *
+ * One pixel out on each axis is the whole fix, and it is deliberately *not*
+ * scaled along the 45° axis — the overlap is with the cell's square corner, so
+ * the correction is square too. Turned, the glyph stands straight up over the
+ * dot and only the vertical needs it; a sideways nudge there would put the tip
+ * over a *different* separation, which is a different pair of loci.
+ */
+const ARROW_NUDGE = 1
 
 /**
  * Arrowheads, pointing down-left at the cell they name.
@@ -432,7 +672,9 @@ const ARROW_HALF = 6.5
  * Placed **outside** the cell relative to the main diagonal — up and to the
  * right for a mark in the upper triangle, down and to the left for its mirror —
  * so the pixel being called out is never under the glyph that calls it out. The
- * tip is what carries the meaning, and it is what sits closest to the cell.
+ * tip is what carries the meaning, and it is what sits closest to the cell,
+ * clear of it by {@link ARROW_GAP} along the diagonal and {@link ARROW_NUDGE}
+ * square to the axes.
  *
  * The mirror is not cosmetic. A mark placed while reading the upper triangle
  * must not point *into* the map when the reader pans to the lower one, which is
@@ -481,10 +723,15 @@ export function drawArrowheads(
     const dx = turn === null ? side * Math.SQRT1_2 : 0
     const dy =
       turn === null ? -side * Math.SQRT1_2 : turn.direction === 'up' ? -1 : 1
-    const tipX = x + dx * ARROW_GAP
-    const tipY = y + dy * ARROW_GAP
-    const baseX = x + dx * (ARROW_GAP + ARROW_LENGTH)
-    const baseY = y + dy * (ARROW_GAP + ARROW_LENGTH)
+    // The whole glyph stood off the cell's corner, tip and base together: a
+    // nudge applied to the tip alone would shorten the arrow by a pixel and
+    // leave it pointing a pixel to the side of where it is.
+    const fromX = x + (turn === null ? side * ARROW_NUDGE : 0)
+    const fromY = y + Math.sign(dy) * ARROW_NUDGE
+    const tipX = fromX + dx * ARROW_GAP
+    const tipY = fromY + dy * ARROW_GAP
+    const baseX = fromX + dx * (ARROW_GAP + ARROW_LENGTH)
+    const baseY = fromY + dy * (ARROW_GAP + ARROW_LENGTH)
     // Perpendicular to the axis of the arrow.
     const px = -dy
     const py = dx

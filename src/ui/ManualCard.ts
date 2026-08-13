@@ -8,16 +8,23 @@
  * do when you are looking at the thing and want to point at it. Neither is a
  * fallback for the other, so both are first-class and both produce exactly the
  * same mark.
+ *
+ * Three kinds, and they are three sentences: a line says *this coordinate*, an
+ * arrowhead says *this cell*, a rectangle says *this block of contacts*.
  */
 
 import {
   MANUAL_PALETTE,
   formatPoint,
+  formatSpan,
   mintMarkId,
+  orderedSpan,
   parsePoint,
+  parseSpan,
   type LineAxis,
   type ManualMark,
   type ManualPoint,
+  type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
 import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
@@ -79,6 +86,7 @@ export class ManualCard {
       cardTitle('Manual annotations', 'pencil'),
       this.lineForm(),
       this.arrowForm(),
+      this.rectForm(),
       this.list,
       this.exportRow(),
     )
@@ -196,6 +204,99 @@ export class ManualCard {
   }
 
   /**
+   * Boxes: a stretch of rows by a stretch of columns.
+   *
+   * Two ranges rather than a range and a shape, so that on- and off-diagonal are
+   * the same form and any ratio is expressible — a domain is `I:120000-180000`
+   * against itself, a corner peak is two short stretches a megabase apart, and a
+   * locus against a whole arm is a short one against a long one. Leaving the
+   * second box empty means *the same stretch on both axes*, which is the box on
+   * the diagonal and is not worth making anybody type twice; it is the same
+   * courtesy the arrowhead form does for a cell on the diagonal.
+   *
+   * Picking one takes **two clicks**, which is the smallest number a box can be
+   * drawn in: a click is a cell, and one cell is a corner. The pending corner is
+   * held here rather than in the store — a half-drawn box is not a mark, it is a
+   * gesture in progress, and a mark list that flickered with one would be a list
+   * of things the reader has to un-place.
+   */
+  private rectForm(): HTMLElement {
+    const first = el('input', { class: 'input', type: 'text', placeholder: 'I:120000-180000 (rows)' })
+    const second = el('input', { class: 'input', type: 'text', placeholder: 'I:340000-400000 (columns)' })
+    const hint = el('span', { class: 'manual-hint' })
+    const add = (a: ManualSpan, b: ManualSpan): void => {
+      this.props.store.add({
+        id: mintMarkId(),
+        kind: 'rect',
+        a,
+        b,
+        colour: this.props.store.nextColour(),
+      })
+    }
+    const typed = button('add', () => {
+      const a = parseSpan(first.value)
+      const b = second.value.trim() === '' ? a : parseSpan(second.value)
+      first.classList.toggle('is-bad', a === null)
+      second.classList.toggle('is-bad', b === null)
+      if (a === null || b === null) return
+      add(a, b)
+      first.value = ''
+      second.value = ''
+    })
+    for (const box of [first, second]) {
+      box.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') typed.click()
+      })
+    }
+
+    let corner: { rows: ManualPoint; cols: ManualPoint } | null = null
+    const forget = (): void => {
+      corner = null
+      hint.textContent = ''
+    }
+    const pick = this.pickButton(
+      'pick corners',
+      (point) => {
+        if (corner === null) {
+          corner = point
+          // Said on the card, because the map shows nothing yet: a mode that has
+          // taken one click and is waiting for the second has to say so
+          // somewhere, or a reader whose second click lands on the sidebar
+          // cannot tell whether the first one registered.
+          hint.textContent = `from ${formatPoint(point.rows)} × ${formatPoint(point.cols)} — click the opposite corner`
+          return
+        }
+        // A span names one sequence. Two corners in different blocks of a
+        // whole-genome view name four, and there is no box with four sides on
+        // two axes — so the first corner is kept and the reader is told, rather
+        // than a box being invented across a boundary they can see.
+        if (corner.rows.contig !== point.rows.contig || corner.cols.contig !== point.cols.contig) {
+          hint.textContent = 'both corners must be on the same pair of sequences'
+          return
+        }
+        // The same cell twice is not a box. Kept armed with the corner it
+        // already has, so the second click is simply the one that missed.
+        if (corner.rows.bp === point.rows.bp && corner.cols.bp === point.cols.bp) return
+        add(
+          orderedSpan(corner.rows.contig, corner.rows.bp, point.rows.bp),
+          orderedSpan(corner.cols.contig, corner.cols.bp, point.cols.bp),
+        )
+        forget()
+      },
+      forget,
+    )
+
+    return el(
+      'div',
+      { class: 'manual-form' },
+      el('span', { class: 'manual-form-title', text: 'Rectangles' }),
+      el('div', { class: 'manual-row' }, first, second),
+      el('div', { class: 'manual-row' }, typed, pick),
+      hint,
+    )
+  }
+
+  /**
    * A button that turns picking on, and then turns it off.
    *
    * One button with two labels rather than two controls: while the mode is on,
@@ -207,15 +308,22 @@ export class ManualCard {
    * several — the corners of four domains, every loop worth an arrowhead — and
    * the round trip to the sidebar between each one was the whole cost of doing
    * it here rather than by typing coordinates.
+   *
+   * `forget` is for a form that carries state *between* clicks: the box form
+   * holds one corner while it waits for the other, and a mode that ended with a
+   * corner still pending would take the reader's next arming and quietly draw a
+   * box to somewhere they pointed at before they changed their mind.
    */
   private pickButton(
     label: string,
     place: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
+    forget: () => void = () => {},
   ): HTMLButtonElement {
     let stop: (() => void) | null = null
 
     const rest = (): void => {
       stop = null
+      forget()
       node.classList.remove('is-armed')
       node.textContent = label
       node.title = 'Then click the plot, as often as you like. Escape or Done stops.'
@@ -259,15 +367,15 @@ export class ManualCard {
    * Aesthetics panel, in the card whose contents it writes.
    *
    * The dropdown chooses *which marks*, not just which container, because the
-   * two kinds are different objects and there is one standard file for each: a
-   * line is a point on the genome and a loop is a pair of them. Saying so in
-   * the option label is more honest than a single "export" that quietly writes
-   * half of what is on screen.
+   * kinds are different objects and there is one standard file for each: a line
+   * is a point on the genome, and a loop and a box are each a pair of places.
+   * Saying so in the option label is more honest than a single "export" that
+   * quietly writes half of what is on screen.
    */
   private exportRow(): HTMLElement {
     for (const [value, text] of [
       ['bed', 'lines (BED)'],
-      ['bedpe', 'loops (BEDPE)'],
+      ['bedpe', 'loops & boxes (BEDPE)'],
     ] as Array<[MarkFormat, string]>) {
       this.formatSelect.appendChild(el('option', { value, text }))
     }
@@ -287,7 +395,7 @@ export class ManualCard {
     this.saveButton.disabled = count === 0
     this.saveButton.title =
       count === 0
-        ? `No ${format === 'bed' ? 'lines' : 'loops'} have been drawn yet`
+        ? `No ${format === 'bed' ? 'lines' : 'loops or boxes'} have been drawn yet`
         : `Write ${count} to a file this app — and bedtools — reads back`
   }
 
@@ -349,6 +457,12 @@ function describe(mark: ManualMark): string {
   if (mark.kind === 'line') {
     const glyph = mark.axis === 'vertical' ? '│' : mark.axis === 'horizontal' ? '─' : '┼'
     return `${glyph} ${formatPoint(mark.at)}`
+  }
+  if (mark.kind === 'rect') {
+    const a = formatSpan(mark.a)
+    const b = formatSpan(mark.b)
+    // One extent for a box on the diagonal, which is what its form takes back.
+    return a === b ? `▭ ${a}` : `▭ ${a} × ${b}`
   }
   const a = formatPoint(mark.a)
   const b = formatPoint(mark.b)

@@ -3,10 +3,10 @@
  *
  * A mark is a coordinate the reader chose, and a coordinate is worth more than
  * the session it was chosen in: it goes in a figure legend, into a colleague's
- * copy of the same file, into the next run's overlay card. So the two kinds go
- * out as the two standard files that mean the same things — a point on the
- * genome is BED, a pair of points is BEDPE — rather than as a private JSON that
- * only this page could open.
+ * copy of the same file, into the next run's overlay card. So the kinds go out
+ * as the two standard files that mean the same things — a point on the genome is
+ * BED, anything naming two places at once is BEDPE — rather than as a private
+ * JSON that only this page could open.
  *
  * They round-trip: `annotations/parse.ts` sniffs and reads both, so marks saved
  * here come back as an overlay drawn on the map. That is the test worth having,
@@ -16,16 +16,24 @@
  * half-open, and a zero-length feature is the one thing readers disagree about.
  */
 
-import type { ManualArrowhead, ManualLine, ManualMark } from './manual'
+import type { ManualArrowhead, ManualLine, ManualMark, ManualRect, ManualSpan } from './manual'
 import type { AnnotationPayload } from './types'
 
 /** What a set of marks can be written as. */
 export type MarkFormat = 'bed' | 'bedpe'
 
-/** The kind each format carries: a line is a point, an arrowhead is a pair. */
+/**
+ * The kinds each format carries: a line is a point on the genome, and both an
+ * arrowhead and a rectangle are a pair of places — one anchor per axis.
+ *
+ * The two go in one file rather than two because they are one thing to BEDPE and
+ * to everything that reads it: an arrowhead's anchors happen to be a single base
+ * wide and a rectangle's are as wide as the reader drew them, which is a
+ * property of the row and not a format. Splitting them would hand out two files
+ * whose only difference is a number in a column.
+ */
 export function marksFor(marks: readonly ManualMark[], format: MarkFormat): ManualMark[] {
-  const kind = format === 'bed' ? 'line' : 'arrowhead'
-  return marks.filter((mark) => mark.kind === kind)
+  return marks.filter((mark) => (mark.kind === 'line') === (format === 'bed'))
 }
 
 /**
@@ -46,7 +54,7 @@ export function formatMarks(
   const rows =
     format === 'bed'
       ? marksFor(marks, 'bed').map((mark) => bedRow(mark as ManualLine))
-      : marksFor(marks, 'bedpe').map((mark) => bedpeRow(mark as ManualArrowhead))
+      : marksFor(marks, 'bedpe').map((mark) => bedpeRow(mark as ManualArrowhead | ManualRect))
   return [`# metacooler manual annotations${from}${when}`, ...rows, ''].join('\n')
 }
 
@@ -63,11 +71,34 @@ function bedRow(line: ManualLine): string {
   return [line.at.contig, start, start + 1, line.axis, 0, '.'].join('\t')
 }
 
-/** `chrom1 start1 end1 chrom2 start2 end2 name score strand1 strand2`. */
-function bedpeRow(mark: ManualArrowhead): string {
-  const a = Math.max(0, Math.round(mark.a.bp))
-  const b = Math.max(0, Math.round(mark.b.bp))
-  return [mark.a.contig, a, a + 1, mark.b.contig, b, b + 1, mark.id, 0, '.', '.'].join('\t')
+/**
+ * `chrom1 start1 end1 chrom2 start2 end2 name score strand1 strand2`.
+ *
+ * An arrowhead's two anchors are the one base each names; a rectangle's are the
+ * two stretches it was drawn across, which is what BEDPE's six coordinate
+ * columns are *for* — the row is the box, not a summary of it.
+ */
+function bedpeRow(mark: ManualArrowhead | ManualRect): string {
+  const [one, two] =
+    mark.kind === 'rect'
+      ? [spanColumns(mark.a), spanColumns(mark.b)]
+      : [pointColumns(mark.a.contig, mark.a.bp), pointColumns(mark.b.contig, mark.b.bp)]
+  return [...one, ...two, mark.id, 0, '.', '.'].join('\t')
+}
+
+/** One base, half-open. */
+function pointColumns(contig: string, bp: number): [string, number, number] {
+  const start = Math.max(0, Math.round(bp))
+  return [contig, start, start + 1]
+}
+
+/**
+ * One stretch, half-open and never empty: a box drawn inside a single bin has
+ * `from === to`, and `chr 100 100` is a row half the tools in this field drop.
+ */
+function spanColumns(span: ManualSpan): [string, number, number] {
+  const start = Math.max(0, Math.round(span.from))
+  return [span.contig, start, Math.max(start + 1, Math.round(span.to))]
 }
 
 // ---------------------------------------------------------------------------

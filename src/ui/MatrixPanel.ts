@@ -61,6 +61,7 @@ import {
   drawArrowheads,
   drawDiagonalFeatures,
   drawManualLines,
+  drawManualRects,
   drawPairs,
   type OverlayAxes,
   type OverlayFrame,
@@ -3007,6 +3008,10 @@ export class MatrixPanel {
       }
     }
 
+    // Boxes under the pointers, for the reason the files go under the marks: a
+    // box is an area and a line or an arrowhead is aimed at something, and an
+    // aim that disappears where it crosses an outline is an aim at the outline.
+    drawManualRects(ctx, frame, this.locusAxes, context.manual.rects)
     drawManualLines(ctx, frame, this.locusAxes, context.manual.lines)
     drawArrowheads(ctx, frame, this.locusAxes, context.manual.arrowheads, palette.labelHaloColor)
     this.paintLaneGuide(ctx, frame)
