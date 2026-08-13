@@ -18,7 +18,7 @@ code disagree, the code is right and this file is a bug.
 ## Contents
 
 - [The three shells](#the-three-shells) — window, session, tab
-- [Persistence](#persistence) — what is remembered where, and why
+- [Persistence](#persistence) — what is remembered where, grants and connected folders
 - [What is being looked at](#what-is-being-looked-at) — view state, views, levels
 - [Files and addressing](#files-and-addressing) — cool, metacool, entries, URIs
 - [Genomes and sequences](#genomes-and-sequences) — genome, contig, assembly, naming
@@ -26,7 +26,7 @@ code disagree, the code is right and this file is a bug.
 - [Annotations](#annotations) — track, lane, placement, group, mark, bookmark
 - [The picture](#the-picture) — score, transform, clip, the turn, refine
 - [Analysis](#analysis) — task, availability, result, synthetic track
-- [Machinery](#machinery) — workers, sources, budgets, grants
+- [Machinery](#machinery) — workers, sources, budgets, grants, buckets
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, CLI
 - [Overloaded words](#overloaded-words)
 - [Doctrines](#doctrines) — the rules cited by number everywhere
@@ -180,6 +180,36 @@ Permission to re-read a local file, kept across a reload (`src/state/handles.ts`
 `FileSystemFileHandle` is a **capability**, not a path and not a copy: it cannot be read as text,
 cannot be sent anywhere, and names nothing a server could act on. Keyed by the file rather than by the
 tab, because two tabs on `rep1.cool` must share one grant.
+
+### connected folder
+
+A place the window keeps and browses, rather than a file it opened (§20, `src/browse/`). Two things
+are one here: a **directory on the machine** and a **key prefix on a bucket**, read through the same
+interface — given a path, the sub-folders and the files; given a file, how to open it. Shown in the
+**Files** panel, which is the one side column that is not about the file the session is of.
+
+A connected folder is a wider grant than a [grant](#grant) above it: the page can see the *names* of
+everything under it and read any of them without a further gesture. Where the bytes go is unchanged
+— nowhere — and every one is listed and revocable in the stored-data screen.
+
+### durable *(of a folder)*
+
+Whether a connected folder survives a reload, which depends on the browser and is stated on its row.
+Chromium and the desktop build have `showDirectoryPicker`, so a directory is held as a
+`FileSystemDirectoryHandle` in IndexedDB and the folder is genuinely connected — live, and still
+there tomorrow. Firefox and Safari have no such thing: `<input webkitdirectory>` hands over a flat
+`File[]`, from which the tree is rebuilt once. That is a **snapshot** — it does not update and it is
+gone after a reload — and the row says *this visit* rather than letting the reader find out later. A
+bucket is always durable, being a line in `localStorage`.
+
+### public scope
+
+A [bucket scope](#bucket-scope) with no credential: a URL prefix and nothing else, listed and read
+unsigned (§20.3). The rule is all three signing fields or none, so a half-filled row is dropped
+rather than downgraded — falling back would turn a mistyped secret into a bucket that 403s on data
+the reader believes they have a key for. Browsing one needs `s3:ListBucket` granted to `*` in the
+bucket policy, which is a different grant from the `s3:GetObject` that makes the files downloadable
+and which most published buckets do not have; that is a normal configuration rather than a fault.
 
 ---
 
@@ -548,8 +578,12 @@ The reader is in a position to know better than the guess, and can override it.
 
 ### bucket and scope
 
-A remote store the app reads by range, and a prefix within one that a stored key applies to. Keys
-live in `localStorage`, are listed in *What this browser is remembering*, and can be cleared there.
+A remote store the app reads by range, and a prefix within one that an entry applies to. A scope
+carries a key or carries none — see [public scope](#public-scope) — and matching is by **longest
+prefix**, so a narrower scope inside a wider one wins and a public `demo/` can sit inside a signed
+bucket without acquiring a signature. Keys live in `localStorage`, are listed in *What this browser
+is remembering*, and can be cleared there. A scope is also a [connected folder](#connected-folder):
+the same entry that decides which key signs a read is the one the Files panel browses.
 
 ---
 

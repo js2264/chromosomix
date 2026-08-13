@@ -88,9 +88,18 @@ export const KEYS = {
   mapToggle: 'v',
 } as const
 
-/** `'Autoscale every track'` + `'y'` → `'Autoscale every track (Y)'`. */
-export function withKey(text: string, keys: string): string {
-  return `${text} (${keyLabel(keys)})`
+/**
+ * `'Autoscale every track'` + `'y'` → `'Autoscale every track (Y)'`.
+ *
+ * `undefined` gives the text back unchanged, so a control that has no shortcut
+ * can be described by the same call as one that has. Not every control does:
+ * `ui/plotOptions.ts` gave `f` to the Files panel and left its `fills` toggle
+ * keyless, and the single-letter space is spent enough that it will not be the
+ * last. Absorbed here rather than at the call sites, because a `?? ''` at each
+ * of them would print `Track fill — … ()`.
+ */
+export function withKey(text: string, keys: string | undefined): string {
+  return keys === undefined ? text : `${text} (${keyLabel(keys)})`
 }
 
 /**

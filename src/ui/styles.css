@@ -5811,7 +5811,7 @@ canvas.is-frozen {
   margin-top: 0.15rem;
 }
 
-.bucket-browse {
+.folder-browse {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -5833,12 +5833,12 @@ canvas.is-frozen {
   color: var(--accent);
 }
 
-.bucket-filter-row {
+.folder-filter-row {
   display: flex;
   gap: 0.4rem;
 }
 
-.bucket-filter {
+.folder-filter {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -5846,15 +5846,15 @@ canvas.is-frozen {
 /* The line under the list — a count, a truncation warning, or a listing that
    failed. Reserving no height when it is empty, because the common case is a
    folder small enough to have nothing to say about it. */
-.bucket-note-line:empty {
+.folder-note:empty {
   display: none;
 }
 
-.bucket-note-line {
+.folder-note {
   margin: 0;
 }
 
-.bucket-crumbs {
+.folder-crumbs {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -5862,11 +5862,11 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
-.bucket-crumb-sep {
+.folder-crumb-sep {
   color: var(--text-dim);
 }
 
-.bucket-entries {
+.folder-entries {
   display: flex;
   flex-direction: column;
   /* Bounded, because a prefix may hold a thousand keys and the dialog must not
@@ -5879,7 +5879,7 @@ canvas.is-frozen {
   border-radius: var(--radius);
 }
 
-.bucket-entry {
+.folder-entry {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -5894,25 +5894,212 @@ canvas.is-frozen {
   cursor: pointer;
 }
 
-.bucket-entry:last-child {
+.folder-entry:last-child {
   border-bottom: none;
 }
 
-.bucket-entry:hover {
+.folder-entry:hover {
   background: var(--accent-soft);
 }
 
-.bucket-entry-name {
+.folder-entry-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.bucket-entry-size {
+.folder-entry-size {
   flex: 0 0 auto;
   font-family: var(--mono);
   font-size: var(--step--2);
   color: var(--text-dim);
+}
+
+/* A file this viewer has no route for. Drawn, because a folder view that hid
+   what it cannot open would disagree with the folder — and dimmed and inert,
+   because a row that looks like the others and does nothing is worse than one
+   that says so. The tooltip carries the reason. */
+.folder-entry-inert {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.folder-entry-inert:hover {
+  background: none;
+}
+
+.folder-error {
+  color: var(--danger);
+}
+
+/* The load arrow, on a file row. Held at the end of the row and revealed on
+   hover or focus rather than drawn on every line: forty rows each carrying a
+   permanent arrow is forty marks competing with the names, which are what a
+   reader is actually scanning. It stays visible while focused so the keyboard
+   path is never chasing something that is not there. */
+.folder-entry-load {
+  flex: 0 0 auto;
+  opacity: 0;
+  padding: 0.1rem;
+}
+
+.folder-entry:hover .folder-entry-load,
+.folder-entry:focus-within .folder-entry-load,
+.folder-entry-load:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  /* No hover to reveal it with. */
+  .folder-entry-load {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The Files panel: the folders this window is connected to, and their trees.
+
+   The one column that is not about the file the session is of, so it is also
+   the one whose contents do not change on a tab switch. Its listing is given
+   the height the column has rather than the dialog's fixed 22rem — a sidebar
+   somebody works out of for an afternoon should use the window.
+   --------------------------------------------------------------------------- */
+.files-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.files-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.files-folder {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: var(--radius);
+}
+
+/* Which folder the tree below is of. A background rather than a rule, because
+   the row above and below it are the same shape and a rule would read as a
+   separator between them. */
+.files-folder.is-on {
+  background: var(--accent-soft);
+}
+
+.files-folder-name {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.files-folder-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-folder-name svg {
+  flex: 0 0 auto;
+}
+
+/* A folder that will not survive a reload, said on the row rather than only in
+   the tooltip — a reader who finds out tomorrow has been told too late. */
+.files-folder-note {
+  flex: 0 0 auto;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.files-actions {
+  display: flex;
+}
+
+.files-actions .btn {
+  flex: 1 1 auto;
+}
+
+.files-lapsed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.files-lapsed p {
+  margin: 0;
+}
+
+/* In the panel the tree is the column: it takes the height that is left and
+   scrolls inside it, so the folder list and the connect button stay put while a
+   four-hundred-entry directory is read. The dialog keeps the fixed box above,
+   which is right there — a modal must not grow with its content. */
+.files-card .folder-browse {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-top: none;
+  padding-top: 0;
+}
+
+.files-card .folder-entries {
+  max-height: none;
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   The Connect dialog: one folder, either kind.
+   --------------------------------------------------------------------------- */
+.connect-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.connect-section > h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+/* The form inside a section already has the section's rule above it. */
+.connect-section .bucket-add {
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Public or needs-a-key, as two buttons rather than a checkbox: what it chooses
+   is which of two ordinary arrangements this is, and a checkbox would make one
+   of them the exception. */
+.bucket-kind {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.bucket-kind .btn.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bucket-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 /* ---------------------------------------------------------------------------

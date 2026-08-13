@@ -178,17 +178,30 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
 }
 
 /**
- * The key that toggles each overlay.
+ * The key that toggles each overlay, where it has one.
  *
  * Here rather than in the command list, beside the label and the mark, because
  * three surfaces need it and only one of them is the command list: the two Plot
  * cards print it in the toggle's tooltip, which is where anybody actually finds
  * a shortcut, and `App.commands` binds it. Written twice, they drift, and the
  * one that drifts is always the tooltip — nothing fails when it is wrong.
+ *
+ * **`fills` has no key any more, and gave `f` to the Files panel.** The
+ * single-letter space was down to `q` and `z` when a fifth panel arrived, and
+ * neither is a letter anyone reaches for a list of files. Between a panel — one
+ * of five columns, in the row of marks at the top of every window — and one of
+ * eleven overlay toggles, `f` belongs to the panel: the four other panels are
+ * `b`, `a`, `m` and `j`, so a keyless one would be the odd column out, while an
+ * overlay's toggle is a button that is on screen beside the picture it changes.
+ * The toggle is untouched; it is one keystroke that is gone, from the option
+ * whose button is hardest to miss.
+ *
+ * A missing entry is therefore a real state and every reader of this table
+ * handles it: the tooltip prints the label alone, and `App.commands` registers
+ * nothing.
  */
-export const PLOT_OPTION_KEYS: Record<PlotOptionKey, string> = {
+export const PLOT_OPTION_KEYS: Partial<Record<PlotOptionKey, string>> = {
   text: 'n',
-  fills: 'f',
   outline: 'i',
   baseline: 'r',
   gutter: 'u',

@@ -42,6 +42,19 @@ const LUCIDE = [
   // adds a file to the tab you are in — two marks that must not be the same
   // mark, standing one row apart.
   'file-plus',
+  // The Files panel, and the button that fills it. `folder-tree` is what the
+  // panel *holds* — a directory read one level at a time — on the same rule its
+  // four siblings follow: `layers` for the annotation stack, `beaker` for what
+  // can be computed. `plug` is the gesture beside it, because what that button
+  // does is attach a place rather than bring in a file, which is the whole
+  // distinction it has to draw against the `file-plus` standing next to it.
+  'folder-tree',
+  'plug',
+  // Which kind of place a connected folder is, on its own row: a disk on this
+  // machine, or a bucket somewhere else. The one fact about a folder that
+  // changes what its rows cost to open, so it is a mark rather than a word.
+  'hard-drive',
+  'cloud',
   'search',
   'zoom-in',
   'zoom-out',

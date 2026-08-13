@@ -32,6 +32,7 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
+import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { cardTitle, icon, iconButton } from './icons'
 import { bucketBrowseButton } from './browseButton'
@@ -85,6 +86,16 @@ export interface AnnotationCardProps {
    * card is told where it is.
    */
   context?: 'map' | 'browser'
+  /**
+   * A row out of the Files panel, dropped on this card.
+   *
+   * Takes the *event* rather than a file, because the bytes behind such a row
+   * have not been fetched and a drop handler cannot await — see
+   * `MatrixPanel.pickOnEdge`, which is the same door onto the map's own edges.
+   * Absent means the drop is ignored, which is what a card with no session
+   * behind it should do with one.
+   */
+  onPickDropped?(event: DragEvent): void
 }
 
 export class AnnotationCard {
@@ -193,7 +204,10 @@ export class AnnotationCard {
    */
   private cardDrops(host: HTMLElement, zone: HTMLElement): void {
     host.addEventListener('dragover', (event) => {
-      if (!dragHasFiles(event)) return
+      // A row out of the Files panel is the same gesture with the bytes
+      // somewhere else, and this card is the plainest place to aim one: it is
+      // the list the track is about to join.
+      if (!dragHasFiles(event) && !dragHasFileRow(event)) return
       event.preventDefault()
       zone.classList.add('over')
     })
@@ -208,6 +222,14 @@ export class AnnotationCard {
       event.preventDefault()
       event.stopPropagation()
       zone.classList.remove('over')
+      if (dragHasFileRow(event)) {
+        // Handed to the session rather than to the loader, and that is not a
+        // detour: a `.cool` dragged onto the Tracks card is still a map, and
+        // `Session.addPicked` is where that is decided — for a dropped file it
+        // has always been decided the same way, one level up in `dropped`.
+        this.props.onPickDropped?.(event)
+        return
+      }
       const files = filesFrom(event.dataTransfer)
       if (files.length > 0) this.props.loader.addFiles(files)
     })

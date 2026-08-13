@@ -29,9 +29,13 @@ import {
   AESTHETICS_PANEL,
   ANALYSIS_PANEL,
   ANNOTATION_PANEL,
+  FILES_PANEL,
   GENERAL_PANEL,
   SidePanel,
 } from '../ui/SidePanel'
+import { FilesCard } from '../ui/FilesCard'
+import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
+import { hydrateFolders } from '../browse/connected'
 import { StatusBar } from '../ui/StatusBar'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { desktop } from '../desktop'
@@ -112,6 +116,19 @@ const ADD_FILE_HINT =
   'else is drawn on top — the same routing a dropped file takes.'
 
 /**
+ * What the header's plug promises, read by its tooltip and by its command.
+ *
+ * It names the *lasting* half, because that is the whole difference from the
+ * button beside it: what a reader gets is not a file but a column they can keep
+ * working out of. The second sentence is the claim that makes it one control
+ * rather than two — a directory and a bucket are browsed identically — and it is
+ * true of the code rather than a slogan (`browse/folder.ts`).
+ */
+const CONNECT_HINT =
+  'A directory on this machine or a bucket, browsed in the Files panel and still there when you ' +
+  'come back. Both are read the same way.'
+
+/**
  * How many sessions may be open at once.
  *
  * Not a rendering limit — the tab strip scrolls — but a memory one. Each session
@@ -178,6 +195,18 @@ export class App implements SessionHost {
   private readonly annotationsPanel: SidePanel
   private readonly aestheticsPanel: SidePanel
   /**
+   * The fifth, and the one that is not about the open file at all.
+   *
+   * Window furniture in a stronger sense than its four siblings: they hold the
+   * *active session's* cards and are re-parented on every tab switch, and this
+   * one holds the same folders whichever tab is in front, because a place you
+   * connected is not a fact about a file. So it is built once, filled once, and
+   * never told about a session — which is also why it is the one panel that
+   * stays available with nothing open.
+   */
+  private readonly filesPanel: SidePanel
+  private readonly files: FilesCard
+  /**
    * The fourth, and the one that lists jobs rather than controls (§18.1).
    *
    * Furniture on the same terms as the other three: its fold is a preference
@@ -209,6 +238,21 @@ export class App implements SessionHost {
     this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout)
     this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout)
     this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout)
+    this.filesPanel = new SidePanel(FILES_PANEL, relayout)
+    this.files = new FilesCard({
+      // The panel's arrow means what the header's `+` means, so it goes to the
+      // same place: a second map beside the one that is open, anything else on
+      // top, an empty tab filled rather than added to. A tab has to exist for
+      // that, and on the landing page one always does.
+      onLoad: (picked) => void this.current?.addPicked(picked),
+      onConnect: () => this.openConnectDialog(),
+    })
+    this.filesPanel.setContent([this.files.el])
+    // Available from the first paint and never withdrawn: the landing page is
+    // exactly where a reader with a folder of coolers starts, and a column that
+    // appeared only once something was open would be missing when it is most
+    // useful. See `ui/SidePanel.ts`.
+    this.filesPanel.setAvailable(true)
 
     this.status = new StatusBar({ client: () => this.current?.client ?? null })
     this.theme = new ThemeToggle()
@@ -268,6 +312,10 @@ export class App implements SessionHost {
           el(
             'div',
             { class: 'head-panels' },
+            // Files first, matching the columns' own order out from the map:
+            // it is the outermost on the left, and it is the one a reader
+            // arrives through rather than one they drive the picture with.
+            this.filesPanel.toggle,
             this.generalPanel.toggle,
             this.annotationsPanel.toggle,
             this.aestheticsPanel.toggle,
@@ -285,6 +333,16 @@ export class App implements SessionHost {
             { class: 'head-add' },
             iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
               this.addFileDialog(),
+            ),
+            // Beside the `+` and not instead of it, because they answer
+            // different questions. The `+` brings in **one file**, now, and
+            // closes; this attaches a **place** and leaves it attached, so the
+            // next twenty files cost a click each. A reader with one URL wants
+            // the first; a reader working out of a directory for an afternoon
+            // wants the second, and until now the app only offered them the
+            // first, twenty times.
+            iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
+              this.openConnectDialog(),
             ),
           ),
         ),
@@ -333,6 +391,7 @@ export class App implements SessionHost {
         'div',
         { class: 'app-body' },
         this.content,
+        this.filesPanel.el,
         this.generalPanel.el,
         this.annotationsPanel.el,
         this.aestheticsPanel.el,
@@ -407,11 +466,12 @@ export class App implements SessionHost {
     // means is the session's decision, by name — see `Session.dropFiles`, which
     // adds rather than replaces in every case it can.
     this.content.addEventListener('dragover', (event) => {
-      // Files only. A track row dragged out of the Tracks card is also a drag
-      // across this area — it is on its way to the map's edge rectangles — and
-      // outlining the whole content area for it would say the content area is
-      // where it goes.
-      if (!dragHasFiles(event)) return
+      // Files only — from the operating system, or out of the Files panel, which
+      // are the same gesture with the bytes in a different place. A track row
+      // dragged out of the Tracks card is also a drag across this area — it is
+      // on its way to the map's edge rectangles — and outlining the whole
+      // content area for it would say the content area is where it goes.
+      if (!dragHasFiles(event) && !dragHasFileRow(event)) return
       event.preventDefault()
       this.content.classList.add('over')
     })
@@ -444,6 +504,16 @@ export class App implements SessionHost {
       ) {
         return
       }
+      // A row out of the Files panel, which carries a name rather than bytes.
+      // Read before `filesFrom`, because it is the only branch that can be told
+      // apart cheaply and a drag is never both.
+      if (dragHasFileRow(event)) {
+        event.preventDefault()
+        void readFileDrag(event).then((picked) => {
+          if (picked !== null) void this.current?.addPicked(picked)
+        })
+        return
+      }
       const files = filesFrom(event.dataTransfer)
       if (files.length === 0) return
       event.preventDefault()
@@ -456,8 +526,44 @@ export class App implements SessionHost {
     // database that is slow, or refuses to open, must not hold up the picker.
     // Anything that genuinely needs the answer awaits the same promise.
     void hydrateHandles()
+    // The same arrangement, for the same reason, one level up: reading the
+    // connected directories in is what lets the Files panel open on the folder
+    // a previous visit left, and a database that is slow must not hold up the
+    // picker. Unlike the file grants, this one has something to do when it
+    // lands — the panel is already on screen, empty — so it is chained rather
+    // than dropped.
+    void hydrateFolders().then(() => this.files.showFirst())
 
     this.restore()
+  }
+
+  /**
+   * The Connect dialog, imported on demand.
+   *
+   * A dynamic import for `ui/FilePicker.ts`'s reason and with the same
+   * honesty about what it buys: the dialog pulls in the bucket form and the
+   * directory pickers, which a session opening a public demo never touches. It
+   * does not keep the *browsing* out of the entry chunk and was never going to
+   * — the Files panel is built with the shell and holds the folder view — so
+   * the split is worth having for the form and nothing more is claimed for it.
+   */
+  private openConnectDialog(): void {
+    if (this.modal !== null) return
+    void import('../ui/ConnectCard').then(({ openConnect }) => {
+      const modal = openConnect({
+        onConnected: (id) => {
+          // Straight into the folder that was just connected, which is the only
+          // thing a reader who has connected one wants next — and the panel is
+          // opened for them, because a column they cannot see is not an answer.
+          this.filesPanel.reveal()
+          this.files.showConnected(id)
+        },
+        onClose: () => {
+          this.modal = null
+        },
+      })
+      this.modal = modal
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -1187,6 +1293,13 @@ export class App implements SessionHost {
         run: () => this.addFileDialog(),
       },
       {
+        id: 'connect-folder',
+        group: 'File',
+        title: 'Connect a folder',
+        hint: CONNECT_HINT,
+        run: () => this.openConnectDialog(),
+      },
+      {
         id: 'open-file',
         group: 'File',
         title: 'Open a different file',
@@ -1252,13 +1365,20 @@ export class App implements SessionHost {
     // because the two Tracks cards print them in their tooltips: a list of pairs
     // here and a lookup there is the same table written twice, and the copy
     // that goes stale is the one nothing tests.
-    for (const key of Object.keys(PLOT_OPTION_KEYS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
+    //
+    // Iterated over the **labels**, not over the bindings. Not every overlay has
+    // a key — `fills` gave `f` up to the Files panel — and iterating the keys
+    // would have dropped that one out of the palette altogether, which is the
+    // one place in this app that promises to list everything it can do. A
+    // command with no `keys` is a palette-only command, which is a state the
+    // registry already has a word for.
+    for (const key of Object.keys(PLOT_OPTION_LABELS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
       list.push({
         id: `overlay-${key}`,
         group: 'View',
         title: `${overlays[key] ? 'Hide' : 'Show'} ${PLOT_OPTION_LABELS[key].label}`,
         hint: PLOT_OPTION_LABELS[key].hint,
-        keys: PLOT_OPTION_KEYS[key],
+        ...(PLOT_OPTION_KEYS[key] === undefined ? {} : { keys: PLOT_OPTION_KEYS[key] }),
         run: () => void togglePlotOption(key),
       })
     }
@@ -1284,6 +1404,18 @@ export class App implements SessionHost {
         keys: GENERAL_PANEL.keys,
         enabled: file,
         run: () => this.generalPanel.toggle.click(),
+      },
+      {
+        id: 'fold-files',
+        group: 'View',
+        title: 'Fold or show the Files panel',
+        hint: 'The folders you have connected, and what is in them.',
+        keys: FILES_PANEL.keys,
+        // No `enabled` gate, unlike its four siblings. They describe the open
+        // file and have nothing to show without one; this describes the places
+        // you connected, which are there before anything is open and are most
+        // useful exactly then.
+        run: () => this.filesPanel.toggle.click(),
       },
       {
         id: 'fold-annotations',

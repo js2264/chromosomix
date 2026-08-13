@@ -22,6 +22,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addressOf,
   credentialFor,
+  credentialOf,
+  isSigned,
   normaliseBase,
   readScopes,
   scopeFor,
@@ -133,6 +135,36 @@ describe('the stored scopes', () => {
       ]),
     )
     expect(readScopes().map((entry) => entry.id)).toEqual(['keep'])
+  })
+
+  /**
+   * A row with **no** key half is a public prefix and is kept.
+   *
+   * The rule is all three or none, and the middle is what gets dropped: a scope
+   * holding an access key and no secret cannot sign, and *falling back* to an
+   * unsigned request would turn a mistyped secret into a bucket that 403s on
+   * data the reader believes they have a key for — attributing the failure to
+   * the bucket rather than to the field two lines up.
+   */
+  it('keeps a row with no key at all, and still drops a half-filled one', () => {
+    installStorage().set(
+      'metacooler-viewer:buckets',
+      JSON.stringify([
+        { id: 'public', label: 'demos', base: 'https://b.s3.amazonaws.com/demo/' },
+        { id: 'half', label: 'oops', base: 'https://b.s3.amazonaws.com/x/', region: 'eu-west-3' },
+        scope({ id: 'signed' }),
+      ]),
+    )
+    expect(readScopes().map((entry) => entry.id)).toEqual(['public', 'signed'])
+    expect(isSigned(readScopes()[0])).toBe(false)
+    expect(isSigned(readScopes()[1])).toBe(true)
+  })
+
+  it('round-trips a public scope without inventing a key half', () => {
+    const open: BucketScope = { id: 'p0', label: 'demos', base: 'https://b.s3.amazonaws.com/demo/' }
+    writeScopes([open])
+    expect(readScopes()).toEqual([open])
+    expect(credentialOf(readScopes()[0])).toBeNull()
   })
 
   it('survives storage holding something that is not JSON', () => {
@@ -365,6 +397,52 @@ describe('listing a prefix', () => {
     })
     expect(seen['Authorization']).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE\//)
     expect(seen).toHaveProperty('x-amz-date')
+  })
+
+  /**
+   * A public prefix is listed with **no headers at all**, and that is not a
+   * detail.
+   *
+   * An unsigned `GET` carrying no custom header is a *simple* CORS request, so
+   * the browser does not preflight it — which means the ordinary public-data
+   * policy (`GET`, `HEAD`, `Range`) answers it as it stands. Add one header here
+   * and every public bucket in the world starts needing a CORS change before it
+   * can be browsed, and the failure would arrive as an opaque `TypeError` with
+   * nothing naming the cause.
+   */
+  it('sends a public listing unsigned, with no headers to preflight', async () => {
+    let seen: Record<string, string> = { sentinel: 'unset' }
+    const open: BucketScope = {
+      id: 'p0',
+      label: 'demos',
+      base: 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/',
+    }
+    await listPrefix(open, 'demo/', {
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        seen = init.headers as Record<string, string>
+        return new Response(XML, { status: 200 })
+      }) as never,
+    })
+    expect(Object.keys(seen)).toEqual([])
+  })
+
+  /**
+   * And the 403 it gets says which of the two grants is missing.
+   *
+   * A bucket published for downloads grants `s3:GetObject` to `*` and stops
+   * there, so "cannot list" is the *normal* state of a public bucket rather than
+   * a fault — and with no backend (C1) there is nothing the app can do but say
+   * so accurately and point at the URL box.
+   */
+  it('blames the bucket policy, not a key, when a public listing is refused', async () => {
+    const open: BucketScope = {
+      id: 'p0',
+      label: 'demos',
+      base: 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/',
+    }
+    await expect(
+      listPrefix(open, 'demo/', { fetchImpl: respondWith('<Error/>', 403) }),
+    ).rejects.toThrow(/anonymous listing.*s3:ListBucket.*bucket policy/s)
   })
 
   it('asks S3 to do the grouping, so one request draws one level', async () => {
