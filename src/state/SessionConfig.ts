@@ -326,6 +326,53 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
 }
 
 /**
+ * Why a file that is not a session is not one.
+ *
+ * A typed answer rather than `null`, because the three cases want three
+ * different sentences and a bare `null` made two of them **false**: a file from
+ * a newer build landed the reader on "is a JSON file but not a saved session",
+ * and a link from one on "may have been cut short in transit". Both send
+ * somebody to inspect the wrong thing — the file, or their network — when what
+ * is actually wrong is the build they are holding.
+ */
+export type ConfigRefusal =
+  | { reason: 'not-json' }
+  | { reason: 'not-a-session' }
+  | { reason: 'newer'; version: number; producer?: string }
+
+/** `true` when {@link readConfig} answered with a session rather than a refusal. */
+export function isRefusal(value: SessionConfig | ConfigRefusal): value is ConfigRefusal {
+  return 'reason' in value
+}
+
+/**
+ * What to tell the reader, in one sentence, about a file that was refused.
+ *
+ * A pure function so the wording is testable without a `Session` and identical
+ * on all three roads a config travels — a dropped file, a fetched URL, and the
+ * CLI. `label` is what the reader calls the thing: a file name, or a URL.
+ */
+export function refusalMessage(refusal: ConfigRefusal, label: string): string {
+  if (refusal.reason === 'not-json') {
+    return `${label} is not a JSON file, so it is not a saved session.`
+  }
+  if (refusal.reason === 'newer') {
+    // Names both numbers and the build, because the fix is not to the file: it
+    // is to update the viewer, or to save the session again from this one.
+    const from = refusal.producer === undefined ? '' : ` — ${refusal.producer}`
+    return (
+      `${label} was saved by a newer version of the viewer${from}, in session format ` +
+      `${refusal.version}. This build reads format ${CONFIG_VERSION}. Update the viewer, or ` +
+      'ask for the session to be saved again from this one.'
+    )
+  }
+  return (
+    `${label} is a JSON file but not a saved session — it does not name itself as one. ` +
+    'A session is written by the export button in the top bar.'
+  )
+}
+
+/**
  * Read a config out of a file's text, or refuse it.
  *
  * Deliberately forgiving about *fields* and strict about *identity*: anything
@@ -334,20 +381,41 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
  * should be told it is not a session rather than watched as their tab is
  * replaced by an empty one.
  */
-export function parseConfig(text: string): SessionConfig | null {
+export function readConfig(text: string): SessionConfig | ConfigRefusal {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    return null
+    return { reason: 'not-json' }
   }
-  if (typeof parsed !== 'object' || parsed === null) return null
+  if (typeof parsed !== 'object' || parsed === null) return { reason: 'not-a-session' }
   const row = parsed as Record<string, unknown>
-  if (row['kind'] !== CONFIG_KIND) return null
+  if (row['kind'] !== CONFIG_KIND) return { reason: 'not-a-session' }
   const state = row['state']
-  if (typeof state !== 'object' || state === null) return null
+  if (typeof state !== 'object' || state === null) return { reason: 'not-a-session' }
   const uri = (state as Record<string, unknown>)['uri']
-  if (typeof uri !== 'string' || uri === '') return null
+  if (typeof uri !== 'string' || uri === '') return { reason: 'not-a-session' }
+
+  // The one check that belongs to *identity* rather than to a field, and the
+  // reason it is here rather than among the tolerant reads below. `version` is
+  // not a value this format carries; it is a claim about what every other value
+  // in the file **means**. A bump says a field this build reads means something
+  // else now, and nothing in a v1 build can know which field moved — so reading
+  // on would be drawing somebody's `vmin` as a log10 value when they wrote a
+  // percentile, with every label on screen agreeing.
+  //
+  // Deliberately no "open anyway". The button would be an offer to be silently
+  // wrong, and the honest fix when a bump finally happens is a `migrate(row,
+  // from)` call on this line rather than a way past it.
+  const version = typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION
+  if (version > CONFIG_VERSION) {
+    const producer = row['producer']
+    return {
+      reason: 'newer',
+      version,
+      ...(typeof producer === 'string' && producer !== '' ? { producer } : {}),
+    }
+  }
 
   const list = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
   const record = (value: unknown): GroupModes =>
@@ -366,7 +434,7 @@ export function parseConfig(text: string): SessionConfig | null {
 
   return {
     kind: CONFIG_KIND,
-    version: typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION,
+    version,
     // Read tolerantly, like every other field: a session written before these
     // existed is still a session, and one written by a build that could not
     // find its own git repository is too.
@@ -410,6 +478,20 @@ export function parseConfig(text: string): SessionConfig | null {
       ? row['plot']
       : {}) as PlotOptions,
   }
+}
+
+/**
+ * The same read, for the two roads that have nowhere to put a reason.
+ *
+ * A share link and the durable workspace record both arrive somewhere that can
+ * only show or not show a thing, so they take the `null` and inherit every
+ * refusal above — including the version gate, which is the point. They are
+ * precisely the two roads that would otherwise silently misread a file from a
+ * newer build.
+ */
+export function parseConfig(text: string): SessionConfig | null {
+  const read = readConfig(text)
+  return isRefusal(read) ? null : read
 }
 
 /** `true` when a file name is worth reading as a config before anything else. */

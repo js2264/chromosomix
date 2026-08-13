@@ -11,12 +11,17 @@ import { describe, expect, it } from 'vitest'
 
 import {
   CONFIG_KIND,
+  CONFIG_VERSION,
   applyConfig,
   buildConfig,
   configFileName,
   looksLikeConfig,
   parseConfig,
+  readConfig,
+  refusalMessage,
   resolveConfig,
+  isRefusal,
+  type ConfigRefusal,
   type SessionConfig,
 } from '@/state/SessionConfig'
 import { MAPS_SEPARATOR, VACANT, parseMaps, type PanelRef } from '@/panels/deck'
@@ -426,6 +431,74 @@ describe('resolveConfig', () => {
     const config = resolveConfig(relative as NonNullable<typeof relative>, base)
     expect(config.tracks).toHaveLength(2)
     expect(config.tracks[1].source).toEqual({ kind: 'local', name: 'dropped.bw' })
+  })
+})
+
+/**
+ * The one check that belongs to a file's *identity* rather than to a field.
+ *
+ * `CONFIG_VERSION`'s docstring says the number is bumped only when a field
+ * **changes meaning** — so the single situation it exists for is a file whose
+ * `vmin` might be a percentile where this build reads a log10 value. Reading on
+ * would draw that with every label on screen agreeing, which is the outcome this
+ * codebase refuses everywhere else. Nothing acted on it until now.
+ */
+describe('the version gate', () => {
+  const at = (version: unknown, over: Record<string, unknown> = {}) =>
+    JSON.stringify({ kind: CONFIG_KIND, version, state: STATE, ...over })
+
+  it('refuses a session from a newer build, and says what it is', () => {
+    const read = readConfig(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
+    expect(isRefusal(read)).toBe(true)
+    expect(read).toMatchObject({
+      reason: 'newer',
+      version: CONFIG_VERSION + 1,
+      producer: '(meta)cooler 9.9.9',
+    })
+  })
+
+  it('names both formats and the build, rather than blaming the file', () => {
+    const read = readConfig(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
+    const message = refusalMessage(read as ConfigRefusal, 'figure3.metacooler.json')
+    expect(message).toContain('figure3.metacooler.json')
+    expect(message).toContain('(meta)cooler 9.9.9')
+    expect(message).toContain(`format ${CONFIG_VERSION + 1}`)
+    expect(message).toContain(`format ${CONFIG_VERSION}`)
+    // The fix is to the viewer, not to the file — so the sentence must not send
+    // the reader off to inspect the JSON.
+    expect(message).toContain('Update the viewer')
+    expect(message).not.toContain('not a saved session')
+  })
+
+  it('still refuses legibly when the newer file cannot say which build wrote it', () => {
+    const read = readConfig(at(CONFIG_VERSION + 1))
+    expect(refusalMessage(read as ConfigRefusal, 'x.json')).toContain(
+      `format ${CONFIG_VERSION + 1}`,
+    )
+  })
+
+  it('tolerates this format and every older one', () => {
+    // Forward tolerance for *added* fields is the promise; a lower number is an
+    // older file and must keep opening. Pinned so whoever writes the first
+    // migration sees exactly what they are changing.
+    expect(isRefusal(readConfig(at(CONFIG_VERSION)))).toBe(false)
+    expect(isRefusal(readConfig(at(0)))).toBe(false)
+    expect(isRefusal(readConfig(at(undefined)))).toBe(false)
+    expect(isRefusal(readConfig(at('two')))).toBe(false)
+  })
+
+  it('tells apart JSON that is broken from JSON that is not a session', () => {
+    expect(readConfig('not json at all')).toEqual({ reason: 'not-json' })
+    expect(readConfig(JSON.stringify({ name: 'my-package' }))).toEqual({ reason: 'not-a-session' })
+    expect(refusalMessage({ reason: 'not-json' }, 'x.json')).toContain('not a JSON file')
+  })
+
+  it('is inherited by the two roads that can only take a null', () => {
+    // A share link and the durable record have nowhere to put a reason, so they
+    // keep calling `parseConfig` — and they are precisely the two that would
+    // otherwise silently misread a file from a newer build.
+    expect(parseConfig(at(CONFIG_VERSION + 1))).toBeNull()
+    expect(parseConfig(at(CONFIG_VERSION))).not.toBeNull()
   })
 })
 

@@ -974,6 +974,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in the one place where the fallback was meant to be the calm one. Found while
   giving the header's new add button the same rule to follow.
 
+- **A session file from a newer build was read as though it were current.** The
+  format carries a version, and `CONFIG_VERSION`'s own docstring says the number
+  is bumped only when a field **changes meaning** — so the single situation it
+  exists for was the one situation nothing acted on. A file whose `vmin` meant a
+  percentile would have been drawn as a log10 value, with every label on screen
+  agreeing.
+
+  It is now refused, and there is deliberately no *open anyway*: a version bump
+  cannot say which field moved, so the button would be an offer to be silently
+  wrong. When a bump does happen the honest fix is a migration on that line
+  rather than a way past it, and the comment says so.
+
+  Refusing needed a **reason** rather than a `null`, because two of the three
+  sentences a reader used to get were false. A file from a newer build landed
+  them on "is a JSON file but not a saved session", and a *link* from one on "may
+  have been cut short in transit" — both sending somebody to inspect the file, or
+  their network, when what is actually wrong is the build they are holding. All
+  three roads now say the same true thing, naming both format numbers and the
+  build the file came from:
+
+  > `figure3.metacooler.json` was saved by a newer version of the viewer —
+  > (meta)cooler 9.9.9, in session format 2. This build reads format 1. Update
+  > the viewer, or ask for the session to be saved again from this one.
+
+  A shared link also now separates *did not survive the journey* from *arrived
+  intact and this build will not read it*. Only the first is the link's fault,
+  and telling a recipient the second was truncated sends them back to the sender
+  for a fresh copy that will fail identically.
+
 - **A session published beside its data broke the moment it named a deck.**
   `resolveConfig` points a config's relative file names at wherever the config
   itself was found — that is what makes `demo/yeast/` a folder anyone can copy to

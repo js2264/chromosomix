@@ -24,7 +24,25 @@ import {
   shareUrl,
   shortenable,
 } from '@/state/shareLink'
-import { CONFIG_KIND, CONFIG_VERSION, type SessionConfig } from '@/state/SessionConfig'
+import {
+  CONFIG_KIND,
+  CONFIG_VERSION,
+  isRefusal,
+  type ConfigRefusal,
+  type SessionConfig,
+} from '@/state/SessionConfig'
+
+/**
+ * The session a link decoded to, or `null`.
+ *
+ * `decodeShare` now separates *the link did not survive the journey* (`null`)
+ * from *it arrived intact and this build will not read it* (a refusal), because
+ * only the first is the link's fault. These tests are about the first road, so
+ * they narrow to the session and let a refusal read as a failure.
+ */
+function decoded(value: SessionConfig | ConfigRefusal | null): SessionConfig | null {
+  return value === null || isRefusal(value) ? null : value
+}
 
 function configOf(overrides: Partial<SessionConfig> = {}): SessionConfig {
   return {
@@ -51,7 +69,7 @@ describe('a session in a fragment', () => {
         { id: 'b2', label: 'boundary', contig: 'chrII', start: 40_000, end: 60_000, binsize: 5000 },
       ],
     })
-    const back = await decodeShare(await encodeShare(config))
+    const back = decoded(await decodeShare(await encodeShare(config)))
     expect(back).not.toBeNull()
     // Field by field rather than deep-equal against the input: `parseConfig`
     // fills in every key an older file might have omitted, so a decoded config
@@ -66,8 +84,8 @@ describe('a session in a fragment', () => {
     // The property deep-equality was reaching for, stated in a way the defaults
     // cannot break. If a round trip lost or invented a field, the second pass
     // would differ from the first.
-    const once = await decodeShare(await encodeShare(configOf()))
-    const twice = await decodeShare(await encodeShare(once as SessionConfig))
+    const once = decoded(await decodeShare(await encodeShare(configOf())))
+    const twice = decoded(await decodeShare(await encodeShare(once as SessionConfig)))
     expect(twice).toEqual(once)
   })
 
@@ -85,7 +103,7 @@ describe('a session in a fragment', () => {
       source: { kind: 'remote', name: `s${i}.bw`, url: `https://x/${i}.bw` },
     }))
     const config = configOf({ tracks: tracks as unknown as SessionConfig['tracks'] })
-    const back = await decodeShare(await encodeShare(config))
+    const back = decoded(await decodeShare(await encodeShare(config)))
     expect(back?.tracks).toHaveLength(8)
     expect(back?.tracks).toEqual(config.tracks)
   })
@@ -147,19 +165,38 @@ describe('reading a link', () => {
     expect(await decodeShare('')).toBeNull()
   })
 
-  it('answers null for a payload that inflates to the wrong kind of JSON', async () => {
-    // Guarding the *kind* matters: `parseConfig` is what stops a link built from
-    // some other application's JSON being opened as a session.
-    const bytes = new TextEncoder().encode(JSON.stringify({ hello: 'world' }))
+  /** Deflate and base64url an arbitrary object, as `encodeShare` would. */
+  async function payloadOf(value: unknown): Promise<string> {
+    const bytes = new TextEncoder().encode(JSON.stringify(value))
     const stream = new Blob([bytes as BlobPart])
       .stream()
       .pipeThrough(new CompressionStream('deflate-raw'))
     const deflated = new Uint8Array(await new Response(stream).arrayBuffer())
-    const payload = btoa(String.fromCharCode(...deflated))
+    return btoa(String.fromCharCode(...deflated))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')
-    expect(await decodeShare(payload)).toBeNull()
+  }
+
+  it('refuses a payload that inflates to the wrong kind of JSON, and says which', async () => {
+    // Guarding the *kind* matters: it is what stops a link built from some other
+    // application's JSON being opened as a session. It answers with a **reason**
+    // rather than `null`, because `null` is reserved for the one failure that is
+    // the link's own fault — see below.
+    const refused = await decodeShare(await payloadOf({ hello: 'world' }))
+    expect(refused).toEqual({ reason: 'not-a-session' })
+  })
+
+  it('separates a link that did not survive from one this build will not read', async () => {
+    // The distinction the reader actually needs. A truncated payload is the
+    // link's fault and a fresh copy fixes it. A session from a newer build
+    // travelled perfectly, and telling its recipient the link was cut short
+    // sends them back to the sender for a copy that will fail identically.
+    expect(await decodeShare('not-base64-and-not-deflate')).toBeNull()
+    const newer = await decodeShare(
+      await payloadOf({ kind: CONFIG_KIND, version: CONFIG_VERSION + 1, state: { uri: 'a.cool' } }),
+    )
+    expect(newer).toMatchObject({ reason: 'newer', version: CONFIG_VERSION + 1 })
   })
 })
 

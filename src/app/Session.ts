@@ -57,8 +57,10 @@ import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice }
 import {
   applyConfig,
   buildConfig,
+  isRefusal,
   looksLikeConfig,
-  parseConfig,
+  readConfig,
+  refusalMessage,
   resolveConfig,
   type SessionConfig,
 } from '../state/SessionConfig'
@@ -1441,17 +1443,15 @@ export class Session {
 
   /** Read a dropped file as a config, and say so if it is not one. */
   private async openConfigFile(file: File): Promise<void> {
-    const config = parseConfig(await file.text())
-    if (config === null) {
-      this.showError(
-        new Error(
-          `${file.name} is a JSON file but not a saved session — it does not name itself as one. ` +
-            'A session is written by the export button in the top bar.',
-        ),
-      )
+    const read = readConfig(await file.text())
+    if (isRefusal(read)) {
+      // The reason, not a guess at it: a file from a newer build is refused for
+      // a reason the reader can act on, and telling them it "is not a saved
+      // session" would send them to inspect the file instead of the viewer.
+      this.showError(new Error(refusalMessage(read, file.name)))
       return
     }
-    await this.openConfig(config)
+    await this.openConfig(read)
   }
 
   /**
@@ -1491,15 +1491,10 @@ export class Session {
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
-      const config = parseConfig(await response.text())
-      if (config === null) {
-        throw new Error(
-          `${fileLabel(url)} is a JSON file but not a saved session — it does not name itself ` +
-            'as one. A session is written by the export button in the top bar.',
-        )
-      }
+      const read = readConfig(await response.text())
+      if (isRefusal(read)) throw new Error(refusalMessage(read, fileLabel(url)))
       if (this.destroyed) return
-      await this.openConfig(resolveConfig(config, url))
+      await this.openConfig(resolveConfig(read, url))
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {

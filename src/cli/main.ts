@@ -53,7 +53,7 @@ import { outputToTsv } from '../analysis/write/tsv'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import { parseBed, parseBedpe, sniffFormat, decodeAnnotationText } from '../annotations/parse'
-import { parseConfig } from '../state/SessionConfig'
+import { isRefusal, readConfig, refusalMessage } from '../state/SessionConfig'
 import type { AnalysisFraming, AnalysisTask, Params, TaskResult } from '../analysis/types'
 import type { TaskInputs } from '../analysis/worker/protocol'
 import { VERSION } from '../version'
@@ -518,11 +518,15 @@ async function replayCommand(args: Args): Promise<number> {
     process.stderr.write('replay needs a session file.\n')
     return 2
   }
-  const config = parseConfig(await readFile(path, 'utf8'))
-  if (config === null) {
-    process.stderr.write(`${path} is not a metacooler session file.\n`)
+  const read = readConfig(await readFile(path, 'utf8'))
+  if (isRefusal(read)) {
+    // The reason rather than one blanket sentence: a session from a newer build
+    // is a different problem from a file that is not one, and only one of them
+    // is fixed by looking at the file.
+    process.stderr.write(`${refusalMessage(read, path)}\n`)
     return 2
   }
+  const config = read
   const recorded = recordedTasks(config)
   if (recorded.length === 0) {
     process.stderr.write(

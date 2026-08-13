@@ -51,7 +51,7 @@ import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
-import { applyConfig, configFileName } from '../state/SessionConfig'
+import { applyConfig, configFileName, isRefusal, refusalMessage } from '../state/SessionConfig'
 import { fileMemoryKey } from '../state/UiMemory'
 import {
   WORKSPACE_VERSION,
@@ -941,12 +941,22 @@ export class App implements SessionHost {
   private async openSharedHash(): Promise<boolean> {
     const payload = readShareHash(window.location.hash)
     if (payload === null) return false
-    const config = await decodeShare(payload)
-    if (config === null) {
-      this.warn('That shared link could not be read. It may have been cut short in transit.')
+    const read = await decodeShare(payload)
+    if (read === null || isRefusal(read)) {
+      // Two different failures, and only one of them is the link's fault. A
+      // payload that did not inflate was cut short in transit; anything past
+      // that arrived intact, and a session this build cannot read is a fact
+      // about the build. Sending a reader back for a fresh copy of a link that
+      // will fail identically is the outcome worth avoiding.
+      this.warn(
+        read === null
+          ? 'That shared link could not be read. It may have been cut short in transit.'
+          : refusalMessage(read, 'That shared link'),
+      )
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       return false
     }
+    const config = read
     this.writingHash = true
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
     this.writingHash = false

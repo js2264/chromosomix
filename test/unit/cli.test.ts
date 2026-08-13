@@ -232,12 +232,40 @@ describe('replaying a session', () => {
     expect(complained()).toMatch(/skipped notATask: this build has no such task/)
   })
 
-  it('refuses a file that is not a session', async () => {
+  it('refuses a file that is not a session, and says which way it is not one', async () => {
     reset()
     const path = join(directory, 'nope.json')
     await writeFile(path, '{"hello":"world"}')
     expect(await main(['replay', path, '--over', sample])).toBe(2)
-    expect(complained()).toMatch(/not a metacooler session file/)
+    expect(complained()).toMatch(/not a saved session/)
+
+    reset()
+    const broken = join(directory, 'broken.json')
+    await writeFile(broken, 'not json at all')
+    expect(await main(['replay', broken, '--over', sample])).toBe(2)
+    expect(complained()).toMatch(/not a JSON file/)
+  })
+
+  it('refuses a session from a newer build without blaming the file', async () => {
+    // The reason the message is no longer one blanket sentence. A session this
+    // build cannot read is a fact about the build, and telling somebody their
+    // file is "not a metacooler session file" sends them to inspect a file that
+    // is perfectly good.
+    reset()
+    const path = join(directory, 'future.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        kind: 'metacooler.session',
+        version: 99,
+        producer: '(meta)cooler 9.9.9',
+        state: { uri: 'a.cool', view: 'region' },
+      }),
+    )
+    expect(await main(['replay', path, '--over', sample])).toBe(2)
+    expect(complained()).toMatch(/newer version of the viewer/)
+    expect(complained()).toMatch(/9\.9\.9/)
+    expect(complained()).not.toMatch(/not a saved session/)
   })
 
   it('refuses a session that recorded no analysis', async () => {

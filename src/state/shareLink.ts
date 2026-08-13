@@ -37,7 +37,13 @@
  * filename to a stranger.
  */
 
-import { CONFIG_KIND, parseConfig, type SessionConfig } from './SessionConfig'
+import {
+  CONFIG_KIND,
+  isRefusal,
+  readConfig,
+  type ConfigRefusal,
+  type SessionConfig,
+} from './SessionConfig'
 
 /** The fragment key a shared session travels under. */
 export const SHARE_KEY = 's'
@@ -97,17 +103,26 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
 }
 
 /** The inverse. `null` for anything that is not one, rather than a throw. */
-export async function decodeShare(payload: string): Promise<SessionConfig | null> {
+export async function decodeShare(payload: string): Promise<SessionConfig | ConfigRefusal | null> {
+  let json: string
   try {
-    const json = new TextDecoder().decode(await inflate(fromBase64Url(payload)))
-    const config = parseConfig(json)
-    return config !== null && config.kind === CONFIG_KIND ? config : null
+    json = new TextDecoder().decode(await inflate(fromBase64Url(payload)))
   } catch {
     // A truncated link — pasted across two lines by a mail client, most often —
     // reaches here, and the right answer is the picker rather than an error
-    // screen about base64.
+    // screen about base64. `null` is *this* failure and only this one: the
+    // payload did not survive the journey.
     return null
   }
+  // Everything past the inflate arrived intact, so a refusal from here is about
+  // the *session* and is worth passing on rather than flattening into "cut
+  // short in transit". A link from a newer build is the case that matters: it
+  // travelled perfectly and this build cannot read it, and telling the
+  // recipient their link is broken sends them back to the sender for a fresh
+  // copy of a link that will fail the same way.
+  const read = readConfig(json)
+  if (isRefusal(read)) return read
+  return read.kind === CONFIG_KIND ? read : { reason: 'not-a-session' }
 }
 
 /** The payload out of a location hash, or `null` when it carries none. */
