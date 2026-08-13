@@ -10,6 +10,86 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Tabs can be called something.** A tab is labelled by its file, which is the
+  right default and a poor name for the work: four tabs reading
+  `matrix_1000.mcool` off four runs are four identical labels whose only
+  distinguishing part is the one they all share. Double-click a tab — or press
+  <kbd>F2</kbd>, or find *Rename this session* in the palette — and type. Enter
+  commits, Escape abandons, and an **empty box hands the tab back to its file
+  name**, which is what makes a rename undoable.
+
+  The name is part of the *session* rather than of the window, so it travels in
+  the saved workspace, in the durable record and in a share link: a workspace of
+  six tabs whose names did not come back is six tabs a reader has to open one at
+  a time to tell apart. It is kept against the file, so it survives a change of
+  resolution and a redirect into an entry of a collection, and opening a
+  *different* file in the tab hands the label back — replacing the file is
+  replacing the work. A tab with nothing open cannot be named, and the strip does
+  not offer the gesture there rather than accepting a name it would have nowhere
+  to keep.
+
+  The tooltip leads with the URI it has always led with, because a named tab is a
+  tab whose file is no longer on screen anywhere else.
+
+- **A saved workspace now carries four things it used to leave behind.** Each was
+  invisible in the same way — the file opened, the tabs came back, and one
+  decision the reader had made was quietly the importing window's instead. Every
+  one of them is a decision that takes minutes to make and a moment to lose.
+
+  **Which columns were folded, and how wide they were.** A fold is a preference
+  and lives beside the theme, which is exactly why it has to travel: a window
+  that restores twelve tracks into an Annotations column the sender had dragged
+  to 520 pixels, and puts it back at the default with Analysis unfolded over it,
+  has restored the tracks and not the arrangement. All five columns, the Files
+  panel included. A file that says nothing about a column leaves it alone.
+
+  **How each companion of a deck was drawn** — its transform, its ramp, its clip,
+  the score it reads instead of the deck's, and whether its chain was open. The
+  deck's own doctrine is that the view is shared and the presentation is not, and
+  a deck of four replicates each clipped to its own depth is precisely what a
+  deck is *arranged* for; restoring it onto the lead's one clip is a legal deck,
+  a plausible-looking one, and not the figure that was saved. Keyed by the file
+  each map was showing, never by its slot — a slot id is minted per deck and
+  names nothing tomorrow — which is the same key the parked lanes already use.
+  One consequence worth stating: one file open twice in one deck has one look,
+  and comes back on whichever of the two clips was set last.
+
+  **What the session's own map says about a track.** Every other map's lane was
+  written down and the lead's was not, so the two things a lane can say that a
+  track cannot — *I am not on this map* and *my range here is different* — were
+  sayable about every map in a deck except the one every session has. Both were
+  losable in one gesture: taking a track off the lead is one press of its last
+  lit edge, and every analysis result computed against a starred companion is
+  placed there and taken off the lead. A deck of four then came back with the
+  fourth's tracks stacked on the first as well.
+
+  **The overlay toggles, on the road that had never applied them.** See below.
+
+- **Companions' scales are remembered across a reload, not only across a save.**
+  The same record the workspace carries is this session's own memory, written on
+  every change rather than on a save — so a reload, the durable restore after a
+  browser restart, and an exported file all describe the same deck. Nudging four
+  companions' clips and closing the window used to lose all four, because a clip
+  is not a navigation and nothing on the state road ever fired.
+
+### Fixed
+
+- **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
+  in the file has always recorded them — the dividers, the breaks, the labels,
+  the ticks, the crosshair, the tooltip — and the one road that could not apply
+  them was the road a workspace actually arrives on. A dropped single session and
+  a pasted share link went through `Session.openConfig`, which applies them; a
+  workspace file and the offer after a browser restart go through the shell,
+  which did not. So a figure saved with the dividers on and the crosshair off
+  came back with whatever the importing window happened to be set to, silently,
+  and looking exactly like the toggles had not been saved. The tab that ends up
+  in front now decides, which is what a window-level preference carried per tab
+  can honestly mean.
+
 ## [0.11.0] - 2026-08-14
 
 ### Changed

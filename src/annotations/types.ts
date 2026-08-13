@@ -641,6 +641,42 @@ export interface StoredEntry {
   visible: boolean
   placement: Placement
   style: AnnotationStyle
+  /**
+   * What the session's own map does with this track, when it is not simply
+   * *draw it where the track says* — and `null` when it does not draw it at all.
+   *
+   * ## Why the lead needs a record of its own
+   *
+   * Every other map's lane is written down by file, in `deck:lanes`
+   * (`AnnotationStore.parkedFor`), and the lead is deliberately excluded there:
+   * a `StoredLane` is keyed on the companion's URI and the lead has no such key
+   * to be found under. So the two things a lane can say that a track cannot —
+   * *I am not on this map* and *my range here is different* — were sayable about
+   * every map in a deck except the one every session has.
+   *
+   * Both were losable in ordinary use. Taking a track off the lead is one press
+   * of the last lit edge in the location row (`ui/lanePlacement.ts`), and every
+   * analysis result computed against a starred companion is placed on that
+   * companion and taken off the lead (`analysis/workspace.ts`) — after which
+   * `placement` still names the edge the track *would* go on, and a restore
+   * dutifully put it there. A deck of four came back with the fourth's tracks
+   * stacked on the first as well.
+   *
+   * ## Absent is not `null`
+   *
+   * Three states, and conflating any two of them loses something:
+   *
+   * - **absent** — every config written before this field existed, and every
+   *   track that is on the lead at its own placement with nothing to add. Read
+   *   as *drawn on the lead, as `placement` says*, which is what those files
+   *   meant and what a plain track means today.
+   * - **`null`** — the lead does not draw it. `placement` is still carried,
+   *   because it is the default any *new* lane of this track is given.
+   * - **an object** — the lead draws it, and here is what it says differently:
+   *   its own edges, and the sparse patch `LANE_OVERRIDES` allows over the
+   *   track's style (`annotations/placement.ts`).
+   */
+  lead?: { placement: Placement; style?: Partial<Pick<AnnotationStyle, 'limits' | 'flip'>> } | null
   /** Which feature set the search reads; see {@link AnnotationEntry.primary}. */
   primary?: boolean
 }

@@ -30,7 +30,8 @@
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
-import { parseMaps, serialiseMaps, type DeckLocal } from '../panels/deck'
+import { parseMaps, readDeckLook, serialiseMaps, type DeckLocal, type DeckLook } from '../panels/deck'
+import type { PanelLayout } from '../ui/SidePanel'
 import { COMMIT, PRODUCER } from '../version'
 import type { StoredEntry } from '../annotations/types'
 import type { StoredLane } from '../annotations/store'
@@ -112,6 +113,25 @@ export interface SessionConfig {
    * recipient can do nothing with (`state/shareLink.ts`).
    */
   source?: { name: string; size?: number; lastModified?: number }
+  /**
+   * What the reader calls this tab, where they have said.
+   *
+   * A tab is labelled by its file, which is the right default and a poor name
+   * for the thing a reader is actually doing: four tabs reading
+   * `matrix_1000.mcool` off four runs are four identical labels, and the file
+   * name is the one part of them that is the same. So a tab can be named, and
+   * the name is part of the session rather than of the window — it travels in
+   * the workspace, in the durable record and in a share link, because a
+   * workspace of six tabs whose names did not come back is six tabs the reader
+   * has to open one at a time to tell apart.
+   *
+   * Absent means *call it after the file*, which is what every tab does until
+   * somebody says otherwise. Absent rather than the file's own label, so a
+   * renamed file — or the same session at another resolution — keeps following
+   * its file rather than being frozen at the name it had when the session was
+   * saved.
+   */
+  name?: string
   /** What is being looked at: the same object the URL hash carries. */
   state: ViewState
   /** Every loaded annotation, exactly as session storage keeps them (§8.6). */
@@ -155,7 +175,7 @@ export interface SessionConfig {
    * (`keepStarPresent`). A second copy of those two rules here would be a second
    * place to keep them in step with the deck they are about.
    */
-  deck: { starred?: string; columns?: number; locals?: DeckLocal[] }
+  deck: { starred?: string; columns?: number; locals?: DeckLocal[]; looks?: DeckLook[] }
   /**
    * The local second file, which the hash has never carried (§11, §5.7).
    *
@@ -195,6 +215,20 @@ export interface SessionConfig {
    * was looking at. Applied on import for the same reason.
    */
   plot: PlotOptions
+  /**
+   * Which columns were folded, and how wide the open ones were.
+   *
+   * A window-level setting carried in a session file for {@link plot}'s reason,
+   * word for word: a folded Analysis column and a 520-pixel Annotations column
+   * are what the sender was looking at, and a workspace that restored twelve
+   * tracks into a column the reader had folded away restored the tracks and not
+   * the arrangement. See `ui/SidePanel.ts`'s `PanelState`.
+   *
+   * Optional on the way in, like every field added after the format shipped: a
+   * config written before this existed leaves the importing window's columns
+   * exactly as it found them.
+   */
+  panels?: PanelLayout
 }
 
 /** `{ genomes: … }` when there is one, and nothing at all when there is not. */
@@ -205,14 +239,20 @@ function tableOf(
   return value === null || value === undefined ? {} : { [which]: value }
 }
 
-/** `{ starred: … }` for whichever of the two the deck actually wrote. */
+/** `{ starred: … }` for whichever of the four the deck actually wrote. */
 function deckOf(
   starred: string | null | undefined,
   columns: number | null | undefined,
   locals?: DeckLocal[] | null,
+  looks?: DeckLook[] | null,
 ): SessionConfig['deck'] {
   return {
     ...(Array.isArray(locals) && locals.length > 0 ? { locals } : {}),
+    // An empty list is no list: a deck nobody has recoloured writes nothing
+    // rather than an empty array, so `applyConfig` can tell "this session says
+    // the companions are on the lead's scale" from "this session predates the
+    // field" — and the second must leave the importing tab alone.
+    ...(Array.isArray(looks) && looks.length > 0 ? { looks } : {}),
     // An empty star is no star, matching the guard `PanelDeck`'s constructor
     // reads it back through; a non-finite column count is not a deck anybody
     // drew, and `recallColumns` would refuse it on the way back in anyway.
@@ -280,6 +320,15 @@ function localsOf(value: unknown): DeckLocal[] {
   })
 }
 
+/**
+ * Where a tab's name lives in session memory; see {@link SessionConfig.name}.
+ *
+ * Exported because `Session` writes it and this module reads it, and a string
+ * literal in both places is one that drifts the first time either moves — with
+ * nothing failing, since a scope nobody writes simply reads back empty.
+ */
+export const SESSION_NAME_SCOPE = 'session:name'
+
 /** The `UiMemory` scopes one session's workspace is spread across. */
 const SCOPES = {
   tracks: 'annotations',
@@ -297,6 +346,8 @@ const SCOPES = {
   locals: 'deck:locals',
   compareLocal: 'compare:local',
   lanes: 'deck:lanes',
+  looks: 'deck:looks',
+  name: SESSION_NAME_SCOPE,
 } as const
 
 /**
@@ -311,6 +362,16 @@ export function buildConfig(options: {
   state: ViewState
   memoryKey: string
   plot: PlotOptions
+  /**
+   * How the window's columns stood, when the caller is a window that has any.
+   *
+   * Passed in beside {@link plot} rather than recalled, and for its reason: both
+   * are the *window's* preferences rather than this session's, so neither is in
+   * the per-session memory this function otherwise reads from. Absent for a
+   * caller with no columns — the CLI is one — where a layout would be an
+   * invention rather than a reading.
+   */
+  panels?: PanelLayout
   now: Date
   /**
    * The local file this session is of, when it is one — see {@link
@@ -330,6 +391,7 @@ export function buildConfig(options: {
     producer: PRODUCER,
     ...(COMMIT === '' ? {} : { commit: COMMIT }),
     ...(options.source === undefined ? {} : { source: options.source }),
+    ...nameOf(recall<string>(key, SCOPES.name)),
     state: options.state,
     tracks: recall<StoredEntry[]>(key, SCOPES.tracks) ?? [],
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
@@ -347,11 +409,18 @@ export function buildConfig(options: {
       recall<string>(key, SCOPES.starred),
       recall<number>(key, SCOPES.columns),
       recall<DeckLocal[]>(key, SCOPES.locals),
+      recall<DeckLook[]>(key, SCOPES.looks),
     ),
     ...compareOf(recall<string>(key, SCOPES.compareLocal)),
     ...lanesOf(recall<StoredLane[]>(key, SCOPES.lanes)),
     plot: options.plot,
+    ...(options.panels === undefined ? {} : { panels: options.panels }),
   }
+}
+
+/** `{ name: … }` for a tab the reader has named, and nothing for one they have not. */
+function nameOf(name: string | null | undefined): { name?: string } {
+  return typeof name === 'string' && name.trim() !== '' ? { name: name.trim() } : {}
 }
 
 /**
@@ -388,8 +457,13 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   if (config.deck?.starred !== undefined) remember(key, SCOPES.starred, config.deck.starred)
   if (config.deck?.columns !== undefined) remember(key, SCOPES.columns, config.deck.columns)
   if (config.deck?.locals !== undefined) remember(key, SCOPES.locals, config.deck.locals)
+  if (config.deck?.looks !== undefined) remember(key, SCOPES.looks, config.deck.looks)
   if (config.compare !== undefined) remember(key, SCOPES.compareLocal, config.compare)
   if (config.lanes !== undefined) remember(key, SCOPES.lanes, config.lanes)
+  // Written only when the config names one, on the rule the three lines above
+  // follow: importing a session from before tabs could be named must leave a tab
+  // the reader has already named alone rather than clearing it back to its file.
+  if (config.name !== undefined) remember(key, SCOPES.name, config.name)
 }
 
 /**
@@ -513,6 +587,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       ? { commit: row['commit'] }
       : {}),
     ...sourceOf(row['source']),
+    ...nameOf(typeof row['name'] === 'string' ? row['name'] : undefined),
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
     state: state as ViewState,
     tracks: list<StoredEntry>(row['tracks']),
@@ -540,13 +615,56 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       typeof deck['starred'] === 'string' ? deck['starred'] : undefined,
       typeof deck['columns'] === 'number' ? deck['columns'] : undefined,
       localsOf(deck['locals']),
+      looksOf(deck['looks']),
     ),
     ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
     ...lanesOf(Array.isArray(row['lanes']) ? (row['lanes'] as StoredLane[]) : undefined),
     plot: (typeof row['plot'] === 'object' && row['plot'] !== null
       ? row['plot']
       : {}) as PlotOptions,
+    ...panelsOf(row['panels']),
   }
+}
+
+/**
+ * A `deck.looks` list, checked member by member.
+ *
+ * Through `panels/deck.ts`'s own reader rather than a second one written here,
+ * on `resolveConfig`'s rule about `parseMaps`: the deck owns what a look is, and
+ * a validator that drifted from it would restore a companion onto a transform
+ * this build has no name for and draw a blank rectangle.
+ */
+function looksOf(value: unknown): DeckLook[] {
+  if (!Array.isArray(value)) return []
+  const out: DeckLook[] = []
+  for (const entry of value as unknown[]) {
+    const look = readDeckLook(entry)
+    if (look !== null) out.push(look)
+  }
+  return out
+}
+
+/**
+ * A `panels` record, checked column by column.
+ *
+ * Keys are not checked against the five columns this build has: a key naming a
+ * panel that does not exist is simply never asked for, and refusing the whole
+ * record over one would lose a layout to a column that was renamed.
+ */
+function panelsOf(value: unknown): { panels?: PanelLayout } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+  const out: PanelLayout = {}
+  for (const [key, held] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof held !== 'object' || held === null) continue
+    const row = held as Record<string, unknown>
+    if (typeof row['folded'] !== 'boolean') continue
+    const width = row['width']
+    out[key] = {
+      folded: row['folded'],
+      ...(typeof width === 'number' && Number.isFinite(width) && width > 0 ? { width } : {}),
+    }
+  }
+  return Object.keys(out).length === 0 ? {} : { panels: out }
 }
 
 /**
@@ -652,6 +770,16 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
   const deck: SessionConfig['deck'] = {
     ...(held.starred === undefined ? {} : { starred: held.starred }),
     ...(held.columns === undefined ? {} : { columns: held.columns }),
+    // Resolved and **kept**, where `locals` beside it is dropped, and the rule
+    // that separates them is the one stated above: a private name is stripped
+    // only where the structure survives without it. A look is keyed on the file
+    // it describes, so a look whose key was stripped is not a look at all — and
+    // the thing it would restore onto a recipient's same-named file is a colour
+    // clip, which is a picture rather than a door. The same trade `lanes` makes
+    // one field down, and through the same `at()`.
+    ...(held.looks === undefined
+      ? {}
+      : { looks: held.looks.map((look) => ({ ...look, uri: at(look.uri) })) }),
   }
 
   const resolved: SessionConfig = {

@@ -19,6 +19,7 @@
  */
 
 import { LANE_EDGES, type LaneEdge } from '../annotations/types'
+import type { Transform } from '../types'
 
 /**
  * A **backstop** on how many maps may be on screen at once, lead included.
@@ -202,6 +203,114 @@ export function withLocalCompanions(
     next[local.index] = { kind: 'local', uri: local.uri }
   }
   return next
+}
+
+/**
+ * How one companion was *drawn*, written down.
+ *
+ * The deck's own doctrine says the view is shared and the presentation is not
+ * (see the module head of `panels/PanelDeck.ts`): every panel takes the region,
+ * the level and the score from the lead, and every panel owns its transform, its
+ * ramp, its clip and — since a companion gained a picker of its own — the score
+ * it reads instead of the deck's. All of that is a decision a reader makes per
+ * map, and until now none of it survived closing the window.
+ *
+ * That absence was the loudest one in a saved workspace. A deck of four
+ * replicates each clipped to its own depth is *the* thing a deck is arranged
+ * for, and restoring it put all four back on the lead's clip — a legal deck, a
+ * plausible-looking one, and not the figure that was saved.
+ *
+ * ## Keyed by the file, never by the slot
+ *
+ * The same key {@link DeckLocal} and `StoredLane` use, and for the same reason:
+ * a slot id is minted per deck (`PanelDeck`'s `nextSlotId`), so an id written
+ * down today names nothing tomorrow. What a reader means by "that map" is the
+ * file it was showing.
+ *
+ * A consequence worth stating rather than discovering: **one file open twice in
+ * one deck has one look.** That is a legitimate deck — the plainest way to read
+ * one map at two colour scales — and it comes back at whichever of the two clips
+ * was written last. Keying on the slot would restore both and lose both the next
+ * time the deck was rebuilt, which is the worse half of the trade.
+ *
+ * Every field is optional because every field is an *override*: a companion that
+ * says nothing about its transform follows the lead, which is what a fresh one
+ * has always done ({@link MapPanelProps.initialLook}).
+ */
+export interface DeckLook {
+  uri: string
+  transform?: Transform
+  colormap?: string
+  vmin?: number
+  vmax?: number
+  /**
+   * The score this panel reads instead of the deck's (`MapPanel.scoreOverride`).
+   *
+   * Sticky by design: once a reader has said what this map's cells are, the
+   * deck's later choices are the deck's business — so it is exactly the kind of
+   * decision a workspace has to carry, or reopening one silently re-imposes the
+   * lead's score on a companion the reader had taken off it.
+   */
+  score?: string
+  /**
+   * Whether the chain on this panel's heading was closed.
+   *
+   * `false` is the interesting value and the only one that is written: a panel
+   * off the lead is a panel the reader deliberately unhooked, and a restore that
+   * hooked it back would move the picture on the first pan.
+   */
+  locked?: boolean
+}
+
+/** The transforms a stored look may name; anything else is not one this build has. */
+const TRANSFORMS: readonly Transform[] = ['log1p', 'log10', 'log2', 'none']
+
+/**
+ * Untrusted, like every other stored shape: checked field by field.
+ *
+ * A member that fails is dropped and its neighbours are kept, which is
+ * `parseWorkspaceFile`'s rule one level down: three companions with their clips
+ * and one corrupt record is three companions, not a deck that refuses to open.
+ * A field that fails takes only itself, for the same reason — a look with an
+ * unreadable `vmax` is still a look that names a colormap.
+ */
+export function isDeckLook(value: unknown): value is DeckLook {
+  if (typeof value !== 'object' || value === null) return false
+  const row = value as Record<string, unknown>
+  return typeof row['uri'] === 'string' && row['uri'] !== ''
+}
+
+/** One stored look with every field this build cannot read left out. */
+export function readDeckLook(value: unknown): DeckLook | null {
+  if (!isDeckLook(value)) return null
+  const row = value as unknown as Record<string, unknown>
+  const number = (key: string): number | undefined =>
+    typeof row[key] === 'number' && Number.isFinite(row[key]) ? (row[key] as number) : undefined
+  const vmin = number('vmin')
+  const vmax = number('vmax')
+  const transform = row['transform']
+  const colormap = row['colormap']
+  const score = row['score']
+  return {
+    uri: row['uri'] as string,
+    ...(TRANSFORMS.includes(transform as Transform) ? { transform: transform as Transform } : {}),
+    ...(typeof colormap === 'string' && colormap !== '' ? { colormap } : {}),
+    ...(vmin === undefined ? {} : { vmin }),
+    ...(vmax === undefined ? {} : { vmax }),
+    ...(typeof score === 'string' && score !== '' ? { score } : {}),
+    ...(typeof row['locked'] === 'boolean' ? { locked: row['locked'] } : {}),
+  }
+}
+
+/**
+ * The looks of a list, with one file's replaced.
+ *
+ * A helper rather than three lines at each call site because the *keying* is the
+ * rule — one entry per file — and a caller that pushed instead of replacing
+ * would grow the record by one member per nudge of a colour slider.
+ */
+export function withLook(looks: readonly DeckLook[], look: DeckLook): DeckLook[] {
+  return [...looks.filter((held) => held.uri !== look.uri), look]
 }
 
 /**

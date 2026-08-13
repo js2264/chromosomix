@@ -231,6 +231,30 @@ describe('reading a link', () => {
     expect(back?.state.maps).toBe(`a.cool${MAPS_SEPARATOR}${VACANT}`)
   })
 
+  it('sends a remote companion’s scale and holds a local one’s back', async () => {
+    // The one field that is neither kept nor dropped whole. A look is keyed on
+    // the file it describes, so the ones naming local companions carry the same
+    // private filename `locals` is stripped for — and the ones naming remote
+    // companions are worth sending, since a deck of replicates arriving on four
+    // different clips is the figure not arriving.
+    const config = configOf({
+      deck: {
+        locals: [{ index: 1, uri: 'rep2.cool' }],
+        looks: [
+          { uri: 'https://example.org/a.cool', vmax: 2.5 },
+          { uri: 'rep2.cool', vmax: 9 },
+        ],
+      },
+      state: { uri: 'lead.cool', view: 'region', maps: `a.cool${MAPS_SEPARATOR}${VACANT}` },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    expect(JSON.stringify(decoded(await decodeShare(payload)))).not.toContain('rep2.cool')
+    expect(decoded(await decodeShare(payload))?.deck.looks).toEqual([
+      { uri: 'https://example.org/a.cool', vmax: 2.5 },
+    ])
+  })
+
   it('keeps a local track, because dropping one would lose the row', async () => {
     // The rule that decides all four: a private name is stripped only where the
     // structure survives without it.

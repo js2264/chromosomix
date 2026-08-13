@@ -39,9 +39,20 @@
 /** Grants for files this page has been handed, by the `File` they came with. */
 const grants = new WeakMap<File, Promise<FileSystemFileHandle | null>>()
 
-/** `true` when a handle is only a handle, rather than a directory. */
-function isFileHandle(handle: FileSystemHandle | null): handle is FileSystemFileHandle {
-  return handle !== null && handle.kind === 'file'
+/**
+ * `true` when a handle is only a handle, rather than a directory.
+ *
+ * Written against `undefined` as well as `null`, which the type does not admit
+ * and a browser does: `getAsFileSystemHandle` on an item of a `DataTransfer`
+ * built in script — which is what a synthetic drop is — resolves to `undefined`
+ * rather than to either. A `TypeError` thrown here lands in the `then` below,
+ * past the rejection handler beside it, and leaves the grant promise rejected
+ * for whoever awaits it later.
+ */
+function isFileHandle(
+  handle: FileSystemHandle | null | undefined,
+): handle is FileSystemFileHandle {
+  return handle != null && handle.kind === 'file'
 }
 
 function record(file: File, grant: Promise<FileSystemHandle | null>): void {

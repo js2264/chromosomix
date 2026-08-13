@@ -32,6 +32,8 @@ import {
   FILES_PANEL,
   GENERAL_PANEL,
   SidePanel,
+  type PanelLayout,
+  type SidePanelSpec,
 } from '../ui/SidePanel'
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
@@ -89,6 +91,7 @@ import {
   PLOT_OPTION_KEYS,
   PLOT_OPTION_LABELS,
   getPlotOptions,
+  setPlotOptions,
   togglePlotOption,
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
@@ -234,11 +237,17 @@ export class App implements SessionHost {
     // changes no box the observer watches while still moving where the plot
     // should sit. Telling the mounted view directly is the reliable half.
     const relayout = (): void => this.current?.relayout()
-    this.generalPanel = new SidePanel(GENERAL_PANEL, relayout)
-    this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout)
-    this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout)
-    this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout)
-    this.filesPanel = new SidePanel(FILES_PANEL, relayout)
+    // The shape of the columns is part of a saved workspace, so a fold or a
+    // finished drag is worth recording — and only *finished*, because
+    // `rememberDurably` gathers a config per tab out of session storage and
+    // doing that on every pixel of a drag would put storage between the hand and
+    // the repaint. Debounced downstream like every other write of the record.
+    const settled = (): void => this.rememberDurably()
+    this.generalPanel = new SidePanel(GENERAL_PANEL, relayout, settled)
+    this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout, settled)
+    this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled)
+    this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout, settled)
+    this.filesPanel = new SidePanel(FILES_PANEL, relayout, settled)
     this.files = new FilesCard({
       // The panel's arrow means what the header's `+` means, so it goes to the
       // same place: a second map beside the one that is open, anything else on
@@ -260,6 +269,7 @@ export class App implements SessionHost {
       onSelect: (index) => this.activate(index),
       onClose: (index) => this.closeSession(index),
       onNew: () => this.newSession(),
+      onRename: (index, name) => this.renameSession(index, name),
     })
 
     // The title is the way home. It reads as one, so it should behave as one:
@@ -751,6 +761,20 @@ export class App implements SessionHost {
         ? first + Math.max(0, Math.min(incoming, plan.take - 1))
         : this.sessions.findIndex((session) => session.id === workspace.active)
     this.active = wanted >= 0 && wanted < this.sessions.length ? wanted : 0
+    // **The window's own preferences, from the tab that ends up in front.**
+    //
+    // `plot` and `panels` are window-level and every tab in the file carries a
+    // copy, so restoring six of them would be five windows' worth of overlays
+    // applied and discarded — the one that means anything is the tab the reader
+    // is about to be looking at. `Session.openConfig` does exactly this for the
+    // one-tab roads; this road does not go through it, which is why a saved
+    // workspace used to come back with the sender's tracks and the *importing*
+    // window's overlays, silently, and looking like the toggles had not saved.
+    const front = workspace.sessions[incoming >= 0 ? incoming : 0]?.config
+    if (front !== undefined) {
+      setPlotOptions(front.plot)
+      this.applyPanelLayout(front.panels)
+    }
     this.paintTabs()
     this.mountActive()
     this.writeHash(this.current?.state ?? null, { replace: true })
@@ -781,6 +805,19 @@ export class App implements SessionHost {
     applyConfig(config, fileMemoryKey(session.id, config.state.uri))
     session.prime(config.state)
     this.sessions.push(session)
+  }
+
+  /**
+   * Call one tab something.
+   *
+   * A pass-through, and it is here rather than as a direct call from the strip
+   * because the strip holds an index into a list it was handed and the sessions
+   * are this class's. The repaint follows from `sessionChanged`, which the
+   * session raises for itself — a rename changes the label and nothing else, so
+   * there is nothing to mount and nothing to navigate.
+   */
+  private renameSession(index: number, name: string): void {
+    this.sessions[index]?.rename(name)
   }
 
   private newSession(): Session | null {
@@ -867,6 +904,11 @@ export class App implements SessionHost {
         id: session.id,
         label: session.label,
         hint: session.tabHint,
+        // A tab with nothing open has nowhere to keep a name — the memory is
+        // keyed on the file — so the strip does not offer the gesture there
+        // rather than taking a name and losing it (`Session.rename`).
+        nameable: session.state !== null,
+        named: session.name !== null,
         active: index === this.active,
         pending: session.isPrimed,
       })),
@@ -951,6 +993,41 @@ export class App implements SessionHost {
     this.noticeSlot.replaceChildren(
       noticeBanner(message, () => this.noticeSlot.replaceChildren()),
     )
+  }
+
+  /**
+   * The window's columns, keyed the way they are stored.
+   *
+   * The Files panel is in it like the other four, and deliberately: §16.5's
+   * distinction — four columns describe the file and one describes the places
+   * this window has been connected to — is about *what they hold*, not about how
+   * much room a reader gave them. Somebody who folded the file list away and
+   * saved a workspace meant it folded.
+   */
+  panelLayout(): PanelLayout {
+    const layout: PanelLayout = {}
+    for (const [spec, column] of this.columns()) layout[spec.key] = column.layout
+    return layout
+  }
+
+  /** Put a saved arrangement of columns back. Absent is *leave them alone*. */
+  applyPanelLayout(layout: PanelLayout | undefined): void {
+    if (layout === undefined) return
+    for (const [spec, column] of this.columns()) column.applyLayout(layout[spec.key])
+  }
+
+  /**
+   * The five columns beside their specs, so the two methods above cannot name
+   * four of them each and a different four.
+   */
+  private columns(): ReadonlyArray<readonly [SidePanelSpec, SidePanel]> {
+    return [
+      [FILES_PANEL, this.filesPanel],
+      [GENERAL_PANEL, this.generalPanel],
+      [ANNOTATION_PANEL, this.annotationsPanel],
+      [AESTHETICS_PANEL, this.aestheticsPanel],
+      [ANALYSIS_PANEL, this.analysisPanel],
+    ]
   }
 
   sessionChanged(session: Session): void {
@@ -1329,6 +1406,22 @@ export class App implements SessionHost {
         keys: KEYS.saveSession,
         enabled: file,
         run: () => this.exportWorkspace(),
+      },
+      {
+        id: 'rename-session',
+        group: 'File',
+        title: 'Rename this session',
+        hint:
+          'Call the tab something other than its file — the condition, the run, the figure it is ' +
+          'for. Four tabs on four copies of `matrix_1000.mcool` are otherwise four identical ' +
+          'labels. The name travels in the saved workspace and in the share link; clearing the ' +
+          'box hands the tab back to its file name. Double-clicking the tab does the same thing.',
+        keys: KEYS.renameSession,
+        enabled: file,
+        run: () => {
+          const id = this.current?.id
+          if (id !== undefined) this.tabs.beginRename(id)
+        },
       },
       {
         id: 'close-session',

@@ -128,6 +128,11 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  *   machine. It exists to catch a wrong file locally; in a link it is metadata
  *   about a private disk that the recipient can do nothing with.
  *
+ * **`deck.looks`** is the one field that is neither kept nor dropped whole: a
+ * look is keyed on the file it describes, so the ones naming local companions go
+ * with `locals` and the ones naming remote companions travel. Same rule, applied
+ * per member because the field has members of both kinds.
+ *
  * A **local track is kept**, and the rule that decides all four is the one
  * `resolveConfig` states: a private name is stripped only where the structure
  * survives without it. A dropped companion costs a label — `state.maps` still
@@ -142,11 +147,21 @@ export function forSharing(config: SessionConfig): SessionConfig {
   // config missing one field would be a worse failure than the one this function
   // exists to prevent.
   const deck = config.deck ?? {}
+  // The looks of the companions a recipient can actually open, and only those.
+  // A look is keyed on the file it describes (`panels/deck.ts`'s `DeckLook`), so
+  // one naming a local companion carries the same bare filename `locals` is
+  // stripped for — and `locals` is what says which names those are. A remote
+  // companion's clip is the opposite case and worth sending: the recipient opens
+  // the same URL, and a deck of four replicates arriving on four different
+  // scales is the figure not arriving.
+  const local = new Set((deck.locals ?? []).map((held) => held.uri))
+  const looks = (deck.looks ?? []).filter((look) => !local.has(look.uri))
   const shared: SessionConfig = {
     ...config,
     deck: {
       ...(deck.starred === undefined ? {} : { starred: deck.starred }),
       ...(deck.columns === undefined ? {} : { columns: deck.columns }),
+      ...(looks.length === 0 ? {} : { looks }),
     },
   }
   // Deleted rather than set to `undefined`: a key holding nothing is a third

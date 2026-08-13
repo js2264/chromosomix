@@ -21,6 +21,7 @@ import {
 import { LEAD_MAP } from '../../src/annotations/placement'
 import { ANNOTATION_PALETTE, AnnotationStore, cleanLabel } from '../../src/annotations/store'
 import { defaultStyle, placementOn, type Placement } from '../../src/annotations/types'
+import { remember } from '../../src/state/UiMemory'
 import { overlapWarning } from '../../src/ui/AnnotationCard'
 import { demoAnnotationsFor, DEMO_ANNOTATION_FILES } from '../../src/ui/examples'
 
@@ -1176,5 +1177,137 @@ describe('remembering which panel a track was drawn on', () => {
       ]),
     ).not.toThrow()
     expect(AnnotationStore.storedLanes('never-written.cool')).toEqual([])
+  })
+})
+
+/**
+ * What the *session's own map* says about a track.
+ *
+ * Every other map's lane is written down by file, in `deck:lanes`, and the lead
+ * is deliberately excluded there: a `StoredLane` is keyed on the companion's URI
+ * and the lead has no such key to be found under. So the two things a lane can
+ * say that a track cannot — *I am not on this map* and *my range here is
+ * different* — were sayable about every map in a deck except the one every
+ * session has. Both are losable in ordinary use: taking a track off the lead is
+ * one press of the last lit edge, and every analysis result computed against a
+ * starred companion is placed there and taken off the lead.
+ */
+describe('what the lead map says about a track', () => {
+  function ready(store: AnnotationStore, name = 'ATAC.bw'): string {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { kind: 'local', file: new File([], name), name },
+      placement: placementOn('bottom'),
+    })
+    store.update(entry.id, { status: 'ready' })
+    return entry.id
+  }
+
+  /** One page load's worth: what was written, read back into a new store. */
+  function reload(uri: string, id: string): AnnotationStore {
+    const written = AnnotationStore.stored(uri)
+    const next = freshStore(uri)
+    const row = written.find((held) => held.id === id)
+    if (row === undefined) throw new Error('the row was not persisted at all')
+    next.begin({
+      card: row.card,
+      kind: row.kind,
+      source: { kind: 'local', file: new File([], row.source.name), name: row.source.name },
+      id: row.id,
+      placement: row.placement,
+      style: row.style,
+      lead: row.lead,
+    })
+    next.update(id, { status: 'ready' })
+    return next
+  }
+
+  it('says nothing where the lead simply draws it', () => {
+    // The overwhelming majority of rows. A second copy of `placement` in every
+    // workspace file, for the benefit of the few that differ, is not worth it.
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    ready(store)
+    expect('lead' in AnnotationStore.stored(uri)[0]).toBe(false)
+  })
+
+  it('brings back a track the reader took off the lead', () => {
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = ready(store, 'companion.bw')
+    store.unplaceFrom(id, LEAD_MAP)
+    expect(AnnotationStore.stored(uri)[0].lead).toBeNull()
+
+    // `placement` still names the edge the track *would* go on, and a restore
+    // dutifully put it there: a deck of four came back with the fourth's tracks
+    // stacked on the first as well.
+    const next = reload(uri, id)
+    expect(next.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+    expect(next.entries).toHaveLength(1)
+  })
+
+  it('brings back a range set on the lead’s own lane', () => {
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = ready(store)
+    // `limits` is one of the two fields a lane may differ on, precisely because
+    // a ceiling is a number about one library's depth
+    // (`annotations/placement.ts`'s `LANE_OVERRIDES`).
+    store.overrideOn(id, LEAD_MAP, { limits: { auto: false, min: 0, max: 42 } })
+    expect(AnnotationStore.stored(uri)[0].lead?.style).toEqual({
+      limits: { auto: false, min: 0, max: 42 },
+    })
+
+    const next = reload(uri, id)
+    expect(next.laneFor(id, LEAD_MAP)?.style?.limits).toEqual({ auto: false, min: 0, max: 42 })
+    // …and the cascade resolves it over the track, which is what a lane patch is.
+    expect(next.entriesOn(LEAD_MAP)[0].style.limits).toEqual({ auto: false, min: 0, max: 42 })
+  })
+
+  it('brings back edges the lead alone was given', () => {
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = ready(store)
+    store.placeOn(id, LEAD_MAP, placementOn('left'))
+    const next = reload(uri, id)
+    expect(next.drawnOnMap(LEAD_MAP, 'left')).toHaveLength(1)
+    expect(next.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+  })
+
+  it('reads a row from before the field existed as “on the lead, as placement says”', () => {
+    // The tolerance an added field promises. Absent is not `null`, and reading
+    // the two as one would take every track in every older session off the map.
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = ready(store)
+    const row = AnnotationStore.stored(uri)[0]
+    const next = freshStore(uri)
+    next.begin({
+      card: row.card,
+      kind: row.kind,
+      source: { kind: 'local', file: new File([], 'ATAC.bw'), name: 'ATAC.bw' },
+      id,
+      placement: row.placement,
+      style: row.style,
+    })
+    expect(next.drawnOnMap(LEAD_MAP, 'bottom')).toHaveLength(0)
+    next.update(id, { status: 'ready' })
+    expect(next.laneFor(id, LEAD_MAP)?.placement.bottom).toBe(true)
+  })
+
+  it('drops an unreadable lead record rather than the row that carries it', () => {
+    // Losing this field costs a lane its edges; losing the row loses the file it
+    // names, which is the whole import.
+    const uri = `lead-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = ready(store)
+    remember(uri, 'annotations', [
+      { ...AnnotationStore.stored(uri)[0], lead: 'somewhere' },
+    ])
+    const back = AnnotationStore.stored(uri)
+    expect(back).toHaveLength(1)
+    expect(back[0].lead).toBeUndefined()
+    expect(back[0].id).toBe(id)
   })
 })

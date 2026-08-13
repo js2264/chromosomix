@@ -33,6 +33,15 @@ export const KEYS = {
   newSession: 'o',
   saveSession: 'mod+s',
   closeSession: 'mod+w',
+  /**
+   * Call the tab in front something other than its file.
+   *
+   * `F2`, which is what every list with renameable rows has used since file
+   * managers had rows — and the one binding here that costs nothing else: the
+   * single-letter space is spent (`ui/plotOptions.ts` explains giving up `f`),
+   * and the browser claims every chord a rename would otherwise want.
+   */
+  renameSession: 'F2',
   nextSession: 'mod+]',
   prevSession: 'mod+[',
   theme: 't',

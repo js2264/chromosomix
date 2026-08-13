@@ -559,6 +559,17 @@ export class AnnotationStore {
      * is a fresh open, and the tracks are restored around it.
      */
     visible?: boolean
+    /**
+     * What the session's own map does with this row, for a row that has been
+     * here before — see {@link StoredEntry.lead}.
+     *
+     * Absent, which is every fresh import, means the line below: the lead draws
+     * it at the track's own placement, with no patch. `null` means the lead does
+     * not draw it at all, and is the one thing a restore could not say before —
+     * so a track a reader had moved onto the third replicate came back on the
+     * first as well, every time the row was begun again.
+     */
+    lead?: StoredEntry['lead']
   }): AnnotationEntry {
     const placement =
       options.placement === undefined
@@ -612,7 +623,23 @@ export class AnnotationStore {
     // always meant. The entry's own `placement` is the *default* a new lane is
     // given — on this map now, and on any other map the reader puts it on later
     // — and the lane is where it is actually drawn.
-    this.lanes = place(this.lanes, entry.id, LEAD_MAP, entry.placement)
+    //
+    // Except where the row is *returning* and says otherwise. A `null` is a
+    // reader who took this track off the session's own map, and an object is one
+    // who gave it edges or a range there of its own; both are decisions already
+    // made, and re-placing over them is what made the deck's arrangement the one
+    // part of a workspace that did not come back.
+    this.lanes =
+      options.lead === null
+        ? unplace(this.lanes, entry.id, LEAD_MAP)
+        : place(this.lanes, entry.id, LEAD_MAP, options.lead?.placement ?? entry.placement)
+    if (options.lead != null && options.lead.style !== undefined) {
+      const held = laneOf(this.lanes, entry.id, LEAD_MAP)
+      const style = options.lead.style
+      if (held !== undefined) {
+        this.lanes = this.lanes.map((lane) => (lane === held ? { ...lane, style } : lane))
+      }
+    }
     this.changed()
     return entry
   }
@@ -876,7 +903,13 @@ export class AnnotationStore {
 
   private persist(): void {
     if (this.options.persist === false) return
-    remember(this.uri, STORE_SCOPE, this.items.filter(persistable).map(toStored))
+    remember(
+      this.uri,
+      STORE_SCOPE,
+      this.items
+        .filter(persistable)
+        .map((entry) => toStored(entry, laneOf(this.lanes, entry.id, LEAD_MAP))),
+    )
     remember(this.uri, LANES_SCOPE, this.parkedFor())
   }
 
@@ -964,7 +997,12 @@ export class AnnotationStore {
     for (const value of raw) {
       if (!isStoredEntry(value) || seen.has(value.id)) continue
       seen.add(value.id)
-      rows.push(value)
+      // The one field normalised on the way out rather than checked in the
+      // guard: an unreadable `lead` costs a lane its edges, and refusing the row
+      // over it would cost the import. See {@link readLead}.
+      const { lead: raw, ...rest } = value
+      const lead = readLead(raw)
+      rows.push(lead === undefined ? rest : { ...rest, lead })
     }
     return rows
   }
@@ -987,7 +1025,12 @@ function persistable(entry: AnnotationEntry): boolean {
   return entry.status === 'ready' || entry.status === 'detached'
 }
 
-function toStored(entry: AnnotationEntry): StoredEntry {
+/**
+ * @param lead The track's lane on the session's own map, or `undefined` where
+ *   it has none — which is a fact worth writing down rather than an absence.
+ *   See {@link StoredEntry.lead}.
+ */
+function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
   return {
     id: entry.id,
     card: entry.card,
@@ -1019,8 +1062,24 @@ function toStored(entry: AnnotationEntry): StoredEntry {
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
+    // Written only where it says something. A track drawn on the lead at its
+    // own placement with no patch is the overwhelming majority of rows, and
+    // stamping `lead` onto every one of them would put a second copy of
+    // `placement` in every workspace file for the benefit of the few that
+    // differ. `null` — off the lead entirely — is the one absence that has to
+    // be spelled, because absence already means the opposite.
+    ...(lead === undefined
+      ? { lead: null }
+      : lead.style === undefined && samePlacement(lead.placement, entry.placement)
+        ? {}
+        : { lead: { placement: lead.placement, ...(lead.style === undefined ? {} : { style: lead.style }) } }),
     ...(entry.primary === true ? { primary: true } : {}),
   }
+}
+
+/** Whether two placements light the same edges. */
+function samePlacement(a: Placement, b: Placement): boolean {
+  return LANE_EDGES.every((edge) => a[edge] === b[edge])
 }
 
 const KINDS: AnnotationKind[] = [
@@ -1060,6 +1119,31 @@ function isStoredEntry(value: unknown): value is StoredEntry {
     if (typeof row2['recipe'] !== 'object' || row2['recipe'] === null) return false
   }
   return typeof row['style'] === 'object' && row['style'] !== null
+}
+
+/**
+ * The lead's lane, read out of a stored row.
+ *
+ * Three legal states and a fourth that is corruption — absent, `null`, an object
+ * naming a placement, and anything else — and the fourth is normalised to
+ * *absent* rather than dropping the row. Losing this field costs a lane its
+ * edges; losing the row loses the file it names, which is the whole import.
+ * `undefined` is returned for both absent and unreadable, which is right: the
+ * two mean the same thing to every reader of it.
+ */
+function readLead(value: unknown): StoredEntry['lead'] {
+  if (value === null) return null
+  if (typeof value !== 'object') return undefined
+  const row = value as Record<string, unknown>
+  const placement = row['placement']
+  if (typeof placement !== 'object' || placement === null) return undefined
+  const style = row['style']
+  return {
+    placement: normalisePlacement(placement as Partial<Placement>),
+    ...(typeof style === 'object' && style !== null
+      ? { style: style as NonNullable<StoredEntry['lead']>['style'] }
+      : {}),
+  }
 }
 
 /** Which stack a placement puts a track in, if it puts it in exactly one. */

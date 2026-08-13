@@ -93,6 +93,9 @@ import {
   swapItems,
   localCompanions,
   withLocalCompanions,
+  readDeckLook,
+  withLook,
+  type DeckLook,
   type GrowDirection,
   type PanelRef,
 } from './deck'
@@ -229,6 +232,17 @@ export interface PanelDeckProps {
    * a deck must not do about a quantity.
    */
   score?(): string | undefined
+  /**
+   * A companion's own scale, score or chain moved.
+   *
+   * Nothing to apply — the deck has already written it into this session's
+   * memory — only somebody to tell, because the durable record and the exported
+   * workspace are built from that memory and neither is rewritten by a change
+   * that does not touch the view state. Without this, nudging four companions'
+   * clips and closing the window lost all four: a clip is not a navigation, so
+   * nothing on the state road ever fired.
+   */
+  onLooksChange?(): void
 }
 
 /**
@@ -365,6 +379,18 @@ export class PanelDeck {
   private starred: MapId = LEAD_MAP
 
   /**
+   * How each companion was last drawn, by file (`panels/deck.ts`'s `DeckLook`).
+   *
+   * Held here rather than on the panels because it has to outlive them. A panel
+   * is destroyed and rebuilt by every reconcile that changes the list — closing
+   * a neighbour, dragging a map to another cell, following a link — and a clip
+   * kept on the instance is a clip the reader loses on the next thing they do to
+   * the grid. It also has to outlive the *deck*, since the whole point is that a
+   * saved workspace brings four replicates back on their own four scales.
+   */
+  private looks: DeckLook[] = []
+
+  /**
    * The bin size the session's own map was last seen at.
    *
    * Watched rather than told, because there is no one place to be told from: a
@@ -401,6 +427,7 @@ export class PanelDeck {
     // the lead rather than leaving the Analysis column pointed at nothing.
     const star = recall<string>(props.memoryKey(), 'deck:starred')
     if (typeof star === 'string' && star !== '') this.starred = star
+    this.looks = this.recallLooks()
 
     this.urlInput = el('input', {
       class: 'input input-tiny deck-url',
@@ -1065,7 +1092,19 @@ export class PanelDeck {
     /** The file a `remembered` vacancy is standing in for. */
     name?: string,
   ): Slot {
-    const slot: Slot = { id: `p${nextSlotId++}`, ref, panel: null, vacancy: null, locked: true }
+    // A chain the reader deliberately opened stays open across a rebuild and
+    // across a restore: a panel put back on the lead would jump to the deck's
+    // window on the first pan, which is the one thing unhooking it said not to
+    // do. `locked` where nothing was remembered, which is how a fresh panel
+    // arrives (§16.2).
+    const held = ref.kind === 'vacant' ? undefined : this.lookFor(ref.uri)
+    const slot: Slot = {
+      id: `p${nextSlotId++}`,
+      ref,
+      panel: null,
+      vacancy: null,
+      locked: held?.locked !== false,
+    }
     if (ref.kind === 'vacant') {
       slot.vacancy = new VacantPanel({
         origin,
@@ -1117,6 +1156,14 @@ export class PanelDeck {
       // borrowed: a lead under a two-file `ratio` is on `log2` and a diverging
       // ramp, and a companion drawing plain counts must not inherit that.
       initialLook: () => this.leadBaseLook(),
+      // Read against the ref as it stands rather than against the `ref` captured
+      // above, because a companion handed a collection resolves itself to one of
+      // its entries and rewrites the slot ({@link resolveRef}) — and it is the
+      // resolved URI the look was written under.
+      remembered: () => (slot.ref.kind === 'vacant' ? undefined : this.lookFor(slot.ref.uri)),
+      onLook: (look) => {
+        if (slot.ref.kind !== 'vacant') this.noteLook(slot.ref.uri, { ...look, locked: slot.locked })
+      },
       preferBinsize: () => this.props.binsize?.(),
       onResolved: (uri) => this.resolveRef(slot, uri),
       onDragChange: (dragging) => this.setArranging(dragging),
@@ -1297,6 +1344,13 @@ export class PanelDeck {
   private toggleLock(slot: Slot): void {
     slot.locked = !slot.locked
     slot.panel?.syncLock()
+    // Recorded beside the scale, because to a reader it is the same kind of
+    // decision about the same map: *this one is not like the others*. Only a
+    // slot with a file behind it — a vacancy has no key to be remembered under.
+    if (slot.ref.kind !== 'vacant') {
+      const held = this.lookFor(slot.ref.uri) ?? { uri: slot.ref.uri }
+      this.noteLook(slot.ref.uri, { ...held, locked: slot.locked })
+    }
     if (!slot.locked) return
     this.seedFromLead()
     this.lock.catchUp(slot.id)
@@ -2218,7 +2272,42 @@ export class PanelDeck {
     if (typeof stored !== 'number' || !Number.isFinite(stored) || stored < 1) return null
     return Math.min(Math.floor(stored), MAX_PANELS)
   }
+
+  /** What a previous visit remembered about how each companion was drawn. */
+  private recallLooks(): DeckLook[] {
+    const stored = recall<unknown>(this.props.memoryKey(), LOOKS_SCOPE)
+    if (!Array.isArray(stored)) return []
+    const out: DeckLook[] = []
+    for (const entry of stored as unknown[]) {
+      const look = readDeckLook(entry)
+      if (look !== null) out.push(look)
+    }
+    return out
+  }
+
+  /** This companion's remembered look, for the panel about to draw it. */
+  private lookFor(uri: string): DeckLook | undefined {
+    return this.looks.find((look) => look.uri === uri)
+  }
+
+  /**
+   * Write down how one companion is drawn.
+   *
+   * Keyed by the file rather than by the slot, and merged rather than appended:
+   * the reasons are `DeckLook`'s own. Written on every change rather than on a
+   * save, for the reason every other scope here is written that way — what
+   * storage holds *is* the session, so a reload, a durable restore and an
+   * exported workspace all describe the same deck.
+   */
+  private noteLook(uri: string, look: Omit<DeckLook, 'uri'>): void {
+    this.looks = withLook(this.looks, { ...look, uri })
+    remember(this.props.memoryKey(), LOOKS_SCOPE, this.looks)
+    this.props.onLooksChange?.()
+  }
 }
+
+/** Where a deck's per-companion presentation lives in this session's memory. */
+const LOOKS_SCOPE = 'deck:looks'
 
 /**
  * A panel's live scale as the thing another panel can be handed.
