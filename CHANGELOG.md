@@ -44,12 +44,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
   **Drawn with a drag**, which is the gesture a hand already makes for a box:
   press at one corner, let go at the other, with the map's own marquee and its
-  coordinate chips showing what is about to exist. Holding Shift while drawing
-  locks it to the diagonal, so a domain is one gesture; on a turned map every
-  drag is that, the band being the only thing there with coordinates on it. The
-  mode stays on afterwards, as the other two do, because marking up a figure is
-  several marks — and a click while the map is waiting for a drag places nothing
-  rather than navigating away from the picture being drawn on.
+  coordinate chips showing what is about to exist. The marquee follows the hand
+  on both axes — a *selection* is squared because it resolves to one range, and a
+  mark does not — and it snaps out to the edges of the cells the two ends are in,
+  which is what commits. Holding Shift locks the box to the diagonal, so a domain
+  is one gesture. The mode stays on afterwards, as the other two do, because
+  marking up a figure is several marks — and a click while the map is waiting for
+  a drag places nothing rather than navigating away from the picture being drawn
+  on.
+
+  **On a turned map the box is off the diagonal if that is where it was drawn.**
+  Both ends of the drag are taken back to the square the band was rotated out of,
+  exactly as a click is, so pressing over one contact and releasing over another
+  names the rectangle those two contacts span — the one thing a band selection
+  there cannot say, since a selection over a turned map is always a stretch of
+  the genome against itself. Shift there collapses each end onto its own midpoint
+  rather than snapping the pointer, which gives the on-diagonal square through
+  the two places the drag ran between. And what is drawn while the hand moves is
+  the mark itself, through the code that will draw it for good: a rectangle of
+  rows against columns leans at 45° on a turned map and folds where it crosses
+  the diagonal, so a rubber band would be a box drawn around a shape that is not
+  one.
 
   Which gesture a form asks for is now part of what it hands the map: the two
   marks that name a place take clicks, the one that names an extent takes drags.

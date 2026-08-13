@@ -15,7 +15,13 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
-import { anchorRays, rowForSeparation, turnedCentre, type RotateDirection } from './rotate'
+import {
+  anchorRays,
+  cellAt as squareOf,
+  rowForSeparation,
+  turnedCentre,
+  type RotateDirection,
+} from './rotate'
 import {
   Scale,
   autoRangeOfDisplay,
@@ -651,6 +657,32 @@ export interface SelectionBox {
   anchor: Cell
 }
 
+/**
+ * A box drawn for a form, in cells of the **square** block.
+ *
+ * Square-block cells whichever way the map is drawn, and that is the whole
+ * difference between this and {@link SelectionBox}. A selection is about the
+ * picture — it opens what it covers, and on a turned map what it covers is a
+ * stretch of the genome and the full height of a band. A drawn box is about the
+ * *data*: it becomes a rectangle of rows against columns, and rows and columns
+ * are things the square has. So the two ends of the drag are taken back to the
+ * square they were rotated out of, exactly as a click is (`render/rotate.ts`),
+ * and what comes out is one range per genomic axis.
+ *
+ * Which means a drag on a turned map can name an **off-diagonal** rectangle:
+ * press over one contact, release over another, and the two are opposite corners
+ * of the box those two contacts span. The band's own geometry is not lost —
+ * it is what makes the two corners land where the reader aimed.
+ */
+export interface DrawnBox {
+  /** Half-open row range of the square block. */
+  rows: [number, number]
+  /** Half-open column range of the square block. */
+  cols: [number, number]
+  /** Where the drag began, in square cells: which block the box belongs to. */
+  anchor: { row: number; col: number }
+}
+
 /** A cell identified by {@link HeatmapView.cellAt}. */
 export interface Cell {
   /** Row within the rendered block. */
@@ -1088,7 +1120,17 @@ export interface HeatmapOptions {
    * open a region, and it is not copied. The box is the answer to a question
    * somebody else asked, and the picture stays where the reader left it.
    */
-  onDrawn?: (selection: SelectionBox) => void
+  onDrawn?: (box: DrawnBox) => void
+  /**
+   * The same box, on every move while it is being drawn; `null` on release.
+   *
+   * For an owner that wants to *show* what is being drawn. The renderer's own
+   * rubber band is a rectangle on screen, which is exactly the mark on a square
+   * map and is not the mark at all on a turned one — there a box of cells is a
+   * parallelogram leaning at 45°, and only the thing that draws the mark can
+   * draw it honestly.
+   */
+  onDrawing?: (box: DrawnBox | null) => void
   /**
    * What the two spans of a drag say, per axis, already formatted.
    *
@@ -1152,6 +1194,16 @@ interface Drag {
    * it, so the box is the one thing it was ever going to be.
    */
   diagonal: boolean
+  /**
+   * Shift, as it was when the button went down.
+   *
+   * Kept apart from {@link diagonal}, which is the *pixel* snap and is off on a
+   * turned map — there the diagonal is the bottom edge of the picture, so
+   * snapping a corner onto it would be snapping to the frame. A drawn box still
+   * honours the modifier there, by collapsing each end onto the contact's own
+   * midpoint rather than by moving the pointer ({@link drawnBoxFrom}).
+   */
+  shift: boolean
 }
 
 type ResolvedOptions = Required<
@@ -1165,6 +1217,7 @@ type ResolvedOptions = Required<
     | 'onSelectionMade'
     | 'onBand'
     | 'onDrawn'
+    | 'onDrawing'
     | 'selectionLabel'
     | 'onHover'
     | 'plotOptions'
@@ -1307,7 +1360,8 @@ export class HeatmapView {
   private readonly onSelect: ((selection: SelectionBox) => void) | null
   private readonly onSelectionMade: ((selection: SelectionBox) => void) | null
   private onBand: ((axis: 'rows' | 'cols', span: [number, number]) => void) | null
-  private readonly onDrawn: ((selection: SelectionBox) => void) | null
+  private readonly onDrawn: ((box: DrawnBox) => void) | null
+  private readonly onDrawing: ((box: DrawnBox | null) => void) | null
   /**
    * What a Shift-drag does when it is let go.
    *
@@ -1541,6 +1595,7 @@ export class HeatmapView {
     this.onSelectionMade = options.onSelectionMade ?? null
     this.onBand = options.onBand ?? null
     this.onDrawn = options.onDrawn ?? null
+    this.onDrawing = options.onDrawing ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
 
@@ -2645,6 +2700,82 @@ export class HeatmapView {
   }
 
   /**
+   * The cell under a point, taken back to the **square** block.
+   *
+   * Clamped into the plot first, so a corner dragged past the edge of the data
+   * is still the corner nearest to where the hand went, and mapped through the
+   * rotation where there is one: a turned cell is a cell of the square
+   * underneath it, which is what has a row and a column (`render/rotate.ts`).
+   */
+  private squareCellAt(x: number, y: number): { row: number; col: number } | null {
+    const matrix = this.matrix
+    if (matrix === null) return null
+    const plot = this.plotRect
+    const cell = this.cellAt(
+      clamp(x, plot.x, plot.x + plot.width - 1),
+      clamp(y, plot.y, plot.y + plot.height - 1),
+    )
+    if (cell === null) return null
+    const turn = this.turn
+    if (turn === null) return { row: cell.row, col: cell.col }
+    const at = squareOf(
+      {
+        nrows: matrix.nrows,
+        ncols: matrix.ncols,
+        maxSeparation: turn.maxSeparation,
+        direction: turn.direction,
+        originBin: 0,
+      },
+      cell.row,
+      cell.col,
+    )
+    return at === null ? null : { row: at.row, col: at.col }
+  }
+
+  /**
+   * The box a drag drew, in square-block cells.
+   *
+   * The two ends of the drag are two cells, and a box is what two cells span —
+   * which is the same statement on a square map and on a turned one, and is why
+   * this does not go through the marquee. On the square the marquee *is* this
+   * box; turned, the marquee is a rectangle on screen and the box is the
+   * rectangle of rows against columns whose opposite corners are the two
+   * contacts the hand went between ({@link DrawnBox}).
+   *
+   * `shift` collapses each end onto the diagonal — its own midpoint, `(i + j)/2`
+   * — so the box is the on-diagonal square through the two places the drag ran
+   * between. On a square map the pointer has already been snapped in pixels and
+   * this only makes exact what rounding left within a cell of it; on a turned
+   * map it is the whole of the lock, the pixel snap being off there.
+   */
+  private drawnBoxFrom(x0: number, y0: number, x: number, y: number, shift: boolean): DrawnBox | null {
+    const matrix = this.matrix
+    const from = this.squareCellAt(x0, y0)
+    const to = this.squareCellAt(x, y)
+    if (matrix === null || from === null || to === null) return null
+    const onAxis = (cell: { row: number; col: number }): { row: number; col: number } => {
+      const mid = Math.round((cell.row + cell.col) / 2)
+      return { row: mid, col: mid }
+    }
+    const a = shift ? onAxis(from) : from
+    const b = shift ? onAxis(to) : to
+    // The **square** block's side, which under a turn is not the band's own
+    // shape: a band of `n` bins is `2n − 1` half-bin columns and as many rows as
+    // it shows separations, and the box being built is in the square's cells.
+    const side =
+      this.turn === null ? null : Math.round((matrix.ncols + 1) / 2)
+    const span = (one: number, two: number, limit: number): [number, number] => [
+      Math.max(0, Math.min(one, two)),
+      Math.min(limit, Math.max(one, two) + 1),
+    ]
+    return {
+      rows: span(a.row, b.row, side ?? matrix.nrows),
+      cols: span(a.col, b.col, side ?? matrix.ncols),
+      anchor: a,
+    }
+  }
+
+  /**
    * A pixel run along one axis as a half-open **block-local** cell range.
    *
    * Public because the same gesture is made on the lane canvases beside the map
@@ -2840,7 +2971,11 @@ export class HeatmapView {
    * that arms this already puts its own class on the canvas.
    */
   setDrawMode(on: boolean): void {
+    if (this.drawMode === on) return
     this.drawMode = on
+    // A preview belongs to a mode, so it goes out with it: a mode ended
+    // mid-drag would otherwise leave the shape of an abandoned box on the map.
+    if (!on) this.onDrawing?.(null)
   }
 
   /**
@@ -2852,16 +2987,22 @@ export class HeatmapView {
    * picture when the question was about the data. A view that wants the old
    * behaviour simply does not pass `onSelect`.
    */
-  private finishSelection(x0: number, y0: number, x: number, y: number): void {
-    const found = this.boxFrom(x0, y0, x, y)
+  private finishSelection(drag: Drag): void {
+    const { x0, y0, x, y } = drag
     // A box drawn *for a form* is none of the three things a selection is: it
     // does not zoom, it does not open a region, and it is not copied. The reader
     // is drawing on the picture, and every one of those would move the picture
     // out from under what they have just drawn.
+    //
+    // Nor is it a `SelectionBox`: that one is in the cells of the block on
+    // screen, and a drawn box is in the cells of the square ({@link DrawnBox}).
     if (this.drawMode) {
-      if (found !== null) this.onDrawn?.(found.box)
+      const drawn = this.drawnBoxFrom(x0, y0, x, y, drag.shift)
+      this.onDrawing?.(null)
+      if (drawn !== null) this.onDrawn?.(drawn)
       return
     }
+    const found = this.boxFrom(x0, y0, x, y)
     // Before either outcome, and regardless of which: what was framed is the
     // same fact whether the box then zooms or opens a region.
     if (found !== null) this.onSelectionMade?.(found.box)
@@ -3397,8 +3538,37 @@ export class HeatmapView {
    * plot instead, because that is what the gesture now commits: a stretch of the
    * genome, opened on both axes. A square there would draw a top and a bottom
    * edge over an axis that has no coordinates to bound.
+   *
+   * **Drawing a box is neither.** A rectangle mark is two independent stretches
+   * — that is the whole point of it, a locus against a whole arm being a thing
+   * no square can say — so the rubber band follows the hand on both axes and
+   * commits exactly what it drew.
    */
   private marqueeFrom(x0: number, y0: number, x: number, y: number): Marquee {
+    if (this.drawMode) {
+      const free = {
+        x: Math.min(x0, x),
+        y: Math.min(y0, y),
+        width: Math.abs(x - x0),
+        height: Math.abs(y - y0),
+      }
+      // Out to the edges of the cells the two ends are *in*, which is what
+      // commits: a mark covers the cell the reader pressed on and the cell they
+      // let go on, so a band drawn to the pointer would promise a box a cell
+      // short of the one that lands — a whole cell at the zoom where a reader
+      // is placing marks by hand.
+      const box = this.drawnBoxFrom(x0, y0, x, y, this.drag?.shift === true)
+      if (box === null) return free
+      const plot = this.plotRect
+      const left = plot.x + this.colScale.toPixel(box.cols[0])
+      const top = plot.y + this.rowScale.toPixel(box.rows[0])
+      return {
+        x: left,
+        y: top,
+        width: plot.x + this.colScale.toPixel(box.cols[1]) - left,
+        height: plot.y + this.rowScale.toPixel(box.rows[1]) - top,
+      }
+    }
     if (!this.spanGestures) {
       const square = squareFrom(x0, y0, x, y)
       return { x: square.x, y: square.y, width: square.side, height: square.side }
@@ -3420,6 +3590,12 @@ export class HeatmapView {
       return
     }
     if (drag === null || drag.mode !== 'select' || !this.dragMoved) return
+    // A box being drawn on a **turned** map is not a rectangle on screen: it is
+    // a rectangle of rows against columns, which leans at 45° here. The owner
+    // draws it, through the same code that draws the finished mark; a rubber
+    // band over the top of that would be a second, wrong outline of the shape
+    // the reader is already looking at.
+    if (this.drawMode && this.spanGestures) return
     const plot = this.dataRect
     const ctx = this.ctx
     const { x, y, width: w, height: h } = this.marqueeFrom(drag.x0, drag.y0, drag.x, drag.y)
@@ -4511,7 +4687,7 @@ export class HeatmapView {
       // modifiers are held ({@link setSpanGestures}).
       const diagonal = mode === 'select' && e.shiftKey && !this.spanGestures
       const [ax, ay] = diagonal ? this.onDiagonal(x, y) : [x, y]
-      this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal }
+      this.drag = { mode, x0: ax, y0: ay, x: ax, y: ay, diagonal, shift: e.shiftKey }
       this.lastX = x
       this.lastY = y
       follow(true)
@@ -4563,6 +4739,13 @@ export class HeatmapView {
           const [nx, ny] = drag.diagonal ? this.onDiagonal(cx, cy) : [cx, cy]
           drag.x = nx
           drag.y = ny
+          // What is being drawn, for an owner that draws it: on a turned map the
+          // renderer's own rubber band is a rectangle on screen and the mark is
+          // not, so the honest preview is the mark itself, drawn by the code
+          // that will draw it for good.
+          if (this.drawMode) {
+            this.onDrawing?.(this.drawnBoxFrom(drag.x0, drag.y0, nx, ny, drag.shift))
+          }
         }
         this.changed()
         return
@@ -4688,7 +4871,7 @@ export class HeatmapView {
       // `drag.x/y`, not the release position: the corner the reader saw is the
       // clamped, diagonal-locked one the marquee was drawn to, and a release
       // outside the canvas has no meaningful position at all.
-      if (drag.mode === 'select') this.finishSelection(drag.x0, drag.y0, drag.x, drag.y)
+      if (drag.mode === 'select') this.finishSelection(drag)
       if (drag.mode === 'band') this.finishBand(drag.x0, drag.y0, drag.x, drag.y)
       this.changed()
     }

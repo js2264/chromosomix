@@ -1073,10 +1073,20 @@ is on a turned map, since that is what it is.
 **Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
 and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
 a **drag**: press at one corner, let go at the other, with the map's own marquee and its coordinate
-chips showing what is about to exist. Holding Shift while drawing locks the box to the diagonal, so a
-domain is one gesture; on a turned map every drag is that, the band being the only thing there with
-coordinates on it. All three modes stay on for as many marks as the reader wants, and a click while
-the map is waiting for a drag places nothing rather than navigating.
+chips showing what is about to exist. The marquee follows the hand on both axes — a selection is
+squared because it *resolves* to one range, and a mark does not — and it snaps out to the edges of the
+cells the two ends are in, which is what commits. Holding Shift locks the box to the diagonal, so a
+domain is one gesture. All three modes stay on for as many marks as the reader wants, and a click
+while the map is waiting for a drag places nothing rather than navigating.
+
+**A box drawn on a turned map is a box of the square underneath it.** Both ends of the drag are taken
+back to the square they were rotated out of, exactly as a click is, so pressing over one contact and
+releasing over another names the rectangle those two contacts span — which may be off the diagonal,
+and is the one thing a band selection there cannot say. Shift collapses each end onto its own midpoint
+instead of snapping the pointer, which gives the on-diagonal square through the two places the drag
+ran between. What is *drawn* while the hand moves is the mark itself rather than a rubber band: a
+rectangle of rows against columns leans at 45° on a turned map and folds where it crosses the
+diagonal, so a box on screen would be a box drawn around a shape that is not one.
 
 A hand-drawn mark never sits on the pixel it is about (§8.1's rule for overlays generally). For the
 arrowhead that means the glyph is stood off the cell along its own 45° axis **and** by a pixel square
@@ -2361,6 +2371,13 @@ the column labels have already claimed.
 ### 17.6 What a drag means on a turned map
 
 Both gestures collapse onto the **x axis**, because it is the only one with coordinates on it.
+
+There is a third, and it does not: **drawing a box** for the Manual card (§8.1). The difference is
+what the gesture is *about*. A selection and a 4C drag are about the picture — they open what they
+cover, and up the side there is nothing to open — while a mark is about the data, and rows and columns
+are things the square has. So a drawn box takes both ends back to the square, exactly as a click does,
+and comes out as a rectangle of rows against columns which may be off the diagonal. It is drawn as the
+mark it will become rather than as a rubber band, since that rectangle leans at 45° here.
 
 Up the side is distance from the diagonal, which bounds no window: a marquee's top and bottom edges
 name nothing, and a band of rows is a range of separations rather than a stretch of genome. Read as

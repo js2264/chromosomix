@@ -10,7 +10,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { HeatmapView, type SelectionBox } from '@/render/heatmap'
+import { HeatmapView, type DrawnBox, type SelectionBox } from '@/render/heatmap'
 import type { DenseMatrix } from '@/types'
 
 /**
@@ -742,7 +742,7 @@ describe('a band along one axis', () => {
    * lit button and a changed cursor is asking twice.
    */
   it('draws a box on a plain drag, and does not move the picture', () => {
-    const drawn: SelectionBox[] = []
+    const drawn: DrawnBox[] = []
     const { canvas, fire } = harness(400)
     const heatmap = new HeatmapView(canvas, {
       devicePixelRatio: 1,
@@ -755,11 +755,16 @@ describe('a band along one axis', () => {
     const zoom = heatmap.zoomLevel
     const before = heatmap.cellAt(plot.x + plot.width / 2, plot.y + plot.height / 2)
 
-    // Four pixels a cell at the fitted zoom: columns 20–40 by rows 40–60.
+    // Four pixels a cell at the fitted zoom: pressed on column 20 / row 40 and
+    // released on column 40 / row 60, and a box covers both of the cells its
+    // corners are in — which is what makes a one-cell box drawable at all.
     dragWith(fire, [plot.x + 80, plot.y + 160], [plot.x + 160, plot.y + 240])
     expect(drawn).toHaveLength(1)
-    expect(drawn[0]?.cols).toEqual([20, 40])
-    expect(drawn[0]?.rows).toEqual([40, 60])
+    expect(drawn[0]?.cols).toEqual([20, 41])
+    expect(drawn[0]?.rows).toEqual([40, 61])
+    // Two different spans: a rectangle mark is two independent stretches, and
+    // the marquee is no longer squared into promising one.
+    expect(drawn[0]?.cols).not.toEqual(drawn[0]?.rows)
     // Neither zoomed nor panned: the reader is drawing *on* the picture, and
     // every one of the three things a released marquee usually does would move
     // it out from under what they have just drawn.
@@ -768,7 +773,7 @@ describe('a band along one axis', () => {
   })
 
   it('keeps Shift’s diagonal lock, so a domain is one gesture', () => {
-    const drawn: SelectionBox[] = []
+    const drawn: DrawnBox[] = []
     const { canvas, fire } = harness(400)
     const heatmap = new HeatmapView(canvas, {
       devicePixelRatio: 1,
@@ -785,7 +790,7 @@ describe('a band along one axis', () => {
   })
 
   it('pans again once the mode is off', () => {
-    const drawn: SelectionBox[] = []
+    const drawn: DrawnBox[] = []
     const { canvas, fire } = harness(400)
     const heatmap = new HeatmapView(canvas, {
       devicePixelRatio: 1,

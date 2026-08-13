@@ -24,6 +24,7 @@
  */
 
 import {
+  MANUAL_PALETTE,
   formatPoint,
   mintMarkId,
   orderedSpan,
@@ -31,6 +32,7 @@ import {
   type ManualLine,
   type ManualMark,
   type ManualPoint,
+  type ManualRect,
   type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
@@ -126,6 +128,7 @@ import {
   type AxisCoords,
   type Cell,
   type PlotOptions,
+  type DrawnBox,
   type SelectionBox,
   type SelectionText,
   type SeparatorSet,
@@ -1044,6 +1047,8 @@ export class MatrixPanel {
   private gaugeShown: DenseMatrix | null = null
   /** The open map's own bin size — see {@link openBinsize}. */
   private readonly baseBinsize: number
+  /** A box being drawn on a turned map; see {@link previewRect}. */
+  private pendingRect: ManualRect | null = null
   /** A picking mode in progress; see {@link armPicking}. */
   private picking: (PickHandlers & {
     /** Called once when the mode ends, however it ends. */
@@ -1182,7 +1187,10 @@ export class MatrixPanel {
       // A box drawn for a form that asked for one. Resolved here, like the band
       // above and for the same reason: the renderer knows cells and this is the
       // object that knows which sequence and which base pair they are.
-      onDrawn: (box: SelectionBox) => this.boxDrawn(box),
+      onDrawn: (box: DrawnBox) => this.boxDrawn(box),
+      // …and the same box on every move while it is drawn, so a turned map can
+      // show what is coming. See {@link previewRect}.
+      onDrawing: (box: DrawnBox | null) => this.previewRect(box),
       // Only wired when the view wants it; without it a drag zooms, which is
       // the renderer's own behaviour.
       ...(options.onSelectRegion === undefined
@@ -3076,7 +3084,16 @@ export class MatrixPanel {
     // Boxes under the pointers, for the reason the files go under the marks: a
     // box is an area and a line or an arrowhead is aimed at something, and an
     // aim that disappears where it crosses an outline is an aim at the outline.
-    drawManualRects(ctx, frame, this.locusAxes, context.manual.rects)
+    // The one being drawn is drawn with them, because it is one of them: what
+    // the reader lets go of is what they were already looking at.
+    drawManualRects(
+      ctx,
+      frame,
+      this.locusAxes,
+      this.pendingRect === null
+        ? context.manual.rects
+        : [...context.manual.rects, this.pendingRect],
+    )
     drawManualLines(ctx, frame, this.locusAxes, context.manual.lines)
     drawArrowheads(ctx, frame, this.locusAxes, context.manual.arrowheads, palette.labelHaloColor)
     this.paintLaneGuide(ctx, frame)
@@ -3302,39 +3319,72 @@ export class MatrixPanel {
   /**
    * A box drawn on the map, as a stretch of genome per axis.
    *
-   * The 2D counterpart of {@link bandDragged}, and the same conversion the
-   * region selection makes ({@link emitSelection}) — one derivation, so a box
-   * that opens a region and a box that becomes a mark cannot come to name
-   * different stretches.
+   * The 2D counterpart of {@link bandDragged}: the renderer knows cells and this
+   * is the object that knows which sequence and which base pair they are. The
+   * conversion is `axisSelection`'s, which is the region selection's own — so a
+   * box that opens a region and a box that becomes a mark cannot come to name
+   * different stretches, and both clamp to the block's own ends.
    *
-   * **Turned, it is the on-diagonal square.** A band over a turned map names one
-   * stretch of the genome and nothing up the side is a place, so the box it
-   * stands for is that stretch against itself — which is the domain a reader
-   * drawing on a turned map is drawing, and the reading the region selection
-   * already takes there.
+   * **The same on both presentations**, because {@link DrawnBox} has already
+   * taken the drag back to the square: two rows against two columns, whether the
+   * hand moved over a square map or over a band. That is what lets a rectangle
+   * be drawn off the diagonal on a turned map, which is the one thing a band
+   * selection there cannot say.
    *
-   * Silent above bin level, where a cell is a whole sequence: a rectangle whose
+   * `null` above bin level, where a cell is a whole sequence: a rectangle whose
    * corners are contigs has no base pairs in it, and inventing some would put a
    * mark on the map at coordinates nobody chose.
    */
-  private boxDrawn(box: SelectionBox): void {
-    const handler = this.picking?.box
+  private rectFor(box: DrawnBox): { rows: ManualSpan; cols: ManualSpan } | null {
     const data = this.data
-    if (handler === undefined || data === null || data.level !== 'bin') return
-    const span = (axis: SelectedAxis | null): ManualSpan | null =>
-      axis?.range === undefined ? null : orderedSpan(axis.label, axis.range[0], axis.range[1])
-
-    if (this.turned !== null) {
-      const only = span(this.turnedAxisSelection(box))
-      if (only !== null) handler({ rows: only, cols: { ...only } })
-      return
-    }
+    if (data === null || data.level !== 'bin') return null
+    // Through the block the drag *began* in, which is what says which sequence a
+    // box laid across a boundary is of — the rule a selection follows too.
     const rowGroup = groupAt(data.rowGroups, box.anchor.row)
     const colGroup = groupAt(data.colGroups, box.anchor.col)
-    if (rowGroup === undefined || colGroup === undefined) return
+    if (rowGroup === undefined || colGroup === undefined) return null
+    const span = (axis: SelectedAxis | null): ManualSpan | null =>
+      axis?.range === undefined ? null : orderedSpan(axis.label, axis.range[0], axis.range[1])
     const rows = span(this.axisSelection(rowGroup, box.rows, data.rowExtent[0]))
     const cols = span(this.axisSelection(colGroup, box.cols, data.colExtent[0]))
-    if (rows !== null && cols !== null) handler({ rows, cols })
+    return rows === null || cols === null ? null : { rows, cols }
+  }
+
+  private boxDrawn(box: DrawnBox): void {
+    const handler = this.picking?.box
+    const at = this.rectFor(box)
+    if (handler !== undefined && at !== null) handler(at)
+  }
+
+  /**
+   * The box being drawn, shown as the mark it is about to become.
+   *
+   * **Only under a turn.** On a square map a rectangle of rows against columns
+   * *is* a rectangle on screen, so the renderer's own rubber band already draws
+   * it exactly — with the coordinate chips on its edges, which this has nowhere
+   * to put. Turned, that same rectangle leans at 45° and folds where it crosses
+   * the diagonal ({@link drawManualRects}), so a rubber band would be a box
+   * drawn around a shape that is not a box: the preview is the mark itself,
+   * through the code that will draw it for good, and what the reader lets go of
+   * is exactly what they were looking at.
+   *
+   * The colour is the one the mark will be given, for the same reason.
+   */
+  private previewRect(box: DrawnBox | null): void {
+    const at = box === null || this.turned === null ? null : this.rectFor(box)
+    const next: ManualRect | null =
+      at === null
+        ? null
+        : {
+            id: 'drawing',
+            kind: 'rect',
+            a: at.rows,
+            b: at.cols,
+            colour: this.options.annotations?.manual.nextColour() ?? MANUAL_PALETTE[0],
+          }
+    if (next === null && this.pendingRect === null) return
+    this.pendingRect = next
+    this.schedule()
   }
 
   /**
