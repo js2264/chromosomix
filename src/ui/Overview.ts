@@ -44,7 +44,7 @@ import { isCancellation } from '../worker/client'
 import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
-import { MatrixPanel, blockSummary } from './MatrixPanel'
+import { MatrixPanel, blockSummary, type AnnotationContext } from './MatrixPanel'
 import { SearchBox } from './SearchBox'
 
 /**
@@ -198,6 +198,16 @@ export interface OverviewProps {
    */
   onOpenContig(rowContig: string, colContig?: string): void
   onError(err: unknown): void
+  /**
+   * Annotations to draw beside the map (§8, §8.12).
+   *
+   * The whole-metagenome picture is the one this matters most in: its axis is
+   * MAGs, and a MAG's completeness, redundancy and taxon are exactly what a
+   * reader is holding the picture against. No file's tracks can be drawn here —
+   * a metacool loads none (§8.5) — so in practice this carries the file's own
+   * columns and nothing else.
+   */
+  annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
 }
@@ -290,6 +300,7 @@ export class Overview {
     // its own terms, which made switching to it feel like leaving the app.
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       detachedControls: true,
       hideTitle: true,

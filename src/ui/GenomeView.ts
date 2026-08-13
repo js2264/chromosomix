@@ -13,6 +13,7 @@ import type { ReaderClient } from '../worker/client'
 import { el, fmt } from './dom'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary, poolingNote,
+  type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
 } from './MatrixPanel'
@@ -71,6 +72,16 @@ export interface GenomeViewProps {
    */
   onOpenContigPair(rowContig: string, colContig: string): void
   onError(err: unknown): void
+  /**
+   * Annotations to draw beside the map (§8, §8.12).
+   *
+   * On a metagenome this is the file's *own* columns and nothing else: a
+   * `.metacool` loads no annotation files at all (§8.5), and its `/genomes` and
+   * `/contigs` tables are indexed against this very axis. Which is why this view
+   * — reachable only on a file that has genomes — takes the context now, when it
+   * never used to.
+   */
+  annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
   /** Genomes one step away in display order, for the `‹ ›` buttons. */
@@ -127,6 +138,7 @@ export class GenomeView {
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
+      ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       // The controls live in this view's sidebar, stacked above the contig list,
       // and the `<h2>` above already names the genome.
       detachedControls: true,

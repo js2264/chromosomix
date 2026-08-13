@@ -1042,6 +1042,12 @@ elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from t
 these two answer a different question — not "what is on the sequence here" but "this pixel is a
 feature" — and because one file is rarely wanted in both roles at once.
 
+**Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
+sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
+map's own cells. Discovered rather than loaded, so it is the one card whose contents nobody had to
+find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and over the marks,
+because the column descends from what came out of a file to what a reader put there by hand.
+
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both) and arrowheads (on- or off-diagonal), each entered as coordinates or picked by clicking the
 map. This is the card that makes a figure, and nothing in it comes from a file.
@@ -1119,6 +1125,11 @@ thousands of *different organisms*, assembled independently; a bigWig or a GTF i
 names that belong to one assembly, so the overlap is either a coincidence or a mistake, and drawing a
 gene model across a MAG boundary would assert a coordinate system that does not exist. The honest
 answer is to not offer it.
+
+**The gate is about files, and §8.12 is the case it never covered.** A metacool's own `/genomes` and
+`/contigs` tables are keyed on that file's own axis: there is no naming convention to coincide with,
+no overlap to report and nothing to match, because the names *are* the map's. So the **Metadata**
+card is offered on every container, a metacool included, and it is the only card such a file gets.
 
 ### 8.6 Persistence
 
@@ -1326,6 +1337,74 @@ Kept in per-file session memory beside the marks (§8.6), which is what makes th
 resolution, a switch of view, a deck opening and closing, and a reload; and carried in an exported
 session (§5.6), because a list of loci walked one after another is work, and it is the one part of a
 workspace a recipient can act on without the bytes.
+
+
+### 8.12 Metadata annotations: the file's own columns
+
+Every container this viewer opens keeps tables beside its pixels, and those tables have always held
+more than the arithmetic the reader needs. A `.metacool`'s `/genomes` carries completeness,
+redundancy, GC content and whatever else the binner wrote; its `/contigs` carries what the assembler
+and the annotator joined on — an MGE call, a coverage, a bin id; and every cooler's `/bins` carries at
+least the weight it was balanced with. Until this section all of it was readable only as a *table*,
+one row at a time, in a view that is not the picture.
+
+**A metadata column is an annotation, and it joins the same store every other annotation joins.**
+Adding one from the drop-down produces an ordinary entry with `kind: 'metadata'` (a value profile) or
+`kind: 'classes'` (a set of labels), and from that moment the colour, the rename, the height, the
+limits, the autoscale group, the four edges, the multi-map placement, the reorder, the hairline, the
+tooltip, the figure export and the session memory are the one implementation those rows already go
+through — the argument §18.5 makes for computed tracks, made a second time and settled the same way.
+What is left for a card of its own is the drop-down, the provenance line, the legend and a TSV export.
+
+**Two pictures, because a column is one of two things.** A *quantitative* column is a value per unit
+and is drawn as bars against an axis, defaulting to bars rather than a line because one cell is one
+unit and there is no ground between two MAGs to interpolate over. A *qualitative* column is not a
+value at all and is drawn as runs of colour with the category written into the runs wide enough to
+hold it, from a fixed colour-vision-safe palette rather than from the lane's own colour — the colours
+belong to the categories, they have to mean the same thing in every lane and every figure, and one
+swatch cannot describe six of them. Which of the two a column is comes from the values: text is
+qualitative, numbers are quantitative, and small integers repeated over many rows are the labels a
+binner writes rather than a measurement. A column whose every row is a different string is an
+identifier and is not offered at all.
+
+**The level rule: a table may be no finer than the axis.** This is the whole of what makes a metadata
+lane adapt to the view, and it is a rule about honesty rather than about effort. One cell of a genome
+× genome overview is a whole MAG, so a genome column has something exact to say about it and a bin
+weight has not; one cell of a bin × bin view is a bin, so all three tables can speak. A coarser
+column is therefore *broadcast* down — a MAG's contamination is exact on every contig and every bin
+inside it, and drawing it as a constant invents nothing — and a finer column is refused upward,
+because rolling bins into a MAG means choosing a statistic nobody asked for and then drawing it in
+the same ink as a number the file wrote. The drop-down offers what this view can show and lists the
+rest **disabled, with the reason**; a row already added to a view that has since coarsened stays in
+the list and says it is not drawn here.
+
+Inside a cell the aggregation *is* allowed, and the difference is that it stays in the unit the axis
+is drawn in: a pooled block's cell is those bins, every one of them on screen at that position, so a
+quantitative column is averaged over them (skipping `NaN`, which is a filtered bin and means *no
+value here*) and a qualitative one takes the most common of them.
+
+**Cells, not base pairs.** A metadata lane is indexed by the map's own cells, which is what lets one
+be drawn on a genome × genome overview where no other lane can be: there is no `LocusAxis` there at
+all (§8.4), because a cell is a whole MAG and a base pair inside it would be an invention. Which row
+of which table each cell is comes from what the reader already sends with every block — the axis
+runs, the bin each run's sequence starts at, and the pooling — so it is exact on all three levels,
+dense or pooled, and resolved through the *bin* rather than through a name wherever a bin is
+available. That last clause matters on a metagenome, where two MAGs are entitled to have assembled a
+`contig_1` each.
+
+**Reading `/bins` stays bounded.** §3.3's rule is that coordinates never come from `/bins`, and they
+still do not: what is read at open time is the group's column *names and dtypes*, which reads no
+values, and a column is then read over the bins the picture covers, cached by that range and widened
+by half on either side so a pan costs nothing. A window too large to read at once is refused in the
+row with the number, rather than by freezing the tab.
+
+**Persistence and export.** A row is remembered per file like every other (§8.6) and comes back
+**ready** rather than detached — there is no file to re-open and no recipe to re-run, because the
+column is in the map that is already open. A row naming a column the file no longer has is kept and
+says so. The TSV export writes the column at **its own** granularity, one row per unit of the source
+table under `#` comment lines naming the file, the table and the column: a lane is drawn at whatever
+level the view is, and a reader checking a bar against the file needs the rows the file actually
+wrote (§18.7).
 
 ---
 

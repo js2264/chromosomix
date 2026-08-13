@@ -14,6 +14,57 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The map's own metadata, as lanes beside it.** Every file this viewer opens
+  carries tables about its own units — a `.metacool`'s `/genomes` with
+  completeness, redundancy and GC content in it, its `/contigs` with the MGE
+  calls and bin ids the annotator joined on, every cooler's `/bins` with the
+  weight it was balanced with — and until now all of it was readable only as a
+  table, one row at a time, in a view that is not the picture.
+
+  A new **Metadata annotations** card, between the tracks and the marks, lists
+  what the open file carries and draws any of it beside the map. The columns are
+  discovered rather than declared, so a file with a column this app has never
+  heard of offers it like any other. A row is an ordinary annotation from the
+  moment it is added: same colour picker, same rename, same height, same limits,
+  same four edges, same multi-map placement, same reorder, same tooltip, same
+  figure, same session memory — because it joins the store a dropped bigWig
+  joins, which is the argument §18.5 already made for computed tracks.
+
+  **The ink follows the data.** A quantitative column is bars against a value
+  axis; a qualitative one is runs of colour with the category written into the
+  runs wide enough to hold it, from a fixed colour-vision-safe palette — the
+  colours belong to the categories, not to the lane, because they have to mean
+  the same thing in the lane above the map and the one down its side. Which of
+  the two a column is comes from what is in it, so a cluster id written as small
+  integers is a set of labels rather than a barplot of the numbering.
+
+  **What is offered is what the view can show.** One cell of a genome × genome
+  overview is a whole MAG and one cell of a bin × bin view is a bin, so a genome
+  column draws on all three levels and a bin weight draws on one. A coarser
+  column is broadcast down, which invents nothing; a finer one is refused
+  upward, because rolling bins into a MAG means choosing a statistic nobody
+  asked for and then drawing it in the same ink as a number the file wrote. The
+  drop-down lists the ones this view cannot show **disabled, with the reason**,
+  and a lane whose view has since coarsened says so in its row rather than
+  vanishing.
+
+  **A metacool has an annotations column for the first time.** §8.5's gate is
+  about *files* — a bigWig keyed on contig names from thousands of independently
+  assembled organisms either coincides or misleads — and it never covered a
+  column of the map's own tables, which cannot be matched to the wrong sequence
+  because the names are the map's. So a metagenome now gets this card, and only
+  this card.
+
+  `/bins` stays bounded, as §3.3 requires: what is read when a file opens is the
+  column *names and dtypes*, and a column is then read over the bins the picture
+  covers, widened by half so panning costs nothing. A window too large to read
+  at once is refused in the row, with the number.
+
+  Each column exports as a TSV at **its own** granularity — one row per genome,
+  sequence or bin, under `#` lines naming the file, the table and the column —
+  because a lane is drawn at whatever level the view is, and checking a bar
+  against the file means having the rows the file wrote.
+
 - **Every box that takes a file URL now has a `browse…` beside it.** The bucket
   browser existed and was reachable from one place: the picker's *private
   buckets…* dialog, the screen for typing secret keys into. So a reader with a

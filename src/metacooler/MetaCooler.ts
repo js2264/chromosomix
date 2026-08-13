@@ -23,6 +23,7 @@ import { pyRepr } from '../format'
 import type { AttrValue, Hdf5Handle } from '../h5/api'
 import { NameIndex } from '../genome/naming'
 import { openHdf5 } from '../h5/Hdf5File'
+import { dtypeKind } from '../h5/typed'
 import type {
   ByteSource,
   DenseMatrix,
@@ -1035,6 +1036,56 @@ export class MetaCooler {
     }
   }
 
+  /**
+   * The `/bins` columns this file carries, with the kind of each — names and
+   * dtypes, never a value (§8.12).
+   *
+   * One group listing and one `dtype` per column, which is what makes it safe
+   * to ask at open time for a drop-down that may never be opened: §3.3's rule
+   * is that `/bins` is never *read*, and this reads nothing. The weight column
+   * is in the list like any other, because to a reader it is exactly what this
+   * feature is for — the balancing decision, drawn beside the map it was made
+   * for.
+   */
+  binColumns(): Array<{ name: string; text: boolean }> {
+    if (!this.handle.has('bins')) return []
+    const out: Array<{ name: string; text: boolean }> = []
+    for (const name of this.handle.keys('bins')) {
+      // A column whose dtype this reader cannot interpret — a compound, a
+      // reference, an enum — is left out rather than reported as a number.
+      // Nothing downstream could draw it, and the honest place to decline is
+      // the list rather than the lane.
+      const text = columnIsText(this.handle.dtype(`bins/${name}`))
+      if (text !== null) out.push({ name, text })
+    }
+    return out
+  }
+
+  /**
+   * One `/bins` column over one half-open bin range.
+   *
+   * Bounded exactly as the weight read is, and for the same reason: the block
+   * on screen is at most a few thousand cells however large the file is, so a
+   * lane over it never needs more of the column than the picture covers. A
+   * whole-file column read would be as long as the file's bin count, for a
+   * picture that is going to be four thousand pixels wide.
+   */
+  binColumn(column: string, lo: number, hi: number): Float64Array | string[] {
+    const path = `bins/${column}`
+    if (!this.handle.has(path)) {
+      throw new ViewerError(
+        'unsupported',
+        `This file has no /${path} column.`,
+        { column },
+      )
+    }
+    const from = Math.max(0, Math.min(lo, this.nBins))
+    const to = Math.max(from, Math.min(hi, this.nBins))
+    return columnIsText(this.handle.dtype(path)) === true
+      ? this.handle.readStrings(path, from, to)
+      : this.handle.readNumeric(path, from, to)
+  }
+
   /** The two bounded weight slices a balanced roll-up multiplies by. */
   private weightSlices(rows: Extent, cols: Extent): { rows: Float64Array; cols: Float64Array } {
     const path = `bins/${DEFAULT_WEIGHT_COLUMN}`
@@ -1310,6 +1361,23 @@ function toFloat64(table: Table, column: string): Float64Array {
   const raw = table.data[column]
   if (raw instanceof Float64Array) return raw
   return Float64Array.from(table.numbers(column))
+}
+
+/**
+ * Whether a dataset holds text, or `null` where its dtype is not a scalar one.
+ *
+ * A total function over a partial one: {@link dtypeKind} throws for a compound
+ * or reference datatype, which is the right answer for a required column being
+ * validated and the wrong one for a *discovery* pass over whatever a creator
+ * happened to put in `/bins` (§8.12). One odd column should cost that column,
+ * not the listing.
+ */
+function columnIsText(dtype: string): boolean | null {
+  try {
+    return 'SOU'.includes(dtypeKind(dtype))
+  } catch {
+    return null
+  }
 }
 
 /** The same, narrowing to `Int32Array` — for id columns, which are indices. */

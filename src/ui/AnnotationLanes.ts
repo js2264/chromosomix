@@ -89,11 +89,26 @@ import {
   LANE_EDGES,
   drawsAProfile,
   hasAMovableAxis,
+  isMetadata,
   type AnnotationEntry,
   type FeatureSet,
   type LaneEdge,
   type TrackSampleSet,
 } from '../annotations/types'
+import {
+  IDENTITY_CELLS,
+  cellOfUnit,
+  type CellScale,
+  type MetaBlock,
+  type MetaCells,
+} from '../annotations/metadata'
+import {
+  categoryAt,
+  categoryColour,
+  drawCategories,
+  profileFromCells,
+  type CategoryRun,
+} from '../render/meta'
 import { el, fmt } from './dom'
 import type { LaneMark } from './LaneControls'
 import { LANE_MIN_SIZE } from './trackControls'
@@ -246,10 +261,52 @@ interface Lane {
   /** One per value track in the lane; empty for the feature kinds. */
   profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
   /**
+   * The categories to paint, for a qualitative metadata lane (§8.12).
+   *
+   * Its own field rather than a `profiles` entry with a flag, because it is not
+   * a profile: there is no value axis, no limits to resolve and no autoscale
+   * group to join, and every one of those is a question `profiles` is asked.
+   */
+  categories: Extract<MetaCells, { kind: 'qualitative' }> | null
+  /**
    * The canvas coordinate of the border a resize drag grabs — the lane's far
    * edge, away from the map.
    */
   border: number
+}
+
+/**
+ * Where a metadata lane's numbers come from (§8.12).
+ *
+ * An interface, and a very small one, because the alternative is this file
+ * knowing about the reader's tables. What it hands back is one value per cell
+ * of the block, already resolved — the arithmetic is `annotations/metadata.ts`'s
+ * and the tables are `annotations/metaIndex.ts`'s, and neither is a drawing
+ * concern.
+ *
+ * `null` is a real answer and a common one: the column is a `/bins` column
+ * whose slice has not arrived, or one this level cannot show. The lane draws
+ * nothing that frame, exactly as a track with no samples yet does.
+ */
+export interface MetaSource {
+  cellsFor(entry: AnnotationEntry, block: MetaBlock): MetaCells | null
+  /**
+   * A counter that grows whenever a column arrives or is re-read.
+   *
+   * What the lane's own cache is keyed on, and the reason it is a *number*
+   * rather than a callback: the values behind a metadata lane can improve
+   * without the block changing — a `/bins` slice lands, or a wider one replaces
+   * the one that was drawn while a reader zoomed out — and a cache keyed on the
+   * block alone would go on drawing the first answer for as long as the picture
+   * stood still.
+   */
+  revision(): number
+}
+
+/** The two axes of the block, as the metadata lanes read them. */
+export interface MetaAxes {
+  rows: MetaBlock | null
+  cols: MetaBlock | null
 }
 
 /**
@@ -311,6 +368,29 @@ export class AnnotationLanes {
 
   private axes: OverlayAxes = { rows: null, cols: null }
   /**
+   * The same two axes as *cells of the file's own tables* (§8.12).
+   *
+   * Beside {@link axes} rather than inside it, because they are two different
+   * coordinate models and the whole point of the metadata lanes is that they
+   * use the second one. A genome × genome overview has no `LocusAxis` at all —
+   * a cell is a whole MAG and there is no base pair inside it to put a bigWig
+   * sample at — and that is exactly the picture a MAG's completeness belongs
+   * beside.
+   */
+  private metaAxes: MetaAxes = { rows: null, cols: null }
+  /**
+   * This block's cells per entry and scope, so a pan does not re-resolve them.
+   *
+   * Cleared with the axes, for the reason the feature layouts are: a mapping
+   * built for one block drawn over another is the one failure §8.4 exists to
+   * prevent.
+   */
+  private readonly metaCells = new Map<string, MetaCells | null>()
+  /** Which revision of the index's values {@link metaCells} was resolved from. */
+  private metaRevision = -1
+  /** The category runs each lane was painted from, for the readout. */
+  private readonly metaRuns = new Map<string, { frame: LaneFrame; runs: CategoryRun[] }>()
+  /**
    * The sample cache, or `null` on a file with no annotation worker.
    *
    * A file with a genome layer carries no annotations at all (§8.5), so its
@@ -352,6 +432,15 @@ export class AnnotationLanes {
        * (`annotations/groups.ts`). Absent where there are no groups to have.
        */
       groups?: Pick<GroupSettings, 'modeOf' | 'scalingOf'>
+      /**
+       * Where a metadata lane's values come from (§8.12).
+       *
+       * Absent on a surface that draws no metadata — a file whose reader has
+       * gone, or a panel built before the index was — and then a metadata row
+       * simply draws nothing, which is the same thing it does while a column is
+       * being read.
+       */
+      metadata?: MetaSource
       /** Ask for a repaint; the panel coalesces it into its own frame. */
       onChange(): void
     },
@@ -388,6 +477,40 @@ export class AnnotationLanes {
     return laneIsHorizontal(edge) ? this.axes.cols : this.axes.rows
   }
 
+  /** The same axis, as cells of the file's own tables (§8.12). */
+  private metaAxisFor(edge: LaneEdge): MetaBlock | null {
+    return laneIsHorizontal(edge) ? this.metaAxes.cols : this.metaAxes.rows
+  }
+
+  /** How this edge's cells land on the units the lane is drawn in. */
+  private cellScaleFor(edge: LaneEdge): CellScale {
+    return this.metaAxisFor(edge)?.scale ?? IDENTITY_CELLS
+  }
+
+  /**
+   * The cells one metadata row resolves to on one edge, resolved at most once
+   * per block.
+   *
+   * Keyed by *scope* rather than by edge, exactly as the sample cache is: the
+   * same column drawn above and below the map is one answer over one axis, and
+   * two slots would resolve it twice to draw the same numbers.
+   */
+  private cellsFor(entry: AnnotationEntry, edge: LaneEdge): MetaCells | null {
+    const block = this.metaAxisFor(edge)
+    const source = this.options.metadata
+    if (block === null || source === undefined) return null
+    const revision = source.revision()
+    if (revision !== this.metaRevision) {
+      this.metaRevision = revision
+      this.metaCells.clear()
+    }
+    const key = `${entry.id}:${laneIsHorizontal(edge) ? 'cols' : 'rows'}`
+    if (this.metaCells.has(key)) return this.metaCells.get(key) ?? null
+    const cells = source.cellsFor(entry, block)
+    this.metaCells.set(key, cells)
+    return cells
+  }
+
   /**
    * Point the lanes at a new block.
    *
@@ -399,6 +522,21 @@ export class AnnotationLanes {
     this.axes = axes
     this.layouts.clear()
   }
+
+  /**
+   * Point the metadata lanes at the same new block.
+   *
+   * Separate from {@link setAxes} because the two are read by different lanes
+   * and one can exist without the other: a genome-level block has cells and no
+   * loci, and a turned block has loci along one axis and no cells this module
+   * could put a table row against. Callers that change the block call both.
+   */
+  setMetaAxes(axes: MetaAxes): void {
+    this.metaAxes = axes
+    this.metaCells.clear()
+    this.metaRuns.clear()
+  }
+
 
   /**
    * Draw no stacks at all — the map on its own.
@@ -495,11 +633,17 @@ export class AnnotationLanes {
     const entries = this.turned
       ? this.options.store.drawnAnywhereOn(map)
       : this.options.store.drawnOnMap(map, edge)
-    // No axis on this edge, no lane: every kind that draws here draws against
-    // genomic coordinates, and the one that did not — the 4C lane read straight
-    // off the picture — is gone (§18.9). A stack with nothing to place its
-    // signal on has nothing to say.
-    return this.axisFor(edge) === null ? [] : entries
+    // No axis on this edge, no lane — with one exception, which is the whole of
+    // §8.12. Every *loaded* kind draws against genomic coordinates, so a
+    // contig-level or genome-level block leaves them nothing to place their
+    // signal on. A metadata column is indexed by the map's own cells instead,
+    // and a genome × genome overview has those even though it has no base pair
+    // anywhere in it — which is precisely the picture a MAG's contamination
+    // belongs beside.
+    const locus = this.axisFor(edge) !== null
+    const cells = this.metaAxisFor(edge) !== null
+    if (locus && cells) return entries
+    return entries.filter((entry) => (isMetadata(entry.kind) ? cells : locus))
   }
 
   /**
@@ -835,7 +979,31 @@ export class AnnotationLanes {
     return this.slotsFor(edge).map((slot) => {
       const frame = this.frameOf(edge, slot, geometry)
       const profiles: Lane['profiles'] = []
+      let categories: Lane['categories'] = null
       for (const member of [slot.entry, ...slot.overlaid]) {
+        // A quantitative metadata column is a profile like any other from here
+        // on: one value per cell reduced to one per pixel, and everything after
+        // that — limits, groups, the ceiling drag, the figure — is the code the
+        // tracks already go through (§8.12).
+        if (member.kind === 'metadata') {
+          const cells = this.cellsFor(member, edge)
+          if (cells?.kind !== 'quantitative') continue
+          profiles.push({
+            entry: member,
+            profile: profileFromCells(frame, cells.values, this.cellScaleFor(edge)),
+          })
+          continue
+        }
+        if (member.kind === 'classes') {
+          // Only the lane's host is painted, never an overlaid member: two
+          // categorical strips in one lane is the second one painted over the
+          // first, and there is no transparency that makes two opaque category
+          // maps readable together.
+          if (member.id !== slot.entry.id) continue
+          const cells = this.cellsFor(member, edge)
+          if (cells?.kind === 'qualitative') categories = cells
+          continue
+        }
         // A sequence is a value track from here: beside a map, where a pixel is
         // a whole bin, a FASTA can only ever be its GC content — the residues
         // need a base per pixel and a bin is a thousand of them.
@@ -851,6 +1019,7 @@ export class AnnotationLanes {
         frame,
         border: this.nearEdgeOf(edge, slot) + laneOutward(edge) * slot.thickness,
         profiles,
+        categories,
       }
     })
   }
@@ -995,6 +1164,59 @@ export class AnnotationLanes {
             ),
             detail: { kind: 'limits', ...shown },
             at: labelEndFor(frame, shown, first.entry.style.flip),
+          }
+        }
+      } else if (lane.categories !== null) {
+        // A qualitative column: colour per category, edge to edge, with the
+        // names written into the runs that have room for them (§8.12). The
+        // palette is the categories' own and not the entry's colour — see
+        // `render/meta.ts` for why one swatch cannot describe six categories.
+        const runs = drawCategories(
+          ctx,
+          frame,
+          lane.categories,
+          {
+            levels: lane.categories.levels,
+            opacity: entry.style.opacity,
+            labels: text,
+            font: scaleFont(LANE_FONT),
+            haloColour: geometry.palette.halo,
+            guideColour: geometry.palette.guide,
+            baseline,
+          },
+          this.cellScaleFor(edge),
+        )
+        this.metaRuns.set(`${entry.id}:${edge}`, { frame, runs })
+        if (text) {
+          const shown = new Set(runs.map((run) => run.code))
+          label = {
+            // Named with a colour that is **in the lane**: the label's swatch is
+            // the entry's own colour everywhere else, and on a categorical strip
+            // that colour is drawn nowhere at all — a green chip over a lane of
+            // blue and orange is a legend for a track that is not there. The
+            // first category drawn is the one the chip stands for, and the card
+            // carries the full legend.
+            entries: [
+              {
+                ...entry,
+                style: {
+                  ...entry.style,
+                  colour: categoryColour(runs[0]?.code ?? -1),
+                },
+              },
+            ],
+            // How many of the column's categories this picture actually holds,
+            // which is the one number a reader cannot get from the colours: a
+            // lane showing three of eleven taxa looks exactly like a lane of a
+            // three-category column.
+            detail: {
+              kind: 'text',
+              text:
+                shown.size === lane.categories.levels.length
+                  ? `${fmt.int(shown.size)} categories`
+                  : `${fmt.int(shown.size)} of ${fmt.int(lane.categories.levels.length)} categories`,
+            },
+            at: 'near',
           }
         }
       } else if (entry.payload?.kind === 'features' && axis !== null) {
@@ -1421,16 +1643,20 @@ export class AnnotationLanes {
         for (const member of values) {
           // From the samples rather than from the paint: the answer is the
           // file's value at that base, not the mean the pixel happened to be
-          // drawn at.
+          // drawn at. A metadata column answers from its cells for the same
+          // reason — the number under the pointer is the file's row, not the
+          // mean of however many rows that pixel drew (§8.12).
           const value =
-            axis === null
-              ? null
-              : valueAtPixel(
-                  this.cache?.peek(member.id, horizontal ? 'cols' : 'rows') ?? null,
-                  axis,
-                  frame,
-                  along,
-                )
+            member.kind === 'metadata'
+              ? cellValueAt(this.cellsFor(member, edge), frame, along, this.cellScaleFor(edge))
+              : axis === null
+                ? null
+                : valueAtPixel(
+                    this.cache?.peek(member.id, horizontal ? 'cols' : 'rows') ?? null,
+                    axis,
+                    frame,
+                    along,
+                  )
           rows.push({
             label: member.kind === 'sequence' ? `${member.label} GC` : member.label,
             colour: member.style.colour,
@@ -1438,6 +1664,31 @@ export class AnnotationLanes {
             here,
           })
         }
+        continue
+      }
+
+      // A categorical strip has a name at a position rather than a number, so
+      // it is a row whose "value" is the category — which is what a reader
+      // hovering one wants to be told, and the only place the legend is.
+      if (slot.entry.kind === 'classes') {
+        const painted = this.metaRuns.get(`${slot.entry.id}:${edge}`)
+        const cells = this.cellsFor(slot.entry, edge)
+        const run =
+          painted === undefined || cells?.kind !== 'qualitative'
+            ? null
+            : categoryAt(
+                painted.runs,
+                cellOfUnit(this.cellScaleFor(edge), painted.frame.toUnit(along)),
+              )
+        rows.push({
+          label: slot.entry.label,
+          colour: run === null ? slot.entry.style.colour : categoryColour(run.code),
+          value:
+            run === null || cells?.kind !== 'qualitative'
+              ? '—'
+              : (cells.levels[run.code] ?? '—'),
+          here,
+        })
         continue
       }
 
@@ -1465,9 +1716,18 @@ export class AnnotationLanes {
     }
 
     if (rows.length === 0 && detail.length === 0 && !onALane) return null
+    const first = this.frameOf(edge, slots[0], geometry)
+    const cells = this.metaAxisFor(edge)
     return {
+      // A base pair where there is one, and the unit's own name where there is
+      // not: above bin level a cell is a whole sequence, so `MAG_12` is the
+      // true answer and a coordinate would be an invention.
       position:
-        axis === null ? '—' : describeAt(axis, this.frameOf(edge, slots[0], geometry), along),
+        axis !== null
+          ? describeAt(axis, first, along)
+          : cells === null
+            ? '—'
+            : describeCell(cells, first, along),
       rows,
       detail,
     }
@@ -1626,6 +1886,36 @@ function laneLabelStyle(): LaneLabelStyle {
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {
   const locus = axis.unitToLocus(frame.toUnit(along))
   return locus === null ? '—' : `${locus.contig}:${fmt.bp(locus.bp)}`
+}
+
+/**
+ * `MAG_12` — where the pointer is, on an axis that has no base pairs (§8.12).
+ *
+ * The run's own label, which is what the axis is written with and what the
+ * matrix tooltip says about the same column. A cell above genome level has no
+ * position inside anything, so this is the whole of what can honestly be said
+ * about where the pointer is — and it is more than the em dash that was there.
+ */
+function describeCell(block: MetaBlock, frame: LaneFrame, along: number): string {
+  const cell = cellOfUnit(block.scale ?? IDENTITY_CELLS, frame.toUnit(along))
+  for (const run of block.runs) {
+    if (cell >= run.start && cell < run.end) return run.label
+  }
+  return '—'
+}
+
+/** The value of the cell under a pixel, from what the lane resolved. */
+function cellValueAt(
+  cells: MetaCells | null,
+  frame: LaneFrame,
+  along: number,
+  scale: CellScale,
+): number | null {
+  if (cells === null || cells.kind !== 'quantitative') return null
+  const cell = cellOfUnit(scale, frame.toUnit(along))
+  if (cell < 0 || cell >= cells.values.length) return null
+  const value = cells.values[cell]
+  return Number.isFinite(value) ? value : null
 }
 
 /** The sampled value under a pixel, straight from the cache. */

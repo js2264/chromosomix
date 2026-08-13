@@ -7013,3 +7013,79 @@ canvas.is-frozen {
   border-right: 1px solid var(--accent, #3b82f6);
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------------------
+   The Metadata card (§8.12)
+   ------------------------------------------------------------------------- */
+
+/* The drop-down and its button share a row and the drop-down takes what is
+   left: a column name can run to `checkm_contamination_pct`, and a select that
+   sized itself to its content would push the button off a 16 rem column. */
+.meta-add {
+  gap: 0.4rem;
+}
+
+.meta-add > .select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A categorical row's stand-in for the colour swatch: the first few of the
+   palette's colours, in the swatch's own place and at its own size, so the
+   heads of the two kinds of row line up down the list. Not a control — the
+   palette is fixed so that a category is one colour everywhere — so it takes
+   no pointer and no focus ring. */
+.meta-chip {
+  display: flex;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  flex: 0 0 auto;
+}
+
+.meta-chip-part {
+  flex: 1 1 auto;
+}
+
+/* The legend, which is the one thing a colour strip cannot carry itself. It
+   wraps rather than scrolls: a column with nine categories is a list of nine
+   short words, and a reader comparing the lane against it should see all of
+   them at once rather than pushing a bar sideways. */
+.meta-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  font-size: var(--step--2, 0.72rem);
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.meta-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.meta-legend-item > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 9rem;
+}
+
+.meta-legend-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+/* Said plainly rather than left to the colours to imply: past the palette's
+   length two categories share a colour, and a legend that showed the repeat
+   without naming it would read as a mistake. */
+.meta-legend-more {
+  font-style: italic;
+}

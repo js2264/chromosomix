@@ -35,7 +35,24 @@
  */
 import type { TrackOp } from './derived'
 
-export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
+/**
+ * `metadata` and `classes` are the two the file itself supplies (§8.12). A
+ * column of `/genomes`, `/contigs` or `/bins` is drawn against the map's own
+ * cells rather than against base pairs, which is what lets one be drawn on a
+ * genome × genome overview where nothing else can be — and the two kinds are
+ * two *pictures* of one idea, because the ink a column deserves depends on
+ * what is in it. A completeness fraction is a profile with an axis; an MGE call
+ * is a run of colour with a legend, and drawn as a profile it would be a
+ * barplot of the order the categories happen to be numbered in.
+ */
+export type AnnotationKind =
+  | 'gtf'
+  | 'track'
+  | 'segments'
+  | 'pairs'
+  | 'sequence'
+  | 'metadata'
+  | 'classes'
 
 /**
  * Which card an entry belongs to; see §8.1.
@@ -52,7 +69,7 @@ export type AnnotationKind = 'gtf' | 'track' | 'segments' | 'pairs' | 'sequence'
  * remembered nowhere. The 4C *task* answers the same question from the file, so
  * the lane and its card are gone and the gesture is a 1D zoom (§18.9).
  */
-export type AnnotationCard = 'linear' | 'overlay' | 'synthetic'
+export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's
@@ -63,6 +80,31 @@ export type AnnotationSource =
   | { kind: 'local'; file: File; name: string }
   | { kind: 'remote'; url: string; name: string }
   | ComputedSource
+  | MetadataSource
+
+/**
+ * A column of the open file's own tables (§8.12).
+ *
+ * The one source with no bytes of its own to name, and the only one that comes
+ * back from a reload **whole**: a dropped file cannot be re-read without a
+ * gesture and a computed profile has to be worked out again, but a metadata
+ * column is in the file that is open, so restoring the row is re-reading two
+ * strings. There is therefore no `detached` state on this road and no
+ * Recompute button — the row simply draws.
+ *
+ * `table` and `column` rather than a joined string, because they are two
+ * questions with two answers: which of the file's tables, and which of its
+ * columns. A file that has since lost the column leaves the row saying so
+ * (`ui/MetadataCard.ts`), which is the one thing a joined string could not do
+ * without being taken apart again.
+ */
+export interface MetadataSource {
+  kind: 'metadata'
+  /** `contigs/mge_class` — what the row writes when it names its origin. */
+  name: string
+  table: 'genomes' | 'contigs' | 'bins'
+  column: string
+}
 
 /**
  * A lane an analysis produced rather than a file (§18.5).
@@ -122,7 +164,7 @@ export const LANE_EDGES: readonly LaneEdge[] = ['top', 'right', 'bottom', 'left'
  * because at a bin per pixel a sequence can only be its GC content.
  */
 export function drawsAProfile(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'sequence'
+  return kind === 'track' || kind === 'sequence' || kind === 'metadata'
 }
 
 /**
@@ -134,7 +176,12 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
  * ⌘-scroll and the autoscale button all ask this.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
-  return kind === 'track'
+  return kind === 'track' || kind === 'metadata'
+}
+
+/** Whether this kind is one of the file's own columns (§8.12). */
+export function isMetadata(kind: AnnotationKind): boolean {
+  return kind === 'metadata' || kind === 'classes'
 }
 
 /** A half-open genomic interval on one contig, as every query here takes one. */
@@ -420,8 +467,28 @@ export interface AnnotationStyle {
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    size: kind === 'track' ? 90 : kind === 'gtf' ? 92 : kind === 'sequence' ? 46 : 16,
-    mode: kind === 'sequence' ? 'line' : 'area',
+    // A metadata profile is read at a glance beside the map rather than
+    // studied, and there are usually several of them: 56 pixels is enough to
+    // tell one MAG's contamination from its neighbour's without spending a
+    // quarter of the picture on it. A categorical strip needs only enough to
+    // see the colour and, where a run is wide, to write the category in it.
+    size:
+      kind === 'track'
+        ? 90
+        : kind === 'gtf'
+          ? 92
+          : kind === 'sequence'
+            ? 46
+            : kind === 'metadata'
+              ? 56
+              : kind === 'classes'
+                ? 20
+                : 16,
+    // Bars, because one cell is one unit: a metadata column has a value per
+    // genome, per contig or per bin and nothing in between, so a line drawn
+    // through the tops of them would interpolate between two MAGs that have no
+    // ground between them to interpolate over.
+    mode: kind === 'sequence' ? 'line' : kind === 'metadata' ? 'bar' : 'area',
     // GC content is a fraction, and a fraction has an axis whether or not this
     // window happens to use all of it. Autoscaling it would make the same
     // sequence look different in two views and put "0.41 – 0.44" under a line
@@ -545,12 +612,15 @@ export interface StoredEntry {
    * because the bytes behind them are not this app's to remember (§8.6).
    */
   source: {
-    kind: 'local' | 'remote' | 'computed'
+    kind: 'local' | 'remote' | 'computed' | 'metadata'
     name: string
     url?: string
     task?: string
     recipe?: Record<string, unknown>
     framing?: string
+    /** `metadata` only: which of the open file's tables, and which column. */
+    table?: 'genomes' | 'contigs' | 'bins'
+    column?: string
   }
   visible: boolean
   placement: Placement

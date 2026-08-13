@@ -174,9 +174,13 @@ export interface WholeViewProps {
   /**
    * Annotations to draw beside and on the map (spec §8).
    *
-   * Supplied only for a cooler; a `.metacool` never carries one (§8.5), which is
-   * why the genome and pair views — reachable only on files that *have* genomes
-   * — do not take this at all.
+   * Every view that mounts a panel takes this now. It used to be this view and
+   * the region view alone, on the grounds that a `.metacool` carries no
+   * annotations (§8.5) and the genome, pair and overview views are reachable
+   * only on files that have genomes — true of *files*, and no longer true of
+   * annotations: a metacool's own columns are ones it cannot misplace (§8.12),
+   * so the three views a metagenome is actually read in are exactly the ones
+   * that had no way to draw them.
    */
   annotations?: AnnotationContext
   /**

@@ -21,6 +21,7 @@ import { button, el, field } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel, axisRegion, blockSummary,
+  type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
 } from './MatrixPanel'
@@ -75,6 +76,16 @@ export interface PairViewProps {
    */
   onOpenContig(contig: string, contig2?: string): void
   onError(err: unknown): void
+  /**
+   * Annotations to draw beside the map (§8, §8.12).
+   *
+   * On a metagenome this is the file's *own* columns and nothing else: a
+   * `.metacool` loads no annotation files at all (§8.5), and its `/genomes` and
+   * `/contigs` tables are indexed against this very axis. Which is why this view
+   * — reachable only on a file that has genomes — takes the context now, when it
+   * never used to.
+   */
+  annotations?: AnnotationContext
   /** File and genome context for the exported figure's caption. */
   caption?: { file: string; genome?: string }
 }
@@ -132,6 +143,7 @@ export class PairView {
       binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
+      ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       // The same shape as the genome and region views: the heading names the
       // selection, the controls live in the sidebar, and the panel draws only
       // the plot. A pair is a view of this file like any other.

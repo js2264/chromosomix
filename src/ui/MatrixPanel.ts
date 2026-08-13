@@ -65,7 +65,15 @@ import {
   type OverlayAxes,
   type OverlayFrame,
 } from '../render/overlays'
-import { AnnotationLanes, LANE_GAP, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
+import {
+  AnnotationLanes,
+  LANE_GAP,
+  type LaneEdge,
+  type LaneGeometry,
+  type MetaAxes,
+  type MetaSource,
+} from './AnnotationLanes'
+import type { MetaBlock } from '../annotations/metadata'
 import {
   COMPARE_OPS,
   alignable,
@@ -563,7 +571,15 @@ export interface AnnotationContext {
    */
   map?: MapId
   manual: ManualStore
-  client: AnnotationClient
+  /**
+   * The annotation worker, for the loaded formats.
+   *
+   * Optional because a file with a genome layer has none (§8.5) and still draws
+   * metadata lanes (§8.12): its columns come out of the map that is open, so
+   * there is nothing to parse and no thread to spawn. A panel without one draws
+   * every lane it can and never asks for a sample.
+   */
+  client?: AnnotationClient
   /**
    * How each group of tracks is drawn and scaled, for this file.
    *
@@ -580,6 +596,15 @@ export interface AnnotationContext {
    * business knowing the reader's table shapes.
    */
   contigLength(name: string): number | undefined
+  /**
+   * Where the file's own columns come from (§8.12).
+   *
+   * Absent on a surface that draws no metadata lanes — the 1D browser, a panel
+   * built before the tables were read — and then a metadata row on the card
+   * simply has nothing to draw here, which is the same state a `/bins` column
+   * is in while its slice is on its way.
+   */
+  metadata?: MetaSource
   /**
    * Files were dropped on one edge of the map: load them, drawn on that edge.
    *
@@ -1104,6 +1129,9 @@ export class MatrixPanel {
       ...(options.annotations?.manual === undefined ? {} : { manual: options.annotations.manual }),
       ...(options.annotations?.client === undefined ? {} : { client: options.annotations.client }),
       ...(options.annotations?.groups === undefined ? {} : { groups: options.annotations.groups }),
+      ...(options.annotations?.metadata === undefined
+        ? {}
+        : { metadata: options.annotations.metadata }),
       onChange: () => this.schedule(),
     })
 
@@ -4102,6 +4130,7 @@ export class MatrixPanel {
       })
     }
     this.lanes.setAxes(this.locusAxes)
+    this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     // The caret was measured into a lane of the outgoing block, and the number
     // in it belongs to a picture that no longer exists.
     this.laneEditor?.close()
@@ -4204,6 +4233,7 @@ export class MatrixPanel {
       })
     }
     this.lanes.setAxes(this.locusAxes)
+    this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
@@ -4321,6 +4351,56 @@ export class MatrixPanel {
    * is no row axis; the *square* pair is the block's, and it is what a pointer is
    * resolved through however the picture is arranged ({@link squareAxes}).
    */
+  /**
+   * The same two axes as **cells of the file's own tables** (§8.12).
+   *
+   * Everything a metadata lane needs about a block, and nothing about base
+   * pairs: which runs the axis is made of, how many cells it has, which bin it
+   * opens at and how many bins one cell holds. All four come off the result the
+   * reader already sends, so this is a re-labelling of `MatrixResult` rather
+   * than a second read of anything.
+   *
+   * A **turned** block gets `null` on rows, exactly as the loci do and for a
+   * closely related reason: up the side of a turned map is distance from the
+   * diagonal, which is not a unit of any table. The columns keep their cells,
+   * so a metadata lane survives the turn along the bottom with every track.
+   */
+  private metaAxesOf(data: MatrixResult, turned: RotatedBlock | null): MetaAxes {
+    const binsPerCell = data.binsPerCell ?? 1
+    const cols: MetaBlock = {
+      level: data.level,
+      runs: data.colGroups,
+      cells: data.ncols,
+      blockStart: data.colExtent[0],
+      binsPerCell,
+      // A turned map is drawn on the half-bin lattice the rotation produced
+      // (`render/rotate.ts`), so the cells of the *block* — which is what the
+      // tables are indexed by — are two drawn columns each, counted from the
+      // rotation's own origin rather than from the block's. Both facts live in
+      // this pair of numbers so that nothing downstream has to know a turn can
+      // happen: the same two lanes are drawn by the same two painters.
+      ...(turned === null
+        ? {}
+        : {
+            scale: {
+              origin: (data.colExtent[0] - turned.originBin) / BIN_FRACTION,
+              per: binsPerCell / BIN_FRACTION,
+            },
+          }),
+    }
+    if (turned !== null) return { rows: null, cols }
+    return {
+      rows: {
+        level: data.level,
+        runs: data.rowGroups,
+        cells: data.nrows,
+        blockStart: data.rowExtent[0],
+        binsPerCell,
+      },
+      cols,
+    }
+  }
+
   private locusAxesOf(
     data: MatrixResult,
     turned: RotatedBlock | null,
@@ -5382,6 +5462,18 @@ export class MatrixPanel {
       vmin: this.manualVmin,
       vmax: this.manualVmax,
     })
+    this.schedule()
+  }
+
+  /**
+   * Ask for a frame, from outside.
+   *
+   * For data that arrived without the store changing — a `/bins` column landing
+   * behind a metadata lane (§8.12). Everything else that redraws this panel
+   * either changes the store, which the lanes subscribe to, or is a gesture on
+   * the panel itself; this is the one road in from a fetch nobody is watching.
+   */
+  repaint(): void {
     this.schedule()
   }
 

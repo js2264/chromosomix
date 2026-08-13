@@ -85,6 +85,10 @@ import { MAX_PANELS, parseMaps, type GrowDirection } from '../panels/deck'
 import type { AnalysisFacts } from '../panels/MapPanel'
 import type { RunTarget } from '../analysis/runner'
 import { ManualCard, type MapPicker } from '../ui/ManualCard'
+import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
+import { MetadataCard } from '../ui/MetadataCard'
+import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
+import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
@@ -265,8 +269,25 @@ interface OpenCompare {
 interface FileAnnotations {
   store: AnnotationStore
   manual: ManualStore
-  client: AnnotationClient
-  loader: AnnotationLoader
+  /**
+   * The annotation worker and the loader in front of it.
+   *
+   * Absent on a file with a genome layer, which loads no annotation files at
+   * all (§8.5) and still has this record — because §8.12's metadata lanes come
+   * out of the map that is open, so a metacool now has a store, a placement
+   * model and a card, and nothing to parse. Spawning a thread to answer no
+   * questions is the one thing that would cost anybody anything.
+   */
+  client?: AnnotationClient
+  loader?: AnnotationLoader
+  /**
+   * The file's own tables, as the metadata card and the lanes read them (§8.12).
+   *
+   * Absent in a 1D genome browser, which is the one session with annotations
+   * and no contact map: its axis is an assembly's sequences and there is no
+   * `/genomes`, `/contigs` or `/bins` behind it to have columns of.
+   */
+  metadata?: MetadataIndex
   /**
    * How each group of tracks is drawn and scaled, for this file.
    *
@@ -399,6 +420,8 @@ export class Session {
    */
   private annotations: FileAnnotations | null = null
   private manualCard: ManualCard | null = null
+  /** The Metadata card (§8.12); rebuilt with the file, like every other card. */
+  private metadataCard: MetadataCard | null = null
   private bookmarksCard: BookmarksCard | null = null
   /**
    * The state the mounted view was built for.
@@ -684,6 +707,102 @@ export class Session {
     this.relayout()
   }
 
+  /**
+   * What one cell of the mounted picture is — the level rule's input (§8.12).
+   *
+   * Read off the state rather than off the panel, because it is a fact about
+   * what was *asked for*: the same two accessors every view builds its own
+   * request with, so the card and the picture cannot come to disagree about
+   * which level is on screen. `null` for the surfaces that are not a matrix —
+   * the two tables and the 1D browser — where there are no cells to draw a
+   * column against and the drop-down says so instead of offering everything.
+   */
+  private metadataLevel(): MetaLevel | null {
+    const state = this.store.state
+    if (state === null || this.current?.panel === undefined) return null
+    switch (state.view) {
+      case 'overview':
+        return overviewLevel(state)
+      case 'genome':
+      case 'pair':
+      case 'region':
+      case 'whole':
+      case 'selection':
+        return matrixLevel(state)
+      default:
+        return null
+    }
+  }
+
+  /**
+   * Metadata rows a previous visit left in session storage (§8.6, §8.12).
+   *
+   * Brought back **ready** rather than detached, which is the whole difference
+   * between this and every other restore in the app: there is no file to
+   * re-open and no recipe to re-run, because the column is in the map that is
+   * already open. A row naming a column this file does not have is kept and
+   * marked — see `MetadataCard.row` for why it is not silently dropped.
+   */
+  private restoreMetadata(scope: string): void {
+    const held = this.annotations
+    if (held === null) return
+    for (const row of AnnotationStore.stored(scope)) {
+      if (row.source.kind !== 'metadata') continue
+      const table = row.source.table
+      const column = row.source.column
+      if (table === undefined || column === undefined) continue
+      held.store.begin({
+        card: 'metadata',
+        kind: row.kind,
+        source: { kind: 'metadata', name: row.source.name, table, column },
+        id: row.id,
+        label: row.label,
+        placement: row.placement,
+        style: row.style,
+        visible: row.visible,
+      })
+      const found = held.metadata?.columnFor(table, column) ?? null
+      held.store.update(row.id, {
+        status: 'ready',
+        ...(found === null ? {} : { summary: summaryOf(found) }),
+      })
+    }
+  }
+
+  /**
+   * One metadata column, written out as a TSV (§8.12, §18.7).
+   *
+   * At the column's own granularity and not the picture's, which is
+   * `MetadataIndex.exportTsv`'s argument: a lane is drawn at whatever level the
+   * view is, and a reader checking a bar against the file needs the rows the
+   * file actually wrote.
+   */
+  private exportMetadata(entry: AnnotationEntry): void {
+    const held = this.annotations
+    const source = entry.source
+    if (held?.metadata === undefined || source.kind !== 'metadata') return
+    const text = held.metadata.exportTsv(source.table, source.column, this.file?.uri ?? '')
+    if (text === null) return
+    downloadBlob(
+      new Blob([text], { type: 'text/tab-separated-values' }),
+      `${exportBaseName(fileLabel(this.file?.uri ?? 'map'))}-${source.table}-${source.column}-${fileStamp(new Date())}.tsv`,
+    )
+  }
+
+  /**
+   * A metadata column landed: redraw the lanes that were waiting for it (§8.12).
+   *
+   * A repaint and not a re-render. Nothing about the *view* changed — the block
+   * is the one that was already on screen and the store holds what it held —
+   * only the numbers behind one lane arrived, which is exactly the state a
+   * track is in when its samples come back.
+   */
+  private repaintMetadata(): void {
+    this.current?.panel?.repaint()
+    this.deck?.repaint()
+    this.metadataCard?.refresh()
+  }
+
   /** Re-measure whatever is mounted; a column moved or the window resized. */
   relayout(): void {
     this.current?.panel?.remeasure()
@@ -702,7 +821,7 @@ export class Session {
     this.deck = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
-    this.annotations?.client.destroy()
+    this.annotations?.client?.destroy()
     this.annotations = null
     this.compare?.client.terminate()
     this.compare = null
@@ -1705,8 +1824,8 @@ export class Session {
       // genome. Adding it again gives the same track twice, under one name, with
       // one of the two carrying the settings.
       if (result.format !== 'sizes' && this.annotations !== null && !this.alreadyLoaded(source)) {
-        if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
-        else this.annotations.loader.addUrl(source.url)
+        if (source.kind === 'local') this.annotations.loader?.addFiles([source.file])
+        else this.annotations.loader?.addUrl(source.url)
       }
       const target: ViewState = {
         uri,
@@ -1970,8 +2089,15 @@ export class Session {
 
   private mountBrowser(state: ViewState): void {
     const assembly = this.assembly
+    if (assembly === null) return
+    // Every road into the browser builds these first; a set without a worker
+    // behind it is a metacool's (§8.12), which cannot draw a file's tracks and
+    // is not what this surface is of.
+    if (this.annotations === null || this.annotations.client === undefined) {
+      this.setUpBrowserAnnotations(assembly)
+    }
     const held = this.annotations
-    if (assembly === null || held === null) return
+    if (held === null || held.client === undefined) return
     const toggle = this.mapToggleButton()
     const view = new BrowserView({
       assembly,
@@ -2103,6 +2229,9 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
+    // A metacool has a store and no loader (§8.5, §8.12): its own columns are
+    // annotations and a dropped bigWig still is not one.
+    if (held.loader === undefined) return
     held.loader.addFiles([file], placement)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
@@ -2140,7 +2269,7 @@ export class Session {
       if (result.format !== 'sizes' || result.contigs.length === 0) {
         // Named like a sizes file and is not one. Offer it to the loader, which
         // reads its bytes and refuses it by name if it is nothing at all.
-        this.annotations?.loader.addFiles([file])
+        this.annotations?.loader?.addFiles([file])
         return
       }
       this.assembly = assemblyOf({
@@ -2491,7 +2620,11 @@ export class Session {
     // run after the map is closed is still a measurement of that file, and its
     // record should say so rather than naming a genome with no file behind it.
     this.assemblySource = file.source
-    if (held === null) this.setUpBrowserAnnotations(assembly)
+    // A metacool's annotations have a store and no loader (§8.5, §8.12), and
+    // the file they describe is the one being closed. A browser over that
+    // genome starts a set of its own rather than inheriting a card that has
+    // nothing to load with.
+    if (held === null || held.loader === undefined) this.setUpBrowserAnnotations(assembly)
     else {
       this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
@@ -2514,9 +2647,10 @@ export class Session {
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
     this.parkedMap = null
-    this.annotations?.client.destroy()
+    this.annotations?.client?.destroy()
     this.annotations = null
     this.manualCard = null
+    this.metadataCard = null
     this.bookmarksCard = null
     this.dropCompare()
     this.compareCard = null
@@ -2550,9 +2684,10 @@ export class Session {
    * coordinate system that does not exist.
    */
   private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
-    this.annotations?.client.destroy()
+    this.annotations?.client?.destroy()
     this.annotations = null
     this.manualCard = null
+    this.metadataCard = null
     this.bookmarksCard = null
     // A picked locus names a sequence, and the same name in another file is
     // another place: carrying one across would hand a form coordinates from
@@ -2564,15 +2699,12 @@ export class Session {
     // no sense in which it survives the first being closed.
     this.dropCompare()
     this.compareCard = null
-    if (info.hasGenomes) {
-      this.setAnnotations([])
-      return
-    }
 
     // The contigs table is what every annotation is matched against — by name,
     // for the §8.2 overlap report, and by length, so an aggregated axis knows
     // how long one cell is. It is read once per file and cached, so this is the
-    // only place that pays for it.
+    // only place that pays for it. A metacool reads it too, now: its own
+    // columns are what §8.12 draws, and the same table carries them.
     const contigs = await this.contigs().catch(() => null)
     // A live reader request, so the session may have been closed while it was
     // outstanding — and closing it rejects exactly this read. Without the check
@@ -2584,18 +2716,37 @@ export class Session {
     const names = contigNames(contigs)
     const lengths = contigLengths(contigs)
 
+    // What `/bins` holds, by name and kind. A group listing and one dtype per
+    // column — no values, so §3.3's rule that `/bins` is never read at open
+    // time still holds, and the drop-down can offer the weights a cooler was
+    // balanced with (§8.12).
+    const binColumns = await this.clientOf()
+      .request<'binColumns'>({ kind: 'binColumns' })
+      .then((result) => result.columns)
+      .catch(() => [])
+    if (this.destroyed) return
+
     const scope = this.memoryKey(uri)
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
-    const client = new AnnotationClient()
-    const loader = new AnnotationLoader(
-      store,
-      client,
-      // Names *and* lengths: the loader renames a track's sequences into this
-      // map's vocabulary (§5.9), and a rename with no length behind it is a
-      // guess nothing can check.
-      names.map((name) => ({ name, length: lengths.get(name) ?? 0 })),
-    )
+    // **A file with a genome layer gets no annotation worker** (§8.5): a GTF or
+    // a bigWig keyed on the contig names of thousands of independently
+    // assembled organisms either coincides or misleads. What it does now get is
+    // the store, the placement model and the metadata card, because a column of
+    // its *own* tables is indexed against its own axis and cannot be matched to
+    // the wrong sequence (§8.12).
+    const client = info.hasGenomes ? undefined : new AnnotationClient()
+    const loader =
+      client === undefined
+        ? undefined
+        : new AnnotationLoader(
+            store,
+            client,
+            // Names *and* lengths: the loader renames a track's sequences into
+            // this map's vocabulary (§5.9), and a rename with no length behind
+            // it is a guess nothing can check.
+            names.map((name) => ({ name, length: lengths.get(name) ?? 0 })),
+          )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -2609,10 +2760,22 @@ export class Session {
     this.annotations = {
       store,
       manual,
-      client,
-      loader,
+      ...(client === undefined ? {} : { client }),
+      ...(loader === undefined ? {} : { loader }),
       groups: new GroupSettings(scope),
       contigLength: (name) => lengths.get(name),
+      metadata: metadataIndexFrom({
+        // The two tables the app has already read, and the third by name only.
+        genomes: info.hasGenomes ? (this.file?.genomes.table ?? null) : null,
+        contigs: contigs?.table ?? { columns: [], length: 0, data: {} },
+        binsize: info.binsize ?? 1,
+        binColumns,
+        client: this.clientOf(),
+        // A `/bins` slice landing is new data for a lane that is already drawn,
+        // and the panels are what have to hear about it — the annotation store
+        // did not change, so nothing else would ask for a frame.
+        onChange: () => this.repaintMetadata(),
+      }),
     }
 
     const picker: MapPicker = {
@@ -2655,6 +2818,28 @@ export class Session {
     // where a reader goes to *leave* the matrix, which is not a rare thing at
     // all — and a control that turns the whole picture into a genome browser
     // does not belong under eight track rows and a list of hand-drawn marks.
+    // The file's own columns (§8.12). It goes **under the tracks and over the
+    // marks**, which is the same ordering the column already has: the cards
+    // descend from what came out of a file to what a reader put there by hand,
+    // and a column of the open map's own tables is the last thing on that side
+    // of the line. On a metacool it is the only card between the two, because
+    // there are no tracks to load (§8.5) and no marks to draw.
+    this.metadataCard = new MetadataCard({
+      store,
+      index: () => this.annotations?.metadata ?? null,
+      level: () => this.metadataLevel(),
+      maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
+      onExport: (entry) => this.exportMetadata(entry),
+    })
+
+    // A file with a genome layer has no Tracks card, no drop zones and no
+    // manual marks (§8.5) — and now one card that is *not* about files at all.
+    if (loader === undefined) {
+      this.setAnnotations([this.compareCard.el, this.syntheticSlot, this.metadataCard.el])
+      this.restoreMetadata(scope)
+      return
+    }
+
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card: see the browser path for why.
@@ -2682,6 +2867,7 @@ export class Session {
               },
             }),
       }).el,
+      this.metadataCard.el,
       this.manualCard.el,
       // Under the marks, because the two are the same kind of note made at
       // opposite ends of a gesture: a mark says *look here* on the picture you
@@ -2692,6 +2878,7 @@ export class Session {
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
     loader.restore(AnnotationStore.stored(scope))
+    this.restoreMetadata(scope)
     // …and what this session was already holding, when the file under it has
     // just changed. Dropping a cooler on a genome browser is the case: the
     // tracks were opened against that genome and the map is of the same genome,
@@ -3345,9 +3532,14 @@ export class Session {
           store: held.store,
           ...(map === undefined ? {} : { map }),
           manual: held.manual,
-          client: held.client,
+          ...(held.client === undefined ? {} : { client: held.client }),
           groups: held.groups,
           contigLength: held.contigLength,
+          // The file's own columns (§8.12). Handed to every panel, including a
+          // deck's companions: a lane is placed per map like any other, so a
+          // MAG's contamination can be drawn beside the replicate it belongs to
+          // as easily as beside the lead.
+          ...(held.metadata === undefined ? {} : { metadata: held.metadata }),
           // Dropped on the map itself, on the edge the reader aimed at. A
           // `.cool` still opens as a map and a `chrom.sizes` still replaces the
           // lengths — `dropped` decides that by name, exactly as it does for a
@@ -3684,10 +3876,11 @@ export class Session {
       // The annotation worker belongs to the open file, and there is no longer
       // one. Its cache is megabytes of parsed features; leaving it running would
       // hold them until the tab closed.
-      this.annotations?.client.destroy()
+      this.annotations?.client?.destroy()
       this.annotations = null
       this.manualCard = null
-    this.bookmarksCard = null
+      this.metadataCard = null
+      this.bookmarksCard = null
       // The second file too, and for the same reason: it is a second map *of a
       // file that is no longer open*, and with no state there is no `uri2` left
       // to reconcile against — so nothing downstream would ever reach it again,
@@ -4370,6 +4563,7 @@ export class Session {
     }
     const view = new GenomeView({
       client: this.clientOf(),
+      ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       caption: this.captionFor(state),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
@@ -4405,6 +4599,7 @@ export class Session {
     const mapSwitch = this.mapToggleButton()
     const view = new PairView({
       client: this.clientOf(),
+      ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       caption: this.captionFor(state),
       ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
@@ -4530,6 +4725,7 @@ export class Session {
       () =>
         new Overview({
           client: this.clientOf(),
+          ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
           caption: this.captionFor(state),
           binsize: file.info.binsize ?? 1,
           sourceKind: file.info.sourceKind,
@@ -4698,6 +4894,11 @@ export class Session {
     // …and the same for *this view*, which saves the window on screen and has none
     // to save on a table.
     this.bookmarksCard?.refresh()
+    // What the metadata drop-down offers is what *this* view can show (§8.12):
+    // a genome × genome overview cannot draw a bin weight, and a card that went
+    // on offering one would be offering a lane that never appears. So it is
+    // refreshed with every navigation, exactly as the two above are.
+    this.metadataCard?.refresh()
     // The deck, where there is one, is a frame around whatever was going to be
     // mounted: the view's own element is *re-parented* into the first cell of a
     // grid rather than rebuilt, so a session with companions costs the session
