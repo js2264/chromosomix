@@ -1,6 +1,13 @@
 {
-  "latest": "1f62409",
+  "latest": "dd5ae83",
   "versions": [
+    {
+      "commit": "dd5ae83",
+      "version": "0.10.0",
+      "date": "2026-08-14T01:13:59+02:00",
+      "subject": "chores: update CHANGELOG",
+      "tag": ""
+    },
     {
       "commit": "1f62409",
       "version": "0.10.0",
@@ -132,13 +139,6 @@
       "version": "0.9.0",
       "date": "2026-08-09T21:14:06+02:00",
       "subject": "fix(analysis): find the set the form chose, and quiet the waiting rows",
-      "tag": ""
-    },
-    {
-      "commit": "7527bbf",
-      "version": "0.9.0",
-      "date": "2026-08-09T16:28:37+02:00",
-      "subject": "feat: the wheel slides sideways, `v` walks three pictures, and a hidden track stays hidden",
       "tag": ""
     },
     {
