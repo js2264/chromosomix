@@ -66,6 +66,76 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   right and the glossary is a bug — is the reason that is part of this change
   rather than a follow-up.
 
+- **On a turned map the guide becomes a vertical line while a stretch is being
+  chosen.** At rest the guide under the pointer is a pair of 45° rays, and that
+  is the honest answer to *what is this cell*: a turned map's two directions are
+  not its two axes, so the cells sharing a place with the contact under the
+  pointer are a ray rather than a column. It is the wrong answer the moment the
+  next press names an **interval** instead — Shift held, Option held, or a form
+  waiting to be pointed at — because then the reader is not choosing a contact,
+  and the mark that says where an interval starts is the edge it starts on. So
+  the rays collapse to one vertical line at the pointer's own column, and the
+  tracks beside the map drop back to a single hairline under it rather than
+  marking the two anchors of a contact nobody is selecting. It answers the
+  modifier rather than the movement, so pressing Shift over a stationary hand
+  changes the guide immediately.
+
+- **Windows installers are temporarily not built.** The `--win` leg of the
+  release workflow is commented out, so releases carry the macOS and Linux
+  installers and no `.exe`. Nothing about the target changed — `npx
+  electron-builder --win` still works from a clone — and the leg is left in
+  place, commented, so restoring it is uncommenting three lines. `fail-fast:
+  false` meant the other legs never depended on it, and `collect` attaches
+  whatever artifacts exist. `docs/desktop.md` and the release body say so, and
+  both point Windows readers at the standalone HTML page, which needs no
+  installer anywhere.
+
+- **A folded column leaves a tab rather than nothing.** Folding one used to take
+  it out of the layout entirely, which left the four marks up in the header as the
+  only sign it existed — and a mark in the window furniture says neither which
+  column is folded nor what is in it. A folded column now keeps a strip of itself
+  with a **tab** standing on the bottom of it, carrying the panel's mark, its
+  name, the key that opens it and a chevron pointing the way it will open. The
+  tab is turned a quarter-turn anticlockwise, so the name reads bottom-to-top up
+  the side of the window like the spine of a book — which is what buys it the room
+  to be named at all: a strip wide enough for "General" written upright would be a
+  column, and what a folded column has to cost is a strip.
+
+  They **nest**, and it costs no arithmetic: the four columns are already ordered
+  outermost-first from each edge, and a folded strip sits exactly where its column
+  would. Two folded panels on the left are two tabs side by side at the edge of
+  the screen; open General and the Annotations tab moves out to stand against
+  it, while General's own tab always stands at the screen edge. The right side is
+  the mirror — Analysis at the edge, Aesthetics against it. Nothing is measured,
+  so no tab can be left stranded behind an expanded column. A panel with *nothing
+  to show* still leaves altogether: a tab is an invitation, and one that opens an
+  empty column is worse than the column's absence.
+
+- **The panel buttons come after the name in the header, and the strapline is
+  gone.** Four unlabelled marks used to open the row, so a reader identified them
+  before reaching the thing that says what they are looking at. They are now a
+  group set off from the title by a rule, and the line that explained the app to
+  somebody who had already opened it has given them its room.
+
+- **General is marked `file-cog`** rather than a fold arrow. Its three siblings
+  are already marked by what they hold — `layers` for the annotation stack,
+  `chart-spline` for the picture's controls, `beaker` for what can be computed —
+  and an arrow said only "this panel folds", which is true of all four of them.
+  What is behind this one is the file and what can be read off it.
+
+- **A Shift-drag now opens the stretch it named on the diagonal.** The gesture
+  names a band of one axis and zooms to it; the axis nobody dragged took the same
+  zoom and kept whatever centre it happened to have. So the same drag over the
+  same stretch of chromosome I landed on a different picture depending on where
+  the view had been panned to — that stretch against a megabase somewhere else —
+  and nothing on screen said which. What a reader dragging a band out of a
+  contact map means is *this stretch, against itself*, so the other axis is now
+  centred on the same stretch and what comes back is the on-diagonal square.
+
+  Unchanged where the block has no diagonal to open, which is a `chrI × chrII`
+  panel: there the other axis keeps its centre, since pulling it to a bin the
+  block does not contain would only jam it against an edge.
+
 ### Fixed
 
 - **A ratio drew "present here, absent there" in the colour that means the
@@ -111,6 +181,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   apart printed the same string, so a reader checking a ratio against the counts
   under it was shown a pair that could not have produced it. Values below a
   thousandth now keep three *significant* digits, and below `1e-7` an exponent.
+
+- **Two metagenomes selected together hung the tab.** A file with a genome layer
+  has no deck for a second one to join (§16.8), and the fallback for that case
+  was written as "open it as this session's map" but implemented by calling the
+  dropped-file router — which had since learned to send a map back to the
+  companion path that was calling it. The pair recursed until the stack ran out,
+  in the one place where the fallback was meant to be the calm one. Found while
+  giving the header's new add button the same rule to follow.
+
+- **A shared link carried three things it promised not to.** Two comments in the
+  codebase already stated the rule — a session's `compare` field says "a shared
+  link still cannot" carry a local second file, and the deck's own module says
+  spelling a companion's name into a link "would post a private filename to a
+  stranger, which `shareLink.ts` already refuses to do". Neither was true. A link
+  carried the local compared file, the deck's local companions, and (once
+  sessions began recording it) the size and modification time of the sender's own
+  file.
+
+  Worse than useless to a recipient: those names are bare filenames, and opening
+  one goes through a grant store keyed on the bare name whose guard compares only
+  the name — so somebody who had ever granted their own `rep2.cool` would have
+  opened **their** file in the sender's slot, with every label on screen
+  agreeing. The redaction now happens inside the encoder rather than at its call
+  site, so a second caller cannot forget it, and the test asserts against the
+  encoded payload rather than the decoded object: the point is that the name
+  never leaves the machine, not that the far end ignores it.
+
+  A **local track is kept**, and the rule that decides all of it is now written
+  down in both places: a private name is stripped only where the structure
+  survives without it. A dropped companion costs a label — the `~` placeholder
+  keeps the slot, the count and the order — while a dropped track costs the row.
 
 ### Added
 
@@ -1154,115 +1255,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `{type:"module"}` worker. `scripts/smoke-standalone.mjs` then drives a real
   Chromium at a real `file://` URL and opens a real `.hic` through a real worker,
   because every one of those rules can pass on a page that does not run.
-
-### Changed
-
-- **On a turned map the guide becomes a vertical line while a stretch is being
-  chosen.** At rest the guide under the pointer is a pair of 45° rays, and that
-  is the honest answer to *what is this cell*: a turned map's two directions are
-  not its two axes, so the cells sharing a place with the contact under the
-  pointer are a ray rather than a column. It is the wrong answer the moment the
-  next press names an **interval** instead — Shift held, Option held, or a form
-  waiting to be pointed at — because then the reader is not choosing a contact,
-  and the mark that says where an interval starts is the edge it starts on. So
-  the rays collapse to one vertical line at the pointer's own column, and the
-  tracks beside the map drop back to a single hairline under it rather than
-  marking the two anchors of a contact nobody is selecting. It answers the
-  modifier rather than the movement, so pressing Shift over a stationary hand
-  changes the guide immediately.
-
-- **Windows installers are temporarily not built.** The `--win` leg of the
-  release workflow is commented out, so releases carry the macOS and Linux
-  installers and no `.exe`. Nothing about the target changed — `npx
-  electron-builder --win` still works from a clone — and the leg is left in
-  place, commented, so restoring it is uncommenting three lines. `fail-fast:
-  false` meant the other legs never depended on it, and `collect` attaches
-  whatever artifacts exist. `docs/desktop.md` and the release body say so, and
-  both point Windows readers at the standalone HTML page, which needs no
-  installer anywhere.
-
-- **A folded column leaves a tab rather than nothing.** Folding one used to take
-  it out of the layout entirely, which left the four marks up in the header as the
-  only sign it existed — and a mark in the window furniture says neither which
-  column is folded nor what is in it. A folded column now keeps a strip of itself
-  with a **tab** standing on the bottom of it, carrying the panel's mark, its
-  name, the key that opens it and a chevron pointing the way it will open. The
-  tab is turned a quarter-turn anticlockwise, so the name reads bottom-to-top up
-  the side of the window like the spine of a book — which is what buys it the room
-  to be named at all: a strip wide enough for "General" written upright would be a
-  column, and what a folded column has to cost is a strip.
-
-  They **nest**, and it costs no arithmetic: the four columns are already ordered
-  outermost-first from each edge, and a folded strip sits exactly where its column
-  would. Two folded panels on the left are two tabs side by side at the edge of
-  the screen; open General and the Annotations tab moves out to stand against
-  it, while General's own tab always stands at the screen edge. The right side is
-  the mirror — Analysis at the edge, Aesthetics against it. Nothing is measured,
-  so no tab can be left stranded behind an expanded column. A panel with *nothing
-  to show* still leaves altogether: a tab is an invitation, and one that opens an
-  empty column is worse than the column's absence.
-
-- **The panel buttons come after the name in the header, and the strapline is
-  gone.** Four unlabelled marks used to open the row, so a reader identified them
-  before reaching the thing that says what they are looking at. They are now a
-  group set off from the title by a rule, and the line that explained the app to
-  somebody who had already opened it has given them its room.
-
-- **General is marked `file-cog`** rather than a fold arrow. Its three siblings
-  are already marked by what they hold — `layers` for the annotation stack,
-  `chart-spline` for the picture's controls, `beaker` for what can be computed —
-  and an arrow said only "this panel folds", which is true of all four of them.
-  What is behind this one is the file and what can be read off it.
-
-### Changed
-
-- **A Shift-drag now opens the stretch it named on the diagonal.** The gesture
-  names a band of one axis and zooms to it; the axis nobody dragged took the same
-  zoom and kept whatever centre it happened to have. So the same drag over the
-  same stretch of chromosome I landed on a different picture depending on where
-  the view had been panned to — that stretch against a megabase somewhere else —
-  and nothing on screen said which. What a reader dragging a band out of a
-  contact map means is *this stretch, against itself*, so the other axis is now
-  centred on the same stretch and what comes back is the on-diagonal square.
-
-  Unchanged where the block has no diagonal to open, which is a `chrI × chrII`
-  panel: there the other axis keeps its centre, since pulling it to a bin the
-  block does not contain would only jam it against an edge.
-
-### Fixed
-
-- **Two metagenomes selected together hung the tab.** A file with a genome layer
-  has no deck for a second one to join (§16.8), and the fallback for that case
-  was written as "open it as this session's map" but implemented by calling the
-  dropped-file router — which had since learned to send a map back to the
-  companion path that was calling it. The pair recursed until the stack ran out,
-  in the one place where the fallback was meant to be the calm one. Found while
-  giving the header's new add button the same rule to follow.
-
-- **A shared link carried three things it promised not to.** Two comments in the
-  codebase already stated the rule — a session's `compare` field says "a shared
-  link still cannot" carry a local second file, and the deck's own module says
-  spelling a companion's name into a link "would post a private filename to a
-  stranger, which `shareLink.ts` already refuses to do". Neither was true. A link
-  carried the local compared file, the deck's local companions, and (once
-  sessions began recording it) the size and modification time of the sender's own
-  file.
-
-  Worse than useless to a recipient: those names are bare filenames, and opening
-  one goes through a grant store keyed on the bare name whose guard compares only
-  the name — so somebody who had ever granted their own `rep2.cool` would have
-  opened **their** file in the sender's slot, with every label on screen
-  agreeing. The redaction now happens inside the encoder rather than at its call
-  site, so a second caller cannot forget it, and the test asserts against the
-  encoded payload rather than the decoded object: the point is that the name
-  never leaves the machine, not that the far end ignores it.
-
-  A **local track is kept**, and the rule that decides all of it is now written
-  down in both places: a private name is stripped only where the structure
-  survives without it. A dropped companion costs a label — the `~` placeholder
-  keeps the slot, the count and the order — while a dropped track costs the row.
-
-### Added
 
 - **A saved tab records which file it was made from.** Name, size and
   modification time, for a local file. It reads as bookkeeping and it closes a
