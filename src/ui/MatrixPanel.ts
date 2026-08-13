@@ -3334,15 +3334,7 @@ export class MatrixPanel {
     // what can honestly be reported, and a bare name is what every range
     // grammar here takes for a whole sequence or a whole genome.
     if (axis === null) return this.unitPick(which, span[0])
-    const from = axis.unitToLocus(span[0])
-    const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
-    const segment = axis.segmentAt(span[0])
-    if (from === null || to === null || segment === null) return null
-    return {
-      contig: from.contig,
-      start: Math.round(from.bp),
-      end: Math.round(to.bp + segment.bpPerUnit),
-    }
+    return bandRegion(axis, span)
   }
 
   /**
@@ -7047,6 +7039,43 @@ export function separatorsFor(data: MatrixResult): SeparatorSet {
  */
 export function onDiagonal(box: SelectionBox): boolean {
   return Math.abs(box.rows[0] - box.cols[0]) <= 1 && Math.abs(box.rows[1] - box.cols[1]) <= 1
+}
+
+/**
+ * A dragged band of one axis, as a locus on the sequence it began in.
+ *
+ * **Clamped to that sequence, and that is the whole of this function.** A drag
+ * is free to run across several — on a whole-metagenome view a cell is a contig
+ * or two, so a band of five crosses four boundaries — and the reading used to
+ * take the *name* from where the hand went down and the *end* from where it
+ * came up, which is one contig's name against another contig's coordinate. On
+ * the mock community that produced `NODE_…:1-260,000` for a 200 kb sequence,
+ * and the range parser refused it: `Genomic region out of bounds`. The 4C
+ * task's anchor, unusable from the picture it was picked on, and a clipboard
+ * copy of the same gesture that pasted back as an error.
+ *
+ * The anchor is where the hand went down — the same rule a marquee follows, for
+ * the same reason (`axisSelection`) — and what it names is however much of that
+ * sequence the gesture covered. The end never passes the sequence's length,
+ * because a contig's last bin is partial in general and a whole-contig drag
+ * would otherwise name a coordinate a bin beyond the end of it.
+ *
+ * Exported for the test that pins those two clamps, beside the three selection
+ * helpers below it and for the same reason: the panel needs a canvas and the
+ * arithmetic does not.
+ */
+export function bandRegion(axis: LocusAxis, span: [number, number]): PickedLocus | null {
+  const segment = axis.segmentAt(span[0])
+  if (segment === null) return null
+  const last = Math.min(Math.max(span[0], span[1] - 1), segment.unitEnd - 1)
+  const from = axis.unitToLocus(span[0])
+  const to = axis.unitToLocus(last)
+  if (from === null || to === null) return null
+  return {
+    contig: from.contig,
+    start: Math.max(0, Math.round(from.bp)),
+    end: Math.min(segment.contigLength, Math.round(to.bp + segment.bpPerUnit)),
+  }
 }
 
 /**

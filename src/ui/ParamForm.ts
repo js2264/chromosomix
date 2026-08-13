@@ -374,7 +374,18 @@ export function resolveEntryDefaults(
   context: AnalysisContext,
   value: Params,
 ): Params {
-  const out: Record<string, ParamValue> = { ...value }
+  // **Only what this task has parameters for.** The incoming record is a stored
+  // session's (`analysis/memory.ts`), and a task's parameters are not fixed for
+  // all time: the 4C task dropped *cis only* and *normalisation*, and a value
+  // remembered under either key would otherwise have gone on reaching the
+  // runner — which still reads both — from a form with no control for it. A key
+  // with no spec is not a parameter of this task, and is dropped rather than
+  // carried; the CLI makes the same judgement louder, by refusing to start.
+  const known = new Set(specs.map((spec) => spec.key))
+  const out: Record<string, ParamValue> = {}
+  for (const [key, held] of Object.entries(value)) {
+    if (known.has(key)) out[key] = held
+  }
   for (const spec of specs) {
     if (!isEntrySpec(spec)) continue
     out[spec.key] =

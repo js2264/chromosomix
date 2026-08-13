@@ -14,6 +14,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A band dragged across several sequences no longer names a region that does
+  not exist.** The reading took the sequence's *name* from where the hand went
+  down and the *end* from where it came up — one contig's name against another
+  contig's coordinate — which on a whole-metagenome view, where a cell is a
+  contig or two and any real drag crosses boundaries, produced things like
+  `NODE_…:1-260,000` for a 200 kb sequence. The range parser refused it:
+  *Genomic region out of bounds*. So the 4C anchor could not be picked on the
+  picture it is most naturally picked on, and the same gesture put an unusable
+  string on the clipboard. A band is now clamped to the sequence it began in,
+  and never runs past the end of it.
+
+- **The 4C form asks for the anchor and nothing else.** *Cis only* and
+  *Normalisation* are gone. The profile a reader comes here for is the one along
+  the anchor's own sequence — that is what a 4C experiment produces and what a
+  bigWig of one holds — and the two extra rows made the commonest run a
+  three-decision form, one of them mispricing it by looking ordinary beside the
+  anchor: *with trans* turns a handful of range requests into a walk over half
+  the file. Both computations are kept and still goldened; the runner reads the
+  keys with the defaults the form used to supply, so what changed is what is
+  asked rather than what is computed. A stored session carrying either key no
+  longer reaches the runner behind a form that cannot show it: a parameter with
+  no spec is dropped when the form resolves its defaults.
+
 - **A metagenome is read by genome, and now the gestures agree.** Four things
   on a `.metacool` said otherwise.
 

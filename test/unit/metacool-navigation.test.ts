@@ -15,6 +15,8 @@ import { describe, expect, it } from 'vitest'
 
 import { FOURC_TASK } from '@/analysis/tasks/fourc'
 import type { AnalysisContext, AnalysisFraming } from '@/analysis/types'
+import { LocusAxis } from '@/render/locus'
+import { bandRegion } from '@/ui/MatrixPanel'
 import { locusText } from '@/ui/mapPick'
 import { overviewTarget } from '@/ui/Overview'
 
@@ -139,5 +141,54 @@ describe('the 4C anchor', () => {
     // read for a picture already in memory.
     const cost = estimate('MAG_1', { blockLoaded: true, framing: framing('bin', [0, 20]) })
     expect(cost?.class).toBe('free')
+  })
+})
+
+describe('a band dragged across a whole-file picture', () => {
+  /**
+   * Three sequences of a whole-metagenome view, at 50 kb per cell.
+   *
+   * The shape that produced `Genomic region out of bounds: [1, 260000)`: cells
+   * are coarse enough that a short drag crosses two boundaries, and the first
+   * sequence is shorter than where the drag ends.
+   */
+  const axis = new LocusAxis([
+    { contig: 'NODE_1', unitStart: 0, unitEnd: 4, bpStart: 0, bpPerUnit: 50_000, contigLength: 200_000 },
+    { contig: 'NODE_2', unitStart: 4, unitEnd: 6, bpStart: 0, bpPerUnit: 50_000, contigLength: 90_000 },
+    { contig: 'NODE_3', unitStart: 6, unitEnd: 9, bpStart: 0, bpPerUnit: 50_000, contigLength: 150_000 },
+  ])
+
+  it('stays inside the sequence the hand went down on', () => {
+    // Cells 0–6 span three contigs. The answer is the first of them, whole —
+    // never its name against the third's coordinate, which is what made the
+    // range parser refuse the 4C anchor picked on this very picture.
+    expect(bandRegion(axis, [0, 7])).toEqual({ contig: 'NODE_1', start: 0, end: 200_000 })
+  })
+
+  it('never runs past the end of it, though the last cell would', () => {
+    // NODE_2 is 90 kb — under two whole 50 kb cells — so the second cell's own
+    // width would put the end at 100 kb, past a sequence that stops at 90.
+    expect(bandRegion(axis, [4, 6])).toEqual({ contig: 'NODE_2', start: 0, end: 90_000 })
+  })
+
+  it('reports a drag inside one sequence as the stretch it covered', () => {
+    expect(bandRegion(axis, [1, 3])).toEqual({ contig: 'NODE_1', start: 50_000, end: 150_000 })
+  })
+
+  it('is a whole cell wide when the drag was one cell', () => {
+    expect(bandRegion(axis, [2, 3])).toEqual({ contig: 'NODE_1', start: 100_000, end: 150_000 })
+  })
+
+  it('has nothing to say off the end of the axis', () => {
+    expect(bandRegion(axis, [12, 14])).toBeNull()
+  })
+})
+
+describe('the 4C form', () => {
+  it('offers the anchor and the balance switch, and nothing else', () => {
+    // *Cis only* and *Normalisation* were switches over what the task is for,
+    // and the profile a reader comes here for is the cis one. The arithmetic
+    // behind both is kept and still goldened; what changed is what is asked.
+    expect(FOURC_TASK.params.map((param) => param.key)).toEqual(['anchor', 'balance'])
   })
 })

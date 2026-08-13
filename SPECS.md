@@ -2640,8 +2640,9 @@ Three specific gates, each stated because each is a place the naive implementati
    the whole pixel table — because an upper-triangular store keeps every column *before* the anchor in
    other rows (§5.3, §6.2). Done properly it is one streaming pass over the pixels with
    `bin1 < anchor_end`, on average half the file, accumulating into a band of `|anchor|` rows and
-   materialising nothing large. **Cis is the default** and is bounded; trans is a toggle that says what
-   it costs.
+   materialising nothing large. **Cis is the default** and is bounded; trans was a toggle that said what
+   it cost, and is no longer offered in the form (§18.8) — the estimate still prices it, because the
+   runner still reads the key.
 
 2. **The correlation matrix is N², and there is a bin-count gate.** A whole yeast genome at 1 kb is
    12,100 bins and a 586 MB correlation matrix; human chr1 at 10 kb is 24,900 bins and 2.5 GB. The gate
@@ -2736,11 +2737,18 @@ producing the **expected** curve three later tasks consume. *Coverage and margin
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
-*4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig,
-and optionally **over expected** — where "expected" means the anchor's own sequence's decay in cis and
-the mean of what the anchor reaches off it in trans, so that a profile carrying both halves carries one
-quantity. Per sequence rather than from P(s)'s genome-wide curve: a small chromosome divided by the
-average behaviour of the large ones comes out with a slope that is a property of the set.
+*4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
+as a bigWig. **The form asks for the anchor and nothing else.** It used to carry two more switches,
+*cis only* and *over expected*, and neither earned its row: the profile a reader comes here for is the
+one along the anchor's own sequence, which is what a 4C experiment produces and what a bigWig of one
+holds, and the extra rows turned the commonest run into a three-decision form. One of them also
+mispriced it by looking ordinary — *with trans* turns a handful of range requests into a walk over half
+the file. Both computations are kept and still goldened (`run/fourc.ts`): the runner reads the two keys
+with the defaults the form used to supply, so what changed is what is *asked*, not what is computed.
+Where the expectation is applied it is the anchor's own sequence's decay in cis and the mean of what
+the anchor reaches off it in trans, so a profile carrying both halves carries one quantity — per
+sequence rather than from P(s)'s genome-wide curve, since a small chromosome divided by the average
+behaviour of the large ones comes out with a slope that is a property of the set.
 *Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
 behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that

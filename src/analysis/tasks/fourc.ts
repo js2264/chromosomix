@@ -87,6 +87,22 @@ function anchorSpan(
   }
 }
 
+/**
+ * The anchor, and whether to balance. **Two controls that were here are not.**
+ *
+ * *Cis only* and *Normalisation* were both switches over what the task is for,
+ * and neither earned its place in the form. The profile a reader comes here to
+ * get is the one along the anchor's own sequence — that is what a 4C experiment
+ * produces and what a bigWig of one holds — and the two extra rows made the
+ * commonest run a three-decision form. What they did instead of helping was
+ * price it: *with trans* turns a handful of range requests into a walk over
+ * half the file, offered as an ordinary toggle beside the anchor.
+ *
+ * The arithmetic behind both is kept and still goldened (`run/fourc.ts`,
+ * `test/unit/analysis-fourc.test.ts`): the runner reads `cis` and `normalise`
+ * with the defaults this form used to supply, so removing the controls changed
+ * what is *offered* and nothing about what is computed.
+ */
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
@@ -95,53 +111,8 @@ const PARAMS: readonly ParamSpec[] = [
     pickable: true,
     hint:
       'The locus the profile is a reading from. A whole sequence is allowed, and on a metagenome ' +
-      'a whole genome — then cis means the MAG rather than one of its contigs. Type it, or press ' +
-      '“Pick on map” and drag along either axis.',
-  },
-  {
-    kind: 'choice',
-    key: 'normalise',
-    label: 'Normalisation',
-    default: 'none',
-    /**
-     * A 4C profile is a slice of the map, and a slice of a Hi-C map is mostly
-     * P(s): contact falls by orders of magnitude with distance, so the profile's
-     * shape is dominated by *how far away* each bin is rather than by whether
-     * anything is happening there. On a log axis that is a clean triangle with
-     * the anchor at its apex, and the loops a reader ran the task to find are
-     * bumps on its flanks — visible near the anchor, invisible a megabase out.
-     *
-     * Dividing by the decay is the standard way to see past it, and the curve is
-     * taken from **the anchor's own sequence**, accumulated from the square this
-     * task is already reading. Not the P(s) task's genome-wide curve: a small
-     * chromosome divided by the average behaviour of the large ones comes out
-     * with a slope that is a property of the *set* rather than of this locus.
-     *
-     * `none` stays the default because the raw profile is what a bigWig of a 4C
-     * experiment holds and what a reader comparing against one expects — and
-     * because a ratio is a derived quantity that should be asked for.
-     */
-    options: [
-      {
-        value: 'none',
-        label: 'None',
-        hint: 'Contacts as they were counted.',
-      },
-      {
-        value: 'ps',
-        label: 'By P(s)',
-        hint: 'Observed over expected at that separation, from this sequence’s own decay.',
-      },
-    ],
-  },
-  {
-    kind: 'toggle',
-    key: 'cis',
-    label: 'Cis only',
-    hint:
-      'On, this reads one sequence and costs a handful of requests. Off, it walks the pixel ' +
-      'table to reach the contacts leaving that sequence.',
-    default: true,
+      'a whole genome — then the profile is over the whole MAG rather than one of its contigs. ' +
+      'Type it, or press “Pick on map” and drag along either axis.',
   },
   BALANCE_PARAM,
 ]
@@ -172,6 +143,12 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   const balance = params.balance === true
+  // Priced, and no longer reachable from the form: **cis only** and
+  // **normalisation** are gone from {@link PARAMS} (see its note). The branch
+  // stays because the *runner* still reads both keys and the arithmetic behind
+  // them is goldened, so a params object that carries one — a stored session
+  // written by an older build, a test — is priced as it always was rather than
+  // being run under a cost this function did not quote.
   if (!cisOnly(params)) {
     return {
       class: 'scan',
