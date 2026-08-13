@@ -4223,17 +4223,23 @@ export class Session {
         this.store.patch({ oe: on ? true : undefined })
         this.rederive()
       },
-      correlate: state.corr === true,
+      // From the score rather than from a key of its own: the correlation *is*
+      // one of the answers to "what are these numbers", and it carries the
+      // balancing and the baseline it needs with it (`ui/scores.ts`).
+      correlate: this.scoreOf(state).correlate === true,
       onCorrelateChange: (on) => {
-        this.store.patch({ corr: on ? true : undefined })
+        // There is no correlation toggle to flip any more, so the only caller is
+        // the failure path below, and the only thing "off" can mean is the score
+        // it was standing on: balanced counts, which is what it was computed
+        // from and the nearest picture to what the reader asked for.
+        if (!on) this.store.patch({ score: BALANCED_SCORE })
         this.rederive()
       },
       correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
       onCorrelateFailure: (message) => {
-        // The panel has already switched the toggle off, so the hash has to
-        // follow or the next render would ask for the correlation again and the
-        // failure would repeat once per frame.
-        this.store.patch({ corr: undefined })
+        // The panel has already asked for the score to move, so this only says
+        // what happened. Without the move the next render would ask for the
+        // correlation again and the failure would repeat once per frame.
         this.host.notify(`Correlation failed: ${message}`)
       },
       smooth: state.smooth ?? 0,

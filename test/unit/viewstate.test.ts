@@ -113,7 +113,6 @@ const CASES: ViewState[] = [
     score: 'balanced',
     oe: true,
     smooth: 2,
-    corr: true,
     op: 'ratio',
     // `false` rather than absent on purpose: absent *means* turned, so the
     // explicit square is the value that has to survive being written down.

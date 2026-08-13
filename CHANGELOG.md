@@ -178,18 +178,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   both kinds, and its add form is the one the Connect dialog uses — one
   implementation, so the two cannot come to disagree about what a valid entry is.
 
-- **A `correlation` toggle: the square replaced by the Pearson correlation
-  between its rows.** Two bins correlate when they contact the rest of the
-  sequence in the same pattern, so the checkerboard this draws *is* the A/B
-  compartments — and it is drawn through the same `correlationMatrix` and the
-  same `usableBins` the Compartments task solves for its eigenvector, not a
-  second implementation "for display" that would agree with the first until it
-  did not.
+- **`correlation`, a new entry in the score picker: the square replaced by the
+  Pearson correlation between its rows.** Two bins correlate when they contact
+  the rest of the sequence in the same pattern, so the checkerboard this draws
+  *is* the A/B compartments — and it is drawn through the same
+  `correlationMatrix` and the same `usableBins` the Compartments task solves for
+  its eigenvector, not a second implementation "for display" that would agree
+  with the first until it did not.
 
-  **It implies `O/E`**, and forces it rather than refusing: the distance decay is
-  the largest thing in a contact map, so every pair of rows in a raw or balanced
-  square correlates near 1 and the picture is a uniform wash. The caption says
-  both were applied.
+  **It is one entry rather than three controls**, and it belongs in that list for
+  the reason O/E is kept out of it. O/E is excluded because it *composes* — the
+  standard pipeline is O/E of balanced counts, and folding it in would make
+  `balanced` and `O/E` mutually exclusive for no reason but the control. The
+  correlation composes with nothing: the cell no longer holds a contact at all,
+  it holds a coefficient between −1 and 1 for a pair of bins' whole rows, and the
+  pipeline that produces the compartments is fixed at balanced → O/E →
+  correlate. So the entry carries all three steps and the reader picks one thing;
+  a control per step would be three controls with exactly one legal combination.
+  Offered only on a file that carries weights, since a correlation of unbalanced
+  O/E is a correlation of the coverage bias — which is per-bin, and therefore
+  looks exactly like a compartment. The caption names every step that was
+  applied.
 
   **A dropped bin comes back as a gap**, not as a zero. A zeroed row asserts that
   its bin is uncorrelated with everything, which is a strong and false claim; on
@@ -199,11 +208,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
   It is the one **cubic** step in the viewer, so it runs on the analysis thread
   — its own client, not the drawer's, so a correlation never queues behind
-  somebody's insulation pass — reports a percentage, and cancels when the box is
-  unticked. Measured at 32 ms for 232 bins, 232 ms for 464 and 2.8 s for 929, so
-  the map caps at 1,500 a side and greys the control **with the reason** above
-  it. One file and square blocks only: the correlation of a ratio is not a
-  correlation, and rows and columns have to be the same bins.
+  somebody's insulation pass — reports a percentage, and is cancelled by picking
+  another score. Measured at 32 ms for 232 bins, 232 ms for 464 and 2.8 s for
+  929, so the map caps at 1,500 a side.
+
+  Where it cannot be drawn — a second file open under `ratio`, a `contig_A ×
+  contig_B` block whose rows and columns are not the same bins, or a square past
+  the cap — the map falls back to the O/E underneath it and **the caption says
+  so**. That is deliberate: the O/E is a real picture and looks like one, so
+  nothing else on screen would betray that it is not what was asked for, and the
+  caption is the only part that survives an export.
 
 - **A despeckle, in the `smooth` picker beside the transform.** Each cell
   replaced by the mean of the cells around it with **its own value left out** —

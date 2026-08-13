@@ -424,19 +424,6 @@ export interface ViewState {
    */
   smooth?: number
   /**
-   * Whether the square is replaced by the **correlation between its rows** — the
-   * object a compartment eigenvector is computed from (§18.8).
-   *
-   * Carried like {@link oe}, which it implies: a correlation of anything but
-   * observed-over-expected is dominated by the distance decay and every pair of
-   * rows correlates, so a link naming this one names both.
-   *
-   * Meaningless on a block whose two axes are different stretches, and dropped
-   * rather than defended there — the same thing `flip` does on a metagenome. A
-   * link is not the place to discover that a picture could not be made.
-   */
-  corr?: boolean
-  /**
    * How two open files are put together — the diagonal split, or one derived
    * field over the whole square (`render/compare.ts`).
    *

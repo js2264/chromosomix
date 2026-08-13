@@ -669,10 +669,11 @@ const CORRELATE_HINT =
   'eigenvector is computed from (§18.8). Two bins correlate when they contact the rest of the ' +
   'sequence in the same pattern, so the checkerboard this draws *is* the A/B compartments, and ' +
   'it is the same matrix the Compartments task solves. Implies `O/E`, since a correlation of ' +
-  'anything else is a correlation of the distance decay. One file, square blocks, and up to ' +
+  'anything else is a correlation of the distance decay, and balanced counts, since a ' +
+  'correlation of unbalanced O/E is a correlation of the coverage bias. One file, square blocks, and up to ' +
   `${MAP_CORRELATION_BINS.toLocaleString()} bins a side: it is the one cubic step in the viewer, ` +
   'so it runs off the main thread — about 3 seconds at a thousand bins a side and eight times ' +
-  'that for each doubling. Unticking cancels it.'
+  'that for each doubling. Choosing another score cancels it.'
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
@@ -1000,9 +1001,6 @@ export class MatrixPanel {
    * — a deck companion, which draws the smoothing and does not offer it.
    */
   private smoothSelect: HTMLSelectElement | null = null
-
-  /** The correlation control, greyed when the block cannot take one. */
-  private correlateBox: HTMLInputElement | null = null
 
   /**
    * Which block the values in {@link correlation} were measured on.
@@ -1476,21 +1474,6 @@ export class MatrixPanel {
       )
     }
 
-    // Ahead of the despeckle in the row, because the two are the pair of
-    // questions about *what the numbers are* that the score picker does not
-    // answer, and this is the one that changes the quantity outright. Owned on
-    // the same rule: a companion draws both and offers neither.
-    const onCorrelateChange = options.derive?.onCorrelateChange
-    if (onCorrelateChange !== undefined) {
-      const box = el('input', { class: 'checkbox', type: 'checkbox' })
-      this.correlateBox = box
-      box.checked = options.derive?.correlate === true
-      box.addEventListener('change', () => {
-        onCorrelateChange(box.checked)
-      })
-      controls.unshift(field('correlation', box, CORRELATE_HINT))
-    }
-
     valueFields.push(...controls)
 
     /**
@@ -1709,7 +1692,12 @@ export class MatrixPanel {
       const select = el('select', { class: 'select' })
       this.scoreSelect = select
       for (const choice of scores.choices) {
-        select.appendChild(el('option', { value: choice.id, text: choice.label }))
+        const option = el('option', { value: choice.id, text: choice.label })
+        // One entry in this list is a pipeline rather than a reading, and the
+        // field's own hint below has no room to say what it does or what it
+        // refuses. Per-option, because it is the only one that needs it.
+        if (choice.correlate === true) option.title = CORRELATE_HINT
+        select.appendChild(option)
       }
       select.value = scores.current
       select.addEventListener('change', () => {
@@ -2746,30 +2734,6 @@ export class MatrixPanel {
     select.value = String(radius)
   }
 
-  /** Tick or untick the correlation box. {@link paintSmooth}'s twin. */
-  private paintCorrelate(on: boolean): void {
-    if (this.correlateBox !== null) this.correlateBox.checked = on
-  }
-
-  /**
-   * Grey the correlation box, with the refusal as its tooltip.
-   *
-   * Greyed rather than hidden, on the turn toggle's rule: a reader should be
-   * able to see that the control exists and find out what it wants of them. The
-   * reason is written into the `title` of the whole field rather than the input,
-   * because a disabled input is not a hover target in every browser.
-   */
-  private paintCorrelateAvailable(refusal: string | null): void {
-    const box = this.correlateBox
-    if (box === null) return
-    box.disabled = refusal !== null
-    const field = box.closest('.field')
-    if (field instanceof HTMLElement) {
-      field.classList.toggle('is-disabled', refusal !== null)
-      if (refusal !== null) field.title = `Correlation: ${refusal}.`
-      else field.title = CORRELATE_HINT
-    }
-  }
 
   /** Reflect the shared overlay state on the buttons. */
   private paintPlotOptions(options: PlotOptions): void {
@@ -5118,11 +5082,12 @@ export class MatrixPanel {
       rows: data.rowGroups,
       cols: data.colGroups,
     }
-    // Refused before it is wanted, so the control can be greyed with a reason
-    // whether or not the reader has it switched on.
-    const refusal = this.correlationRefusal(data, second)
-    this.paintCorrelateAvailable(refusal)
-    const correlating = this.options.derive?.correlate === true && refusal === null
+    const wantsCorrelation = this.options.derive?.correlate === true
+    // Asked before the derivation rather than after, because the answer decides
+    // what the derivation *is*: a refused correlation is not a correlation drawn
+    // badly, it is O/E with a sentence attached.
+    const refusal = wantsCorrelation ? this.correlationRefusal(data, second) : null
+    const correlating = wantsCorrelation && refusal === null
 
     const derivation: Derivation = {
       normalise: this.options.derive?.normalise,
@@ -5130,9 +5095,14 @@ export class MatrixPanel {
       // the largest thing in a contact map by far, so every pair of rows in a
       // raw or balanced square correlates near 1 and the picture is a uniform
       // wash — the correlation is only a compartment object once the decay has
-      // been divided out (§18.8). Forced rather than refused: it makes the
-      // toggle one click, and the caption says both were applied.
-      expected: correlating || this.options.derive?.expected === true,
+      // been divided out (§18.8). Carried by the score rather than asked for
+      // separately (`ui/scores.ts`), and the caption names both steps.
+      //
+      // On `wantsCorrelation` and not on `correlating`, so a *refused* one still
+      // draws the O/E underneath it. That is the nearest true picture to what
+      // was asked for, and dropping back to plain counts would change the map
+      // twice — once for the refusal and once for a baseline nobody withdrew.
+      expected: wantsCorrelation || this.options.derive?.expected === true,
       // Applied inside `deriveBlock`, which is what puts it on *each file* and
       // ahead of `combine` — the whole reason a ratio can be smoothed at all
       // (`render/smooth.ts`).
@@ -5143,7 +5113,15 @@ export class MatrixPanel {
     // rather than inside `deriveBlock`: every step in there is synchronous and
     // this one is not, so the panel is the only place that can hold the answer
     // between the request and the frame that draws it.
-    const mine = correlating ? this.correlated(data, derivation, derived) : derived
+    const mine = correlating
+      ? this.correlated(data, derivation, derived)
+      : refusal === null
+        ? derived
+        : // Said in the caption, which is the only place that survives an export.
+          // A correlation the reader picked and did not get has to be visible on
+          // the figure: the O/E under it is a real picture and looks like one, so
+          // nothing else on screen would betray that it is not what was asked for.
+          { ...derived, scope: `correlation not drawn — ${refusal}` }
     if (!correlating && this.correlating !== null) this.forgetCorrelation()
     this.derived = mine
     const aligned = second !== undefined && alignable(data, second) ? second : undefined
@@ -5801,7 +5779,6 @@ export class MatrixPanel {
     // an unlit toggle is the picture disagreeing with the control that made it.
     this.paintExpected(derive?.expected === true || derive?.correlate === true)
     this.paintSmooth(derive?.smooth ?? 0)
-    this.paintCorrelate(derive?.correlate === true)
     return same
   }
 
