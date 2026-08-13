@@ -20,9 +20,9 @@
  * ## And why `replay` is the half that matters
  *
  * A subcommand per task is useful and obvious. The subcommand that is neither is
- * `replay`: it takes a **session file** — the thing the Share link and the save
- * button already produce — and re-runs the analyses recorded in it over any
- * number of other files. That closes the loop the app is missing at both ends. A
+ * `replay`: it takes a **workspace file** — the thing the save button already
+ * produces, every open tab in one file — and re-runs the analyses recorded in
+ * one of its tabs over any number of other files. That closes the loop the app is missing at both ends. A
  * reader chooses parameters the way parameters should be chosen, by looking at a
  * picture and adjusting until it is right; and then applies exactly those, with
  * no retyping and no transcription error, to the other hundred and ninety-nine.
@@ -53,7 +53,8 @@ import { outputToTsv } from '../analysis/write/tsv'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
 import { parseBed, parseBedpe, sniffFormat, decodeAnnotationText } from '../annotations/parse'
-import { isRefusal, readConfig, refusalMessage } from '../state/SessionConfig'
+import { isRefusal, refusalMessage } from '../state/SessionConfig'
+import { parseWorkspaceFile } from '../state/workspace'
 import type { AnalysisFraming, AnalysisTask, Params, TaskResult } from '../analysis/types'
 import type { TaskInputs } from '../analysis/worker/protocol'
 import { VERSION } from '../version'
@@ -425,10 +426,12 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`
 
-  metacooler-run replay <session.metacooler.json> --over <file> [...]
-      Re-run every analysis recorded in a saved session, with the parameters it
-      recorded, over the files named by --over. The session is what the app's
-      Save and Share already produce.
+  metacooler-run replay <workspace.metacooler.json> --over <file> [...]
+      Re-run every analysis recorded in a saved workspace, with the parameters
+      it recorded, over the files named by --over. The workspace is what the
+      app's Save button produces: every open tab in one file.
+      --tab <n>            which tab to replay, 1-based. Default: the one that
+                           was in front when the workspace was saved.
 
 Remote files are not supported: the reader uses synchronous range requests,
 which exist in a worker and not in Node. Fetch it first.
@@ -504,9 +507,9 @@ async function runCommand(args: Args): Promise<number> {
 }
 
 /**
- * Re-run a saved session's analyses over other files.
+ * Re-run a saved tab's analyses over other files.
  *
- * The parameters come from `analysis` in the session — the same block the drawer
+ * The parameters come from `analysis` in the tab — the same block the drawer
  * restores a form from — so what runs here is what the reader settled on by
  * looking at a picture. Nothing is retyped, which is the whole point: a
  * transcription error in a batch of two hundred is two hundred wrong numbers
@@ -515,18 +518,30 @@ async function runCommand(args: Args): Promise<number> {
 async function replayCommand(args: Args): Promise<number> {
   const path = args.positional[0]
   if (path === undefined) {
-    process.stderr.write('replay needs a session file.\n')
+    process.stderr.write('replay needs a workspace file.\n')
     return 2
   }
-  const read = readConfig(await readFile(path, 'utf8'))
+  const read = parseWorkspaceFile(await readFile(path, 'utf8'))
   if (isRefusal(read)) {
-    // The reason rather than one blanket sentence: a session from a newer build
-    // is a different problem from a file that is not one, and only one of them
-    // is fixed by looking at the file.
+    // The reason rather than one blanket sentence: a workspace from a newer
+    // build is a different problem from a file that is not one, and only one of
+    // them is fixed by looking at the file.
     process.stderr.write(`${refusalMessage(read, path)}\n`)
     return 2
   }
-  const config = read
+  // A workspace holds every tab the window had. Replaying "the session" means
+  // one of them, so it is the tab that was in front unless `--tab` names
+  // another — printed one-based, because that is how the reader counted them.
+  const wanted = one(args, 'tab')
+  const index = wanted === undefined ? read.active : Number(wanted) - 1
+  if (!Number.isInteger(index) || index < 0 || index >= read.tabs.length) {
+    process.stderr.write(
+      `${path} holds ${read.tabs.length} tab${read.tabs.length === 1 ? '' : 's'}; ` +
+        `--tab must name one of them.\n`,
+    )
+    return 2
+  }
+  const config = read.tabs[index]
   const recorded = recordedTasks(config)
   if (recorded.length === 0) {
     process.stderr.write(

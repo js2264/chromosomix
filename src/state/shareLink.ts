@@ -37,13 +37,8 @@
  * filename to a stranger.
  */
 
-import {
-  CONFIG_KIND,
-  isRefusal,
-  readConfig,
-  type ConfigRefusal,
-  type SessionConfig,
-} from './SessionConfig'
+import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
+import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 
 /** The fragment key a shared session travels under. */
 export const SHARE_KEY = 's'
@@ -98,7 +93,18 @@ async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
  * mismatch would give and is reached without paying for one.
  */
 export async function encodeShare(config: SessionConfig): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(forSharing(config)))
+  // A workspace of **one** tab, so the link and the file are the same format
+  // even though they carry different amounts of it. The wrapper costs a few
+  // dozen bytes after deflate and buys one parser instead of two.
+  //
+  // One tab and not the window, and that is not an aesthetic call: `lengthAdvice`
+  // below already warns past about eight thousand characters, and a single
+  // session with eight tracks is a few thousand — a link carrying six tabs would
+  // open by telling the reader not to use it. §5.5's rule says the same thing
+  // from the other side: a link is *what is being looked at*, and there is one of
+  // those on screen. The file is what carries a window.
+  const file = buildWorkspaceFile([forSharing(config)], 0, new Date())
+  const json = new TextEncoder().encode(JSON.stringify(file))
   return toBase64Url(await deflate(json))
 }
 
@@ -164,14 +170,16 @@ export async function decodeShare(payload: string): Promise<SessionConfig | Conf
     return null
   }
   // Everything past the inflate arrived intact, so a refusal from here is about
-  // the *session* and is worth passing on rather than flattening into "cut
+  // the *workspace* and is worth passing on rather than flattening into "cut
   // short in transit". A link from a newer build is the case that matters: it
   // travelled perfectly and this build cannot read it, and telling the
   // recipient their link is broken sends them back to the sender for a fresh
   // copy of a link that will fail the same way.
-  const read = readConfig(json)
+  const read = parseWorkspaceFile(json)
   if (isRefusal(read)) return read
-  return read.kind === CONFIG_KIND ? read : { reason: 'not-a-session' }
+  // One tab is what a link carries, and `parseWorkspaceFile` has already refused
+  // a file with none — so this is the tab that was shared.
+  return read.tabs[read.active] ?? read.tabs[0]
 }
 
 /** The payload out of a location hash, or `null` when it carries none. */
@@ -253,7 +261,7 @@ export function lengthAdvice(length: number): string | null {
   }
   return (
     `This link is ${length.toLocaleString()} characters, which is long enough that something ` +
-    'between here and the recipient will probably break it. Saving the session as a file and ' +
+    'between here and the recipient will probably break it. Saving the workspace as a file and ' +
     'sending that is the reliable form of the same thing.'
   )
 }

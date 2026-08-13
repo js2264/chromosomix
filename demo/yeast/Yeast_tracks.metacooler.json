@@ -1,292 +1,299 @@
 {
-  "kind": "metacooler.session",
+  "kind": "metacooler.workspace",
   "version": 1,
   "createdAt": "2026-08-06T18:13:36.751Z",
-  "state": {
-    "uri": "Yeast_ATAC.bw",
-    "view": "browser",
-    "locus": "IV:1,246,215-1,295,987"
-  },
-  "tracks": [
+  "active": 0,
+  "tabs": [
     {
-      "id": "demo-sequence",
-      "card": "linear",
-      "kind": "sequence",
-      "label": "sequence",
-      "source": {
-        "kind": "remote",
-        "name": "S288c_syn40-XIII.fa",
-        "url": "S288c_syn40-XIII.fa"
+      "version": 1,
+      "createdAt": "2026-08-06T18:13:36.751Z",
+      "state": {
+        "uri": "Yeast_ATAC.bw",
+        "view": "browser",
+        "locus": "IV:1,246,215-1,295,987"
       },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#8c6d31",
-        "size": 46,
-        "mode": "line",
-        "limits": {
-          "auto": false,
-          "min": 0,
-          "max": 1
+      "tracks": [
+        {
+          "id": "demo-sequence",
+          "card": "linear",
+          "kind": "sequence",
+          "label": "sequence",
+          "source": {
+            "kind": "remote",
+            "name": "S288c_syn40-XIII.fa",
+            "url": "S288c_syn40-XIII.fa"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 46,
+            "mode": "line",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
         },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-genes",
-      "card": "linear",
-      "kind": "gtf",
-      "label": "genes",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_annotations.gtf",
-        "url": "Yeast_annotations.gtf"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#5b6169",
-        "size": 92,
-        "mode": "area",
-        "limits": {
-          "auto": true,
-          "min": 0,
-          "max": 1
+        {
+          "id": "demo-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_annotations.gtf",
+            "url": "Yeast_annotations.gtf"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#5b6169",
+            "size": 92,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
         },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-mnase",
-      "card": "linear",
-      "kind": "track",
-      "label": "MNase",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_MNase.bw",
-        "url": "Yeast_MNase.bw"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#0072b2",
-        "size": 78,
-        "mode": "area",
-        "limits": {
-          "auto": false,
-          "min": 0,
-          "max": 10
+        {
+          "id": "demo-mnase",
+          "card": "linear",
+          "kind": "track",
+          "label": "MNase",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_MNase.bw",
+            "url": "Yeast_MNase.bw"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#0072b2",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 10
+            },
+            "group": "chromatin",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
         },
-        "group": "chromatin",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-atac",
-      "card": "linear",
-      "kind": "track",
-      "label": "ATAC",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_ATAC.bw",
-        "url": "Yeast_ATAC.bw"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#d55e00",
-        "size": 78,
-        "mode": "area",
-        "limits": {
-          "auto": false,
-          "min": 0,
-          "max": 50
+        {
+          "id": "demo-atac",
+          "card": "linear",
+          "kind": "track",
+          "label": "ATAC",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ATAC.bw",
+            "url": "Yeast_ATAC.bw"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#d55e00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": false,
+              "min": 0,
+              "max": 50
+            },
+            "group": "chromatin",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
         },
-        "group": "chromatin",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-atac-peaks",
-      "card": "linear",
-      "kind": "segments",
-      "label": "ATAC peaks",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_ATAC.narrowPeak",
-        "url": "Yeast_ATAC.narrowPeak"
+        {
+          "id": "demo-atac-peaks",
+          "card": "linear",
+          "kind": "segments",
+          "label": "ATAC peaks",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ATAC.narrowPeak",
+            "url": "Yeast_ATAC.narrowPeak"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "demo-pol2",
+          "card": "linear",
+          "kind": "track",
+          "label": "Pol II / input",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ChIP_Pol2-vs-input.bw",
+            "url": "Yeast_ChIP_Pol2-vs-input.bw"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#009e73",
+            "size": 78,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "demo-pol2-peaks",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Pol II peaks",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ChIP_Pol2-vs-input.narrowPeak",
+            "url": "Yeast_ChIP_Pol2-vs-input.narrowPeak"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "demo-rna-fwd",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA +",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_RNA_fwd.bw",
+            "url": "Yeast_RNA_fwd.bw"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#e69f00",
+            "size": 96,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "RNA",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "demo-rna-rev",
+          "card": "linear",
+          "kind": "track",
+          "label": "RNA −",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_RNA_rev.bw",
+            "url": "Yeast_RNA_rev.bw"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 96,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "RNA",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": true
+          }
+        },
+        {
+          "id": "demo-loops",
+          "card": "overlay",
+          "kind": "pairs",
+          "label": "loops",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_microC_loops.tsv",
+            "url": "Yeast_microC_loops.tsv"
+          },
+          "visible": true,
+          "placement": { "bottom": true, "right": false },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 60,
+            "mode": "area",
+            "limits": { "auto": true, "min": 0, "max": 1 },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 0.9,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": ["IV"],
+      "groups": {
+        "chromatin": "stacked",
+        "RNA": "stacked"
       },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#d55e00",
-        "size": 34,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-pol2",
-      "card": "linear",
-      "kind": "track",
-      "label": "Pol II / input",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_ChIP_Pol2-vs-input.bw",
-        "url": "Yeast_ChIP_Pol2-vs-input.bw"
+      "scaling": {
+        "chromatin": "each",
+        "RNA": "shared"
       },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#009e73",
-        "size": 78,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-pol2-peaks",
-      "card": "linear",
-      "kind": "segments",
-      "label": "Pol II peaks",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_ChIP_Pol2-vs-input.narrowPeak",
-        "url": "Yeast_ChIP_Pol2-vs-input.narrowPeak"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#009e73",
-        "size": 34,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-rna-fwd",
-      "card": "linear",
-      "kind": "track",
-      "label": "RNA +",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_RNA_fwd.bw",
-        "url": "Yeast_RNA_fwd.bw"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#e69f00",
-        "size": 96,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "RNA",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": false
-      }
-    },
-    {
-      "id": "demo-rna-rev",
-      "card": "linear",
-      "kind": "track",
-      "label": "RNA −",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_RNA_rev.bw",
-        "url": "Yeast_RNA_rev.bw"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#56b4e9",
-        "size": 96,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "RNA",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 1,
-        "flip": true
-      }
-    },
-    {
-      "id": "demo-loops",
-      "card": "overlay",
-      "kind": "pairs",
-      "label": "loops",
-      "source": {
-        "kind": "remote",
-        "name": "Yeast_microC_loops.tsv",
-        "url": "Yeast_microC_loops.tsv"
-      },
-      "visible": true,
-      "placement": { "bottom": true, "right": false },
-      "style": {
-        "colour": "#cc79a7",
-        "size": 60,
-        "mode": "area",
-        "limits": { "auto": true, "min": 0, "max": 1 },
-        "group": "",
-        "shape": "element",
-        "radius": 7,
-        "opacity": 0.9,
-        "flip": false
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": true,
+        "crosshair": true,
+        "dividers": false,
+        "breaks": true,
+        "labels": false,
+        "ticks": true
       }
     }
-  ],
-  "manual": [],
-  "sequences": ["IV"],
-  "groups": {
-    "chromatin": "stacked",
-    "RNA": "stacked"
-  },
-  "scaling": {
-    "chromatin": "each",
-    "RNA": "shared"
-  },
-  "compareNormalise": false,
-  "tables": {},
-  "plot": {
-    "text": true,
-    "fills": true,
-    "baseline": true,
-    "outline": true,
-    "gutter": true,
-    "crosshair": true,
-    "dividers": false,
-    "breaks": true,
-    "labels": false,
-    "ticks": true
-  }
+  ]
 }

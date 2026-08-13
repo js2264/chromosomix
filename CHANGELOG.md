@@ -12,6 +12,44 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **Save writes the whole window, and the file is now called a workspace.** The
+  disk button in the top bar used to write the tab in front of you, which made it
+  the third button on that row doing something a reader could reasonably have
+  expected of the other two. It now writes **every open tab in one file** — each
+  with its view, its tracks, its marks, its bookmarks, its ticked sequences, its
+  table filters and its analysis recipes — and records which one was in front.
+  Dropping it back opens all of them.
+
+  The pair of buttons now states a real difference rather than two words for one
+  thing:
+
+  > **Share this session as a link** — the tab you are looking at.
+  > **Save this workspace as a file** — every tab, with everything in it.
+
+  A link stays one tab on purpose. The advice line already warns past about eight
+  thousand characters and a single session with eight tracks is a few thousand,
+  so a link carrying six tabs would open by telling the reader not to use it.
+  What is new is that both roads carry the *same format* — a link is a workspace
+  of one — so there is one parser, one version gate and no way for the two to
+  drift apart.
+
+  **A dropped workspace is added, never substituted.** Six open tabs are not
+  closed by a drop; they were the reader's, and there is no undo. The one place
+  that does replace a window is the offer on the first screen after a browser
+  restart, which has asked first. A window showing nothing but the picker gives
+  that tab up, and a file with more tabs than the window can hold says how many
+  it left rather than dropping them in silence.
+
+  **The file format is a clean break, and old `.metacooler.json` files stop
+  opening.** They are a tab where the reader now has a window, and carrying both
+  shapes would mean two readers to keep in step for the sake of files that are a
+  few weeks old and a re-save away from being current. Saving again from this
+  build is the whole of the fix. The published example datasets and the CLI's
+  `replay` moved with it — `replay` takes a workspace and re-runs the tab that
+  was in front, or the one `--tab <n>` names.
+
 ### Added
 
 - **A button that adds a file to the tab you are in.** Dropping a file on the
@@ -1019,11 +1057,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **A saved session records which file it was made from.** Name, size and
+- **A saved tab records which file it was made from.** Name, size and
   modification time, for a local file. It reads as bookkeeping and it closes a
-  real hole: a config names its file by URI, that URI is the bare filename for a
+  real hole: a tab names its file by URI, that URI is the bare filename for a
   local file, and opening one goes through a grant store keyed on exactly that
-  name. So a session received from a colleague and naming `rep1.cool` opened
+  name. So a workspace received from a colleague and naming `rep1.cool` opened
   **this** browser's `rep1.cool` — somebody else's data under the sender's marks,
   bookmarks and colour limits, with nothing on screen disagreeing.
 
@@ -1033,7 +1071,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   opens. Absent for a remote file, whose identity is its URL, and stripped from
   shared links, where it would be metadata about a private disk.
 
-- **A session file from a newer build was read as though it were current.** The
+- **A saved file from a newer build was read as though it were current.** The
   format carries a version, and `CONFIG_VERSION`'s own docstring says the number
   is bumped only when a field **changes meaning** — so the single situation it
   exists for was the one situation nothing acted on. A file whose `vmin` meant a
@@ -1047,14 +1085,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
   Refusing needed a **reason** rather than a `null`, because two of the three
   sentences a reader used to get were false. A file from a newer build landed
-  them on "is a JSON file but not a saved session", and a *link* from one on "may
+  them on "is a JSON file but not a saved workspace", and a *link* from one on "may
   have been cut short in transit" — both sending somebody to inspect the file, or
   their network, when what is actually wrong is the build they are holding. All
   three roads now say the same true thing, naming both format numbers and the
   build the file came from:
 
   > `figure3.metacooler.json` was saved by a newer version of the viewer —
-  > (meta)cooler 9.9.9, in session format 2. This build reads format 1. Update
+  > (meta)cooler 9.9.9, in workspace format 2. This build reads format 1. Update
   > the viewer, or ask for the session to be saved again from this one.
 
   A shared link also now separates *did not survive the journey* from *arrived
@@ -1062,13 +1100,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and telling a recipient the second was truncated sends them back to the sender
   for a fresh copy that will fail identically.
 
-- **A session published beside its data broke the moment it named a deck.**
-  `resolveConfig` points a config's relative file names at wherever the config
-  itself was found — that is what makes `demo/yeast/` a folder anyone can copy to
-  a bucket, to a colleague's bucket, or to a laptop. It resolved the map, the
+- **A workspace published beside its data broke the moment it named a deck.**
+  `resolveConfig` points a tab's relative file names at wherever the file it came
+  in was found — that is what makes `demo/yeast/` a folder anyone can copy to a
+  bucket, to a colleague's bucket, or to a laptop. It resolved the map, the
   compared file and the tracks, and it had never been taught the three fields a
-  session grew when decks, lanes and local companions started travelling. So a
-  published session naming a companion `rep2.cool` handed the deck a bare name,
+  tab grew when decks, lanes and local companions started travelling. So a
+  published workspace naming a companion `rep2.cool` handed the deck a bare name,
   which was fetched **against the site root** — a 404 on the website, and
   `app://viewer/rep2.cool` in the desktop build. It read as a broken panel rather
   than as an unresolved name.

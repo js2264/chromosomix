@@ -39,10 +39,17 @@ import {
   DEMO_FILES,
   demoAnnotationsFor,
 } from '../../src/ui/examples'
-import { parseConfig, resolveConfig, type SessionConfig } from '../../src/state/SessionConfig'
+import {
+  isRefusal,
+  refusalMessage,
+  resolveConfig,
+  type SessionConfig,
+} from '../../src/state/SessionConfig'
+import { parseWorkspaceFile, type WorkspaceFile } from '../../src/state/workspace'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { firstEntry } from '../../src/ui/FilePicker'
+import { parseMaps } from '../../src/panels/deck'
 import { parseUri } from '../../src/uri'
 
 const DIR = decodeURIComponent(new URL('../../demo/', import.meta.url).pathname)
@@ -74,11 +81,50 @@ function underDemo(uri: string): string {
   return path.startsWith(ORIGIN) ? path.slice(ORIGIN.length) : path
 }
 
-/** Read one of the published sessions, as the app reads it. */
-function published(file: string): SessionConfig {
-  const config = parseConfig(readFileSync(`${DIR}${file}`, 'utf8'))
-  expect(config, `${file} is offered by the picker but is not a session file`).not.toBeNull()
-  return resolveConfig(config as SessionConfig, `${ORIGIN}${file}`)
+/**
+ * Read one of the published workspaces, as the app reads it — every tab of it.
+ *
+ * A published example is one tab today and the format holds a window, so this
+ * answers with the list rather than with the first of it. A catalogue entry that
+ * grew a second tab and only ever had its first checked would be exactly the
+ * kind of half-checked thing this file exists to prevent.
+ */
+function published(file: string): SessionConfig[] {
+  const read = parseWorkspaceFile(readFileSync(`${DIR}${file}`, 'utf8'))
+  // Through `refusalMessage` rather than a bare `not.toBeNull()`, so a demo file
+  // broken by an edit says *which* way it is broken in the failure output.
+  expect(
+    isRefusal(read) ? refusalMessage(read, file) : '',
+    `${file} is offered by the picker but is not a workspace file`,
+  ).toBe('')
+  return (read as WorkspaceFile).tabs.map((tab) => resolveConfig(tab, `${ORIGIN}${file}`))
+}
+
+/**
+ * Every file a session names, wherever in it the name lives.
+ *
+ * Written as one list rather than checked field by field because the failure it
+ * guards is a name in a place nobody thought to look. `state.uri` and the
+ * tracks were checked from the beginning; the deck's companions and the lanes
+ * beside them arrived later and were resolved by nothing at all, so a published
+ * session naming `rep2.cool` fetched it against the *site root* — a 404 on the
+ * web and `app://viewer/rep2.cool` in the desktop build, in a cell that simply
+ * read as a broken panel.
+ *
+ * A vacancy and a local track name no file by construction and are the two
+ * omissions here; both are covered by `session-config.test.ts`.
+ */
+function namedFiles(config: SessionConfig): string[] {
+  return [
+    config.state.uri,
+    ...(config.state.uri2 === undefined ? [] : [config.state.uri2]),
+    ...parseMaps(config.state.maps).flatMap((ref) => (ref.kind === 'vacant' ? [] : [ref.uri])),
+    // A second name for the same companion, matched against it by string
+    // equality when the deck comes back (`annotations/store.ts`), so it has to
+    // resolve to the same place rather than merely to *a* place.
+    ...(config.lanes ?? []).map((lane) => lane.uri),
+    ...config.tracks.flatMap((track) => (track.source.url === undefined ? [] : [track.source.url])),
+  ]
 }
 
 describe('the picker examples', () => {
@@ -86,9 +132,9 @@ describe('the picker examples', () => {
     expect(DEMO_FILES.length).toBeGreaterThan(0)
   })
 
-  it('offers sessions and nothing else', () => {
+  it('offers workspaces and nothing else', () => {
     for (const file of DEMO_FILES) {
-      expect(file, 'the picker offers published sessions, not data files').toMatch(
+      expect(file, 'the picker offers published workspaces, not data files').toMatch(
         /\.metacooler\.json$/,
       )
     }
@@ -131,51 +177,74 @@ describe('the picker examples', () => {
     })
 
     it(`resolves every file ${file} names`, () => {
-      const config = published(file)
-      // Relative inside the file, absolute after resolution — that is the whole
-      // of what lets one dataset folder work on the bucket, in the desktop
-      // build and off a laptop, and a config that had absolute URLs baked in
-      // would pass every other check here and open nowhere but the bucket it
-      // was written against.
-      expect(config.state.uri.startsWith(ORIGIN), `${file} names ${config.state.uri}`).toBe(true)
-      const named = [config.state.uri, ...config.tracks.map((track) => track.source.url ?? '')]
-      for (const uri of named) {
-        expect(
-          existsSync(`${DIR}${underDemo(uri)}`),
-          `${file} names ${underDemo(uri)}, which is not in demo/`,
-        ).toBe(true)
+      for (const config of published(file)) {
+        // Relative inside the file, absolute after resolution — that is the
+        // whole of what lets one dataset folder work on the bucket, in the
+        // desktop build and off a laptop, and a config that had absolute URLs
+        // baked in would pass every other check here and open nowhere but the
+        // bucket it was written against.
+        for (const uri of namedFiles(config)) {
+          expect(uri.startsWith(ORIGIN), `${file} names ${uri}, which did not resolve`).toBe(true)
+          expect(
+            existsSync(`${DIR}${underDemo(uri)}`),
+            `${file} names ${underDemo(uri)}, which is not in demo/`,
+          ).toBe(true)
+        }
+      }
+    })
+
+    /**
+     * A lane names a map the deck is actually showing.
+     *
+     * The two are matched by string equality when the deck comes back, so a
+     * lane resolving to a *different* place than the companion it means puts
+     * that track on the lead — a perfectly legal lane, drawn without complaint,
+     * and not the figure that was published.
+     */
+    it(`places every track ${file} lays out on a map it opens`, () => {
+      for (const config of published(file)) {
+        const maps = new Set([
+          config.state.uri,
+          ...parseMaps(config.state.maps).flatMap((ref) => (ref.kind === 'vacant' ? [] : [ref.uri])),
+        ])
+        for (const lane of config.lanes ?? []) {
+          expect(maps.has(lane.uri), `${file} puts a track on ${lane.uri}, which it never opens`).toBe(
+            true,
+          )
+        }
       }
     })
 
     it(`opens what ${file} names`, async () => {
-      const config = published(file)
-      const path = `${DIR}${underDemo(config.state.uri)}`
+      for (const config of published(file)) {
+        const path = `${DIR}${underDemo(config.state.uri)}`
 
-      // A browser session names a bigWig, a bigBed or a sizes file — not a
-      // cooler — so `MetaCooler` is the wrong check for one. What makes it
-      // valid is that the annotations worker can read an assembly out of it,
-      // which `annotation-parse` covers for these very files.
-      if (config.state.view === 'browser') {
-        expect(existsSync(path)).toBe(true)
-        return
+        // A browser session names a bigWig, a bigBed or a sizes file — not a
+        // cooler — so `MetaCooler` is the wrong check for one. What makes it
+        // valid is that the annotations worker can read an assembly out of it,
+        // which `annotation-parse` covers for these very files.
+        if (config.state.view === 'browser') {
+          expect(existsSync(path)).toBe(true)
+          continue
+        }
+
+        let mc: MetaCooler
+        try {
+          mc = await MetaCooler.open(path, await LocalFileSource.open(path))
+        } catch (err) {
+          // Exactly what `App.open` does with an `.mmetacool` or `.mcool` root.
+          const landing = firstEntry(err)
+          expect(landing, `${file} did not open and named no entry: ${String(err)}`).not.toBeNull()
+          const uri = `${path}::${landing?.group}/${landing?.entry}`
+          mc = await MetaCooler.open(uri, await LocalFileSource.open(path))
+        }
+
+        // The §3.2 gate the picker cannot pre-check: a variable-bin file is
+        // refused, so a demo file that is one is a broken choice, not a slow one.
+        expect(mc.binsize).toBeGreaterThan(0)
+        expect(mc.nContigs).toBeGreaterThan(0)
+        mc.close()
       }
-
-      let mc: MetaCooler
-      try {
-        mc = await MetaCooler.open(path, await LocalFileSource.open(path))
-      } catch (err) {
-        // Exactly what `App.open` does with an `.mmetacool` or `.mcool` root.
-        const landing = firstEntry(err)
-        expect(landing, `${file} did not open and named no entry: ${String(err)}`).not.toBeNull()
-        const uri = `${path}::${landing?.group}/${landing?.entry}`
-        mc = await MetaCooler.open(uri, await LocalFileSource.open(path))
-      }
-
-      // The §3.2 gate the picker cannot pre-check: a variable-bin file is
-      // refused, so a demo file that is one is a broken choice, not a slow one.
-      expect(mc.binsize).toBeGreaterThan(0)
-      expect(mc.nContigs).toBeGreaterThan(0)
-      mc.close()
     })
   }
 
@@ -190,14 +259,15 @@ describe('the picker examples', () => {
    */
   it('describes every group its tracks are in', () => {
     for (const file of DEMO_FILES) {
-      const config = published(file)
-      for (const track of config.tracks) {
-        if (track.style.group === '') continue
-        expect(
-          config.groups[track.style.group],
-          `${file} puts ${track.label} in "${track.style.group}" and never says how it is drawn`,
-        ).toBeDefined()
-        expect(config.scaling[track.style.group]).toBeDefined()
+      for (const config of published(file)) {
+        for (const track of config.tracks) {
+          if (track.style.group === '') continue
+          expect(
+            config.groups[track.style.group],
+            `${file} puts ${track.label} in "${track.style.group}" and never says how it is drawn`,
+          ).toBeDefined()
+          expect(config.scaling[track.style.group]).toBeDefined()
+        }
       }
     }
   })

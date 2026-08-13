@@ -1,5 +1,5 @@
 /**
- * The demo sessions published on the lab's bucket.
+ * The demo workspaces published on the lab's bucket.
  *
  * They used to ship inside the bundle, in `public/demo/`, which put 250 MB of
  * Hi-C into every Pages artifact and every desktop checkout — and made the
@@ -15,21 +15,27 @@
  * `Content-Length` and `Content-Range`. That is bucket configuration, not code,
  * and `scripts/publish-demo.sh` applies it alongside the upload.
  *
- * **Every entry in the picker is a session file, not a data file.** A `.cool`
+ * **Every entry in the picker is a workspace file, not a data file.** A `.cool`
  * in the list could only ever offer what dropping that file offers: a map at
  * its landing view, with nothing beside it. What a first-time reader should
  * meet is the application doing its job — a window worth looking at, tracks on
  * both edges of the map, a group of two strands sharing a lane — and all of
- * that is exactly what `state/SessionConfig.ts` already writes down. So the
- * catalogue is three `.metacooler.json` files that live next to the data they
- * name, and choosing one is the same gesture as dropping a session somebody
- * sent you. Nothing here is a second way of opening a file.
+ * that is exactly what `state/workspace.ts` writes down. So the catalogue is
+ * three `.metacooler.json` files that live next to the data they name, and
+ * choosing one is the same gesture as dropping a workspace somebody sent you.
+ * Nothing here is a second way of opening a file.
  *
- * Each session sits in the bucket folder holding the files it names, and the
- * names *inside* it stay relative — resolved against the config's own URL on
- * the way in (`resolveConfig`). That is what keeps a dataset folder a
+ * Each is a workspace of **one tab**, which is what the format's `active` index
+ * and `tabs` list collapse to when there is one of them. Nothing stops a
+ * published example being several — a map and the genome browser over the same
+ * assembly, say — and `demo-examples.test.ts` walks every tab of every entry
+ * rather than the first, so a second one would be checked the day it arrives.
+ *
+ * Each workspace sits in the bucket folder holding the files it names, and the
+ * names *inside* it stay relative — resolved against the file's own URL on the
+ * way in (`resolveConfig`). That is what keeps a dataset folder a
  * self-contained thing: `demo/yeast/` can be copied to another bucket, or
- * served off a laptop, and both of its sessions still open. It is also why
+ * served off a laptop, and both of its workspaces still open. It is also why
  * moving the data to S3 changed no line of any `.metacooler.json`.
  */
 
@@ -210,7 +216,7 @@ export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOT
 )
 
 /**
- * The session files this module offers, as their paths under `demo/`, for the
+ * The workspace files this module offers, as their paths under `demo/`, for the
  * test that reads every one of them off disk and opens what it names.
  *
  * A separate export rather than `demoExamples().map(...)` because that function
@@ -221,7 +227,7 @@ export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOT
 export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder}/${entry.file}`)
 
 /**
- * Absolute URLs for the published sessions, in the order they should be
+ * Absolute URLs for the published workspaces, in the order they should be
  * offered — the metagenomic ladder first, because a multi-genome map is the
  * file type this viewer exists for; then the same yeast assembly twice, as a
  * map with tracks around it and as the tracks with no map at all.

@@ -57,10 +57,7 @@ import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice }
 import {
   applyConfig,
   buildConfig,
-  isRefusal,
   looksLikeConfig,
-  readConfig,
-  refusalMessage,
   resolveConfig,
   type SessionConfig,
 } from '../state/SessionConfig'
@@ -142,6 +139,15 @@ export interface SessionHost {
   panelsChanged(session: Session): void
   /** Ask for a file over the top of whatever is on screen (§11). */
   openFileDialog(session: Session): void
+  /**
+   * A saved workspace arrived — as a dropped file, or fetched from a URL.
+   *
+   * The shell's, not a session's: a workspace is *N tabs* and a session
+   * deliberately knows nothing about the window it sits in. `base` is where the
+   * file was found, for resolving the relative names a published one carries;
+   * absent for a dropped file, which has no folder a page can see.
+   */
+  openWorkspaceFile(text: string, label: string, base?: string): void
   /** Say something quiet and dismissible about what just happened. */
   notify(message: string): void
   /** A read finished; the status bar's counters are worth another look. */
@@ -1492,15 +1498,11 @@ export class Session {
 
   /** Read a dropped file as a config, and say so if it is not one. */
   private async openConfigFile(file: File): Promise<void> {
-    const read = readConfig(await file.text())
-    if (isRefusal(read)) {
-      // The reason, not a guess at it: a file from a newer build is refused for
-      // a reason the reader can act on, and telling them it "is not a saved
-      // session" would send them to inspect the file instead of the viewer.
-      this.showError(new Error(refusalMessage(read, file.name)))
-      return
-    }
-    await this.openConfig(read)
+    // Handed straight up. A saved file is a *workspace* — every tab of the
+    // window that wrote it — and seating N tabs is the shell's business; a
+    // session has no idea it has neighbours. It also means the refusal is
+    // reported in one place rather than in each of the roads a file arrives by.
+    this.host.openWorkspaceFile(await file.text(), file.name)
   }
 
   /**
@@ -1540,10 +1542,10 @@ export class Session {
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
-      const read = readConfig(await response.text())
-      if (isRefusal(read)) throw new Error(refusalMessage(read, fileLabel(url)))
       if (this.destroyed) return
-      await this.openConfig(resolveConfig(read, url))
+      // …and the same hop for a published one, with the URL it was found at, so
+      // the relative names inside it resolve against that folder.
+      this.host.openWorkspaceFile(await response.text(), fileLabel(url), url)
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
@@ -2396,8 +2398,8 @@ export class Session {
    * the map is still a map, not a track drawn along the bottom.
    */
   private dropped(file: File, placement?: Placement, map?: string): void {
-    // A saved session, before anything else looks at it: it is not a track, it
-    // is the tab it was exported from.
+    // A saved workspace, before anything else looks at it: it is not a track,
+    // it is the window it was saved from.
     if (looksLikeConfig(file.name)) {
       void this.openConfigFile(file)
       return
@@ -2729,8 +2731,8 @@ export class Session {
         // the tracks come across live, because a genome browser that opens a map
         // of its own genome has not changed the subject. Through the doors every
         // other drop takes, rather than straight at `open`: what a file *is* is
-        // decided in one place, so a saved session dropped on this rectangle is
-        // still a saved session and a `chrom.sizes` is still an answer about
+        // decided in one place, so a saved workspace dropped on this rectangle
+        // is still a saved workspace and a `chrom.sizes` is still an answer about
         // lengths.
         if (source.kind === 'local') this.dropped(source.file)
         else void this.openWithConfig(source.url, { kind: 'remote', url: splitUri(source.url).path })

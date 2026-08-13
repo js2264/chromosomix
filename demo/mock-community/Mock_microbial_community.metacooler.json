@@ -1,39 +1,46 @@
 {
-  "kind": "metacooler.session",
+  "kind": "metacooler.workspace",
   "version": 1,
   "createdAt": "2026-08-06T00:00:00.000Z",
-  "state": {
-    "uri": "Mock_microbial_community.mmetacool",
-    "view": "genomes",
-    "level": "bin",
-    "balance": false,
-    "transform": "log10",
-    "colormap": "default"
-  },
-  "tracks": [],
-  "manual": [],
-  "sequences": [],
-  "groups": {},
-  "scaling": {},
-  "compareNormalise": false,
-  "tables": {
-    "genomes": {
-      "filters": {},
-      "search": "",
-      "sortKey": "length",
-      "sortDir": -1
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-08-06T00:00:00.000Z",
+      "state": {
+        "uri": "Mock_microbial_community.mmetacool",
+        "view": "genomes",
+        "level": "bin",
+        "balance": false,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {
+        "genomes": {
+          "filters": {},
+          "search": "",
+          "sortKey": "length",
+          "sortDir": -1
+        }
+      },
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": false,
+        "breaks": true,
+        "labels": false,
+        "ticks": true
+      }
     }
-  },
-  "plot": {
-    "text": true,
-    "fills": true,
-    "baseline": true,
-    "outline": true,
-    "gutter": false,
-    "crosshair": true,
-    "dividers": false,
-    "breaks": true,
-    "labels": false,
-    "ticks": true
-  }
+  ]
 }

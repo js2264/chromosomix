@@ -1,23 +1,26 @@
 /**
- * A session written to a file, and read back.
+ * One tab written down, and read back.
  *
  * The round trip is the whole contract, and the two halves are asymmetric in a
  * way worth pinning: writing gathers up what storage already holds, so it cannot
  * drift from what a reload restores; reading has to survive a file written by a
  * different build, or by a text editor, or by something else entirely.
+ *
+ * A tab is not a file. `state/workspace.ts` owns the file — the thing with a
+ * `kind`, a list of tabs and an active index — and its own suite covers that
+ * wrapper. Everything here is about one entry inside it, which is also what a
+ * share link carries one of and what the durable record keeps per tab.
  */
 
 import { describe, expect, it } from 'vitest'
 
 import {
-  CONFIG_KIND,
   CONFIG_VERSION,
   applyConfig,
   buildConfig,
-  configFileName,
   looksLikeConfig,
-  parseConfig,
-  readConfig,
+  parseTab,
+  readTab,
   refusalMessage,
   resolveConfig,
   isRefusal,
@@ -71,6 +74,19 @@ const BOOKMARK = {
   binsize: 1000,
 }
 
+/**
+ * Through the JSON a file actually holds, and back.
+ *
+ * `parseTab` takes a parsed value rather than text, because the file around it
+ * has already done the parsing and a second `JSON.parse` per tab would be a
+ * second place for "this is not JSON" to be decided. The stringify here is not
+ * ceremony: it is what turns a live object into the untrusted shape the reader
+ * is written against, and it is where an unserialisable field would show up.
+ */
+function roundTrip(value: unknown): SessionConfig | null {
+  return parseTab(JSON.parse(JSON.stringify(value)))
+}
+
 // No storage to clear: `UiMemory` falls back to a module-level map when there
 // is no `window`, which is what a node test has. Each test uses keys of its own.
 describe('buildConfig', () => {
@@ -96,7 +112,6 @@ describe('buildConfig', () => {
       now: new Date('2026-08-05T10:00:00Z'),
     })
 
-    expect(config.kind).toBe(CONFIG_KIND)
     expect(config.createdAt).toBe('2026-08-05T10:00:00.000Z')
     expect(config.state).toEqual(STATE)
     expect(config.tracks).toEqual([TRACK])
@@ -170,7 +185,7 @@ describe('the round trip', () => {
       now: new Date(0),
     })
 
-    const read = parseConfig(JSON.stringify(config, null, 2))
+    const read = roundTrip(config)
     expect(read).not.toBeNull()
     expect(read?.state).toEqual(STATE)
     expect(read?.tracks).toEqual([TRACK])
@@ -196,7 +211,7 @@ describe('the round trip', () => {
       now: new Date(0),
     })
 
-    const read = parseConfig(JSON.stringify(config))
+    const read = roundTrip(config)
     expect(read?.deck).toEqual({ starred: 'p4', columns: 2 })
     applyConfig(read as NonNullable<typeof read>, 's3|six.cool')
     expect(recall('s3|six.cool', 'deck:starred')).toBe('p4')
@@ -210,7 +225,7 @@ describe('the round trip', () => {
     // claims and only the second is a reason to forget one.
     remember('s4|old.cool', 'deck:starred', 'p1')
     remember('s4|old.cool', 'deck:columns', 4)
-    const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
+    const read = parseTab({ state: STATE })
     expect(read?.deck).toEqual({})
     applyConfig(read as NonNullable<typeof read>, 's4|old.cool')
     expect(recall('s4|old.cool', 'deck:starred')).toBe('p1')
@@ -221,39 +236,52 @@ describe('the round trip', () => {
     // Stored state outlives the build that wrote it (§8.6), and both of these
     // reach `PanelDeck` — a `columns` of `NaN` divides the grid into no columns
     // at all, and an empty star names no map.
-    const read = parseConfig(
-      JSON.stringify({ kind: CONFIG_KIND, state: STATE, deck: { starred: '', columns: 'three' } }),
-    )
+    const read = parseTab({ state: STATE, deck: { starred: '', columns: 'three' } })
     expect(read?.deck).toEqual({})
+  })
+
+  it('names itself nowhere, because the file around it does that once', () => {
+    // The clean break. A tab used to carry its own `kind`, which made sense when
+    // a file *was* a tab; now that a file holds several, a second name inside
+    // every entry would be a claim with nothing to check it against and one more
+    // thing to keep in step.
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: 's9|unnamed',
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    expect('kind' in config).toBe(false)
+    expect(JSON.stringify(config)).not.toContain('metacooler.workspace')
   })
 })
 
-describe('parseConfig', () => {
-  it('refuses anything that does not name itself a session', () => {
-    expect(parseConfig('not json at all')).toBeNull()
-    expect(parseConfig('[]')).toBeNull()
-    expect(parseConfig(JSON.stringify({ name: 'my-package', version: '1.0.0' }))).toBeNull()
-    // Right kind, no state to open: there would be nothing to show.
-    expect(parseConfig(JSON.stringify({ kind: CONFIG_KIND }))).toBeNull()
-    expect(parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: { view: 'region' } }))).toBeNull()
+describe('parseTab', () => {
+  it('refuses anything that is not a tab looking at something', () => {
+    expect(parseTab('not a tab')).toBeNull()
+    expect(parseTab(null)).toBeNull()
+    expect(parseTab([])).toBeNull()
+    expect(parseTab({ name: 'my-package', version: '1.0.0' })).toBeNull()
+    // What identifies a tab is that it says what it is looking at — there is no
+    // `kind` to check any more, so an empty state is the whole guard.
+    expect(parseTab({})).toBeNull()
+    expect(parseTab({ state: { view: 'region' } })).toBeNull()
   })
 
   it('reads a session that cannot say which build wrote it', () => {
     // Every file written before provenance existed. Absent is not empty and not
     // a broken file — it is a session that simply cannot answer.
-    const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
+    const read = parseTab({ state: STATE })
     expect('producer' in (read as object)).toBe(false)
     expect('commit' in (read as object)).toBe(false)
     // …and an empty string is read as the same thing, since a build with no git
     // behind it writes nothing rather than an empty hash.
-    const blank = parseConfig(
-      JSON.stringify({ kind: CONFIG_KIND, state: STATE, producer: '', commit: '' }),
-    )
+    const blank = parseTab({ state: STATE, producer: '', commit: '' })
     expect('producer' in (blank as object)).toBe(false)
   })
 
   it('tolerates every field but the state being absent', () => {
-    const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
+    const read = parseTab({ state: STATE })
     expect(read?.tracks).toEqual([])
     expect(read?.manual).toEqual([])
     expect(read?.bookmarks).toEqual([])
@@ -264,9 +292,7 @@ describe('parseConfig', () => {
   })
 
   it('drops a sequences list that is not one', () => {
-    const read = parseConfig(
-      JSON.stringify({ kind: CONFIG_KIND, state: STATE, sequences: ['IV', 7, null] }),
-    )
+    const read = parseTab({ state: STATE, sequences: ['IV', 7, null] })
     expect(read?.sequences).toEqual(['IV'])
   })
 })
@@ -287,17 +313,14 @@ function uriOf(ref: PanelRef | undefined): string | undefined {
 }
 
 describe('resolveConfig', () => {
-  const base = 'https://example.org/app/demo/session.metacooler.json'
-  const relative = parseConfig(
-    JSON.stringify({
-      kind: CONFIG_KIND,
-      state: { uri: 'yeast.cool', view: 'region', region: 'IV' },
-      tracks: [
-        { ...TRACK, source: { kind: 'remote', name: 'ATAC.bw', url: 'ATAC.bw' } },
-        { ...TRACK, id: 'a2', source: { kind: 'local', name: 'dropped.bw' } },
-      ],
-    }),
-  )
+  const base = 'https://example.org/app/demo/workspace.metacooler.json'
+  const relative = parseTab({
+    state: { uri: 'yeast.cool', view: 'region', region: 'IV' },
+    tracks: [
+      { ...TRACK, source: { kind: 'remote', name: 'ATAC.bw', url: 'ATAC.bw' } },
+      { ...TRACK, id: 'a2', source: { kind: 'local', name: 'dropped.bw' } },
+    ],
+  })
 
   it('resolves what a config names against where the config is', () => {
     const config = resolveConfig(relative as NonNullable<typeof relative>, base)
@@ -308,33 +331,21 @@ describe('resolveConfig', () => {
   })
 
   it('leaves an exported session exactly as it was', () => {
-    const exported = parseConfig(
-      JSON.stringify({ kind: CONFIG_KIND, state: STATE, tracks: [TRACK] }),
-    )
+    const exported = parseTab({ state: STATE, tracks: [TRACK] })
     const config = resolveConfig(exported as NonNullable<typeof exported>, base)
     expect(config.state.uri).toBe(STATE.uri)
     expect(config.tracks[0].source.url).toBe(TRACK.source.url)
   })
 
   it('resolves the file half of a `file::group` URI and keeps the group', () => {
-    const collection = parseConfig(
-      JSON.stringify({
-        kind: CONFIG_KIND,
-        state: { uri: 'mock.mmetacool::entries/1000', view: 'genomes' },
-      }),
-    )
+    const collection = parseTab({ state: { uri: 'mock.mmetacool::entries/1000', view: 'genomes' } })
     expect(resolveConfig(collection as NonNullable<typeof collection>, base).state.uri).toBe(
       'https://example.org/app/demo/mock.mmetacool::/entries/1000',
     )
   })
 
   it('resolves the compared file too', () => {
-    const pair = parseConfig(
-      JSON.stringify({
-        kind: CONFIG_KIND,
-        state: { uri: 'a.cool', uri2: 'b.cool', view: 'region' },
-      }),
-    )
+    const pair = parseTab({ state: { uri: 'a.cool', uri2: 'b.cool', view: 'region' } })
     expect(resolveConfig(pair as NonNullable<typeof pair>, base).state.uri2).toBe(
       'https://example.org/app/demo/b.cool',
     )
@@ -350,17 +361,14 @@ describe('resolveConfig', () => {
    * than as an unresolved name.
    */
   const deckConfig = (over: Record<string, unknown> = {}) =>
-    parseConfig(
-      JSON.stringify({
-        kind: CONFIG_KIND,
-        state: {
-          uri: 'lead.cool',
-          view: 'region',
-          maps: `rep2.cool${MAPS_SEPARATOR}${VACANT}${MAPS_SEPARATOR}https://other.org/rep4.cool`,
-        },
-        ...over,
-      }),
-    ) as SessionConfig
+    parseTab({
+      state: {
+        uri: 'lead.cool',
+        view: 'region',
+        maps: `rep2.cool${MAPS_SEPARATOR}${VACANT}${MAPS_SEPARATOR}https://other.org/rep4.cool`,
+      },
+      ...over,
+    }) as SessionConfig
 
   it('resolves every map of a deck, and leaves a vacancy vacant', () => {
     const refs = parseMaps(resolveConfig(deckConfig(), base).state.maps)
@@ -378,12 +386,9 @@ describe('resolveConfig', () => {
     // second `|` split written here: a raw pipe separates and `%7C` inside a
     // member is data, and a second copy of that rule fails by resolving to a
     // *different number of maps* than were written.
-    const odd = parseConfig(
-      JSON.stringify({
-        kind: CONFIG_KIND,
-        state: { uri: 'lead.cool', view: 'region', maps: 'we%7Cird.cool' },
-      }),
-    ) as SessionConfig
+    const odd = parseTab({
+      state: { uri: 'lead.cool', view: 'region', maps: 'we%7Cird.cool' },
+    }) as SessionConfig
     expect(parseMaps(resolveConfig(odd, base).state.maps)).toEqual([
       { kind: 'remote', uri: 'https://example.org/app/demo/we|ird.cool' },
     ])
@@ -444,11 +449,14 @@ describe('resolveConfig', () => {
  * codebase refuses everywhere else. Nothing acted on it until now.
  */
 describe('the version gate', () => {
-  const at = (version: unknown, over: Record<string, unknown> = {}) =>
-    JSON.stringify({ kind: CONFIG_KIND, version, state: STATE, ...over })
+  const at = (version: unknown, over: Record<string, unknown> = {}) => ({
+    version,
+    state: STATE,
+    ...over,
+  })
 
   it('refuses a session from a newer build, and says what it is', () => {
-    const read = readConfig(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
+    const read = readTab(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
     expect(isRefusal(read)).toBe(true)
     expect(read).toMatchObject({
       reason: 'newer',
@@ -458,7 +466,7 @@ describe('the version gate', () => {
   })
 
   it('names both formats and the build, rather than blaming the file', () => {
-    const read = readConfig(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
+    const read = readTab(at(CONFIG_VERSION + 1, { producer: '(meta)cooler 9.9.9' }))
     const message = refusalMessage(read as ConfigRefusal, 'figure3.metacooler.json')
     expect(message).toContain('figure3.metacooler.json')
     expect(message).toContain('(meta)cooler 9.9.9')
@@ -467,11 +475,11 @@ describe('the version gate', () => {
     // The fix is to the viewer, not to the file — so the sentence must not send
     // the reader off to inspect the JSON.
     expect(message).toContain('Update the viewer')
-    expect(message).not.toContain('not a saved session')
+    expect(message).not.toContain('not a saved workspace')
   })
 
   it('still refuses legibly when the newer file cannot say which build wrote it', () => {
-    const read = readConfig(at(CONFIG_VERSION + 1))
+    const read = readTab(at(CONFIG_VERSION + 1))
     expect(refusalMessage(read as ConfigRefusal, 'x.json')).toContain(
       `format ${CONFIG_VERSION + 1}`,
     )
@@ -481,35 +489,35 @@ describe('the version gate', () => {
     // Forward tolerance for *added* fields is the promise; a lower number is an
     // older file and must keep opening. Pinned so whoever writes the first
     // migration sees exactly what they are changing.
-    expect(isRefusal(readConfig(at(CONFIG_VERSION)))).toBe(false)
-    expect(isRefusal(readConfig(at(0)))).toBe(false)
-    expect(isRefusal(readConfig(at(undefined)))).toBe(false)
-    expect(isRefusal(readConfig(at('two')))).toBe(false)
+    expect(isRefusal(readTab(at(CONFIG_VERSION)))).toBe(false)
+    expect(isRefusal(readTab(at(0)))).toBe(false)
+    expect(isRefusal(readTab(at(undefined)))).toBe(false)
+    expect(isRefusal(readTab(at('two')))).toBe(false)
   })
 
-  it('tells apart JSON that is broken from JSON that is not a session', () => {
-    expect(readConfig('not json at all')).toEqual({ reason: 'not-json' })
-    expect(readConfig(JSON.stringify({ name: 'my-package' }))).toEqual({ reason: 'not-a-session' })
+  it('says a tab that is not one is not a workspace, in the file’s own words', () => {
+    // A tab has no vocabulary of its own for this: it is only ever read out of a
+    // file, so the sentence the reader sees has to be about the file they
+    // dropped. `state/workspace.ts` covers the other two reasons, which are the
+    // wrapper's to detect.
+    expect(readTab({ name: 'my-package' })).toEqual({ reason: 'not-a-workspace' })
     expect(refusalMessage({ reason: 'not-json' }, 'x.json')).toContain('not a JSON file')
   })
 
-  it('is inherited by the two roads that can only take a null', () => {
-    // A share link and the durable record have nowhere to put a reason, so they
-    // keep calling `parseConfig` — and they are precisely the two that would
-    // otherwise silently misread a file from a newer build.
-    expect(parseConfig(at(CONFIG_VERSION + 1))).toBeNull()
-    expect(parseConfig(at(CONFIG_VERSION))).not.toBeNull()
+  it('is inherited by the road that can only take a null', () => {
+    // The durable record has nowhere to put a reason, so it keeps calling
+    // `parseTab` — and it is precisely the one that would otherwise silently
+    // misread a tab written by a newer build.
+    expect(parseTab(at(CONFIG_VERSION + 1))).toBeNull()
+    expect(parseTab(at(CONFIG_VERSION))).not.toBeNull()
   })
 })
 
-describe('naming one', () => {
-  it('says what it is, twice', () => {
-    expect(configFileName('yeast', '2026-08-05-1000')).toBe(
-      'yeast-2026-08-05-1000.metacooler.json',
-    )
-    expect(looksLikeConfig('yeast-2026-08-05-1000.metacooler.json')).toBe(true)
-    // Any JSON is worth *reading* — `parseConfig` is what refuses it — because a
-    // reader who renames the file should still be able to open it.
+describe('looksLikeConfig', () => {
+  it('is a hint about which files are worth opening, and nothing stronger', () => {
+    expect(looksLikeConfig('workspace-2026-08-05-1000.metacooler.json')).toBe(true)
+    // Any JSON is worth *reading* — `parseWorkspaceFile` is what refuses it —
+    // because a reader who renames the file should still be able to open it.
     expect(looksLikeConfig('whatever.json')).toBe(true)
     expect(looksLikeConfig('yeast.cool')).toBe(false)
   })

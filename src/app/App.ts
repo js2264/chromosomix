@@ -50,12 +50,22 @@ import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
-import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
-import { applyConfig, configFileName, isRefusal, refusalMessage } from '../state/SessionConfig'
+import { downloadBlob, fileStamp } from '../ui/export'
+import {
+  applyConfig,
+  isRefusal,
+  refusalMessage,
+  resolveConfig,
+  type SessionConfig,
+} from '../state/SessionConfig'
 import { fileMemoryKey } from '../state/UiMemory'
 import {
   WORKSPACE_VERSION,
+  buildWorkspaceFile,
   flushWorkspace,
+  parseWorkspaceFile,
+  seatWorkspace,
+  workspaceFileName,
   forgetWorkspace,
   readWorkspace,
   recordAction,
@@ -282,14 +292,20 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-actions' },
-          // Save the session, theme, shortcuts, source, about. No "open a
-          // file" button: the title is the way back to the picker and says so
-          // on hover.
+          // Share one tab as a link, save the whole window as a file, theme,
+          // shortcuts, source, about. The two leftmost are a deliberate pair and
+          // say different things: a link is *what is being looked at* (§5.5) and
+          // there is one of those on screen, while a file is the window. No
+          // "open a file" button: the title is the way back to the picker and
+          // says so on hover.
           iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
           iconButton(
             'save',
-            withKey('Save this session as a file, to open again later', KEYS.saveSession),
-            () => this.exportSession(),
+            withKey(
+              'Save this workspace as a file — every tab, to open again later',
+              KEYS.saveSession,
+            ),
+            () => this.exportWorkspace(),
           ),
           this.theme.el,
           iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
@@ -581,26 +597,80 @@ export class App implements SessionHost {
    * reason: `applyConfig` must precede the file opening, because the annotation
    * machinery reads those scopes on its way up.
    */
-  private adoptWorkspace(workspace: Workspace): void {
-    for (const session of this.sessions) session.destroy()
-    this.sessions.length = 0
-    reserveSessionIds(highestId(workspace.sessions.map((row) => ({ id: row.id, hash: '' }))))
+  private adoptWorkspace(workspace: Workspace, mode: 'replace' | 'append' = 'replace'): void {
+    if (mode === 'replace') {
+      for (const session of this.sessions) session.destroy()
+      this.sessions.length = 0
+      reserveSessionIds(highestId(workspace.sessions.map((row) => ({ id: row.id, hash: '' }))))
+    }
 
-    for (const row of workspace.sessions.slice(0, MAX_SESSIONS)) {
-      applyConfig(row.config, fileMemoryKey(row.id, row.config.state.uri))
-      const session = new Session(this, row.id)
-      session.prime(row.config.state)
-      this.sessions.push(session)
+    const open = this.sessions.filter((session) => session.state !== null).length
+    const plan = seatWorkspace({
+      open,
+      emptyTab: this.sessions.length === 1 && this.sessions[0].state === null,
+      incoming: workspace.sessions.length,
+      max: MAX_SESSIONS,
+    })
+    if (plan.consumeEmpty) {
+      // A window showing only the picker is a window with nothing in it, and
+      // leaving that tab beside the imports would be a picker nobody asked for.
+      for (const session of this.sessions) session.destroy()
+      this.sessions.length = 0
+    }
+
+    const first = this.sessions.length
+    for (const row of workspace.sessions.slice(0, plan.take)) {
+      // **Fresh ids on append.** Reusing the file's is safe only where the
+      // window was emptied first: two tabs with one id share every `UiMemory`
+      // scope keyed on it, so one tab's tracks would appear in the other's card
+      // (`state/workspace.ts`). `applyConfig` is therefore keyed on the id this
+      // window mints, not on the one the file carried.
+      const id = mode === 'append' ? undefined : row.id
+      this.seat(id, row.config)
     }
     if (this.sessions.length === 0) this.sessions.push(new Session(this))
 
-    const wanted = this.sessions.findIndex((session) => session.id === workspace.active)
-    this.active = wanted >= 0 ? wanted : 0
+    // Which tab ends up in front. On replace the ids are the file's own, so the
+    // active one is found by name; on append they have been re-minted, so it is
+    // found by *position* in the incoming list and offset past whatever was
+    // already here — which is also what puts the reader on the tab the sender
+    // was looking at rather than on the first one they happened to open.
+    const incoming = workspace.sessions.findIndex((row) => row.id === workspace.active)
+    const wanted =
+      mode === 'append'
+        ? first + Math.max(0, Math.min(incoming, plan.take - 1))
+        : this.sessions.findIndex((session) => session.id === workspace.active)
+    this.active = wanted >= 0 && wanted < this.sessions.length ? wanted : 0
     this.paintTabs()
     this.mountActive()
     this.writeHash(this.current?.state ?? null, { replace: true })
     this.current?.activate()
     this.remember()
+    if (plan.dropped > 0) {
+      // Named rather than dropped in silence: a partial import is useful, and a
+      // reader who is quietly given nine of twelve tabs has no way to find out.
+      this.notify(
+        `${plan.dropped} more ${plan.dropped === 1 ? 'tab was' : 'tabs were'} in that file than ` +
+          `this window can hold. ${MAX_SESSIONS} is the limit — close a few and open it again.`,
+      )
+    }
+  }
+
+  /**
+   * Put one remembered tab in the window.
+   *
+   * Shared by both modes for the ordering alone: **`applyConfig` runs before
+   * `prime`**, because a primed tab's session memory is empty until it is
+   * written and `exportConfig` would otherwise gather an empty config over the
+   * good record on the first click. `adoptWorkspace`'s own comment records what
+   * that cost the restore road; an append path that re-derived the order would
+   * pay it again.
+   */
+  private seat(id: string | undefined, config: SessionConfig): void {
+    const session = id === undefined ? new Session(this) : new Session(this, id)
+    applyConfig(config, fileMemoryKey(session.id, config.state.uri))
+    session.prime(config.state)
+    this.sessions.push(session)
   }
 
   private newSession(): Session | null {
@@ -903,35 +973,82 @@ export class App implements SessionHost {
   }
 
   /**
-   * Write the active tab out as a file.
+   * The whole window, written to a file.
    *
-   * Everything about it that is not the bytes of its data: the view, the window,
-   * the colour scale, every track with its own settings, the groups, the ticked
-   * sequences, the hand-placed marks. Dropping it back on the page brings the
-   * session up again — asking for the file itself, when that file is a local one
-   * no page can re-open by name.
+   * **Every tab, not the one in front**, and that is what the button says. A
+   * window of six maps with their tracks, marks and bookmarks is a project
+   * rather than a picture, and the reader who presses Save meant the project —
+   * the picture already has its own two buttons, the figure export and the
+   * share link.
+   *
+   * What travels is everything about a tab that is not the bytes of its data:
+   * the view, the window, the colour scale, every track with its settings, the
+   * groups, the ticked sequences, the hand-placed marks, the saved places and
+   * the analysis recipes. Dropping the file back on the page brings all of it
+   * up again — asking for the files themselves, where those are local ones no
+   * page can re-open by name.
    */
-  private exportSession(): void {
-    const session = this.current
-    const config = session?.exportConfig() ?? null
-    if (session === undefined || config === null) {
-      this.warn('There is nothing open in this tab to save.')
+  private exportWorkspace(): void {
+    const tabs: SessionConfig[] = []
+    let active = -1
+    for (const session of this.sessions) {
+      const config = session.exportConfig()
+      if (config === null) continue
+      if (session === this.current) active = tabs.length
+      tabs.push(config)
+    }
+    if (tabs.length === 0) {
+      this.warn('There is nothing open in this window to save.')
       return
     }
     const now = new Date()
-    const name = configFileName(exportBaseName(fileLabel(config.state.uri)), fileStamp(now))
     downloadBlob(
-      new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }),
-      name,
+      new Blob([JSON.stringify(buildWorkspaceFile(tabs, active, now), null, 2)], {
+        type: 'application/json',
+      }),
+      workspaceFileName(fileStamp(now)),
     )
   }
 
   /**
-   * The whole session as a link, and the offer to shorten it.
+   * Open a saved workspace, beside whatever is already here.
    *
-   * The same object {@link exportSession} writes to a file — the link and the
-   * file are two encodings of one thing, which is what keeps them from drifting
-   * (`state/shareLink.ts`).
+   * **Appended, never replacing.** `adoptWorkspace('replace')` closes every open
+   * tab, which is right where it runs — an empty startup window whose reader has
+   * just been asked — and would be catastrophic here: six tabs gone on a drop,
+   * with no message and no undo. `Session.dropFiles` states the doctrine this
+   * follows: adds rather than replaces in every case it can.
+   */
+  openWorkspaceFile(text: string, label: string, base?: string): void {
+    const read = parseWorkspaceFile(text)
+    if (isRefusal(read)) {
+      this.warn(refusalMessage(read, label))
+      return
+    }
+    // A published workspace names its files relative to its own folder, so they
+    // are pointed at wherever it was found. A dropped file has no folder a page
+    // can see, and its names are already absolute or already local.
+    const tabs =
+      base === undefined ? read.tabs : read.tabs.map((tab) => resolveConfig(tab, base))
+    this.adoptWorkspace(
+      {
+        version: read.version,
+        savedAt: read.createdAt,
+        sessions: tabs.map((config, index) => ({ id: `imported-${index}`, config })),
+        active: `imported-${read.active}`,
+      },
+      'append',
+    )
+  }
+
+  /**
+   * This tab as a link, and the offer to shorten it.
+   *
+   * The same *format* {@link exportWorkspace} writes to a file, carrying one tab
+   * rather than the window — a workspace of one, so both roads are read by one
+   * parser and neither can drift from the other (`state/shareLink.ts`). The
+   * difference between the two buttons is the honest one: a link is what you are
+   * looking at, a file is everything you have open.
    */
   private openShareDialog(): void {
     const config = this.current?.exportConfig() ?? null
@@ -1085,15 +1202,16 @@ export class App implements SessionHost {
         run: () => this.newSession(),
       },
       {
-        id: 'save-session',
+        id: 'save-workspace',
         group: 'File',
-        title: 'Save this session',
+        title: 'Save this workspace',
         hint:
-          'Everything about this tab as a file: the view, every track and its settings, the ' +
-          'groups, the marks. Drop it back on the page to open it again.',
+          'Every open tab as one file: the views, every track with its settings, the groups, the ' +
+          'marks, the bookmarks. Drop it back on the page and they all come back. The link button ' +
+          'beside it shares one tab instead.',
         keys: KEYS.saveSession,
         enabled: file,
-        run: () => this.exportSession(),
+        run: () => this.exportWorkspace(),
       },
       {
         id: 'close-session',

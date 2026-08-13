@@ -26,12 +26,12 @@ import {
 } from '@/state/shareLink'
 import { MAPS_SEPARATOR, VACANT } from '@/panels/deck'
 import {
-  CONFIG_KIND,
   CONFIG_VERSION,
   isRefusal,
   type ConfigRefusal,
   type SessionConfig,
 } from '@/state/SessionConfig'
+import { WORKSPACE_KIND } from '@/state/workspace'
 
 /**
  * The session a link decoded to, or `null`.
@@ -45,9 +45,26 @@ function decoded(value: SessionConfig | ConfigRefusal | null): SessionConfig | n
   return value === null || isRefusal(value) ? null : value
 }
 
+/**
+ * What a payload actually holds, undone by hand.
+ *
+ * `decodeShare` answers with the one tab, which is the right answer for every
+ * caller and the wrong one for a test about the *envelope*: it is the wrapper —
+ * the kind, the version, the single tab — that makes a link refusable by the
+ * same code a file is, and only this reaches it.
+ */
+async function inflated(payload: string): Promise<Record<string, any>> {
+  const padded = payload.replace(/-/g, '+').replace(/_/g, '/')
+  const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  const stream = new Blob([bytes as BlobPart])
+    .stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'))
+  return JSON.parse(new TextDecoder().decode(await new Response(stream).arrayBuffer()))
+}
+
 function configOf(overrides: Partial<SessionConfig> = {}): SessionConfig {
   return {
-    kind: CONFIG_KIND,
     version: CONFIG_VERSION,
     createdAt: '2026-08-12T09:00:00.000Z',
     state: {
@@ -72,13 +89,27 @@ describe('a session in a fragment', () => {
     })
     const back = decoded(await decodeShare(await encodeShare(config)))
     expect(back).not.toBeNull()
-    // Field by field rather than deep-equal against the input: `parseConfig`
-    // fills in every key an older file might have omitted, so a decoded config
-    // is a *superset* of a sparse one. What has to survive is what was set.
+    // Field by field rather than deep-equal against the input: `parseTab` fills
+    // in every key an older file might have omitted, so a decoded config is a
+    // *superset* of a sparse one. What has to survive is what was set.
     expect(back?.state).toEqual(config.state)
     expect(back?.bookmarks).toEqual(config.bookmarks)
     expect(back?.createdAt).toBe(config.createdAt)
-    expect(back?.kind).toBe(CONFIG_KIND)
+  })
+
+  it('travels as a workspace of one tab, which is the file’s own format', async () => {
+    // One parser rather than two. The wrapper costs a few dozen bytes after
+    // deflate and buys a link that is refused by the same code a file is —
+    // including the version gate, which a link had no way to apply before.
+    //
+    // One tab and not the window: `lengthAdvice` already warns past about eight
+    // thousand characters and a single session with eight tracks is a few
+    // thousand, so a link carrying six tabs would open by telling the reader not
+    // to use it.
+    const file = await inflated(await encodeShare(configOf()))
+    expect(file.kind).toBe(WORKSPACE_KIND)
+    expect(file.tabs).toHaveLength(1)
+    expect(file.active).toBe(0)
   })
 
   it('is stable: decoding what it encoded encodes to the same thing again', async () => {
@@ -231,8 +262,15 @@ describe('reading a link', () => {
     // application's JSON being opened as a session. It answers with a **reason**
     // rather than `null`, because `null` is reserved for the one failure that is
     // the link's own fault — see below.
-    const refused = await decodeShare(await payloadOf({ hello: 'world' }))
-    expect(refused).toEqual({ reason: 'not-a-session' })
+    expect(await decodeShare(await payloadOf({ hello: 'world' }))).toEqual({
+      reason: 'not-a-workspace',
+    })
+    // A bare tab is not a workspace either. It is the shape a link carried
+    // before the two formats were made one, so it is worth pinning that it is
+    // refused rather than half-read.
+    expect(await decodeShare(await payloadOf({ state: { uri: 'a.cool' } }))).toEqual({
+      reason: 'not-a-workspace',
+    })
   })
 
   it('separates a link that did not survive from one this build will not read', async () => {
@@ -242,7 +280,12 @@ describe('reading a link', () => {
     // sends them back to the sender for a copy that will fail identically.
     expect(await decodeShare('not-base64-and-not-deflate')).toBeNull()
     const newer = await decodeShare(
-      await payloadOf({ kind: CONFIG_KIND, version: CONFIG_VERSION + 1, state: { uri: 'a.cool' } }),
+      await payloadOf({
+        kind: WORKSPACE_KIND,
+        version: CONFIG_VERSION + 1,
+        active: 0,
+        tabs: [{ state: { uri: 'a.cool' } }],
+      }),
     )
     expect(newer).toMatchObject({ reason: 'newer', version: CONFIG_VERSION + 1 })
   })
@@ -277,6 +320,6 @@ describe('saying how long the link is', () => {
   })
 
   it('recommends the file for one that is not going to survive', () => {
-    expect(lengthAdvice(20_000)).toMatch(/Saving the session as a file/)
+    expect(lengthAdvice(20_000)).toMatch(/Saving the workspace as a file/)
   })
 })

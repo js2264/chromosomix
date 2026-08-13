@@ -1,6 +1,11 @@
 /**
  * A whole tab, written down.
  *
+ * **One tab, and not a file.** What a reader saves is a *workspace* — every tab
+ * in the window, in one file — and `state/workspace.ts` owns that. This module
+ * owns what one of its entries is, which is also what the durable record keeps
+ * per tab and what a share link carries one of. Three roads, one definition.
+ *
  * The URL already shares *what is being looked at* (§5.5) — one file, one view,
  * one window, one colour scale — and that is the right thing for a link. It is
  * not the right thing for a workspace: eight tracks with their colours, heights,
@@ -35,9 +40,6 @@ import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
 import type { ViewState } from '../types'
 
-/** What the file says it is, so a stray `.json` is not read as one. */
-export const CONFIG_KIND = 'metacooler.session'
-
 /**
  * The format's own version.
  *
@@ -51,7 +53,13 @@ export const CONFIG_VERSION = 1
 type GroupModes = Record<string, string>
 
 export interface SessionConfig {
-  kind: typeof CONFIG_KIND
+  /**
+   * The format's version, carried per tab.
+   *
+   * Kept here rather than only on the file around it because a tab is what the
+   * durable record and a share link hold one of, and each of those has to be
+   * able to refuse a tab from a newer build on its own.
+   */
   version: number
   /** When it was written, for the reader who finds four of them in a folder. */
   createdAt: string
@@ -315,7 +323,6 @@ export function buildConfig(options: {
 }): SessionConfig {
   const key = options.memoryKey
   return {
-    kind: CONFIG_KIND,
     version: CONFIG_VERSION,
     createdAt: options.now.toISOString(),
     // Stamped always, and the commit only where there is one. See the fields'
@@ -390,18 +397,24 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
  *
  * A typed answer rather than `null`, because the three cases want three
  * different sentences and a bare `null` made two of them **false**: a file from
- * a newer build landed the reader on "is a JSON file but not a saved session",
+ * a newer build landed the reader on "is a JSON file but not a saved workspace",
  * and a link from one on "may have been cut short in transit". Both send
  * somebody to inspect the wrong thing — the file, or their network — when what
  * is actually wrong is the build they are holding.
  */
 export type ConfigRefusal =
   | { reason: 'not-json' }
-  | { reason: 'not-a-session' }
+  | { reason: 'not-a-workspace' }
   | { reason: 'newer'; version: number; producer?: string }
 
-/** `true` when {@link readConfig} answered with a session rather than a refusal. */
-export function isRefusal(value: SessionConfig | ConfigRefusal): value is ConfigRefusal {
+/**
+ * `true` when a reader answered with a refusal rather than the thing asked for.
+ *
+ * Takes any object, because there are two readers now — one for a tab and one
+ * for the file around it — and both answer with the same refusals. Narrowing it
+ * to one of them would mean a second identical guard for the other.
+ */
+export function isRefusal<T extends object>(value: T | ConfigRefusal): value is ConfigRefusal {
   return 'reason' in value
 }
 
@@ -414,21 +427,21 @@ export function isRefusal(value: SessionConfig | ConfigRefusal): value is Config
  */
 export function refusalMessage(refusal: ConfigRefusal, label: string): string {
   if (refusal.reason === 'not-json') {
-    return `${label} is not a JSON file, so it is not a saved session.`
+    return `${label} is not a JSON file, so it is not a saved workspace.`
   }
   if (refusal.reason === 'newer') {
     // Names both numbers and the build, because the fix is not to the file: it
     // is to update the viewer, or to save the session again from this one.
     const from = refusal.producer === undefined ? '' : ` — ${refusal.producer}`
     return (
-      `${label} was saved by a newer version of the viewer${from}, in session format ` +
+      `${label} was saved by a newer version of the viewer${from}, in workspace format ` +
       `${refusal.version}. This build reads format ${CONFIG_VERSION}. Update the viewer, or ` +
       'ask for the session to be saved again from this one.'
     )
   }
   return (
-    `${label} is a JSON file but not a saved session — it does not name itself as one. ` +
-    'A session is written by the export button in the top bar.'
+    `${label} is a JSON file but not a saved workspace — it does not name itself as one. ` +
+    'A workspace is written by the save button in the top bar.'
   )
 }
 
@@ -441,20 +454,16 @@ export function refusalMessage(refusal: ConfigRefusal, label: string): string {
  * should be told it is not a session rather than watched as their tab is
  * replaced by an empty one.
  */
-export function readConfig(text: string): SessionConfig | ConfigRefusal {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return { reason: 'not-json' }
-  }
-  if (typeof parsed !== 'object' || parsed === null) return { reason: 'not-a-session' }
+export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
+  if (typeof parsed !== 'object' || parsed === null) return { reason: 'not-a-workspace' }
   const row = parsed as Record<string, unknown>
-  if (row['kind'] !== CONFIG_KIND) return { reason: 'not-a-session' }
+  // No `kind` on a tab: the *file* names itself once, and a second name inside
+  // every entry would be a claim to keep in step with nothing. What identifies a
+  // tab is that it says what it is looking at.
   const state = row['state']
-  if (typeof state !== 'object' || state === null) return { reason: 'not-a-session' }
+  if (typeof state !== 'object' || state === null) return { reason: 'not-a-workspace' }
   const uri = (state as Record<string, unknown>)['uri']
-  if (typeof uri !== 'string' || uri === '') return { reason: 'not-a-session' }
+  if (typeof uri !== 'string' || uri === '') return { reason: 'not-a-workspace' }
 
   // The one check that belongs to *identity* rather than to a field, and the
   // reason it is here rather than among the tolerant reads below. `version` is
@@ -493,7 +502,6 @@ export function readConfig(text: string): SessionConfig | ConfigRefusal {
   const deck = record(row['deck']) as Record<string, unknown>
 
   return {
-    kind: CONFIG_KIND,
     version,
     // Read tolerantly, like every other field: a session written before these
     // existed is still a session, and one written by a build that could not
@@ -542,16 +550,15 @@ export function readConfig(text: string): SessionConfig | ConfigRefusal {
 }
 
 /**
- * The same read, for the two roads that have nowhere to put a reason.
+ * The same read, for the road that has nowhere to put a reason.
  *
- * A share link and the durable workspace record both arrive somewhere that can
- * only show or not show a thing, so they take the `null` and inherit every
- * refusal above — including the version gate, which is the point. They are
- * precisely the two roads that would otherwise silently misread a file from a
- * newer build.
+ * The durable record arrives somewhere that can only show or not show a thing,
+ * so it takes the `null` and inherits every refusal above — including the
+ * version gate, which is the point: it would otherwise be the one road that
+ * silently misread a tab from a newer build.
  */
-export function parseConfig(text: string): SessionConfig | null {
-  const read = readConfig(text)
+export function parseTab(parsed: unknown): SessionConfig | null {
+  const read = readTab(parsed)
   return isRefusal(read) ? null : read
 }
 
@@ -678,7 +685,4 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
   return resolved
 }
 
-/** What one is called on the way out. */
-export function configFileName(base: string, stamp: string): string {
-  return `${base}-${stamp}.metacooler.json`
-}
+
