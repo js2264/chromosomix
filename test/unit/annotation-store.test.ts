@@ -333,19 +333,63 @@ describe('the contig overlap warning (§8.2)', () => {
   // presents as "the feature is broken" rather than "these files disagree".
   it('says so loudly when nothing matches', () => {
     const message = overlapWarning({ matched: 0, total: 16, missing: ['I'], extra: ['chrI'] })
-    expect(message).toContain('0 of 16')
-    expect(message).toContain('chrI')
+    expect(message?.tone).toBe('warn')
+    expect(message?.text).toContain('0 of 16')
+    expect(message?.text).toContain('chrI')
   })
 
   it('names what is missing on a partial match', () => {
     const message = overlapWarning({ matched: 15, total: 16, missing: ['XVI'], extra: [] })
-    expect(message).toContain('15 of 16')
-    expect(message).toContain('XVI')
+    expect(message?.tone).toBe('warn')
+    expect(message?.text).toContain('15 of 16')
+    expect(message?.text).toContain('XVI')
   })
 
   it('says nothing when everything matched', () => {
     expect(overlapWarning({ matched: 16, total: 16, missing: [], extra: [] })).toBeNull()
     expect(overlapWarning(undefined)).toBeNull()
+  })
+
+  // On a metagenome the same arithmetic reads as a failure: a coverage track
+  // over three MAGs of forty-nine matches 412 of 20,566 sequences, which is
+  // exactly what a file about another organism would also say. The unit of the
+  // answer is the MAG, and partial coverage is not a fault (§8.5).
+  it('counts genomes rather than sequences where the map has them', () => {
+    const message = overlapWarning({
+      matched: 412,
+      total: 20_566,
+      missing: ['NODE_9'],
+      extra: [],
+      genomes: { matched: 3, total: 49, named: ['MAG_12', 'MAG_31', 'MAG_44'] },
+    })
+    expect(message?.tone).toBe('note')
+    expect(message?.text).toBe('412 of 20,566 sequences, in 3 of 49 genomes: MAG_12, MAG_31, MAG_44.')
+  })
+
+  it('says so plainly when a track covers every genome', () => {
+    const message = overlapWarning({
+      matched: 20_100,
+      total: 20_566,
+      missing: ['NODE_9'],
+      extra: [],
+      genomes: { matched: 49, total: 49, named: ['MAG_1', 'MAG_2', 'MAG_3', 'MAG_4'] },
+    })
+    expect(message?.tone).toBe('note')
+    expect(message?.text).toBe('20,100 of 20,566 sequences, across all 49 genomes.')
+  })
+
+  it('still shouts when a metagenome track matches nothing at all', () => {
+    // The genome clause is about *partial* coverage. Zero is the one failure
+    // §8.2 exists for, on a metagenome as anywhere else.
+    const message = overlapWarning({
+      matched: 0,
+      total: 20_566,
+      missing: ['NODE_1'],
+      extra: ['chr1'],
+      genomes: { matched: 0, total: 49, named: [] },
+    })
+    expect(message?.tone).toBe('warn')
+    expect(message?.text).toContain('0 of 20,566')
   })
 })
 

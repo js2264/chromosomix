@@ -331,8 +331,16 @@ export class AnnotationCard {
       if (entry.summary !== undefined) {
         row.appendChild(el('p', { class: 'ann-note', text: entry.summary }))
       }
+      // Two tones from one function: a **warning** is a file that does not fit
+      // this map, and a **note** is a file that fits part of it, which on a
+      // metagenome is what fitting looks like (§8.5). Painting the second one
+      // yellow would make the ordinary case look like a fault.
       const warning = overlapWarning(entry.overlap)
-      if (warning !== null) row.appendChild(el('p', { class: 'ann-warn', text: warning }))
+      if (warning !== null) {
+        row.appendChild(
+          el('p', { class: warning.tone === 'warn' ? 'ann-warn' : 'ann-note', text: warning.text }),
+        )
+      }
     }
     row.appendChild(body)
     this.acceptDrops(row, index)
@@ -1042,27 +1050,79 @@ function cssEscape(value: string): string {
  * genomes. Telling a reader to go and rename their chromosomes would now be
  * advice for a problem they do not have.
  */
-export function overlapWarning(overlap: ContigOverlap | undefined): string | null {
+export interface OverlapNote {
+  /**
+   * How loudly to say it.
+   *
+   * `warn` is *this file does not fit this map* — no overlap at all, a partial
+   * one on a single-genome file, or a cross-convention match whose lengths
+   * disagree. `note` is *this file fits part of it*, which on a metagenome is
+   * what fitting looks like: a track over a co-assembly covers the organisms it
+   * was made about, and painting that yellow would make the ordinary case read
+   * as a fault (§8.5).
+   */
+  tone: 'warn' | 'note'
+  text: string
+}
+
+export function overlapWarning(overlap: ContigOverlap | undefined): OverlapNote | null {
   if (overlap === undefined || overlap.total === 0) return null
   if (overlap.matched === 0) {
     const sample = overlap.extra.length > 0 ? ` This file names ${overlap.extra.join(', ')}…` : ''
-    return `No contig in this file matches the map (0 of ${fmt.int(overlap.total)}).${sample} ` +
-      'The usual naming conventions were tried, so this is likely a file about another genome.'
+    return {
+      tone: 'warn',
+      text:
+        `No contig in this file matches the map (0 of ${fmt.int(overlap.total)}).${sample} ` +
+        'The usual naming conventions were tried, so this is likely a file about another genome.',
+    }
+  }
+  // **On a metagenome the unit of the answer is the MAG** (§8.5). A track over
+  // a co-assembly routinely covers a few organisms out of fifty — coverage of
+  // one MAG, an annotation of another — and the sequence counts state that as
+  // `412 of 20,566 contigs matched`, which is arithmetically true and reads
+  // exactly like the failure above it. So the sentence is about genomes, and it
+  // is not a warning: partial coverage is the *expected* shape of a track here,
+  // and the reader is told which organisms it landed on rather than which
+  // twenty thousand sequences it did not.
+  const genomes = overlap.genomes
+  if (genomes !== undefined && genomes.matched > 0) {
+    if (genomes.matched === genomes.total) {
+      return {
+        tone: 'note',
+        text:
+          `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} sequences, across all ` +
+          `${fmt.int(genomes.total)} genomes.`,
+      }
+    }
+    const more = genomes.matched > genomes.named.length ? '…' : ''
+    return {
+      tone: 'note',
+      text:
+        `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} sequences, in ` +
+        `${fmt.int(genomes.matched)} of ${fmt.int(genomes.total)} genomes: ` +
+        `${genomes.named.join(', ')}${more}.`,
+    }
   }
   if (overlap.matched < overlap.total) {
-    return `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} contigs matched; ` +
-      `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`
+    return {
+      tone: 'warn',
+      text:
+        `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} contigs matched; ` +
+        `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`,
+    }
   }
   // Matched in full, and *that is the problem*: a rename this file was not sure
   // of counts as a match, so the two clauses above go quiet on the one case
   // that most warrants a word. hg19's `MT` against hg38's `chrM` is one name
   // apiece and two sequences (§5.9).
   if (overlap.contested !== undefined && overlap.contested.length > 0) {
-    return (
-      `Matched across two naming conventions, but the sequences are different ` +
-      `lengths: ${overlap.contested.join(', ')}. Two assembly versions would look ` +
-      `exactly like this — the coordinates still land, they just may not mean the same place.`
-    )
+    return {
+      tone: 'warn',
+      text:
+        `Matched across two naming conventions, but the sequences are different ` +
+        `lengths: ${overlap.contested.join(', ')}. Two assembly versions would look ` +
+        `exactly like this — the coordinates still land, they just may not mean the same place.`,
+    }
   }
   return null
 }

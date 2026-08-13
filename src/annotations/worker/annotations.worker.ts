@@ -102,12 +102,46 @@ function overlapReport(
   renaming: Renaming | null,
 ): ContigOverlap {
   const overlap = overlapWith(fileContigs, namesOf(mapContigs))
+  const genomes = genomeOverlap(fileContigs, mapContigs)
   const contested = renaming?.contested ?? []
-  if (contested.length === 0) return overlap
   return {
     ...overlap,
-    contested: contested.slice(0, 4).map((match) => `${match.asked} → ${match.name}`),
+    ...(genomes === null ? {} : { genomes }),
+    ...(contested.length === 0
+      ? {}
+      : { contested: contested.slice(0, 4).map((match) => `${match.asked} → ${match.name}`) }),
   }
+}
+
+/**
+ * How many **genomes** a file touches, on a map that has them (§8.5).
+ *
+ * The sequence counts are the wrong unit for a metagenome and are true in a way
+ * that reads as false: a coverage track over three MAGs of fifty says `412 of
+ * 20,566 sequences matched`, which is what a file about another organism
+ * entirely would also say. What distinguishes them is that the 412 fall inside
+ * three *organisms* rather than being scattered over fifty, and that is what a
+ * reader is checking for.
+ *
+ * `null` where the map has no genome layer, which leaves the report exactly as
+ * it was on every cooler.
+ */
+function genomeOverlap(
+  fileContigs: readonly string[],
+  mapContigs: readonly NamedSequence[],
+): { matched: number; total: number; named: string[] } | null {
+  const all = new Set<string>()
+  for (const sequence of mapContigs) {
+    if (sequence.genome !== undefined && sequence.genome !== '') all.add(sequence.genome)
+  }
+  if (all.size === 0) return null
+  const inFile = new Set(fileContigs)
+  const hit = new Set<string>()
+  for (const sequence of mapContigs) {
+    if (sequence.genome === undefined || sequence.genome === '') continue
+    if (inFile.has(sequence.name)) hit.add(sequence.genome)
+  }
+  return { matched: hit.size, total: all.size, named: [...hit].slice(0, 4) }
 }
 
 /**

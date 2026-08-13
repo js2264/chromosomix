@@ -523,6 +523,22 @@ export interface ContigOverlap {
   /** Up to a handful of this file's contigs the map has never heard of. */
   extra: string[]
   /**
+   * The **genome layer's** view of the same question (§8.5).
+   *
+   * Present only on a file that has one, and it is what makes the report
+   * readable there. A metagenome is one co-assembly binned into MAGs, so a
+   * track over it — coverage from the same BAM, an annotation of the same
+   * contigs — routinely covers a handful of organisms out of fifty, and the
+   * sequence counts say `412 of 20,566`, which is arithmetically true and reads
+   * exactly like a file that failed to match. The number a reader wants is how
+   * many *MAGs* it touches, and which.
+   *
+   * `matched` counts genomes with at least one sequence in the file; `total` is
+   * every genome the map has; `named` is a handful of the matched ones, ready
+   * to print.
+   */
+  genomes?: { matched: number; total: number; named: string[] }
+  /**
    * Sequences matched across two conventions whose **lengths disagree**.
    *
    * The one hole the rename (§5.9) would otherwise open in §8.2's promise. A

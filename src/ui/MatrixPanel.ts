@@ -583,15 +583,7 @@ export interface AnnotationContext {
    */
   map?: MapId
   manual: ManualStore
-  /**
-   * The annotation worker, for the loaded formats.
-   *
-   * Optional because a file with a genome layer has none (§8.5) and still draws
-   * metadata lanes (§8.12): its columns come out of the map that is open, so
-   * there is nothing to parse and no thread to spawn. A panel without one draws
-   * every lane it can and never asks for a sample.
-   */
-  client?: AnnotationClient
+  client: AnnotationClient
   /**
    * How each group of tracks is drawn and scaled, for this file.
    *

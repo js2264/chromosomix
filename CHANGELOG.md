@@ -14,6 +14,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **bigWigs, gene models and interval sets on a metagenome.** §8.5 gated every
+  annotation card on the file having no genome layer, so a `.metacool` had no
+  Tracks card, no drop zones and no way to draw a coverage track beside the map
+  it was computed from. The argument was that a metacool's axis is contigs from
+  thousands of independently assembled organisms, so a file keyed on contig
+  names either coincides or misleads.
+
+  The premise was wrong about the files people have. A metagenomic Hi-C dataset
+  is **one co-assembly** binned into MAGs afterwards: the names in `/contigs`
+  are one namespace — on the reference file, 20,566 sequences with 20,566
+  distinct names — and a bigWig over that assembly is keyed on exactly those
+  names, in the (contig, start, end) coordinates every other lane here is drawn
+  in. The naming ladder (§5.9) was already inert on opaque assembler ids, which
+  is what makes the rename safe on a metagenome in the first place.
+
+  So the whole column is offered on every container. What a metagenome needed
+  instead of a gate was an honest **report**: a track over a co-assembly covers
+  the organisms it was made about, and the sequence counts state that as `794 of
+  20,566`, which is arithmetically true and reads exactly like a file that
+  failed to match. Where the map has genomes the sentence now counts them —
+  *794 of 20,566 sequences, in 4 of 48 genomes: metator_00001_00000, …* — and
+  says it as a note rather than a warning, because partial coverage is the
+  expected shape of a track here. `__unbinned__` is not among them (§7.4). The
+  two real faults keep their voice: no overlap at all, and a cross-convention
+  match whose lengths disagree.
+
+  Measured rather than assumed, on the 48-MAG reference file with a bigWig
+  written over four of its MAGs: the whole-metagenome picture costs the track
+  **three range requests**, because the sample cache asks once per view and bbi
+  answers two thousand regions out of one zoom level. No cap was needed.
+
 - **A band dragged across several sequences no longer names a region that does
   not exist.** The reading took the sequence's *name* from where the hand went
   down and the *end* from where it came up — one contig's name against another

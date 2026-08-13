@@ -1080,6 +1080,15 @@ browser does — read out of the file rather than computed here.
 the overlap explicitly ("16 of 16 contigs matched"). Silent zero-overlap is the most likely support
 question and must be impossible.
 
+**On a file with a genome layer the report is about genomes** (§8.5). The same arithmetic that is
+informative on a cooler is alarming on a metagenome: a coverage track over four MAGs matches `794 of
+20,566` sequences, which is true, and is also what a track about another organism entirely would
+say. So where the map has genomes the sentence counts them — *794 of 20,566 sequences, in 4 of 48
+genomes: metator_00001_00000, …* — and it is a **note rather than a warning**, because partial
+coverage is the expected shape of a track over a co-assembly and painting it yellow would make the
+ordinary case read as a fault. The two failures that *are* faults keep their voice: no overlap at
+all, and a cross-convention match whose lengths disagree (§5.9).
+
 ### 8.3 Text formats
 
 Parsed in full, in the annotations worker, never on the main thread — a 9.5 MB GTF is a tenth of a
@@ -1122,25 +1131,41 @@ refines by the same rule, from the same three ideas — a window wider than the 
 quantised so a small zoom asks for nothing new, and the picture in hand left on screen until the
 better one arrives.
 
-### 8.5 cool and mcool only — and genomes with no map
+### 8.5 Every container, and genomes with no map
 
-Every card, every lane and every overlay is gated on the file having no genome layer — which is
-exactly "this is a cooler" (§9). On a `.metacool` or `.mmetacool` they are not rendered at all.
+**This section used to be a gate, and the gate is gone.** It read: every card, every lane and every
+overlay is offered only where the file has no genome layer — which is exactly "this is a cooler"
+(§9) — and on a `.metacool` none of them are rendered at all. The argument was that a metacool's
+axis is thousands of contigs from thousands of *different organisms*, assembled independently, so a
+bigWig or a GTF keyed on contig names either coincides or misleads.
 
-The gate is about the *genome layer*, not about there being a matrix. A session browsing an assembly
-with no map (§5.8) offers the same cards for the same reason the cooler does: one assembly, one
-namespace of sequence names, and an overlap report that means something.
+**The premise was wrong about the files people have.** A metagenomic Hi-C dataset is *one
+co-assembly* — one `spades`/`megahit` run over one library — which is binned into MAGs afterwards.
+The names in `/contigs` are therefore one namespace, and on the reference file they are 20,566
+sequences with 20,566 distinct names, `NODE_17248_len_278011` and its siblings. A bigWig of coverage
+over that assembly is keyed on exactly those names, in exactly the (contig, start, end) coordinates
+every other lane in this application is drawn in. There was never anything to coincide with: the
+naming ladder (§5.9) is already inert on opaque assembler ids, matching them by spelling and nothing
+else, which is what makes the rename safe on a metagenome in the first place.
 
-The reason is not squeamishness about effort. A metacool's axis is thousands of contigs from
-thousands of *different organisms*, assembled independently; a bigWig or a GTF is keyed on contig
-names that belong to one assembly, so the overlap is either a coincidence or a mistake, and drawing a
-gene model across a MAG boundary would assert a coordinate system that does not exist. The honest
-answer is to not offer it.
+So the cards are offered on every container. What a metagenome needed instead of a gate was an
+**honest report**, and that is where the gate's real content went (§8.2): a track over a co-assembly
+covers the organisms it was made about, so the sequence counts say `794 of 20,566`, which is
+arithmetically true and reads exactly like a file that failed to match. The unit of the answer on a
+file with a genome layer is the **MAG**.
 
-**The gate is about files, and §8.12 is the case it never covered.** A metacool's own `/genomes` and
-`/contigs` tables are keyed on that file's own axis: there is no naming convention to coincide with,
-no overlap to report and nothing to match, because the names *are* the map's. So the **Metadata**
-card is offered on every container, a metacool included, and it is the only card such a file gets.
+The `__unbinned__` pseudo-genome is not one of them (§7.4): it is every contig binning failed to
+place, and counting it would put a 49th organism in a sentence about 48 and name it as something a
+track "covers".
+
+Two things are still true of a session browsing an assembly **with no map** (§5.8): it offers the
+same cards for the same reason, and one assembly means one namespace of sequence names.
+
+**And §8.12 is the card that never needed the gate lifted.** A metacool's own `/genomes` and
+`/contigs` tables are keyed on that file's own axis — there is no convention to coincide with, no
+overlap to report and nothing to match, because the names *are* the map's — so the **Metadata** card
+was offered on every container from the day it existed, and was for a while the only card a metacool
+got.
 
 **And the same argument settles the two ways a second *map* gets in.** The lower-left triangle
 (§5.7) and the deck (§16) both rest on the one thing their pictures must share — a coordinate system

@@ -68,7 +68,13 @@ import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { ReaderClient } from '../worker/client'
-import type { ContigsResult, GenomesResult, OpenResult, SourceSpec } from '../worker/protocol'
+import type {
+  ContigsResult,
+  GenomesResult,
+  OpenResult,
+  SourceSpec,
+  TablePayload,
+} from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
@@ -269,17 +275,8 @@ interface OpenCompare {
 interface FileAnnotations {
   store: AnnotationStore
   manual: ManualStore
-  /**
-   * The annotation worker and the loader in front of it.
-   *
-   * Absent on a file with a genome layer, which loads no annotation files at
-   * all (§8.5) and still has this record — because §8.12's metadata lanes come
-   * out of the map that is open, so a metacool now has a store, a placement
-   * model and a card, and nothing to parse. Spawning a thread to answer no
-   * questions is the one thing that would cost anybody anything.
-   */
-  client?: AnnotationClient
-  loader?: AnnotationLoader
+  client: AnnotationClient
+  loader: AnnotationLoader
   /**
    * The file's own tables, as the metadata card and the lanes read them (§8.12).
    *
@@ -821,7 +818,7 @@ export class Session {
     this.deck = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
-    this.annotations?.client?.destroy()
+    this.annotations?.client.destroy()
     this.annotations = null
     this.compare?.client.terminate()
     this.compare = null
@@ -1824,8 +1821,8 @@ export class Session {
       // genome. Adding it again gives the same track twice, under one name, with
       // one of the two carrying the settings.
       if (result.format !== 'sizes' && this.annotations !== null && !this.alreadyLoaded(source)) {
-        if (source.kind === 'local') this.annotations.loader?.addFiles([source.file])
-        else this.annotations.loader?.addUrl(source.url)
+        if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
+        else this.annotations.loader.addUrl(source.url)
       }
       const target: ViewState = {
         uri,
@@ -2089,15 +2086,8 @@ export class Session {
 
   private mountBrowser(state: ViewState): void {
     const assembly = this.assembly
-    if (assembly === null) return
-    // Every road into the browser builds these first; a set without a worker
-    // behind it is a metacool's (§8.12), which cannot draw a file's tracks and
-    // is not what this surface is of.
-    if (this.annotations === null || this.annotations.client === undefined) {
-      this.setUpBrowserAnnotations(assembly)
-    }
     const held = this.annotations
-    if (held === null || held.client === undefined) return
+    if (assembly === null || held === null) return
     const toggle = this.mapToggleButton()
     const view = new BrowserView({
       assembly,
@@ -2238,9 +2228,6 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
-    // A metacool has a store and no loader (§8.5, §8.12): its own columns are
-    // annotations and a dropped bigWig still is not one.
-    if (held.loader === undefined) return
     held.loader.addFiles([file], placement)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
@@ -2278,7 +2265,7 @@ export class Session {
       if (result.format !== 'sizes' || result.contigs.length === 0) {
         // Named like a sizes file and is not one. Offer it to the loader, which
         // reads its bytes and refuses it by name if it is nothing at all.
-        this.annotations?.loader?.addFiles([file])
+        this.annotations?.loader.addFiles([file])
         return
       }
       this.assembly = assemblyOf({
@@ -2629,11 +2616,7 @@ export class Session {
     // run after the map is closed is still a measurement of that file, and its
     // record should say so rather than naming a genome with no file behind it.
     this.assemblySource = file.source
-    // A metacool's annotations have a store and no loader (§8.5, §8.12), and
-    // the file they describe is the one being closed. A browser over that
-    // genome starts a set of its own rather than inheriting a card that has
-    // nothing to load with.
-    if (held === null || held.loader === undefined) this.setUpBrowserAnnotations(assembly)
+    if (held === null) this.setUpBrowserAnnotations(assembly)
     else {
       this.compareCard = this.newCompareCard(assembly.uri)
       this.setAnnotations([
@@ -2656,7 +2639,7 @@ export class Session {
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
     this.parkedMap = null
-    this.annotations?.client?.destroy()
+    this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
     this.metadataCard = null
@@ -2693,7 +2676,7 @@ export class Session {
    * coordinate system that does not exist.
    */
   private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
-    this.annotations?.client?.destroy()
+    this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
     this.metadataCard = null
@@ -2724,6 +2707,11 @@ export class Session {
     if (this.destroyed) return
     const names = contigNames(contigs)
     const lengths = contigLengths(contigs)
+    // Which MAG each sequence belongs to, for the overlap report (§8.5). Empty
+    // on a cooler, which has no genome layer to report against.
+    const genomeOf = info.hasGenomes
+      ? contigGenomes(contigs, this.file?.genomes.table ?? null)
+      : new Map<string, string>()
 
     // What `/bins` holds, by name and kind. A group listing and one dtype per
     // column — no values, so §3.3's rule that `/bins` is never read at open
@@ -2738,24 +2726,22 @@ export class Session {
     const scope = this.memoryKey(uri)
     const store = new AnnotationStore(scope)
     const manual = new ManualStore(scope)
-    // **A file with a genome layer gets no annotation worker** (§8.5): a GTF or
-    // a bigWig keyed on the contig names of thousands of independently
-    // assembled organisms either coincides or misleads. What it does now get is
-    // the store, the placement model and the metadata card, because a column of
-    // its *own* tables is indexed against its own axis and cannot be matched to
-    // the wrong sequence (§8.12).
-    const client = info.hasGenomes ? undefined : new AnnotationClient()
-    const loader =
-      client === undefined
-        ? undefined
-        : new AnnotationLoader(
-            store,
-            client,
-            // Names *and* lengths: the loader renames a track's sequences into
-            // this map's vocabulary (§5.9), and a rename with no length behind
-            // it is a guess nothing can check.
-            names.map((name) => ({ name, length: lengths.get(name) ?? 0 })),
-          )
+    const client = new AnnotationClient()
+    const loader = new AnnotationLoader(
+      store,
+      client,
+      // Names, lengths **and genomes**. The first two are §5.9's: the loader
+      // renames a track's sequences into this map's vocabulary, and a rename
+      // with no length behind it is a guess nothing can check. The third is
+      // §8.5's: on a metagenome the overlap a reader needs reported is which
+      // *MAGs* a file covers, and 412 of 20,566 sequences is a true sentence
+      // that reads like a broken file.
+      names.map((name) => ({
+        name,
+        length: lengths.get(name) ?? 0,
+        ...(genomeOf.size === 0 ? {} : { genome: genomeOf.get(name) ?? '' }),
+      })),
+    )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -2769,8 +2755,8 @@ export class Session {
     this.annotations = {
       store,
       manual,
-      ...(client === undefined ? {} : { client }),
-      ...(loader === undefined ? {} : { loader }),
+      client,
+      loader,
       groups: new GroupSettings(scope),
       contigLength: (name) => lengths.get(name),
       metadata: metadataIndexFrom({
@@ -2837,8 +2823,7 @@ export class Session {
     // marks**, which is the same ordering the column already has: the cards
     // descend from what came out of a file to what a reader put there by hand,
     // and a column of the open map's own tables is the last thing on that side
-    // of the line. On a metacool it is the only card between the two, because
-    // there are no tracks to load (§8.5) and no marks to draw.
+    // of the line.
     this.metadataCard = new MetadataCard({
       store,
       index: () => this.annotations?.metadata ?? null,
@@ -2847,14 +2832,17 @@ export class Session {
       onExport: (entry) => this.exportMetadata(entry),
     })
 
-    // A file with a genome layer has no Tracks card, no drop zones and no
-    // manual marks (§8.5) — and now one card that is *not* about files at all.
-    if (loader === undefined) {
-      this.setAnnotations([this.syntheticSlot, this.metadataCard.el])
-      this.restoreMetadata(scope)
-      return
-    }
-
+    // **Every file gets the same column now** (§8.5). It used to fork here: a
+    // metacool got the metadata card and nothing else, on §8.5's argument that
+    // a bigWig keyed on contig names from thousands of independently assembled
+    // organisms either coincides or misleads. The premise was wrong about the
+    // files people actually have. A metagenome is *one co-assembly* binned into
+    // MAGs afterwards, so its `/contigs` names are one namespace — on the mock
+    // community, 20,566 sequences and 20,566 distinct names — and a bigWig of
+    // coverage over that assembly is keyed on exactly those names, in exactly
+    // the (contig, start, end) coordinates every other lane here is drawn in.
+    // What was needed instead of a gate was an honest *report*: which MAGs a
+    // file covers, which `overlapWarning` now says.
     this.setAnnotations([
       ...(this.compareCard === null ? [] : [this.compareCard.el]),
       // Above the Tracks card: see the browser path for why.
@@ -3567,7 +3555,7 @@ export class Session {
           store: held.store,
           ...(map === undefined ? {} : { map }),
           manual: held.manual,
-          ...(held.client === undefined ? {} : { client: held.client }),
+          client: held.client,
           groups: held.groups,
           contigLength: held.contigLength,
           // The file's own columns (§8.12). Handed to every panel, including a
@@ -3911,7 +3899,7 @@ export class Session {
       // The annotation worker belongs to the open file, and there is no longer
       // one. Its cache is megabytes of parsed features; leaving it running would
       // hold them until the tab closed.
-      this.annotations?.client?.destroy()
+      this.annotations?.client.destroy()
       this.annotations = null
       this.manualCard = null
       this.metadataCard = null
@@ -5523,6 +5511,35 @@ function contigNames(contigs: ContigsResult | null): string[] {
  * by name — an annotation file knows what it calls a contig and nothing about
  * the row it sits on.
  */
+/**
+ * The genome each sequence belongs to, by name (§8.5).
+ *
+ * Built from the two tables the session already holds: `/contigs`' `genome_id`
+ * is an index into `/genomes`, which is not something an annotation file — or
+ * the reader of a warning about one — can look up. Empty for a cooler, which
+ * has neither column.
+ */
+function contigGenomes(
+  contigs: ContigsResult | null,
+  genomes: TablePayload | null,
+): Map<string, string> {
+  const out = new Map<string, string>()
+  const names = contigNames(contigs)
+  const ids = contigs?.table.data['genome_id']
+  const genomeNames = genomes?.data['name']
+  if (ids === undefined || Array.isArray(ids) || !Array.isArray(genomeNames)) return out
+  for (let i = 0; i < names.length && i < ids.length; i++) {
+    const genome = (genomeNames as string[])[Number(ids[i])]
+    // `__unbinned__` is not a genome (§7.4): it is every contig binning failed
+    // to place, it is excluded from every view and every count in this app, and
+    // counting it here would put a 49th organism in a sentence about 48 — and
+    // name it as one a track "covers" when what the track covers is the
+    // leftovers.
+    if (genome !== undefined && genome !== UNBINNED_NAME) out.set(names[i], genome)
+  }
+  return out
+}
+
 function contigLengths(contigs: ContigsResult | null): Map<string, number> {
   const out = new Map<string, number>()
   const names = contigNames(contigs)
