@@ -25,6 +25,7 @@ import {
   drawArrowheads,
   drawDiagonalFeatures,
   drawManualLines,
+  drawManualRects,
   drawPairs,
   type OverlayAxes,
   type OverlayFrame,
@@ -34,7 +35,7 @@ import { Scale } from '@/render/scale'
 import { BIN_FRACTION, cellLoci } from '@/render/rotate'
 import { emptyFeatureSet } from '@/annotations/featureset'
 import type { FeatureSet, PairSet } from '@/annotations/types'
-import type { ManualArrowhead, ManualLine } from '@/annotations/manual'
+import type { ManualArrowhead, ManualLine, ManualRect } from '@/annotations/manual'
 
 const BINSIZE = 1000
 /** Deepest separation the band shows, in bins. */
@@ -357,6 +358,98 @@ describe('an arrowhead on a turned map', () => {
     expect(rec.moves).toHaveLength(1)
     expect(rec.moves[0][0]).toBeCloseTo(xOf(25_000), 6)
   })
+
+  it('is stood a whole pixel clear of the dot, and only upwards', () => {
+    // The 45° gap is four pixels along the glyph's own axis; turned, that axis
+    // is vertical, and one more pixel is what puts the tip off the cell rather
+    // than on its last row. Sideways it stays put — a nudge in x on a turned map
+    // is a nudge to a different separation, which is a different pair of loci.
+    const rec = ctx()
+    drawArrowheads(as2d(rec), frame(), turnedAxes(), [mark(10_000, 30_000)], '#fff')
+    const perBin = PLOT / (MAX_SEPARATION + 1)
+    const dotY = axisY() - 20 * perBin
+    const [tipX, tipY] = rec.moves[0]
+    expect(dotY - tipY).toBeCloseTo(4 + 1, 6)
+    expect(tipX).toBeCloseTo(xOf(20_000), 6)
+  })
+})
+
+describe('a hand-drawn box on a turned map', () => {
+  const box = (a: [number, number], b: [number, number]): ManualRect => ({
+    id: 'r1',
+    kind: 'rect',
+    a: { contig: 'chrI', from: a[0], to: a[1] },
+    b: { contig: 'chrI', from: b[0], to: b[1] },
+    colour: '#f00',
+  })
+  const perBin = PLOT / (MAX_SEPARATION + 1)
+  /** Every corner of a drawn polygon, in the order the path was walked. */
+  const path = (rec: Recorder): Array<[number, number]> => [...rec.moves, ...rec.lines]
+
+  it('is the domain triangle when it sits on the diagonal', () => {
+    // An on-diagonal box *is* a domain drawn by hand, so it had better be the
+    // shape a domain out of a BED gets: two corners on the axis, and the two off
+    // it meeting over the midpoint at the height of the box's own width.
+    const rec = ctx()
+    drawManualRects(as2d(rec), frame(), turnedAxes(), [box([10_000, 20_000], [10_000, 20_000])])
+    expect(rec.moves).toHaveLength(1)
+    expect(path(rec)).toHaveLength(3)
+    const feet = path(rec).filter(([, y]) => Math.abs(y - axisY()) < 1e-6)
+    expect(feet.map(([x]) => x)).toEqual([xOf(10_000), xOf(20_000)])
+    const apex = path(rec).find(([, y]) => y < axisY() - 1)
+    expect(apex?.[0]).toBeCloseTo(xOf(15_000), 6)
+    expect(axisY() - (apex?.[1] ?? 0)).toBeCloseTo(10 * perBin, 6)
+  })
+
+  it('is one parallelogram, leaning, when it sits off the diagonal', () => {
+    // 10 kb of rows against 10 kb of columns 30 kb away. Its four corners are at
+    // four different separations, which is exactly what the turn is for: the
+    // near corner is 20 bins off the axis and the far one 40.
+    const rec = ctx()
+    drawManualRects(as2d(rec), frame(), turnedAxes(), [box([10_000, 20_000], [40_000, 50_000])])
+    expect(rec.moves).toHaveLength(1)
+    const corners = path(rec)
+    expect(corners).toHaveLength(4)
+    const depths = corners.map(([, y]) => Math.round((axisY() - y) / perBin)).sort((a, b) => a - b)
+    expect(depths).toEqual([20, 30, 30, 40])
+    // The mirror of a box wholly above the diagonal is wholly below it, and a
+    // turned map draws one of those halves. One outline, not two.
+    expect(corners.map(([x]) => Math.round(x))).toEqual(
+      [25_000, 30_000, 35_000, 30_000].map((bp) => Math.round(xOf(bp))),
+    )
+  })
+
+  it('drops the half that folds inside the other', () => {
+    // A box drawn a little off the diagonal straddles it, so both halves turn
+    // into a shape — and the smaller lands wholly inside the larger. Drawing it
+    // would put an outline in there that is not the edge of anything.
+    const rec = ctx()
+    drawManualRects(as2d(rec), frame(), turnedAxes(), [box([10_000, 30_000], [12_000, 34_000])])
+    expect(rec.moves).toHaveLength(1)
+    expect(path(rec)).toHaveLength(5)
+  })
+
+  it('keeps both halves when they fold apart', () => {
+    // 100 kb of rows against 20 kb of columns inside them: the part above the
+    // diagonal and the part below rotate into two separate stripes leaning
+    // opposite ways, and neither is inside the other. Drawing one of them would
+    // be drawing half the contacts the reader boxed.
+    const rec = ctx()
+    drawManualRects(as2d(rec), frame(), turnedAxes(), [box([0, 100_000], [40_000, 60_000])])
+    expect(rec.moves).toHaveLength(2)
+    expect(path(rec)).toHaveLength(8)
+    expect(rec.didClip).toBe(true)
+  })
+
+  it('is not drawn between two sequences, which have no separation', () => {
+    const rec = ctx()
+    const across: ManualRect = {
+      ...box([10_000, 20_000], [40_000, 50_000]),
+      b: { contig: 'chrII', from: 40_000, to: 50_000 },
+    }
+    drawManualRects(as2d(rec), frame(), turnedAxes(), [across])
+    expect(path(rec)).toHaveLength(0)
+  })
 })
 
 describe('the square map, unchanged', () => {
@@ -398,6 +491,95 @@ describe('the square map, unchanged', () => {
       { id: 'm', kind: 'line', axis: 'both', at: { contig: 'chrI', bp: 25_000 }, colour: '#f00' },
     ])
     expect(rec.moves).toHaveLength(2)
+  })
+
+  /** Four canvas pixels per bin: 100 bins of 1 kb across a 400 px plot. */
+  const pxOf = (bp: number): number => (bp / BINSIZE) * 4
+
+  it('draws a box as the rows and columns it was drawn across', () => {
+    const rec = ctx()
+    drawManualRects(as2d(rec), squareFrame(), squareAxes(), [
+      {
+        id: 'r1',
+        kind: 'rect',
+        a: { contig: 'chrI', from: 10_000, to: 20_000 },
+        b: { contig: 'chrI', from: 40_000, to: 60_000 },
+        colour: '#f00',
+      },
+    ])
+    expect(rec.rects).toHaveLength(1)
+    const [x, y, width, height] = rec.rects[0]
+    // Any ratio: twice as wide as it is tall, which is a thing no on-diagonal
+    // mark can say. Half a pixel off exact because an outline is snapped to the
+    // device-pixel grid, as every hairline here is.
+    expect(x).toBeCloseTo(pxOf(40_000), -0.5)
+    expect(y).toBeCloseTo(pxOf(10_000), -0.5)
+    expect(width).toBeCloseTo(pxOf(20_000), 6)
+    expect(height).toBeCloseTo(pxOf(10_000), 6)
+    // Clipped, unlike the lines: a box is very often bigger than the view it is
+    // read in, and its edges must not be drawn over the rulers.
+    expect(rec.didClip).toBe(true)
+  })
+
+  it('draws no box for one whose sequences are off this view', () => {
+    const rec = ctx()
+    drawManualRects(as2d(rec), squareFrame(), squareAxes(), [
+      {
+        id: 'r1',
+        kind: 'rect',
+        a: { contig: 'chrI', from: 10_000, to: 20_000 },
+        b: { contig: 'chrIII', from: 40_000, to: 60_000 },
+        colour: '#f00',
+      },
+    ])
+    expect(rec.rects).toHaveLength(0)
+  })
+
+  it('stands an arrowhead a pixel clear of the cell’s corner, both ways', () => {
+    // The gap is measured along the glyph's 45° axis, so it clears the cell's
+    // *centre* — where the mark is anchored — and not its corner. One pixel on
+    // each axis, square to them, is what takes the tip off the cell it names.
+    const gap = 4 * Math.SQRT1_2
+    const upper = ctx()
+    drawArrowheads(
+      as2d(upper),
+      squareFrame(),
+      squareAxes(),
+      [
+        {
+          id: 'a1',
+          kind: 'arrowhead',
+          a: { contig: 'chrI', bp: 20_000 },
+          b: { contig: 'chrI', bp: 60_000 },
+          colour: '#f00',
+        },
+      ],
+      '#fff',
+    )
+    const [tipX, tipY] = upper.moves[0]
+    expect(tipX - pxOf(60_000)).toBeCloseTo(gap + 1, 6)
+    expect(tipY - pxOf(20_000)).toBeCloseTo(-(gap + 1), 6)
+
+    // And the other way in the lower triangle, where the glyph is mirrored: away
+    // from the diagonal is down and to the left, so the nudge is too.
+    const lower = ctx()
+    drawArrowheads(
+      as2d(lower),
+      squareFrame(),
+      squareAxes(),
+      [
+        {
+          id: 'a2',
+          kind: 'arrowhead',
+          a: { contig: 'chrI', bp: 60_000 },
+          b: { contig: 'chrI', bp: 20_000 },
+          colour: '#f00',
+        },
+      ],
+      '#fff',
+    )
+    expect(lower.moves[0][0] - pxOf(20_000)).toBeCloseTo(-(gap + 1), 6)
+    expect(lower.moves[0][1] - pxOf(60_000)).toBeCloseTo(gap + 1, 6)
   })
 })
 

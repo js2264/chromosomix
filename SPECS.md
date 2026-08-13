@@ -1060,8 +1060,39 @@ find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and 
 because the column descends from what came out of a file to what a reader put there by hand.
 
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
-or both) and arrowheads (on- or off-diagonal), each entered as coordinates or picked by clicking the
-map. This is the card that makes a figure, and nothing in it comes from a file.
+or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
+entered as coordinates or picked by clicking the map. This is the card that makes a figure, and
+nothing in it comes from a file.
+
+The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
+third is two intervals rather than one interval and a shape, because the boxes people draw are not
+one shape: a domain is a square on the diagonal, a corner peak is a small square off it, and a locus
+against a whole arm is neither. An on-diagonal rectangle is drawn as the same triangle a BED domain
+is on a turned map, since that is what it is.
+
+**Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
+and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
+a **drag**: press at one corner, let go at the other, with the map's own marquee and its coordinate
+chips showing what is about to exist. The marquee follows the hand on both axes — a selection is
+squared because it *resolves* to one range, and a mark does not — and it snaps out to the edges of the
+cells the two ends are in, which is what commits. Holding Shift locks the box to the diagonal, so a
+domain is one gesture. All three modes stay on for as many marks as the reader wants, and a click
+while the map is waiting for a drag places nothing rather than navigating.
+
+**A box drawn on a turned map is a box of the square underneath it.** Both ends of the drag are taken
+back to the square they were rotated out of, exactly as a click is, so pressing over one contact and
+releasing over another names the rectangle those two contacts span — which may be off the diagonal,
+and is the one thing a band selection there cannot say. Shift collapses each end onto its own midpoint
+instead of snapping the pointer, which gives the on-diagonal square through the two places the drag
+ran between. What is *drawn* while the hand moves is the mark itself rather than a rubber band: a
+rectangle of rows against columns leans at 45° on a turned map and folds where it crosses the
+diagonal, so a box on screen would be a box drawn around a shape that is not one.
+
+A hand-drawn mark never sits on the pixel it is about (§8.1's rule for overlays generally). For the
+arrowhead that means the glyph is stood off the cell along its own 45° axis **and** by a pixel square
+to the axes: the mark is anchored at the cell's centre, so a diagonal gap alone clears the centre and
+not the corner, and at any zoom where a bin is a handful of pixels the tip landed on the last row and
+column of the cell it was pointing at.
 
 ### 8.2 bigWig
 
@@ -1348,8 +1379,28 @@ pressed.
 Freed of the anchor, **Shift-drag names a band of one axis and zooms to it**. Which axis is decided
 by which way the hand went, so a drag a few degrees off vertical still means what it plainly meant.
 Zoom is one scalar for both axes, because that is what keeps a cell square (`imshow(aspect="equal")`),
-so a 1D gesture has a 2D consequence: the axis nobody dragged keeps its centre and takes the same
-zoom. On a map read about its diagonal that is the square the reader wanted anyway.
+so a 1D gesture has a 2D consequence — and **that consequence is the diagonal**: the axis nobody
+dragged is centred on the same stretch, so what comes back is the on-diagonal square. It used to keep
+whatever centre it happened to have, which made the same drag land on a different picture depending on
+where the view had been panned to, with nothing on screen saying which. Where the block has no
+diagonal — a `chrI × chrII` panel — that axis keeps its centre, since there is no square to open and
+pulling it to a bin the block does not contain would only jam it against an edge.
+
+**Shift is the map's on-diagonal modifier throughout**, and the pointer says so before the drag
+begins: while it is held the readout and the crosshair snap onto the diagonal — the perpendicular foot
+of the pointer on the line the two axes name the same bin — so the reader can see which stretch a
+Shift-drag would open. Only the reading moves; the cursor stays where the hand put it. It answers the
+question a hand hovering over a contact map is usually asking anyway, and finding the diagonal by eye
+at a fitted whole-genome view is a two-pixel target on a 45° line. Off on a turned map, where every
+reading is already measured from the diagonal and the snap would be onto the picture's own bottom
+edge.
+
+**Recentre on the diagonal** is the same idea as a control: a button in Aesthetics → Map, between the
+turn and `O/E`, that slides the view onto the nearest on-diagonal window at the zoom it is already at
+— the perpendicular foot of the *picture's* centre, which is the least it has to move. Every gesture
+that lands off the diagonal takes several more of the same gestures to come back from, and no drag can
+say "here, but on the diagonal". Greyed where the block has no diagonal, and while the map is turned,
+where the picture already is one.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -2295,7 +2346,15 @@ where a locus is:
 - a **loop** becomes one dot at that height — the pair and its mirror rotate to the same point, so
   the square map's "which half do I ring" question does not arise;
 - an **arrowhead** stands over the dot it names with its tip pointing back at it, square to the axis
-  rather than at 45°, and on the far side from the diagonal so the cell is never under the glyph.
+  rather than at 45°, and on the far side from the diagonal so the cell is never under the glyph —
+  the extra pixel of clearance is vertical only here, a sideways nudge on a turned map being a nudge
+  to a different separation and so to a different pair of loci;
+- a **rectangle** becomes the image of the contacts it names, which is a parallelogram leaning at 45°
+  off the diagonal and the domain triangle on it. A box drawn *across* the diagonal has two such
+  images, one per side, and both are drawn where they genuinely fall apart — a locus against a whole
+  arm turns into two stripes leaning opposite ways, and drawing one of them would be drawing half the
+  contacts the reader boxed. Where one image falls inside the other, which is every box drawn near
+  the diagonal, only the outer is drawn: a second outline in there is the edge of nothing.
 
 A call further out than the band shows is **not drawn**. That is outside the data rather than off
 the edge of the picture, and a dot pinned to the top would claim a depth the map is not showing.
@@ -2312,6 +2371,13 @@ the column labels have already claimed.
 ### 17.6 What a drag means on a turned map
 
 Both gestures collapse onto the **x axis**, because it is the only one with coordinates on it.
+
+There is a third, and it does not: **drawing a box** for the Manual card (§8.1). The difference is
+what the gesture is *about*. A selection and a 4C drag are about the picture — they open what they
+cover, and up the side there is nothing to open — while a mark is about the data, and rows and columns
+are things the square has. So a drawn box takes both ends back to the square, exactly as a click does,
+and comes out as a rectangle of rows against columns which may be off the diagonal. It is drawn as the
+mark it will become rather than as a rubber band, since that rectangle leans at 45° here.
 
 Up the side is distance from the diagonal, which bounds no window: a marquee's top and bottom edges
 name nothing, and a band of rows is a range of separations rather than a stretch of genome. Read as
@@ -2330,6 +2396,13 @@ picture, so snapping a corner onto it would be snapping to the frame.
 The arithmetic is the rotation's, halved — a column is half a bin — and the rounding goes outward at
 both ends. A reader who drags across a feature means the bins their band *touched*, not the bins it
 wholly contained, and a band narrower than one bin is still a band.
+
+**With a modifier down, the readout says one place.** The crosshair has already become a single
+vertical line standing where a band would begin, and the card beside it went on printing the pair of
+loci under the pointer and the distance between them — a fact about the cell, which is not what the
+next drag will select. Held, it names the position along the bottom and nothing else: the midpoint of
+the pair, which is what a turned column stands over, and the same number the ruler under the pointer
+is printing. No distance, no count. Let go, the card is a card about a cell again.
 
 The same inverse serves the readout, and has to: the two names, the separation, the pair of positions
 and the value are all questions about the square block, and anything that answers one of them from a

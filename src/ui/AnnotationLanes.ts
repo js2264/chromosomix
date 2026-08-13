@@ -82,7 +82,7 @@ import {
   scaledTo,
   type PixelProfile,
 } from '../render/tracks'
-import type { ManualStore } from '../annotations/manual'
+import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
@@ -359,8 +359,33 @@ const UNGROUPED = {
   scalingOf: (): 'shared' => 'shared',
 }
 
+/** What the lanes read off the reader's own marks. */
+type LaneMarks = Pick<ManualStore, 'lines' | 'arrowheads' | 'rects'>
+
 /** No hand-drawn marks, for a file that cannot carry any. */
-const EMPTY_MARKS = { lines: [], arrowheads: [] } as Pick<ManualStore, 'lines' | 'arrowheads'>
+const EMPTY_MARKS = { lines: [], arrowheads: [], rects: [] } as LaneMarks
+
+/**
+ * Every coordinate the marks ask a lane to point at, mark by mark.
+ *
+ * Grouped by mark rather than flattened, because the "same place twice" rule is
+ * per mark: two boxes that happen to share an edge are two marks about it, and
+ * collapsing them would take a triangle away from one of them.
+ */
+function anchorsOf(manual: LaneMarks): Array<{ colour: string; at: ManualPoint[] }> {
+  return [
+    ...manual.arrowheads.map((mark) => ({ colour: mark.colour, at: [mark.a, mark.b] })),
+    ...manual.rects.map((mark) => ({
+      colour: mark.colour,
+      at: [
+        { contig: mark.a.contig, bp: mark.a.from },
+        { contig: mark.a.contig, bp: mark.a.to },
+        { contig: mark.b.contig, bp: mark.b.from },
+        { contig: mark.b.contig, bp: mark.b.to },
+      ],
+    })),
+  ]
+}
 
 export class AnnotationLanes {
   /** The four canvases, mounted by the panel. Hidden when their stack is empty. */
@@ -468,7 +493,7 @@ export class AnnotationLanes {
   }
 
   /** The marks drawn into every lane; empty where the file carries none. */
-  private get manual(): Pick<ManualStore, 'lines' | 'arrowheads'> {
+  private get manual(): LaneMarks {
     return this.options.manual ?? EMPTY_MARKS
   }
 
@@ -666,7 +691,7 @@ export class AnnotationLanes {
   }
 
   /**
-   * Room past the last lane for the loop anchors, when there are any.
+   * Room past the last lane for the loop and box anchors, when there are any.
    *
    * The triangles used to be drawn *in* that lane, over the last seven pixels of
    * whatever it is a picture of — which on a coverage track is the busiest part
@@ -674,12 +699,13 @@ export class AnnotationLanes {
    * own is the only place a glyph about the axis can go without being ink on
    * somebody's data.
    *
-   * Zero while no loop is marked, so the map keeps those pixels in the session
-   * that never places one: the band is the cost of a mark, and it arrives with
-   * the mark that needs it.
+   * Zero while nothing that anchors is marked, so the map keeps those pixels in
+   * the session that never places one: the band is the cost of a mark, and it
+   * arrives with the mark that needs it.
    */
   private anchorBand(): number {
-    return this.manual.arrowheads.length > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
+    const marks = this.manual.arrowheads.length + this.manual.rects.length
+    return marks > 0 ? ANCHOR_GAP + ANCHOR_LENGTH : 0
   }
 
   /**
@@ -1367,16 +1393,22 @@ export class AnnotationLanes {
     // anchor only under it would answer half of that on each edge, and neither
     // half where the comparison is made. A coordinate is a coordinate: each end
     // is drawn wherever the axis in front of it has room for it.
+    //
+    // A **box** is the same statement four times over — where it starts and
+    // stops on each axis — so its edges are anchored the same way. Two triangles
+    // under a domain drawn on the diagonal is what a reader comparing it against
+    // the tracks is actually asking for: the boundaries, in the coordinate the
+    // tracks are drawn in.
     const last = lanes[lanes.length - 1]
     if (last !== undefined) {
-      for (const mark of axis === null ? [] : this.manual.arrowheads) {
-        let drawn: number | null = null
-        for (const anchor of [mark.a, mark.b]) {
+      for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
+        const drawn = new Set<number>()
+        for (const anchor of mark.at) {
           const unit = axis?.locusToUnit(anchor.contig, anchor.bp) ?? null
-          // An on-diagonal loop names one place twice; drawing the triangle
-          // twice would only darken it.
-          if (unit === null || unit === drawn) continue
-          drawn = unit
+          // An on-diagonal loop names one place twice, and an on-diagonal box
+          // names two places twice; drawing a triangle again only darkens it.
+          if (unit === null || drawn.has(unit)) continue
+          drawn.add(unit)
           anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
         }
       }

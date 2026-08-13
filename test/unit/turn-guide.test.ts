@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The guide under the pointer on a **turned** map, and the one gesture that
- * changes its shape.
+ * The guide under the pointer on a **turned** map, the one gesture that changes
+ * its shape, and what the readout beside it is told.
+ *
+ * The two halves are here together because they were what came apart: the
+ * crosshair stood up as a single vertical line the moment a modifier went down,
+ * saying "the next drag names a stretch of the genome", while the card beside it
+ * went on printing a pair of loci and the distance between them — a fact about
+ * the cell, which is not what the gesture is about to select. A picture and a
+ * caption describing two different gestures is worse than either one alone.
  *
  * At rest a turned map's guide is a pair of 45° rays: the picture's two
  * directions are not its two axes, so the cells sharing a place with the contact
@@ -20,7 +27,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { CROSSHAIR_COLOR, HeatmapView } from '@/render/heatmap'
+import { CROSSHAIR_COLOR, HeatmapView, type DrawnBox } from '@/render/heatmap'
+import { alongAxis } from '@/ui/MatrixPanel'
 import { BIN_FRACTION } from '@/render/rotate'
 import type { DenseMatrix } from '@/types'
 
@@ -59,6 +67,10 @@ interface Harness {
   fire(type: string, event: Record<string, unknown>): void
   /** Every line stroked in the crosshair's colour on one frame. */
   guide(): Segment[]
+  /** What the last hover told the readout, which is the card's whole input. */
+  told(): { cell: { row: number; col: number } | null; span: boolean } | null
+  /** Every box a drag drew, in cells of the square the band came from. */
+  boxes: DrawnBox[]
 }
 
 /** How many bins the square block behind the band has. */
@@ -146,10 +158,19 @@ function harness(size = 400): Harness {
     style: {},
   } as unknown as HTMLCanvasElement
 
+  let hover: { cell: { row: number; col: number } | null; span: boolean } | null = null
+  const boxes: DrawnBox[] = []
   const heatmap = new HeatmapView(canvas, {
     devicePixelRatio: 1,
     // Everything but the guide off, so the strokes on the page are the subject.
     plotOptions: { crosshair: true, dividers: false, breaks: false, labels: false, ticks: false },
+    onHover: (cell, at) => {
+      hover = {
+        cell: cell === null ? null : { row: cell.row, col: cell.col },
+        span: at?.span === true,
+      }
+    },
+    onDrawn: (box) => boxes.push(box),
   })
   // The order the panel uses, and the same four calls: the presentation first,
   // then the block it was chosen for (`ui/MatrixPanel.setData`).
@@ -167,7 +188,42 @@ function harness(size = 400): Harness {
       heatmap.draw()
       return segments.filter((segment) => segment.colour === CROSSHAIR_COLOR)
     },
+    told: () => hover,
+    boxes,
   }
+}
+
+/** The middle of a turned cell, in canvas pixels. */
+function pointAt(fit: Harness, row: number, column: number): [number, number] {
+  const plot = fit.heatmap.plotRect
+  return [
+    plot.x + fit.heatmap.scaleX.toPixel(column + 0.5),
+    plot.y + fit.heatmap.scaleY.toPixel(row + 0.5),
+  ]
+}
+
+/**
+ * Press, travel and release, as a hand draws a box.
+ *
+ * The press goes to the canvas and the rest to the **window**, which is where a
+ * drag in progress is followed: a gesture belongs to the hand that started it,
+ * so the view stops listening at the canvas the moment the button goes down
+ * (`HeatmapView.follow`). Under jsdom that host exists, unlike in the node
+ * tests, so a move dispatched at the canvas would be the one handler that steps
+ * aside.
+ */
+function dragOn(fit: Harness, from: [number, number], to: [number, number], shift = false): void {
+  const modifiers = shift ? { shiftKey: true } : {}
+  fit.fire('mousedown', { clientX: from[0], clientY: from[1], button: 0, ...modifiers })
+  for (const type of ['mousemove', 'mouseup']) {
+    window.dispatchEvent(
+      new MouseEvent(type, { clientX: to[0], clientY: to[1], button: 0, ...modifiers }),
+    )
+  }
+  // Drawn here rather than on the frame the release scheduled: that one runs
+  // after the file's `afterAll` has taken the canvas stubs away, and a raster
+  // built against jsdom's own canvas throws.
+  fit.heatmap.draw()
 }
 
 /** A segment at 45°, which is what a ray off a turned contact is. */
@@ -354,5 +410,112 @@ describe('a place pointed at from a track beside another map', () => {
     expect(fit.guide()).toHaveLength(2)
     fit.heatmap.setPlotOptions({ crosshair: false })
     expect(fit.guide()).toHaveLength(0)
+  })
+})
+
+/**
+ * The other half of the same modifier: what the card is told.
+ *
+ * The guide's shape and the readout's contents are one answer to one question —
+ * *what am I about to select* — and a reader looking at a vertical line over a
+ * card describing a contact has been given two.
+ */
+describe('what a turned map tells the readout', () => {
+  it('names a cell at rest, as every map always has', () => {
+    const fit = harness()
+    hover(fit)
+    // Drawn as well as told: the two are one answer, and the assertions below
+    // are that they agree. (It also flushes the frame the hover scheduled.)
+    expect(fit.guide().every(diagonal)).toBe(true)
+    expect(fit.told()?.span).toBe(false)
+    expect(fit.told()?.cell).not.toBeNull()
+  })
+
+  it('says a place is being named while Shift is held', () => {
+    const fit = harness()
+    hover(fit, { shiftKey: true })
+    expect(fit.guide().filter(vertical)).toHaveLength(1)
+    expect(fit.told()?.span).toBe(true)
+  })
+
+  it('says the same while Option is held, which draws the same guide', () => {
+    const fit = harness()
+    hover(fit, { altKey: true })
+    expect(fit.guide().filter(vertical)).toHaveLength(1)
+    expect(fit.told()?.span).toBe(true)
+  })
+
+  it('goes back to naming a cell when the modifier is let go', () => {
+    const fit = harness()
+    hover(fit, { shiftKey: true })
+    hover(fit)
+    expect(fit.guide().every(diagonal)).toBe(true)
+    expect(fit.told()?.span).toBe(false)
+  })
+
+  /**
+   * Where along the bottom that place is: the midpoint of the pair the cell
+   * under the pointer is a contact between, which is what a turned column
+   * stands over. Either end of the pair would be a coordinate the reader is not
+   * pointing at — on a band nine bins deep, up to nine bins away from the line
+   * the guide is drawn on.
+   */
+  it('puts the position half way between the contact’s two ends', () => {
+    expect(alongAxis({ row: 10, col: 30 })).toBe(20)
+    // On the diagonal the two ends are one place, and the midpoint is it.
+    expect(alongAxis({ row: 7, col: 7 })).toBe(7)
+    // Half-integers are ordinary here — a turned column is half a bin — and are
+    // passed on rather than rounded to a bin the reader did not point at.
+    expect(alongAxis({ row: 10, col: 11 })).toBe(10.5)
+  })
+})
+
+/**
+ * Drawing a rectangle on a turned map.
+ *
+ * The one thing a band *selection* cannot say there, and the reason a drawn box
+ * is not one: a selection over a turned map is a stretch of the genome opened on
+ * both axes, which is always the on-diagonal square. A mark is about the data
+ * rather than about the picture, so the drag is taken back to the square it was
+ * rotated out of — press over one contact, release over another, and the two are
+ * opposite corners of the rectangle those two contacts span.
+ */
+describe('a box drawn on a turned map', () => {
+  it('names the rectangle its two contacts span, off the diagonal', () => {
+    const fit = harness()
+    fit.heatmap.setDrawMode(true)
+    // Row 4 column 40 is the contact (17, 22); row 1 column 60 is (26, 34).
+    // Both well off the diagonal, and the two spans are different lengths —
+    // which is the whole of what "off the diagonal, at any ratio" means.
+    dragOn(fit, pointAt(fit, 4, 40), pointAt(fit, 1, 60))
+    expect(fit.boxes).toHaveLength(1)
+    expect(fit.boxes[0]?.rows).toEqual([17, 27])
+    expect(fit.boxes[0]?.cols).toEqual([22, 35])
+  })
+
+  it('is the on-diagonal square while Shift is held', () => {
+    // The pixel snap is off on a turned map — the diagonal is the bottom edge of
+    // the picture — so the lock is done in the data: each end collapses onto its
+    // own midpoint, which is the place on the genome the contact is *at*.
+    const fit = harness()
+    fit.heatmap.setDrawMode(true)
+    dragOn(fit, pointAt(fit, 4, 40), pointAt(fit, 1, 60), true)
+    expect(fit.boxes).toHaveLength(1)
+    expect(fit.boxes[0]?.rows).toEqual([20, 31])
+    expect(fit.boxes[0]?.cols).toEqual([20, 31])
+  })
+
+  it('draws no rubber band, the mark being drawn instead', () => {
+    // A rectangle of rows against columns leans at 45° here, so a box on screen
+    // would be a box drawn around a shape that is not one. The owner previews
+    // the mark itself; see `MatrixPanel.previewRect`.
+    const fit = harness()
+    fit.heatmap.setDrawMode(true)
+    const [x0, y0] = pointAt(fit, 4, 40)
+    const [x, y] = pointAt(fit, 1, 60)
+    fit.fire('mousedown', { clientX: x0, clientY: y0, button: 0 })
+    fit.fire('mousemove', { clientX: x, clientY: y, button: 0 })
+    expect(fit.guide().filter((segment) => !diagonal(segment) && !vertical(segment))).toHaveLength(0)
+    fit.fire('mouseup', { clientX: x, clientY: y, button: 0 })
   })
 })

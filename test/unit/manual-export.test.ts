@@ -28,12 +28,22 @@ const MARKS: ManualMark[] = [
     b: { contig: 'IV', bp: 2_000 },
     colour: '#1f5fa9',
   },
+  {
+    id: 'm4',
+    kind: 'rect',
+    a: { contig: 'I', from: 120_000, to: 180_000 },
+    b: { contig: 'IV', from: 340_000, to: 400_000 },
+    colour: '#0f8a5f',
+  },
 ]
 
 describe('marksFor', () => {
   it('sends each kind to the file that can hold it', () => {
     expect(marksFor(MARKS, 'bed').map((mark) => mark.id)).toEqual(['m1', 'm2'])
-    expect(marksFor(MARKS, 'bedpe').map((mark) => mark.id)).toEqual(['m3'])
+    // A loop and a box are both a pair of places, which is one row shape and one
+    // file: what differs is how wide each anchor is, and that is a number in a
+    // column rather than a format.
+    expect(marksFor(MARKS, 'bedpe').map((mark) => mark.id)).toEqual(['m3', 'm4'])
   })
 })
 
@@ -47,7 +57,30 @@ describe('formatMarks', () => {
   it('writes loops as BEDPE, both anchors on their own contig', () => {
     const text = formatMarks(MARKS, 'bedpe')
     const rows = text.trim().split('\n').filter((line) => !line.startsWith('#'))
-    expect(rows).toEqual(['I\t1000\t1001\tIV\t2000\t2001\tm3\t0\t.\t.'])
+    // A loop's anchors are the one base each names; a box's are the two
+    // stretches it was drawn across, which is what BEDPE's six coordinate
+    // columns are for — the row is the box, not a summary of it.
+    expect(rows).toEqual([
+      'I\t1000\t1001\tIV\t2000\t2001\tm3\t0\t.\t.',
+      'I\t120000\t180000\tIV\t340000\t400000\tm4\t0\t.\t.',
+    ])
+  })
+
+  it('never writes an empty interval for a box drawn inside one bin', () => {
+    // `chr 100 100` is a row half the tools in this field drop.
+    const text = formatMarks(
+      [
+        {
+          id: 'm5',
+          kind: 'rect',
+          a: { contig: 'I', from: 100, to: 100 },
+          b: { contig: 'I', from: 100, to: 100 },
+          colour: '#000',
+        },
+      ],
+      'bedpe',
+    )
+    expect(text.trim().split('\n')[1]).toBe('I\t100\t101\tI\t100\t101\tm5\t0\t.\t.')
   })
 
   it('carries where it came from, as a comment every reader skips', () => {
@@ -84,10 +117,14 @@ describe('the round trip', () => {
     expect(features.name).toEqual(['vertical', 'both'])
 
     const pairs = parseBedpe(formatMarks(MARKS, 'bedpe'))
-    expect(pairs.length).toBe(1)
+    expect(pairs.length).toBe(2)
     expect(pairs.contigs[pairs.contig1[0]]).toBe('I')
     expect(pairs.start1[0]).toBe(1_000)
     expect(pairs.contigs[pairs.contig2[0]]).toBe('IV')
     expect(pairs.start2[0]).toBe(2_000)
+    // A box keeps its width through the trip: the anchors come back as the
+    // stretches it was drawn across rather than as the points a loop has.
+    expect([pairs.start1[1], pairs.end1[1]]).toEqual([120_000, 180_000])
+    expect([pairs.start2[1], pairs.end2[1]]).toEqual([340_000, 400_000])
   })
 })

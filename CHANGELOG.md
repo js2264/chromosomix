@@ -14,6 +14,83 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Recentre on the diagonal**, a button in Aesthetics → Map between the turn and
+  `O/E`. It slides the view onto the nearest on-diagonal window at the zoom it is
+  already at — the perpendicular foot of the picture's own centre on the line the
+  two axes name the same bin, which is the least it has to move — without
+  touching the region or the resolution.
+
+  Every gesture that lands off the diagonal takes several more of the same
+  gestures to come back from, and none of them can be asked for directly: a pan
+  is relative, a box is where the hand drew it, and a wheel zoom is around the
+  pointer. There is no drag that says *here, but on the diagonal*. Greyed where
+  the block has no diagonal — the trans corner of two chromosomes — and while the
+  map is turned, where the picture already is one.
+
+- **Rectangles, in the Manual annotations card.** The card drew two of the three
+  things people put on a contact map by hand: a line says *this coordinate* and
+  an arrowhead says *this cell*, and there was no way at all to say *this block
+  of contacts* — which is the mark a domain, a corner peak and a pair of loci
+  worth boxing all want. The workaround was four lines making a box out of
+  crosshairs, which is four marks to move and four to delete.
+
+  A rectangle is **two intervals**, one per axis, rather than an interval and a
+  shape. That is what makes on- and off-diagonal the same mark and any ratio
+  expressible: `I:120000-180000` against itself is a domain, two short stretches
+  a megabase apart is a corner peak, and a short stretch against a long one is a
+  locus against a whole arm — a thing no square could have said. Typed with the
+  second box left empty means *the same stretch on both axes*, the same courtesy
+  the arrowhead form does for a cell on the diagonal.
+
+  **Drawn with a drag**, which is the gesture a hand already makes for a box:
+  press at one corner, let go at the other, with the map's own marquee and its
+  coordinate chips showing what is about to exist. The marquee follows the hand
+  on both axes — a *selection* is squared because it resolves to one range, and a
+  mark does not — and it snaps out to the edges of the cells the two ends are in,
+  which is what commits. Holding Shift locks the box to the diagonal, so a domain
+  is one gesture. The mode stays on afterwards, as the other two do, because
+  marking up a figure is several marks — and a click while the map is waiting for
+  a drag places nothing rather than navigating away from the picture being drawn
+  on.
+
+  **On a turned map the box is off the diagonal if that is where it was drawn.**
+  Both ends of the drag are taken back to the square the band was rotated out of,
+  exactly as a click is, so pressing over one contact and releasing over another
+  names the rectangle those two contacts span — the one thing a band selection
+  there cannot say, since a selection over a turned map is always a stretch of
+  the genome against itself. Shift there collapses each end onto its own midpoint
+  rather than snapping the pointer, which gives the on-diagonal square through
+  the two places the drag ran between. And what is drawn while the hand moves is
+  the mark itself, through the code that will draw it for good: a rectangle of
+  rows against columns leans at 45° on a turned map and folds where it crosses
+  the diagonal, so a rubber band would be a box drawn around a shape that is not
+  one.
+
+  Which gesture a form asks for is now part of what it hands the map: the two
+  marks that name a place take clicks, the one that names an extent takes drags.
+  A plain drag draws the box rather than panning, because a reader who has just
+  pressed a button that says *draw on map* is going to drag on the map, and
+  asking for a modifier on top of an armed mode with a lit button and a changed
+  cursor is asking twice.
+
+  On a **turned** map a box is drawn as the contacts it names rather than as its
+  own outline, which is the same rule every other mark there follows: off the
+  diagonal that is a parallelogram leaning at 45°, and on it that is exactly the
+  triangle a BED domain gets, because an on-diagonal box *is* a domain drawn by
+  hand. A box drawn across the diagonal has an image on each side of it; where
+  they genuinely fall apart — a locus against a whole arm turns into two stripes
+  leaning opposite ways — both are drawn, and where one falls inside the other,
+  which is every box drawn near the diagonal, only the outer one is, since a
+  second outline in there is the edge of nothing.
+
+  Boxes are anchored in the **lane stacks** the way loops already were, a
+  triangle per edge on each axis: a domain boxed on the map puts its two
+  boundaries under the tracks, in the coordinate the tracks are drawn in, which
+  is where the comparison is actually made. They go out with the loops as
+  **BEDPE**, whose six coordinate columns are exactly a pair of intervals — the
+  row is the box rather than a summary of it — and they are carried in a session
+  file and in per-file session memory like every other mark.
+
 - **bigWigs, gene models and interval sets on a metagenome.** §8.5 gated every
   annotation card on the file having no genome layer, so a `.metacool` had no
   Tracks card, no drop zones and no way to draw a coverage track beside the map
@@ -707,7 +784,52 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and an arrow said only "this panel folds", which is true of all four of them.
   What is behind this one is the file and what can be read off it.
 
+### Changed
+
+- **A Shift-drag now opens the stretch it named on the diagonal.** The gesture
+  names a band of one axis and zooms to it; the axis nobody dragged took the same
+  zoom and kept whatever centre it happened to have. So the same drag over the
+  same stretch of chromosome I landed on a different picture depending on where
+  the view had been panned to — that stretch against a megabase somewhere else —
+  and nothing on screen said which. What a reader dragging a band out of a
+  contact map means is *this stretch, against itself*, so the other axis is now
+  centred on the same stretch and what comes back is the on-diagonal square.
+
+  Unchanged where the block has no diagonal to open, which is a `chrI × chrII`
+  panel: there the other axis keeps its centre, since pulling it to a bin the
+  block does not contain would only jam it against an edge.
+
 ### Fixed
+
+- **Shift stopped sticking the readout to the diagonal as soon as the pointer
+  moved.** Shift is the map's on-diagonal modifier — a Shift-drag names a stretch
+  and opens it there — and holding it snaps the crosshair and the coordinates
+  onto the diagonal so the reader can see which stretch that would be. Pressing
+  the key snapped them; the first pixel of movement put them back, because the
+  key press asked for Shift and the pointer move asked for Option-with-Shift.
+  That is the one shape of bug a reader cannot report: it worked until they
+  moved. Both now ask the same question, and a key event reconstructs the state
+  of the modifier it did not carry rather than assuming it is up.
+
+- **A turned map's card went on describing a cell while the pointer was naming a
+  place.** With a modifier down the crosshair stands up as a single vertical line
+  — the edge a band would begin on — and the card beside it still printed the two
+  loci under the pointer and the distance between them, which is a fact about the
+  cell and not about what the next drag would select. Held, the readout now names
+  the position along the bottom and nothing else: the midpoint of the pair, which
+  is what a turned column stands over and the same number the ruler is printing.
+  Let go, it is a card about a cell again.
+
+- **An arrowhead sat on a corner of the very cell it pointed at.** The glyph is
+  stood off along its own 45° axis, which puts it four pixels from the mark's
+  anchor — and the anchor is the cell's *centre*, so the gap cleared the centre
+  and not the corner. At any zoom where a bin is a handful of pixels, the tip
+  covered the last row and column of the cell the reader was being asked to look
+  at, which is the one thing an overlay here is not allowed to do. The whole
+  glyph now stands a further pixel out, square to the axes: right and up in the
+  upper triangle, left and down in the lower. Turned, where it stands straight
+  over the dot, the extra pixel is vertical only — a sideways nudge there is a
+  nudge to a different separation, and so to a different pair of loci.
 
 - **Publishing the demos switched private buckets off, and the error blamed the
   wrong setting.** An S3 CORS policy is bucket-wide — the rules have no prefix

@@ -28,6 +28,8 @@
  * what a drag means.
  */
 
+import type { ManualPoint, ManualSpan } from '../annotations/manual'
+
 /** A locus, in the shape the map reports and a form reads. */
 export interface PickedLocus {
   /** Sequence name, as the file spells it — or a genome's, when {@link whole}. */
@@ -184,8 +186,29 @@ export function locusText(at: PickedLocus): string {
 // ---------------------------------------------------------------------------
 
 /** Anything that can be put into a picking mode — a map, or a deck of them. */
-export interface Armable<P> {
-  armPicking(onPoint: (point: P) => void, onEnd: () => void): () => void
+export interface Armable<H> {
+  armPicking(handlers: H, onEnd: () => void): () => void
+}
+
+/**
+ * What a picking mode reports, and — by which of these is present — what the
+ * form is asking the reader to do.
+ *
+ * Two gestures rather than one, because the marks are not all one shape. A line
+ * and an arrowhead are each *a place*, and the gesture for a place is a click. A
+ * rectangle is *an extent*, and the gesture for an extent is a drag: pressing at
+ * one corner and letting go at the other is what a hand does to draw a box, and
+ * asking for two clicks instead made the reader hold a corner in their head
+ * between them with nothing on the picture to show it.
+ *
+ * The panel reads which is present and arms accordingly — `box` turns drawing
+ * on, where a plain drag draws a marquee instead of panning.
+ */
+export interface PickHandlers {
+  /** A click, as one locus per axis. */
+  point?: (at: { rows: ManualPoint; cols: ManualPoint }) => void
+  /** A drag, as one stretch per axis. */
+  box?: (at: { rows: ManualSpan; cols: ManualSpan }) => void
 }
 
 /**
@@ -209,9 +232,9 @@ export interface Armable<P> {
  * when there is no map to arm at all — which is the race where a view was torn
  * down between a button being enabled and being pressed.
  */
-export function armAll<P>(
-  targets: ReadonlyArray<Armable<P> | null | undefined>,
-  onPoint: (point: P) => void,
+export function armAll<H>(
+  targets: ReadonlyArray<Armable<H> | null | undefined>,
+  handlers: H,
   onEnd: () => void,
 ): () => void {
   const cancels: Array<() => void> = []
@@ -226,7 +249,7 @@ export function armAll<P>(
   }
   for (const target of targets) {
     if (target === null || target === undefined) continue
-    cancels.push(target.armPicking(onPoint, finish))
+    cancels.push(target.armPicking(handlers, finish))
   }
   if (cancels.length === 0) {
     onEnd()

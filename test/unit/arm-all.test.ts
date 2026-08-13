@@ -14,8 +14,13 @@ import { describe, expect, it } from 'vitest'
 
 import { armAll, type Armable } from '@/ui/mapPick'
 
+/** What a form asks for, in the shape the real cards hand over. */
+interface Handlers {
+  point?: (at: string) => void
+}
+
 /** A map that records how it was armed and can end its own mode, as one does. */
-function fake(): Armable<string> & {
+function fake(): Armable<Handlers> & {
   readonly armed: boolean
   readonly cancels: number
   place(point: string): void
@@ -40,8 +45,8 @@ function fake(): Armable<string> & {
       onEnd = null
       end?.()
     },
-    armPicking(point, end) {
-      onPoint = point
+    armPicking(handlers, end) {
+      onPoint = handlers.point ?? null
       onEnd = end
       return () => {
         cancels++
@@ -56,7 +61,7 @@ describe('arming every map at once', () => {
   it('arms all of them, and reports a point from any', () => {
     const maps = [fake(), fake(), fake()]
     const points: string[] = []
-    armAll(maps, (point) => points.push(point), () => {})
+    armAll(maps, { point: (at) => points.push(at) }, () => {})
     expect(maps.every((map) => map.armed)).toBe(true)
     maps[2].place('chrIV:1000')
     maps[0].place('chrV:20')
@@ -65,7 +70,7 @@ describe('arming every map at once', () => {
 
   it('stays armed after a point, because marking up a figure is eight clicks', () => {
     const maps = [fake(), fake()]
-    armAll(maps, () => {}, () => {})
+    armAll(maps, {}, () => {})
     maps[0].place('a')
     expect(maps.every((map) => map.armed)).toBe(true)
   })
@@ -73,7 +78,7 @@ describe('arming every map at once', () => {
   it('ends everywhere when the card ends it', () => {
     const maps = [fake(), fake(), fake()]
     let ends = 0
-    const finish = armAll(maps, () => {}, () => ends++)
+    const finish = armAll(maps, {}, () => ends++)
     finish()
     expect(maps.map((map) => map.cancels)).toEqual([1, 1, 1])
     expect(ends).toBe(1)
@@ -82,7 +87,7 @@ describe('arming every map at once', () => {
   it('ends everywhere when *one map* ends it', () => {
     const maps = [fake(), fake(), fake()]
     let ends = 0
-    armAll(maps, () => {}, () => ends++)
+    armAll(maps, {}, () => ends++)
     // Escape over the second panel: the other two must not be left armed.
     maps[1].escape()
     expect(maps[0].cancels).toBe(1)
@@ -94,7 +99,7 @@ describe('arming every map at once', () => {
   it('reports the ending exactly once, however many times it is reached', () => {
     const maps = [fake(), fake()]
     let ends = 0
-    const finish = armAll(maps, () => {}, () => ends++)
+    const finish = armAll(maps, {}, () => ends++)
     maps[0].escape()
     finish()
     finish()
@@ -105,14 +110,14 @@ describe('arming every map at once', () => {
   it('skips a panel that is still reading, and arms the rest', () => {
     const map = fake()
     let ends = 0
-    armAll([null, undefined, map], () => {}, () => ends++)
+    armAll([null, undefined, map], {}, () => ends++)
     expect(map.armed).toBe(true)
     expect(ends).toBe(0)
   })
 
   it('ends before it starts when there is no map at all', () => {
     let ends = 0
-    const finish = armAll<string>([null, undefined], () => {}, () => ends++)
+    const finish = armAll<Handlers>([null, undefined], {}, () => ends++)
     // Which the card reads as "put the button back" — the race where a view was
     // torn down between the button being enabled and being pressed.
     expect(ends).toBe(1)

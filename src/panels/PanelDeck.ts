@@ -94,7 +94,7 @@ import {
   type PanelRef,
 } from './deck'
 import { ViewportLock, spansAgree } from './lock'
-import type { ManualPoint } from '../annotations/manual'
+import type { PickHandlers } from '../ui/mapPick'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
 import { fileLabel } from '../ui/labels'
@@ -1338,12 +1338,9 @@ export class PanelDeck {
    *
    * @returns a function that disarms every panel this armed.
    */
-  armPicking(
-    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    onEnd: () => void = () => {},
-  ): () => void {
+  armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
     const cancels = this.slots
-      .map((slot) => slot.panel?.armPicking(onPoint, onEnd))
+      .map((slot) => slot.panel?.armPicking(handlers, onEnd))
       .filter((cancel): cancel is () => void => cancel !== undefined)
     return () => {
       for (const cancel of cancels) cancel()

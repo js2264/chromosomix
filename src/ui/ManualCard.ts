@@ -8,22 +8,29 @@
  * do when you are looking at the thing and want to point at it. Neither is a
  * fallback for the other, so both are first-class and both produce exactly the
  * same mark.
+ *
+ * Three kinds, and they are three sentences: a line says *this coordinate*, an
+ * arrowhead says *this cell*, a rectangle says *this block of contacts*.
  */
 
 import {
   MANUAL_PALETTE,
   formatPoint,
+  formatSpan,
   mintMarkId,
   parsePoint,
+  parseSpan,
   type LineAxis,
   type ManualMark,
   type ManualPoint,
+  type ManualSpan,
   type ManualStore,
 } from '../annotations/manual'
 import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
 import { button, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { cardTitle, iconButton } from './icons'
+import type { PickHandlers } from './mapPick'
 
 /**
  * How the card reaches the mounted plot.
@@ -37,8 +44,11 @@ export interface MapPicker {
   /** `true` when there is a plot to click on. */
   available(): boolean
   /**
-   * Turn on picking. Every click on the plot reports one point *per axis*, for
-   * as long as the mode lasts.
+   * Turn on picking, for as long as the mode lasts.
+   *
+   * Which gesture the mode listens for is decided by what the form hands over:
+   * `point` takes every click as one locus per axis, `box` takes every drag as
+   * one stretch per axis ({@link PickHandlers}).
    *
    * `onEnd` fires exactly once, however the mode ends — the returned stop
    * function, Escape, another gesture arming over this one, or the plot going
@@ -47,10 +57,7 @@ export interface MapPicker {
    *
    * @returns a function that ends the mode.
    */
-  start(
-    onPoint: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-    onEnd: () => void,
-  ): () => void
+  start(handlers: PickHandlers, onEnd: () => void): () => void
 }
 
 export interface ManualCardProps {
@@ -79,6 +86,7 @@ export class ManualCard {
       cardTitle('Manual annotations', 'pencil'),
       this.lineForm(),
       this.arrowForm(),
+      this.rectForm(),
       this.list,
       this.exportRow(),
     )
@@ -142,8 +150,8 @@ export class ManualCard {
     // Read from the select on every click rather than captured once: the mode
     // now outlives a single mark, so a reader may well place two verticals,
     // switch to horizontal and place a third without leaving it.
-    const pick = this.pickButton('pick on map', (point) => {
-      add(axis.value === 'horizontal' ? point.rows : point.cols)
+    const pick = this.pickButton('pick on map', {
+      point: (at) => add(axis.value === 'horizontal' ? at.rows : at.cols),
     })
 
     return el(
@@ -182,14 +190,75 @@ export class ManualCard {
 
     // One click is a cell, and a cell already has both coordinates — so an
     // arrowhead is one click, not two.
-    const pick = this.pickButton('pick on map', (point) => {
-      add(point.rows, point.cols)
-    })
+    const pick = this.pickButton('pick on map', { point: (at) => add(at.rows, at.cols) })
 
     return el(
       'div',
       { class: 'manual-form' },
       el('span', { class: 'manual-form-title', text: 'Arrowheads' }),
+      el('div', { class: 'manual-row' }, first, second),
+      el('div', { class: 'manual-row' }, typed, pick),
+    )
+  }
+
+  /**
+   * Boxes: a stretch of rows by a stretch of columns.
+   *
+   * Two ranges rather than a range and a shape, so that on- and off-diagonal are
+   * the same form and any ratio is expressible — a domain is `I:120000-180000`
+   * against itself, a corner peak is two short stretches a megabase apart, and a
+   * locus against a whole arm is a short one against a long one. Leaving the
+   * second box empty means *the same stretch on both axes*, which is the box on
+   * the diagonal and is not worth making anybody type twice; it is the same
+   * courtesy the arrowhead form does for a cell on the diagonal.
+   *
+   * **Drawn with a drag**, which is the gesture a hand already makes for a box:
+   * press at one corner, let go at the other, and the marquee the map draws
+   * while the button is down is the mark that is about to exist. It used to be
+   * two clicks, and two clicks made the reader hold a corner in their head
+   * between them — the card had to say which one it was holding, because the
+   * picture could not.
+   *
+   * Holding **Shift** while drawing locks the box to the diagonal, so a domain
+   * is one gesture. On a turned map every drag is that, the band being the only
+   * thing there with coordinates on it.
+   */
+  private rectForm(): HTMLElement {
+    const first = el('input', { class: 'input', type: 'text', placeholder: 'I:120000-180000 (rows)' })
+    const second = el('input', { class: 'input', type: 'text', placeholder: 'I:340000-400000 (columns)' })
+    const add = (a: ManualSpan, b: ManualSpan): void => {
+      this.props.store.add({
+        id: mintMarkId(),
+        kind: 'rect',
+        a,
+        b,
+        colour: this.props.store.nextColour(),
+      })
+    }
+    const typed = button('add', () => {
+      const a = parseSpan(first.value)
+      const b = second.value.trim() === '' ? a : parseSpan(second.value)
+      first.classList.toggle('is-bad', a === null)
+      second.classList.toggle('is-bad', b === null)
+      if (a === null || b === null) return
+      add(a, b)
+      first.value = ''
+      second.value = ''
+    })
+    for (const box of [first, second]) {
+      box.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') typed.click()
+      })
+    }
+
+    const pick = this.pickButton('draw on map', {
+      box: (at) => add(at.rows, at.cols),
+    })
+
+    return el(
+      'div',
+      { class: 'manual-form' },
+      el('span', { class: 'manual-form-title', text: 'Rectangles' }),
       el('div', { class: 'manual-row' }, first, second),
       el('div', { class: 'manual-row' }, typed, pick),
     )
@@ -204,21 +273,28 @@ export class ManualCard {
    * why both run {@link end}.
    *
    * The mode is *not* ended by placing a mark. Marking up a figure means placing
-   * several — the corners of four domains, every loop worth an arrowhead — and
-   * the round trip to the sidebar between each one was the whole cost of doing
-   * it here rather than by typing coordinates.
+   * several — four domains boxed, every loop worth an arrowhead — and the round
+   * trip to the sidebar between each one was the whole cost of doing it here
+   * rather than by typing coordinates.
+   *
+   * What the mode listens for is whatever the form handed over: a click for the
+   * two marks that name a place, a drag for the one that names an extent. The
+   * button says which in its own hint, since a reader who clicks at a map that
+   * is waiting for a drag has been given no way to find that out.
    */
-  private pickButton(
-    label: string,
-    place: (point: { rows: ManualPoint; cols: ManualPoint }) => void,
-  ): HTMLButtonElement {
+  private pickButton(label: string, handlers: PickHandlers): HTMLButtonElement {
+    const hint =
+      handlers.box === undefined
+        ? 'Then click the plot, as often as you like. Escape or Done stops.'
+        : 'Then drag a box on the plot, as many as you like — Shift keeps it on the diagonal. ' +
+          'Escape or Done stops.'
     let stop: (() => void) | null = null
 
     const rest = (): void => {
       stop = null
       node.classList.remove('is-armed')
       node.textContent = label
-      node.title = 'Then click the plot, as often as you like. Escape or Done stops.'
+      node.title = hint
       // Every pick button on the card comes back at once: only one mode can be
       // on, so arming the other one has just ended this.
       this.refresh()
@@ -237,13 +313,10 @@ export class ManualCard {
         // Set before `start`, so a picker that ends the mode synchronously —
         // because there is no plot — still finds something to clear.
         stop = () => {}
-        const end = this.props.picker.start(place, rest)
+        const end = this.props.picker.start(handlers, rest)
         if (stop !== null) stop = end
       },
-      {
-        class: 'btn',
-        title: 'Then click the plot, as often as you like. Escape or Done stops.',
-      },
+      { class: 'btn', title: hint },
     )
     node.disabled = !this.props.picker.available()
     this.buttons.push(node)
@@ -259,15 +332,15 @@ export class ManualCard {
    * Aesthetics panel, in the card whose contents it writes.
    *
    * The dropdown chooses *which marks*, not just which container, because the
-   * two kinds are different objects and there is one standard file for each: a
-   * line is a point on the genome and a loop is a pair of them. Saying so in
-   * the option label is more honest than a single "export" that quietly writes
-   * half of what is on screen.
+   * kinds are different objects and there is one standard file for each: a line
+   * is a point on the genome, and a loop and a box are each a pair of places.
+   * Saying so in the option label is more honest than a single "export" that
+   * quietly writes half of what is on screen.
    */
   private exportRow(): HTMLElement {
     for (const [value, text] of [
       ['bed', 'lines (BED)'],
-      ['bedpe', 'loops (BEDPE)'],
+      ['bedpe', 'loops & boxes (BEDPE)'],
     ] as Array<[MarkFormat, string]>) {
       this.formatSelect.appendChild(el('option', { value, text }))
     }
@@ -287,7 +360,7 @@ export class ManualCard {
     this.saveButton.disabled = count === 0
     this.saveButton.title =
       count === 0
-        ? `No ${format === 'bed' ? 'lines' : 'loops'} have been drawn yet`
+        ? `No ${format === 'bed' ? 'lines' : 'loops or boxes'} have been drawn yet`
         : `Write ${count} to a file this app — and bedtools — reads back`
   }
 
@@ -349,6 +422,12 @@ function describe(mark: ManualMark): string {
   if (mark.kind === 'line') {
     const glyph = mark.axis === 'vertical' ? '│' : mark.axis === 'horizontal' ? '─' : '┼'
     return `${glyph} ${formatPoint(mark.at)}`
+  }
+  if (mark.kind === 'rect') {
+    const a = formatSpan(mark.a)
+    const b = formatSpan(mark.b)
+    // One extent for a box on the diagonal, which is what its form takes back.
+    return a === b ? `▭ ${a}` : `▭ ${a} × ${b}`
   }
   const a = formatPoint(mark.a)
   const b = formatPoint(mark.b)

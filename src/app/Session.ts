@@ -2786,7 +2786,7 @@ export class Session {
        * boundary drawn across four replicates is the thing a deck is for.
        * `armAll` is what makes the five into one mode.
        */
-      start: (onPoint, onEnd) => armAll([this.current?.panel, this.deck], onPoint, onEnd),
+      start: (handlers, onEnd) => armAll([this.current?.panel, this.deck], handlers, onEnd),
     }
     this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
     this.bookmarksCard = new BookmarksCard({
