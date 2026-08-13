@@ -37,6 +37,11 @@ const LUCIDE = [
   'layers',
   'grip-vertical',
   'plus',
+  // The header's own add button. A *file* with a `+` on it rather than the bare
+  // `+` beside it in the tab strip, because that one adds a tab and this one
+  // adds a file to the tab you are in — two marks that must not be the same
+  // mark, standing one row apart.
+  'file-plus',
   'search',
   'zoom-in',
   'zoom-out',
