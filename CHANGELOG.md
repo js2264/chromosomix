@@ -42,6 +42,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   opens instead, exactly as the landing page does, rather than taking a lone
   bigWig and finding no track list to put it in.
 
+- **The picker now says which file it wants back, not just its name.** A session
+  saved from a local file names it by its bare filename, and `rep1.cool` is a
+  name a reader may well have several of — so the note asking for it now carries
+  the size and the modification date the session was made with. That is the
+  difference between finding the right file and finding *a* file with the right
+  name.
+
+  And when a file arrives whose **name matches but whose bytes do not**, the app
+  says so once and opens anyway. That is either the same file re-run through a
+  pipeline — legitimate, and worth knowing, because the numbers on screen are
+  then not the numbers in the figure — or somebody else's file of the same name.
+  The two are indistinguishable from inside the app and one of them is a thing
+  people do on purpose, so it is a remark and never a refusal.
+
+  Saying it needed a third way to speak. The shell had a modal, which takes the
+  keyboard and demands an answer, and the error view, which replaces what is on
+  screen; both are far too loud for *"this opened, and here is something you may
+  want to know"*. Notes now appear as a dismissible row under the tab strip,
+  where the restore offer already lives.
+
 - **Closing the browser no longer ends the session — it offers it back.** The tab
   strip has always lived in `sessionStorage`, which is a deliberate rule and not
   an oversight: a set of open files is a train of thought, it belongs to the

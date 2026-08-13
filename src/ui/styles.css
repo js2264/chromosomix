@@ -2023,6 +2023,17 @@ p {
   font-size: var(--step--1);
 }
 
+.notice-slot:empty,
+.restore-slot:empty {
+  display: none;
+}
+
+/* A passing remark rather than an offer: same row, same place, and tinted like
+   a note instead of like something waiting for an answer. */
+.notice-banner {
+  background: var(--bg-raised);
+}
+
 .restore-text {
   /* Shrinkable, so a long list of file names wraps rather than pushing the two
      buttons off the right edge of a narrow window. */

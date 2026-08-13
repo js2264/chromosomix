@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { agoLabel, bannerLine, filesLabel } from '@/ui/RestoreCard'
+import { sourceNote } from '@/ui/labels'
 import type { WorkspaceSummary } from '@/state/workspace'
 
 const NOW = new Date('2026-08-13T12:00:00Z')
@@ -78,5 +79,39 @@ describe('bannerLine', () => {
     expect(bannerLine(summary({ tabs: 1, files: ['a.cool'], tracks: 1 }), null)).toBe(
       'You had 1 tab open: a.cool, with 1 track.',
     )
+  })
+})
+
+/**
+ * How a session names the file it was made from.
+ *
+ * A local file is named in a config by its bare filename, and `rep1.cool` is a
+ * name a reader may well have several of. "the one that is 4.2 GB and was
+ * modified on 3 June" is the difference between finding the right file and
+ * finding *a* file with the right name — so the sentence is doing work, and is
+ * worth pinning.
+ */
+describe('sourceNote', () => {
+  it('names the two things that identify a file', () => {
+    const note = sourceNote({ name: 'rep1.cool', size: 4_200_000_000, lastModified: Date.UTC(2026, 5, 3) })
+    expect(note).toContain('GB')
+    expect(note).toContain('modified')
+    expect(note).toContain('2026')
+  })
+
+  it('says what it can when it cannot say everything', () => {
+    expect(sourceNote({ name: 'a.cool', size: 1024 })).toContain('1')
+    expect(sourceNote({ name: 'a.cool', lastModified: Date.UTC(2026, 0, 1) })).toContain('modified')
+  })
+
+  it('says nothing rather than something empty', () => {
+    // Every session written before the field existed, and every one made from a
+    // remote file, whose identity is its URL. The caller keeps the sentence it
+    // has always had rather than printing an emptier version of a better one.
+    expect(sourceNote(undefined)).toBeNull()
+    expect(sourceNote({ name: 'a.cool' })).toBeNull()
+    // A number that is not one would report a mismatch against a file that
+    // matches, so it is dropped rather than repaired.
+    expect(sourceNote({ name: 'a.cool', size: Number.NaN })).toBeNull()
   })
 })

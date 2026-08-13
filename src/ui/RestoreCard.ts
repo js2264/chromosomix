@@ -121,6 +121,35 @@ export function restoreBanner(props: RestoreBannerProps): HTMLElement {
   )
 }
 
+/**
+ * A passing remark the reader can dismiss — not a modal, not an error view.
+ *
+ * The app had two ways to say something and no third: a `Modal`, which takes the
+ * keyboard and demands an answer, and the error view, which replaces what is on
+ * screen. Both are far too loud for *"this opened, and here is something you may
+ * want to know about it"* — and a remark that has to be dismissed before the
+ * reader can look at their map would be worse than not making it.
+ *
+ * So: the same row the restore offer uses, in the same place, with an × on it.
+ * `role="status"` rather than `alert` for the same reason it is dismissible —
+ * nothing is wrong, and ignoring it entirely is a legitimate answer.
+ */
+export function noticeBanner(message: string, onDismiss: () => void): HTMLElement {
+  const row = el(
+    'div',
+    { class: 'restore-banner notice-banner', attrs: { role: 'status' } },
+    el('div', { class: 'restore-text' }, el('span', { text: message })),
+  )
+  row.appendChild(
+    el(
+      'div',
+      { class: 'restore-actions' },
+      button('Dismiss', onDismiss, { class: 'btn btn-quiet', title: 'Hide this note.' }),
+    ),
+  )
+  return row
+}
+
 export interface StoredDataProps {
   items: StoredItem[]
   onForgetAll(): void

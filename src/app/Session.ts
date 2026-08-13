@@ -117,7 +117,7 @@ import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
-import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
+import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
@@ -142,6 +142,8 @@ export interface SessionHost {
   panelsChanged(session: Session): void
   /** Ask for a file over the top of whatever is on screen (§11). */
   openFileDialog(session: Session): void
+  /** Say something quiet and dismissible about what just happened. */
+  notify(message: string): void
   /** A read finished; the status bar's counters are worth another look. */
   activity(session: Session): void
 }
@@ -1455,6 +1457,39 @@ export class Session {
     await this.openWithConfig(config.state.uri, source)
   }
 
+  /**
+   * Say so, once, when the file handed over is not the file this session was
+   * made from.
+   *
+   * Only where the **name matches**, which is the whole signal: a reader who
+   * drops `other.cool` for a session saved from `rep1.cool` has deliberately
+   * pointed it somewhere else, and this module's own rule is that the same
+   * session under a renamed file is still that session. What is worth remarking
+   * on is the case that looks like a match and is not — the same name, different
+   * bytes. That is either a re-run pipeline, which is legitimate and which the
+   * reader should know about because the numbers on screen are not the numbers in
+   * their figure, or it is somebody else's file of the same name.
+   *
+   * A remark and never a refusal. The two cases are indistinguishable from here,
+   * and one of them is a thing people do on purpose.
+   */
+  private noteSourceMismatch(config: SessionConfig, source: SourceSpec): void {
+    const saved = config.source
+    if (saved === undefined || source.kind !== 'local') return
+    const file = source.file
+    if (file.name !== saved.name) return
+    const sizeMoved = saved.size !== undefined && saved.size !== file.size
+    const timeMoved = saved.lastModified !== undefined && saved.lastModified !== file.lastModified
+    if (!sizeMoved && !timeMoved) return
+    const was = sourceNote(saved)
+    const now = sourceNote({ name: file.name, size: file.size, lastModified: file.lastModified })
+    this.host.notify(
+      `${file.name} is not the file this session was made from — that one was ${was ?? 'different'}` +
+        `, this one is ${now ?? 'different'}. The session has opened; the numbers in it are this ` +
+        'file’s.',
+    )
+  }
+
   /** Read a dropped file as a config, and say so if it is not one. */
   private async openConfigFile(file: File): Promise<void> {
     const read = readConfig(await file.text())
@@ -1556,6 +1591,7 @@ export class Session {
       await this.open(uri, source)
       return
     }
+    this.noteSourceMismatch(config, source)
     applyConfig(config, this.memoryKey(uri))
     // Kept for the one hop `open` can make on its own: a collection addressed
     // at its root lands on one of its entries, under a URI this config has
@@ -5214,13 +5250,22 @@ export class Session {
   /** The picker, asking for the file a config describes. */
   private pickerWithConfig(config: SessionConfig): HTMLElement {
     const tracks = config.tracks.length
+    // What the session knows about the file, when it knows anything. `rep1.cool`
+    // is a name a reader may have several of, and the size and date are the
+    // difference between finding the right file and finding *a* file with the
+    // right name. Absent for every session written before the field existed and
+    // for every one made from a remote file, and then the sentence is the one it
+    // has always been.
+    const note = sourceNote(config.source)
     return el(
       'div',
       { class: 'view' },
       el('p', {
         class: 'inline-error',
         text:
-          `This session was saved from ${fileLabel(config.state.uri)}, which is a local file — no ` +
+          `This session was saved from ${fileLabel(config.state.uri)}` +
+          (note === null ? '' : ` (${note})`) +
+          ', which is a local file — no ' +
           'page can re-open one by name. Drop it below and everything else comes back with it' +
           (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
       }),

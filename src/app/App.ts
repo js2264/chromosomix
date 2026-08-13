@@ -66,7 +66,7 @@ import {
 } from '../state/workspace'
 import { forgetEverything, storedItems } from '../state/stored'
 import { hydrateHandles } from '../state/handles'
-import { openStoredData, restoreBanner } from '../ui/RestoreCard'
+import { noticeBanner, openStoredData, restoreBanner } from '../ui/RestoreCard'
 import { decodeShare, readShareHash } from '../state/shareLink'
 import { openShareDialog } from '../ui/ShareDialog'
 import { fileLabel } from '../ui/labels'
@@ -126,6 +126,14 @@ export class App implements SessionHost {
    * picker, and the reader's other six tabs are exactly as worth offering then.
    */
   private readonly restoreSlot = el('div', { class: 'restore-slot' })
+  /**
+   * Where a session's passing remarks go — see {@link notify}.
+   *
+   * Its own slot beside the restore offer rather than the same one, because the
+   * two are answers to different questions and clobbering one with the other
+   * would lose whichever arrived first.
+   */
+  private readonly noticeSlot = el('div', { class: 'notice-slot' })
   /**
    * Whether the durable record may be written to yet.
    *
@@ -297,6 +305,7 @@ export class App implements SessionHost {
       // offers is the reader's own workspace and it must not cover the drop
       // target — see `ui/RestoreCard.ts`.
       this.restoreSlot,
+      this.noticeSlot,
       this.breadcrumbSlot,
       // Each column carries its own `order`, so the DOM order here is free —
       // and it is content-first, which is what the tab order should be.
@@ -748,6 +757,21 @@ export class App implements SessionHost {
   // -------------------------------------------------------------------------
   // SessionHost
   // -------------------------------------------------------------------------
+
+  /**
+   * Say something to the reader that is worth knowing and not worth stopping
+   * for.
+   *
+   * The third channel this shell has, after the modal and the error view, and
+   * the only quiet one. A session uses it for facts about what it just opened —
+   * that the file it was handed is not quite the file its session was made from,
+   * for instance — where refusing would be wrong and silence would be worse.
+   */
+  notify(message: string): void {
+    this.noticeSlot.replaceChildren(
+      noticeBanner(message, () => this.noticeSlot.replaceChildren()),
+    )
+  }
 
   sessionChanged(session: Session): void {
     this.paintTabs()

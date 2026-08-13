@@ -10,6 +10,7 @@
  */
 
 import { NameIndex } from '../genome/naming'
+import { fmt } from './dom'
 
 /** Split a `file::group` URI into its two parts, without validating either. */
 export function splitUri(raw: string): { path: string; group: string } {
@@ -91,4 +92,44 @@ export function contigOf(region: string, names: readonly string[]): string | nul
   if (whole !== null) return whole.name
   if (head === null) return null
   return index.find(head)?.name ?? null
+}
+
+/**
+ * How a session describes the file it was made from, for the note that asks for
+ * it back.
+ *
+ * Its own function, and a pure one, because the sentence is doing real work
+ * rather than decorating: a local file is named in a config by its bare
+ * filename, and `rep1.cool` is a name a reader may well have several of. "the
+ * one that is 4.2 GB and was modified on 3 June" is the difference between
+ * finding the right file and finding *a* file with the right name.
+ *
+ * `null` where the session cannot say — every session written before the field
+ * existed, and every one made from a remote file, whose identity is its URL.
+ * The caller then keeps the sentence it always had, rather than printing an
+ * emptier version of a better one.
+ *
+ * Dates are the reader's own locale and to the day: the hour a file was written
+ * is not what anybody recognises it by, and a full timestamp in a sentence about
+ * finding a file is noise around the two numbers that identify it.
+ */
+export function sourceNote(
+  source: { name: string; size?: number; lastModified?: number } | undefined,
+): string | null {
+  if (source === undefined) return null
+  const parts: string[] = []
+  if (source.size !== undefined && Number.isFinite(source.size)) parts.push(fmt.bytes(source.size))
+  if (source.lastModified !== undefined && Number.isFinite(source.lastModified)) {
+    const when = new Date(source.lastModified)
+    if (!Number.isNaN(when.getTime())) {
+      parts.push(
+        `modified ${when.toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })}`,
+      )
+    }
+  }
+  return parts.length === 0 ? null : parts.join(', ')
 }
