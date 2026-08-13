@@ -3483,9 +3483,15 @@ export class Session {
    * not what is in it, and it is per session because it is a fact about *these
    * two files* — one being shallower than the other — rather than about the
    * viewer.
+   *
+   * `undefined` where nothing has been remembered, and the panel takes it from
+   * there: the sensible default differs between the split and the derived
+   * operations and between balanced values and raw counts, and only the panel
+   * knows which of those it is drawing. Collapsing the absent case to `false`
+   * here would hand it a choice the reader never made.
    */
-  private normalising(): boolean {
-    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') === true
+  private normalising(): boolean | undefined {
+    return recall<boolean>(this.memoryKey(this.file?.uri ?? ''), 'compare:normalise') ?? undefined
   }
 
   /** What a heatmap view needs to read and label the second file, or `undefined`. */

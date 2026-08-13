@@ -83,6 +83,7 @@ import {
   COMPARE_OPS,
   alignable,
   combine,
+  depthMatchDefault,
   isCompareOp,
   matchGain,
   type CompareOp,
@@ -585,13 +586,17 @@ export interface ComparePresentation {
   op: CompareOp
   onOpChange(op: CompareOp): void
   /**
-   * Whether the second file's counts are scaled to the first's bright end.
+   * Whether the second file's counts are scaled to the first's bright end, or
+   * `undefined` where the reader has not said and the default stands.
    *
-   * Off by default, because one scale for both is the stronger claim: the same
-   * colour is the same number of contacts, wherever it is. On when the two
-   * files differ enough in depth that the shallower is a blank triangle.
+   * Three states rather than two, because the default is not a constant: it
+   * depends on the operation and on whether the cells are balanced, and a plain
+   * boolean could not tell "the reader wants it off" from "nobody has chosen
+   * yet" — which is what made a ratio silently rescale itself. See
+   * {@link HeatmapPanel.compareNormalising} for the rule and for why balanced
+   * values want the opposite default from raw counts.
    */
-  normalise: boolean
+  normalise?: boolean
   onNormaliseChange(on: boolean): void
 }
 
@@ -1541,21 +1546,28 @@ export class MatrixPanel {
 
     if (options.compare !== undefined) {
       const compare = options.compare
-      // Only under the split. A ratio and a difference force it on, because
-      // there the depth scalar is a nuisance parameter with no reading at all
-      // ({@link compareNormalising}), and a control whose setting cannot change
-      // the picture is worse than no control.
-      if (compare.op === 'split') {
+      // Under every operation, not only the split. It used to be hidden under a
+      // ratio and a difference on the grounds that they force it on — but the
+      // force was itself the bug ({@link compareNormalising}), and a rescale a
+      // reader can neither see nor switch off is the one kind of arithmetic a
+      // viewer must not do to a quantitative field. The setting now starts where
+      // the operation and the units say it should and moves when they say so.
+      {
         const normalise = el('input', { class: 'checkbox', type: 'checkbox' })
-        normalise.checked = compare.normalise
+        normalise.checked = this.compareNormalising(compare.op)
         normalise.addEventListener('change', () => compare.onNormaliseChange(normalise.checked))
         controls.unshift(
           field(
             'match depth',
             normalise,
-            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s, ` +
-              'so the two triangles saturate together. Off, one colour is one count on both sides of ' +
-              'the diagonal — the stronger claim, and wrong to read when the files differ in depth.',
+            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s. ` +
+              'Under `split` that makes the two triangles saturate together; off, one colour is one ' +
+              'count on both sides of the diagonal — the stronger claim, and wrong to read when the ' +
+              'files differ in depth. Under `ratio` and `difference` it divides that difference out ' +
+              'of every cell, which raw counts want and balanced values do not: balanced matrices ' +
+              'already share ICE`s normalisation, and the factor is measured on the near-diagonal ' +
+              'cells where two conditions actually differ — so it shifts the whole map by the ' +
+              'finding. On for counts, off for balanced, unless set here.',
           ),
         )
       }
@@ -5475,17 +5487,39 @@ export class MatrixPanel {
   /**
    * Whether the second file's counts are scaled to the first's bright end.
    *
-   * The reader's choice under the split, and **not** a choice under a ratio or a
-   * difference, where it is forced on. Two libraries at different depth differ
-   * by roughly a scalar; under the split that scalar is a real reading about two
-   * real files and the honest default is to leave it in, but a ratio *is* that
-   * scalar everywhere — a flat wash whose colour is the depth difference and
-   * whose structure is invisible — and a difference of raw counts is dominated
-   * by it just as completely. There the depth is a nuisance parameter with no
-   * reading at all, so the control is hidden rather than left to be got wrong.
+   * The reader's choice everywhere, and only the *default* differs by operation.
+   * Two libraries at different depth differ by roughly a scalar; under the split
+   * that scalar is a real reading about two real files and the honest default is
+   * to leave it in, while a ratio of raw counts *is* that scalar everywhere — a
+   * flat wash whose colour is the depth difference and whose structure is
+   * invisible — so there it is divided out unless the reader says otherwise.
+   *
+   * **Balanced values are the exception, and they are the common case.** ICE
+   * puts every bin's marginal at 1, so two balanced matrices already carry one
+   * normalisation and there is no depth left in them to correct: on an E. coli
+   * pair at 5 kb the two marginals agree to 0.2%, and matching the 99th
+   * percentiles on top of that rescaled the second file by 1.48 — a uniform
+   * `log2` shift of −0.56 applied to every cell of the ratio. On the ±1 scale a
+   * ratio map is drawn with, that is a quarter of the picture's whole range: the
+   * near-diagonal band that a separate tool draws at +0.60 came out at +0.04,
+   * white instead of red, and the map disagreed with the same comparison made
+   * anywhere else.
+   *
+   * The reason it fails there is worth naming, because it is not a matter of
+   * degree. The 99th percentile of a Hi-C map lives entirely in the first few
+   * diagonals, which is exactly where two conditions differ — so matching on it
+   * does not remove a depth difference, it removes the finding. It is the right
+   * statistic for the split, whose question is "can I see both triangles", and
+   * the wrong one for a ratio, whose question is "by how much do these differ".
+   *
+   * Forced off for neither: a reader comparing two raw-count files still has the
+   * tickbox, which is now offered under all three operations rather than hidden
+   * under two of them.
    */
   private compareNormalising(op: CompareOp): boolean {
-    return op !== 'split' || this.options.compare?.normalise === true
+    const chosen = this.options.compare?.normalise
+    if (chosen !== undefined) return chosen
+    return depthMatchDefault(op, this.options.balance === true)
   }
 
   /**

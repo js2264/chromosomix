@@ -148,6 +148,36 @@ export function isCompareOp(value: string): value is CompareOp {
   return (COMPARE_OPS as readonly string[]).includes(value)
 }
 
+/**
+ * Whether {@link matchGain} should be applied when the reader has not said.
+ *
+ * Two facts decide it, and the second is the one that was missing.
+ *
+ * The **operation**: under the split the depth difference is a real reading
+ * about two real files and is left in, while a ratio or a difference of raw
+ * counts *is* that difference everywhere — a flat wash whose colour is the
+ * sequencing depth and whose structure is invisible — so there it is divided
+ * out.
+ *
+ * The **units**: balanced values have already had it divided out. ICE puts every
+ * bin's marginal at 1, so two balanced matrices arrive on one normalisation and
+ * there is nothing left for a gain to correct — on an E. coli pair at 5 kb the
+ * two marginals agree to 0.2%. Matching them again is not a no-op, because
+ * {@link matchGain} does not measure depth: it measures the 99th percentile,
+ * which in a Hi-C map lives entirely in the first few diagonals — which is
+ * exactly where two conditions differ. On that pair it returned 1.48 and shifted
+ * every cell of the ratio by −0.56 in `log2`, turning a near-diagonal band drawn
+ * at +0.60 by another tool into +0.04. The scale factor was not a nuisance
+ * parameter being removed; it was the finding being removed.
+ *
+ * So: on for raw counts under a derived operation, off everywhere else. The
+ * reader can still say otherwise — `ui/MatrixPanel.ts` offers the tickbox under
+ * all three operations — and this is only where the tickbox starts.
+ */
+export function depthMatchDefault(op: CompareOp, balanced: boolean): boolean {
+  return op !== 'split' && !balanced
+}
+
 export interface Combined extends Blend {
   /**
    * The value that means "these two agree", or `null` for the split, which is

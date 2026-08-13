@@ -57,7 +57,61 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   right and the glossary is a bug — is the reason that is part of this change
   rather than a follow-up.
 
+### Fixed
+
+- **A ratio drew "present here, absent there" in the colour that means the
+  opposite.** `x / 0` is `Infinity`, and it is a real reading — the strongest
+  statement a ratio can make in the numerator's favour. The raster tested the
+  pooled value with `Number.isFinite` and sent everything that failed to the
+  **bottom** of the ramp. That is right for `-Infinity`, which is what `0 / x`
+  becomes on `log2`, and it is exactly backwards for `+Infinity`: the cells where
+  the first file has contacts and the second has none were painted the second
+  file's colour.
+
+  The two arms are the same size — on an *E. coli* pair at 5 kb, 7.7% of cells
+  each — so **half of every saturated cell in the picture carried the wrong
+  sign**, and the half that was wrong was the half worth looking at. It could
+  only be caught at the pointer, where two adjacent cells reading `0.001 · 0` and
+  `0 · 0.001` were the same shade of dark blue.
+
+- **A ratio of two balanced maps was silently rescaled, and the rescale ate the
+  finding.** `ratio` and `difference` forced the depth match on and hid its
+  tickbox, on the grounds that two libraries of different depth differ by a
+  scalar and a ratio *is* that scalar everywhere. True of raw counts. Not true of
+  balanced ones: ICE puts every bin's marginal at 1, so two balanced matrices
+  arrive on one normalisation with nothing left to correct — on the pair above,
+  the two marginals agree to 0.2%.
+
+  Matching them again was not a no-op, because `matchGain` does not measure
+  depth. It measures the 99th percentile, and the 99th percentile of a Hi-C map
+  is made entirely of near-diagonal cells — which is where two conditions differ.
+  It returned **1.478** and shifted every cell of the ratio by **−0.56 in
+  `log2`**, a quarter of the ±1 range such a map is drawn on: a near-diagonal
+  band that another tool puts at +0.60 came out at +0.04, white instead of red,
+  and the same comparison made anywhere else disagreed with the viewer. It also
+  moved with the viewport, since the gain is measured on the block that was read
+  — the same cell reported a different ratio at different zooms.
+
+  Depth matching is now **off by default on balanced values** and on as before
+  for raw counts, and the tickbox is offered under all three operations instead
+  of being hidden under two of them.
+
+- **The hover readout printed most of a balanced map as `0`.** `fmt.num` rounded
+  to three decimal places, and a balanced cell is a fraction — at 5 kb on a
+  bacterial genome the typical value is a few times `1e-4`. Two cells three-fold
+  apart printed the same string, so a reader checking a ratio against the counts
+  under it was shown a pair that could not have produced it. Values below a
+  thousandth now keep three *significant* digits, and below `1e-7` an exponent.
+
 ### Added
+
+- **A blue–white–red diverging ramp, `BuWtRd`.** Higher contrast than `RdBu_r`
+  and with more of its range spent away from the centre, which suits a sparse
+  ratio map: most cells sit near neutral, so a ramp that stays pale through the
+  first third of each arm spends its colour where there is least to say. Its
+  white is anchored to the **middle** of the scale rather than to the fifth of
+  its eight stops — spread evenly that would land at `4/7`, and a map of two
+  identical files would have come out faintly blue everywhere.
 
 - **A button that adds a file to the tab you are in.** Dropping a file on the
   page has always *added* rather than replaced — a second cooler comes up beside

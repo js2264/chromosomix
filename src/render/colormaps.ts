@@ -111,19 +111,76 @@ const RDBU_R_STOPS = [
   '#F4A582', '#D6604D', '#B2182B', '#67001F',
 ]
 
-/** Interpolate hex stops to a flat `size * 3` RGB table, as the tables are. */
-function rampFromStops(stops: readonly string[], size: number): number[] {
+/**
+ * `BuWtRd`: a blue–white–red diverging ramp, from eight stops with the white
+ * pinned to the **middle** of the scale.
+ *
+ * Higher-contrast than `RdBu_r` and with more of its range spent away from the
+ * centre, which is what a sparse ratio map wants: most of a contact map's cells
+ * sit near neutral, so a ramp that stays pale for the first third of each arm
+ * spends most of its colour on the cells that have the least to say.
+ *
+ * Deliberately not one of matplotlib's, and named so it cannot be mistaken for
+ * `bwr`, which is a different ramp under a name a reader might reasonably expect
+ * to match. Nothing about §7.1 parity moves: the CLI has no such option, so
+ * there is nothing for this to disagree with.
+ *
+ * **The white is the centre stop and not the fifth of eight.** Eight stops
+ * spread evenly put the fifth at `4/7` — so a ratio of exactly 1, which the
+ * raster sends to `t = 0.5`, would have been drawn in the pale blue below it,
+ * and a map of two identical files would have come out faintly blue everywhere.
+ * The two arms are therefore spaced separately, four stops below the middle and
+ * three above, which is what {@link ANCHORED} exists for. The arms then carry
+ * unequal gradient density — that is a property of the list, not an error.
+ *
+ * One caveat worth knowing at the pointer: this centre is `#FFFFFF`, the same
+ * colour a transparent cell composites to on a white page. `RdBu_r` uses
+ * `#F7F7F7` precisely so that "measured, and equal" can be told from "no
+ * comparison could be made" (`render/derive.ts` produces `NaN` for the latter).
+ * Chosen anyway, because it is what was asked for and the difference only shows
+ * on cells that are already unreadable at map zoom.
+ */
+const BUWTRD_STOPS = [
+  '#1659b1', '#487BA8', '#819EC8', '#D1E6F1', '#FFFFFF', '#FAC1C1', '#F1606C', '#EE222A',
+]
+
+/**
+ * Where {@link BUWTRD_STOPS} sit on `[0, 1]`: evenly within each arm, with the
+ * white on the centre.
+ */
+const BUWTRD_AT = [0, 0.125, 0.25, 0.375, 0.5, 2 / 3, 5 / 6, 1]
+
+/**
+ * Interpolate hex stops to a flat `size * 3` RGB table, as the tables are.
+ *
+ * `at` places the stops; absent, they are spread evenly, which is
+ * `LinearSegmentedColormap.from_list`'s own default and what the sequential
+ * ramps here want. A diverging ramp usually needs the explicit form, because
+ * its middle stop has a *meaning* — the value the reader is measuring departures
+ * from — and evenly spacing an even number of stops puts that meaning off
+ * centre. Must be ascending, start at 0 and end at 1.
+ */
+function rampFromStops(
+  stops: readonly string[],
+  size: number,
+  at?: readonly number[],
+): number[] {
   const points = stops.map((hex) => [
     Number.parseInt(hex.slice(1, 3), 16),
     Number.parseInt(hex.slice(3, 5), 16),
     Number.parseInt(hex.slice(5, 7), 16),
   ])
   const last = points.length - 1
+  const stopAt = at ?? points.map((_, i) => i / last)
   const out: number[] = new Array<number>(size * 3)
   for (let i = 0; i < size; i++) {
-    const t = (i / (size - 1)) * last
-    const lo = Math.min(Math.floor(t), last - 1)
-    const frac = t - lo
+    const t = i / (size - 1)
+    // The segment `t` falls in. Linear rather than a search: eight stops, and
+    // this runs once per table rather than once per cell.
+    let lo = 0
+    while (lo < last - 1 && t >= stopAt[lo + 1]) lo++
+    const span = stopAt[lo + 1] - stopAt[lo]
+    const frac = span > 0 ? (t - stopAt[lo]) / span : 0
     for (let c = 0; c < 3; c++) {
       out[i * 3 + c] = Math.round(points[lo][c] + (points[lo + 1][c] - points[lo][c]) * frac)
     }
@@ -145,6 +202,7 @@ const RGB_TABLES: Record<string, readonly number[]> = {
   viridis: VIRIDIS_RGB,
   magma: MAGMA_RGB,
   RdBu_r: rampFromStops(RDBU_R_STOPS, COLORMAP_SIZE),
+  BuWtRd: rampFromStops(BUWTRD_STOPS, COLORMAP_SIZE, BUWTRD_AT),
 }
 
 /** Every colormap the viewer offers, in the order the picker should list them. */
@@ -162,7 +220,7 @@ export const COLORMAP_NAMES: string[] = Object.keys(RGB_TABLES)
  * that a reader who never touches the control is never shown a ratio on a ramp
  * that cannot express one.
  */
-export const DIVERGING_COLORMAPS: string[] = ['RdBu_r']
+export const DIVERGING_COLORMAPS: string[] = ['RdBu_r', 'BuWtRd']
 
 /** What a derived map with a neutral value opens on. */
 export const DEFAULT_DIVERGING_COLORMAP = 'RdBu_r'
