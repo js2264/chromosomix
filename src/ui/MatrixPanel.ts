@@ -388,8 +388,20 @@ export interface MatrixPanelOptions {
     vmax?: number
   }): void
   onLevelChange?(level: 'bin' | 'contig'): void
-  /** A cell was clicked; offsets are block-local, ids are absolute. */
-  onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
+  /**
+   * A cell was clicked; offsets are block-local, ids are absolute.
+   *
+   * `genomes` is the genome each axis is *in* at that cell, where the block was
+   * read with them (`namesGenomes`). It is what lets a view answer a click with
+   * the unit a reader is looking at rather than with the unit the axis happens
+   * to be indexed by: on a whole-metagenome picture the cells are bins, the
+   * runs are contigs, and the thing being pointed at is a MAG.
+   */
+  onCellClick?(
+    cell: Cell,
+    groups: { row?: AxisGroup; col?: AxisGroup },
+    genomes?: { row?: string; col?: string },
+  ): void
   /**
    * What the exported figure is a picture *of*, for its caption.
    *
@@ -3313,7 +3325,15 @@ export class MatrixPanel {
   /** A band of one axis of the block on screen, as a locus, or `null`. */
   private bandLocus(which: 'rows' | 'cols', span: [number, number]): PickedLocus | null {
     const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
-    if (axis === null) return null
+    // **Above bin level a drag names a unit, not a span.** There is no
+    // `LocusAxis` on a genome × genome picture — a cell is a whole MAG and a
+    // base pair inside one would be an invention — and until this the gesture
+    // simply did nothing there: the reader pressed *Pick on map*, dragged
+    // across the only picture a metagenome's 4C is naturally anchored from, and
+    // the box stayed empty with the button still lit. The run under the drag is
+    // what can honestly be reported, and a bare name is what every range
+    // grammar here takes for a whole sequence or a whole genome.
+    if (axis === null) return this.unitPick(which, span[0])
     const from = axis.unitToLocus(span[0])
     const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
     const segment = axis.segmentAt(span[0])
@@ -3323,6 +3343,23 @@ export class MatrixPanel {
       start: Math.round(from.bp),
       end: Math.round(to.bp + segment.bpPerUnit),
     }
+  }
+
+  /**
+   * The unit a drag began on, where the axis has no coordinates inside it.
+   *
+   * Refused when the axis is **pooled by units**: a slot of a pooled overview
+   * holds several genomes and its label carries a `+15` saying so, so naming
+   * one of them would be picking whichever the reader did not point at. Refused
+   * rather than guessed, which leaves the button lit and the box empty — the
+   * same answer the gesture gives anywhere else it cannot be honoured.
+   */
+  private unitPick(which: 'rows' | 'cols', at: number): PickedLocus | null {
+    const data = this.data
+    if (data === null || (data.contigsPerCell ?? 1) > 1) return null
+    const group = groupAt(which === 'rows' ? data.rowGroups : data.colGroups, at)
+    if (group === undefined || group.label === '') return null
+    return { contig: group.label, start: 0, end: 0, whole: true }
   }
 
   /**
@@ -6154,10 +6191,19 @@ export class MatrixPanel {
     // separation, and a view asked to open "the block at row 3" of a band would
     // be handed whichever sequence sits three bins from the diagonal.
     const square = this.squareCell(cell)
-    this.options.onCellClick?.(square, {
-      row: groupAt(this.data.rowGroups, square.row),
-      col: groupAt(this.data.colGroups, square.col),
-    })
+    this.options.onCellClick?.(
+      square,
+      {
+        row: groupAt(this.data.rowGroups, square.row),
+        col: groupAt(this.data.colGroups, square.col),
+      },
+      // The same runs the tooltip names the genome from, so what a click opens
+      // and what the pointer said it was over cannot come apart.
+      {
+        row: groupAt(this.data.rowGenomes, square.row)?.label,
+        col: groupAt(this.data.colGenomes, square.col)?.label,
+      },
+    )
   }
 
   /**

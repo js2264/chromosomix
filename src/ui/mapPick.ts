@@ -30,11 +30,23 @@
 
 /** A locus, in the shape the map reports and a form reads. */
 export interface PickedLocus {
-  /** Sequence name, as the file spells it. */
+  /** Sequence name, as the file spells it — or a genome's, when {@link whole}. */
   contig: string
   /** 0-based, half-open — cooler's convention, and the reader's. */
   start: number
   end: number
+  /**
+   * The **whole named unit**, with no span inside it.
+   *
+   * What a pick on an axis of genomes can honestly report. A genome × genome
+   * map has one cell per MAG and no base pair anywhere in it (§8.4), so the
+   * answer to "where did they point" is a name and not a coordinate — and a
+   * name is exactly what every range grammar here already accepts for a whole
+   * sequence or a whole genome. Written out as the bare name by
+   * {@link locusText}, so the form's box holds something the reader could have
+   * typed.
+   */
+  whole?: boolean
 }
 
 let armed = false
@@ -160,6 +172,10 @@ export function resetPick(): void {
  * conversion rather than an off-by-one.
  */
 export function locusText(at: PickedLocus): string {
+  // A whole unit is its name and nothing else: a genome has no coordinate
+  // system of its own to write a span in, and `contig:1-0` would be a range
+  // nothing accepts.
+  if (at.whole === true) return at.contig
   return `${at.contig}:${at.start + 1}-${at.end}`
 }
 

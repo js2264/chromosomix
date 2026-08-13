@@ -2190,6 +2190,15 @@ export class Session {
    */
   private addCompanion(file: File): void {
     if (this.file === null) return
+    // The third road to a second map, and it takes the same refusal as the
+    // other two: a metagenome's axis is its own assembly's contigs, so there is
+    // no deck for a second one to join ({@link deckIsPossible}). Dropped
+    // instead — which opens it as *this* session's map, the ordinary meaning of
+    // dropping a cooler on a viewer that already has one.
+    if (this.file.info.hasGenomes) {
+      this.dropped(file)
+      return
+    }
     this.ensureDeck().add({ kind: 'local', uri: file.name }, { kind: 'local', file })
   }
 
@@ -2806,7 +2815,13 @@ export class Session {
       binsize: () => this.file?.info.binsize ?? null,
     })
 
-    this.compareCard = this.newCompareCard(uri)
+    // **No second map for a metagenome** (§8.5). A metacool is not compared this
+    // way and never has been — `compareRefusal` has always said so — but the
+    // card offering it was still the first thing in the column, so the whole of
+    // what it did on this file was invite a gesture and then explain that it
+    // does not work. An absent card is the doctrine everywhere else here: a
+    // control a file cannot answer is not shown greyed, it is not shown.
+    this.compareCard = info.hasGenomes ? null : this.newCompareCard(uri)
 
     // The demo map ships ten annotation files on its own assembly. Offering
     // them as one click is the difference between a viewer that demonstrably
@@ -2835,13 +2850,13 @@ export class Session {
     // A file with a genome layer has no Tracks card, no drop zones and no
     // manual marks (§8.5) — and now one card that is *not* about files at all.
     if (loader === undefined) {
-      this.setAnnotations([this.compareCard.el, this.syntheticSlot, this.metadataCard.el])
+      this.setAnnotations([this.syntheticSlot, this.metadataCard.el])
       this.restoreMetadata(scope)
       return
     }
 
     this.setAnnotations([
-      this.compareCard.el,
+      ...(this.compareCard === null ? [] : [this.compareCard.el]),
       // Above the Tracks card: see the browser path for why.
       this.syntheticSlot,
       new AnnotationCard({
@@ -3290,6 +3305,11 @@ export class Session {
    * additive rather than a rewrite of the router.
    */
   private syncDeck(state: ViewState): void {
+    // A hash naming companions is not a reason to build a deck the file cannot
+    // have (§16, {@link deckIsPossible}). A link outlives the file it was made
+    // from, and one made against a cooler and opened on a metagenome would
+    // otherwise put five panels round a map none of them can follow.
+    if (this.file?.info.hasGenomes === true) return
     if (this.deck === null && parseMaps(state.maps).length === 0) return
     const deck = this.ensureDeck()
     deck.apply(state)
@@ -3424,7 +3444,10 @@ export class Session {
 
   /** The "add a map" command: open a deck if there is none, and ask for a file. */
   private addMap(): void {
-    if (this.file === null) return
+    // The command is already disabled where this is false; the guard is for the
+    // other door into it — a keyboard shortcut fired before a render has
+    // re-read the state (§16, {@link deckIsPossible}).
+    if (this.file === null || !this.deckIsPossible) return
     this.ensureDeck().promptAdd()
   }
 
@@ -3453,8 +3476,20 @@ export class Session {
    * another table, so offering a panel there would be offering to put two
    * unrelated pages side by side. The command is disabled rather than hidden,
    * so the answer to "can this viewer do that" is *yes, from a map*.
+   *
+   * **And never on a file with a genome layer.** §16 is built on the one thing
+   * a deck's panels must share — a coordinate system — and two metagenomes have
+   * none: their axes are contigs from two independent assemblies, so a region
+   * that names a place in one names nothing in the other, and the lock that
+   * moves five maps together would be moving them to five different places. It
+   * is the same argument §8.5 makes about a track and `compareRefusal` makes
+   * about the lower-left triangle, and it is stronger here because a deck
+   * *navigates*: the reader would not be shown a wrong picture once, they would
+   * drag one about. So the `+` edges are absent rather than disabled, which is
+   * what this predicate decides — see {@link framed}.
    */
   private get deckIsPossible(): boolean {
+    if (this.file?.info.hasGenomes === true) return false
     const view = this.store.state?.view
     return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
   }
@@ -4376,6 +4411,11 @@ export class Session {
                   ),
                   onOpenGenome: (genome: string) =>
                     this.navigate({ uri: state.uri, view: 'genome', genome }),
+                  // The same two destinations the overview's own cells open,
+                  // through the same navigation: one MAG's map on the diagonal,
+                  // the block between two off it.
+                  onOpenPair: (genome: string, genome2: string) =>
+                    this.navigate({ uri: state.uri, view: 'pair', genome, genome2 }),
                 },
               }
             : {}),

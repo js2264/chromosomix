@@ -32,7 +32,6 @@ import { contigNamed, framingCovers } from '../context'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -49,10 +48,43 @@ export function cisOnly(params: Params): boolean {
   return params.cis !== false
 }
 
-/** The contig an anchor names, or `undefined` while it is still being typed. */
-function anchorContig(context: AnalysisContext, params: Params): ContextContig | undefined {
+/**
+ * What an anchor names, as bins, whether it is a sequence or a **genome**.
+ *
+ * The runner has always taken both — `resolveAnchor` reads a genome's extent
+ * and makes *cis* mean the whole MAG, deliberately, because on a metagenome the
+ * question "what does this organism touch" is the one being asked and answering
+ * for whichever contig the first bin fell in would answer a different one. This
+ * side did not: the estimate resolved the name against `/contigs` alone, so
+ * naming a MAG — which is what a click on a genome × genome map means, and what
+ * the map's own axis is labelled with — was refused before it could run.
+ *
+ * A genome is checked *after* a sequence, so a file where one name is both
+ * behaves as it always did.
+ */
+function anchorSpan(
+  context: AnalysisContext,
+  params: Params,
+): { label: string; bins: number; extent: [number, number]; kind: 'contig' | 'genome' } | null {
   const name = anchorOf(params).split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
+  if (name === '') return null
+  const contig = contigNamed(context, name)
+  if (contig !== undefined) {
+    return {
+      label: contig.name,
+      bins: contig.bins,
+      extent: [contig.startBin, contig.startBin + contig.bins],
+      kind: 'contig',
+    }
+  }
+  const genome = context.genomes?.find((it) => it.name === name)
+  if (genome === undefined) return null
+  return {
+    label: genome.name,
+    bins: genome.extent[1] - genome.extent[0],
+    extent: [genome.extent[0], genome.extent[1]],
+    kind: 'genome',
+  }
 }
 
 const PARAMS: readonly ParamSpec[] = [
@@ -62,7 +94,8 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'Anchor',
     pickable: true,
     hint:
-      'The locus the profile is a reading from. A whole sequence is allowed. Type it, or press ' +
+      'The locus the profile is a reading from. A whole sequence is allowed, and on a metagenome ' +
+      'a whole genome — then cis means the MAG rather than one of its contigs. Type it, or press ' +
       '“Pick on map” and drag along either axis.',
   },
   {
@@ -114,7 +147,7 @@ const PARAMS: readonly ParamSpec[] = [
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  const contig = anchorContig(context, params)
+  const anchor = anchorSpan(context, params)
   if (anchorOf(params) === '') {
     return {
       class: 'free',
@@ -124,13 +157,17 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal: 'Name a locus to anchor the profile on — type one, or pick it on the map.',
     }
   }
-  if (contig === undefined) {
+  if (anchor === null) {
+    const named = anchorOf(params).split(':')[0].trim()
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
-      refusal: `This file has no sequence called ${anchorOf(params).split(':')[0].trim()}.`,
+      refusal:
+        context.genomes === null
+          ? `This file has no sequence called ${named}.`
+          : `This file has no sequence or genome called ${named}.`,
     }
   }
 
@@ -147,7 +184,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  const extent: [number, number] = [contig.startBin, contig.startBin + contig.bins]
+  const extent = anchor.extent
   const framing = context.framing
   if (
     context.blockLoaded &&
@@ -169,8 +206,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests,
     bytes: null,
     note:
-      `About ${requests} range requests: one dense square over ${contig.name} ` +
-      `(${contig.bins.toLocaleString()} bins).`,
+      `About ${requests} range requests: one dense square over ` +
+      `${anchor.kind === 'genome' ? 'the whole of ' : ''}${anchor.label} ` +
+      `(${anchor.bins.toLocaleString()} bins).`,
   }
 }
 

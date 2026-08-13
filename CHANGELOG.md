@@ -14,6 +14,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome is read by genome, and now the gestures agree.** Four things
+  on a `.metacool` said otherwise.
+
+  **A click on the whole-file map.** Its three levels are one picture at three
+  depths and are labelled and divided by genome at all of them, but only two of
+  them resolved a *click* that way: `contig × contig` and `genome × genome`
+  opened a MAG's own map on the diagonal and the pair off it, while `bin × bin`
+  — the default, the level a reader lands on — opened a region view of the two
+  `NODE_` contigs under the pointer. All three now dispatch on one rule, so the
+  same gesture means the same thing at every depth (§7.3).
+
+  **The 4C task on those pictures.** The runner has always accepted a whole
+  genome as an anchor — cis then means the MAG rather than whichever contig the
+  first bin fell in — and three things upstream of it disagreed. The estimate
+  refused the name with *this file has no sequence called…*; the locus box
+  suggested twenty thousand contigs and no MAG; and at genome level the form
+  *invented* a default, reading an axis of 48 genome slots as 48 bins and
+  offering `NODE_17248_len_278011:1-48,000` — a real window of the file's first
+  sequence, chosen by nobody, ready to run. All three are fixed, and **Pick on
+  map** now works there too: a drag on an axis of genomes names the genome,
+  which is the only thing it can honestly name (§8.9).
+
+  **The Contact maps card and the deck.** Neither has ever worked on a metacool
+  — `compareRefusal` says so, and §16's whole premise is a coordinate system two
+  panels share, which two independent assemblies have not — but the card was
+  still the first thing in the Annotations column and the `+` edges were still
+  on the map. A control whose only function on this file is to invite a gesture
+  and then explain that it does not work is worse than no control: both are
+  absent now, along with the "add a map" command and the deck a shared `maps=`
+  link would have built (§8.5).
+
 - **The map's own metadata, as lanes beside it.** Every file this viewer opens
   carries tables about its own units — a `.metacool`'s `/genomes` with
   completeness, redundancy and GC content in it, its `/contigs` with the MGE

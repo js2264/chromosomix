@@ -436,6 +436,15 @@ function binsFor(bp: number, binsize: number): number {
 function framingRegion(context: AnalysisContext): string {
   const framing = context.framing
   if (framing === null) return ''
+  // **Only where the axis is made of bins.** A genome × genome picture's
+  // extents count *slots* — one per MAG — and read as bins they resolve to a
+  // window of whichever sequence the file happens to start with: on a
+  // 48-genome overview, `NODE_17248_len_278011:1-48,000`, a locus nobody
+  // pointed at, offered as the default anchor of the 4C task and run without a
+  // word if the reader pressed the button. There is no honest answer at that
+  // level — the picture is of *all* the genomes — so the box stays empty and
+  // the task asks for a name, which is what the reader is there to give.
+  if (framing.level === 'genome') return ''
   const [from, to] = framing.rows
   const contig = context.contigs.find(
     (item) => from >= item.startBin && from < item.startBin + item.bins,
@@ -1362,7 +1371,9 @@ export class ParamForm {
       type: 'text',
       attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
-      title: 'A contig, or a contig and a span — the same thing the locus boxes take.',
+      title:
+        'A contig, or a contig and a span — the same thing the locus boxes take. On a ' +
+        'metagenome a genome name is one too, and means the whole of it.',
       // The locus box's own 24 rem is a width for a toolbar. In a column it
       // overflows the card, and a grid track cannot shrink an element below the
       // width it asks for.
@@ -1384,7 +1395,14 @@ export class ParamForm {
         })
 
     const refill = (): void => {
+      // **Genomes first, where the file has them.** A locus box on a metagenome
+      // takes either — the range grammar has always resolved a bare genome name
+      // (§5.5), and the 4C task means the whole MAG by one — and a list of
+      // twenty thousand contigs with no MAG in it taught the reader the
+      // opposite. They lead because there are tens of them against tens of
+      // thousands, so a list that opened on the contigs would bury them.
       options.replaceChildren(
+        ...(this.context.genomes ?? []).map((genome) => el('option', { value: genome.name })),
         ...this.context.contigs.map((contig) => el('option', { value: contig.name })),
       )
     }

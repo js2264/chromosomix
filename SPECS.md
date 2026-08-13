@@ -900,6 +900,17 @@ by contig — the axis is the whole metagenome at every level, 2,082 contig hair
 are a grey wash, and an axis label that names a genome opens that genome. A *selection* is not
 affected: its axis names what was ticked, which is the answer to a different question.
 
+**And a click on a cell opens a genome at all three levels.** "Read by genome" is a claim about the
+picture, and it has to be a claim about the gestures on it or it is only a claim about the ink: the
+two accumulating levels resolved a cell to one MAG's map on the diagonal and to the pair off it,
+while `bin × bin` — the *default*, the level a reader lands on — resolved to the contig under the
+pointer and opened a region view of two `NODE_` sequences nobody had asked about. The same gesture
+on the same file went somewhere else depending on which of three levels was chosen. All three now
+dispatch on one rule (`overviewTarget`): same genome on both axes opens that genome, two genomes
+open the block between them, and a file with no genome layer falls through to the sequence, which is
+what a cooler's whole-genome view has always done. The contig is one click further in, from the
+genome's own map, which is where a question about a contig is actually asked.
+
 ### 7.4 `__unbinned__` — never displayable
 
 Reserved, holding every contig that binning failed to assign. It breaks the small-MAG assumption
@@ -1131,6 +1142,16 @@ answer is to not offer it.
 no overlap to report and nothing to match, because the names *are* the map's. So the **Metadata**
 card is offered on every container, a metacool included, and it is the only card such a file gets.
 
+**And the same argument settles the two ways a second *map* gets in.** The lower-left triangle
+(§5.7) and the deck (§16) both rest on the one thing their pictures must share — a coordinate system
+— and two metagenomes have none: their axes are contigs from two independent assemblies, so a region
+that names a place in one names nothing in the other. `compareRefusal` has always said so, and the
+**Contact maps** card offering it was still the first thing in the Annotations column of every
+metacool — a control whose whole function on that file was to invite a gesture and then explain that
+it does not work. It is absent there now, and so are the deck's `+` edges, its "add a map" command
+and the deck a shared `maps=` link would otherwise build. A control a file cannot answer is not shown
+greyed; it is not shown.
+
 ### 8.6 Persistence
 
 The loaded set, and every per-annotation setting, is remembered per file in `UiMemory` — the same
@@ -1276,6 +1297,26 @@ arms `ui/mapPick.ts`; the next drag on a map names a locus for that form and the
 is a mode on a picture, so it disarms after **one** pick and it disarms on Escape, and both rules are
 in the module rather than in the map — the map's whole job is to ask `isArmed` before it decides what
 a drag means.
+
+**Above bin level a pick names the unit, not a span.** There is no `LocusAxis` on a genome × genome
+picture — a cell is a whole MAG and a base pair inside one would be an invention (§8.4) — so the
+gesture used to do nothing at all there: the button lit, the drag ran across the one picture a
+metagenome's 4C is naturally anchored from, and the box stayed empty. What can honestly be reported
+is the *run* under the drag, and a bare name is what every range grammar here already takes for the
+whole of a sequence or the whole of a genome. It is refused where the axis is **pooled by units** —
+a slot holding fifteen genomes, which its own label says with a `+15` — because naming one of them
+would be naming whichever the reader did not point at.
+
+The other half of that gesture is the **anchor** itself: the 4C runner has always resolved a genome
+name, deliberately, so that *cis* means the whole MAG rather than whichever contig the first bin fell
+in. The form refused one — it resolved the name against `/contigs` alone — so the name the picture is
+labelled with could not be used on the picture it came from. It resolves both now, and the locus
+box's own suggestions lead with the genomes on a file that has them: there are tens of those against
+tens of thousands of contigs, and a list that opened on the contigs taught the reader the opposite of
+what the grammar accepts. **And no default is invented at genome level**: a framing there counts
+*slots*, so reading its extents as bins produced a real 48 kb window of whichever sequence the file
+began with — a locus nobody chose, offered as the anchor, and run without a word if the button was
+pressed.
 
 #### Shift-drag is a zoom, in one dimension, everywhere
 
