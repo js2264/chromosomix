@@ -178,6 +178,7 @@ import {
   trackHeightField,
 } from './trackControls'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt, trimNumber } from './dom'
+import { filesFrom } from './chooseFiles'
 import { MapKey } from './MapKey'
 import {
   EXPORT_DPI_CHOICES,
@@ -2052,7 +2053,7 @@ export class MatrixPanel {
       }
 
       const load = this.options.annotations?.loadOnEdge
-      const files = Array.from(event.dataTransfer?.files ?? [])
+      const files = filesFrom(event.dataTransfer)
       // Untouched where this file cannot carry tracks at all (§8.5). The shell
       // stands aside for a `.lane-drop` target, so claiming a drop we cannot
       // answer would swallow it — and a `.cool` dropped on a metacool's map is

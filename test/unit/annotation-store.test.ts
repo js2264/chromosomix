@@ -1061,3 +1061,120 @@ describe('a result placed on the starred map', () => {
     expect(store.entries).toHaveLength(1)
   })
 })
+
+/**
+ * Where the tracks were drawn, across a reload.
+ *
+ * `homes` used to say in prose that it was deliberately not persisted, and the
+ * argument was sound: an arrangement of pictures that no longer exist is not
+ * something to restore a reader into. What changed is the premise — a deck of
+ * local companions now comes back — so the arrangement is worth keeping, and a
+ * restored deck that put every track on the lead would be the one part of the
+ * session that did not return.
+ *
+ * The old behaviour still has to hold wherever the old premise does: where the
+ * companions do *not* come back, the lanes park onto the lead exactly as before.
+ */
+describe('remembering which panel a track was drawn on', () => {
+  function loaded(store: AnnotationStore, name: string, placement: Placement): string {
+    const entry = store.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { kind: 'local', file: new File([], name), name },
+      placement,
+    })
+    store.update(entry.id, { status: 'ready' })
+    return entry.id
+  }
+
+  it('writes down a lane on a live companion, not only a parked one', () => {
+    // The half that would have been easy to miss: persisting `homes` alone
+    // records the tracks whose maps were *closed* and forgets every one still on
+    // screen, which is exactly backwards.
+    const uri = `lanes-${Math.random()}.cool`
+    const store = freshStore(uri)
+    const id = loaded(store, 'companion.bw', placementOn('bottom'))
+    store.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
+    store.placeOn(id, 'slot-2', placementOn('top'))
+    store.unplaceFrom(id, LEAD_MAP)
+
+    const written = AnnotationStore.storedLanes(uri)
+    expect(written).toHaveLength(1)
+    expect(written[0]).toMatchObject({ track: id, uri: 'rep2.cool', borrowedLead: true })
+    // Keyed by the file, never by the slot id — a slot id is minted per deck and
+    // would name nothing in the window that reads this back.
+    expect(JSON.stringify(written)).not.toContain('slot-2')
+  })
+
+  it('puts a track back on the companion showing its file, after a reload', () => {
+    const uri = `lanes-${Math.random()}.cool`
+    const first = freshStore(uri)
+    const id = loaded(first, 'companion.bw', placementOn('bottom'))
+    first.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
+    first.placeOn(id, 'slot-2', placementOn('top'))
+    first.unplaceFrom(id, LEAD_MAP)
+    // Read before the next store exists: `freshStore` clears, which is what a
+    // test wants and not what a reload does.
+    const written = AnnotationStore.storedLanes(uri)
+
+    // A new page load: a new store over the same file, and the rows and the
+    // arrangement read back out of session memory.
+    const next = freshStore(uri)
+    const back = next.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { kind: 'local', file: new File([], 'companion.bw'), name: 'companion.bw' },
+      id,
+    })
+    next.update(back.id, { status: 'ready' })
+    next.seedHomes(written)
+
+    // Nothing has moved yet: seeding parks, and the deck is not built.
+    expect(next.drawnOnMap(LEAD_MAP, 'top')).toHaveLength(0)
+
+    // …and the companion opens, under an id this window minted for itself.
+    next.noteMapFiles(new Map([['slot-41', 'rep2.cool']]))
+    next.adoptHome('slot-41', 'rep2.cool')
+    expect(next.drawnOnMap('slot-41', 'top')).toHaveLength(1)
+  })
+
+  it('leaves the track on the lead when the companion does not come back', () => {
+    // The old decision, still in force wherever its premise still holds.
+    const uri = `lanes-${Math.random()}.cool`
+    const first = freshStore(uri)
+    const id = loaded(first, 'companion.bw', placementOn('bottom'))
+    first.noteMapFiles(new Map([['slot-2', 'rep2.cool']]))
+    first.placeOn(id, 'slot-2', placementOn('top'))
+    first.unplaceFrom(id, LEAD_MAP)
+    const written = AnnotationStore.storedLanes(uri)
+
+    const next = freshStore(uri)
+    const back = next.begin({
+      card: 'linear',
+      kind: 'track',
+      source: { kind: 'local', file: new File([], 'companion.bw'), name: 'companion.bw' },
+      id,
+      placement: placementOn('bottom'),
+    })
+    next.update(back.id, { status: 'ready' })
+    next.seedHomes(written)
+    // No deck: nothing ever calls `adoptHome`, and the row is drawn where a
+    // restored row has always been drawn.
+    expect(next.drawnOnMap('slot-41', 'top')).toHaveLength(0)
+    expect(next.entries.map((entry) => entry.id)).toEqual([id])
+  })
+
+  it('refuses a stored lane that is not one', () => {
+    const uri = `lanes-${Math.random()}.cool`
+    const store = freshStore(uri)
+    // Untrusted like every other stored shape. A record from a build that wrote
+    // a different form must be dropped rather than repaired into a lane the
+    // renderers would choke on.
+    expect(() =>
+      store.seedHomes([
+        { track: '', uri: 'a.cool', placement: placementOn('top'), borrowedLead: true },
+      ]),
+    ).not.toThrow()
+    expect(AnnotationStore.storedLanes('never-written.cool')).toEqual([])
+  })
+})

@@ -23,6 +23,8 @@ import type {
 } from './types'
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
+import { hasHandle, rememberHandle, resolveHandle } from '../state/handles'
+import { grantFor } from '../ui/chooseFiles'
 
 /**
  * What a file's *name* suggests it is.
@@ -117,9 +119,17 @@ export class AnnotationLoader {
    * Re-open what a previous visit left in session storage (§8.6).
    *
    * A remote entry is fetched again, since its URL is all that was ever needed.
-   * A local one cannot be — no browser re-reads a dropped file without a fresh
-   * gesture — so it comes back `detached`, holding its colours and limits and
-   * waiting for the same file to be dropped on it again.
+   * A local one is re-opened where this browser still holds a grant for the file
+   * (`state/handles.ts`), and otherwise comes back `detached` exactly as it
+   * always has — holding its colours and limits, waiting for the same file to be
+   * dropped on it again.
+   *
+   * The re-open is asynchronous and the row is seated before it finishes, so a
+   * remembered track appears saying *reopening…* and then fills in. That is the
+   * same two-step a remote row has always taken, and it is deliberately not
+   * awaited: eight tracks resolve in parallel rather than one after another, and
+   * a grant that turns out to be spent leaves a row the reader can still fix by
+   * hand.
    */
   restore(stored: readonly StoredEntry[]): void {
     for (const row of stored) {
@@ -155,10 +165,17 @@ export class AnnotationLoader {
             } satisfies ComputedSource)
           : null
       const source = computed ?? ({ kind: 'detached', name: row.source.name } as const)
+      // Asked synchronously, and only to choose the wording: `hasHandle` reads a
+      // set hydrated at boot, so it costs nothing and cannot be wrong in the
+      // direction that matters — a row it calls remembered and then fails to
+      // open falls back to the detached wording a moment later.
+      const remembered = computed === null && hasHandle(row.source.name)
       const summary =
-        computed === null
-          ? 'dropped file — re-open it to draw it again'
-          : `computed by ${computed.task} · recompute to draw it again`
+        computed !== null
+          ? `computed by ${computed.task} · recompute to draw it again`
+          : remembered
+            ? 'reopening…'
+            : 'dropped file — re-open it to draw it again'
       this.store.begin({
         card: row.card,
         kind: row.kind,
@@ -174,7 +191,34 @@ export class AnnotationLoader {
         summary,
         visible: row.visible,
       })
+      // A `computed` row has no file to re-open, and a `detached` one may still
+      // have a grant behind it — including one this browser learnt about after
+      // `hasHandle` was asked above, which is why the attempt is unconditional
+      // and the flag above only chose a word.
+      if (computed === null) void this.reopenRemembered(row.id, row.source.name)
     }
+  }
+
+  /**
+   * Re-open a restored local row from a remembered grant, or leave it detached.
+   *
+   * The whole of the difference this makes is that the reader is not asked to
+   * find a file the browser can already reach. Where the grant has lapsed — the
+   * file moved, the permission withdrawn, a different file now wearing the name
+   * — nothing is reported: the row is put back into exactly the state it was
+   * already in, with the button beside it that has always been the way back.
+   */
+  private async reopenRemembered(id: string, name: string): Promise<void> {
+    const file = await resolveHandle(name)
+    const entry = this.store.byId(id)
+    // Gone while we were asking — the tab was closed, the file re-dropped by
+    // hand, the row removed. Any of those makes this answer stale.
+    if (entry === undefined || entry.status !== 'detached') return
+    if (file === null) {
+      this.store.update(id, { summary: 'dropped file — re-open it to draw it again' })
+      return
+    }
+    this.reattach(id, file)
   }
 
   /**
@@ -247,6 +291,19 @@ export class AnnotationLoader {
     placement?: Placement,
     index?: File,
   ): AnnotationEntry {
+    // Where the browser gave a grant for this file, write it down: a track is as
+    // worth remembering as the map it is drawn beside, and eight bigWigs to
+    // re-drop is the larger share of what a reload used to cost. Keyed on the
+    // file's name, which is what a restored row carries and looks itself up by.
+    if (source.kind === 'local') {
+      const file = source.file
+      void grantFor(file).then(
+        (handle) => {
+          if (handle !== null) void rememberHandle(source.name, handle, file)
+        },
+        () => undefined,
+      )
+    }
     const guess = guessOf(source.name)
     const entry = this.store.begin({
       card: stored?.card ?? guess.card,

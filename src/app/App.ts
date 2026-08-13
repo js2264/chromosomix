@@ -46,10 +46,26 @@ import {
 } from '../ui/commands'
 import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
+import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
 import { demoExamples } from '../ui/examples'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
-import { configFileName } from '../state/SessionConfig'
+import { applyConfig, configFileName } from '../state/SessionConfig'
+import { fileMemoryKey } from '../state/UiMemory'
+import {
+  WORKSPACE_VERSION,
+  flushWorkspace,
+  forgetWorkspace,
+  readWorkspace,
+  recordAction,
+  summariseWorkspace,
+  writeWorkspace,
+  type Workspace,
+  type WorkspaceSession,
+} from '../state/workspace'
+import { forgetEverything, storedItems } from '../state/stored'
+import { hydrateHandles } from '../state/handles'
+import { openStoredData, restoreBanner } from '../ui/RestoreCard'
 import { decodeShare, readShareHash } from '../state/shareLink'
 import { openShareDialog } from '../ui/ShareDialog'
 import { fileLabel } from '../ui/labels'
@@ -86,6 +102,25 @@ export class App implements SessionHost {
   private active = 0
 
   private readonly content: HTMLElement
+  /**
+   * Where the offer to reopen a previous workspace sits, when there is one.
+   *
+   * A slot the shell owns rather than something a session shows, because the
+   * offer is about *N tabs* and a session deliberately knows nothing about the
+   * window it is in (`app/Session.ts`). It is also why this is not on the
+   * picker: a link opened into a fresh browser shows that file rather than the
+   * picker, and the reader's other six tabs are exactly as worth offering then.
+   */
+  private readonly restoreSlot = el('div', { class: 'restore-slot' })
+  /**
+   * Whether the durable record may be written to yet.
+   *
+   * `false` for the moment between the shell existing and the boot deciding
+   * what to do about a previous workspace. See {@link rememberDurably}.
+   */
+  private durableSettled = false
+  /** `true` while the offer is on screen and has not been answered. */
+  private offering = false
   private readonly breadcrumbSlot: HTMLElement
   /**
    * Where the active session parents its Analysis drawer.
@@ -229,6 +264,11 @@ export class App implements SessionHost {
         ),
       ),
       this.tabs.el,
+      // Empty except on the first screen of a browser that was closed with work
+      // in it. A row of its own rather than a floating bar, because what it
+      // offers is the reader's own workspace and it must not cover the drop
+      // target — see `ui/RestoreCard.ts`.
+      this.restoreSlot,
       this.breadcrumbSlot,
       // Each column carries its own `order`, so the DOM order here is free —
       // and it is content-first, which is what the tab order should be.
@@ -270,6 +310,32 @@ export class App implements SessionHost {
     // Unconditional, not gated on the target: the same miss on the website
     // replaces the app with a download prompt or a page of binary, which is no
     // better for being recoverable.
+    // The durable workspace is written on a trailing debounce, and a timer does
+    // not survive the page going away — so without this the last few seconds of
+    // a session are precisely the ones lost, and they are the ones the reader
+    // remembers. `pagehide` rather than `beforeunload`: it fires for a tab put
+    // into the back/forward cache too, and it does not make the browser offer to
+    // block the navigation. `visibilitychange` covers the mobile case, where a
+    // tab is often never "hidden" so much as switched away from and reaped.
+    //
+    // Both handlers **rebuild** the record before flushing it, and that is not
+    // belt and braces. `remember()` runs on a *view state* change, and most of
+    // what a workspace is does not touch the view state at all: loading eight
+    // tracks, placing a mark, saving a bookmark, filtering a table. Each of
+    // those persists itself into session memory and none of them navigates, so
+    // a record written at the last navigation would come back to a reader
+    // missing every one of them — the session as it was ten minutes before they
+    // closed the window. Rebuilding here costs one pass over the open tabs at
+    // the one moment it is certainly worth paying for.
+    const save = (): void => {
+      this.rememberDurably()
+      void flushWorkspace()
+    }
+    window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') save()
+    })
+
     document.addEventListener('dragover', (event) => event.preventDefault())
     document.addEventListener('drop', (event) => {
       if (event.target instanceof HTMLElement && event.target.closest('.dropzone') !== null) return
@@ -321,11 +387,18 @@ export class App implements SessionHost {
       ) {
         return
       }
-      const files = Array.from(event.dataTransfer?.files ?? [])
+      const files = filesFrom(event.dataTransfer)
       if (files.length === 0) return
       event.preventDefault()
       void this.current?.dropFiles(files)
     })
+
+    // Started here and deliberately **not** awaited. Reading the granted files
+    // into memory is what lets a tab's tooltip be written synchronously and what
+    // keeps a permission prompt off the far side of a storage read — but a
+    // database that is slow, or refuses to open, must not hold up the picker.
+    // Anything that genuinely needs the answer awaits the same promise.
+    void hydrateHandles()
 
     this.restore()
   }
@@ -391,6 +464,106 @@ export class App implements SessionHost {
     this.mountActive()
     if (shared) void this.openSharedHash()
     this.current?.activate()
+    // Only when session storage had nothing, which is exactly "the browser was
+    // closed" — a reload has its own, fresher answer above and must not be
+    // asked a question it already knows. Last, and asynchronous, so a database
+    // that is slow or refuses to open delays nothing on the boot path.
+    //
+    // A reload settles immediately: there is no question to ask, so the record
+    // may be written from this moment. The other branch settles when the read
+    // comes back, which is what keeps an empty startup window from deleting the
+    // workspace it is about to be offered.
+    if (stored.sessions.length > 0) this.durableSettled = true
+    else void this.offerWorkspace()
+  }
+
+  /**
+   * Ask whether to pick up where a previous browser session stopped.
+   *
+   * An offer and not a restore, for two reasons that are not the same reason:
+   * reopening six files a week later reverses the decision the reader made by
+   * closing them, and on a shared machine it would put somebody's unpublished
+   * figure on screen for whoever sat down next (§11). `ui/RestoreCard.ts` makes
+   * the same argument at more length, beside the wording.
+   *
+   * Nothing here is awaited by the caller and nothing it does can fail visibly:
+   * a record that will not load is a banner that does not appear, which is the
+   * state every browser was in before this existed.
+   */
+  private async offerWorkspace(): Promise<void> {
+    let workspace: Workspace | null = null
+    try {
+      workspace = await readWorkspace()
+    } finally {
+      // Whatever the answer, the question has now been asked, so the record may
+      // be written from here on — including when the read failed, where the
+      // right behaviour is simply the app as it was before any of this existed.
+      this.durableSettled = true
+    }
+    if (workspace === null) return
+    // The reader has been working while the record was read. Whatever they have
+    // done since is theirs, and an offer to replace it would be an interruption
+    // rather than a courtesy.
+    if (this.sessions.some((session) => session.state !== null)) return
+    this.offering = true
+    const answered = (): void => {
+      this.offering = false
+      this.restoreSlot.replaceChildren()
+    }
+    this.restoreSlot.replaceChildren(
+      restoreBanner({
+        summary: summariseWorkspace(workspace),
+        savedAt: workspace.savedAt,
+        onRestore: () => {
+          answered()
+          this.adoptWorkspace(workspace as Workspace)
+        },
+        onDismiss: () => {
+          answered()
+          void forgetWorkspace()
+        },
+      }),
+    )
+  }
+
+  /**
+   * Seat a remembered workspace in this window.
+   *
+   * **The `applyConfig` below runs before a single `prime`, and that ordering is
+   * the whole of why this method is not three lines.** A primed tab is one that
+   * holds a view state and has read nothing (`Session.prime`), and
+   * `exportConfig` builds a config by reading that tab's `UiMemory` — which,
+   * after a browser restart, is empty. So the first `activate()` would call
+   * `remember()`, gather eight empty configs, and overwrite the good record with
+   * them. Silently, permanently, and looking exactly like "the restore lost my
+   * tracks". Writing the workspace into memory first makes `exportConfig`
+   * honest from the very first write, and costs a handful of `sessionStorage`
+   * writes per tab.
+   *
+   * It is also the order `SessionConfig` already requires for a different
+   * reason: `applyConfig` must precede the file opening, because the annotation
+   * machinery reads those scopes on its way up.
+   */
+  private adoptWorkspace(workspace: Workspace): void {
+    for (const session of this.sessions) session.destroy()
+    this.sessions.length = 0
+    reserveSessionIds(highestId(workspace.sessions.map((row) => ({ id: row.id, hash: '' }))))
+
+    for (const row of workspace.sessions.slice(0, MAX_SESSIONS)) {
+      applyConfig(row.config, fileMemoryKey(row.id, row.config.state.uri))
+      const session = new Session(this, row.id)
+      session.prime(row.config.state)
+      this.sessions.push(session)
+    }
+    if (this.sessions.length === 0) this.sessions.push(new Session(this))
+
+    const wanted = this.sessions.findIndex((session) => session.id === workspace.active)
+    this.active = wanted >= 0 ? wanted : 0
+    this.paintTabs()
+    this.mountActive()
+    this.writeHash(this.current?.state ?? null, { replace: true })
+    this.current?.activate()
+    this.remember()
   }
 
   private newSession(): Session | null {
@@ -492,6 +665,56 @@ export class App implements SessionHost {
       snapshots.push({ id: session.id, hash: serialiseViewState(state) })
     }
     writeSessions({ sessions: snapshots, active: this.current?.id ?? null })
+    this.rememberDurably()
+  }
+
+  /**
+   * The same act, written where closing the browser cannot reach it.
+   *
+   * An **addition** to the line above rather than a replacement for it, and the
+   * two are not redundant. `sessionStorage` remains the truth for this browsing
+   * context — it is strictly fresher, and a reload reads it and never looks at
+   * the durable copy. This record exists for the one case that storage cannot
+   * answer at all: the browser was closed.
+   *
+   * It carries a whole {@link SessionConfig} per tab rather than the hash that
+   * satisfies the strip, because a hash names a file and a workspace is eight
+   * tracks with their colours, a set of marks and forty bookmarks. The id
+   * travels *beside* the config rather than inside it, since a config is
+   * deliberately portable and folding a tab identity in would put one into every
+   * exported session and every share link (`state/workspace.ts`).
+   *
+   * Debounced downstream, in `writeWorkspace`: this is called on every state
+   * change, which includes every frame of a colour-slider drag.
+   */
+  private rememberDurably(): void {
+    const sessions: WorkspaceSession[] = []
+    for (const session of this.sessions) {
+      const config = session.exportConfig()
+      if (config === null) continue
+      sessions.push({ id: session.id, config })
+    }
+    // The rule, and why an empty window is not always a reason to forget, is in
+    // `recordAction` — it is subtle enough to be worth a pure function and a
+    // test rather than three conditions here.
+    const action = recordAction({
+      settled: this.durableSettled,
+      offering: this.offering,
+      tabs: sessions.length,
+    })
+    if (action === 'wait') return
+    // A window emptied down to the picker is a reader who closed everything, and
+    // offering it back next week would be offering them nothing.
+    if (action === 'forget') {
+      void forgetWorkspace()
+      return
+    }
+    writeWorkspace({
+      version: WORKSPACE_VERSION,
+      savedAt: new Date().toISOString(),
+      sessions,
+      active: this.current?.id ?? null,
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -500,6 +723,13 @@ export class App implements SessionHost {
 
   sessionChanged(session: Session): void {
     this.paintTabs()
+    // The durable record follows the *workspace*, not only the view state.
+    // Loading a track, placing a mark and saving a bookmark all arrive here and
+    // none of them navigates, so without this the record would describe the
+    // session as it stood at the last navigation — which for a reader who spent
+    // ten minutes arranging tracks is everything they did. Debounced downstream,
+    // and cheap: it reads session memory rather than the live objects.
+    this.rememberDurably()
     if (session !== this.current) return
     document.title =
       session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
@@ -862,6 +1092,16 @@ export class App implements SessionHost {
         run: () => this.openShareDialog(),
         enabled: this.current?.exportConfig() !== null,
       },
+      {
+        id: 'stored-data',
+        group: 'Help',
+        title: 'What this browser is remembering',
+        hint:
+          'Everything kept on this computer — which files were open, how they were set up, and ' +
+          'any bucket keys — with a button that clears all of it. No file contents are ever ' +
+          'among it.',
+        run: () => void this.openStoredDataDialog(),
+      },
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
       {
         id: 'source',
@@ -926,6 +1166,32 @@ export class App implements SessionHost {
     // bridge and the dialog says exactly what it says today.
     this.modal = openAbout(REPO_URL, desktop()?.platform ?? null, () => {
       this.modal = null
+    })
+  }
+
+  /**
+   * Account for everything this browser is keeping, and offer to end it.
+   *
+   * The list is gathered here rather than in the dialog because the stores are
+   * spread across three layers and `ui/RestoreCard.ts` has no business knowing
+   * about any of them. What this owes the reader is that the account is
+   * *complete*: a control that clears the durable workspace while thirteen
+   * `localStorage` keys stay put — one of them holding an S3 secret in
+   * cleartext — would be a worse lie than having no control at all.
+   */
+  private async openStoredDataDialog(): Promise<void> {
+    if (this.modal !== null) return
+    // Gathered before the dialog opens rather than filled in after it: the
+    // account is the whole content, and a panel that appears empty and then
+    // grows a list reads as though the first answer was "nothing".
+    const items = await storedItems()
+    if (this.modal !== null) return
+    this.modal = openStoredData({
+      items,
+      onForgetAll: () => void forgetEverything(),
+      onClose: () => {
+        this.modal = null
+      },
     })
   }
 

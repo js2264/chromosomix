@@ -232,7 +232,7 @@ export function demoExamples(): Example[] {
   // absolute: it costs nothing, and it is what lets the escape hatch be a
   // *relative* base — `DEMO_BASE=/demo/ npm run build` for a copy served beside
   // the app. Whatever comes out is `http(s)://`, which is the shape
-  // `inferSource` in `app/Session.ts` needs to re-open a shared link.
+  // `inferSource` in `app/resolve.ts` needs to re-open a shared link.
   return DEMO.map((entry) => ({
     label: entry.label,
     url: new URL(`${base}${entry.folder}/${entry.file}`, window.location.href).href,

@@ -1963,6 +1963,85 @@ p {
   background: var(--accent-soft);
 }
 
+/* The one button in a pair that the reader is being invited to press. Filled
+   rather than outlined, because two identical buttons side by side make a
+   reader read both to find out which is the answer to the question they were
+   just asked. */
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  /* The base `.btn:hover` turns text and border to the accent, which on a
+     filled button is accent on accent — invisible. Overridden to darken
+     instead, so the hover reads as a press rather than as a disappearance. */
+  color: #fff;
+  filter: brightness(1.12);
+}
+
+/* A button that destroys something. Outlined rather than filled: it is not the
+   invited answer, and a red block would pull the eye to the one control on
+   screen nobody should press by accident. */
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* The offer to pick a previous workspace back up (`src/ui/RestoreCard.ts`).
+
+   In the flow rather than over it, and that is the difference between this and
+   `.update-bar` below. The update offer is about the application and can wait
+   indefinitely in a corner; this one is about *the reader's own work*, it is
+   only ever shown on the first screen of a fresh browser, and a floating bar
+   over the drop target would cover the thing the page exists to offer. So it
+   takes a row of its own between the tab strip and the content, pushes nothing
+   off screen, and disappears the moment it is answered. */
+.restore-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.restore-text {
+  /* Shrinkable, so a long list of file names wraps rather than pushing the two
+     buttons off the right edge of a narrow window. */
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
+.restore-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+/* The account of what is being kept, inside its dialog. */
+.stored-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: min(30rem, 70vw);
+}
+
+.stored-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* The service worker's update offer (`src/pwa.ts`): a bar in the corner, not a
    dialog. Nothing is wrong and nothing is urgent — a modal over a contact map
    to announce a newer build would be an interruption charging for a courtesy —

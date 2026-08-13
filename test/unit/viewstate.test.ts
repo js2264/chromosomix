@@ -71,6 +71,52 @@ const CASES: ViewState[] = [
     region: 'NC_000913.3',
     focus: 'NC_000913.3:3500000-3560000',
   },
+  // What the cells *are* (§7.1). Serialised since the key existed and parsed by
+  // nothing, so a link and a restored tab both came back on `count` however the
+  // sender had shaded it — the one field in `KEY_ORDER` the round trip did not
+  // hold for, and silent in both directions because `count` is a legal picture.
+  { uri: 'yeast.cool', view: 'region', region: 'II', score: 'balanced' },
+  // The composition the O/E comment in the parser describes: a normalisation
+  // *and* the reading over expected, which are two keys and one picture.
+  { uri: 'yeast.cool', view: 'region', region: 'II', score: 'ICE', oe: true },
+  // An arbitrary `/pixels` column. No closed list to validate against — which
+  // is exactly why this must round-trip whatever it is handed.
+  { uri: 'x.cool', view: 'region', region: 'chr1', score: 'expected_dense' },
+  // **Every key at once**, which is the case that would have caught `score`.
+  //
+  // The cases above are each a picture somebody looks at, and that is why none
+  // of them found it: a field is only tested here if a reader thought to write a
+  // state that uses it, so the round trip was proven for twenty-one keys by
+  // twelve states and for the twenty-second by none. This one is not a picture —
+  // several of these keys are meaningless together — and it is not meant to be.
+  // It exists so that a key added to `KEY_ORDER` and forgotten in the parser
+  // fails here rather than in somebody's link a release later.
+  {
+    uri: 'a.mcool::resolutions/1000',
+    uri2: 'https://bucket.example.org/b.cool',
+    maps: 'c.cool|~|https://bucket.example.org/d.cool',
+    view: 'region',
+    genome: 'MAG_1',
+    genome2: 'MAG_2',
+    genomes: 'MAG_1,MAG_2',
+    region: 'chr1:1-1,000',
+    region2: 'chr2',
+    focus: 'chr1:200-400',
+    regions: 'chr1,chr2',
+    locus: 'chr1:1-500',
+    level: 'contig',
+    transform: 'log2',
+    colormap: 'cividis',
+    vmin: -1.5,
+    vmax: 12.5,
+    balance: true,
+    score: 'balanced',
+    oe: true,
+    op: 'ratio',
+    // `false` rather than absent on purpose: absent *means* turned, so the
+    // explicit square is the value that has to survive being written down.
+    flip: false,
+  },
 ]
 
 describe('serialiseViewState / parseViewState', () => {

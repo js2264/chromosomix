@@ -14,6 +14,143 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Closing the browser no longer ends the session — it offers it back.** The tab
+  strip has always lived in `sessionStorage`, which is a deliberate rule and not
+  an oversight: a set of open files is a train of thought, it belongs to the
+  window it was opened in, and closing the tab is meant to end it. That rule is
+  unchanged, and `sessionStorage` still wins whenever it is present — a reload
+  reads it and never looks anywhere else. What is new is an answer for the one
+  case it cannot cover, because the storage is gone with the window: the browser
+  was closed.
+
+  Alongside it there is now a durable record — every tab, its file, its tracks
+  with their colours and limits, its marks, bookmarks, ticked sequences, table
+  filters and analysis recipes — written to IndexedDB on a debounce and flushed
+  when the page goes away. On the first screen of a browser that was closed with
+  work in it, a row above the picker says what was open and when, and offers to
+  bring it back.
+
+  **Offered, never applied**, and that is two decisions rather than one. Silently
+  reopening six files a week later reverses the decision the reader made by
+  closing them; and on a shared machine it would put somebody's unpublished
+  figure on screen for whoever sat down next, which is the reader §11 is written
+  for. *Start fresh* is a real answer and it deletes the record rather than
+  hiding the note, because an offer that returns tomorrow having been declined
+  today is not an offer.
+
+  The record holds no file contents and never will. A local file still comes back
+  detached, exactly as it does from a reload, so this stage changes nothing about
+  what is read or copied — §11 and §12 are untouched, and every browser gets it,
+  not only the ones with a file-handle API.
+
+  Two traps are worth recording, because both failed silently and both were
+  found by driving the real application rather than by reading the code.
+
+  A restored tab is *primed* — it holds a view state and has read nothing — and a
+  config is built by reading that tab's session memory, which after a browser
+  restart is empty. So the first click would have gathered eight empty configs
+  and written them over the good record. The workspace is therefore applied into
+  memory *before* the first tab is primed, which is also the order `applyConfig`
+  already required for its own reason.
+
+  And **a window with nothing open is two different facts.** After the reader
+  closes their last tab it means *forget this*; at startup it means *nothing has
+  been restored yet* — and acting on the second deletes the record while the read
+  that would have offered it back is still in flight. A race, resolving
+  differently on a warm cache than a cold one, so the workspace disappeared on
+  some loads and not others with nothing in the console either way. The rule is
+  now a pure function with a test rather than three conditions in the shell.
+
+  A third thing that had to change for any of it to be true: the record follows
+  the **workspace**, not the view state. Loading a track, placing a mark and
+  saving a bookmark are most of what a session *is* and none of them navigate, so
+  a record written at the last navigation came back missing everything the reader
+  had done since.
+
+- **A local file you have already opened reopens itself after a reload.** In
+  Chromium and in the desktop build, dropping or choosing a file now also hands
+  the page a `FileSystemFileHandle` — a *capability*, not a path and not a copy —
+  and that is what is kept. A reload, a restored tab or a reopened workspace
+  resolves the grant and reads the same file, with no drag and, while the browser
+  session lasts, no prompt.
+
+  Nothing about how the file is read changes: what comes back is the same `File`
+  object a drop produces, read a slice at a time by the same `LocalFileSource` as
+  before. No bytes are stored, nothing is uploaded and nothing is duplicated on
+  disk, so §11 and §12 stand exactly as written. Firefox and Safari have no such
+  grant to give, and there a local file comes back detached as it always has.
+
+  **The tracks come back too**, which is the larger half of what a reload used to
+  cost: a map is one drop and the bigWigs beside it are eight. A restored track
+  with a grant behind it says *reopening…* and fills itself in, keeping its id —
+  so it does not jump to the bottom of the card — along with its colour, its
+  limits, its height and its edge. They resolve in parallel rather than one after
+  another, and a grant that turns out to be spent puts the row back exactly where
+  it used to land, with the *re-open this file* button that has always been the
+  way back.
+
+  Two things this deliberately does **not** do. It does not put local file names
+  into the URL hash: this browser being able to reopen `rep1.cool` says nothing
+  about anybody else's, so the shareability test the hash is gated on is
+  unchanged, and a link still carries only what a recipient can act on. And it
+  does not ask for permission on the boot path, because a permission request
+  without a user gesture resolves without ever showing a dialog — the reader is
+  asked when they click, and never by a page that is merely loading.
+
+  A grant is keyed by the file rather than by the tab, so two tabs on one file
+  share it and one `.mcool` at five resolutions is one grant. The row also
+  records the file's name, size and modification time, because a local file's URI
+  is its bare name and two `rep1.cool` from two directories would otherwise
+  collide: a name that no longer matches is refused outright rather than opened,
+  since showing the wrong file with every label on screen agreeing is worse than
+  asking for it again. A file that has merely *changed* is not refused — a re-run
+  pipeline overwriting a file somebody is reading is a legitimate thing to do.
+
+- **The deck and the comparison come back too, and the tracks land on the right
+  panels.** These were the two files a reload lost most quietly. A local
+  companion is destroyed at *serialisation* — `maps` writes `~` for one — and a
+  local second file was never in the hash at all, so neither could even be
+  refused: by the time anything could ask, the name was gone.
+
+  Neither is fixed by changing the hash, and that is the design. The `~` is a
+  promise to a **recipient** (§16.6): it keeps the count and the order, so a
+  shared deck arrives with a drop rectangle where the sender's file was rather
+  than silently one map short. Putting a filename there instead would post a
+  private name to a stranger and leave their deck trying to *fetch* it. So the
+  names live beside the hash, in the session's own memory, as private as the
+  files they name — which means a plain reload restores them as well as a
+  remembered workspace does.
+
+  A stale note can only ever degrade to today's behaviour: a remembered cell that
+  now holds a published map is left alone, and one past the end of a deck that
+  has since shrunk is dropped. A companion whose file cannot be re-opened comes
+  back as a cell that **names it**, rather than as the link's "a map was here" —
+  which is true of a stranger's deck and misleading about a file on your own
+  disk.
+
+  And **where a track was drawn is remembered with it**. Until now a restored
+  deck put every track back on the first map, however carefully they had been
+  arranged across the panels. What is stored is keyed by the *file* each
+  companion was showing rather than by its panel id, because panel ids are minted
+  per deck and one written down today names nothing tomorrow — so it is seeded
+  into the same parking mechanism that already hands a lane back when a map
+  reopens its file. Where the companions do not come back, the tracks park onto
+  the lead exactly as they always have.
+
+- **A screen that says what this browser is remembering, and a button that ends
+  it.** Reachable from the command palette. It lists the durable workspace, the
+  per-window entries, the preferences, and — named outright rather than counted —
+  any bucket access keys, which are stored in plain text and which a reader
+  deciding what to clear on a borrowed machine should not have to press the
+  button to discover.
+
+  *Forget everything* means everything: both web storages and both IndexedDB
+  stores, swept by one rule over the prefix every key this app writes shares.
+  A rule rather than a list of names, because a list only covers the keys
+  somebody remembered to add to it — and a sweep that quietly missed one while
+  telling the reader it had cleared everything would be worse than no button at
+  all. A test reads every `setItem` in `src/` and holds the rule to it.
+
 - **Recentre on the diagonal**, a button in Aesthetics → Map between the turn and
   `O/E`. It slides the view onto the nearest on-diagonal window at the zoom it is
   already at — the perpendicular foot of the picture's own centre on the line the
@@ -800,6 +937,45 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   block does not contain would only jam it against an edge.
 
 ### Fixed
+
+- **Which score the cells were drawn from did not survive a link, a reload or the
+  back button.** `score` has been in `KEY_ORDER` since the field existed, so
+  every hash the app wrote carried it — and `parseViewState` never read it back.
+  The round trip `state/ViewState.ts` requires of itself in its own header was
+  broken for exactly one of its twenty-two keys, and silently, because what a
+  dropped `score` lands on is `count`: a legal picture of the same region, in the
+  same colours, with nothing on screen saying the quantity had changed.
+
+  Three things it cost, none of which looked like the same bug. A shared link
+  naming `balanced` or `ICE` opened on raw counts for the recipient. A restored
+  tab did the same, because the tab strip stores that very string
+  (`app/sessions.ts`). And the back button did it *within* a session: `readHash`
+  re-parses on every popstate and compares by serialising, so it saw a
+  difference, adopted the parsed state, and redrew a different quantity — press
+  Back after a bookmark and the map changed meaning.
+
+  The parser now reads it, as an open string like `colormap` rather than against
+  a closed list, because which `/pixels` columns exist is a fact about the file
+  and not about this build; an id this file has no column for is repaired by
+  `scoreFor`, exactly as a link naming a missing genome is. The round-trip test
+  gained the case, and a second one that would have caught this on the day it
+  was written: a state with **every** key set at once. Each of the twelve cases
+  there is a picture somebody looks at, which is why none of them covered a key
+  no case happened to use.
+
+- **An exported session forgot how its deck was arranged.** `deck:starred` and
+  `deck:columns` are per-file session memory like the ticked sequences and the
+  table filters beside them, and they were the two scopes `buildConfig` walked
+  straight past. `state.maps` says which maps a session holds, so those came
+  back; the arrangement around them did not. A deck of six exported at three
+  columns reopened at whatever the importing window computed for itself, and the
+  Analysis column reopened pointed at the lead rather than at the map the sender
+  had starred — both silently, because both are legal decks.
+
+  Nothing is validated on the way in, deliberately: `PanelDeck` already refuses a
+  column count it cannot use and already moves a star naming a slot it did not
+  build back onto the lead. A second copy of those rules in the config reader
+  would be a second place to keep them in step.
 
 - **Shift stopped sticking the readout to the diagonal as soon as the pointer
   moved.** Shift is the map's on-diagonal modifier — a Shift-drag names a stretch
