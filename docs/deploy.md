@@ -128,12 +128,12 @@ usual chain accepts. It is **not** part of `npm run build` and not part of the d
 data changes on the order of once a year and the app deploys on every push, so coupling them would
 mean re-uploading 250 MB to publish a CSS fix.
 
-None of them is in the example dropdown. What the dropdown offers is the sessions below, and those
+None of them is in the example dropdown. What the dropdown offers is the workspaces below, and those
 name these.
 
-## The published sessions
+## The published workspaces
 
-The picker's list (`ui/examples.ts`) is **three session files and nothing else**:
+The picker's list (`ui/examples.ts`) is **three workspace files and nothing else**:
 
 | file | opens |
 | --- | --- |
@@ -141,26 +141,40 @@ The picker's list (`ui/examples.ts`) is **three session files and nothing else**
 | `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
 | `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
 
-They are ordinary `metacooler.session` files — the exact format the export button in the top bar
-writes (`state/SessionConfig.ts`) — so choosing one from the list and dropping one somebody sent you
-are the same gesture, through the same code. A `.json` on a URL is fetched, parsed and applied;
+They are ordinary `metacooler.workspace` files — the exact format the save button in the top bar
+writes (`state/workspace.ts`) — so choosing one from the list and dropping one somebody sent you are
+the same gesture, through the same code. A `.json` on a URL is fetched, parsed and applied;
 everything it names is then opened by the ordinary paths.
 
-The reason to publish sessions rather than the data files themselves is that a `.cool` in a dropdown
-can only ever offer what dropping that `.cool` offers — a map at its landing view, with nothing
-beside it. A first-time reader should meet the application doing its job: a window worth looking at,
-tracks on both edges, two strands sharing a lane. All of that is already writable as a file, so it is
-written as one.
+Each is a workspace of **one tab**, which is what the format collapses to when a window holds one.
+Nothing stops a published example carrying several — a map and the genome browser over the same
+assembly, opening as two tabs — and `demo-examples.test.ts` walks every tab of every entry rather
+than the first, so a second one is checked the day it is added.
 
-**Names inside a session are relative, and must stay that way.** The URL of the session itself is
+The reason to publish workspaces rather than the data files themselves is that a `.cool` in a
+dropdown can only ever offer what dropping that `.cool` offers — a map at its landing view, with
+nothing beside it. A first-time reader should meet the application doing its job: a window worth
+looking at, tracks on both edges, two strands sharing a lane. All of that is already writable as a
+file, so it is written as one.
+
+**Names inside a workspace are relative, and must stay that way.** The URL of the workspace itself is
 absolute — built from the bucket prefix in `ui/examples.ts` — because a *relative* URI in a shared
 link would not re-open: `inferSource` follows a link only when its path is `http(s)://`. But the
-files a published session names are resolved against the session's own URL (`resolveConfig`), which
-is what makes a dataset folder self-contained: `demo/yeast/` holds two sessions and everything they
-name, and it opens from the bucket, from a copy on another bucket, or from `python3 -m http.server`
-over the directory. It is also why moving 250 MB from Pages to S3 changed no line of any
-`.metacooler.json`. An *exported* session names absolute URLs and is left untouched by that step, so
+files a published workspace names are resolved against its own URL (`resolveConfig`), which is what
+makes a dataset folder self-contained: `demo/yeast/` holds two workspaces and everything they name,
+and it opens from the bucket, from a copy on another bucket, or from `python3 -m http.server` over
+the directory. It is also why moving 250 MB from Pages to S3 changed no line of any
+`.metacooler.json`. A *saved* workspace names absolute URLs and is left untouched by that step, so
 the two kinds can be mixed in one file.
+
+Resolution covers **everything a tab names**, not only its map and its tracks: the second file of a
+comparison, every companion in a deck (`state.maps`), and the lane each track was drawn on. The deck
+and the lanes were the half that used to be missed, and the failure was quiet — a bare `rep2.cool`
+fetched against the *site root*, so the cell read as a broken panel rather than as an unresolved
+name. Two things are deliberately **dropped** rather than resolved on the way in, because they can
+only ever have named a file on the sender's own disk: a local second file, and a local deck
+companion. The `~` placeholder keeps the slot, so the count and the order survive and the reader gets
+a drop rectangle.
 
 ## The track resources
 
@@ -222,11 +236,12 @@ its neutral value is **1, not 0**, and a renderer that baselines at zero will dr
 positive; and `Yeast_microC_loops.tsv` is cis-only, so there is nothing to draw off the diagonal.
 
 These are data by every rule in `scripts/sw-manifest.mjs`, so they are not precached and not in
-`DEMO_FILES`, which now holds the three session files. `test/unit/demo-examples.test.ts` reads each
-of them with the app's own parser, resolves it as the app resolves it, checks that **every file it
-names is in this directory**, and opens the map ones. That is the check that matters here: renaming a
-bigWig no longer breaks a dropdown entry, it breaks a session that opens to a map with six error rows
-beside it, and nothing else in the suite would notice.
+`DEMO_FILES`, which holds the three workspace files. `test/unit/demo-examples.test.ts` reads each of
+them with the app's own parser, resolves it as the app resolves it, checks that **every file it
+names is in this directory** — map, comparison, companions, lanes and tracks alike — and opens the
+map ones. That is the check that matters here: renaming a bigWig no longer breaks a dropdown entry,
+it breaks a workspace that opens to a map with six error rows beside it, and nothing else in the
+suite would notice.
 
 ## Every push stays reachable
 

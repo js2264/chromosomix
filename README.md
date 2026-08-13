@@ -142,14 +142,15 @@ like, through the same kernels and the same writers:
 npm run build:cli
 node dist-cli/metacooler-run.mjs tasks
 node dist-cli/metacooler-run.mjs insulation *.mcool --window chrII --out results/
-node dist-cli/metacooler-run.mjs replay session.metacooler.json --over 'data/*.hic'
+node dist-cli/metacooler-run.mjs replay workspace.metacooler.json --over 'data/*.hic'
 ```
 
-`replay` takes the session file **Save** and **Share** already produce and
-re-runs the analyses in it, with the parameters in it, over other files —
-parameters chosen by looking at a picture, applied to the other hundred and
-ninety-nine without retyping. Local files only: the reader's range requests are
-synchronous and exist in a worker rather than in Node.
+`replay` takes the workspace file **Save** produces — every open tab in one
+file — and re-runs the analyses recorded in it, with the parameters in it, over
+other files: parameters chosen by looking at a picture, applied to the other
+hundred and ninety-nine without retyping. It replays the tab that was in front
+unless `--tab <n>` names another. Local files only: the reader's range requests
+are synchronous and exist in a worker rather than in Node.
 
 `npm run fixtures` shells out to Python and needs an interpreter with `metacooler` installed:
 
@@ -331,7 +332,7 @@ category — see SPECS §9); **no write access of any kind** — the viewer neve
 opened.
 
 That last one is worth spelling out now that the app writes bigWigs. It has always *produced* files
-— a PNG, a PDF, a BED of hand-drawn marks, a saved session — and a bigWig is one more of them: new
+— a PNG, a PDF, a BED of hand-drawn marks, a saved workspace — and a bigWig is one more of them: new
 bytes handed to the browser as a download, needing no server, touching nothing that was opened. The
 line is between authoring an output and editing an input, and only the second is refused. Which is
 also why there is **no writing of `.cool`, `.mcool` or `.metacool`**: h5wasm could create one, so

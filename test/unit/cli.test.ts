@@ -181,24 +181,38 @@ describe('running a task', () => {
   })
 })
 
-describe('replaying a session', () => {
-  const sessionAt = async (analysis: unknown): Promise<string> => {
-    const path = join(directory, 'session.metacooler.json')
+describe('replaying a workspace', () => {
+  /** A workspace file of one tab — what the save button writes for one tab. */
+  const tabOf = (analysis: unknown, uri = 'sample.hic') => ({
+    version: 1,
+    createdAt: '2026-08-12T00:00:00.000Z',
+    state: { uri, view: 'contigs' },
+    tracks: [],
+    manual: [],
+    bookmarks: [],
+    analysis,
+  })
+
+  const workspaceAt = async (
+    tabs: unknown[],
+    active = 0,
+    name = 'workspace.metacooler.json',
+  ): Promise<string> => {
+    const path = join(directory, name)
     await writeFile(
       path,
       JSON.stringify({
-        kind: 'metacooler.session',
+        kind: 'metacooler.workspace',
         version: 1,
         createdAt: '2026-08-12T00:00:00.000Z',
-        state: { uri: 'sample.hic', view: 'contigs' },
-        tracks: [],
-        manual: [],
-        bookmarks: [],
-        analysis,
+        active,
+        tabs,
       }),
     )
     return path
   }
+
+  const sessionAt = (analysis: unknown): Promise<string> => workspaceAt([tabOf(analysis)])
 
   it('runs what the session recorded, with the parameters it recorded', async () => {
     reset()
@@ -221,7 +235,56 @@ describe('replaying a session', () => {
       coverage: { total: true, cis: false, fraction: false, trans: false, balance: false },
     })
     await main(['replay', path, '--over', sample, '--out', join(directory, 'r2'), '--quiet'])
-    expect(complained()).toMatch(/2 tasks from session\.metacooler\.json, over 1 file/)
+    expect(complained()).toMatch(/2 tasks from workspace\.metacooler\.json, over 1 file/)
+  })
+
+  /**
+   * Which tab, out of a window full of them.
+   *
+   * A workspace holds every tab that was open, and "replay the session" now has
+   * to mean one of them. The tab that was in front is the honest default — it is
+   * what the reader was looking at when they pressed Save — and `--tab` is
+   * one-based because that is how they counted the strip.
+   */
+  it('replays the tab that was in front, and the one --tab names', async () => {
+    reset()
+    const path = await workspaceAt(
+      [
+        tabOf({ coverage: { total: true, cis: false, fraction: false, trans: false, balance: false } }),
+        tabOf({
+          expected: { scope: 'contig', factor: 1.75, derivative: false, minSeparation: 0, balance: false },
+        }),
+      ],
+      1,
+    )
+    const front = join(directory, 'front')
+    expect(await main(['replay', path, '--over', sample, '--out', front, '--quiet'])).toBe(0)
+    expect(await readFile(join(front, 'sample.expected.ps.tsv'), 'utf8')).toMatch(
+      /^# param factor: 1\.75$/m,
+    )
+
+    reset()
+    const first = join(directory, 'first')
+    expect(
+      await main(['replay', path, '--tab', '1', '--over', sample, '--out', first, '--quiet']),
+    ).toBe(0)
+    // Named by prefix rather than by one filename: a profile output is a bigWig
+    // and a bedGraph beside the table, and which of the three is checked is not
+    // what this test is about.
+    expect(
+      (await readdir(first)).some((name) => name.startsWith('sample.coverage')),
+      'tab 1 recorded coverage and nothing else',
+    ).toBe(true)
+  })
+
+  it('names how many tabs there are rather than replaying the wrong one', async () => {
+    // Silently falling back to tab 1 would produce a full set of results from
+    // parameters nobody asked for, which is the failure this whole command
+    // exists to avoid.
+    reset()
+    const path = await workspaceAt([tabOf({ coverage: { total: true, balance: false } })])
+    expect(await main(['replay', path, '--tab', '4', '--over', sample])).toBe(2)
+    expect(complained()).toMatch(/holds 1 tab; --tab must name one of them/)
   })
 
   it('names a task this build does not have rather than skipping in silence', async () => {
@@ -232,15 +295,44 @@ describe('replaying a session', () => {
     expect(complained()).toMatch(/skipped notATask: this build has no such task/)
   })
 
-  it('refuses a file that is not a session', async () => {
+  it('refuses a file that is not a workspace, and says which way it is not one', async () => {
     reset()
     const path = join(directory, 'nope.json')
     await writeFile(path, '{"hello":"world"}')
     expect(await main(['replay', path, '--over', sample])).toBe(2)
-    expect(complained()).toMatch(/not a metacooler session file/)
+    expect(complained()).toMatch(/not a saved workspace/)
+
+    reset()
+    const broken = join(directory, 'broken.json')
+    await writeFile(broken, 'not json at all')
+    expect(await main(['replay', broken, '--over', sample])).toBe(2)
+    expect(complained()).toMatch(/not a JSON file/)
   })
 
-  it('refuses a session that recorded no analysis', async () => {
+  it('refuses a workspace from a newer build without blaming the file', async () => {
+    // The reason the message is no longer one blanket sentence. A workspace this
+    // build cannot read is a fact about the build, and telling somebody their
+    // file is "not a metacooler workspace file" sends them to inspect a file
+    // that is perfectly good.
+    reset()
+    const path = join(directory, 'future.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: 99,
+        producer: '(meta)cooler 9.9.9',
+        active: 0,
+        tabs: [{ state: { uri: 'a.cool', view: 'region' } }],
+      }),
+    )
+    expect(await main(['replay', path, '--over', sample])).toBe(2)
+    expect(complained()).toMatch(/newer version of the viewer/)
+    expect(complained()).toMatch(/9\.9\.9/)
+    expect(complained()).not.toMatch(/not a saved workspace/)
+  })
+
+  it('refuses a workspace that recorded no analysis', async () => {
     reset()
     const path = await sessionAt({})
     expect(await main(['replay', path, '--over', sample])).toBe(2)

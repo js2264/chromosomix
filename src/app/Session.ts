@@ -58,7 +58,6 @@ import {
   applyConfig,
   buildConfig,
   looksLikeConfig,
-  parseConfig,
   resolveConfig,
   type SessionConfig,
 } from '../state/SessionConfig'
@@ -115,7 +114,7 @@ import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
-import { contigOf, fileLabel, neighbour, splitUri } from '../ui/labels'
+import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
@@ -140,6 +139,17 @@ export interface SessionHost {
   panelsChanged(session: Session): void
   /** Ask for a file over the top of whatever is on screen (§11). */
   openFileDialog(session: Session): void
+  /**
+   * A saved workspace arrived — as a dropped file, or fetched from a URL.
+   *
+   * The shell's, not a session's: a workspace is *N tabs* and a session
+   * deliberately knows nothing about the window it sits in. `base` is where the
+   * file was found, for resolving the relative names a published one carries;
+   * absent for a dropped file, which has no folder a page can see.
+   */
+  openWorkspaceFile(text: string, label: string, base?: string): void
+  /** Say something quiet and dismissible about what just happened. */
+  notify(message: string): void
   /** A read finished; the status bar's counters are worth another look. */
   activity(session: Session): void
 }
@@ -1403,11 +1413,25 @@ export class Session {
   exportConfig(): SessionConfig | null {
     const state = this.store.state
     if (state === null) return null
+    // Which file this is *of*, when it is a local one. A browser session has no
+    // `file` and carries its source separately, and both are asked, because a
+    // 1D browser opened from a dropped bigWig is as much "made from a file" as a
+    // map is. A remote file needs none of this: its identity is its URL.
+    const opened = this.file?.source ?? this.assemblySource
+    const source =
+      opened?.kind === 'local'
+        ? {
+            name: opened.file.name,
+            size: opened.file.size,
+            lastModified: opened.file.lastModified,
+          }
+        : undefined
     return buildConfig({
       state,
       memoryKey: this.memoryKey(state.uri),
       plot: getPlotOptions(),
       now: new Date(),
+      ...(source === undefined ? {} : { source }),
     })
   }
 
@@ -1439,19 +1463,46 @@ export class Session {
     await this.openWithConfig(config.state.uri, source)
   }
 
+  /**
+   * Say so, once, when the file handed over is not the file this session was
+   * made from.
+   *
+   * Only where the **name matches**, which is the whole signal: a reader who
+   * drops `other.cool` for a session saved from `rep1.cool` has deliberately
+   * pointed it somewhere else, and this module's own rule is that the same
+   * session under a renamed file is still that session. What is worth remarking
+   * on is the case that looks like a match and is not — the same name, different
+   * bytes. That is either a re-run pipeline, which is legitimate and which the
+   * reader should know about because the numbers on screen are not the numbers in
+   * their figure, or it is somebody else's file of the same name.
+   *
+   * A remark and never a refusal. The two cases are indistinguishable from here,
+   * and one of them is a thing people do on purpose.
+   */
+  private noteSourceMismatch(config: SessionConfig, source: SourceSpec): void {
+    const saved = config.source
+    if (saved === undefined || source.kind !== 'local') return
+    const file = source.file
+    if (file.name !== saved.name) return
+    const sizeMoved = saved.size !== undefined && saved.size !== file.size
+    const timeMoved = saved.lastModified !== undefined && saved.lastModified !== file.lastModified
+    if (!sizeMoved && !timeMoved) return
+    const was = sourceNote(saved)
+    const now = sourceNote({ name: file.name, size: file.size, lastModified: file.lastModified })
+    this.host.notify(
+      `${file.name} is not the file this session was made from — that one was ${was ?? 'different'}` +
+        `, this one is ${now ?? 'different'}. The session has opened; the numbers in it are this ` +
+        'file’s.',
+    )
+  }
+
   /** Read a dropped file as a config, and say so if it is not one. */
   private async openConfigFile(file: File): Promise<void> {
-    const config = parseConfig(await file.text())
-    if (config === null) {
-      this.showError(
-        new Error(
-          `${file.name} is a JSON file but not a saved session — it does not name itself as one. ` +
-            'A session is written by the export button in the top bar.',
-        ),
-      )
-      return
-    }
-    await this.openConfig(config)
+    // Handed straight up. A saved file is a *workspace* — every tab of the
+    // window that wrote it — and seating N tabs is the shell's business; a
+    // session has no idea it has neighbours. It also means the refusal is
+    // reported in one place rather than in each of the roads a file arrives by.
+    this.host.openWorkspaceFile(await file.text(), file.name)
   }
 
   /**
@@ -1491,15 +1542,10 @@ export class Session {
             `${response.statusText}${credential === null ? '' : ' to a signed request'}.`,
         )
       }
-      const config = parseConfig(await response.text())
-      if (config === null) {
-        throw new Error(
-          `${fileLabel(url)} is a JSON file but not a saved session — it does not name itself ` +
-            'as one. A session is written by the export button in the top bar.',
-        )
-      }
       if (this.destroyed) return
-      await this.openConfig(resolveConfig(config, url))
+      // …and the same hop for a published one, with the URL it was found at, so
+      // the relative names inside it resolve against that folder.
+      this.host.openWorkspaceFile(await response.text(), fileLabel(url), url)
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
@@ -1547,6 +1593,7 @@ export class Session {
       await this.open(uri, source)
       return
     }
+    this.noteSourceMismatch(config, source)
     applyConfig(config, this.memoryKey(uri))
     // Kept for the one hop `open` can make on its own: a collection addressed
     // at its root lands on one of its entries, under a URI this config has
@@ -2308,8 +2355,10 @@ export class Session {
    */
   async addRemote(uri: string, source: SourceSpec): Promise<void> {
     const { path } = splitUri(uri)
-    // A saved session names a whole tab rather than a file to put in one, and
-    // the door that knows that is the picker's own.
+    // A saved workspace names whole *tabs* rather than a file to put in one, so
+    // it goes to the door that knows that. It keeps this button's promise
+    // rather than breaking it: `App.openWorkspaceFile` appends its tabs beside
+    // whatever is open, so *and this too* is exactly what a reader gets.
     if (looksLikeConfig(path)) {
       await this.openPicked(uri, source)
       return
@@ -2351,8 +2400,8 @@ export class Session {
    * the map is still a map, not a track drawn along the bottom.
    */
   private dropped(file: File, placement?: Placement, map?: string): void {
-    // A saved session, before anything else looks at it: it is not a track, it
-    // is the tab it was exported from.
+    // A saved workspace, before anything else looks at it: it is not a track,
+    // it is the window it was saved from.
     if (looksLikeConfig(file.name)) {
       void this.openConfigFile(file)
       return
@@ -2684,8 +2733,8 @@ export class Session {
         // the tracks come across live, because a genome browser that opens a map
         // of its own genome has not changed the subject. Through the doors every
         // other drop takes, rather than straight at `open`: what a file *is* is
-        // decided in one place, so a saved session dropped on this rectangle is
-        // still a saved session and a `chrom.sizes` is still an answer about
+        // decided in one place, so a saved workspace dropped on this rectangle
+        // is still a saved workspace and a `chrom.sizes` is still an answer about
         // lengths.
         if (source.kind === 'local') this.dropped(source.file)
         else void this.openWithConfig(source.url, { kind: 'remote', url: splitUri(source.url).path })
@@ -5205,13 +5254,22 @@ export class Session {
   /** The picker, asking for the file a config describes. */
   private pickerWithConfig(config: SessionConfig): HTMLElement {
     const tracks = config.tracks.length
+    // What the session knows about the file, when it knows anything. `rep1.cool`
+    // is a name a reader may have several of, and the size and date are the
+    // difference between finding the right file and finding *a* file with the
+    // right name. Absent for every session written before the field existed and
+    // for every one made from a remote file, and then the sentence is the one it
+    // has always been.
+    const note = sourceNote(config.source)
     return el(
       'div',
       { class: 'view' },
       el('p', {
         class: 'inline-error',
         text:
-          `This session was saved from ${fileLabel(config.state.uri)}, which is a local file — no ` +
+          `This session was saved from ${fileLabel(config.state.uri)}` +
+          (note === null ? '' : ` (${note})`) +
+          ', which is a local file — no ' +
           'page can re-open one by name. Drop it below and everything else comes back with it' +
           (tracks === 0 ? '.' : `: the view, and ${fmt.int(tracks)} tracks with their settings.`),
       }),

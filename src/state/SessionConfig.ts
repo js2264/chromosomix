@@ -1,6 +1,11 @@
 /**
  * A whole tab, written down.
  *
+ * **One tab, and not a file.** What a reader saves is a *workspace* — every tab
+ * in the window, in one file — and `state/workspace.ts` owns that. This module
+ * owns what one of its entries is, which is also what the durable record keeps
+ * per tab and what a share link carries one of. Three roads, one definition.
+ *
  * The URL already shares *what is being looked at* (§5.5) — one file, one view,
  * one window, one colour scale — and that is the right thing for a link. It is
  * not the right thing for a workspace: eight tracks with their colours, heights,
@@ -25,7 +30,8 @@
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
-import type { DeckLocal } from '../panels/deck'
+import { parseMaps, serialiseMaps, type DeckLocal } from '../panels/deck'
+import { COMMIT, PRODUCER } from '../version'
 import type { StoredEntry } from '../annotations/types'
 import type { StoredLane } from '../annotations/store'
 import type { Bookmark } from '../annotations/bookmarks'
@@ -33,9 +39,6 @@ import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
 import type { ViewState } from '../types'
-
-/** What the file says it is, so a stray `.json` is not read as one. */
-export const CONFIG_KIND = 'metacooler.session'
 
 /**
  * The format's own version.
@@ -50,10 +53,65 @@ export const CONFIG_VERSION = 1
 type GroupModes = Record<string, string>
 
 export interface SessionConfig {
-  kind: typeof CONFIG_KIND
+  /**
+   * The format's version, carried per tab.
+   *
+   * Kept here rather than only on the file around it because a tab is what the
+   * durable record and a share link hold one of, and each of those has to be
+   * able to refuse a tab from a newer build on its own.
+   */
   version: number
   /** When it was written, for the reader who finds four of them in a folder. */
   createdAt: string
+  /**
+   * Which build wrote this — `(meta)cooler 0.10.0`, or `… desktop`.
+   *
+   * Byte-identical to the string every exported PDF carries in its `/Producer`
+   * field (`ui/export.ts`), and deliberately so: a figure and the session that
+   * made it should answer *which build* the same way, because "which build made
+   * this" is the first question asked when one of them came out wrong. A flat
+   * string rather than a `{name, version, target}` object, because there is no
+   * consumer that wants the parts and every reader wants the line.
+   *
+   * Optional on the way in: a file written before this existed is still a
+   * session, and it simply cannot say.
+   */
+  producer?: string
+  /**
+   * Short commit hash, when the build had a git repository behind it.
+   *
+   * Absent rather than empty where it is unknown — `version.ts`'s own rule, and
+   * the reason `buildLine()` filters before it joins. An empty string here would
+   * be a claim that the build has no commit, which is a different thing from not
+   * knowing.
+   */
+  commit?: string
+  /**
+   * Which file this session was made *from*, when that file was a local one.
+   *
+   * Not decoration, and not for display first: it closes a hole. A config names
+   * its file by URI, and for a local file that URI is the bare filename. Opening
+   * one goes through the grant store, which is keyed on that bare name and whose
+   * collision guard compares only the name (`state/handles.ts`) — so a config
+   * received from a colleague and naming `rep1.cool` opens **this** browser's
+   * `rep1.cool`, with the sender's marks, bookmarks and colour limits drawn over
+   * somebody else's data and every label on screen agreeing.
+   *
+   * The size and the modification time are what tell the two apart. They also
+   * catch the quieter case of the same file re-run through a pipeline: same
+   * name, same path, different numbers.
+   *
+   * **It informs and never vetoes.** `handles.ts` deliberately blesses a re-run
+   * overwriting a file somebody is reading — the reader asked for *that file* —
+   * and nothing here can distinguish that from a different file on another
+   * machine. So a mismatch is said once, where the file is asked for, and the
+   * session opens.
+   *
+   * Absent for a remote file, whose identity is its URL, and absent from a
+   * shared link, where it would be metadata about a private machine that a
+   * recipient can do nothing with (`state/shareLink.ts`).
+   */
+  source?: { name: string; size?: number; lastModified?: number }
   /** What is being looked at: the same object the URL hash carries. */
   state: ViewState
   /** Every loaded annotation, exactly as session storage keeps them (§8.6). */
@@ -168,6 +226,31 @@ function lanesOf(lanes: StoredLane[] | null | undefined): { lanes?: StoredLane[]
   return Array.isArray(lanes) && lanes.length > 0 ? { lanes } : {}
 }
 
+/**
+ * A `source` block, checked field by field.
+ *
+ * The name is the only required part: a file with no size recorded is still a
+ * file this session was made from, and saying so is better than saying nothing.
+ * A size or a time that is not a number is dropped rather than repaired, because
+ * a wrong number here would report a mismatch against a file that matches.
+ */
+function sourceOf(value: unknown): { source?: SessionConfig['source'] } {
+  if (typeof value !== 'object' || value === null) return {}
+  const row = value as Record<string, unknown>
+  if (typeof row['name'] !== 'string' || row['name'] === '') return {}
+  return {
+    source: {
+      name: row['name'],
+      ...(typeof row['size'] === 'number' && Number.isFinite(row['size'])
+        ? { size: row['size'] }
+        : {}),
+      ...(typeof row['lastModified'] === 'number' && Number.isFinite(row['lastModified'])
+        ? { lastModified: row['lastModified'] }
+        : {}),
+    },
+  }
+}
+
 /** `{ compare: … }` when a local second file was open, and nothing when not. */
 function compareOf(uri: string | null | undefined): { compare?: string } {
   return typeof uri === 'string' && uri !== '' ? { compare: uri } : {}
@@ -229,12 +312,24 @@ export function buildConfig(options: {
   memoryKey: string
   plot: PlotOptions
   now: Date
+  /**
+   * The local file this session is of, when it is one — see {@link
+   * SessionConfig.source}. Passed in rather than read out of storage, which is
+   * the one exception to this function's own rule, because the identity of a
+   * `File` is not something any store holds: it is on the object the drop
+   * handed over, and nowhere else.
+   */
+  source?: { name: string; size?: number; lastModified?: number }
 }): SessionConfig {
   const key = options.memoryKey
   return {
-    kind: CONFIG_KIND,
     version: CONFIG_VERSION,
     createdAt: options.now.toISOString(),
+    // Stamped always, and the commit only where there is one. See the fields'
+    // own docstrings for why absent beats empty.
+    producer: PRODUCER,
+    ...(COMMIT === '' ? {} : { commit: COMMIT }),
+    ...(options.source === undefined ? {} : { source: options.source }),
     state: options.state,
     tracks: recall<StoredEntry[]>(key, SCOPES.tracks) ?? [],
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
@@ -298,6 +393,59 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
 }
 
 /**
+ * Why a file that is not a session is not one.
+ *
+ * A typed answer rather than `null`, because the three cases want three
+ * different sentences and a bare `null` made two of them **false**: a file from
+ * a newer build landed the reader on "is a JSON file but not a saved workspace",
+ * and a link from one on "may have been cut short in transit". Both send
+ * somebody to inspect the wrong thing — the file, or their network — when what
+ * is actually wrong is the build they are holding.
+ */
+export type ConfigRefusal =
+  | { reason: 'not-json' }
+  | { reason: 'not-a-workspace' }
+  | { reason: 'newer'; version: number; producer?: string }
+
+/**
+ * `true` when a reader answered with a refusal rather than the thing asked for.
+ *
+ * Takes any object, because there are two readers now — one for a tab and one
+ * for the file around it — and both answer with the same refusals. Narrowing it
+ * to one of them would mean a second identical guard for the other.
+ */
+export function isRefusal<T extends object>(value: T | ConfigRefusal): value is ConfigRefusal {
+  return 'reason' in value
+}
+
+/**
+ * What to tell the reader, in one sentence, about a file that was refused.
+ *
+ * A pure function so the wording is testable without a `Session` and identical
+ * on all three roads a config travels — a dropped file, a fetched URL, and the
+ * CLI. `label` is what the reader calls the thing: a file name, or a URL.
+ */
+export function refusalMessage(refusal: ConfigRefusal, label: string): string {
+  if (refusal.reason === 'not-json') {
+    return `${label} is not a JSON file, so it is not a saved workspace.`
+  }
+  if (refusal.reason === 'newer') {
+    // Names both numbers and the build, because the fix is not to the file: it
+    // is to update the viewer, or to save the session again from this one.
+    const from = refusal.producer === undefined ? '' : ` — ${refusal.producer}`
+    return (
+      `${label} was saved by a newer version of the viewer${from}, in workspace format ` +
+      `${refusal.version}. This build reads format ${CONFIG_VERSION}. Update the viewer, or ` +
+      'ask for the session to be saved again from this one.'
+    )
+  }
+  return (
+    `${label} is a JSON file but not a saved workspace — it does not name itself as one. ` +
+    'A workspace is written by the save button in the top bar.'
+  )
+}
+
+/**
  * Read a config out of a file's text, or refuse it.
  *
  * Deliberately forgiving about *fields* and strict about *identity*: anything
@@ -306,20 +454,37 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
  * should be told it is not a session rather than watched as their tab is
  * replaced by an empty one.
  */
-export function parseConfig(text: string): SessionConfig | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null) return null
+export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
+  if (typeof parsed !== 'object' || parsed === null) return { reason: 'not-a-workspace' }
   const row = parsed as Record<string, unknown>
-  if (row['kind'] !== CONFIG_KIND) return null
+  // No `kind` on a tab: the *file* names itself once, and a second name inside
+  // every entry would be a claim to keep in step with nothing. What identifies a
+  // tab is that it says what it is looking at.
   const state = row['state']
-  if (typeof state !== 'object' || state === null) return null
+  if (typeof state !== 'object' || state === null) return { reason: 'not-a-workspace' }
   const uri = (state as Record<string, unknown>)['uri']
-  if (typeof uri !== 'string' || uri === '') return null
+  if (typeof uri !== 'string' || uri === '') return { reason: 'not-a-workspace' }
+
+  // The one check that belongs to *identity* rather than to a field, and the
+  // reason it is here rather than among the tolerant reads below. `version` is
+  // not a value this format carries; it is a claim about what every other value
+  // in the file **means**. A bump says a field this build reads means something
+  // else now, and nothing in a v1 build can know which field moved — so reading
+  // on would be drawing somebody's `vmin` as a log10 value when they wrote a
+  // percentile, with every label on screen agreeing.
+  //
+  // Deliberately no "open anyway". The button would be an offer to be silently
+  // wrong, and the honest fix when a bump finally happens is a `migrate(row,
+  // from)` call on this line rather than a way past it.
+  const version = typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION
+  if (version > CONFIG_VERSION) {
+    const producer = row['producer']
+    return {
+      reason: 'newer',
+      version,
+      ...(typeof producer === 'string' && producer !== '' ? { producer } : {}),
+    }
+  }
 
   const list = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
   const record = (value: unknown): GroupModes =>
@@ -337,8 +502,17 @@ export function parseConfig(text: string): SessionConfig | null {
   const deck = record(row['deck']) as Record<string, unknown>
 
   return {
-    kind: CONFIG_KIND,
-    version: typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION,
+    version,
+    // Read tolerantly, like every other field: a session written before these
+    // existed is still a session, and one written by a build that could not
+    // find its own git repository is too.
+    ...(typeof row['producer'] === 'string' && row['producer'] !== ''
+      ? { producer: row['producer'] }
+      : {}),
+    ...(typeof row['commit'] === 'string' && row['commit'] !== ''
+      ? { commit: row['commit'] }
+      : {}),
+    ...sourceOf(row['source']),
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
     state: state as ViewState,
     tracks: list<StoredEntry>(row['tracks']),
@@ -375,6 +549,19 @@ export function parseConfig(text: string): SessionConfig | null {
   }
 }
 
+/**
+ * The same read, for the road that has nowhere to put a reason.
+ *
+ * The durable record arrives somewhere that can only show or not show a thing,
+ * so it takes the `null` and inherits every refusal above — including the
+ * version gate, which is the point: it would otherwise be the one road that
+ * silently misread a tab from a newer build.
+ */
+export function parseTab(parsed: unknown): SessionConfig | null {
+  const read = readTab(parsed)
+  return isRefusal(read) ? null : read
+}
+
 /** `true` when a file name is worth reading as a config before anything else. */
 export function looksLikeConfig(name: string): boolean {
   return /\.json$/i.test(name)
@@ -399,6 +586,32 @@ export function looksLikeConfig(name: string): boolean {
  * The `::entries/rep1` half of a URI is not part of the resolution — it names a
  * group *inside* the file — so it is split off, and put back on, by the reader's
  * own parser rather than by a second one written here.
+ *
+ * ## It also *drops* two fields, which is not the same job
+ *
+ * This function is reached from exactly two places, and both mean **this config
+ * arrived from somewhere that is not this machine**. That is the strongest
+ * signal available about a name, and it licenses more than resolution: a
+ * *private* name — one that can only ever have meant a file on the sender's own
+ * disk — is removed rather than repaired.
+ *
+ * `compare` and `deck.locals` are both bare local filenames, and leaving them is
+ * the worst of the three options. `Session` resolves them through
+ * `resolveSource` → `resolveHandle`, where a grant is keyed on the bare name and
+ * the collision guard compares only `file.name` (`state/handles.ts`). So a
+ * recipient who has ever granted their own `rep2.cool` opens **their** file in
+ * the sender's slot, with every label on screen agreeing with them. Resolving
+ * the names instead would mint a URL for a file that was never published — a 404
+ * where an honest drop rectangle used to be.
+ *
+ * Dropping costs only a *label*: `state.maps` still carries `~` for the slot, so
+ * the count, the order and the drop rectangle all survive (§16.6).
+ *
+ * The rule that decides all of this, and the reason a *local track* is kept:
+ * **a private name is stripped only where the structure survives without it.**
+ * A dropped companion costs a label; a dropped track costs the row, and a
+ * recipient silently receiving seven tracks where eight were sent is the exact
+ * failure the `~` placeholder exists to prevent.
  */
 export function resolveConfig(config: SessionConfig, base: string): SessionConfig {
   const at = (uri: string): string => {
@@ -413,22 +626,63 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
     if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return uri
     return formatUri(new URL(parsed.path, base).href, parsed.group)
   }
-  return {
+
+  // Through the deck's own pair, never a second `|` splitter written here. The
+  // escaping invariant — a raw pipe separates, `%7C` inside a member is data —
+  // lives in `panels/deck.ts`, and its comment says what a second copy costs: a
+  // config that resolves to a *different number of maps* than were written, with
+  // no error anywhere. Two normalisations come with the reuse and are both
+  // already applied downstream by `Session.syncDeck`: empty segments are
+  // dropped, and the list is capped at `MAX_PANELS - 1`.
+  const maps =
+    config.state.maps === undefined
+      ? undefined
+      : serialiseMaps(
+          parseMaps(config.state.maps).map((ref) =>
+            ref.kind === 'remote' ? { ...ref, uri: at(ref.uri) } : ref,
+          ),
+        )
+
+  // `deck` minus its `locals`, keeping the arrangement. Written out rather than
+  // spread-and-delete so the omission is visible at the call site.
+  // `?? {}` for the reason `forSharing` has one: this takes whatever it is
+  // handed, and refusing to resolve a published session because it omits a field
+  // would be a worse failure than the one being fixed.
+  const held = config.deck ?? {}
+  const deck: SessionConfig['deck'] = {
+    ...(held.starred === undefined ? {} : { starred: held.starred }),
+    ...(held.columns === undefined ? {} : { columns: held.columns }),
+  }
+
+  const resolved: SessionConfig = {
     ...config,
     state: {
       ...config.state,
       uri: at(config.state.uri),
       ...(config.state.uri2 === undefined ? {} : { uri2: at(config.state.uri2) }),
+      ...(maps === undefined ? {} : { maps }),
     },
     tracks: config.tracks.map((track) =>
       track.source.kind !== 'remote' || track.source.url === undefined
         ? track
         : { ...track, source: { ...track.source, url: at(track.source.url) } },
     ),
+    deck,
+    // Through the **same** `at()` as `maps`, and that pairing is load-bearing: a
+    // `StoredLane.uri` is the companion's file URI and `adoptHome` matches it by
+    // string equality, so resolving one and not the other puts every placed
+    // track on the lead — which is a perfectly legal lane, so nothing reports
+    // anything and the deck simply comes back wrong.
+    ...(config.lanes === undefined
+      ? {}
+      : { lanes: config.lanes.map((lane) => ({ ...lane, uri: at(lane.uri) })) }),
   }
+  // Deleted rather than set to `undefined`, so the field is *absent* exactly as
+  // `parseConfig` leaves it for a config that never had one — a key present and
+  // holding nothing is a third state, and every reader here treats absence as
+  // the answer.
+  delete resolved.compare
+  return resolved
 }
 
-/** What one is called on the way out. */
-export function configFileName(base: string, stamp: string): string {
-  return `${base}-${stamp}.metacooler.json`
-}
+

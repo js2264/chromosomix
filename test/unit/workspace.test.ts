@@ -17,18 +17,30 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  WORKSPACE_KIND,
   WORKSPACE_VERSION,
+  buildWorkspaceFile,
   flushWorkspace,
   forgetWorkspace,
+  parseWorkspaceFile,
   readWorkspace,
   recordAction,
+  seatWorkspace,
   summariseWorkspace,
+  workspaceFileName,
   writeWorkspace,
   type Workspace,
 } from '@/state/workspace'
 import { STORES, store } from '@/state/idb'
-import { CONFIG_KIND, buildConfig } from '@/state/SessionConfig'
+import {
+  CONFIG_VERSION,
+  buildConfig,
+  isRefusal,
+  refusalMessage,
+  type ConfigRefusal,
+} from '@/state/SessionConfig'
 import { remember } from '@/state/UiMemory'
+import { COMMIT, PRODUCER } from '@/version'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
 import type { ViewState } from '@/types'
 
@@ -158,7 +170,26 @@ describe('readWorkspace', () => {
     })
     const read = await readWorkspace()
     expect(read?.sessions.map((session) => session.id)).toEqual(['s2'])
-    expect(read?.sessions[0].config.kind).toBe(CONFIG_KIND)
+    expect(read?.sessions[0].config.state.uri).toBe('good.cool')
+  })
+
+  it('reads a record that names no kind, because a record never carried one', async () => {
+    // The regression a clean break invites. The *file* names itself and is
+    // refused when it does not; a record is private to this browser, was written
+    // by this build, and has never had a `kind` in it — neither around the tabs
+    // nor inside one. Demanding one here would refuse every record already on
+    // disk, and the symptom would not be an error: it would be the restore
+    // banner quietly never appearing again, which reads exactly like "there was
+    // nothing to restore".
+    await seed({
+      version: 1,
+      savedAt: '2026-08-13T09:00:00.000Z',
+      sessions: [{ id: 's1', config: configFor('kindless.cool', 'wsG|kindless.cool') }],
+      active: 's1',
+    })
+    const read = await readWorkspace()
+    expect(read?.sessions).toHaveLength(1)
+    expect(JSON.stringify(read)).not.toContain(WORKSPACE_KIND)
   })
 
   it('drops a duplicate id rather than seating two tabs on one memory key', async () => {
@@ -264,5 +295,191 @@ describe('recordAction', () => {
   it('writes whenever there is something to write', () => {
     expect(recordAction({ settled: true, offering: false, tabs: 1 })).toBe('write')
     expect(recordAction({ settled: true, offering: false, tabs: 12 })).toBe('write')
+  })
+})
+
+/**
+ * The workspace as a file, which is the one artifact that leaves this browser.
+ *
+ * Everything above is private to one machine and can afford to be forgiving.
+ * This is not: it is written on one computer and opened on another, possibly by
+ * a different build, possibly after somebody has edited it in a text editor. So
+ * it names itself, it says which build wrote it, and it refuses rather than
+ * guesses — while still being forgiving about the *tabs* inside it, because
+ * nine good tabs and one corrupt one is nine tabs.
+ */
+describe('the workspace file', () => {
+  const tabs = [
+    configFor('one.cool', 'wf1|one.cool'),
+    configFor('two.cool', 'wf2|two.cool'),
+    configFor('three.cool', 'wf3|three.cool'),
+  ]
+  const written = (active = 1) => buildWorkspaceFile(tabs, active, new Date('2026-08-13T09:00:00Z'))
+
+  it('carries every tab and remembers which was in front', () => {
+    const file = written()
+    expect(file.kind).toBe('metacooler.workspace')
+    expect(file.tabs).toHaveLength(3)
+    expect(file.tabs.map((tab) => tab.state.uri)).toEqual(['one.cool', 'two.cool', 'three.cool'])
+    expect(file.active).toBe(1)
+    expect(file.createdAt).toBe('2026-08-13T09:00:00.000Z')
+  })
+
+  it('names the active tab by index rather than by session id', () => {
+    // The one real difference from the record above. A sender's `s1` means
+    // nothing in a recipient's window and would *collide* with a tab they
+    // already have; `applyConfig` re-keys on import anyway, so an id in a file
+    // would be a private tab identity published for the benefit of nobody.
+    expect(JSON.stringify(written())).not.toContain('"id":"s1"')
+    expect(typeof written().active).toBe('number')
+  })
+
+  /**
+   * Which build wrote it.
+   *
+   * Against the **imported** constants and never a literal: `version.ts` reads
+   * its values from a `define` substitution that vitest does not apply, so a
+   * literal would pass here and fail in a real build, or the reverse.
+   */
+  it('stamps which build wrote it, the way an exported PDF does', () => {
+    const file = written()
+    expect(file.producer).toBe(PRODUCER)
+    if (COMMIT === '') expect('commit' in file).toBe(false)
+    else expect(file.commit).toBe(COMMIT)
+  })
+
+  it('clamps an active index that names no tab', () => {
+    // A window has to open on something, and an index past the end is a state
+    // nothing else in the app produces.
+    expect(buildWorkspaceFile(tabs, 9, new Date(0)).active).toBe(0)
+    expect(buildWorkspaceFile(tabs, -1, new Date(0)).active).toBe(0)
+    expect(buildWorkspaceFile([], 0, new Date(0)).active).toBe(-1)
+  })
+
+  it('round-trips through the text that actually gets saved', () => {
+    const read = parseWorkspaceFile(JSON.stringify(written(2), null, 2))
+    expect(isRefusal(read)).toBe(false)
+    const file = read as ReturnType<typeof written>
+    expect(file.tabs.map((tab) => tab.state.uri)).toEqual(['one.cool', 'two.cool', 'three.cool'])
+    expect(file.active).toBe(2)
+    expect(file.producer).toBe(PRODUCER)
+  })
+
+  it('tells apart broken JSON, foreign JSON, and a file from a newer build', () => {
+    // Three different sentences for three different situations, which is the
+    // whole reason these are refusals rather than `null`. A bare null landed the
+    // reader on "is a JSON file but not a saved workspace" for a file from a
+    // newer build — false, and it sends them to inspect the wrong thing.
+    expect(parseWorkspaceFile('not json at all')).toEqual({ reason: 'not-json' })
+    expect(parseWorkspaceFile('[]')).toEqual({ reason: 'not-a-workspace' })
+    expect(parseWorkspaceFile(JSON.stringify({ name: 'my-package' }))).toEqual({
+      reason: 'not-a-workspace',
+    })
+    // Right shape, wrong family: the guard that stops some other application's
+    // JSON opening as a window full of tabs.
+    expect(
+      parseWorkspaceFile(JSON.stringify({ tabs: [{ state: { uri: 'a.cool' } }], active: 0 })),
+    ).toEqual({ reason: 'not-a-workspace' })
+
+    const newer = parseWorkspaceFile(
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: CONFIG_VERSION + 1,
+        producer: '(meta)cooler 9.9.9',
+        active: 0,
+        tabs: [{ state: { uri: 'a.cool' } }],
+      }),
+    )
+    expect(newer).toMatchObject({ reason: 'newer', version: CONFIG_VERSION + 1 })
+    const message = refusalMessage(newer as ConfigRefusal, 'figure3.metacooler.json')
+    expect(message).toContain('(meta)cooler 9.9.9')
+    expect(message).toContain('Update the viewer')
+  })
+
+  it('keeps the good tabs when one of them is not a tab', () => {
+    // Nine good tabs and one corrupt one is nine tabs, not an error screen: the
+    // reader loses what was actually lost and nothing more.
+    const read = parseWorkspaceFile(
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: CONFIG_VERSION,
+        active: 2,
+        tabs: [{ state: { uri: 'good.cool' } }, { name: 'my-package' }, null, 'nope'],
+      }),
+    )
+    expect(isRefusal(read)).toBe(false)
+    const file = read as ReturnType<typeof written>
+    expect(file.tabs).toHaveLength(1)
+    // The index named a tab that did not survive, and a window still opens on
+    // something rather than on nothing.
+    expect(file.active).toBe(0)
+  })
+
+  it('refuses a file whose every tab was dropped', () => {
+    // Nothing to open: better to say so than to hand the shell an empty window
+    // it would fill with a picker, which looks like the file having worked.
+    expect(
+      parseWorkspaceFile(
+        JSON.stringify({ kind: 'metacooler.workspace', version: 1, active: 0, tabs: [] }),
+      ),
+    ).toEqual({ reason: 'not-a-workspace' })
+  })
+
+  it('is named for what it is, without claiming how many tabs are in it', () => {
+    // The count would be wrong the moment anybody edits the file, and nothing
+    // routes on the name anyway — the `kind` inside is what decides. The
+    // `.metacooler.json` suffix stays so the family stays recognisable.
+    expect(workspaceFileName('2026-08-13-0900')).toBe('workspace-2026-08-13-0900.metacooler.json')
+  })
+})
+
+/**
+ * Where a dropped workspace's tabs go.
+ *
+ * A pure function for `recordAction`'s reason: the rules are small, each guards
+ * a failure that is silent when it happens, and none of them needs a DOM.
+ */
+describe('seatWorkspace', () => {
+  it('consumes the picker a fresh window opens with', () => {
+    // Dropping a workspace onto an empty window should not leave the picker
+    // sitting beside the imports.
+    expect(seatWorkspace({ open: 0, emptyTab: true, incoming: 3, max: 12 })).toEqual({
+      consumeEmpty: true,
+      take: 3,
+      dropped: 0,
+    })
+  })
+
+  it('keeps every tab a populated window already has', () => {
+    // `Session.dropFiles` states the doctrine this follows: adds rather than
+    // replaces in every case it can. Closing six open tabs with no message and
+    // no undo is what the startup offer is *allowed* to do, having asked.
+    expect(seatWorkspace({ open: 6, emptyTab: false, incoming: 3, max: 12 })).toEqual({
+      consumeEmpty: false,
+      take: 3,
+      dropped: 0,
+    })
+  })
+
+  it('takes what fits and counts what does not', () => {
+    // Twelve is a memory limit rather than a rendering one, and a partial import
+    // is useful where an abort loses everything — so the overflow is counted so
+    // it can be named, rather than dropped in silence.
+    expect(seatWorkspace({ open: 10, emptyTab: false, incoming: 5, max: 12 })).toEqual({
+      consumeEmpty: false,
+      take: 2,
+      dropped: 3,
+    })
+    expect(seatWorkspace({ open: 12, emptyTab: false, incoming: 2, max: 12 })).toEqual({
+      consumeEmpty: false,
+      take: 0,
+      dropped: 2,
+    })
+  })
+
+  it('does not consume an empty tab that is sitting beside real ones', () => {
+    // A picker open beside six loaded tabs is a tab the reader opened on
+    // purpose, and is about to drop a file into.
+    expect(seatWorkspace({ open: 2, emptyTab: true, incoming: 1, max: 12 }).consumeEmpty).toBe(false)
   })
 })

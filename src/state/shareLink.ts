@@ -37,7 +37,8 @@
  * filename to a stranger.
  */
 
-import { CONFIG_KIND, parseConfig, type SessionConfig } from './SessionConfig'
+import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
+import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 
 /** The fragment key a shared session travels under. */
 export const SHARE_KEY = 's'
@@ -92,22 +93,93 @@ async function inflate(bytes: Uint8Array): Promise<Uint8Array> {
  * mismatch would give and is reached without paying for one.
  */
 export async function encodeShare(config: SessionConfig): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(config))
+  // A workspace of **one** tab, so the link and the file are the same format
+  // even though they carry different amounts of it. The wrapper costs a few
+  // dozen bytes after deflate and buys one parser instead of two.
+  //
+  // One tab and not the window, and that is not an aesthetic call: `lengthAdvice`
+  // below already warns past about eight thousand characters, and a single
+  // session with eight tracks is a few thousand — a link carrying six tabs would
+  // open by telling the reader not to use it. §5.5's rule says the same thing
+  // from the other side: a link is *what is being looked at*, and there is one of
+  // those on screen. The file is what carries a window.
+  const file = buildWorkspaceFile([forSharing(config)], 0, new Date())
+  const json = new TextEncoder().encode(JSON.stringify(file))
   return toBase64Url(await deflate(json))
 }
 
+/**
+ * A session with the parts a link may not carry taken out.
+ *
+ * Applied **inside** {@link encodeShare} rather than at its call site, and that
+ * placement is the point: a second caller cannot forget it. Three fields go, and
+ * all three are already *claimed* to be absent from links by comments elsewhere
+ * in this codebase — `SessionConfig.compare` says "a shared link still cannot",
+ * and `panels/deck.ts` says spelling a companion's name into one "would post a
+ * private filename to a stranger — which `state/shareLink.ts` already refuses to
+ * do". Neither was true. One function makes both honest.
+ *
+ * - **`compare`** and **`deck.locals`** are bare local filenames. A recipient
+ *   cannot open them under any resolution, and worse than useless: the grant
+ *   store is keyed on the bare name and its guard compares only the name, so a
+ *   recipient who has ever granted their own `rep2.cool` would open *their* file
+ *   in the sender's slot with every label agreeing (`state/handles.ts`).
+ * - **`source`** is the size and modification time of a file on somebody's own
+ *   machine. It exists to catch a wrong file locally; in a link it is metadata
+ *   about a private disk that the recipient can do nothing with.
+ *
+ * A **local track is kept**, and the rule that decides all four is the one
+ * `resolveConfig` states: a private name is stripped only where the structure
+ * survives without it. A dropped companion costs a label — `state.maps` still
+ * carries `~`, so the slot, the count and the order remain — while a dropped
+ * track costs the row, and a recipient silently receiving seven where eight were
+ * sent is exactly what that placeholder exists to prevent.
+ */
+export function forSharing(config: SessionConfig): SessionConfig {
+  // `?? {}` because this takes whatever it is handed. Everything `parseConfig`
+  // and `buildConfig` produce has a `deck`, but a link is encoded from an object
+  // that has passed through other hands, and a share button that threw on a
+  // config missing one field would be a worse failure than the one this function
+  // exists to prevent.
+  const deck = config.deck ?? {}
+  const shared: SessionConfig = {
+    ...config,
+    deck: {
+      ...(deck.starred === undefined ? {} : { starred: deck.starred }),
+      ...(deck.columns === undefined ? {} : { columns: deck.columns }),
+    },
+  }
+  // Deleted rather than set to `undefined`: a key holding nothing is a third
+  // state, it survives `JSON.stringify` as an absence anyway, and every reader
+  // downstream treats absence as the answer.
+  delete shared.compare
+  delete shared.source
+  return shared
+}
+
 /** The inverse. `null` for anything that is not one, rather than a throw. */
-export async function decodeShare(payload: string): Promise<SessionConfig | null> {
+export async function decodeShare(payload: string): Promise<SessionConfig | ConfigRefusal | null> {
+  let json: string
   try {
-    const json = new TextDecoder().decode(await inflate(fromBase64Url(payload)))
-    const config = parseConfig(json)
-    return config !== null && config.kind === CONFIG_KIND ? config : null
+    json = new TextDecoder().decode(await inflate(fromBase64Url(payload)))
   } catch {
     // A truncated link — pasted across two lines by a mail client, most often —
     // reaches here, and the right answer is the picker rather than an error
-    // screen about base64.
+    // screen about base64. `null` is *this* failure and only this one: the
+    // payload did not survive the journey.
     return null
   }
+  // Everything past the inflate arrived intact, so a refusal from here is about
+  // the *workspace* and is worth passing on rather than flattening into "cut
+  // short in transit". A link from a newer build is the case that matters: it
+  // travelled perfectly and this build cannot read it, and telling the
+  // recipient their link is broken sends them back to the sender for a fresh
+  // copy of a link that will fail the same way.
+  const read = parseWorkspaceFile(json)
+  if (isRefusal(read)) return read
+  // One tab is what a link carries, and `parseWorkspaceFile` has already refused
+  // a file with none — so this is the tab that was shared.
+  return read.tabs[read.active] ?? read.tabs[0]
 }
 
 /** The payload out of a location hash, or `null` when it carries none. */
@@ -189,7 +261,7 @@ export function lengthAdvice(length: number): string | null {
   }
   return (
     `This link is ${length.toLocaleString()} characters, which is long enough that something ` +
-    'between here and the recipient will probably break it. Saving the session as a file and ' +
+    'between here and the recipient will probably break it. Saving the workspace as a file and ' +
     'sending that is the reliable form of the same thing.'
   )
 }

@@ -12,6 +12,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **Save writes the whole window, and the file is now called a workspace.** The
+  disk button in the top bar used to write the tab in front of you, which made it
+  the third button on that row doing something a reader could reasonably have
+  expected of the other two. It now writes **every open tab in one file** — each
+  with its view, its tracks, its marks, its bookmarks, its ticked sequences, its
+  table filters and its analysis recipes — and records which one was in front.
+  Dropping it back opens all of them.
+
+  The pair of buttons now states a real difference rather than two words for one
+  thing:
+
+  > **Share this session as a link** — the tab you are looking at.
+  > **Save this workspace as a file** — every tab, with everything in it.
+
+  A link stays one tab on purpose. The advice line already warns past about eight
+  thousand characters and a single session with eight tracks is a few thousand,
+  so a link carrying six tabs would open by telling the reader not to use it.
+  What is new is that both roads carry the *same format* — a link is a workspace
+  of one — so there is one parser, one version gate and no way for the two to
+  drift apart.
+
+  **A dropped workspace is added, never substituted.** Six open tabs are not
+  closed by a drop; they were the reader's, and there is no undo. The one place
+  that does replace a window is the offer on the first screen after a browser
+  restart, which has asked first. A window showing nothing but the picker gives
+  that tab up, and a file with more tabs than the window can hold says how many
+  it left rather than dropping them in silence.
+
+  **The file format is a clean break, and old `.metacooler.json` files stop
+  opening.** They are a tab where the reader now has a window, and carrying both
+  shapes would mean two readers to keep in step for the sake of files that are a
+  few weeks old and a re-save away from being current. Saving again from this
+  build is the whole of the fix. The published example datasets and the CLI's
+  `replay` moved with it — `replay` takes a workspace and re-runs the tab that
+  was in front, or the one `--tab <n>` names.
+
+  `GLOSSARY.md` moved with it too. It had *session file* as one of the senses of
+  **session** and gave the saved file to `SessionConfig`; there is no such thing
+  any more, so **workspace file** is now its own entry and a config is what one
+  holds. The glossary's own rule — where it and the code disagree, the code is
+  right and the glossary is a bug — is the reason that is part of this change
+  rather than a follow-up.
+
 ### Added
 
 - **A button that adds a file to the tab you are in.** Dropping a file on the
@@ -41,6 +86,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   empty tab the distinction does not exist — there is nothing to add to — so it
   opens instead, exactly as the landing page does, rather than taking a lone
   bigWig and finding no track list to put it in.
+
+- **The picker now says which file it wants back, not just its name.** A session
+  saved from a local file names it by its bare filename, and `rep1.cool` is a
+  name a reader may well have several of — so the note asking for it now carries
+  the size and the modification date the session was made with. That is the
+  difference between finding the right file and finding *a* file with the right
+  name.
+
+  And when a file arrives whose **name matches but whose bytes do not**, the app
+  says so once and opens anyway. That is either the same file re-run through a
+  pipeline — legitimate, and worth knowing, because the numbers on screen are
+  then not the numbers in the figure — or somebody else's file of the same name.
+  The two are indistinguishable from inside the app and one of them is a thing
+  people do on purpose, so it is a remark and never a refusal.
+
+  Saying it needed a third way to speak. The shell had a modal, which takes the
+  keyboard and demands an answer, and the error view, which replaces what is on
+  screen; both are far too loud for *"this opened, and here is something you may
+  want to know"*. Notes now appear as a dismissible row under the tab strip,
+  where the restore offer already lives.
 
 - **Closing the browser no longer ends the session — it offers it back.** The tab
   strip has always lived in `sessionStorage`, which is a deliberate rule and not
@@ -973,6 +1038,113 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   companion path that was calling it. The pair recursed until the stack ran out,
   in the one place where the fallback was meant to be the calm one. Found while
   giving the header's new add button the same rule to follow.
+
+- **A shared link carried three things it promised not to.** Two comments in the
+  codebase already stated the rule — a session's `compare` field says "a shared
+  link still cannot" carry a local second file, and the deck's own module says
+  spelling a companion's name into a link "would post a private filename to a
+  stranger, which `shareLink.ts` already refuses to do". Neither was true. A link
+  carried the local compared file, the deck's local companions, and (once
+  sessions began recording it) the size and modification time of the sender's own
+  file.
+
+  Worse than useless to a recipient: those names are bare filenames, and opening
+  one goes through a grant store keyed on the bare name whose guard compares only
+  the name — so somebody who had ever granted their own `rep2.cool` would have
+  opened **their** file in the sender's slot, with every label on screen
+  agreeing. The redaction now happens inside the encoder rather than at its call
+  site, so a second caller cannot forget it, and the test asserts against the
+  encoded payload rather than the decoded object: the point is that the name
+  never leaves the machine, not that the far end ignores it.
+
+  A **local track is kept**, and the rule that decides all of it is now written
+  down in both places: a private name is stripped only where the structure
+  survives without it. A dropped companion costs a label — the `~` placeholder
+  keeps the slot, the count and the order — while a dropped track costs the row.
+
+### Added
+
+- **A saved tab records which file it was made from.** Name, size and
+  modification time, for a local file. It reads as bookkeeping and it closes a
+  real hole: a tab names its file by URI, that URI is the bare filename for a
+  local file, and opening one goes through a grant store keyed on exactly that
+  name. So a workspace received from a colleague and naming `rep1.cool` opened
+  **this** browser's `rep1.cool` — somebody else's data under the sender's marks,
+  bookmarks and colour limits, with nothing on screen disagreeing.
+
+  It informs and never vetoes. A re-run pipeline overwriting a file somebody is
+  reading is a legitimate thing to do, and the app cannot tell that from a
+  different file on another machine — so a mismatch is said once and the session
+  opens. Absent for a remote file, whose identity is its URL, and stripped from
+  shared links, where it would be metadata about a private disk.
+
+- **A saved file from a newer build was read as though it were current.** The
+  format carries a version, and `CONFIG_VERSION`'s own docstring says the number
+  is bumped only when a field **changes meaning** — so the single situation it
+  exists for was the one situation nothing acted on. A file whose `vmin` meant a
+  percentile would have been drawn as a log10 value, with every label on screen
+  agreeing.
+
+  It is now refused, and there is deliberately no *open anyway*: a version bump
+  cannot say which field moved, so the button would be an offer to be silently
+  wrong. When a bump does happen the honest fix is a migration on that line
+  rather than a way past it, and the comment says so.
+
+  Refusing needed a **reason** rather than a `null`, because two of the three
+  sentences a reader used to get were false. A file from a newer build landed
+  them on "is a JSON file but not a saved workspace", and a *link* from one on "may
+  have been cut short in transit" — both sending somebody to inspect the file, or
+  their network, when what is actually wrong is the build they are holding. All
+  three roads now say the same true thing, naming both format numbers and the
+  build the file came from:
+
+  > `figure3.metacooler.json` was saved by a newer version of the viewer —
+  > (meta)cooler 9.9.9, in workspace format 2. This build reads format 1. Update
+  > the viewer, or ask for the session to be saved again from this one.
+
+  A shared link also now separates *did not survive the journey* from *arrived
+  intact and this build will not read it*. Only the first is the link's fault,
+  and telling a recipient the second was truncated sends them back to the sender
+  for a fresh copy that will fail identically.
+
+- **A workspace published beside its data broke the moment it named a deck.**
+  `resolveConfig` points a tab's relative file names at wherever the file it came
+  in was found — that is what makes `demo/yeast/` a folder anyone can copy to a
+  bucket, to a colleague's bucket, or to a laptop. It resolved the map, the
+  compared file and the tracks, and it had never been taught the three fields a
+  tab grew when decks, lanes and local companions started travelling. So a
+  published workspace naming a companion `rep2.cool` handed the deck a bare name,
+  which was fetched **against the site root** — a 404 on the website, and
+  `app://viewer/rep2.cool` in the desktop build. It read as a broken panel rather
+  than as an unresolved name.
+
+  `state.maps` now resolves through the deck's own parser rather than a second
+  `|` splitter written beside it: the rule that a raw pipe separates and a `%7C`
+  inside a member is data lives in one place, and a second copy of it fails by
+  resolving to a *different number of maps* than were written.
+
+  `lanes[].uri` resolves through the **same** call, and that pairing is
+  load-bearing. A lane names the *file* its companion was showing and is matched
+  by string equality, so resolving one and not the other would put every placed
+  track back on the first map — a perfectly legal lane, drawn without complaint,
+  and not where the sender put it. The test asserts the two against each other
+  rather than against a literal, so it cannot pass with both halves wrong.
+
+  **Two fields are now dropped rather than resolved**, and that is the more
+  interesting half. A local compared file and a deck's local companions are bare
+  filenames from the sender's own disk. Left alone they reach the grant lookup,
+  which is keyed on the bare name and whose guard compares only the name — so a
+  recipient who had ever granted their own `rep2.cool` would open **their** file
+  in the sender's slot, with every label on screen agreeing with them. Resolving
+  them instead would mint a URL for a file that was never published. Dropping
+  them costs only a label: the `~` placeholder still holds the slot, so the
+  count, the order and the drop rectangle all survive.
+
+  A *local track* is kept, and the rule that decides both is now written down: a
+  private name is stripped only where the structure survives without it. A
+  dropped companion costs a label; a dropped track costs the row, and a recipient
+  silently receiving seven tracks where eight were sent is the exact failure the
+  placeholder exists to prevent.
 
 - **Which score the cells were drawn from did not survive a link, a reload or the
   back button.** `score` has been in `KEY_ORDER` since the field existed, so

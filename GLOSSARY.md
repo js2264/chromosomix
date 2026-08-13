@@ -110,35 +110,62 @@ case — there is no session storage at all, which is precisely "the browser was
 
 ### workspace
 
-Every open tab, as one object: `{ version, savedAt, sessions: [{ id, config }], active }`
-(`src/state/workspace.ts`). It is the whole application instance rather than any one file, and it has
-two lives:
+Every open tab, as one object (`src/state/workspace.ts`). It is the whole application instance rather
+than any one file, and it has three lives:
 
 - the **live** workspace — this window and all its tabs, written on a debounce and flushed when the
-  page goes away;
-- a **published** workspace — the same object as a file, naming remote data, so a manuscript's five
-  figures can be five tabs somebody else opens.
+  page goes away. `{ version, savedAt, sessions: [{ id, config }], active }`, in IndexedDB;
+- a **saved** workspace — the same idea as a file, written by the header's save button. A different
+  shape, and deliberately: see [workspace file](#workspace-file);
+- a **published** workspace — a saved one that names remote data, so a manuscript's five figures can
+  be five tabs somebody else opens. What the demo catalogue is.
 
-It is **offered, never applied**. Silently reopening six files a week later would reverse the
-decision the reader made by closing them, and on a shared machine it would put somebody's unpublished
-figure on screen for whoever sat down next (§11). *Start fresh* is a real answer and deletes the
-record.
+The live one is **offered, never applied**. Silently reopening six files a week later would reverse
+the decision the reader made by closing them, and on a shared machine it would put somebody's
+unpublished figure on screen for whoever sat down next (§11). *Start fresh* is a real answer and
+deletes the record.
+
+A **saved** one is the mirror rule: *added, never substituted*. Dropping a workspace file appends its
+tabs beside what is open, because six open tabs were the reader's and there is no undo. The one place
+that replaces a window is the offer above, which has asked first.
 
 ### session config
 
 A whole tab, written down (`src/state/SessionConfig.ts`): the view state, every track with its
 colours, limits and groups, the manual marks, the bookmarks, the ticked sequences, the table filters,
-the deck's arrangement. Two encodings of one thing, which is what keeps them from drifting:
+the deck's arrangement, the analysis recipes. **Never a file on its own** — it is always one entry
+inside a [workspace file](#workspace-file), which is what a config travels in on all three roads:
 
-- a **file** — `<base>-<stamp>.metacooler.json`, written by *Save this session*;
-- a **link** — the same JSON, deflated and base64url-encoded into the fragment under `s=`
-  (`src/state/shareLink.ts`). The **fragment** specifically, because a fragment is not sent to the
-  server, so the contents of somebody's session never reach the host.
+- a **saved file** — every open tab, written by *Save this workspace*;
+- a **link** — a workspace of *one* tab, deflated and base64url-encoded into the fragment under `s=`
+  (`src/state/shareLink.ts`). One tab because a link is *what is being looked at* (§5.5) and there is
+  one of those on screen. The **fragment** specifically, because a fragment is not sent to the
+  server, so the contents of somebody's session never reach the host;
+- the **durable record** — one config per tab, in IndexedDB (see [workspace](#workspace)).
+
+A config carries no `kind` of its own: the file around it names itself once, and a second name inside
+every entry would be a claim with nothing to check it against.
 
 A config is deliberately **portable**: `applyConfig` re-keys it into whatever tab imports it, so a
-session exported from tab 3 opens in tab 7 without dragging tab 3's memory with it. Relative names
-inside are resolved against the config's own URL (`resolveConfig`), which is what makes a dataset
-folder a self-contained thing that can be copied to another bucket and still open.
+session saved from tab 3 opens in tab 7 without dragging tab 3's memory with it. Relative names
+inside are resolved against the file's own URL (`resolveConfig`), which is what makes a dataset
+folder a self-contained thing that can be copied to another bucket and still open — and the same
+step *drops* the two names that could only ever have meant a file on the sender's own disk, a local
+compared file and a local deck companion.
+
+### workspace file
+
+A [workspace](#workspace) as bytes: `workspace-<stamp>.metacooler.json`, `kind:
+"metacooler.workspace"`, holding every open tab as a [session config](#session-config) and naming the
+active one by **index** (`src/state/workspace.ts`). Written by the save button in the header; drop it
+back and its tabs are *added* beside whatever is open.
+
+By index and never by session id, which is the one real difference from the durable record: a
+sender's `s1` means nothing in a recipient's window and would collide with a tab they already have.
+The record keeps its ids, because there they are live and are what puts a reader back in the window
+they left.
+
+The published demo catalogue is three of these, each a workspace of one tab (`src/ui/examples.ts`).
 
 ### detached
 
@@ -552,20 +579,23 @@ where it is not, the qualifier is always present.
 2. **`sessionStorage`** — the browser API, and the app's storage tier for a train of thought.
 3. **a browser session** — the lifetime of the browsing context. Ending it is what the durable
    workspace exists for.
-4. **a session file** — `.metacooler.json`: one tab, written down.
-5. **a shared session** — the same object in a link.
+4. **a shared session** — one tab serialised into a link.
 
-Senses 3, 4 and 5 all mean "a tab, serialised". The demo catalogue entries are **published sessions**
-in sense 4.
+Sense 4 is a tab serialised; senses 3 and 4 are what the durable and saved
+[workspaces](#workspace) exist for. There is **no such thing as a session file**: a `.metacooler.json`
+is a [workspace file](#workspace-file) and holds every tab. The demo catalogue entries are
+**published workspaces**, each of one tab.
 
 ### workspace
 
-1. **`Workspace`** — every open tab, as one object. The primary sense, and the user-facing one.
+1. **`Workspace`** — every open tab, as one object. The primary sense, and the user-facing one; the
+   saved file and the durable record are both this.
 2. **the Analysis drawer** — §18.1 calls the drawer "the workspace", and `src/analysis/workspace.ts`
    is named for it. *This is the collision to fix*: it means one file's analysis state, not the
    window's tabs.
-3. **loosely, "a session with a lot of work in it"** — as in `shareLink.ts`'s size estimate. Being
-   reworded.
+
+The loose third sense — "a session with a lot of work in it", as in `shareLink.ts`'s size estimate —
+is gone: that sentence now names the saved file, which is sense 1.
 
 ### panel
 
@@ -616,8 +646,10 @@ not where it is scrolled to.
 
 **Add, do not replace.** A dropped file joins what is open in every case it can: a second cooler
 comes up beside the first, a bigWig joins the tracks, a `chrom.sizes` answers a browser's guessed
-lengths. Replacing is a deliberate, separately named act — the picker, *Open a different file*, or a
-new tab.
+lengths, and a dropped [workspace file](#workspace-file) appends its tabs beside the ones already
+there. Replacing is a deliberate, separately named act — the picker, *Open a different file*, or a
+new tab. The one thing that replaces a whole *window* is the restore offer on the first screen after
+a browser restart, and it asks first.
 
 **One command list.** `App.commands()` feeds the palette, the shortcuts dialog, the key handler and
 the desktop menu. A menu click and a keystroke are the same thing arriving by a different road, so a

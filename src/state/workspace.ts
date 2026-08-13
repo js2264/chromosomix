@@ -40,7 +40,15 @@
  */
 
 import { STORES, store } from './idb'
-import { parseConfig, type SessionConfig } from './SessionConfig'
+import {
+  CONFIG_VERSION,
+  isRefusal,
+  parseTab,
+  readTab,
+  type ConfigRefusal,
+  type SessionConfig,
+} from './SessionConfig'
+import { COMMIT, PRODUCER } from '../version'
 
 /** The one key the workspace store holds. */
 const KEY = 'current'
@@ -122,12 +130,11 @@ export async function flushWorkspace(): Promise<void> {
  * outlives the build that wrote it, so every field is checked and anything that
  * fails is dropped rather than repaired into a tab pointing at nothing.
  *
- * Each config goes back through `parseConfig` rather than being trusted as an
- * object, which costs a `JSON.stringify` round trip per tab and buys the one
- * thing worth buying: there is exactly *one* validator for a session in this
- * app, and a config that arrived from a file, from a share link and from here
- * is checked by the same code. A second validator would be a second thing to
- * keep in step with `SessionConfig`, and it would drift.
+ * Each tab goes through `parseTab` rather than being trusted as an object,
+ * which is the one thing worth insisting on: there is exactly *one* validator
+ * for a tab in this app, and one that arrived from a file, from a share link and
+ * from here is checked by the same code. A second validator would be a second
+ * thing to keep in step with `SessionConfig`, and it would drift.
  *
  * Not clamped to a tab limit here. `App.restore` already slices its own
  * `MAX_SESSIONS`, and arity is the shell's business rather than storage's.
@@ -151,7 +158,7 @@ export async function readWorkspace(): Promise<Workspace | null> {
     if (seen.has(id)) continue
     let config: SessionConfig | null
     try {
-      config = parseConfig(JSON.stringify(row['config']))
+      config = parseTab(row['config'])
     } catch {
       // A config holding something `JSON.stringify` refuses — a cycle, a BigInt
       // — which is not something any writer here produces and is therefore a
@@ -240,4 +247,162 @@ export function summariseWorkspace(workspace: Workspace): WorkspaceSummary {
     files: workspace.sessions.map((session) => session.config.state.uri),
     tracks: workspace.sessions.reduce((total, session) => total + session.config.tracks.length, 0),
   }
+}
+
+// ---------------------------------------------------------------------------
+// The workspace as a file
+// ---------------------------------------------------------------------------
+
+/** What the file says it is, so a stray `.json` is not read as one. */
+export const WORKSPACE_KIND = 'metacooler.workspace'
+
+/**
+ * A workspace written out: every tab in the window, and which was in front.
+ *
+ * ## Why this is not the record above
+ *
+ * They are the same *idea* and deliberately not the same shape, because they
+ * are different artifacts with one difference that matters: **the record keeps
+ * session ids and the file must not.**
+ *
+ * A record is private to this browser and its ids are live — they key every
+ * `UiMemory` scope of a tab that is still open, and reusing them on restore is
+ * what puts a reader back in the window they left. A sender's `s1` means nothing
+ * in a recipient's window and would *collide* with a tab they already have, so a
+ * file carries its tabs in order and names the active one by **index**.
+ *
+ * What the two do share is the only thing worth sharing: `SessionConfig`, and
+ * therefore `parseTab`. One definition of what a tab is, three roads.
+ */
+export interface WorkspaceFile {
+  kind: typeof WORKSPACE_KIND
+  version: number
+  createdAt: string
+  /** Which build wrote it; see `SessionConfig.producer`. */
+  producer?: string
+  commit?: string
+  /** Index into {@link tabs}, or `-1` when the window had nothing in front. */
+  active: number
+  tabs: SessionConfig[]
+}
+
+/** Gather the open tabs into the thing that gets written to disk. */
+export function buildWorkspaceFile(
+  tabs: readonly SessionConfig[],
+  active: number,
+  now: Date,
+): WorkspaceFile {
+  return {
+    kind: WORKSPACE_KIND,
+    version: CONFIG_VERSION,
+    createdAt: now.toISOString(),
+    producer: PRODUCER,
+    ...(COMMIT === '' ? {} : { commit: COMMIT }),
+    // Clamped rather than trusted: an out-of-range index would open a window
+    // with no tab in front, which is a state nothing else in the app produces.
+    active: active >= 0 && active < tabs.length ? active : tabs.length > 0 ? 0 : -1,
+    tabs: [...tabs],
+  }
+}
+
+/**
+ * Read a workspace out of a file's text, or refuse it with a reason.
+ *
+ * Strict about identity and forgiving about contents, which is the same
+ * character `readTab` has and for the same reasons — a file arrives from
+ * anywhere and must name itself, while a tab it holds may have been written by a
+ * build that knew fewer fields.
+ *
+ * **A tab that does not check out is dropped and its neighbours are kept.** Nine
+ * good tabs and one corrupt one is nine tabs, not an error screen: the reader
+ * loses what was actually lost and nothing more.
+ */
+export function parseWorkspaceFile(text: string): WorkspaceFile | ConfigRefusal {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { reason: 'not-json' }
+  }
+  if (typeof parsed !== 'object' || parsed === null) return { reason: 'not-a-workspace' }
+  const row = parsed as Record<string, unknown>
+  if (row['kind'] !== WORKSPACE_KIND) return { reason: 'not-a-workspace' }
+
+  // The same gate `readTab` applies, one level up and for the same reason: a
+  // version is a claim about what every field in the file *means*, so a file
+  // from a newer build is refused rather than read as though it were current.
+  const version = typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION
+  if (version > CONFIG_VERSION) {
+    const producer = row['producer']
+    return {
+      reason: 'newer',
+      version,
+      ...(typeof producer === 'string' && producer !== '' ? { producer } : {}),
+    }
+  }
+
+  const list = Array.isArray(row['tabs']) ? (row['tabs'] as unknown[]) : []
+  const tabs: SessionConfig[] = []
+  for (const entry of list) {
+    const tab = readTab(entry)
+    if (!isRefusal(tab)) tabs.push(tab)
+  }
+  if (tabs.length === 0) return { reason: 'not-a-workspace' }
+
+  const active = row['active']
+  const producer = row['producer']
+  const commit = row['commit']
+  return {
+    kind: WORKSPACE_KIND,
+    version,
+    createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
+    ...(typeof producer === 'string' && producer !== '' ? { producer } : {}),
+    ...(typeof commit === 'string' && commit !== '' ? { commit } : {}),
+    // Out of range is the front tab, not an error: the index may name a tab that
+    // was dropped above, and a window has to open on something.
+    active: typeof active === 'number' && active >= 0 && active < tabs.length ? active : 0,
+    tabs,
+  }
+}
+
+/**
+ * What a saved workspace is called.
+ *
+ * The tab **count is deliberately not in the name**. It would be wrong the
+ * moment anybody edits the file, and nothing routes on the name anyway — the
+ * `kind` inside is what decides. The `.metacooler.json` suffix stays so the
+ * family is recognisable and so `looksLikeConfig` and any future file
+ * association keep working.
+ */
+export function workspaceFileName(stamp: string): string {
+  return `workspace-${stamp}.metacooler.json`
+}
+
+/**
+ * How many incoming tabs a window can seat, and what it does with the one it
+ * already has.
+ *
+ * A pure function for the reason `recordAction` is one: the rules are small,
+ * each guards a failure that is invisible when it happens, and none of them
+ * needs a DOM to decide.
+ *
+ * - **A window with one empty tab consumes it.** Dropping a workspace onto a
+ *   fresh window should not leave the picker sitting beside the imports.
+ * - **Never more than the window allows.** Twelve is a memory limit, not a
+ *   rendering one (`App.MAX_SESSIONS`), and a partial import is useful where an
+ *   abort loses everything — so the overflow is *counted* and named rather than
+ *   dropped in silence.
+ */
+export function seatWorkspace(state: {
+  /** Tabs currently holding a file. */
+  open: number
+  /** Whether exactly one tab is present and empty. */
+  emptyTab: boolean
+  incoming: number
+  max: number
+}): { consumeEmpty: boolean; take: number; dropped: number } {
+  const consumeEmpty = state.emptyTab && state.open === 0
+  const room = Math.max(0, state.max - state.open)
+  const take = Math.min(state.incoming, room)
+  return { consumeEmpty, take, dropped: state.incoming - take }
 }
