@@ -1,5 +1,5 @@
 /**
- * Private buckets: the keys, and the folder view they unlock.
+ * Buckets: the entries, the keys some of them carry, and the folder view.
  *
  * The URL box beside this one already opens anything public, and with a key
  * stored here it opens anything private too — so the *credentials* half of this
@@ -8,6 +8,12 @@
  * keeps a list of them beside the bucket has to keep the list in step with the
  * bucket. `ListObjectsV2` with a delimiter asks S3 for one level at a time, so
  * the folder view is the bucket rather than a description of it.
+ *
+ * **An entry need not have a key**, since `s3/credentials.ts` learned to hold a
+ * public prefix, so this screen is no longer only about secrets. The heading
+ * kept the word *private* for one release and lost it here, because a dialog
+ * called "private buckets" listing a public one is a dialog that has to be
+ * explained. What it is is the list of buckets this browser knows about.
  *
  * ## Two things this dialog says out loud
  *
@@ -34,16 +40,22 @@
  * question it answers — *which file* — is asked at every URL box in the
  * application and none of those is a place to be looking at an access key. This
  * screen keeps it inline for the reason above, as the check on a key just typed.
+ *
+ * Nor the add form, for the same reason one level up: `ui/bucketForm.ts`, shared
+ * with the Connect dialog, because two copies of six fields writing one
+ * `localStorage` key is two places for the validation to drift apart.
  */
 
 import { Modal } from './Modal'
-import { button, el, field } from './dom'
+import { button, el } from './dom'
 import { icon, iconButton } from './icons'
 import { BucketBrowseView } from './bucketBrowse'
+import { bucketForm } from './bucketForm'
+import { announce } from '../browse/connected'
 import {
   addressOf,
   credentialOf,
-  normaliseBase,
+  isSigned,
   readScopes,
   writeScopes,
   type BucketScope,
@@ -56,26 +68,9 @@ export interface BucketsProps {
   onClose?(): void
 }
 
-/**
- * An id that does not collide with one already stored.
- *
- * `crypto.randomUUID` is not reachable in every context this ships to — it
- * needs a secure origin, which `file://` in a packaged build is not — so the
- * id is built from the count and a random suffix. Nothing depends on it being
- * unguessable; it exists so a row can be replaced rather than matched by a
- * label the user is free to reuse.
- */
-function mintId(existing: readonly BucketScope[]): string {
-  const taken = new Set(existing.map((scope) => scope.id))
-  for (let n = existing.length; ; n++) {
-    const id = `b${n}-${Math.floor(Math.random() * 1e6).toString(36)}`
-    if (!taken.has(id)) return id
-  }
-}
-
 export function openBuckets(props: BucketsProps): Modal {
   return new Modal({
-    title: 'Private buckets',
+    title: 'Buckets',
     variant: 'modal-wide',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => new BucketsBody(props, close).el,
@@ -98,11 +93,17 @@ class BucketsBody {
       // is under this scope's prefix by construction — but a file the user
       // reached *through* a key should be opened with that key rather than with
       // whatever a second resolution happens to pick.
+      //
+      // A public scope has none, and then the field is left off entirely rather
+      // than set to `null`: `withCredential` treats an absent one as "look it
+      // up", which resolves to the same nothing, and the wire shape stays what
+      // every other unsigned open sends.
+      const credential = credentialOf(scope)
       this.close()
       this.props.onOpen(object.url, {
         kind: 'remote',
         url: object.url,
-        credential: credentialOf(scope),
+        ...(credential === null ? {} : { credential }),
       })
     },
   })
@@ -120,12 +121,22 @@ class BucketsBody {
       el('p', {
         class: 'hint',
         text:
-          'A bucket entry is a URL prefix and the key that reads it. Requests under that ' +
-          'prefix are signed; everything else — the public demos included — is fetched ' +
-          'unsigned, as before.',
+          'A bucket entry is a URL prefix, and optionally the key that reads it. Requests under ' +
+          'a prefix that has one are signed; everything else — the public demos included — is ' +
+          'fetched unsigned, as before.',
       }),
       this.listEl,
-      this.addForm(),
+      bucketForm({
+        heading: 'Add a bucket',
+        // Straight into the folder view, which is the honest version of a "test
+        // connection" button: same request, same signature, same preflight as
+        // every later read.
+        onSaved: (scope) => {
+          this.scopes = readScopes()
+          this.renderList()
+          void this.browser.browse(scope, addressOf(scope.base)?.prefix ?? '')
+        },
+      }),
       this.securityNote(),
       this.browser.el,
     )
@@ -156,8 +167,13 @@ class BucketsBody {
             // The region is shown because it is the field that is wrong most
             // often and the one whose being wrong is least legible: a bucket in
             // `eu-west-3` signed for `us-east-1` answers 403, which reads as a
-            // permissions problem rather than as a typo four fields up.
-            el('span', { class: 'bucket-row-meta', text: `${scope.region} · ${scope.accessKeyId}` }),
+            // permissions problem rather than as a typo four fields up. A public
+            // entry has neither field and says which of the two kinds it is,
+            // because "no key" is the answer to why nothing here is signed.
+            el('span', {
+              class: 'bucket-row-meta',
+              text: isSigned(scope) ? `${scope.region} · ${scope.accessKeyId}` : 'public — no key',
+            }),
           ),
           button(
             'browse',
@@ -176,87 +192,13 @@ class BucketsBody {
   private remove(id: string): void {
     this.scopes = this.scopes.filter((scope) => scope.id !== id)
     writeScopes(this.scopes)
+    // The same entry is a connected folder in the Files panel, which is a second
+    // screen showing a bucket this app can no longer read.
+    announce()
     // A listing left on screen under a key that has just been deleted is a
     // folder view of a bucket this app can no longer read.
     if (this.browser.isShowing(id)) this.browser.clear()
     this.renderList()
-  }
-
-  /**
-   * The add form.
-   *
-   * Six fields and no step-by-step: every one of them is something the user is
-   * copying out of the AWS console or a `credentials` file, and splitting a
-   * copy-paste across two screens makes it longer rather than simpler.
-   */
-  private addForm(): HTMLElement {
-    const label = el('input', { class: 'input', type: 'text', placeholder: 'lab collections' })
-    const base = el('input', {
-      class: 'input',
-      type: 'text',
-      placeholder: 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/',
-    })
-    const region = el('input', { class: 'input', type: 'text', placeholder: 'eu-west-3' })
-    const keyId = el('input', { class: 'input', type: 'text', placeholder: 'AKIA…' })
-    // `type=password` so a key is not read over a shoulder or caught by a
-    // screen recording during a demo — which is exactly when someone opens this
-    // dialog to show how it works.
-    const secret = el('input', { class: 'input', type: 'password', placeholder: 'secret key' })
-    const token = el('input', {
-      class: 'input',
-      type: 'password',
-      placeholder: 'session token (only for temporary credentials)',
-    })
-    const error = el('p', { class: 'hint bucket-error' })
-
-    const save = (): void => {
-      const normalised = normaliseBase(base.value)
-      if (normalised === null) {
-        // The `https:` requirement is a refusal rather than a normalisation:
-        // over `http:` the `Authorization` header crosses the wire in clear,
-        // and quietly upgrading the scheme would mean the app deciding on the
-        // user's behalf which host they meant.
-        error.textContent =
-          'The prefix must be an https:// URL — a bucket reached over http:// would send the ' +
-          'signature in clear.'
-        return
-      }
-      if (region.value.trim() === '' || keyId.value.trim() === '' || secret.value === '') {
-        error.textContent = 'Region, access key ID and secret key are all part of the signature.'
-        return
-      }
-      const sessionToken = token.value.trim()
-      this.scopes = [
-        ...this.scopes,
-        {
-          id: mintId(this.scopes),
-          label: label.value.trim() === '' ? normalised : label.value.trim(),
-          base: normalised,
-          region: region.value.trim(),
-          accessKeyId: keyId.value.trim(),
-          secretAccessKey: secret.value,
-          ...(sessionToken === '' ? {} : { sessionToken }),
-        },
-      ]
-      writeScopes(this.scopes)
-      error.textContent = ''
-      for (const input of [label, base, region, keyId, secret, token]) input.value = ''
-      this.renderList()
-    }
-
-    return el(
-      'div',
-      { class: 'bucket-add' },
-      el('h3', { text: 'Add a bucket' }),
-      field('name', label, 'What you call it. Never sent anywhere.'),
-      field('prefix', base, 'Everything under this URL is signed with the key below.'),
-      field('region', region, "The bucket's region. Part of the signature, so a wrong one is a 403."),
-      field('access key ID', keyId),
-      field('secret key', secret),
-      field('session token', token, 'Only for STS or SSO credentials.'),
-      error,
-      el('div', { class: 'bucket-actions' }, button('save', save, { class: 'btn btn-primary' })),
-    )
   }
 
   private securityNote(): HTMLElement {

@@ -23,6 +23,16 @@ whole-file scan is running. Results land in a resizable drawer, and every one of
 bigWig for a signal, bedGraph, BED, TSV, PNG, and true vector PDF. The bigWig is written here, byte
 by byte — no `bedGraphToBigWig` step, because a bigWig is what you actually wanted.
 
+Files come in one at a time or by the folder. **Connect** — beside the add button — attaches a
+directory on your machine or an S3 prefix, and a **Files** panel (`f`) browses it: crumbs, a filter,
+and a `→` on every row that loads it into the tab you are in, or drag the row onto a map's edge to
+say which stack a track belongs in. A directory and a bucket are the same thing to everything above
+the byte layer, so it is one tree over both. A public bucket needs nothing but its link; a private
+one takes a read-only key. In Chrome, Edge and the desktop app a connected directory is still there
+after a reload — the browser keeps permission to list it and read what is in it, and nothing is
+uploaded or copied — and in Firefox and Safari it is a snapshot for that visit, which the panel says
+on the row rather than leaving you to discover.
+
 `.hic` is read here too, at versions 7, 8 and 9 — which is most of the published mammalian Hi-C on
 4DN, ENCODE and GEO. It costs no constraint: the format is block-indexed, so a region is a bounded
 range read through the same byte layer as everything else, and a block is an *index* unit rather than
@@ -181,6 +191,9 @@ src/
                  header and footer, the block index and its two numbering
                  schemes, and the cooler-shaped handle that hides all of it
   genome/        an assembly with no matrix behind it, and its one axis
+  browse/        a place read as a tree: one interface, a directory backend and a
+                 bucket one, and the name-routing both of them show rows by
+  s3/            SigV4, the bucket scopes, and ListObjectsV2 as a folder listing
   worker/        message protocol; the worker owns all I/O
   render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar, the
                  diagonal blend for two files, the 1D browser's ruler and arcs

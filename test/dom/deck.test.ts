@@ -449,7 +449,8 @@ describe('growing the deck', () => {
 
   it('fills the first cell it opened when the press carried a file', () => {
     const { deck } = make()
-    deck.grow('beside', new File(['x'], 'dropped.cool'))
+    const dropped = new File(['x'], 'dropped.cool')
+    deck.grow('beside', { uri: dropped.name, source: { kind: 'local', file: dropped } })
     expect(cellNames(deck)).toEqual(['lead.cool', 'dropped.cool'])
   })
 

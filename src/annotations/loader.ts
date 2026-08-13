@@ -107,12 +107,20 @@ export class AnnotationLoader {
     }
   }
 
-  /** Load a file named by URL — a published track, or one of the demo files. */
-  addUrl(url: string, label?: string): void {
+  /**
+   * Load a file named by URL — a published track, or one of the demo files.
+   *
+   * @param placement Which of the map's two edges the lane is drawn on, when a
+   * drop said so. The same parameter {@link addFiles} takes and for the same
+   * reason: a row dragged out of the Files panel onto the bottom edge of a map
+   * is a reader saying which stack they want it in, and a remote file has no
+   * business taking the default just because its bytes are somewhere else.
+   */
+  addUrl(url: string, label?: string, placement?: Placement): void {
     const trimmed = url.trim()
     if (trimmed === '') return
     const name = trimmed.split('/').pop() ?? trimmed
-    this.begin({ kind: 'remote', url: trimmed, name }, label)
+    this.begin({ kind: 'remote', url: trimmed, name }, label, undefined, placement)
   }
 
   /**

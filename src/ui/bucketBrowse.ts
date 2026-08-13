@@ -1,5 +1,5 @@
 /**
- * The folder view over a private prefix, and the dialog that offers it anywhere.
+ * The folder view over a bucket prefix, and the dialog that offers it anywhere.
  *
  * `BucketsCard` grew this first, and grew it in the wrong place: browsing lived
  * inside the screen where keys are *typed*, so reaching a file meant opening the
@@ -14,15 +14,21 @@
  * works; every URL box opens the same view in a modal through
  * `ui/browseButton.ts`.
  *
- * ## Filtering is filtering, not searching
+ * ## And then the view stopped being a bucket's
  *
- * The box above the list narrows **what was listed**, which is one level of one
- * prefix. It is not a bucket search and does not pretend to be: S3 has no such
- * call — `ListObjectsV2` matches a key *prefix*, never a substring — so a search
- * across a collection means walking every sub-prefix, one signed request each,
- * against a key that may be allowed to list some of them and not others. The
- * count under the box says how many of how many are showing, which is the line
- * that keeps "not in this folder" from reading as "not in the bucket".
+ * A directory on the machine is a folder in the same sense, and the crumbs, the
+ * filter, the list and the line underneath were the same five things over a
+ * different backend. They moved to `ui/folderBrowse.ts`, over
+ * `browse/folder.ts`'s interface. What is left here is the bucket-shaped door:
+ * a scope goes in, `browse/bucket.ts` turns it into a folder, and a pick comes
+ * back out as the `BucketObject` and `BucketScope` that every caller of this
+ * module already expects.
+ *
+ * **The modal stays bucket-only, and that is deliberate.** It is opened from
+ * boxes that take a *URL*, and a file in a local directory has none — offering
+ * one there would produce a pick the box cannot hold. The Files panel is where
+ * a local folder is browsed, because that is the surface with somewhere to put
+ * the answer.
  *
  * ## Why a picked file is opened rather than typed into the box
  *
@@ -36,10 +42,13 @@
  */
 
 import { Modal } from './Modal'
-import { button, el, fmt } from './dom'
-import { icon } from './icons'
-import { listPrefix, type BucketListing, type BucketObject } from '../s3/list'
+import { button, el } from './dom'
+import { FolderBrowseView } from './folderBrowse'
+import { bucketFolder } from '../browse/bucket'
 import { addressOf, readScopes, scopeFor, type BucketScope } from '../s3/credentials'
+import type { BucketObject } from '../s3/list'
+
+export { note } from './folderBrowse'
 
 /**
  * What a chosen file is handed back as.
@@ -57,197 +66,51 @@ export interface BrowseViewProps {
 }
 
 /**
- * One level of one prefix, with the way back up and a filter over it.
+ * One level of one prefix, in the shape this module's callers already speak.
  *
- * Holds the listing it drew, so typing in the filter repaints from memory
- * rather than re-listing: a signed request per keystroke would be a preflight
- * per keystroke, and the answer would not change.
+ * An adapter over {@link FolderBrowseView} and nothing more. The entry it hands
+ * back is rebuilt as a {@link BucketObject} because that is what `BucketsCard`
+ * and the modal below take, and because a `FolderEntry`'s `path` *is* the
+ * object's URL for a bucket (`browse/bucket.ts`) — so the rebuild reads one
+ * field rather than recomputing anything.
  */
 export class BucketBrowseView {
   readonly el: HTMLElement
-  private readonly crumbsEl = el('div', { class: 'bucket-crumbs' })
-  private readonly filterRow: HTMLElement
-  private readonly filterInput: HTMLInputElement
-  private readonly entriesEl = el('div', { class: 'bucket-entries' })
-  private readonly noteEl = el('p', { class: 'hint bucket-note-line' })
-  /** Bumped on every navigation, so a slow listing cannot overwrite a fast one. */
-  private navigation = 0
-  private at: { scope: BucketScope; prefix: string } | null = null
-  private listing: BucketListing | null = null
+  private readonly view: FolderBrowseView
 
-  constructor(private readonly props: BrowseViewProps) {
-    // Built once and never replaced, because it is where the caret is: a filter
-    // input rebuilt on each repaint loses focus on the first character typed
-    // into it, which reads as the box refusing to accept typing.
-    this.filterInput = el('input', {
-      class: 'input input-tiny bucket-filter',
-      type: 'text',
-      placeholder: 'filter this folder',
+  constructor(props: BrowseViewProps) {
+    this.view = new FolderBrowseView({
+      onPick: (entry, folder) => {
+        const scope = this.scopes.get(folder.id)
+        if (scope === undefined) return
+        props.onPick(
+          { key: entry.path, name: entry.name, size: entry.size ?? 0, url: entry.path },
+          scope,
+        )
+      },
     })
-    this.filterInput.addEventListener('input', () => this.paint())
-    this.filterRow = el('div', { class: 'bucket-filter-row hidden' }, this.filterInput)
-    this.el = el(
-      'div',
-      { class: 'bucket-browse hidden' },
-      this.crumbsEl,
-      this.filterRow,
-      this.entriesEl,
-      this.noteEl,
-    )
+    this.el = this.view.el
   }
+
+  /** Which scope each folder id came from, so a pick can name it again. */
+  private readonly scopes = new Map<string, BucketScope>()
 
   /** Whether the scope with this id is the one on screen. */
   isShowing(id: string): boolean {
-    return this.at?.scope.id === id
+    return this.view.isShowing(`bucket:${id}`)
   }
 
-  /** Put the view back to showing nothing — a scope was removed, or a dialog closed. */
+  /** Put the view back to showing nothing. */
   clear(): void {
-    this.navigation++
-    this.at = null
-    this.listing = null
-    this.el.classList.add('hidden')
-    this.crumbsEl.replaceChildren()
-    this.entriesEl.replaceChildren()
-    this.noteEl.textContent = ''
-    this.filterRow.classList.add('hidden')
+    this.view.clear()
   }
 
-  /** List one level of `prefix`, signed with `scope`. */
+  /** List one level of `prefix`, signed with `scope` where it has a key. */
   async browse(scope: BucketScope, prefix: string): Promise<void> {
-    this.at = { scope, prefix }
-    this.listing = null
-    // The filter belongs to the folder it was typed in. Carried down into a
-    // sub-prefix it would hide most of what the reader had just opened, with
-    // the reason for it two lines above the list and easy to miss.
-    this.filterInput.value = ''
-    const token = ++this.navigation
-
-    this.el.classList.remove('hidden')
-    this.crumbsEl.replaceChildren(...this.crumbs(scope, prefix))
-    this.filterRow.classList.add('hidden')
-    this.entriesEl.replaceChildren()
-    this.noteEl.textContent = 'Listing…'
-    this.noteEl.classList.remove('bucket-error')
-
-    let listing: BucketListing
-    try {
-      listing = await listPrefix(scope, prefix)
-    } catch (err) {
-      // A stale failure must not replace a newer view either: clicking two
-      // folders quickly and having the first one's 403 land on the second is an
-      // error message about a folder that is not on screen.
-      if (token !== this.navigation) return
-      this.noteEl.textContent = err instanceof Error ? err.message : String(err)
-      this.noteEl.classList.add('bucket-error')
-      return
-    }
-    if (token !== this.navigation) return
-    this.listing = listing
-    this.paint()
+    const folder = bucketFolder(scope)
+    this.scopes.set(folder.id, scope)
+    await this.view.browse(folder, prefix)
   }
-
-  private paint(): void {
-    const at = this.at
-    const listing = this.listing
-    if (at === null || listing === null) return
-    const { scope, prefix } = at
-
-    const needle = this.filterInput.value.trim().toLowerCase()
-    const shown = (name: string): boolean => needle === '' || name.toLowerCase().includes(needle)
-
-    // Folders first, then files — S3 returns them as two separate lists and
-    // interleaving them by name would be inventing an order the bucket does not
-    // have. Within each, S3's order is lexicographic and is left alone.
-    const rows: HTMLElement[] = []
-    for (const folder of listing.folders) {
-      if (!shown(folder.name)) continue
-      const row = el(
-        'button',
-        { class: 'bucket-entry', type: 'button' },
-        icon('chevron-right', { size: 14 }),
-        el('span', { class: 'bucket-entry-name', text: `${folder.name}/` }),
-      )
-      row.addEventListener('click', () => void this.browse(scope, folder.prefix))
-      rows.push(row)
-    }
-    for (const object of listing.objects) {
-      if (!shown(object.name)) continue
-      const row = el(
-        'button',
-        { class: 'bucket-entry bucket-entry-file', type: 'button' },
-        el('span', { class: 'bucket-entry-name', text: object.name }),
-        el('span', { class: 'bucket-entry-size', text: fmt.bytes(object.size) }),
-      )
-      row.addEventListener('click', () => this.props.onPick(object, scope))
-      rows.push(row)
-    }
-
-    const total = listing.folders.length + listing.objects.length
-    // The filter appears only when there is enough to be worth narrowing. Under
-    // that, it is a control that costs a line and saves nothing — and one that
-    // makes a folder holding three files look like a search screen.
-    this.filterRow.classList.toggle('hidden', total < FILTER_FROM)
-    this.entriesEl.replaceChildren(...rows)
-    this.entriesEl.classList.toggle('hidden', rows.length === 0)
-    this.noteEl.classList.remove('bucket-error')
-    this.noteEl.textContent = note(total, rows.length, needle !== '', listing.truncated, prefix)
-  }
-
-  /**
-   * The path back up, as clickable segments.
-   *
-   * Rooted at the scope's *own* prefix rather than at the bucket root: the key
-   * may well not be allowed to list above it, so offering a crumb that leads
-   * there would be offering a click that 403s.
-   */
-  private crumbs(scope: BucketScope, prefix: string): HTMLElement[] {
-    const root = addressOf(scope.base)?.prefix ?? ''
-    const rest = prefix.slice(root.length).split('/').filter((part) => part !== '')
-    const nodes: HTMLElement[] = [
-      button(scope.label, () => void this.browse(scope, root), { class: 'btn-link' }),
-    ]
-    let walked = root
-    for (const part of rest) {
-      walked = `${walked}${part}/`
-      const target = walked
-      nodes.push(el('span', { class: 'bucket-crumb-sep', text: '/' }))
-      nodes.push(button(part, () => void this.browse(scope, target), { class: 'btn-link' }))
-    }
-    return nodes
-  }
-}
-
-/** Below this many entries a folder is read rather than searched. */
-const FILTER_FROM = 8
-
-/**
- * The line under the list: what is showing, and what is not.
- *
- * Three facts compete for it and only one can be wrong in a way that costs
- * anybody an afternoon, so truncation wins whenever it applies: "my file is not
- * here" and "my file is past the first thousand keys" look identical otherwise,
- * and the second is not a thing a reader can guess.
- */
-export function note(
-  total: number,
-  showing: number,
-  filtered: boolean,
-  truncated: boolean,
-  prefix: string,
-): string {
-  if (truncated) {
-    return (
-      `S3 returned the first 1,000 entries of ${prefix === '' ? 'this prefix' : prefix} and there ` +
-      'are more. Open a sub-folder, or paste the file URL into the box.'
-    )
-  }
-  if (total === 0) return 'Nothing under this prefix.'
-  if (!filtered) return ''
-  if (showing === 0) {
-    return `Nothing here matches. ${total} ${total === 1 ? 'entry' : 'entries'} in this folder.`
-  }
-  return `${showing} of ${total} in this folder. The filter reads this level, not the whole bucket.`
 }
 
 /**
@@ -313,10 +176,10 @@ function chooser(scopes: readonly BucketScope[], view: BucketBrowseView): HTMLEl
 }
 
 /**
- * What the dialog says with no key stored.
+ * What the dialog says with no bucket stored.
  *
- * A sentence and one button, rather than the credentials form inlined here: the
- * form belongs to one screen, and two copies of six fields that write the same
+ * A sentence and one button, rather than the add form inlined here: the form
+ * belongs to `ui/bucketForm.ts`, and two copies of it writing the same
  * `localStorage` key is two places for the validation to drift apart.
  */
 function emptyBody(onPick: BucketPick, close: () => void): HTMLElement {
@@ -326,9 +189,10 @@ function emptyBody(onPick: BucketPick, close: () => void): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'No private buckets are set up yet. A bucket entry is a URL prefix and a read-only key: ' +
-        'everything under that prefix is then listed and read signed, and nothing else changes. ' +
-        'A file on a public URL needs none of this — paste it into the box instead.',
+        'No buckets are set up yet. A bucket entry is a URL prefix — with a read-only key where ' +
+        'the data is private, and with nothing else where it is public: everything under that ' +
+        'prefix is then listed and read, and nothing else changes. A file on a public URL needs ' +
+        'none of this — paste it into the box instead.',
     }),
     el(
       'div',
@@ -341,7 +205,7 @@ function emptyBody(onPick: BucketPick, close: () => void): HTMLElement {
             // The credentials dialog browses too, so a reader who came here for
             // a file gets one from there without a second trip: whatever they
             // open is handed to the same caller, with the scope looked up from
-            // the key they have just saved.
+            // the entry they have just saved.
             openBuckets({ onOpen: (uri) => onPick(uri, scopeFor(uri)) })
           })
         },

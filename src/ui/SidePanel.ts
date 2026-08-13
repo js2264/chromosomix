@@ -1,6 +1,6 @@
 /**
- * One of the three columns beside the map: **General**, **Annotations**,
- * **Aesthetics**.
+ * One of the columns beside the map: **Files**, **General**, **Annotations**,
+ * **Aesthetics**, **Analysis**.
  *
  * They started as three unrelated things — a sidebar with a fold button, a
  * column added later with a fold button copied from it, and a controls column
@@ -52,6 +52,21 @@
  * A panel with *nothing to show* still leaves altogether ({@link setAvailable}):
  * a tab is an invitation, and one that opens an empty column is worse than the
  * column's absence.
+ *
+ * ## Four of them describe the open file, and one does not
+ *
+ * §16.5 says these columns are the session's furniture and each describes the
+ * one file the session is of. {@link FILES_PANEL} is the exception and is meant
+ * to be: what it holds is the *places* this window has been connected to, which
+ * are the same in every tab and outlive all of them, exactly as the theme does.
+ *
+ * It is a column rather than a dialog because of what a reader does with it —
+ * they work out of a folder for an afternoon, opening a file, looking, opening
+ * the next — and a door you pass through fifty times should not be a door. That
+ * also makes it the one panel that is available with **nothing open at all**:
+ * the landing page is precisely where a reader with a folder full of coolers
+ * starts, and a column that appears only once you have opened something would be
+ * missing at the moment it is most useful.
  */
 
 import { icon, type IconName } from './icons'
@@ -87,6 +102,38 @@ export interface SidePanelSpec {
    * "get this out of the way" arrives.
    */
   keys: string
+}
+
+/**
+ * The folders this window is connected to, and what is in them.
+ *
+ * **Outermost on the left**, past General: it is the column a reader arrives
+ * *through* rather than one they drive the picture with, and the two beside the
+ * map should be the two that are about the map. `order: -3` puts it there, and
+ * puts its folded tab outside General's, which is the order they are read in.
+ *
+ * `f`, for files, which cost `ui/plotOptions.ts` a shortcut it explains giving
+ * up. The alternative was `q` or `z` — all that the single-letter space had left
+ * — and a column nobody can name the key of is a column reached by mouse only.
+ *
+ * A `folder-tree` rather than a plain folder: what is behind it is not one
+ * directory but a set of places, each opening into levels, and the mark that
+ * says so is the one with the branches on it.
+ */
+export const FILES_PANEL: SidePanelSpec = {
+  key: 'metacooler-viewer:files-collapsed',
+  title: 'Files',
+  side: 'left',
+  order: -3,
+  // Wider than General's 288, and it is the one column where width buys
+  // something concrete: every row is a file name off a sequencer run sheet, and
+  // the names are long, similar, and distinguished by their ends.
+  defaultWidth: 320,
+  minWidth: 240,
+  maxWidth: 600,
+  closeIcon: 'folder-tree',
+  openIcon: 'folder-tree',
+  keys: 'f',
 }
 
 /**
@@ -355,6 +402,19 @@ export class SidePanel {
   /** `true` when it is folded by choice rather than absent for want of content. */
   get isCollapsed(): boolean {
     return this.collapsed
+  }
+
+  /**
+   * Open this column because something it holds has just been asked for.
+   *
+   * The one way a panel unfolds without the reader pressing its own button, and
+   * it is deliberately narrow: connecting a folder is a gesture whose *answer*
+   * is in this column, so leaving it folded would be answering into a drawer.
+   * It writes the stored preference like any other unfold, because a reader who
+   * has just been shown the column and leaves it open has chosen to.
+   */
+  reveal(): void {
+    this.fold(false)
   }
 
   /**

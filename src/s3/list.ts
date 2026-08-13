@@ -21,6 +21,26 @@
  * by URL" rather than as a broken bucket: those are different problems with
  * different fixes and only one of them stops someone working.
  *
+ * ## Signed and unsigned are the same request with one header fewer
+ *
+ * A scope may carry no credential (`s3/credentials.ts`), and a public prefix is
+ * then listed by exactly the request below minus its `Authorization`. That is
+ * not a lesser path: it is the *correct* request for public data, and it is
+ * cheaper in a way worth naming, because it changes what can go wrong. An
+ * unsigned `GET` with no custom headers is a **simple** CORS request, so it is
+ * not preflighted — which means a bucket whose CORS policy was written for
+ * public downloads (`GET`, `HEAD`, `Range`) already answers it, and the whole
+ * class of preflight failures the signed path spends a paragraph explaining
+ * cannot happen here.
+ *
+ * What is left is one permission, and it is the one a published bucket most
+ * often lacks: `s3:ListBucket` granted to `*` in the **bucket policy**, as
+ * against the `s3:GetObject` that makes the objects downloadable. A public
+ * bucket that refuses to be listed is a normal configuration and not a fault,
+ * and with no backend (SPECS C1) there is nothing this app can do about it — so
+ * the 403 says which of the two grants is missing, and says that files under the
+ * prefix still open by URL.
+ *
  * ## Why the XML is parsed by hand
  *
  * `DOMParser` is not available in a worker and this runs on the main thread,
@@ -132,28 +152,43 @@ export async function listPrefix(
   url.searchParams.set('max-keys', '1000')
 
   const credential = credentialOf(scope)
+  const where = prefix === '' ? scope.base : prefix
 
   let response: Response
   try {
     response = await doFetch(url.href, {
       method: 'GET',
-      headers: signS3Request({ method: 'GET', url: url.href, credential }),
+      // Unsigned where the scope has no key, which is a public prefix and not a
+      // degraded private one. `headers: {}` rather than a branch at the call:
+      // the request is otherwise identical, and writing it twice is how the two
+      // paths would come to differ in a query parameter nobody noticed.
+      headers:
+        credential === null ? {} : signS3Request({ method: 'GET', url: url.href, credential }),
     })
   } catch (cause) {
-    // A signed request always preflights, so the first thing a misconfigured
-    // bucket refuses is the `OPTIONS` — which surfaces as an opaque `TypeError`
-    // with no status to report. Naming the likely cause is the whole value of
-    // catching it here.
+    const why = cause instanceof Error ? cause.message : String(cause)
+    // The two paths fail for different reasons and the fix is different, so
+    // guessing wrong here costs a reader the afternoon this message exists to
+    // save. A signed request always preflights, so the first thing a
+    // misconfigured bucket refuses is the `OPTIONS`; an unsigned one is a simple
+    // request that is never preflighted, so reaching here means the bucket has
+    // no CORS rule for this origin at all — or there is nothing at the URL.
     throw new ViewerError(
       'remote-cors',
-      `Could not list ${prefix === '' ? scope.base : prefix} on ${address.bucket}. A signed ` +
-        'request is preflighted, so the bucket CORS policy has to name `Authorization`, ' +
-        '`x-amz-date` and `x-amz-content-sha256` in `AllowedHeaders`. A public-data policy ' +
-        'names `Range` and nothing else, which answers every unsigned read and refuses every ' +
-        'signed one — so a bucket that serves the demos perfectly still fails here. ' +
-        '`AllowedOrigins: ["*"]` is fine: the request sets `Authorization` from script and ' +
-        'sends no cookies, so it is not credentialed in the CORS sense. ' +
-        `Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`,
+      credential === null
+        ? `Could not list ${where} on ${address.bucket}. The request was unsigned and simple, so ` +
+          'it was not preflighted — which leaves two causes. Either the bucket has no CORS ' +
+          'configuration answering this origin (a bucket serving public downloads usually has ' +
+          'one naming `GET`, `HEAD` and `Range`, and that policy answers this request as it ' +
+          'stands), or the host is not an S3 endpoint. Files under this prefix still open by ' +
+          `URL either way. Underlying error: ${why}`
+        : `Could not list ${where} on ${address.bucket}. A signed ` +
+          'request is preflighted, so the bucket CORS policy has to name `Authorization`, ' +
+          '`x-amz-date` and `x-amz-content-sha256` in `AllowedHeaders`. A public-data policy ' +
+          'names `Range` and nothing else, which answers every unsigned read and refuses every ' +
+          'signed one — so a bucket that serves the demos perfectly still fails here. ' +
+          '`AllowedOrigins: ["*"]` is fine: the request sets `Authorization` from script and ' +
+          `sends no cookies, so it is not credentialed in the CORS sense. Underlying error: ${why}`,
       { base: scope.base, prefix },
     )
   }
@@ -161,10 +196,16 @@ export async function listPrefix(
   if (response.status === 403) {
     throw new ViewerError(
       'bad-uri',
-      `The key for ${scope.label} is not allowed to list ${address.bucket}. Browsing needs ` +
-        "`s3:ListBucket` on the bucket, which is a different permission from `s3:GetObject` " +
-        'on the objects — this key may well still open files under it by URL. Add ' +
-        '`s3:ListBucket` scoped to the prefix, or paste the file URL directly.',
+      credential === null
+        ? `${address.bucket} does not allow anonymous listing of ${where}. Browsing a public ` +
+          'prefix needs `s3:ListBucket` granted to `*` in the bucket policy, which is a ' +
+          'different grant from the `s3:GetObject` that makes the objects downloadable — most ' +
+          'published buckets grant the second and not the first. Files under this prefix still ' +
+          'open by URL; add a key for it if you have one, or paste the file URL directly.'
+        : `The key for ${scope.label} is not allowed to list ${address.bucket}. Browsing needs ` +
+          "`s3:ListBucket` on the bucket, which is a different permission from `s3:GetObject` " +
+          'on the objects — this key may well still open files under it by URL. Add ' +
+          '`s3:ListBucket` scoped to the prefix, or paste the file URL directly.',
       { base: scope.base, prefix, status: 403 },
     )
   }
