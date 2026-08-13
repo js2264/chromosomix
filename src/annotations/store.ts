@@ -892,7 +892,18 @@ function toStored(entry: AnnotationEntry): StoredEntry {
               recipe: entry.source.recipe,
               framing: entry.source.framing,
             }
-          : { kind: 'local', name: entry.source.name },
+          : // A column of the open file's own tables (§8.12). Two strings are
+            // the whole of it, and they are enough to draw the row again
+            // without asking the reader for anything — the file they name is
+            // the file that is open.
+            entry.source.kind === 'metadata'
+            ? {
+                kind: 'metadata',
+                name: entry.source.name,
+                table: entry.source.table,
+                column: entry.source.column,
+              }
+            : { kind: 'local', name: entry.source.name },
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
@@ -900,8 +911,16 @@ function toStored(entry: AnnotationEntry): StoredEntry {
   }
 }
 
-const KINDS: AnnotationKind[] = ['gtf', 'track', 'segments', 'pairs', 'sequence']
-const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic']
+const KINDS: AnnotationKind[] = [
+  'gtf',
+  'track',
+  'segments',
+  'pairs',
+  'sequence',
+  'metadata',
+  'classes',
+]
+const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
   if (typeof value !== 'object' || value === null) return false
@@ -912,7 +931,15 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   const source = row['source']
   if (typeof source !== 'object' || source === null) return false
   const kind = (source as Record<string, unknown>)['kind']
-  if (kind !== 'local' && kind !== 'remote' && kind !== 'computed') return false
+  if (kind !== 'local' && kind !== 'remote' && kind !== 'computed' && kind !== 'metadata') {
+    return false
+  }
+  // A metadata row that lost either half of its address names no column, and a
+  // row that names no column can only come back as an empty lane.
+  if (kind === 'metadata') {
+    const named = source as Record<string, unknown>
+    if (typeof named['table'] !== 'string' || typeof named['column'] !== 'string') return false
+  }
   // A computed row that lost its recipe is not a row that can be recomputed,
   // and a Recompute button that cannot is worse than no row at all.
   if (kind === 'computed') {

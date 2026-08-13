@@ -123,6 +123,12 @@ export class AnnotationLoader {
    */
   restore(stored: readonly StoredEntry[]): void {
     for (const row of stored) {
+      // A **metadata** row is not this loader's (§8.12): there is no file
+      // behind it, so there is nothing to re-fetch and nothing to re-attach —
+      // its column is in the map that is open. `Session.restoreMetadata` brings
+      // it back, ready rather than detached, and taking it here would put a
+      // "re-open the file" button under a row that never had one.
+      if (row.source.kind === 'metadata') continue
       if (row.source.kind === 'remote' && row.source.url !== undefined) {
         this.begin(
           { kind: 'remote', url: row.source.url, name: row.source.name },

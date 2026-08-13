@@ -85,6 +85,16 @@
 export interface NamedSequence {
   name: string
   length?: number
+  /**
+   * The genome this sequence belongs to, on a file that has a genome layer.
+   *
+   * Carried for the overlap report and nothing else (§8.5): the matcher itself
+   * has no use for it — a metagenome's contig names are opaque ids and are
+   * matched by spelling alone, which is what makes the rename safe here at all
+   * — but the *report* on a metagenome is about MAGs rather than about
+   * sequences, and this is where the two tables meet.
+   */
+  genome?: string
 }
 
 /**

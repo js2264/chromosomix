@@ -723,6 +723,11 @@ export class MapPanel {
     this.panel?.remeasure()
   }
 
+  /** Ask for a frame; see `MatrixPanel.repaint` (§8.12). */
+  repaint(): void {
+    this.panel?.repaint()
+  }
+
   destroy(): void {
     this.disposed = true
     this.ladder?.destroy()

@@ -26,13 +26,19 @@
  *
  * One task with a toggle rather than two tasks, because they answer the same
  * question and the toggle is the honest way to show what the second one costs.
+ *
+ * **On a metagenome there is no toggle**, and the run is always the second one.
+ * A MAG's contacts with the rest of the community are the reading a metagenomic
+ * map exists for, and the cheap half — one assembly against itself — is a
+ * picture of a genome pretending it was sequenced alone. The cost is stated the
+ * same way; what is gone is the offer to pay less for an answer to a different
+ * question. See {@link PARAMS}.
  */
 
 import { contigNamed, framingCovers } from '../context'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -49,12 +55,67 @@ export function cisOnly(params: Params): boolean {
   return params.cis !== false
 }
 
-/** The contig an anchor names, or `undefined` while it is still being typed. */
-function anchorContig(context: AnalysisContext, params: Params): ContextContig | undefined {
+/**
+ * What an anchor names, as bins, whether it is a sequence or a **genome**.
+ *
+ * The runner has always taken both — `resolveAnchor` reads a genome's extent
+ * and makes *cis* mean the whole MAG, deliberately, because on a metagenome the
+ * question "what does this organism touch" is the one being asked and answering
+ * for whichever contig the first bin fell in would answer a different one. This
+ * side did not: the estimate resolved the name against `/contigs` alone, so
+ * naming a MAG — which is what a click on a genome × genome map means, and what
+ * the map's own axis is labelled with — was refused before it could run.
+ *
+ * A genome is checked *after* a sequence, so a file where one name is both
+ * behaves as it always did.
+ */
+function anchorSpan(
+  context: AnalysisContext,
+  params: Params,
+): { label: string; bins: number; extent: [number, number]; kind: 'contig' | 'genome' } | null {
   const name = anchorOf(params).split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
+  if (name === '') return null
+  const contig = contigNamed(context, name)
+  if (contig !== undefined) {
+    return {
+      label: contig.name,
+      bins: contig.bins,
+      extent: [contig.startBin, contig.startBin + contig.bins],
+      kind: 'contig',
+    }
+  }
+  const genome = context.genomes?.find((it) => it.name === name)
+  if (genome === undefined) return null
+  return {
+    label: genome.name,
+    bins: genome.extent[1] - genome.extent[0],
+    extent: [genome.extent[0], genome.extent[1]],
+    kind: 'genome',
+  }
 }
 
+/**
+ * The anchor, whether to balance, and **two controls a metagenome does not get.**
+ *
+ * *Cis only* and *Normalisation* are real questions on a cooler. A chromosome is
+ * a self-contained thing, most of what a locus touches is on it, and the P(s)
+ * decay of that chromosome is the expectation to divide by; cis is then both the
+ * commonest reading and the cheap one, and the toggle is the honest way to show
+ * what leaving it costs.
+ *
+ * On a metacool neither question survives contact with the file. An anchor there
+ * is one MAG among hundreds sharing a tube, and the reading that is *wanted* —
+ * what this organism touches — is the trans one; a profile restricted to the
+ * anchor's own assembly answers a question about a genome in isolation, which is
+ * not why anybody opened a metagenomic map. And a decay curve accumulated from
+ * one MAG's contigs is not an expectation for contact *between* MAGs, so the
+ * ratio it would produce is a number with two meanings in one track. So both are
+ * absent there and the runner settles them: always trans, never O/E.
+ *
+ * `needsNoGenomes` rather than two descriptors, and rather than a `when` over
+ * some hidden parameter: the file decides, the rule is written where the control
+ * is, and the arithmetic behind both is untouched and still goldened.
+ */
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
@@ -62,14 +123,17 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'Anchor',
     pickable: true,
     hint:
-      'The locus the profile is a reading from. A whole sequence is allowed. Type it, or press ' +
-      '“Pick on map” and drag along either axis.',
+      'The locus the profile is a reading from. A whole sequence is allowed, and on a metagenome ' +
+      'a whole genome — then the profile is over the whole MAG rather than one of its contigs. ' +
+      'Type it, or press “Pick on map” and drag along either axis.',
   },
   {
     kind: 'choice',
     key: 'normalise',
     label: 'Normalisation',
     default: 'none',
+    needsNoGenomes: true,
+    settled: 'none',
     /**
      * A 4C profile is a slice of the map, and a slice of a Hi-C map is mostly
      * P(s): contact falls by orders of magnitude with distance, so the profile's
@@ -105,6 +169,9 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'toggle',
     key: 'cis',
     label: 'Cis only',
+    needsNoGenomes: true,
+    // What a metagenome's run *is*, so that is what its provenance says.
+    settled: false,
     hint:
       'On, this reads one sequence and costs a handful of requests. Off, it walks the pixel ' +
       'table to reach the contacts leaving that sequence.',
@@ -113,8 +180,19 @@ const PARAMS: readonly ParamSpec[] = [
   BALANCE_PARAM,
 ]
 
+/**
+ * Whether this run stays on the anchor's own sequence.
+ *
+ * The file has the last word, and it is the same word the runner says: a
+ * metagenome is always read whole, whatever a stored session or a form on
+ * another file left in `cis`. See {@link PARAMS}.
+ */
+function cisRun(context: AnalysisContext, params: Params): boolean {
+  return !context.hasGenomes && cisOnly(params)
+}
+
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  const contig = anchorContig(context, params)
+  const anchor = anchorSpan(context, params)
   if (anchorOf(params) === '') {
     return {
       class: 'free',
@@ -124,30 +202,40 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal: 'Name a locus to anchor the profile on — type one, or pick it on the map.',
     }
   }
-  if (contig === undefined) {
+  if (anchor === null) {
+    const named = anchorOf(params).split(':')[0].trim()
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
-      refusal: `This file has no sequence called ${anchorOf(params).split(':')[0].trim()}.`,
+      refusal:
+        context.genomes === null
+          ? `This file has no sequence called ${named}.`
+          : `This file has no sequence or genome called ${named}.`,
     }
   }
 
   const balance = params.balance === true
-  if (!cisOnly(params)) {
+  // The metagenome's run is priced here too, and it is the same price: the walk
+  // is the walk whether a toggle asked for it or the file settled it. What must
+  // not happen is quoting four range requests for a pass the runner is going to
+  // make over half the file, which is what pricing `cis` from the params alone
+  // would do on a metacool — the key is still there, still `true` by default,
+  // and no longer the answer.
+  if (!cisRun(context, params)) {
     return {
       class: 'scan',
       requests: null,
       bytes: null,
       note:
         'Walks the pixel table as far as the anchor, which is about half the file, to reach the ' +
-        'contacts that leave this sequence. Progress is reported as it goes and it can be ' +
-        'cancelled at any point.',
+        `contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}. Progress is ` +
+        'reported as it goes and it can be cancelled at any point.',
     }
   }
 
-  const extent: [number, number] = [contig.startBin, contig.startBin + contig.bins]
+  const extent = anchor.extent
   const framing = context.framing
   if (
     context.blockLoaded &&
@@ -169,8 +257,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests,
     bytes: null,
     note:
-      `About ${requests} range requests: one dense square over ${contig.name} ` +
-      `(${contig.bins.toLocaleString()} bins).`,
+      `About ${requests} range requests: one dense square over ` +
+      `${anchor.kind === 'genome' ? 'the whole of ' : ''}${anchor.label} ` +
+      `(${anchor.bins.toLocaleString()} bins).`,
   }
 }
 

@@ -65,7 +65,15 @@ import {
   type OverlayAxes,
   type OverlayFrame,
 } from '../render/overlays'
-import { AnnotationLanes, LANE_GAP, type LaneEdge, type LaneGeometry } from './AnnotationLanes'
+import {
+  AnnotationLanes,
+  LANE_GAP,
+  type LaneEdge,
+  type LaneGeometry,
+  type MetaAxes,
+  type MetaSource,
+} from './AnnotationLanes'
+import type { MetaBlock } from '../annotations/metadata'
 import {
   COMPARE_OPS,
   alignable,
@@ -380,8 +388,20 @@ export interface MatrixPanelOptions {
     vmax?: number
   }): void
   onLevelChange?(level: 'bin' | 'contig'): void
-  /** A cell was clicked; offsets are block-local, ids are absolute. */
-  onCellClick?(cell: Cell, groups: { row?: AxisGroup; col?: AxisGroup }): void
+  /**
+   * A cell was clicked; offsets are block-local, ids are absolute.
+   *
+   * `genomes` is the genome each axis is *in* at that cell, where the block was
+   * read with them (`namesGenomes`). It is what lets a view answer a click with
+   * the unit a reader is looking at rather than with the unit the axis happens
+   * to be indexed by: on a whole-metagenome picture the cells are bins, the
+   * runs are contigs, and the thing being pointed at is a MAG.
+   */
+  onCellClick?(
+    cell: Cell,
+    groups: { row?: AxisGroup; col?: AxisGroup },
+    genomes?: { row?: string; col?: string },
+  ): void
   /**
    * What the exported figure is a picture *of*, for its caption.
    *
@@ -580,6 +600,15 @@ export interface AnnotationContext {
    * business knowing the reader's table shapes.
    */
   contigLength(name: string): number | undefined
+  /**
+   * Where the file's own columns come from (§8.12).
+   *
+   * Absent on a surface that draws no metadata lanes — the 1D browser, a panel
+   * built before the tables were read — and then a metadata row on the card
+   * simply has nothing to draw here, which is the same state a `/bins` column
+   * is in while its slice is on its way.
+   */
+  metadata?: MetaSource
   /**
    * Files were dropped on one edge of the map: load them, drawn on that edge.
    *
@@ -1104,6 +1133,9 @@ export class MatrixPanel {
       ...(options.annotations?.manual === undefined ? {} : { manual: options.annotations.manual }),
       ...(options.annotations?.client === undefined ? {} : { client: options.annotations.client }),
       ...(options.annotations?.groups === undefined ? {} : { groups: options.annotations.groups }),
+      ...(options.annotations?.metadata === undefined
+        ? {}
+        : { metadata: options.annotations.metadata }),
       onChange: () => this.schedule(),
     })
 
@@ -3285,16 +3317,33 @@ export class MatrixPanel {
   /** A band of one axis of the block on screen, as a locus, or `null`. */
   private bandLocus(which: 'rows' | 'cols', span: [number, number]): PickedLocus | null {
     const axis = which === 'rows' ? this.locusAxes.rows : this.locusAxes.cols
-    if (axis === null) return null
-    const from = axis.unitToLocus(span[0])
-    const to = axis.unitToLocus(Math.max(span[0], span[1] - 1))
-    const segment = axis.segmentAt(span[0])
-    if (from === null || to === null || segment === null) return null
-    return {
-      contig: from.contig,
-      start: Math.round(from.bp),
-      end: Math.round(to.bp + segment.bpPerUnit),
-    }
+    // **Above bin level a drag names a unit, not a span.** There is no
+    // `LocusAxis` on a genome × genome picture — a cell is a whole MAG and a
+    // base pair inside one would be an invention — and until this the gesture
+    // simply did nothing there: the reader pressed *Pick on map*, dragged
+    // across the only picture a metagenome's 4C is naturally anchored from, and
+    // the box stayed empty with the button still lit. The run under the drag is
+    // what can honestly be reported, and a bare name is what every range
+    // grammar here takes for a whole sequence or a whole genome.
+    if (axis === null) return this.unitPick(which, span[0])
+    return bandRegion(axis, span)
+  }
+
+  /**
+   * The unit a drag began on, where the axis has no coordinates inside it.
+   *
+   * Refused when the axis is **pooled by units**: a slot of a pooled overview
+   * holds several genomes and its label carries a `+15` saying so, so naming
+   * one of them would be picking whichever the reader did not point at. Refused
+   * rather than guessed, which leaves the button lit and the box empty — the
+   * same answer the gesture gives anywhere else it cannot be honoured.
+   */
+  private unitPick(which: 'rows' | 'cols', at: number): PickedLocus | null {
+    const data = this.data
+    if (data === null || (data.contigsPerCell ?? 1) > 1) return null
+    const group = groupAt(which === 'rows' ? data.rowGroups : data.colGroups, at)
+    if (group === undefined || group.label === '') return null
+    return { contig: group.label, start: 0, end: 0, whole: true }
   }
 
   /**
@@ -4102,6 +4151,7 @@ export class MatrixPanel {
       })
     }
     this.lanes.setAxes(this.locusAxes)
+    this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     // The caret was measured into a lane of the outgoing block, and the number
     // in it belongs to a picture that no longer exists.
     this.laneEditor?.close()
@@ -4204,6 +4254,7 @@ export class MatrixPanel {
       })
     }
     this.lanes.setAxes(this.locusAxes)
+    this.lanes.setMetaAxes(this.metaAxesOf(data, turned))
     this.laneEditor?.close()
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
@@ -4321,6 +4372,56 @@ export class MatrixPanel {
    * is no row axis; the *square* pair is the block's, and it is what a pointer is
    * resolved through however the picture is arranged ({@link squareAxes}).
    */
+  /**
+   * The same two axes as **cells of the file's own tables** (§8.12).
+   *
+   * Everything a metadata lane needs about a block, and nothing about base
+   * pairs: which runs the axis is made of, how many cells it has, which bin it
+   * opens at and how many bins one cell holds. All four come off the result the
+   * reader already sends, so this is a re-labelling of `MatrixResult` rather
+   * than a second read of anything.
+   *
+   * A **turned** block gets `null` on rows, exactly as the loci do and for a
+   * closely related reason: up the side of a turned map is distance from the
+   * diagonal, which is not a unit of any table. The columns keep their cells,
+   * so a metadata lane survives the turn along the bottom with every track.
+   */
+  private metaAxesOf(data: MatrixResult, turned: RotatedBlock | null): MetaAxes {
+    const binsPerCell = data.binsPerCell ?? 1
+    const cols: MetaBlock = {
+      level: data.level,
+      runs: data.colGroups,
+      cells: data.ncols,
+      blockStart: data.colExtent[0],
+      binsPerCell,
+      // A turned map is drawn on the half-bin lattice the rotation produced
+      // (`render/rotate.ts`), so the cells of the *block* — which is what the
+      // tables are indexed by — are two drawn columns each, counted from the
+      // rotation's own origin rather than from the block's. Both facts live in
+      // this pair of numbers so that nothing downstream has to know a turn can
+      // happen: the same two lanes are drawn by the same two painters.
+      ...(turned === null
+        ? {}
+        : {
+            scale: {
+              origin: (data.colExtent[0] - turned.originBin) / BIN_FRACTION,
+              per: binsPerCell / BIN_FRACTION,
+            },
+          }),
+    }
+    if (turned !== null) return { rows: null, cols }
+    return {
+      rows: {
+        level: data.level,
+        runs: data.rowGroups,
+        cells: data.nrows,
+        blockStart: data.rowExtent[0],
+        binsPerCell,
+      },
+      cols,
+    }
+  }
+
   private locusAxesOf(
     data: MatrixResult,
     turned: RotatedBlock | null,
@@ -5385,6 +5486,18 @@ export class MatrixPanel {
     this.schedule()
   }
 
+  /**
+   * Ask for a frame, from outside.
+   *
+   * For data that arrived without the store changing — a `/bins` column landing
+   * behind a metadata lane (§8.12). Everything else that redraws this panel
+   * either changes the store, which the lanes subscribe to, or is a gesture on
+   * the panel itself; this is the one road in from a fetch nobody is watching.
+   */
+  repaint(): void {
+    this.schedule()
+  }
+
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
   private schedule(): void {
     if (this.frame !== 0) return
@@ -6062,10 +6175,19 @@ export class MatrixPanel {
     // separation, and a view asked to open "the block at row 3" of a band would
     // be handed whichever sequence sits three bins from the diagonal.
     const square = this.squareCell(cell)
-    this.options.onCellClick?.(square, {
-      row: groupAt(this.data.rowGroups, square.row),
-      col: groupAt(this.data.colGroups, square.col),
-    })
+    this.options.onCellClick?.(
+      square,
+      {
+        row: groupAt(this.data.rowGroups, square.row),
+        col: groupAt(this.data.colGroups, square.col),
+      },
+      // The same runs the tooltip names the genome from, so what a click opens
+      // and what the pointer said it was over cannot come apart.
+      {
+        row: groupAt(this.data.rowGenomes, square.row)?.label,
+        col: groupAt(this.data.colGenomes, square.col)?.label,
+      },
+    )
   }
 
   /**
@@ -6909,6 +7031,43 @@ export function separatorsFor(data: MatrixResult): SeparatorSet {
  */
 export function onDiagonal(box: SelectionBox): boolean {
   return Math.abs(box.rows[0] - box.cols[0]) <= 1 && Math.abs(box.rows[1] - box.cols[1]) <= 1
+}
+
+/**
+ * A dragged band of one axis, as a locus on the sequence it began in.
+ *
+ * **Clamped to that sequence, and that is the whole of this function.** A drag
+ * is free to run across several — on a whole-metagenome view a cell is a contig
+ * or two, so a band of five crosses four boundaries — and the reading used to
+ * take the *name* from where the hand went down and the *end* from where it
+ * came up, which is one contig's name against another contig's coordinate. On
+ * the mock community that produced `NODE_…:1-260,000` for a 200 kb sequence,
+ * and the range parser refused it: `Genomic region out of bounds`. The 4C
+ * task's anchor, unusable from the picture it was picked on, and a clipboard
+ * copy of the same gesture that pasted back as an error.
+ *
+ * The anchor is where the hand went down — the same rule a marquee follows, for
+ * the same reason (`axisSelection`) — and what it names is however much of that
+ * sequence the gesture covered. The end never passes the sequence's length,
+ * because a contig's last bin is partial in general and a whole-contig drag
+ * would otherwise name a coordinate a bin beyond the end of it.
+ *
+ * Exported for the test that pins those two clamps, beside the three selection
+ * helpers below it and for the same reason: the panel needs a canvas and the
+ * arithmetic does not.
+ */
+export function bandRegion(axis: LocusAxis, span: [number, number]): PickedLocus | null {
+  const segment = axis.segmentAt(span[0])
+  if (segment === null) return null
+  const last = Math.min(Math.max(span[0], span[1] - 1), segment.unitEnd - 1)
+  const from = axis.unitToLocus(span[0])
+  const to = axis.unitToLocus(last)
+  if (from === null || to === null) return null
+  return {
+    contig: from.contig,
+    start: Math.max(0, Math.round(from.bp)),
+    end: Math.min(segment.contigLength, Math.round(to.bp + segment.bpPerUnit)),
+  }
 }
 
 /**

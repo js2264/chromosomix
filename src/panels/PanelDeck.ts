@@ -769,6 +769,11 @@ export class PanelDeck {
     for (const slot of this.slots) slot.panel?.remeasure()
   }
 
+  /** Ask every companion for a frame; see `MatrixPanel.repaint` (§8.12). */
+  repaint(): void {
+    for (const slot of this.slots) slot.panel?.repaint()
+  }
+
   destroy(): void {
     this.destroyed = true
     // Before anything else: the heading is the *view's*, it outlives this deck,

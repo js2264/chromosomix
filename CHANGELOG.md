@@ -14,6 +14,163 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **bigWigs, gene models and interval sets on a metagenome.** §8.5 gated every
+  annotation card on the file having no genome layer, so a `.metacool` had no
+  Tracks card, no drop zones and no way to draw a coverage track beside the map
+  it was computed from. The argument was that a metacool's axis is contigs from
+  thousands of independently assembled organisms, so a file keyed on contig
+  names either coincides or misleads.
+
+  The premise was wrong about the files people have. A metagenomic Hi-C dataset
+  is **one co-assembly** binned into MAGs afterwards: the names in `/contigs`
+  are one namespace — on the reference file, 20,566 sequences with 20,566
+  distinct names — and a bigWig over that assembly is keyed on exactly those
+  names, in the (contig, start, end) coordinates every other lane here is drawn
+  in. The naming ladder (§5.9) was already inert on opaque assembler ids, which
+  is what makes the rename safe on a metagenome in the first place.
+
+  So the whole column is offered on every container. What a metagenome needed
+  instead of a gate was an honest **report**: a track over a co-assembly covers
+  the organisms it was made about, and the sequence counts state that as `794 of
+  20,566`, which is arithmetically true and reads exactly like a file that
+  failed to match. Where the map has genomes the sentence now counts them —
+  *794 of 20,566 sequences, in 4 of 48 genomes: metator_00001_00000, …* — and
+  says it as a note rather than a warning, because partial coverage is the
+  expected shape of a track here. `__unbinned__` is not among them (§7.4). The
+  two real faults keep their voice: no overlap at all, and a cross-convention
+  match whose lengths disagree.
+
+  Measured rather than assumed, on the 48-MAG reference file with a bigWig
+  written over four of its MAGs: the whole-metagenome picture costs the track
+  **three range requests**, because the sample cache asks once per view and bbi
+  answers two thousand regions out of one zoom level. No cap was needed.
+
+- **A band dragged across several sequences no longer names a region that does
+  not exist.** The reading took the sequence's *name* from where the hand went
+  down and the *end* from where it came up — one contig's name against another
+  contig's coordinate — which on a whole-metagenome view, where a cell is a
+  contig or two and any real drag crosses boundaries, produced things like
+  `NODE_…:1-260,000` for a 200 kb sequence. The range parser refused it:
+  *Genomic region out of bounds*. So the 4C anchor could not be picked on the
+  picture it is most naturally picked on, and the same gesture put an unusable
+  string on the clipboard. A band is now clamped to the sequence it began in,
+  and never runs past the end of it.
+
+- **4C on a metagenome reads the whole community, and asks one question.** A
+  MAG's contacts with everything else in the tube are the reading a metagenomic
+  map exists for, and the task was giving back the other one: a profile
+  restricted to the anchor's own assembly, with the rest of the file left as
+  gaps — one organism pictured as though it had been sequenced on its own. So on
+  a `.metacool` the run is now always the whole-file pass, cis and trans
+  together, across every contig.
+
+  *Cis only* and *Normalisation* are gone from the form **there, and only
+  there**. On a cooler both are real questions and both are unchanged: a
+  chromosome is a self-contained thing, cis is the commonest reading and the
+  bounded one, and that chromosome's own P(s) is the curve to divide by. On a
+  metacool neither survives contact with the file — an anchor is one MAG among
+  hundreds, and a decay accumulated from one assembly's contigs is not an
+  expectation for contact *between* assemblies, so the ratio would carry two
+  meanings in one track.
+
+  The runner settles both keys itself on such a file rather than trusting what a
+  stored session or a form filled in on a cooler left behind, and the estimate
+  prices the pass it will actually make instead of the four range requests the
+  absent toggle would have implied. The arithmetic of both switches is untouched
+  and still goldened; what varies by file is which of it is offered. A stored
+  session carrying a key for a control the form no longer has at all is dropped
+  when the form resolves its defaults.
+
+- **A metagenome is read by genome, and now the gestures agree.** Four things
+  on a `.metacool` said otherwise.
+
+  **A click on the whole-file map.** Its three levels are one picture at three
+  depths and are labelled and divided by genome at all of them, but only two of
+  them resolved a *click* that way: `contig × contig` and `genome × genome`
+  opened a MAG's own map on the diagonal and the pair off it, while `bin × bin`
+  — the default, the level a reader lands on — opened a region view of the two
+  `NODE_` contigs under the pointer. All three now dispatch on one rule, so the
+  same gesture means the same thing at every depth (§7.3).
+
+  **The 4C task on those pictures.** The runner has always accepted a whole
+  genome as an anchor — cis then means the MAG rather than whichever contig the
+  first bin fell in — and three things upstream of it disagreed. The estimate
+  refused the name with *this file has no sequence called…*; the locus box
+  suggested twenty thousand contigs and no MAG; and at genome level the form
+  *invented* a default, reading an axis of 48 genome slots as 48 bins and
+  offering `NODE_17248_len_278011:1-48,000` — a real window of the file's first
+  sequence, chosen by nobody, ready to run. All three are fixed, and **Pick on
+  map** now works there too: a drag on an axis of genomes names the genome,
+  which is the only thing it can honestly name (§8.9).
+
+  **The Contact maps card and the deck.** Neither has ever worked on a metacool
+  — `compareRefusal` says so, and §16's whole premise is a coordinate system two
+  panels share, which two independent assemblies have not — but the card was
+  still the first thing in the Annotations column and the `+` edges were still
+  on the map. A control whose only function on this file is to invite a gesture
+  and then explain that it does not work is worse than no control: both are
+  absent now, along with the "add a map" command and the deck a shared `maps=`
+  link would have built (§8.5).
+
+- **The map's own metadata, as lanes beside it.** Every file this viewer opens
+  carries tables about its own units — a `.metacool`'s `/genomes` with
+  completeness, redundancy and GC content in it, its `/contigs` with the MGE
+  calls and bin ids the annotator joined on, every cooler's `/bins` with the
+  weight it was balanced with — and until now all of it was readable only as a
+  table, one row at a time, in a view that is not the picture.
+
+  A new **Metadata annotations** card, between the tracks and the marks, lists
+  what the open file carries and draws any of it beside the map. The columns are
+  discovered rather than declared, so a file with a column this app has never
+  heard of offers it like any other. A row is an ordinary annotation from the
+  moment it is added: same colour picker, same rename, same height, same limits,
+  same four edges, same multi-map placement, same reorder, same tooltip, same
+  figure, same session memory — because it joins the store a dropped bigWig
+  joins, which is the argument §18.5 already made for computed tracks.
+
+  **The ink follows the data.** A quantitative column is bars against a value
+  axis; a qualitative one is runs of colour with the category written into the
+  runs wide enough to hold it, from a fixed colour-vision-safe palette — the
+  colours belong to the categories, not to the lane, because they have to mean
+  the same thing in the lane above the map and the one down its side. Which of
+  the two a column is comes from what is in it, so a cluster id written as small
+  integers is a set of labels rather than a barplot of the numbering.
+
+  **What is offered is what the view can show.** One cell of a genome × genome
+  overview is a whole MAG and one cell of a bin × bin view is a bin, so a genome
+  column draws on all three levels and a bin weight draws on one. A coarser
+  column is broadcast down, which invents nothing; a finer one is refused
+  upward, because rolling bins into a MAG means choosing a statistic nobody
+  asked for and then drawing it in the same ink as a number the file wrote. The
+  drop-down lists the ones this view cannot show **disabled, with the reason**,
+  and a lane whose view has since coarsened says so in its row rather than
+  vanishing.
+
+  **A metacool has an annotations column for the first time.** §8.5's gate is
+  about *files* — a bigWig keyed on contig names from thousands of independently
+  assembled organisms either coincides or misleads — and it never covered a
+  column of the map's own tables, which cannot be matched to the wrong sequence
+  because the names are the map's. So a metagenome now gets this card, and only
+  this card.
+
+  `/bins` stays bounded, as §3.3 requires: what is read when a file opens is the
+  column *names and dtypes*, and a column is then read over the bins the picture
+  covers, widened by half so panning costs nothing. A window too large to read
+  at once is refused in the row, with the number.
+
+  Giving a metacool a store had one consequence worth naming: the analysis
+  drawer decides where a computed result goes by asking whether there is
+  somewhere to put it, and "a store exists" is not the same question as "a lane
+  can draw". A profile's values live in the annotations worker, which a metacool
+  still has none of, so the question is now the second one — profiles stay in
+  the drawer that drew them, and a called interval set, whose coordinates are on
+  the entry itself, becomes an overlay on the map (§18.5).
+
+  Each column exports as a TSV at **its own** granularity — one row per genome,
+  sequence or bin, under `#` lines naming the file, the table and the column —
+  because a lane is drawn at whatever level the view is, and checking a bar
+  against the file means having the rows the file wrote.
+
 - **Every box that takes a file URL now has a `browse…` beside it.** The bucket
   browser existed and was reachable from one place: the picker's *private
   buckets…* dialog, the screen for typing secret keys into. So a reader with a

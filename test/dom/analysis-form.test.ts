@@ -487,3 +487,72 @@ describe('ignoring the near-diagonal', () => {
     expect(spec?.when?.({ contacts: 'both' })).toBe(true)
   })
 })
+
+/**
+ * The two 4C controls a metagenome does not get.
+ *
+ * *Cis only* and *Normalisation* are real questions on a cooler — a chromosome
+ * is a self-contained thing, cis is the commonest reading and the cheap one, and
+ * that chromosome's own P(s) is the curve to divide by. On a metacool an anchor
+ * is one MAG among hundreds sharing a tube: the reading wanted is what it
+ * touches *everywhere*, and a decay accumulated from one assembly's contigs is
+ * not an expectation for contact between assemblies.
+ *
+ * So the file decides, and the last test is the one that matters: the specs are
+ * fixed when the form is built and the drawer hands it another file's context
+ * without rebuilding it, so a rule read once at construction would show a
+ * metagenome two controls whose answers it is about to ignore.
+ */
+describe('4C on a metagenome', () => {
+  const community = (): AnalysisContext => ({
+    ...context(),
+    uri: 'gut.metacool',
+    layout: 'metacool',
+    hasGenomes: true,
+    genomes: [
+      { name: 'MAG_1', extent: [0, 1043], contigs: 2 },
+      { name: 'MAG_2', extent: [1043, 2574], contigs: 1 },
+    ],
+  })
+
+  it('asks a cooler about both, as it always did', () => {
+    const view = form(FOURC_TASK)
+    expect(asks(view, 'Cis only')).toBe(true)
+    expect(asks(view, 'Normalisation')).toBe(true)
+    view.destroy()
+  })
+
+  it('asks a metagenome about neither, and still asks for the anchor', () => {
+    const view = form(FOURC_TASK, community())
+    expect(asks(view, 'Cis only')).toBe(false)
+    expect(asks(view, 'Normalisation')).toBe(false)
+    expect(asks(view, 'Anchor')).toBe(true)
+    view.destroy()
+  })
+
+  it('settles both keys to what the run will be, so the provenance is not a lie', () => {
+    // A hidden control still has a value, and that value is written into the
+    // run's provenance and the header of every TSV exported from it. Left at
+    // its default it read `param cis: true` on a table computed by a walk over
+    // the whole file — a number attributed to a computation nobody performed.
+    const view = form(FOURC_TASK, community())
+    expect(view.value.cis).toBe(false)
+    expect(view.value.normalise).toBe('none')
+    view.destroy()
+  })
+
+  it('leaves a cooler’s own answers alone', () => {
+    const view = form(FOURC_TASK)
+    expect(view.value.cis).toBe(true)
+    view.destroy()
+  })
+
+  it('takes the rows away when the drawer is handed a metagenome, and puts them back', () => {
+    const view = form(FOURC_TASK)
+    view.setContext(community())
+    expect(asks(view, 'Cis only')).toBe(false)
+    view.setContext(context())
+    expect(asks(view, 'Cis only')).toBe(true)
+    view.destroy()
+  })
+})

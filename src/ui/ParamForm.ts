@@ -374,7 +374,24 @@ export function resolveEntryDefaults(
   context: AnalysisContext,
   value: Params,
 ): Params {
-  const out: Record<string, ParamValue> = { ...value }
+  // **Only what this task has parameters for.** The incoming record is a stored
+  // session's (`analysis/memory.ts`), and a task's parameters are not fixed for
+  // all time: one renamed or retired between builds leaves a value remembered
+  // under a key this form has no control for, which would then go on reaching a
+  // runner that still reads it. A key with no spec is not a parameter of this
+  // task, and is dropped rather than carried; the CLI makes the same judgement
+  // louder, by refusing to start.
+  //
+  // A key whose spec exists but is *hidden on this file* (`needsNoGenomes`) is
+  // deliberately not touched here. It is still a parameter of the task, the
+  // reader may have set it on another file, and the runner — which is the one
+  // that knows what a metagenome makes of it — settles it there rather than
+  // depending on this function to have deleted it.
+  const known = new Set(specs.map((spec) => spec.key))
+  const out: Record<string, ParamValue> = {}
+  for (const [key, held] of Object.entries(value)) {
+    if (known.has(key)) out[key] = held
+  }
   for (const spec of specs) {
     if (!isEntrySpec(spec)) continue
     out[spec.key] =
@@ -395,6 +412,14 @@ export function resolveEntryDefaults(
   // weights support, whatever a form somewhere once said.
   for (const spec of specs) {
     if (spec.kind === 'toggle' && spec.derive !== undefined) out[spec.key] = spec.derive(context)
+  }
+  // And the controls this file is not asked about at all: they keep a value,
+  // that value is written into the provenance of the run and into the header of
+  // every table exported from it, and a default left sitting there says the run
+  // was something it was not. See {@link ParamBase.settled}.
+  for (const spec of specs) {
+    if (spec.settled === undefined) continue
+    if (spec.needsNoGenomes === true && context.hasGenomes) out[spec.key] = spec.settled
   }
   // After the entries, because a choice can be filtered by what is loaded and
   // the entry repair above is what decides whether anything is.
@@ -436,6 +461,15 @@ function binsFor(bp: number, binsize: number): number {
 function framingRegion(context: AnalysisContext): string {
   const framing = context.framing
   if (framing === null) return ''
+  // **Only where the axis is made of bins.** A genome × genome picture's
+  // extents count *slots* — one per MAG — and read as bins they resolve to a
+  // window of whichever sequence the file happens to start with: on a
+  // 48-genome overview, `NODE_17248_len_278011:1-48,000`, a locus nobody
+  // pointed at, offered as the default anchor of the 4C task and run without a
+  // word if the reader pressed the button. There is no honest answer at that
+  // level — the picture is of *all* the genomes — so the box stays empty and
+  // the task asks for a name, which is what the reader is there to give.
+  if (framing.level === 'genome') return ''
   const [from, to] = framing.rows
   const contig = context.contigs.find(
     (item) => from >= item.startBin && from < item.startBin + item.bins,
@@ -743,7 +777,7 @@ export class ParamForm {
       const section = control.spec.section ?? ''
       const rows = this.groups.get(section)
       if (rows === undefined) continue
-      const shown = paramVisible(control.spec, this.params)
+      const shown = paramVisible(control.spec, this.params, this.context)
       const ref = after.get(section) ?? null
       if (shown && !control.shown) rows.insertBefore(control.wrapper, ref)
       else if (!shown && control.shown) control.wrapper.remove()
@@ -1362,7 +1396,9 @@ export class ParamForm {
       type: 'text',
       attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
-      title: 'A contig, or a contig and a span — the same thing the locus boxes take.',
+      title:
+        'A contig, or a contig and a span — the same thing the locus boxes take. On a ' +
+        'metagenome a genome name is one too, and means the whole of it.',
       // The locus box's own 24 rem is a width for a toolbar. In a column it
       // overflows the card, and a grid track cannot shrink an element below the
       // width it asks for.
@@ -1384,7 +1420,14 @@ export class ParamForm {
         })
 
     const refill = (): void => {
+      // **Genomes first, where the file has them.** A locus box on a metagenome
+      // takes either — the range grammar has always resolved a bare genome name
+      // (§5.5), and the 4C task means the whole MAG by one — and a list of
+      // twenty thousand contigs with no MAG in it taught the reader the
+      // opposite. They lead because there are tens of them against tens of
+      // thousands, so a list that opened on the contigs would bury them.
       options.replaceChildren(
+        ...(this.context.genomes ?? []).map((genome) => el('option', { value: genome.name })),
         ...this.context.contigs.map((contig) => el('option', { value: contig.name })),
       )
     }

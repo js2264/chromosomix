@@ -253,7 +253,16 @@ export class AnalysisWorkspace {
       onClose: () => this.show(null),
       // Read live rather than captured, because a session's store arrives with
       // the file and this workspace is built when the *view* mounts.
-      hasLanes: () => this.host.store() !== null,
+      //
+      // **A store is not enough**, and the file that proves it is a metacool.
+      // Since §8.12 one has a store, a placement model and a card — for its own
+      // metadata columns, which are drawn from tables the main thread holds. A
+      // *profile* is drawn from values that live in the annotations worker
+      // ({@link register}), and a metacool has no such worker (§8.5), so a row
+      // there would be an empty lane under a sentence saying where to find it.
+      // The question is therefore whether a profile can be **drawn**, not
+      // whether a list exists to put it in.
+      hasLanes: () => this.laneable(),
       writeProfile: (output, provenance, format) =>
         this.writeProfile(output, provenance, format),
     })
@@ -387,6 +396,29 @@ export class AnalysisWorkspace {
       (output): output is IntervalsOutput => output.kind === 'intervals',
     )
     if (profiles.length === 0 && intervals.length === 0) return
+
+    // **The two outputs need different things, so they are asked separately.**
+    // A called interval set carries its own coordinates on the entry, so a
+    // store is the whole of what it needs; a profile's values live in the
+    // annotations worker, so it needs one of those as well ({@link laneable}).
+    // A metacool has the first and not the second (§8.5, §8.12), which is
+    // exactly the file this split exists for: its boundaries become overlays on
+    // the map, and its profiles stay in the drawer that drew them.
+    if (store !== null && !this.laneable()) {
+      for (const output of intervals) this.adoptIntervals(task, result, output, store, on)
+      for (const output of profiles) {
+        this.profiles.set(syntheticId(output.id), {
+          output,
+          provenance: result.provenance,
+          task: task.id,
+          grid: this.grid(),
+        })
+      }
+      this.synthetic?.refresh()
+      this.drawer.refresh()
+      this.host.changed()
+      return
+    }
 
     if (store === null) {
       // §8.5: a file with a genome layer carries no annotations, so there is no
@@ -616,6 +648,9 @@ export class AnalysisWorkspace {
         style: entry.style,
         visible: entry.visible,
       })
+      // Held here whether or not it can be a lane, because these values are
+      // what the exports are written from — and registered only where there is
+      // a worker to hold them ({@link laneable}).
       if (profile !== undefined) {
         this.profiles.set(entry.id, profile)
         this.register(entry.id, profile.output, profile.grid)
@@ -726,6 +761,20 @@ export class AnalysisWorkspace {
    * the card and the renderer has nothing to draw; after it, nothing downstream
    * can tell the track from a bigWig (§18.5).
    */
+  /**
+   * Whether a per-bin result can be drawn as a lane on this file.
+   *
+   * Both halves are needed and they are different questions. The **store** is
+   * where a row goes; the **annotations worker** is where its values go, and a
+   * lane samples them from there like a bigWig's ({@link register}). A file
+   * with the first and not the second — a metacool since §8.12 — can hold the
+   * row and cannot draw it, which is the one outcome worse than not offering
+   * the row at all.
+   */
+  private laneable(): boolean {
+    return this.host.store() !== null && this.host.annotations() !== null
+  }
+
   private register(entryId: string, output: ProfileOutput, grid: BinVectorContig[]): void {
     const client = this.host.annotations()
     if (client === null) return

@@ -70,6 +70,40 @@ interface ParamBase {
    */
   when?(params: Params): boolean
   /**
+   * Offered only where the file has **no** `/genomes` table.
+   *
+   * The mirror of {@link ChoiceOption.needsGenomes}, and it bends §18.2's *a task
+   * is a descriptor, never a screen* by the same stated rule: the descriptor
+   * still lists the control and says which files it is a question for, and what
+   * varies is whether this one can answer it.
+   *
+   * The case is 4C on a metagenome. *Cis only* and *Normalisation* are real
+   * questions on a cooler — a chromosome is a self-contained thing and its own
+   * P(s) is the curve to divide by — and on a metacool neither is: an anchor
+   * there is a MAG among hundreds of others in the same tube, the reading that is
+   * wanted is what it touches **everywhere**, and a decay curve taken from one
+   * assembly's contigs is not an expectation for contact between assemblies. The
+   * runner settles both keys itself on such a file (`run/fourc.ts`), so what this
+   * flag removes is a control whose answer was never the reader's to give.
+   */
+  needsNoGenomes?: boolean
+  /**
+   * What this parameter is worth on a file that is not asked about it.
+   *
+   * A hidden control still has a value, and that value is written into the
+   * provenance of every run and into the header of every TSV exported from one.
+   * Left at its default it says something false: a 4C run on a metagenome, which
+   * reads the whole file, exported a table headed `param cis: true`. The number
+   * a reader compares against would then be attributed to a computation nobody
+   * performed, which is the one thing a provenance block exists to prevent.
+   *
+   * So the form settles it to the file's answer when it drops the control. The
+   * *runner* settles it again for itself, because a job can reach the worker
+   * without passing through a form; this one is about what the run is recorded
+   * as, not about what it does.
+   */
+  settled?: ParamValue
+  /**
    * Group heading this control sits under, for tasks with more than a handful.
    *
    * Absent means the top group, which is where the parameters somebody actually
@@ -339,8 +373,21 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
   return out
 }
 
-/** Whether `spec` is shown, given the rest of the form. */
-export function paramVisible(spec: ParamSpec, params: Params): boolean {
+/**
+ * Whether `spec` is shown, given the rest of the form and the file.
+ *
+ * Two rules and they are different in kind: `when` is about the other answers on
+ * this form and is re-read on every keystroke, while `needsNoGenomes` is about
+ * the file and changes only when the drawer is handed another one. Both end in
+ * the same place — a wrapper out of the document, with its control and its state
+ * kept — so a form does not have to know which of the two hid a row.
+ */
+export function paramVisible(
+  spec: ParamSpec,
+  params: Params,
+  context: AnalysisContext,
+): boolean {
+  if (spec.needsNoGenomes === true && context.hasGenomes) return false
   return spec.when === undefined || spec.when(params)
 }
 

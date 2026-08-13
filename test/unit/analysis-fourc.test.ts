@@ -256,3 +256,53 @@ describe('divided by P(s)', () => {
     expect(profile.unit).toBe('contacts')
   })
 })
+
+/**
+ * The same runner, over a file whose sequences are contigs of MAGs.
+ *
+ * Neither *Cis only* nor *Normalisation* is a control on such a file — the form
+ * drops both (`tasks/fourc.ts`) — and the params that reach the runner say
+ * nothing about it: `cis` is `true` because that is a cooler's default and
+ * because a stored session from another file carries it. Honouring it would give
+ * back a profile of one MAG against itself, with the rest of the community left
+ * as gaps, which on a metagenomic map is the one reading nobody came for.
+ */
+describe('on a metagenome', () => {
+  /** The same two sequences, now belonging to a file that has genomes. */
+  function metaJob(params: Params): { context: JobContext; notes: string[] } {
+    const made = job(params)
+    const mc = made.context.mc as unknown as { hasGenomes: boolean }
+    mc.hasGenomes = true
+    return made
+  }
+
+  async function metaProfile(params: Params): Promise<ProfileOutput> {
+    const outputs = await runFourC(metaJob(params).context)
+    const first = outputs[0]
+    if (first === undefined || first.kind !== 'profile') throw new Error('no profile')
+    return first
+  }
+
+  it('reaches the other sequences even though “cis only” is on', async () => {
+    const profile = await metaProfile({ anchor: ANCHOR, cis: true })
+    const { cis, trans } = halves(profile)
+    expect(trans.every((value) => value === TRANS_CELL)).toBe(true)
+    // And the anchor's own sequence is still there: this is one profile over the
+    // whole file, not the trans half of one.
+    expect(cis[ANCHOR_BIN]).toBeGreaterThan(0)
+  })
+
+  it('does not say “with trans”, because there is nothing else it could be', async () => {
+    const profile = await metaProfile({ anchor: ANCHOR, cis: true })
+    expect(profile.label).toBe(`4C · ${ANCHOR}`)
+  })
+
+  it('stays in contacts, whatever a remembered normalisation says', async () => {
+    // One assembly's decay is not the expectation for contact between
+    // assemblies, so the ratio would be two quantities under one axis.
+    const profile = await metaProfile({ anchor: ANCHOR, cis: true, normalise: 'ps' })
+    expect(profile.label).not.toContain('O/E')
+    expect(profile.unit).toBe('contacts')
+    expect(halves(profile).trans.every((value) => value === TRANS_CELL)).toBe(true)
+  })
+})

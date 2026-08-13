@@ -221,6 +221,29 @@ export interface ContigsResult {
   table: TablePayload
 }
 
+/**
+ * The `/bins` columns a file carries — names and kinds, never a value (§8.12).
+ *
+ * Names and dtypes only, which is what makes it safe to ask while a file is
+ * being opened for a drop-down that may never be opened: §3.3's rule is that
+ * `/bins` is never *read*, and a group listing reads nothing. `[]` for a file
+ * with no `/bins` group at all, which is every `.hic`.
+ */
+export interface BinColumnsResult {
+  columns: Array<{ name: string; text: boolean }>
+}
+
+/** One `/bins` column over the bin range that was asked for. */
+export interface BinColumnResult {
+  column: string
+  /** The half-open bin range these values cover, clamped to the file. */
+  from: number
+  to: number
+  /** One of the two, according to what is on disk. */
+  values?: Float64Array
+  text?: string[]
+}
+
 /** One labelled run along an axis of a rendered block, in block-local offsets. */
 export interface AxisGroup {
   /**
@@ -451,6 +474,8 @@ export interface ResultMap {
   open: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult
+  binColumns: BinColumnsResult
+  binColumn: BinColumnResult
   range: ParsedRange
   matrix: MatrixResult
   aggregate: MatrixResult
@@ -473,6 +498,12 @@ export type WorkerRequest =
   | { id: number; kind: 'open'; uri: string; source: SourceSpec }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
+  | { id: number; kind: 'binColumns' }
+  // One `/bins` column over the bins a picture actually covers (§8.12). The
+  // range is the caller's because the caller is the side that knows what is on
+  // screen; it is clamped here, so a block that runs past the last bin asks for
+  // a slice rather than an error.
+  | { id: number; kind: 'binColumn'; column: string; from: number; to: number }
   | {
       id: number
       kind: 'range'

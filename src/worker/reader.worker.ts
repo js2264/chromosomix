@@ -37,6 +37,8 @@ import {
   tableToPayload,
   transfersFor,
   type AxisGroup,
+  type BinColumnResult,
+  type BinColumnsResult,
   type ContigsResult,
   type DeepValidation,
   type GenomesResult,
@@ -278,6 +280,34 @@ function handleGenomes(): GenomesResult {
 
 function handleContigs(): ContigsResult {
   return { table: tableToPayload(requireSession().mc.fullContigs()) }
+}
+
+/** What `/bins` holds, by name and kind — no values (§8.12). */
+function handleBinColumns(): BinColumnsResult {
+  return { columns: requireSession().mc.binColumns() }
+}
+
+/**
+ * One `/bins` column over one bin range.
+ *
+ * The read is bounded by the caller's range and clamped to the file's own bin
+ * count here, so a block whose last cell runs past the final bin — which is
+ * every pooled block on a file whose bin count is not a multiple of the pooling
+ * — asks for a shorter slice instead of failing.
+ */
+function handleBinColumn(
+  request: Extract<WorkerRequest, { kind: 'binColumn' }>,
+): BinColumnResult {
+  const { mc } = requireSession()
+  const from = Math.max(0, Math.min(Math.trunc(request.from), mc.nBins))
+  const to = Math.max(from, Math.min(Math.trunc(request.to), mc.nBins))
+  const values = mc.binColumn(request.column, from, to)
+  return {
+    column: request.column,
+    from,
+    to,
+    ...(Array.isArray(values) ? { text: values } : { values }),
+  }
 }
 
 function binLevelResult(mc: MetaCooler, dense: DenseMatrix, genomes = false): MatrixResult {
@@ -1104,6 +1134,10 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleGenomes()
     case 'contigs':
       return handleContigs()
+    case 'binColumns':
+      return handleBinColumns()
+    case 'binColumn':
+      return handleBinColumn(request)
     case 'range':
       // Resolved against the rung the caller named, because a range is a bin
       // extent and bin extents are per level. Absent, it is the open map's, as

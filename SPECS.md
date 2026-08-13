@@ -900,6 +900,17 @@ by contig — the axis is the whole metagenome at every level, 2,082 contig hair
 are a grey wash, and an axis label that names a genome opens that genome. A *selection* is not
 affected: its axis names what was ticked, which is the answer to a different question.
 
+**And a click on a cell opens a genome at all three levels.** "Read by genome" is a claim about the
+picture, and it has to be a claim about the gestures on it or it is only a claim about the ink: the
+two accumulating levels resolved a cell to one MAG's map on the diagonal and to the pair off it,
+while `bin × bin` — the *default*, the level a reader lands on — resolved to the contig under the
+pointer and opened a region view of two `NODE_` sequences nobody had asked about. The same gesture
+on the same file went somewhere else depending on which of three levels was chosen. All three now
+dispatch on one rule (`overviewTarget`): same genome on both axes opens that genome, two genomes
+open the block between them, and a file with no genome layer falls through to the sequence, which is
+what a cooler's whole-genome view has always done. The contig is one click further in, from the
+genome's own map, which is where a question about a contig is actually asked.
+
 ### 7.4 `__unbinned__` — never displayable
 
 Reserved, holding every contig that binning failed to assign. It breaks the small-MAG assumption
@@ -1042,6 +1053,12 @@ elements; bedpe-like files mark off-diagonal pairs as circles. Kept apart from t
 these two answer a different question — not "what is on the sequence here" but "this pixel is a
 feature" — and because one file is rarely wanted in both roles at once.
 
+**Metadata annotations** (§8.12). The columns the open file already carries about its own genomes,
+sequences and bins — completeness, contamination, an MGE call, a balancing weight — drawn against the
+map's own cells. Discovered rather than loaded, so it is the one card whose contents nobody had to
+find, and the one card a `.metacool` gets (§8.5). It sits under the tracks and over the marks,
+because the column descends from what came out of a file to what a reader put there by hand.
+
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both) and arrowheads (on- or off-diagonal), each entered as coordinates or picked by clicking the
 map. This is the card that makes a figure, and nothing in it comes from a file.
@@ -1062,6 +1079,15 @@ browser does — read out of the file rather than computed here.
 `/contigs`, not genome names. On load, intersect the bigWig's chrom list with `chromnames` and report
 the overlap explicitly ("16 of 16 contigs matched"). Silent zero-overlap is the most likely support
 question and must be impossible.
+
+**On a file with a genome layer the report is about genomes** (§8.5). The same arithmetic that is
+informative on a cooler is alarming on a metagenome: a coverage track over four MAGs matches `794 of
+20,566` sequences, which is true, and is also what a track about another organism entirely would
+say. So where the map has genomes the sentence counts them — *794 of 20,566 sequences, in 4 of 48
+genomes: metator_00001_00000, …* — and it is a **note rather than a warning**, because partial
+coverage is the expected shape of a track over a co-assembly and painting it yellow would make the
+ordinary case read as a fault. The two failures that *are* faults keep their voice: no overlap at
+all, and a cross-convention match whose lengths disagree (§5.9).
 
 ### 8.3 Text formats
 
@@ -1105,20 +1131,51 @@ refines by the same rule, from the same three ideas — a window wider than the 
 quantised so a small zoom asks for nothing new, and the picture in hand left on screen until the
 better one arrives.
 
-### 8.5 cool and mcool only — and genomes with no map
+### 8.5 Every container, and genomes with no map
 
-Every card, every lane and every overlay is gated on the file having no genome layer — which is
-exactly "this is a cooler" (§9). On a `.metacool` or `.mmetacool` they are not rendered at all.
+**This section used to be a gate, and the gate is gone.** It read: every card, every lane and every
+overlay is offered only where the file has no genome layer — which is exactly "this is a cooler"
+(§9) — and on a `.metacool` none of them are rendered at all. The argument was that a metacool's
+axis is thousands of contigs from thousands of *different organisms*, assembled independently, so a
+bigWig or a GTF keyed on contig names either coincides or misleads.
 
-The gate is about the *genome layer*, not about there being a matrix. A session browsing an assembly
-with no map (§5.8) offers the same cards for the same reason the cooler does: one assembly, one
-namespace of sequence names, and an overlap report that means something.
+**The premise was wrong about the files people have.** A metagenomic Hi-C dataset is *one
+co-assembly* — one `spades`/`megahit` run over one library — which is binned into MAGs afterwards.
+The names in `/contigs` are therefore one namespace, and on the reference file they are 20,566
+sequences with 20,566 distinct names, `NODE_17248_len_278011` and its siblings. A bigWig of coverage
+over that assembly is keyed on exactly those names, in exactly the (contig, start, end) coordinates
+every other lane in this application is drawn in. There was never anything to coincide with: the
+naming ladder (§5.9) is already inert on opaque assembler ids, matching them by spelling and nothing
+else, which is what makes the rename safe on a metagenome in the first place.
 
-The reason is not squeamishness about effort. A metacool's axis is thousands of contigs from
-thousands of *different organisms*, assembled independently; a bigWig or a GTF is keyed on contig
-names that belong to one assembly, so the overlap is either a coincidence or a mistake, and drawing a
-gene model across a MAG boundary would assert a coordinate system that does not exist. The honest
-answer is to not offer it.
+So the cards are offered on every container. What a metagenome needed instead of a gate was an
+**honest report**, and that is where the gate's real content went (§8.2): a track over a co-assembly
+covers the organisms it was made about, so the sequence counts say `794 of 20,566`, which is
+arithmetically true and reads exactly like a file that failed to match. The unit of the answer on a
+file with a genome layer is the **MAG**.
+
+The `__unbinned__` pseudo-genome is not one of them (§7.4): it is every contig binning failed to
+place, and counting it would put a 49th organism in a sentence about 48 and name it as something a
+track "covers".
+
+Two things are still true of a session browsing an assembly **with no map** (§5.8): it offers the
+same cards for the same reason, and one assembly means one namespace of sequence names.
+
+**And §8.12 is the card that never needed the gate lifted.** A metacool's own `/genomes` and
+`/contigs` tables are keyed on that file's own axis — there is no convention to coincide with, no
+overlap to report and nothing to match, because the names *are* the map's — so the **Metadata** card
+was offered on every container from the day it existed, and was for a while the only card a metacool
+got.
+
+**And the same argument settles the two ways a second *map* gets in.** The lower-left triangle
+(§5.7) and the deck (§16) both rest on the one thing their pictures must share — a coordinate system
+— and two metagenomes have none: their axes are contigs from two independent assemblies, so a region
+that names a place in one names nothing in the other. `compareRefusal` has always said so, and the
+**Contact maps** card offering it was still the first thing in the Annotations column of every
+metacool — a control whose whole function on that file was to invite a gesture and then explain that
+it does not work. It is absent there now, and so are the deck's `+` edges, its "add a map" command
+and the deck a shared `maps=` link would otherwise build. A control a file cannot answer is not shown
+greyed; it is not shown.
 
 ### 8.6 Persistence
 
@@ -1266,6 +1323,26 @@ is a mode on a picture, so it disarms after **one** pick and it disarms on Escap
 in the module rather than in the map — the map's whole job is to ask `isArmed` before it decides what
 a drag means.
 
+**Above bin level a pick names the unit, not a span.** There is no `LocusAxis` on a genome × genome
+picture — a cell is a whole MAG and a base pair inside one would be an invention (§8.4) — so the
+gesture used to do nothing at all there: the button lit, the drag ran across the one picture a
+metagenome's 4C is naturally anchored from, and the box stayed empty. What can honestly be reported
+is the *run* under the drag, and a bare name is what every range grammar here already takes for the
+whole of a sequence or the whole of a genome. It is refused where the axis is **pooled by units** —
+a slot holding fifteen genomes, which its own label says with a `+15` — because naming one of them
+would be naming whichever the reader did not point at.
+
+The other half of that gesture is the **anchor** itself: the 4C runner has always resolved a genome
+name, deliberately, so that *cis* means the whole MAG rather than whichever contig the first bin fell
+in. The form refused one — it resolved the name against `/contigs` alone — so the name the picture is
+labelled with could not be used on the picture it came from. It resolves both now, and the locus
+box's own suggestions lead with the genomes on a file that has them: there are tens of those against
+tens of thousands of contigs, and a list that opened on the contigs taught the reader the opposite of
+what the grammar accepts. **And no default is invented at genome level**: a framing there counts
+*slots*, so reading its extents as bins produced a real 48 kb window of whichever sequence the file
+began with — a locus nobody chose, offered as the anchor, and run without a word if the button was
+pressed.
+
 #### Shift-drag is a zoom, in one dimension, everywhere
 
 Freed of the anchor, **Shift-drag names a band of one axis and zooms to it**. Which axis is decided
@@ -1326,6 +1403,74 @@ Kept in per-file session memory beside the marks (§8.6), which is what makes th
 resolution, a switch of view, a deck opening and closing, and a reload; and carried in an exported
 session (§5.6), because a list of loci walked one after another is work, and it is the one part of a
 workspace a recipient can act on without the bytes.
+
+
+### 8.12 Metadata annotations: the file's own columns
+
+Every container this viewer opens keeps tables beside its pixels, and those tables have always held
+more than the arithmetic the reader needs. A `.metacool`'s `/genomes` carries completeness,
+redundancy, GC content and whatever else the binner wrote; its `/contigs` carries what the assembler
+and the annotator joined on — an MGE call, a coverage, a bin id; and every cooler's `/bins` carries at
+least the weight it was balanced with. Until this section all of it was readable only as a *table*,
+one row at a time, in a view that is not the picture.
+
+**A metadata column is an annotation, and it joins the same store every other annotation joins.**
+Adding one from the drop-down produces an ordinary entry with `kind: 'metadata'` (a value profile) or
+`kind: 'classes'` (a set of labels), and from that moment the colour, the rename, the height, the
+limits, the autoscale group, the four edges, the multi-map placement, the reorder, the hairline, the
+tooltip, the figure export and the session memory are the one implementation those rows already go
+through — the argument §18.5 makes for computed tracks, made a second time and settled the same way.
+What is left for a card of its own is the drop-down, the provenance line, the legend and a TSV export.
+
+**Two pictures, because a column is one of two things.** A *quantitative* column is a value per unit
+and is drawn as bars against an axis, defaulting to bars rather than a line because one cell is one
+unit and there is no ground between two MAGs to interpolate over. A *qualitative* column is not a
+value at all and is drawn as runs of colour with the category written into the runs wide enough to
+hold it, from a fixed colour-vision-safe palette rather than from the lane's own colour — the colours
+belong to the categories, they have to mean the same thing in every lane and every figure, and one
+swatch cannot describe six of them. Which of the two a column is comes from the values: text is
+qualitative, numbers are quantitative, and small integers repeated over many rows are the labels a
+binner writes rather than a measurement. A column whose every row is a different string is an
+identifier and is not offered at all.
+
+**The level rule: a table may be no finer than the axis.** This is the whole of what makes a metadata
+lane adapt to the view, and it is a rule about honesty rather than about effort. One cell of a genome
+× genome overview is a whole MAG, so a genome column has something exact to say about it and a bin
+weight has not; one cell of a bin × bin view is a bin, so all three tables can speak. A coarser
+column is therefore *broadcast* down — a MAG's contamination is exact on every contig and every bin
+inside it, and drawing it as a constant invents nothing — and a finer column is refused upward,
+because rolling bins into a MAG means choosing a statistic nobody asked for and then drawing it in
+the same ink as a number the file wrote. The drop-down offers what this view can show and lists the
+rest **disabled, with the reason**; a row already added to a view that has since coarsened stays in
+the list and says it is not drawn here.
+
+Inside a cell the aggregation *is* allowed, and the difference is that it stays in the unit the axis
+is drawn in: a pooled block's cell is those bins, every one of them on screen at that position, so a
+quantitative column is averaged over them (skipping `NaN`, which is a filtered bin and means *no
+value here*) and a qualitative one takes the most common of them.
+
+**Cells, not base pairs.** A metadata lane is indexed by the map's own cells, which is what lets one
+be drawn on a genome × genome overview where no other lane can be: there is no `LocusAxis` there at
+all (§8.4), because a cell is a whole MAG and a base pair inside it would be an invention. Which row
+of which table each cell is comes from what the reader already sends with every block — the axis
+runs, the bin each run's sequence starts at, and the pooling — so it is exact on all three levels,
+dense or pooled, and resolved through the *bin* rather than through a name wherever a bin is
+available. That last clause matters on a metagenome, where two MAGs are entitled to have assembled a
+`contig_1` each.
+
+**Reading `/bins` stays bounded.** §3.3's rule is that coordinates never come from `/bins`, and they
+still do not: what is read at open time is the group's column *names and dtypes*, which reads no
+values, and a column is then read over the bins the picture covers, cached by that range and widened
+by half on either side so a pan costs nothing. A window too large to read at once is refused in the
+row with the number, rather than by freezing the tab.
+
+**Persistence and export.** A row is remembered per file like every other (§8.6) and comes back
+**ready** rather than detached — there is no file to re-open and no recipe to re-run, because the
+column is in the map that is already open. A row naming a column the file no longer has is kept and
+says so. The TSV export writes the column at **its own** granularity, one row per unit of the source
+table under `#` comment lines naming the file, the table and the column: a lane is drawn at whatever
+level the view is, and a reader checking a bar against the file needs the rows the file actually
+wrote (§18.7).
 
 ---
 
@@ -2367,6 +2512,15 @@ lets a task like compartment phasing (§18.8) be a dropdown rather than a second
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
 
+**A control the file cannot be asked about is not shown.** The descriptor still lists it and states the
+rule — an option that needs a `/genomes` table, a switch that is only a question where there is no such
+table (4C's *cis only* and *Normalisation*, §18.8) — and what varies per file is whether this one can
+answer it. This is the single way the *never a screen* rule bends, and it bends by declared data rather
+than by building a descriptor per file. Two things follow, and both are load-bearing: the **runner**,
+not the form, settles a key whose control this file does not show, since a stored session and a form
+filled in on another file both leave a value behind; and the **estimate** prices what the runner will
+actually do, since a cost quoted from a parameter nobody was asked about is a cost for a different run.
+
 ### 18.3 The map stays live: a third worker
 
 **A long analysis must not stop the reader from panning.** This is a requirement, not a preference, and
@@ -2457,10 +2611,15 @@ no contact at all has no cis *fraction*, because zero of zero is not zero and
 drawing it at the floor would put a bin that never touched anything in the same
 place as one that only ever reaches other sequences.
 
-**On a file with no annotation layer the drawer is the lane.** A `.metacool` carries no annotations at
-all (§8.5), so it has no Tracks card, no synthetic card and nowhere for a per-bin result to be a row —
-and three of the tasks offered on one produce exactly that: coverage and marginals, diamond insulation,
-and MAG purity's per-contig track. There the drawer draws the profile itself, bucketed to the width it
+**On a file with no annotation *worker* the drawer is the lane.** This used to read "no annotation
+layer", and §8.12 made the distinction load-bearing: a `.metacool` now has a store, a placement model
+and a card, for its own metadata columns. What it still has no worker for is a **profile**, whose
+values live in the annotations worker and are sampled from there like a bigWig's — so a row there
+would be an empty strip under a sentence saying where to find it. Three of the tasks offered on one
+produce exactly that: coverage and marginals, diamond insulation, and MAG purity's per-contig track.
+A called **interval set** is the other half of the split and goes the other way: its coordinates are
+on the entry itself, so a store is the whole of what it needs, and insulation's boundaries are drawn
+on a metagenome's map like any other overlay. There the drawer draws the profile itself, bucketed to the width it
 has with a min–max band so a spike inside a bucket is visible rather than sampled away, and carries the
 exports the row would have carried: bigWig, bedGraph and TSV beside the PNG and the vector PDF. This is
 not a second opinion about the rule above — wherever there *is* a card the profile goes to it and is a
@@ -2515,8 +2674,10 @@ Three specific gates, each stated because each is a place the naive implementati
    the whole pixel table — because an upper-triangular store keeps every column *before* the anchor in
    other rows (§5.3, §6.2). Done properly it is one streaming pass over the pixels with
    `bin1 < anchor_end`, on average half the file, accumulating into a band of `|anchor|` rows and
-   materialising nothing large. **Cis is the default** and is bounded; trans is a toggle that says what
-   it costs.
+   materialising nothing large. **On a cooler cis is the default** and is bounded, with trans as a
+   toggle that says what it costs. **On a metacool there is no toggle and the run is always the walk**
+   (§18.8): a MAG's contacts with the rest of the community are the reading such a file exists for, and
+   the estimate prices the pass rather than the four requests the absent toggle would otherwise imply.
 
 2. **The correlation matrix is N², and there is a bin-count gate.** A whole yeast genome at 1 kb is
    12,100 bins and a 586 MB correlation matrix; human chr1 at 10 kb is 24,900 bins and 2.5 GB. The gate
@@ -2611,11 +2772,22 @@ producing the **expected** curve three later tasks consume. *Coverage and margin
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
-*4C profile* from an anchor, cis by default with trans as a stated-cost toggle, output as a bigWig,
-and optionally **over expected** — where "expected" means the anchor's own sequence's decay in cis and
-the mean of what the anchor reaches off it in trans, so that a profile carrying both halves carries one
-quantity. Per sequence rather than from P(s)'s genome-wide curve: a small chromosome divided by the
-average behaviour of the large ones comes out with a slope that is a property of the set.
+*4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
+as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
+**over expected**, where "expected" means the anchor's own sequence's decay in cis and the mean of what
+the anchor reaches off it in trans, so that a profile carrying both halves carries one quantity. Per
+sequence rather than from P(s)'s genome-wide curve: a small chromosome divided by the average behaviour
+of the large ones comes out with a slope that is a property of the set.
+**On a metacool the form asks for the anchor and nothing else**, and the two switches are absent
+because neither question survives contact with the file. An anchor there is one MAG among hundreds
+sharing a tube, and the reading wanted is what it touches *everywhere* — a profile restricted to the
+anchor's own assembly answers a question about a genome in isolation, which is not why anybody opened a
+metagenomic map. And a decay curve accumulated from one MAG's contigs is not an expectation for contact
+*between* MAGs, so the ratio it would produce is a number with two meanings in one track. The runner
+settles both keys itself on such a file rather than trusting a value a stored session or a form filled
+in on a cooler left behind: always trans, never over expected. The arithmetic of both switches is
+untouched and still goldened (`run/fourc.ts`); what varies by file is which of it is *offered*, which
+is the same stated rule §18.2 already bends by for options that need a `/genomes` table.
 *Compartments* — expected → observed/expected → Pearson correlation → eigenvectors by power iteration,
 behind the bin-count gate — with **phasing from a dropdown** over the loaded gene models and
 FASTAs, defaulting to the starred one, reporting the correlation it used and saying so when that

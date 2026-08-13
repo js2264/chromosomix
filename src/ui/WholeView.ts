@@ -49,6 +49,7 @@ import {
   type DerivePresentation,
   type TurnPresentation,
 } from './MatrixPanel'
+import { overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -84,6 +85,17 @@ export interface WholeViewProps {
     card: HTMLElement
     /** An axis label — a genome name here — was clicked. */
     onOpenGenome(genome: string): void
+    /**
+     * A cell between two genomes was clicked.
+     *
+     * The other half of {@link onOpenGenome}, and it is what makes this level
+     * agree with the two beside it: on the contig × contig and genome × genome
+     * pictures a click has always resolved to a *genome* — its own square on
+     * the diagonal, the pair off it (`ui/Overview.ts`) — and here it resolved
+     * to a contig, so the same gesture on the same file went somewhere else
+     * depending on which of three levels the reader had chosen.
+     */
+    onOpenPair(rowGenome: string, colGenome: string): void
   }
   /** Total bins in the file, for the counts a selection is measured against. */
   nBins: number
@@ -174,9 +186,13 @@ export interface WholeViewProps {
   /**
    * Annotations to draw beside and on the map (spec §8).
    *
-   * Supplied only for a cooler; a `.metacool` never carries one (§8.5), which is
-   * why the genome and pair views — reachable only on files that *have* genomes
-   * — do not take this at all.
+   * Every view that mounts a panel takes this now. It used to be this view and
+   * the region view alone, on the grounds that a `.metacool` carries no
+   * annotations (§8.5) and the genome, pair and overview views are reachable
+   * only on files that have genomes — true of *files*, and no longer true of
+   * annotations: a metacool's own columns are ones it cannot misplace (§8.12),
+   * so the three views a metagenome is actually read in are exactly the ones
+   * that had no way to draw them.
    */
   annotations?: AnnotationContext
   /**
@@ -327,8 +343,39 @@ export class WholeView {
       // which is also what decides whether the new read is one to ask about
       // first. Loading here as well was the second of two reads for one click.
       onLevelChange: (level) => props.onLevelChange(level),
-      onCellClick: (_cell, groups) => {
+      onCellClick: (_cell, groups, genomes) => {
         if (groups.row === undefined) return
+        // **The whole-metagenome picture answers with a genome**, which is what
+        // the two levels above it have always answered with (`ui/Overview.ts`).
+        // Its cells are bins and its runs are contigs, but the thing a reader
+        // is pointing at is a MAG — the axis is divided and labelled by genome
+        // at this level — and a contig of a metagenome is rarely the question
+        // and is one click further in.
+        //
+        // Through `overviewTarget`, so all three levels of the whole-file
+        // picker decide by one rule: same genome on both axes is that genome's
+        // own map, two genomes are the block between them, and no genome at all
+        // — a cooler, which has none — falls through to the sequence, which is
+        // what this view has always done.
+        const whole = props.wholeFileLevel
+        const target =
+          whole === undefined
+            ? null
+            : overviewTarget({
+                level: 'contig',
+                rowLabel: groups.row.label,
+                colLabel: groups.col?.label ?? groups.row.label,
+                ...(genomes?.row === undefined ? {} : { rowGenome: genomes.row }),
+                ...(genomes?.col === undefined ? {} : { colGenome: genomes.col }),
+              })
+        if (whole !== undefined && target !== null && target.kind === 'genome') {
+          whole.onOpenGenome(target.genome)
+          return
+        }
+        if (whole !== undefined && target !== null && target.kind === 'pair') {
+          whole.onOpenPair(target.rowGenome, target.colGenome)
+          return
+        }
         if (groups.col !== undefined && groups.col.label !== groups.row.label) {
           props.onOpenRegion(groups.row.label, groups.col.label)
           return
