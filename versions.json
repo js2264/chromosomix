@@ -1,6 +1,13 @@
 {
-  "latest": "ceefc81",
+  "latest": "792a8a7",
   "versions": [
+    {
+      "commit": "792a8a7",
+      "version": "0.10.0",
+      "date": "2026-08-13T17:09:23+02:00",
+      "subject": "Add file picker button to header for adding files to current tab (#28)",
+      "tag": ""
+    },
     {
       "commit": "ceefc81",
       "version": "0.10.0",
@@ -132,13 +139,6 @@
       "version": "0.8.0",
       "date": "2026-08-07T10:43:08+02:00",
       "subject": "fix(ui): the 4C anchor takes either direction, and the strip pays for its own room",
-      "tag": ""
-    },
-    {
-      "commit": "50ba73c",
-      "version": "0.8.0",
-      "date": "2026-08-07T10:01:02+02:00",
-      "subject": "fix(publish-demo): run on the bash macOS actually ships",
       "tag": ""
     },
     {
