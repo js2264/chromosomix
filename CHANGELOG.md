@@ -14,6 +14,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A button that adds a file to the tab you are in.** Dropping a file on the
+  page has always *added* rather than replaced — a second cooler comes up beside
+  the first, a bigWig joins the tracks, a `chrom.sizes` answers a browser's
+  guessed lengths — and that is the behaviour the whole content area has taken
+  since decks existed. What it never had was a button. Every click-sized door to
+  a file went the other way: the file crumb, the brand, *Open a different file*
+  and a new tab all replace what is open. So the commonest thing a reader wants
+  to do with a second file was reachable only by dragging one in from a window,
+  and the controls that looked like they would do it did the one thing that
+  loses work.
+
+  The header now carries it, past a divider of its own after the four panel
+  buttons: a file with a `+` on it, in every view, opening the picker over what
+  is on screen. It is the same picker the file crumb opens — the drop area that
+  also takes a click, the URL box, the way into a private bucket — with the
+  published catalogue left out, because every entry on that list is a whole
+  *session* and offering it here would be offering to throw the tab away from
+  the one control whose promise is that it will not. The mark is a *file* with a
+  plus rather than the bare `+` one row below it in the tab strip, since that
+  one adds a tab and this one adds a file to the tab you are in.
+
+  A URL typed into it takes the routing a dropped file takes, which it could not
+  before: a map goes into the deck beside the one that is open, anything else
+  goes to the tracks, and a bucket-browsed file carries its own key there. On an
+  empty tab the distinction does not exist — there is nothing to add to — so it
+  opens instead, exactly as the landing page does, rather than taking a lone
+  bigWig and finding no track list to put it in.
+
 - **Closing the browser no longer ends the session — it offers it back.** The tab
   strip has always lived in `sessionStorage`, which is a deliberate rule and not
   an oversight: a set of open files is a train of thought, it belongs to the
@@ -937,6 +965,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   block does not contain would only jam it against an edge.
 
 ### Fixed
+
+- **Two metagenomes selected together hung the tab.** A file with a genome layer
+  has no deck for a second one to join (§16.8), and the fallback for that case
+  was written as "open it as this session's map" but implemented by calling the
+  dropped-file router — which had since learned to send a map back to the
+  companion path that was calling it. The pair recursed until the stack ran out,
+  in the one place where the fallback was meant to be the calm one. Found while
+  giving the header's new add button the same rule to follow.
 
 - **Which score the cells were drawn from did not survive a link, a reload or the
   back button.** `score` has been in `KEY_ORDER` since the field existed, so

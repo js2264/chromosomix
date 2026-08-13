@@ -21,6 +21,7 @@
 import { ViewerError } from '../errors'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
 import type { ViewState } from '../types'
+import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
 import { FilePicker } from '../ui/FilePicker'
 import { Modal } from '../ui/Modal'
@@ -86,6 +87,19 @@ const REPO_URL = 'https://github.com/js2264/metacooler.js'
 
 /** The document title with nothing open; the file name is prefixed to it. */
 const APP_TITLE = '(meta)cooler'
+
+/**
+ * What the header's `+` promises, read by its tooltip and by its command.
+ *
+ * It names what the file *becomes* rather than the gesture, because the gesture
+ * is the one thing the mark already says. What a reader cannot guess from a file
+ * with a plus on it is the half that matters: a second cooler comes up beside
+ * this one rather than over it, which is the difference between this button and
+ * every other door to a file in the app.
+ */
+const ADD_FILE_HINT =
+  'A second map comes up beside the one that is open rather than instead of it, and anything ' +
+  'else is drawn on top — the same routing a dropped file takes.'
 
 /**
  * How many sessions may be open at once.
@@ -240,6 +254,20 @@ export class App implements SessionHost {
             this.annotationsPanel.toggle,
             this.aestheticsPanel.toggle,
             this.analysisPanel.toggle,
+          ),
+          // Past a second divider, because it is not a fifth panel: those four
+          // fold furniture this window already has, and this one brings
+          // something into it. Dropping is still the gesture the app is opened
+          // with and the whole content area still takes it — this is the same
+          // gesture for a reader who has no window to drag from, and the only
+          // door to a file that is on screen in every view. See
+          // {@link addFileDialog} for why it *adds* rather than replaces.
+          el(
+            'div',
+            { class: 'head-add' },
+            iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
+              this.addFileDialog(),
+            ),
           ),
         ),
         palette,
@@ -762,28 +790,86 @@ export class App implements SessionHost {
    * same question over the top: Escape, the close button or the backdrop leave
    * everything exactly as it was, and choosing a file replaces it deliberately.
    *
-   * Its own {@link FilePicker}, not the one mounted in the content area: that
-   * element is the landing view and moving it into a dialog would empty the
-   * page behind it.
+   * *Replaces* is what separates this door from {@link addFileDialog}, which is
+   * the same picker with the other verb behind it. Both go through
+   * {@link pickerDialog}, so the two dialogs cannot drift apart in anything but
+   * the thing they differ in.
    */
   openFileDialog(session: Session): void {
+    this.pickerDialog({
+      title: 'Open a file',
+      // The published catalogue belongs to *this* door and not to the header's.
+      // Every entry on it is a whole session, so choosing one is the deliberate
+      // replacement this dialog is for, and offering it beside "and this too"
+      // would be offering to throw the reader's tab away from the one control
+      // whose promise is that it will not.
+      examples: demoExamples(),
+      // The landing picker's own door, not `open`: the example list is the same
+      // list, and every entry on it is a published *session*.
+      onOpen: (uri, source) => void session.openPicked(uri, source),
+      onOpenFiles: (files) => void session.openFiles(files),
+    })
+  }
+
+  /**
+   * The header's `+`: one more file *in* this tab, from wherever the reader is.
+   *
+   * The gesture existed and had no button. Dropping onto the content area adds
+   * rather than replaces in every case it can (`Session.dropFiles`) — a second
+   * cooler comes up beside the first, a bigWig joins the tracks — but a drop
+   * needs somewhere to drag from, and every click-sized door to a file in this
+   * app went the other way: the crumb, the brand, `Open a different file` and a
+   * new tab all *replace*. So the commonest thing a reader wants to do with a
+   * second file was reachable only by dragging, and the buttons that looked like
+   * they would do it did the one thing that loses work.
+   *
+   * On an empty tab the distinction does not exist — there is nothing to add to,
+   * and `dropFiles` would take a lone bigWig, find no annotation store to put it
+   * in and drop it on the floor. It opens there instead, which is the same
+   * answer the landing page gives.
+   */
+  private addFileDialog(): void {
+    const session = this.current
+    if (session === undefined) return
+    const empty = !session.hasFile && !session.isBrowsing
+    this.pickerDialog({
+      title: empty ? 'Open a file' : 'Add a file',
+      onOpen: (uri, source) =>
+        void (empty ? session.openPicked(uri, source) : session.addRemote(uri, source)),
+      onOpenFiles: (files) => void (empty ? session.openFiles(files) : session.dropFiles(files)),
+    })
+  }
+
+  /**
+   * The picker, over whatever is on screen, however it was asked for.
+   *
+   * Its own {@link FilePicker}, not the one mounted in the content area: that
+   * element is the landing view and moving it into a dialog would empty the page
+   * behind it. What differs between the two callers is the *verb* — replace this
+   * tab's file, or add one to it — so that is all this takes: one picker, one
+   * modal, two sets of doors out of it.
+   */
+  private pickerDialog(props: {
+    title: string
+    examples?: Array<{ label: string; url: string; note?: string }>
+    onOpen(uri: string, source: SourceSpec): void
+    onOpenFiles(files: readonly File[]): void
+  }): void {
     if (this.modal !== null) return
     const modal: Modal = new Modal({
-      title: 'Open a file',
+      title: props.title,
       variant: 'modal-wide',
       body: () =>
         new FilePicker({
           onOpen: (uri, source) => {
             modal.close()
-            // The landing picker's own door, not `open`: the example list is
-            // the same list, and every entry on it is a published *session*.
-            void session.openPicked(uri, source)
+            props.onOpen(uri, source)
           },
           onOpenFiles: (files) => {
             modal.close()
-            void session.openFiles(files)
+            props.onOpenFiles(files)
           },
-          examples: demoExamples(),
+          examples: props.examples,
         }).el,
       onClose: () => {
         this.modal = null
@@ -937,6 +1023,13 @@ export class App implements SessionHost {
         title: 'Search commands',
         keys: KEYS.palette,
         run: () => this.openPalette(),
+      },
+      {
+        id: 'add-file',
+        group: 'File',
+        title: 'Add a file to this tab',
+        hint: ADD_FILE_HINT,
+        run: () => this.addFileDialog(),
       },
       {
         id: 'open-file',

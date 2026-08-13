@@ -2277,14 +2277,70 @@ export class Session {
     if (this.file === null) return
     // The third road to a second map, and it takes the same refusal as the
     // other two: a metagenome's axis is its own assembly's contigs, so there is
-    // no deck for a second one to join ({@link deckIsPossible}). Dropped
-    // instead — which opens it as *this* session's map, the ordinary meaning of
-    // dropping a cooler on a viewer that already has one.
+    // no deck for a second one to join ({@link deckIsPossible}). Opened instead,
+    // as *this* session's map — the ordinary meaning of dropping a cooler on a
+    // viewer that already has one.
+    //
+    // Not through {@link dropped}, which is what this said and which stopped
+    // being true the day that method learned to route a map back here: two
+    // metagenomes selected together recursed between the pair until the stack
+    // ran out, in the one place where the fallback was supposed to be the calm
+    // one.
     if (this.file.info.hasGenomes) {
-      this.dropped(file)
+      void this.open(file.name, { kind: 'local', file })
       return
     }
     this.ensureDeck().add({ kind: 'local', uri: file.name }, { kind: 'local', file })
+  }
+
+  /**
+   * {@link dropFiles}, for a file that is somewhere else.
+   *
+   * The header's `+` offers one box for a URL beside its drop area, and what a
+   * reader means by typing into it is what they mean by dropping: *and this
+   * too*. So the routing is the same routing — a map goes beside what is open,
+   * anything else joins the tracks, and an empty tab is filled rather than added
+   * to — and the only thing that differs is where the bytes come from.
+   *
+   * `source` is carried rather than rebuilt from `uri`, because a file reached
+   * through a bucket listing arrives holding that listing's key (§13, and
+   * `ui/FilePicker.ts` beside `openPicked`).
+   */
+  async addRemote(uri: string, source: SourceSpec): Promise<void> {
+    const { path } = splitUri(uri)
+    // A saved session names a whole tab rather than a file to put in one, and
+    // the door that knows that is the picker's own.
+    if (looksLikeConfig(path)) {
+      await this.openPicked(uri, source)
+      return
+    }
+    if (this.routeOf(uri) === 'map') {
+      // Beside the map that is open, exactly as {@link addCompanion} puts a
+      // dropped one, and on the same two conditions: there has to be a map to
+      // put it beside, and it has to be one a deck can hold (§16.8). Failing
+      // either, it fills the tab — which is the empty seat being taken rather
+      // than a replacement.
+      //
+      // The whole `uri` and not its `path`: `::entries/rep1` names which map
+      // inside a collection, and the deck splits the two itself.
+      if (this.file !== null && !this.file.info.hasGenomes) {
+        this.ensureDeck().add({ kind: 'remote', uri }, source)
+        return
+      }
+      await this.open(uri, source)
+      return
+    }
+    // Everything else is a track on what is here, and the two tabs with nowhere
+    // to put one answer exactly as they answer a dropped file: an empty one is
+    // filled, and a metacool — which has no annotation machinery at all (§8.5) —
+    // does nothing, because there is no coordinate system for a track to be
+    // drawn against. This must not open it instead: the promise of the button
+    // this arrives from is that it will not throw the open file away.
+    if (this.annotations === null) {
+      if (this.file === null && this.assembly === null) await this.open(uri, source)
+      return
+    }
+    this.annotations.loader.addUrl(path)
   }
 
   /**
