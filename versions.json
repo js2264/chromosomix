@@ -1,6 +1,13 @@
 {
-  "latest": "e13dc56",
+  "latest": "8fc7f1e",
   "versions": [
+    {
+      "commit": "8fc7f1e",
+      "version": "0.10.0",
+      "date": "2026-08-13T13:57:01+02:00",
+      "subject": "Add hand-drawn rectangles and diagonal recentring to contact maps (#26)",
+      "tag": ""
+    },
     {
       "commit": "e13dc56",
       "version": "0.10.0",
