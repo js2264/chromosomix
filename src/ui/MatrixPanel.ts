@@ -95,6 +95,7 @@ import {
   type DerivedValues,
   type Normalisation,
 } from '../render/derive'
+import { SMOOTH_RADII, smoothLabel } from '../render/smooth'
 import {
   BIN_FRACTION,
   anchorColumns,
@@ -577,6 +578,17 @@ export interface DerivePresentation {
    * control, and the values are still derived.
    */
   onExpectedChange?(on: boolean): void
+  /**
+   * Radius of the despeckling window; `0` for none (`render/smooth.ts`).
+   *
+   * Shared and applied exactly as {@link expected} is, including on a companion
+   * that draws it without offering the control — a deck whose panels smoothed
+   * differently would be five pictures that could not be compared, which is the
+   * one thing a deck is for.
+   */
+  smooth: number
+  /** Absent on a panel that applies the smoothing but does not own it. */
+  onSmoothChange?(radius: number): void
 }
 
 export interface ComparePresentation {
@@ -880,6 +892,15 @@ export class MatrixPanel {
   private stopRefineWatch: (() => void) | null = null
   /** The O/E control, lit from {@link setDerive} rather than from its own click. */
   private expectedButton: HTMLElement | null = null
+
+  /**
+   * The despeckle picker, lit from {@link setDerive} for the O/E toggle's
+   * reason: the setting is the session's and can move from a link.
+   *
+   * `null` on a panel that was not given {@link DerivePresentation.onSmoothChange}
+   * — a deck companion, which draws the smoothing and does not offer it.
+   */
+  private smoothSelect: HTMLSelectElement | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /** The room the box has, measured once per resize. See {@link measureRoom}. */
@@ -1293,6 +1314,39 @@ export class MatrixPanel {
         this.clip.el,
       ),
     ]
+
+    // Ahead of the transform in the row, because it is a question about the
+    // *numbers* and the two after it are questions about the picture — and
+    // because it belongs beside the score and the baseline, which is where a
+    // reader looks for "what am I being shown". Offered only where this panel
+    // owns the setting, on {@link DerivePresentation.onExpectedChange}'s rule.
+    const onSmoothChange = options.derive?.onSmoothChange
+    if (onSmoothChange !== undefined) {
+      const smoothSelect = el('select', { class: 'select' })
+      this.smoothSelect = smoothSelect
+      for (const radius of SMOOTH_RADII) {
+        smoothSelect.appendChild(
+          el('option', { value: String(radius), text: radius === 0 ? 'off' : smoothLabel(radius) }),
+        )
+      }
+      smoothSelect.value = String(options.derive?.smooth ?? 0)
+      smoothSelect.addEventListener('change', () => {
+        onSmoothChange(Number(smoothSelect.value))
+      })
+      controls.unshift(
+        field(
+          'smooth',
+          smoothSelect,
+          'Replace each cell by the mean of the cells around it, leaving its own value out — ' +
+            '`terra::focal` with a zero centre weight, the despeckle Hi-C figures are usually ' +
+            'made with. Applied to each file before two are compared, so a ratio is ' +
+            '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
+            'and the saturated single pixels a sparse ratio is made of are never produced. ' +
+            'Single-cell features are averaged away with them, which is why it is off by default.',
+        ),
+      )
+    }
+
     valueFields.push(...controls)
 
     /**
@@ -2378,6 +2432,19 @@ export class MatrixPanel {
     if (button === null) return
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
+  }
+
+  /**
+   * Show the despeckle radius the panel is drawing. {@link paintExpected}'s
+   * counterpart, and silent on a companion, which has no picker to set.
+   *
+   * Programmatic assignment to a `<select>` fires no `change` event, so this
+   * cannot loop back through the handler that called it.
+   */
+  private paintSmooth(radius: number): void {
+    const select = this.smoothSelect
+    if (select === null) return
+    select.value = String(radius)
   }
 
   /** Reflect the shared overlay state on the buttons. */
@@ -4719,6 +4786,10 @@ export class MatrixPanel {
     const derivation = {
       normalise: this.options.derive?.normalise,
       expected: this.options.derive?.expected === true,
+      // Applied inside `deriveBlock`, which is what puts it on *each file* and
+      // ahead of `combine` — the whole reason a ratio can be smoothed at all
+      // (`render/smooth.ts`).
+      smooth: this.options.derive?.smooth ?? 0,
     }
     const mine = deriveBlock(data, derivation, runs)
     this.derived = mine
@@ -5366,12 +5437,14 @@ export class MatrixPanel {
     const held = this.options.derive
     const same =
       held?.normalise === derive?.normalise &&
-      (held?.expected === true) === (derive?.expected === true)
+      (held?.expected === true) === (derive?.expected === true) &&
+      (held?.smooth ?? 0) === (derive?.smooth ?? 0)
     this.options.derive = derive
     // The toggle holds no state of its own — the setting is the session's, and
     // it can move from the command palette or from a link as easily as from a
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
     this.paintExpected(derive?.expected === true)
+    this.paintSmooth(derive?.smooth ?? 0)
     return same
   }
 

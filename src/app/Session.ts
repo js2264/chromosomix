@@ -4124,6 +4124,14 @@ export class Session {
         this.store.patch({ oe: on ? true : undefined })
         this.rederive()
       },
+      smooth: state.smooth ?? 0,
+      onSmoothChange: (radius) => {
+        // `0` is written as *absent*, like `oe`'s `false`: the two mean the same
+        // thing and a hash carrying `smooth=0` would be a link saying it had
+        // chosen the default.
+        this.store.patch({ smooth: radius > 0 ? radius : undefined })
+        this.rederive()
+      },
     }
   }
 

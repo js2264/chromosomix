@@ -19,6 +19,7 @@
  */
 
 import { isCompareOp } from '../render/compare'
+import { SMOOTH_RADII } from '../render/smooth'
 import { contigOf } from '../ui/labels'
 import type { Transform, ViewKind, ViewState } from '../types'
 
@@ -58,6 +59,7 @@ const KEY_ORDER = [
   'balance',
   'score',
   'oe',
+  'smooth',
   'op',
   'flip',
 ] as const
@@ -82,6 +84,7 @@ const OPTIONAL_KEYS = [
   'balance',
   'score',
   'oe',
+  'smooth',
   'op',
   'flip',
 ] as const
@@ -226,6 +229,21 @@ export function parseViewState(hash: string): ViewState | null {
   const oe = raw.get('oe')
   if (oe !== undefined) state.oe = oe === '1' || oe === 'true'
 
+  // Clamped to the radii this build offers rather than believed. A link is a
+  // string a stranger can edit, and the filter's cost is linear in nothing a
+  // reader can see — `smooth=400` would be accepted by the arithmetic and would
+  // average four hundred cells either way, which on a whole-genome block is a
+  // long freeze produced by a URL. Out of range is dropped rather than clamped
+  // to the nearest: a hash asking for something this build does not have should
+  // land on the plain map, which is what every other unrecognised value does.
+  const smooth = raw.get('smooth')
+  if (smooth !== undefined && smooth !== '') {
+    const radius = Number(smooth)
+    if (Number.isInteger(radius) && SMOOTH_RADII.includes(radius) && radius > 0) {
+      state.smooth = radius
+    }
+  }
+
   const op = raw.get('op')
   if (op !== undefined && isCompareOp(op)) state.op = op
 
@@ -300,7 +318,7 @@ export function differsOnlyInScale(a: ViewState, b: ViewState): boolean {
  * force decides which controls the panel draws — the depth tickbox is offered
  * under one and not the others — and controls are built once, at construction.
  */
-export const DERIVED_KEYS = ['oe', 'flip'] as const
+export const DERIVED_KEYS = ['oe', 'smooth', 'flip'] as const
 
 /**
  * The keys that name what is on screen **beside** this view (§16).
@@ -372,7 +390,7 @@ export const COMPANION_KEYS = ['maps', 'uri2'] as const
  * rule and with the same exception: a state that has said something about the
  * key is believed, including having said `false`.
  */
-export const READING_KEYS = ['flip', 'oe'] as const
+export const READING_KEYS = ['flip', 'oe', 'smooth'] as const
 
 /**
  * `true` when two states select the same block and differ only in how it is

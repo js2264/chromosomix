@@ -412,6 +412,18 @@ export interface ViewState {
    */
   oe?: boolean
   /**
+   * Radius of the despeckling window, in cells — `1` is 3 × 3, `0` and absent
+   * are off (`render/smooth.ts`).
+   *
+   * Beside {@link oe} and carried for its reason: it composes with every other
+   * value rather than replacing one, and a smoothed map *looks like a map*, so a
+   * link that dropped it would send a recipient a picture whose single-cell
+   * features had been averaged away with nothing on screen saying so. The one
+   * key in this group whose absence and whose `0` mean the same thing, which is
+   * why it is written down only when a reader has asked for it.
+   */
+  smooth?: number
+  /**
    * How two open files are put together — the diagonal split, or one derived
    * field over the whole square (`render/compare.ts`).
    *

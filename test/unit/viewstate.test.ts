@@ -112,6 +112,7 @@ const CASES: ViewState[] = [
     balance: true,
     score: 'balanced',
     oe: true,
+    smooth: 2,
     op: 'ratio',
     // `false` rather than absent on purpose: absent *means* turned, so the
     // explicit square is the value that has to survive being written down.
@@ -126,6 +127,21 @@ describe('serialiseViewState / parseViewState', () => {
       expect(parseViewState(`#${serialiseViewState(state)}`)).toStrictEqual(state)
     })
   }
+
+  it('takes a despeckle radius this build offers, and nothing else', () => {
+    const at = (hash: string): unknown => (parseViewState(hash) as { smooth?: number }).smooth
+    expect(at('#uri=a&view=region&region=c1&smooth=1')).toBe(1)
+    expect(at('#uri=a&view=region&region=c1&smooth=3')).toBe(3)
+    // `0` is off and off is *absent*: a hash saying it had chosen the default
+    // would round-trip to a key the serialiser never writes.
+    expect(at('#uri=a&view=region&region=c1&smooth=0')).toBeUndefined()
+    // A URL is a string a stranger can edit, and the filter's cost is invisible
+    // from the outside — 400 would average four hundred cells either way.
+    expect(at('#uri=a&view=region&region=c1&smooth=400')).toBeUndefined()
+    expect(at('#uri=a&view=region&region=c1&smooth=-1')).toBeUndefined()
+    expect(at('#uri=a&view=region&region=c1&smooth=1.5')).toBeUndefined()
+    expect(at('#uri=a&view=region&region=c1&smooth=lots')).toBeUndefined()
+  })
 
   it('carries the second region axis, and distinguishes it from a square block', () => {
     const pair = parseViewState('#uri=a&view=region&region=c1&region2=c2')

@@ -105,6 +105,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A despeckle, in the `smooth` picker beside the transform.** Each cell
+  replaced by the mean of the cells around it with **its own value left out** —
+  `terra::focal` with a zero centre weight, which is the filter Hi-C figures are
+  usually made with. Off, `3 × 3`, `5 × 5`, `7 × 7`; carried in the link, and
+  written into the colourbar caption (`counts · smoothed 3 × 3`), because a
+  smoothed map otherwise looks exactly like a map.
+
+  Leaving the centre out is what makes it a despeckle rather than a blur: a cell
+  that disagrees with all eight of its neighbours is evidence about the
+  neighbourhood and not about itself, and a filter that kept a ninth of its own
+  value would carry a wild pixel into the result at a ninth strength instead of
+  removing it.
+
+  **It is applied per file, before two files are combined**, which is what makes
+  it useful on a ratio rather than merely cosmetic. Smoothing the ratio would
+  have to average the `Infinity` and `0` that `x / 0` and `0 / x` produce, and one
+  infinite cell poisons every window it falls in; smoothing the inputs makes
+  those cells finite *before* the division, because a zero cell with contacts
+  around it is no longer zero. On the *E. coli* pair at 5 kb it takes the
+  saturated cells of the ratio from **15.3% to none at all** at `3 × 3`, while
+  the 0.43% that are genuinely unbalanced bins stay blank.
+
+  Two departures from the R original, both about edges. The divisor is the number
+  of cells that contributed rather than the fixed `(2r+1)² - 1`, because here the
+  boundary is the *viewport* and the alternative is a dark frame that moves when
+  the map is panned; and a `NaN` cell keeps none, because filling it from its
+  neighbours paints a measurement over the one place the map is saying it has
+  none.
+
+  Cost is flat in the radius — a separable running window rather than `(2r+1)²`
+  reads per cell — so `7 × 7` is no dearer than `3 × 3`.
+
 - **A blue–white–red diverging ramp, `BuWtRd`.** Higher contrast than `RdBu_r`
   and with more of its range spent away from the centre, which suits a sparse
   ratio map: most cells sit near neutral, so a ramp that stays pale through the
