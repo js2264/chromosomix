@@ -22,6 +22,7 @@ import {
 import { MAPS_SEPARATOR, VACANT, parseMaps, type PanelRef } from '@/panels/deck'
 import { recall, remember } from '@/state/UiMemory'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
+import { COMMIT, PRODUCER } from '@/version'
 import type { ViewState } from '@/types'
 
 const STATE: ViewState = {
@@ -112,6 +113,30 @@ describe('buildConfig', () => {
     // how they were arranged and which one the Analysis column was reading, and
     // they were the two scopes this function used to walk straight past.
     expect(config.deck).toEqual({ starred: 'p2', columns: 3 })
+  })
+
+  /**
+   * Which build wrote it.
+   *
+   * Asserted against the **imported** constant and never against a literal like
+   * `'(meta)cooler 0.10.0'`. `version.ts` reads its values from a `define`
+   * substitution that vitest does not apply, so the test runtime takes the
+   * fallback path — a literal would pass here and fail in a real build, or the
+   * reverse, and either way it would be testing the test.
+   */
+  it('stamps which build wrote it, the way an exported PDF does', () => {
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: 's9|provenance',
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    expect(config.producer).toBe(PRODUCER)
+    // Absent rather than empty where there is no git behind the build — the rule
+    // `buildLine()` follows, and the difference between "no commit" and "cannot
+    // say".
+    if (COMMIT === '') expect('commit' in config).toBe(false)
+    else expect(config.commit).toBe(COMMIT)
   })
 
   it('describes an untouched session as an empty workspace, not as nothing', () => {
@@ -206,6 +231,20 @@ describe('parseConfig', () => {
     // Right kind, no state to open: there would be nothing to show.
     expect(parseConfig(JSON.stringify({ kind: CONFIG_KIND }))).toBeNull()
     expect(parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: { view: 'region' } }))).toBeNull()
+  })
+
+  it('reads a session that cannot say which build wrote it', () => {
+    // Every file written before provenance existed. Absent is not empty and not
+    // a broken file — it is a session that simply cannot answer.
+    const read = parseConfig(JSON.stringify({ kind: CONFIG_KIND, state: STATE }))
+    expect('producer' in (read as object)).toBe(false)
+    expect('commit' in (read as object)).toBe(false)
+    // …and an empty string is read as the same thing, since a build with no git
+    // behind it writes nothing rather than an empty hash.
+    const blank = parseConfig(
+      JSON.stringify({ kind: CONFIG_KIND, state: STATE, producer: '', commit: '' }),
+    )
+    expect('producer' in (blank as object)).toBe(false)
   })
 
   it('tolerates every field but the state being absent', () => {

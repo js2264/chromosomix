@@ -26,6 +26,7 @@ import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
 import { parseMaps, serialiseMaps, type DeckLocal } from '../panels/deck'
+import { COMMIT, PRODUCER } from '../version'
 import type { StoredEntry } from '../annotations/types'
 import type { StoredLane } from '../annotations/store'
 import type { Bookmark } from '../annotations/bookmarks'
@@ -54,6 +55,29 @@ export interface SessionConfig {
   version: number
   /** When it was written, for the reader who finds four of them in a folder. */
   createdAt: string
+  /**
+   * Which build wrote this — `(meta)cooler 0.10.0`, or `… desktop`.
+   *
+   * Byte-identical to the string every exported PDF carries in its `/Producer`
+   * field (`ui/export.ts`), and deliberately so: a figure and the session that
+   * made it should answer *which build* the same way, because "which build made
+   * this" is the first question asked when one of them came out wrong. A flat
+   * string rather than a `{name, version, target}` object, because there is no
+   * consumer that wants the parts and every reader wants the line.
+   *
+   * Optional on the way in: a file written before this existed is still a
+   * session, and it simply cannot say.
+   */
+  producer?: string
+  /**
+   * Short commit hash, when the build had a git repository behind it.
+   *
+   * Absent rather than empty where it is unknown — `version.ts`'s own rule, and
+   * the reason `buildLine()` filters before it joins. An empty string here would
+   * be a claim that the build has no commit, which is a different thing from not
+   * knowing.
+   */
+  commit?: string
   /** What is being looked at: the same object the URL hash carries. */
   state: ViewState
   /** Every loaded annotation, exactly as session storage keeps them (§8.6). */
@@ -235,6 +259,10 @@ export function buildConfig(options: {
     kind: CONFIG_KIND,
     version: CONFIG_VERSION,
     createdAt: options.now.toISOString(),
+    // Stamped always, and the commit only where there is one. See the fields'
+    // own docstrings for why absent beats empty.
+    producer: PRODUCER,
+    ...(COMMIT === '' ? {} : { commit: COMMIT }),
     state: options.state,
     tracks: recall<StoredEntry[]>(key, SCOPES.tracks) ?? [],
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
@@ -339,6 +367,15 @@ export function parseConfig(text: string): SessionConfig | null {
   return {
     kind: CONFIG_KIND,
     version: typeof row['version'] === 'number' ? row['version'] : CONFIG_VERSION,
+    // Read tolerantly, like every other field: a session written before these
+    // existed is still a session, and one written by a build that could not
+    // find its own git repository is too.
+    ...(typeof row['producer'] === 'string' && row['producer'] !== ''
+      ? { producer: row['producer'] }
+      : {}),
+    ...(typeof row['commit'] === 'string' && row['commit'] !== ''
+      ? { commit: row['commit'] }
+      : {}),
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
     state: state as ViewState,
     tracks: list<StoredEntry>(row['tracks']),
