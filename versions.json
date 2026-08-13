@@ -1,6 +1,13 @@
 {
-  "latest": "17ffa85",
+  "latest": "e13dc56",
   "versions": [
+    {
+      "commit": "e13dc56",
+      "version": "0.10.0",
+      "date": "2026-08-13T13:35:57+02:00",
+      "subject": "Add metadata lanes for file's own annotation columns (#25)",
+      "tag": ""
+    },
     {
       "commit": "17ffa85",
       "version": "0.10.0",
@@ -133,13 +140,6 @@
       "date": "2026-08-06T14:02:50+02:00",
       "subject": "0.8.0",
       "tag": "v0.8.0"
-    },
-    {
-      "commit": "af9c613",
-      "version": "0.7.0",
-      "date": "2026-08-06T14:01:46+02:00",
-      "subject": "fix(colormaps): Reds starts at paper, not at pink",
-      "tag": ""
     },
     {
       "commit": "93daac1",
