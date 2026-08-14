@@ -19,6 +19,7 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { CHROMOSIGHT_PRESETS } from '../chromosightPresets'
 import { BALANCE_PARAM } from './shared'
 
 /** Half-width of a fixed window, in bins. */
@@ -27,8 +28,24 @@ export function windowBins(params: Params): number {
   return Math.max(1, Math.min(200, Math.round(value)))
 }
 
+/**
+ * Whether the windows are resampled to a common grid.
+ *
+ * `false` under the chromosight normalisation whatever the mode control says,
+ * and that is not a special case bolted on: there the window *is* the template,
+ * 17 bins for loops, because the score under the picture is a correlation
+ * against those 289 cells. A resampled window would still produce a picture and
+ * the number beneath it would no longer be the one chromosight computes. The
+ * mode control is hidden in that state rather than ignored, so the form and the
+ * arithmetic say the same thing.
+ */
 export function isScaled(params: Params): boolean {
-  return params.mode === 'scaled'
+  return params.mode === 'scaled' && params.norm !== 'chromosight'
+}
+
+/** Whether this run is the chromosight pileup rather than one of the other three. */
+export function isChromosight(params: Params): boolean {
+  return params.norm === 'chromosight'
 }
 
 /** Whether the anchors are pairs (off-diagonal) or single features. */
@@ -78,6 +95,8 @@ const PARAMS: readonly ParamSpec[] = [
       { value: 'fixed', label: 'Fixed window', hint: 'Centre plus or minus a number of bins.' },
       { value: 'scaled', label: 'Scaled', hint: 'The feature or the span between anchors, resampled.' },
     ],
+    // The chromosight pileup's window is its template's size. See {@link isScaled}.
+    when: (params) => params.norm !== 'chromosight',
   },
   {
     kind: 'number',
@@ -89,7 +108,7 @@ const PARAMS: readonly ParamSpec[] = [
     max: 200,
     integer: true,
     unit: 'bins',
-    when: (params) => !isScaled(params),
+    when: (params) => !isScaled(params) && params.norm !== 'chromosight',
   },
   {
     kind: 'number',
@@ -131,7 +150,25 @@ const PARAMS: readonly ParamSpec[] = [
         hint: 'Against the file’s own P(s). Controls for the distance decay only.',
       },
       { value: 'none', label: 'None', hint: 'The raw pileup.' },
+      {
+        value: 'chromosight',
+        label: 'Chromosight',
+        hint: 'The map detrended by its own distance law, then averaged — and every anchor scored against the template.',
+      },
     ],
+  },
+  {
+    kind: 'choice',
+    key: 'csPattern',
+    label: 'Template',
+    default: 'loops',
+    hint: 'What each window is scored against, and how wide it is.',
+    when: (params) => params.norm === 'chromosight',
+    options: CHROMOSIGHT_PRESETS.map((preset) => ({
+      value: preset.name,
+      label: preset.name.replace(/_/g, ' '),
+      hint: preset.blurb,
+    })),
   },
   {
     kind: 'number',
@@ -269,6 +306,27 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
   const entry = context.entries.find((row) => row.id === chosen)
   const anchors = anchorCount(entry?.summary)
+
+  // The chromosight normalisation is priced differently because it *reads*
+  // differently: the distance law it detrends by is a property of a whole
+  // sequence, so it takes one square per sequence the anchors sit on rather than
+  // one small block per anchor. That is usually far fewer requests and far more
+  // bytes, and saying "k windows" here would price the wrong run.
+  if (isChromosight(params)) {
+    const widest = context.contigs.reduce((most, contig) => Math.max(most, contig.bins), 0)
+    return {
+      class: 'scan',
+      requests: Math.max(1, context.contigs.length) * (params.balance === true ? 5 : 4),
+      bytes: widest * widest * 4,
+      note:
+        'One dense square per sequence the anchors sit on — up to ' +
+        `${((widest * widest * 4) / 1e6).toFixed(0)} MB at a time — detrended by its own distance ` +
+        'law, then a window cut at each anchor and scored against the template. ' +
+        `${anchors === null ? '' : `${anchors.toLocaleString()} anchors. `}` +
+        'Progress is reported per sequence and it can be cancelled at any point.',
+    }
+  }
+
   const side = windowSide(params)
   const cells = side * side
   const controls = params.norm === 'matched' ? Math.round(Number(params.controls ?? 5)) : 0
@@ -350,6 +408,6 @@ export const APA_TASK: AnalysisTask = {
       : waitingFor('Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile up on it.')
   },
   params: PARAMS,
-  outputs: ['matrix', 'table'],
+  outputs: ['matrix', 'table', 'curve'],
   estimate,
 }

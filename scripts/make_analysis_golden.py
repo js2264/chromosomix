@@ -933,6 +933,307 @@ def _p2ll(pileup: np.ndarray) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+# chromosight: detection and quantification
+# ---------------------------------------------------------------------------
+
+
+def _chromosight_genome(cfg: dict):
+    """A `HicGenome` over the demo cooler, preprocessed exactly as the CLI does.
+
+    `cmd_detect`'s first four calls, in its order — the order is not incidental:
+    `compute_max_dist` reads the config that `normalize` may have changed, and
+    `make_sub_matrices` bakes both into every sub-matrix it builds.
+    """
+    from chromosight.utils.contacts_map import HicGenome
+
+    hic = HicGenome(str(COOLER), inter=False, kernel_config=cfg)
+    hic.kernel_config = cfg
+    hic.normalize(norm="auto", n_mads=5, threads=1)
+    hic.compute_max_dist()
+    hic.make_sub_matrices()
+    return hic
+
+
+def _sub_matrix(hic, chrom: str):
+    sub = hic.sub_mats.query("(chr1 == @chrom) & (chr2 == @chrom)")["contact_map"].values[0]
+    sub.create_mat()
+    return sub
+
+
+def _slice_of(mat, rows: int, cols: int) -> dict:
+    """A corner of a matrix, as a JSON-able block.
+
+    A corner rather than the whole thing because a chromosome's detrended map is
+    a quarter of a million numbers and the point of comparing it is caught by any
+    contiguous window that contains both an undetectable bin and the diagonal —
+    which the top-left corner of every one of these chromosomes does.
+    """
+    import numpy as np
+
+    dense = np.asarray(mat.todense() if hasattr(mat, "todense") else mat, dtype=float)
+    block = dense[:rows, :cols]
+    return {"rows": list(block.shape), "values": rounded(block)}
+
+
+def chromosight_golden(chroms: list[str], patterns: list[str], corner: int, limit: int) -> dict:
+    """chromosight's own output, from chromosight, on the demo cooler.
+
+    The oracle with no `direct` half, and that is the point of it: there is no
+    second definition of "what chromosight detects" to recompute in numpy. What
+    is recorded is what the package produces — the detrended map it scans, the
+    correlation map it thresholds, the calls that survive its filters, their
+    p-values and q-values, and the pileup it plots — over `demo/yeast/`, at the
+    preset thresholds, so that `analysis/chromosight.ts` can be compared to it
+    cell for cell rather than in spirit.
+
+    Two patterns, because they exercise different halves of the code: `loops`
+    scans a two-thousand-diagonal band off the diagonal, and `borders` scans one
+    diagonal with three templates and folds its pileup onto itself.
+
+    The chromosomes are a subset, and the whole-file steps — neighbour
+    suppression and the FDR — are run over exactly that subset, because both are
+    global: a q-value computed over sixteen chromosomes is not the q-value of the
+    same call computed over two, and a golden that mixed the two would be
+    unreproducible by anything.
+    """
+    import numpy as np
+    import pandas as pd
+    import cooler
+
+    import chromosight.kernels as ck
+    import chromosight.utils.detection as cid
+    import chromosight.utils.preprocessing as preproc
+    from chromosight.utils.stats import fdr_correction
+
+    clr = cooler.Cooler(str(COOLER))
+    binsize = int(clr.binsize)
+    out: dict[str, Any] = {
+        "cooler": COOLER.name,
+        "binsize": binsize,
+        "chroms": chroms,
+        "corner": corner,
+        "tolerance": 1e-6,
+        "compare": "relative",
+        "tool": "chromosight.utils.detection",
+        "patterns": {},
+    }
+
+    for name in patterns:
+        cfg = dict(getattr(ck, name))
+        cfg["tsvd"] = None
+        kernels = [np.asarray(k, dtype=float) for k in cfg["kernels"]]
+        hic = _chromosight_genome(cfg)
+        record: dict[str, Any] = {
+            "config": {
+                "pearson": float(cfg["pearson"]),
+                "max_dist": int(cfg["max_dist"]),
+                "min_dist": int(cfg["min_dist"]),
+                "min_separation": int(cfg["min_separation"]),
+                "max_perc_zero": float(cfg["max_perc_zero"]),
+                "max_perc_undetected": float(cfg["max_perc_undetected"]),
+                "kernel_size": int(kernels[0].shape[0]),
+                "n_kernels": len(kernels),
+                "max_dist_bins": int(hic.max_dist),
+                "on_diagonal": int(cfg["max_dist"]) == 0,
+            },
+            "detrended": {},
+            "correlation": {},
+            "detectable": {},
+        }
+
+        coords_all: list[pd.DataFrame] = []
+        windows_all: list[np.ndarray] = []
+        for chrom in chroms:
+            sub = _sub_matrix(hic, chrom)
+            record["detrended"][chrom] = _slice_of(sub.matrix, corner, corner)
+            record["detectable"][chrom] = {
+                "n": int(sub.matrix.shape[0]),
+                "missing": [
+                    int(v)
+                    for v in preproc.valid_to_missing(
+                        sub.detectable_bins[0], sub.matrix.shape[0]
+                    )
+                ],
+            }
+            for kernel_id, kernel in enumerate(kernels):
+                if kernel_id == 0:
+                    missing_mask = preproc.make_missing_mask(
+                        sub.matrix.shape,
+                        valid_rows=sub.detectable_bins[0],
+                        valid_cols=sub.detectable_bins[1],
+                        max_dist=sub.max_dist,
+                        sym_upper=True,
+                    )
+                    conv, _ = cid.normxcorr2(
+                        sub.matrix.tocsr(),
+                        kernel,
+                        max_dist=sub.max_dist,
+                        sym_upper=True,
+                        full=True,
+                        missing_mask=missing_mask,
+                        pval=True,
+                        missing_tol=cfg["max_perc_undetected"] / 100,
+                    )
+                    # Trimmed to the scan band, as `pattern_detector` trims it
+                    # before picking foci: outside the band the raw convolution
+                    # still holds coefficients, and neither implementation looks
+                    # at them. Recording the untrimmed map would compare a region
+                    # the algorithm has already discarded.
+                    conv.data[np.isnan(conv.data)] = 0
+                    conv = preproc.diag_trim(conv.tocsr(), sub.max_dist)
+                    record["correlation"][chrom] = _slice_of(conv, corner, corner)
+                found, windows = cid.pattern_detector(
+                    sub.contact_map if hasattr(sub, "contact_map") else sub,
+                    cfg,
+                    kernel,
+                    full=True,
+                    tsvd=None,
+                )
+                if found is None:
+                    continue
+                found = hic.get_full_mat_pattern(chrom, chrom, found)
+                found["kernel_id"] = kernel_id
+                found["iteration"] = 0
+                found["chrom"] = chrom
+                coords_all.append(found.reset_index(drop=True))
+                windows_all.append(windows)
+            sub.destroy_mat()
+
+        if not coords_all:
+            record["calls"] = []
+            record["pileup"] = None
+            out["patterns"][name] = record
+            continue
+
+        coords = pd.concat(coords_all, axis=0).reset_index(drop=True)
+        windows = np.concatenate(windows_all, axis=0)
+
+        # `cmd_detect`'s whole-genome tail, in its order.
+        separation_bins = max(int(cfg["min_separation"] // binsize), 1)
+        distinct = cid.remove_neighbours(coords, win_size=separation_bins)
+        coords = coords.loc[distinct, :]
+        windows = windows[distinct, :, :]
+        starts = coords.bin1.values * binsize, coords.bin2.values * binsize
+        near = np.abs(starts[1] - starts[0]) < cfg["min_dist"]
+        coords = coords.loc[~near, :]
+        windows = windows[~near, :, :]
+        missing_p = coords.pvalue.isnull()
+        coords = coords.loc[~missing_p, :]
+        windows = windows[~missing_p.values, :, :]
+        coords["qvalue"] = fdr_correction(coords["pvalue"])
+
+        pileup = cid.pileup_patterns(windows)
+        if not cfg["max_dist"]:
+            pileup = np.nan_to_num(pileup)
+            pileup = pileup + np.transpose(pileup) - np.diag(np.diag(pileup))
+
+        record["calls"] = [
+            {
+                "chrom": row.chrom,
+                "bin1": int(row.bin1),
+                "bin2": int(row.bin2),
+                "score": float(row.score),
+                "pvalue": float(row.pvalue),
+                "qvalue": float(row.qvalue),
+                "kernel_id": int(row.kernel_id),
+            }
+            for row in coords.itertuples()
+        ][:limit]
+        record["n_calls"] = int(coords.shape[0])
+        record["pileup"] = rounded(pileup)
+        record["pileup_shape"] = list(pileup.shape)
+        record["separation_bins"] = separation_bins
+        out["patterns"][name] = record
+
+    return out
+
+
+def chromosight_quantify_golden(chroms: list[str], limit: int) -> dict:
+    """`chromosight quantify` over the demo loop table: scores, and the pileup.
+
+    The oracle for the APA task's chromosight mode. Quantification is not
+    detection with the search removed — it scores *given* coordinates, keeps the
+    ones whose window is usable, and reports `NaN` rather than dropping the rest
+    — so it needs a golden of its own, over a pair list nobody chose to make
+    agreeable.
+
+    `cmd_quantify` widens the scan distance to the furthest pair in the file and
+    drops the minimum, which changes the distance law the map is detrended by;
+    both are reproduced here, because a pileup detrended against a different
+    curve is a different pileup.
+    """
+    import numpy as np
+    import cooler
+
+    import chromosight.kernels as ck
+    import chromosight.utils.detection as cid
+
+    clr = cooler.Cooler(str(COOLER))
+    binsize = int(clr.binsize)
+    cfg = dict(ck.loops)
+    kernel = np.asarray(cfg["kernels"][0], dtype=float)
+    pairs = read_loops(chroms, limit, 0, binsize)
+
+    furthest = max((s2 - s1) for _, s1, _, s2, _ in pairs)
+    cfg["max_dist"] = min(furthest, clr.shape[0] * binsize)
+    cfg["min_dist"] = 0
+    cfg["tsvd"] = None
+
+    hic = _chromosight_genome(cfg)
+    out: dict[str, Any] = {
+        "cooler": COOLER.name,
+        "binsize": binsize,
+        "chroms": chroms,
+        "tolerance": 1e-6,
+        "compare": "relative",
+        "config": {
+            "max_dist": int(cfg["max_dist"]),
+            "max_dist_bins": int(hic.max_dist),
+            "kernel_size": int(kernel.shape[0]),
+            "max_perc_zero": float(cfg["max_perc_zero"]),
+            "max_perc_undetected": float(cfg["max_perc_undetected"]),
+        },
+        "pairs": [],
+        "scores": [],
+        "pvalues": [],
+    }
+
+    stacked: list[np.ndarray] = []
+    for chrom in chroms:
+        chrom_pairs = [p for p in pairs if p[0] == chrom]
+        if not chrom_pairs:
+            continue
+        sub = _sub_matrix(hic, chrom)
+        lo, _ = clr.extent(chrom)
+        coords = np.array(
+            [[s1 // binsize, s2 // binsize] for _, s1, _, s2, _ in chrom_pairs], dtype=int
+        )
+        found, windows = cid.pattern_detector(
+            sub, cfg, kernel, coords=coords.copy(), full=True, tsvd=None
+        )
+        sub.destroy_mat()
+        if found is None:
+            continue
+        for (chrom_name, s1, _e1, s2, _e2), score, pvalue in zip(
+            chrom_pairs, found.score.values, found.pvalue.values
+        ):
+            out["pairs"].append(
+                {"chrom": chrom_name, "start1": int(s1), "start2": int(s2)}
+            )
+            out["scores"].append(float(score))
+            out["pvalues"].append(float(pvalue))
+        stacked.append(windows)
+
+    windows = np.concatenate(stacked, axis=0)
+    out["n_windows"] = int(windows.shape[0])
+    out["n_scored"] = int(np.sum(np.isfinite(np.asarray(out["scores"], dtype=float))))
+    out["pileup"] = rounded(cid.pileup_patterns(windows))
+    out["pileup_shape"] = list(cid.pileup_patterns(windows).shape)
+    out["p2ll"] = _p2ll(cid.pileup_patterns(windows))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # metaplot, over 1D tracks
 # ---------------------------------------------------------------------------
 
@@ -1101,6 +1402,8 @@ COVERAGE = {
     "viewpoint": "a virtual 4C profile, against numpy — the diagonal counted once",
     "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
     "apa": "a raw loop pileup, against numpy and coolpuppy",
+    "chromosight": "detection of loops and borders, against chromosight itself",
+    "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
     "overlap": "Jaccard and hit counts, against a per-base boolean mask",
 }
@@ -1137,6 +1440,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--anchor-bins", type=int, default=5, help="4C anchor width, in bins")
     parser.add_argument("--apa-flank", type=int, default=10, help="APA flank, in bins")
     parser.add_argument("--apa-pairs", type=int, default=200, help="how many loops to pile up")
+    # chromosight's goldens are over two short chromosomes rather than the four
+    # above, and the reason is the FDR: neighbour suppression and the q-values
+    # are computed over whatever set is scanned, so the golden's chromosome list
+    # is part of the answer rather than a sampling of it. Two keeps the JSON
+    # small enough to read and still carries a multi-template pattern, an
+    # undetectable bin and both sides of the diagonal.
+    parser.add_argument(
+        "--chromosight-chroms",
+        nargs="+",
+        default=["I", "III"],
+        help="chromosomes for the chromosight goldens",
+    )
+    parser.add_argument(
+        "--chromosight-patterns",
+        nargs="+",
+        default=["loops", "borders"],
+        help="which presets to golden",
+    )
+    parser.add_argument(
+        "--chromosight-corner",
+        type=int,
+        default=48,
+        help="side of the detrended/correlation corner recorded, in bins",
+    )
+    parser.add_argument(
+        "--chromosight-calls", type=int, default=400, help="calls recorded per pattern"
+    )
+    parser.add_argument(
+        "--chromosight-pairs", type=int, default=120, help="pairs for the quantify golden"
+    )
     parser.add_argument("--meta-flank", type=int, default=1000, help="metaplot flank, in bp")
     parser.add_argument("--meta-columns", type=int, default=40, help="metaplot columns")
     parser.add_argument("--meta-features", type=int, default=300, help="metaplot features")
@@ -1184,6 +1517,23 @@ def main(argv: list[str] | None = None) -> int:
             },
         ),
         ("overlap", overlap_golden, (), {}),
+        (
+            "chromosight",
+            chromosight_golden,
+            ("chromosight",),
+            {
+                "chroms": args.chromosight_chroms,
+                "patterns": args.chromosight_patterns,
+                "corner": args.chromosight_corner,
+                "limit": args.chromosight_calls,
+            },
+        ),
+        (
+            "chromosight_quantify",
+            chromosight_quantify_golden,
+            ("chromosight",),
+            {"chroms": args.chromosight_chroms, "limit": args.chromosight_pairs},
+        ),
     ]
 
     for name, build, needs, kwargs in builders:
@@ -1202,7 +1552,7 @@ def main(argv: list[str] | None = None) -> int:
         written.append({"name": name, "golden": f"{name}.json", "bytes": size})
 
     versions: dict[str, str] = {}
-    for module in ("numpy", "cooler", "cooltools", "coolpuppy", "pyBigWig"):
+    for module in ("numpy", "cooler", "cooltools", "coolpuppy", "pyBigWig", "chromosight"):
         if not have(module):
             continue
         loaded = importlib.import_module(module)

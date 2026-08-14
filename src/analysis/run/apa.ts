@@ -46,8 +46,9 @@ import {
   type TaskRunner,
 } from '../job'
 import { makeRandom } from '../random'
-import { isScaled, onDiagonal, windowBins } from '../tasks/apa'
+import { isChromosight, isScaled, onDiagonal, windowBins } from '../tasks/apa'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
+import { chromosightPileup } from './apaChromosight'
 import { usableBlock, type Span } from './blocks'
 
 /** A rectangle of the matrix, in absolute bins. */
@@ -116,6 +117,24 @@ export const runApa: TaskRunner = async (job) => {
   if (anchors.length === 0) {
     job.note('No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.')
     return []
+  }
+
+  // The chromosight pileup is a different computation over the same anchors —
+  // the map is detrended before anything is cut out of it, so it reads whole
+  // sequences rather than windows — and it answers with its own three outputs.
+  // Branching here rather than at the top is deliberate: the anchor resolution
+  // above, including §5.9's naming, is shared and must stay shared.
+  if (isChromosight(job.params)) {
+    return chromosightPileup(
+      job,
+      anchors.map((anchor) => ({
+        row: anchor.pair.row,
+        col: anchor.pair.col,
+        bounds: anchor.bounds,
+        label: anchor.label,
+      })),
+      { maxAnchors },
+    )
   }
 
   const groups = groupAnchors(job, anchors, usingPairs ? null : (features as FeatureSet))

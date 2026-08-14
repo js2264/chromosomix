@@ -570,6 +570,22 @@ export interface MatrixOutput {
    * data, which is the one thing a diverging scale must not do.
    */
   centre?: number
+  /**
+   * A colour scale the *task* fixes, rather than one fitted to the data.
+   *
+   * Absent almost everywhere, because a scale fitted to the picture is what
+   * makes a picture readable. It is here for the one thing a fitted scale cannot
+   * do: reproduce somebody else's figure. chromosight's pileup is drawn at
+   * `vmin=0, vmax=2` on `seismic` whatever the numbers turn out to be, so two
+   * pileups from two files are the same picture where they are the same result —
+   * and a viewer that autoscaled would show a flat pileup and a strong one in
+   * identical colours and call it the same plot.
+   *
+   * Takes precedence over {@link centre}, which is the *derived* version of the
+   * same idea. `[lo, hi]`, and cells outside it clamp to the end colours, which
+   * is matplotlib's `set_under`/`set_over` default and `colormapIndex`'s.
+   */
+  range?: [number, number]
   /** Numbers printed under the picture: P2LL, AA/BB strength, an r. */
   stats?: Array<{ label: string; value: number; digits?: number; hint?: string }>
 }

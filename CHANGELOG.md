@@ -90,6 +90,79 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in front now decides, which is what a window-level preference carried per tab
   can honestly mean.
 
+- **Pattern detection, and it is chromosight.** A fifteenth task on the map card:
+  loops, borders, hairpins, centromeres and stripes, found by correlating a
+  template against a map detrended by its own distance law, with the smears
+  suppressed and a Benjamini-Hochberg q-value on every call. It is a port of
+  [chromosight](https://github.com/koszullab/chromosight) rather than a caller of
+  this app's own invention, and the difference is the whole reason it exists —
+  §18.9 refused the second and gave a reason that the first answers: a background
+  model and false-discovery control, both of them the published method's.
+
+  **It agrees with that package rather than resembling it.** On
+  `demo/yeast/Yeast_microC_G2M_1kb.cool` at the loops preset, `chromosight detect`
+  and this task both call **1,100 loops** — the same 1,100, with scores agreeing
+  to 5e-7. `test/golden/analysis/chromosight.json` is built by running the package
+  itself and compares five stages separately: the undetectable bins, the detrended
+  map, the correlation map, every call with its score, p-value and q-value, and
+  the pileup. A single end-to-end check would have said "different loops"; these
+  say which of five things moved.
+
+  Four outputs, and they are different in kind on purpose. The **loop set** is a
+  bedpe — a BED for the patterns that live on the diagonal — offered to the
+  Annotations panel, so a call lands on the map it was called from before the
+  reader has to decide whether to believe it. The **pileup** is every window it
+  found, on chromosight's own fixed 0–2 seismic scale, which is what lets it be
+  laid beside a published figure. The **spectrum** is the distribution of the
+  scores behind that pileup: a smooth shoulder running down to the threshold says
+  the calling stopped where the threshold was rather than where the pattern did,
+  and no list of coordinates ever says that. And a table of the strongest calls.
+
+  The pattern is a parameter rather than five tasks, and every threshold under
+  the picker follows the picker — upstream tuned `pearson`, the scan distance and
+  the two window-quality percentages *per template*, so a form that baked one
+  preset's numbers into a box would report borders at twice the threshold
+  chromosight uses. **Set them myself** takes them over, and says so in the
+  provenance.
+
+- **APA has a fourth normalisation, and it is `chromosight quantify`.** The same
+  anchors and the same averaging as the other three, with the control moved: the
+  map is detrended by its own distance law *before* any window is cut, so a cell
+  is observed-over-expected at that separation on that sequence — which is what
+  chromosight's pileups are, drawn on the same fixed scale. Three things follow
+  and none of them is a detail: the window is the **template's** size rather than
+  the reader's half-width, because the score under the picture is a correlation
+  against those cells; the scan distance is the **loop set's own reach**, which is
+  what `cmd_quantify` sets it to; and **every anchor comes back**, scored or not.
+  It reports the per-anchor Pearson correlation, its p-value and its q-value
+  beside the pileup, and the same score spectrum the detector draws — which is the
+  half of the answer a pileup cannot carry, since two sets with the same mean
+  window can be a hundred good loops and four hundred coordinates of which fifty
+  are loops.
+
+  Checked the same way: over the demo loop table, this and `chromosight quantify`
+  produce the same 1,506 scores and the same pileup, and
+  `test/golden/analysis/chromosight_quantify.json` is that package's output.
+
+- **`seismic`, in the colormap picker.** matplotlib's own five stops, here
+  because `pileup_plot` draws with it. A matrix output can now also fix its
+  colour range rather than fitting one to the data — used by exactly the two
+  pileups above, for the reason a fitted scale cannot serve: a pileup running
+  from 0.98 to 1.02 and one running from 0 to 4 would otherwise be the same
+  picture in the same colours, and the difference between them is the result.
+
+### Fixed
+
+- **The CLI can use a loop set again.** `--pairs loops.bedpe` parsed the file,
+  filed it under its *file name*, and then set the task's parameter to a *path*;
+  every task that takes a feature or pair set looked under its own parameter key,
+  found nothing, and reported "the set chosen is no longer loaded" about a file it
+  had just read. `TaskInputs` is keyed by parameter key — `analysis/job.ts` has a
+  whole paragraph about not indexing it any other way — and the CLI was the one
+  venue that had no store to allocate ids in, so it invented a second convention
+  and lost. Both work now: the name a reader typed still names the input, and the
+  parameter key is an alias for it.
+
 ## [0.11.0] - 2026-08-14
 
 ### Changed

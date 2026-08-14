@@ -22,6 +22,7 @@
  * would replace an argued order with an alphabetical one.
  */
 
+import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
 import { COVERAGE_TASK } from "./tasks/coverage";
 import { FOURC_TASK } from "./tasks/fourc";
 import { APA_TASK } from "./tasks/apa";
@@ -45,13 +46,17 @@ export const TASKS: readonly AnalysisTask[] = [
   // (coverage and the marginals), then how contact falls away from it (P(s)),
   // then one locus's slice of that decay (4C), then the domains it resolves
   // into (insulation), then the compartments those domains sit in. Each is a
-  // question the one before it makes it sensible to ask.
+  // question the one before it makes it sensible to ask. Detection comes last
+  // of the map group and is the only one that *calls* anything: it needs the
+  // decay the tasks above it describe, and what it produces — a loop set — is
+  // what the aggregation tasks below it take as input.
   COVERAGE_TASK,
   EXPECTED_TASK,
   FOURC_TASK,
   INSULATION_TASK,
   COMPARTMENTS_TASK,
   CID_TASK,
+  CHROMOSIGHT_TASK,
   METAPLOT_TASK,
   APA_TASK,
   TRACK_CORRELATION_TASK,

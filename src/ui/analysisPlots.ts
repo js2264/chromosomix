@@ -818,6 +818,11 @@ function colourTable(name: string): string[] {
  * amount their tails differ.
  */
 function matrixRange(output: MatrixOutput): { vmin: number; vmax: number } | null {
+  // A scale the task fixed is not a suggestion: it is there so the picture can
+  // be laid beside the one the tool it agrees with draws. See `MatrixOutput.range`.
+  if (output.range !== undefined && output.range[1] > output.range[0]) {
+    return { vmin: output.range[0], vmax: output.range[1] }
+  }
   let lo = Number.POSITIVE_INFINITY
   let hi = Number.NEGATIVE_INFINITY
   for (const value of output.values) {
