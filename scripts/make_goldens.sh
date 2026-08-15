@@ -31,15 +31,19 @@ S3=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo
 curl -fSL -o yeast.cool "$S3/yeast/Yeast_microC_G2M_1kb.cool"
 curl -fSL -o chicken.mcool "$S3/chicken/G2_4DNFIT479GDR.mcool"
 
-# Views over whole chromosomes, with every region name prefixed.
+# Everything below is genome-wide. Omit `--view` and cooltools builds its own
+# over whole chromosomes, which is what the chicken commands do.
 #
-# The prefix is a workaround. `cooltools pileup --expected` unpacks its group
-# key with `if len(support) == 2: region1, region2 = support` — a test meant for
-# a tuple, applied to a string — so a region named `IV` unpacks into `I` and `V`
-# and the run dies with "implemented for cis contacts only" on purely cis loops.
-# Yeast's Roman numerals hit it every time. `region_IV` does not.
+# Yeast is the exception, and only because of a cooltools bug. `pileup
+# --expected` unpacks its group key with `if len(support) == 2: region1, region2
+# = support` — a length test meant for a tuple, applied to a string — so a
+# two-character region name splits into two letters: `IV` becomes `I` and `V`
+# and the run dies with "implemented for cis contacts only" on purely cis loops,
+# and `II` silently becomes `I` twice. Yeast's Roman numerals hit both. So the
+# view below is cooltools' own default region set with the names prefixed —
+# same chromosomes, same spans, nothing excluded — and `region_IV` is 9
+# characters, which survives.
 cooler dump -t chroms yeast.cool | awk 'BEGIN{OFS="\t"}{print $1,0,$2,"region_"$1}' > yeast_view.bed
-cooler dump -t chroms chicken.mcool::/resolutions/100000 | awk 'BEGIN{OFS="\t"}{print $1,0,$2,"region_"$1}' > chicken_view.bed
 
 # --- chromosight: the pattern calls ----------------------------------------
 
@@ -68,7 +72,7 @@ cooltools coverage --clr_weight_name weight --bigwig -p 4 \
 
 # No phasing track, so E1's sign is arbitrary per chromosome: this is the
 # eigenvector up to a flip. Pass --phasing-track <GC bedGraph> for a signed one.
-cooltools eigs-cis --clr-weight-name weight --view chicken_view.bed --n-eigs 3 --bigwig \
+cooltools eigs-cis --clr-weight-name weight --n-eigs 3 --bigwig \
   -o chicken_eigs chicken.mcool::/resolutions/100000
 
 cooltools insulation --clr-weight-name weight --bigwig -p 4 \
@@ -83,11 +87,11 @@ mv -f chicken_insulation chicken_insulation.tsv
 # --- cooltools: the APA of both call sets ----------------------------------
 
 # Observed over expected, because a pileup mixing 20 kb and 2 Mb separations is
-# a picture of the distance decay. The expected table is per view region, so it
-# is computed against the same view the pileup uses.
+# a picture of the distance decay. The expected table is keyed by region name,
+# so each expected-cis runs over the same regions as the pileup it feeds.
 cooltools expected-cis --clr-weight-name weight --view yeast_view.bed -p 4 \
   -o yeast_expected.tsv yeast.cool
-cooltools expected-cis --clr-weight-name weight --view chicken_view.bed -p 4 \
+cooltools expected-cis --clr-weight-name weight -p 4 \
   -o chicken_expected.tsv chicken.mcool::/resolutions/10000
 
 # Six and three columns: the name and score columns are valid BED and BEDPE and
@@ -100,7 +104,7 @@ cooltools pileup --features-format bedpe --view yeast_view.bed \
   --flank 10000 --aggregate mean -p 4 \
   -o apa_yeast_loops.npz yeast.cool loops.6col.bedpe
 
-cooltools pileup --features-format bed --view chicken_view.bed \
+cooltools pileup --features-format bed \
   --expected chicken_expected.tsv --clr-weight-name weight \
   --flank 100000 --aggregate mean -p 4 \
   -o apa_chicken_borders.npz chicken.mcool::/resolutions/10000 borders.3col.bed
