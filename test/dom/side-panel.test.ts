@@ -173,3 +173,73 @@ describe('the four columns', () => {
     }
   })
 })
+
+/**
+ * The shape a workspace file carries.
+ *
+ * A fold is a *preference* and lives in `localStorage`, which is exactly why it
+ * also has to travel: a saved workspace is what somebody was looking at, and a
+ * window that restores twelve tracks into a column the reader had folded away
+ * has restored the tracks and not the arrangement. The width goes with it
+ * because the two are one decision about how much room a column deserves.
+ */
+describe('a column as a saved workspace carries it', () => {
+  it('reports the fold, and the width only where it is not the default', () => {
+    const { panel } = mount()
+    expect(panel.layout).toEqual({ folded: false })
+    panel.toggle.click()
+    expect(panel.layout).toEqual({ folded: true })
+  })
+
+  it('leaves a column alone where the file says nothing about it', () => {
+    // Every config written before the field existed. The importing window keeps
+    // whatever it had, rather than being flattened to a default by omission.
+    const { panel } = mount()
+    panel.toggle.click()
+    panel.applyLayout(undefined)
+    expect(panel.isCollapsed).toBe(true)
+  })
+
+  it('puts a fold back, and writes it where a reload will find it', () => {
+    const { panel } = mount()
+    panel.applyLayout({ folded: true })
+    expect(panel.isCollapsed).toBe(true)
+    expect(panel.el.classList.contains('collapsed')).toBe(true)
+    // Written through to storage rather than held for this window: a restore
+    // that did not would be undone by the next reload, and the reader would
+    // watch their arrangement arrive and then leave again.
+    expect(new SidePanel(GENERAL_PANEL).isCollapsed).toBe(true)
+  })
+
+  it('puts a width back, and hands an absent one to the default', () => {
+    const { panel } = mount()
+    panel.applyLayout({ folded: false, width: 420 })
+    expect(panel.el.style.width).toBe('420px')
+    expect(panel.layout).toEqual({ folded: false, width: 420 })
+
+    // Absent is *the default back*, not "leave it alone": a workspace saved from
+    // a window nobody had dragged restores to the default width, or the same
+    // file would come back at two layouts in two windows.
+    panel.applyLayout({ folded: false })
+    expect(panel.el.style.width).toBe(`${GENERAL_PANEL.defaultWidth}px`)
+  })
+
+  it('clamps a width the bounds have since moved past', () => {
+    // Untrusted like every other stored shape, and this one arrives from another
+    // machine as well as from another build.
+    const { panel } = mount()
+    panel.applyLayout({ folded: false, width: 99_999 })
+    expect(panel.el.style.width).toBe(`${GENERAL_PANEL.maxWidth}px`)
+  })
+
+  it('says nothing about a column that has nothing to show', () => {
+    // The conflation the class makes on purpose: a panel with nothing in it is
+    // hidden *without touching the stored choice*. Reporting it as folded would
+    // write "folded" into a workspace for every column the open file had no use
+    // for — and fold Annotations on the next `.cool` restored over it.
+    const { panel } = mount()
+    panel.setAvailable(false)
+    expect(panel.el.classList.contains('collapsed')).toBe(true)
+    expect(panel.layout.folded).toBe(false)
+  })
+})

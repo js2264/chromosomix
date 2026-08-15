@@ -961,3 +961,74 @@ describe('putting the deck down', () => {
     spy.mockRestore()
   })
 })
+
+/**
+ * How each companion is drawn, remembered against the file it is of.
+ *
+ * The deck's doctrine is that the view is shared and the presentation is not:
+ * every panel takes the region, the level and the score from the lead and owns
+ * its transform, its ramp, its clip and its chain. All of that is a decision a
+ * reader makes per map, and until now none of it survived closing the window —
+ * so a deck of four replicates each clipped to their own depth, which is what a
+ * deck is arranged for, came back on one clip.
+ *
+ * Keyed by the **file**, because a slot id is minted per deck and names nothing
+ * tomorrow. That is what the assertions below are actually about.
+ */
+describe('how each companion was drawn', () => {
+  /** The chain on a companion's heading, which is the one control with no bytes behind it. */
+  function chain(deck: PanelDeck, index = 0): HTMLButtonElement {
+    return all<HTMLButtonElement>(deck.el, '.deck-grid .deck-lock')[index]
+  }
+
+  function remembered(): Array<Record<string, unknown>> {
+    const raw = sessionStorage.getItem('metacooler-viewer:ui:deck-test:deck:looks')
+    return raw === null ? [] : (JSON.parse(raw) as Array<Record<string, unknown>>)
+  }
+
+  it('writes down a chain the reader opened, against the file', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    chain(deck).click()
+    expect(remembered()).toEqual([{ uri: 'https://x.example.org/b.cool', locked: false }])
+    // Never the slot id: `p1` is minted per deck, so a record keyed on one would
+    // name nothing in the window that reads it back.
+    expect(JSON.stringify(remembered())).not.toMatch(/"p\d+"/)
+  })
+
+  it('opens a rebuilt panel back off the lead', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    chain(deck).click()
+    const off = chain(deck).getAttribute('aria-pressed')
+    // The chain is genuinely open, so the comparison below is about something.
+    expect(off).toBe('false')
+
+    // A second deck over the same file, which is what a reload, a restored
+    // workspace and every reconcile that rebuilds a panel all amount to.
+    const again = make()
+    again.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(chain(again.deck).getAttribute('aria-pressed')).toBe(off)
+  })
+
+  it('leaves a companion nobody has touched on the lead', () => {
+    // The default is the argument: a panel follows the deck unless somebody has
+    // said otherwise, and "nothing remembered" is not somebody saying otherwise.
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(remembered()).toEqual([])
+    const again = make()
+    again.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(chain(again.deck).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('keeps one entry per file however often it moves', () => {
+    const { deck } = make()
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    chain(deck).click()
+    chain(deck).click()
+    chain(deck).click()
+    expect(remembered()).toHaveLength(1)
+    expect(remembered()[0].locked).toBe(false)
+  })
+})

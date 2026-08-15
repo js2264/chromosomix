@@ -74,6 +74,33 @@ import { el } from './dom'
 import { resizeHandle } from './resizeHandle'
 import { keyLabel, withKey } from './commands'
 
+/**
+ * One column's shape, as a workspace file carries it.
+ *
+ * The fold is a *preference* and lives in `localStorage` (see the file header),
+ * which is exactly why it also has to travel: a saved workspace is what somebody
+ * was looking at, and a window that comes back with the Analysis column open
+ * over a reader who had folded it — or, worse, with Annotations folded away from
+ * the twelve tracks the file was saved for — is the one part of the arrangement
+ * that did not return. The same argument `SessionConfig.plot` already makes for
+ * the overlays, which are a window preference carried in a session file for the
+ * same reason.
+ *
+ * The width travels beside it because the two are one decision. A column folded
+ * to a strip and a column dragged to 520 pixels are both answers to *how much
+ * room does this deserve*, and restoring one without the other puts a reader's
+ * twelve-track column back at the default 320 with their fold honoured, which
+ * reads as the restore having half worked.
+ */
+export interface PanelState {
+  folded: boolean
+  /** CSS pixels. Absent where the reader has never dragged this column. */
+  width?: number
+}
+
+/** Every column's state, by {@link SidePanelSpec.key}. */
+export type PanelLayout = Record<string, PanelState>
+
 export interface SidePanelSpec {
   /** Stable storage key. Not the title: renaming a panel must not forget it. */
   key: string
@@ -301,6 +328,18 @@ export class SidePanel {
      * changing where the plot should sit.
      */
     private readonly onResize: () => void = () => {},
+    /**
+     * Called when the reader has *settled* on a shape for this column.
+     *
+     * Distinct from {@link onResize}, which fires on every pixel of a drag
+     * because the plot has to follow the hand. This one fires on a fold and at
+     * the end of a drag, and it exists because the shape of the columns is now
+     * part of a saved workspace (see {@link PanelState}) — so somebody who folds
+     * a column and closes the browser should find it folded, rather than finding
+     * whatever the last navigation happened to record. Rebuilding a workspace
+     * per frame of a drag is what the separation buys.
+     */
+    private readonly onSettle: () => void = () => {},
   ) {
     this.collapsed = readFlag(spec.key)
     this.width = readWidth(spec) ?? spec.defaultWidth
@@ -377,6 +416,7 @@ export class SidePanel {
     writeFlag(this.spec.key, collapsed)
     this.paint()
     this.onResize()
+    this.onSettle()
   }
 
   /** Fill the column, or empty it. */
@@ -405,6 +445,44 @@ export class SidePanel {
   }
 
   /**
+   * This column's shape, for a workspace file.
+   *
+   * {@link available} is deliberately not in it. A column with nothing to show
+   * is hidden *without touching the stored choice* — that is the conflation the
+   * file header argues for — so reporting it here would write "folded" into a
+   * saved workspace for every column the file that was open had no use for, and
+   * a reader who opened a `.metacool` and saved would find Annotations folded on
+   * the next `.cool` they restored it over.
+   */
+  get layout(): PanelState {
+    return { folded: this.collapsed, ...(this.width === this.spec.defaultWidth ? {} : { width: this.width }) }
+  }
+
+  /**
+   * Put a shape back, as a restored workspace asks for.
+   *
+   * Written to `localStorage` on the way through rather than held for this
+   * window only, because that is where a fold lives and a restore that did not
+   * write it would be undone by the next reload — the reader would watch their
+   * arrangement arrive and then leave again, with nothing on screen to blame.
+   *
+   * An absent `width` is *the default back*, not "leave it alone": a workspace
+   * saved from a window nobody had dragged is a workspace whose columns are the
+   * default width, and honouring the importing window's old drag instead would
+   * make the same file restore to two different layouts.
+   */
+  applyLayout(state: PanelState | undefined): void {
+    if (state === undefined) return
+    this.setWidth(state.width ?? this.spec.defaultWidth)
+    writeWidth(this.spec, state.width ?? null)
+    this.fold(state.folded)
+    // `fold` returns early when nothing changed, so a state that only moved the
+    // width has still to be painted — which `setWidth` did, unless the width
+    // did not move either. Cheap, and the alternative is two flags.
+    this.paint()
+  }
+
+  /**
    * Open this column because something it holds has just been asked for.
    *
    * The one way a panel unfolds without the reader pressing its own button, and
@@ -430,10 +508,14 @@ export class SidePanel {
       what: `${this.spec.title} panel`,
       width: () => this.width,
       resize: (px) => this.setWidth(px),
-      commit: () => writeWidth(this.spec, this.width),
+      commit: () => {
+        writeWidth(this.spec, this.width)
+        this.onSettle()
+      },
       reset: () => {
         this.setWidth(this.spec.defaultWidth)
         writeWidth(this.spec, null)
+        this.onSettle()
       },
     })
   }

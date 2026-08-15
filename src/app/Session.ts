@@ -54,6 +54,7 @@ import {
 } from '../state/ViewState'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
+import type { PanelLayout } from '../ui/SidePanel'
 import { armAll, resetPick } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
@@ -61,6 +62,7 @@ import {
   buildConfig,
   looksLikeConfig,
   resolveConfig,
+  SESSION_NAME_SCOPE,
   type SessionConfig,
 } from '../state/SessionConfig'
 import type { CompareOp, Transform, ViewState } from '../types'
@@ -153,6 +155,16 @@ export interface SessionHost {
    * absent for a dropped file, which has no folder a page can see.
    */
   openWorkspaceFile(text: string, label: string, base?: string): void
+  /**
+   * How the window's columns stand, and how to put them back.
+   *
+   * The shell's, because the columns are: a session is handed four hosts to fill
+   * and owns none of the panels around them (§16.5). They are here so that a
+   * session can put them into the config it builds and take them out of one it
+   * opens, which is exactly what it already does with the overlay preferences.
+   */
+  panelLayout(): PanelLayout
+  applyPanelLayout(layout: PanelLayout | undefined): void
   /** Say something quiet and dismissible about what just happened. */
   notify(message: string): void
   /** A read finished; the status bar's counters are worth another look. */
@@ -678,17 +690,79 @@ export class Session {
     return this.reader
   }
 
-  /** What the tab says. The file name, or the invitation that replaces it. */
+  /**
+   * What the tab says: what the reader called it, else the file name, else the
+   * invitation that replaces both.
+   *
+   * The name wins over the file and is never *written* from it, which is the
+   * whole of the difference between a name and a default: a session called
+   * `wild type` stays called that through a change of resolution, a redirect
+   * into an entry of a collection, and a re-drop of the same file under another
+   * path, because none of those is a reader renaming anything.
+   */
   get label(): string {
+    const name = this.name
+    if (name !== null) return name
     const state = this.store.state
     if (state !== null) return fileLabel(state.uri)
     return 'New session'
+  }
+
+  /**
+   * The name this tab has been given, or `null` for none.
+   *
+   * Read out of session memory rather than held on the instance, which is the
+   * rule every other per-session setting in this file follows (§8.6): what
+   * storage holds *is* the session, so a name and the tracks beside it come back
+   * on the same terms and `buildConfig` cannot gather a config that disagrees
+   * with the strip.
+   *
+   * Keyed on the file, like everything else under that key — so opening a
+   * *different* file in this tab hands the tab back to its file name. That is
+   * the right answer rather than a limitation: a name is what the reader calls
+   * this piece of work, and replacing the file is replacing the work.
+   */
+  get name(): string | null {
+    const state = this.store.state
+    if (state === null) return null
+    const held = recall<string>(this.memoryKey(state.uri), SESSION_NAME_SCOPE)
+    return typeof held === 'string' && held.trim() !== '' ? held.trim() : null
+  }
+
+  /**
+   * Call this tab something, or hand it back to its file.
+   *
+   * A blank name is *no name* rather than an empty label, which is what makes
+   * clearing the box the way back: a tab called nothing at all would be an
+   * unclickable sliver in the strip, and there would be no gesture to undo it
+   * with.
+   *
+   * Refused where there is nothing open, and not for want of anywhere to put it:
+   * the memory is keyed on the file, so a name given to an empty tab would be
+   * written under a key nothing will ever read and would appear to be silently
+   * forgotten. The strip does not offer the gesture there for the same reason.
+   */
+  rename(name: string | null): void {
+    const state = this.store.state
+    if (state === null) return
+    const wanted = name === null ? '' : name.trim()
+    if (wanted === (this.name ?? '')) return
+    // The empty string rather than a delete: `UiMemory` has no way to forget a
+    // scope, and the getter above already reads blank as no name — so one
+    // representation, and the way back is writing it.
+    remember(this.memoryKey(state.uri), SESSION_NAME_SCOPE, wanted)
+    this.host.sessionChanged(this)
   }
 
   /** One line for the tab's tooltip: what it holds, or why it holds nothing. */
   get tabHint(): string {
     const state = this.store.state
     if (state === null) return 'Nothing open here yet — drop a file, or pick one from the list.'
+    // A named tab hides its file, which is the point of naming one and also the
+    // one thing that gets lost by it: four tabs called after the condition are
+    // four tabs whose file nobody can see. So the tooltip leads with the URI it
+    // has always led with, and the name is what the strip shows.
+    if (this.name !== null && !this.primed) return `${this.label} — ${state.uri}`
     if (this.primed) {
       // Three answers where there used to be two, and the middle one is the
       // point of the whole feature: a local file this browser still holds a
@@ -1435,6 +1509,11 @@ export class Session {
       state,
       memoryKey: this.memoryKey(state.uri),
       plot: getPlotOptions(),
+      // The window's columns, asked of the shell: they are no more this
+      // session's than the overlays above are, and both are carried for the same
+      // reason — what the sender was looking at includes which columns were out
+      // of the way (`ui/SidePanel.ts`'s `PanelState`).
+      panels: this.host.panelLayout(),
       now: new Date(),
       ...(source === undefined ? {} : { source }),
     })
@@ -1456,6 +1535,7 @@ export class Session {
    */
   async openConfig(config: SessionConfig): Promise<void> {
     setPlotOptions(config.plot)
+    this.host.applyPanelLayout(config.panels)
     const source = await resolveSource(config.state.uri, { prompt: true })
     if (this.destroyed) return
     if (source === null) {
@@ -3798,6 +3878,11 @@ export class Session {
         const state = this.store.state
         return state === null ? undefined : this.scoreOf(state).id
       },
+      // A companion's clip is not a navigation, so nothing on the state road
+      // fires for one — and the durable record and the exported workspace are
+      // both rebuilt from this session's memory on `sessionChanged`. The same
+      // line the annotation store subscribes with, for the same reason.
+      onLooksChange: () => this.host.sessionChanged(this),
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in

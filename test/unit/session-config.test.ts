@@ -298,6 +298,125 @@ describe('parseTab', () => {
 })
 
 /**
+ * The four things a session is that a session file did not used to say.
+ *
+ * Each was invisible in the same way: the file opened, the tab came back, and
+ * one decision the reader had made was quietly the importing window's instead.
+ */
+describe('what a tab carries beyond its tracks', () => {
+  it('carries the name the reader gave the tab', () => {
+    const key = 'named|yeast.cool'
+    remember(key, 'session:name', 'wild type')
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    expect(config.name).toBe('wild type')
+    expect(roundTrip(config)?.name).toBe('wild type')
+
+    // Into the *importing* tab's key, like every other scope.
+    applyConfig(config, 'other|yeast.cool')
+    expect(recall<string>('other|yeast.cool', 'session:name')).toBe('wild type')
+  })
+
+  it('says nothing at all about a tab nobody has named', () => {
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: 'unnamed|yeast.cool',
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    // Absent rather than the file's own label: a name frozen at export time
+    // would stop following the file it was named after, and `applyConfig` would
+    // then write it over a tab the importing reader had named themselves.
+    expect('name' in config).toBe(false)
+    applyConfig(config, 'kept|yeast.cool')
+    remember('kept|yeast.cool', 'session:name', 'mine')
+    applyConfig(config, 'kept|yeast.cool')
+    expect(recall<string>('kept|yeast.cool', 'session:name')).toBe('mine')
+  })
+
+  it('carries which columns were folded, and how wide they were', () => {
+    const panels = {
+      'metacooler-viewer:annotations-collapsed': { folded: false, width: 460 },
+      'metacooler-viewer:analysis-collapsed': { folded: true },
+    }
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: 'panels|yeast.cool',
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      panels,
+      now: new Date(0),
+    })
+    expect(roundTrip(config)?.panels).toEqual(panels)
+  })
+
+  it('drops a panel record that does not say whether it is folded', () => {
+    const read = parseTab({
+      state: STATE,
+      panels: {
+        good: { folded: true },
+        vague: { width: 300 },
+        wrong: 7,
+        // A width that is not a width is dropped on its own — the fold beside it
+        // is still worth honouring.
+        odd: { folded: false, width: 'wide' },
+      },
+    })
+    expect(read?.panels).toEqual({ good: { folded: true }, odd: { folded: false } })
+  })
+
+  it('carries how each companion of a deck was drawn', () => {
+    const key = 'looks|yeast.cool'
+    const looks = [
+      { uri: 'https://example.org/rep2.cool', transform: 'log10', vmax: 2.5, score: 'balanced' },
+      { uri: 'https://example.org/rep3.cool', colormap: 'fall', locked: false },
+    ]
+    remember(key, 'deck:looks', looks)
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    expect(config.deck.looks).toEqual(looks)
+    // A deck of four replicates each clipped to its own depth is *the* thing a
+    // deck is arranged for, and it used to be the one part of it that did not
+    // come back.
+    expect(roundTrip(config)?.deck.looks).toEqual(looks)
+  })
+
+  it('drops the parts of a look this build cannot read, and keeps the rest', () => {
+    const read = parseTab({
+      state: STATE,
+      deck: {
+        looks: [
+          { uri: 'a.cool', transform: 'arcsinh', colormap: 'fall', vmax: 'lots' },
+          { uri: '', colormap: 'fall' },
+          'not a look',
+        ],
+      },
+    })
+    // A transform this build has no name for would draw a blank rectangle, and a
+    // clip that is not a number is a clip nothing is ever inside — both go, and
+    // the ramp beside them stays. A look with no file to be about is not one.
+    expect(read?.deck.looks).toEqual([{ uri: 'a.cool', colormap: 'fall' }])
+  })
+
+  it('leaves the importing tab alone where the file predates a field', () => {
+    remember('older|yeast.cool', 'deck:looks', [{ uri: 'mine.cool', vmax: 9 }])
+    remember('older|yeast.cool', 'session:name', 'mine')
+    applyConfig(parseTab({ state: STATE }) as SessionConfig, 'older|yeast.cool')
+    // The tolerance `CONFIG_VERSION`'s own comment promises for an added field:
+    // an older file opens with the parts it did not know about left as they were.
+    expect(recall<unknown[]>('older|yeast.cool', 'deck:looks')).toHaveLength(1)
+    expect(recall<string>('older|yeast.cool', 'session:name')).toBe('mine')
+  })
+})
+
+/**
  * A session published beside its data, rather than exported from a tab.
  *
  * The asymmetry that makes this necessary: an exported session names the URLs
@@ -406,6 +525,19 @@ describe('resolveConfig', () => {
     const out = resolveConfig(withLanes, base)
     expect(out.lanes?.[0].uri).toBe(uriOf(parseMaps(out.state.maps)[0]))
     expect(out.lanes?.[0].uri).toBe('https://example.org/app/demo/rep2.cool')
+  })
+
+  it('puts a companion’s scale on the same map the deck resolved', () => {
+    // The lane's property one field down, and the same failure if it drifts: a
+    // `DeckLook.uri` is matched against the companion's file URI, so resolving
+    // `maps` and not `looks` restores four replicates onto the lead's clip —
+    // legal, silent, and not the figure that was saved.
+    const withLooks = deckConfig({
+      deck: { looks: [{ uri: 'rep2.cool', vmax: 2.5 }] },
+    })
+    const out = resolveConfig(withLooks, base)
+    expect(out.deck.looks?.[0].uri).toBe(uriOf(parseMaps(out.state.maps)[0]))
+    expect(out.deck.looks?.[0].vmax).toBe(2.5)
   })
 
   it('drops the private names a recipient could only mistake for their own', () => {

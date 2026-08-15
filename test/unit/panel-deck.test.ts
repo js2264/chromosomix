@@ -30,6 +30,8 @@ import {
   serialiseMaps,
   localCompanions,
   withLocalCompanions,
+  readDeckLook,
+  withLook,
   type PanelRef,
 } from '../../src/panels/deck'
 import { planFor } from '../../src/panels/MapPanel'
@@ -183,6 +185,70 @@ describe('remembering local companions beside the hash', () => {
     const back = withLocalCompanions(parsed, [{ index: 0, uri: 'rep1.cool' }])
     expect(parsed[0]).toEqual({ kind: 'vacant' })
     expect(back[0]).toEqual({ kind: 'local', uri: 'rep1.cool' })
+  })
+})
+
+/**
+ * How each companion was drawn, which is the half of a deck the hash cannot
+ * carry and the half a saved workspace used to lose.
+ *
+ * The deck's doctrine is that the *view* is shared and the *presentation* is
+ * not: every panel takes the region, the level and the score from the lead and
+ * owns its transform, its ramp, its clip, and the score it reads instead of the
+ * deck's. Four replicates each clipped to their own depth is what a deck is
+ * arranged for, and restoring it onto one clip is a legal deck, a
+ * plausible-looking one, and not the figure that was saved.
+ */
+describe('how each companion was drawn', () => {
+  it('keys on the file, and replaces rather than accumulating', () => {
+    // One entry per file, or the record grows by a member per nudge of a colour
+    // slider — and a deck of four would come back on the first four clips its
+    // reader ever tried.
+    const first = withLook([], { uri: 'rep2.cool', vmax: 1 })
+    const second = withLook(first, { uri: 'rep2.cool', vmax: 9 })
+    expect(second).toEqual([{ uri: 'rep2.cool', vmax: 9 }])
+    expect(withLook(second, { uri: 'rep3.cool' })).toHaveLength(2)
+  })
+
+  it('reads back only the fields this build can act on', () => {
+    expect(
+      readDeckLook({
+        uri: 'rep2.cool',
+        transform: 'log10',
+        colormap: 'fall',
+        vmin: -4,
+        vmax: -1.5,
+        score: 'balanced',
+        locked: false,
+      }),
+    ).toEqual({
+      uri: 'rep2.cool',
+      transform: 'log10',
+      colormap: 'fall',
+      vmin: -4,
+      vmax: -1.5,
+      score: 'balanced',
+      locked: false,
+    })
+  })
+
+  it('drops a field it cannot read without dropping the look', () => {
+    // A transform this build has no name for draws a blank rectangle; a clip
+    // that is not finite is a clip nothing is ever inside. Neither is a reason
+    // to forget the ramp beside it.
+    expect(
+      readDeckLook({ uri: 'rep2.cool', transform: 'arcsinh', colormap: 'fall', vmax: 'lots' }),
+    ).toEqual({ uri: 'rep2.cool', colormap: 'fall' })
+    expect(readDeckLook({ uri: 'rep2.cool', vmin: Number.NaN })).toEqual({ uri: 'rep2.cool' })
+  })
+
+  it('refuses a look with no file to be about', () => {
+    // The key is the whole of what makes it findable again: a slot id is minted
+    // per deck, so the file is the only thing that names the same map tomorrow.
+    expect(readDeckLook({ vmax: 3 })).toBeNull()
+    expect(readDeckLook({ uri: '' })).toBeNull()
+    expect(readDeckLook('rep2.cool')).toBeNull()
+    expect(readDeckLook(null)).toBeNull()
   })
 })
 

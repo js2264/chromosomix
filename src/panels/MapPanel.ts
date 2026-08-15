@@ -24,7 +24,7 @@
 
 import { ViewerError } from '../errors'
 import { describeTier, type NameContext, type NameMatch } from '../genome/naming'
-import { DECK_DRAG_TYPE } from './deck'
+import { DECK_DRAG_TYPE, type DeckLook } from './deck'
 import { matrixLevel, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
@@ -266,6 +266,25 @@ export interface MapPanelProps {
    * {@link MapPanel.setStarred}.
    */
   onStar(): void
+  /**
+   * How this panel was drawn last time it showed this file, or `undefined`.
+   *
+   * The counterpart of {@link initialLook} and read *before* it: what a reader
+   * set on this map beats what the lead is on, and the lead's scale is the
+   * default a companion nobody has touched opens at. Read once, at construction,
+   * because that is the moment {@link scoreOverride} has to exist by — the score
+   * decides which block is fetched, so learning it after the first read would
+   * mean reading the file twice to draw it once.
+   */
+  remembered?(): DeckLook | undefined
+  /**
+   * The reader changed what *this* map looks like: its scale, or its score.
+   *
+   * Reported rather than written here, because the memory is keyed by file and
+   * a panel does not know which of its deck's slots it is nor what the session's
+   * memory key is. See `panels/deck.ts`'s `DeckLook`.
+   */
+  onLook?(look: Omit<DeckLook, 'uri'>): void
 }
 
 export class MapPanel {
@@ -429,6 +448,20 @@ export class MapPanel {
       () => props.onToggleLock(),
       { class: 'btn btn-icon deck-lock', size: 14 },
     )
+    // Before anything is read, because the score decides *which* block is read:
+    // learning it after the first fetch would mean reading the file twice to
+    // draw it once, and the reader would watch the panel settle on the deck's
+    // score and then move off it.
+    const held = props.remembered?.()
+    if (held !== undefined) {
+      this.look = {
+        ...(held.transform === undefined ? {} : { transform: held.transform }),
+        ...(held.colormap === undefined ? {} : { colormap: held.colormap }),
+        ...(held.vmin === undefined ? {} : { vmin: held.vmin }),
+        ...(held.vmax === undefined ? {} : { vmax: held.vmax }),
+      }
+      if (held.score !== undefined) this.scoreOverride = held.score
+    }
     this.el = el(
       'section',
       { class: 'deck-panel' },
@@ -674,6 +707,12 @@ export class MapPanel {
   applyLook(look: ScaleState): void {
     this.look = look
     this.panel?.applyScale(look)
+    // Written down like any other change to this map's scale. "Fix all scales"
+    // is a press rather than a mode (`PanelDeck.fixScales`), so what it leaves
+    // behind is N panels each on a clip of their own that happen to agree — and
+    // a workspace that did not record them would come back with the press
+    // undone.
+    this.reportLook()
   }
 
   /**
@@ -984,7 +1023,34 @@ export class MapPanel {
     this.scoreOverride = id
     this.panel?.applyScale({ ...this.look, vmin: undefined, vmax: undefined })
     this.look = { ...this.look, vmin: undefined, vmax: undefined }
+    this.reportLook()
     if (this.state !== null) void this.load(this.state)
+  }
+
+  /**
+   * Tell the deck how this map is drawn now, so it can be written down.
+   *
+   * Every road that changes either half ends here — the corner menu's five
+   * fields, the score picker, and the deck's own "fix all scales" — because the
+   * memory is of *what this map looks like*, not of which control was touched.
+   */
+  private reportLook(): void {
+    // **Minus whatever a derivation borrowed**, which is the same distinction
+    // `PanelDeck.leadBaseLook` makes and for a sharper reason here. A panel under
+    // `O/E` is forced onto `log2` and a diverging ramp with its clip dropped
+    // (`MatrixPanel.syncDivergingScale`); writing that down would record the
+    // *deck's* current derivation as this map's own choice, and a session
+    // reopened without `O/E` would come back drawing plain counts on a ratio's
+    // scale. `baseScale` is that scale with the borrowing undone, which is what
+    // the reader actually set.
+    const look = this.panel?.baseScale() ?? this.look
+    this.props.onLook?.({
+      ...(look.transform === undefined ? {} : { transform: look.transform }),
+      ...(look.colormap === undefined ? {} : { colormap: look.colormap }),
+      ...(look.vmin === undefined ? {} : { vmin: look.vmin }),
+      ...(look.vmax === undefined ? {} : { vmax: look.vmax }),
+      ...(this.scoreOverride === null ? {} : { score: this.scoreOverride }),
+    })
   }
 
   private async readBlock(
@@ -1153,6 +1219,7 @@ export class MapPanel {
         // The clip a companion arrives at is its own — see {@link applyLook}.
         onScaleChange: (scale) => {
           this.look = scale
+          this.reportLook()
         },
       })
       // Nothing under the picture. A companion's scale controls are on the map

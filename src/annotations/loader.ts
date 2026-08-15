@@ -192,6 +192,9 @@ export class AnnotationLoader {
         label: row.label,
         placement: row.placement,
         style: row.style,
+        // As on the remote road above: where the *lead* draws it, which is not
+        // the same question as which edge the track defaults to.
+        lead: row.lead,
       })
       this.store.update(row.id, {
         status: 'detached',
@@ -328,6 +331,12 @@ export class AnnotationLoader {
             // every decision the reader made about it, and "not this one" is
             // one of them.
             visible: stored.visible,
+            // …and *where*. `placement` is the track's default edge; this is
+            // what the session's own map does with it, up to and including not
+            // drawing it (`annotations/types.ts`'s `StoredEntry.lead`). Passed
+            // through even when absent, which the store reads as "on the lead,
+            // as `placement` says" — the behaviour every restore has had.
+            lead: stored.lead,
           }),
       ...(label === undefined ? {} : { label }),
     })

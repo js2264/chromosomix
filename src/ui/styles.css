@@ -539,6 +539,23 @@ p {
   opacity: 0.7;
 }
 
+/* The box a rename is typed into, in the label's own place.
+
+   Sized off the label rather than off the input styles it inherits from: the
+   strip is a fixed height and a box with an input's usual padding in it makes
+   the row jump by three pixels the moment somebody double-clicks a tab, which
+   reads as the strip having been disturbed rather than as a field having
+   opened. Same width envelope as the label for the same reason — a six-tab
+   strip must not reflow around the one being renamed. */
+.input.tab-rename {
+  position: relative;
+  z-index: 1;
+  min-width: 6rem;
+  max-width: 12rem;
+  padding: 0.2rem 0.3rem;
+  font-size: var(--step--1);
+}
+
 /* Hidden until the tab is pointed at — on the active tab too, which used to be
    an exception. A row of tabs each carrying a permanent × is a row of things
    asking to be closed, and the one being read is the last that should. No
