@@ -166,6 +166,28 @@ hundred and ninety-nine without retyping. It replays the tab that was in front
 unless `--tab <n>` names another. Local files only: the reader's range requests
 are synchronous and exist in a worker rather than in Node.
 
+### Goldens from the reference tools
+
+`scripts/make_goldens.sh` builds a set of oracles from the published tools' own
+command lines — no Python of ours in the path — over two maps on the demo bucket:
+
+```bash
+./scripts/make_goldens.sh                 # everything, into goldens/
+./scripts/make_goldens.sh chromosight     # one section
+OUT=/tmp/g THREADS=8 ./scripts/make_goldens.sh
+```
+
+`chromosight detect` calls loops on the yeast micro-C map and borders on a
+chicken G2 map, written out as BEDPE and BED; `cooltools` writes coverage, E1,
+insulation and a virtual 4C off the chicken map as bigWig; and `cooltools
+pileup` piles up both call sets, with `plotpup.py` drawing them if coolpuppy is
+installed. Every output is checksummed into `goldens/MANIFEST.txt` beside the
+version of the tool that made it.
+
+It needs `pandas<3` (bioframe still passes `verbose=` to `read_table`) and
+`bedGraphToBigWig` on `PATH` (cooltools' `--bigwig` shells out to it); the header
+of the script says so and refuses early rather than failing on the last line.
+
 `npm run fixtures` shells out to Python and needs an interpreter with `metacooler` installed:
 
 ```bash
