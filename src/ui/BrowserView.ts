@@ -33,7 +33,25 @@ import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { drawnFromSamples, hasTrackControls } from '../annotations/types'
-import type { AnnotationEntry, BaseRegion, FeatureSet } from '../annotations/types'
+import { ReadCache } from '../annotations/reads'
+import {
+  BAND_GAP,
+  COVERAGE_BAND,
+  consensusBandFor,
+  NAME_BAND,
+  depthProfile,
+  drawConsensus,
+  drawReads,
+  LOGO_MIN_THICKNESS,
+  pileDetail,
+  READ_ROW,
+  READ_ROW_GAP,
+  readColoursFor,
+  readRungFor,
+  rowsFor,
+  type ReadRung,
+} from '../render/alignments'
+import type { AnnotationEntry, BaseRegion, FeatureSet, ReadWindow } from '../annotations/types'
 import {
   assemblyAxis,
   findContig,
@@ -85,6 +103,7 @@ import {
   snapTo,
   withinGrip,
   type LaneFrame,
+  laneBands,
 } from '../render/lane'
 import {
   drawLaneLabel,
@@ -263,6 +282,16 @@ interface Lane {
    * from the frame itself (`basesAreDrawable`).
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
+  /**
+   * The reads to draw, for an alignment lane zoomed in far enough (§8.13).
+   *
+   * Exclusive with {@link profiles} for the same entry, exactly as
+   * {@link residues} is: an alignment lane is a coverage line *or* a pile with
+   * its consensus, decided per frame from the frame itself by `readRungFor`.
+   * The rung is carried alongside so the paint and the hit test cannot come to
+   * different conclusions about which picture is on screen.
+   */
+  reads: Array<{ entry: AnnotationEntry; window: ReadWindow; rung: ReadRung }>
 }
 
 export class BrowserView {
@@ -312,6 +341,8 @@ export class BrowserView {
   private readonly exportStatus = el('span', { class: 'clip-note export-note' })
   private readonly cache: SampleCache
   private readonly bases: BaseCache
+  /** The reads each alignment lane is drawing, kept between frames. */
+  private readonly piles: ReadCache
   private readonly unsubscribes: Array<() => void> = []
   private readonly observer: ResizeObserver | null
 
@@ -594,6 +625,7 @@ export class BrowserView {
 
     this.cache = new SampleCache(props.client, () => this.schedule())
     this.bases = new BaseCache(props.client, () => this.schedule())
+    this.piles = new ReadCache(props.client, () => this.schedule())
     this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
     this.unsubscribes.push(
@@ -1070,6 +1102,7 @@ export class BrowserView {
       frame: this.frameAt(slot.acrossFrom, slot.thickness),
       profiles: [],
       residues: [],
+      reads: [],
     }))
   }
 
@@ -1447,6 +1480,91 @@ export class BrowserView {
     })
   }
 
+  /**
+   * Draw an alignment lane: coverage, consensus, then the pile (§8.13).
+   *
+   * Three bands out of one lane frame, cut by `laneBands` — so they share the
+   * genomic axis exactly and a read cannot drift from the depth above it. The
+   * coverage band keeps the lane's own value axis, which is what lets the range
+   * under the name and the ceiling drag go on meaning something while the pile
+   * is what the reader is looking at.
+   */
+  private paintAlignments(
+    ctx: CanvasRenderingContext2D,
+    lane: Lane,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' } | null {
+    const row = lane.reads[0]
+    const { entry, frame } = lane
+    const style = entry.style
+    // The label's strip first, so the name and the read count are not read
+    // through the depth curve — see `NAME_BAND`.
+    const [, coverage, consensus, pile] = laneBands(
+      frame,
+      [
+        { fixed: this.text ? NAME_BAND : 0 },
+        { fixed: COVERAGE_BAND },
+        { fixed: consensusBandFor(row.rung, frame) },
+        { fill: true },
+      ],
+      BAND_GAP,
+    )
+
+    // The coverage band, from the base counts already in hand rather than a
+    // second request: the pile and its summary are then the same reads, which
+    // is the one thing a reader would notice if it were not true.
+    const depth = depthProfile(coverage, this.axis, row.window)
+    if (depth !== null) {
+      drawTrack(ctx, coverage, depth.profile, {
+        colour: style.colour,
+        mode: style.mode,
+        limits: depth.limits,
+        guideColour: palette.labelColor,
+        haloColour: palette.labelHaloColor,
+        font: scaleFont(LANE_FONT),
+        fills: this.fills,
+        outline: this.outline,
+        baseline: this.baseline,
+        flip: false,
+        opacity: style.opacity,
+      })
+    }
+
+    if (consensus.thickness > 0) {
+      for (let i = 0; i < row.window.piles.length; i++) {
+        const counts = row.window.bases[i]
+        if (counts === undefined) continue
+        drawConsensus(ctx, consensus, this.axis, row.window.piles[i].contig, counts, {
+          opacity: style.opacity,
+          font: scaleFont(LANE_FONT),
+          guideColour: palette.labelColor,
+          logo: row.rung === 'bases' && consensus.thickness >= LOGO_MIN_THICKNESS,
+        })
+      }
+    }
+
+    const colours = readColoursFor(row.window, style.colour)
+    for (const one of row.window.piles) {
+      drawReads(ctx, pile, this.axis, one, {
+        colours,
+        rowHeight: READ_ROW,
+        rowGap: READ_ROW_GAP,
+        pairs: true,
+        diffs: row.window.diffs !== 'none',
+        opacity: style.opacity,
+        font: scaleFont(LANE_FONT),
+        guideColour: palette.labelColor,
+      }, row.rung)
+    }
+
+    if (!this.text) return null
+    return {
+      entries: [entry],
+      detail: { kind: 'text', text: pileDetail(row.window) },
+      at: 'near',
+    }
+  }
+
   private paintLane(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
@@ -1463,7 +1581,9 @@ export class BrowserView {
       at: 'near' | 'far'
     } | null = null
     clipLane(ctx, frame)
-    if (lane.residues.length > 0) {
+    if (lane.reads.length > 0) {
+      label = this.paintAlignments(ctx, lane, palette)
+    } else if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
         drawSequence(ctx, frame, this.axis, regions, {
           font: scaleFont(BASE_FONT),
@@ -1741,6 +1861,35 @@ export class BrowserView {
         })
         lane.residues.push({ entry: member, regions: regions ?? [] })
         continue
+      }
+      // An alignment lane is the second whose *picture* changes with the zoom,
+      // and this is where that switch is thrown. Above the read rung it is a
+      // coverage line and goes down the sampled road below like any other
+      // track; at or past it, it is a pile with a consensus under it and the
+      // reads are fetched instead (§8.13).
+      if (member.kind === 'alignments') {
+        const rung = readRungFor(lane.frame, 'browser')
+        if (rung !== 'coverage') {
+          const rows = rowsFor(lane.frame, rung, this.text)
+          const window = this.piles.readsFor({
+            entry: member.id,
+            scope: 'browser',
+            axis: this.axis,
+            domain: lane.frame.domain,
+            rows,
+            // The browser's axis is one unit per base (§5.8), so the domain
+            // span over the pixel span *is* bases per pixel.
+            basesPerPixel:
+              (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
+          })
+          if (window !== null) {
+            lane.reads.push({ entry: member, window, rung })
+            continue
+          }
+          // Nothing in hand yet. Fall through to the coverage line rather than
+          // blanking the lane: the reader keeps a picture while the reads
+          // arrive, which is the same contract every other cache here keeps.
+        }
       }
       if (!drawnFromSamples(member.kind)) continue
       const samples = this.cache.samplesFor({

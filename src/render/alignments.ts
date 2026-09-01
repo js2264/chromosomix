@@ -44,11 +44,12 @@ import { BASE_COLOURS } from './sequence'
  * is why it is five entries in the same order as {@link BASE_COLOURS}.
  */
 const BASE_LETTERS = ['A', 'C', 'G', 'T', 'N'] as const
-import { laneRect, laneX, laneY, type LaneFrame } from './lane'
+import { laneIsHorizontal, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import { basePixels } from './sequence'
 import type { BaseCounts, ReadPile } from '../annotations/types'
 import { BASE_LANES } from '../annotations/bam/reads'
 import type { LocusAxis } from './locus'
+import type { PixelProfile } from './tracks'
 
 /** Which picture an alignment lane draws. */
 export type ReadRung = 'coverage' | 'reads' | 'bases'
@@ -430,7 +431,13 @@ export function drawConsensus(
     const x0 = at(position)
     const x1 = at(position + 1)
     if (x1 < frame.alongFrom - 2 || x0 > frame.alongTo + 2) continue
-    if (paint.logo) drawLogoColumn(ctx, frame, counts, position, x0, x1)
+    // A logo is a *stack* of glyphs, which only reads along a horizontal lane:
+    // down the side of a map the letters would stack along the genomic axis and
+    // the picture would be nonsense. That edge gets the bar, which is the same
+    // number drawn a way that works there.
+    if (paint.logo && laneIsHorizontal(frame.orientation)) {
+      drawLogoColumn(ctx, frame, counts, position, x0, x1)
+    }
     else drawBarColumn(ctx, frame, counts, position, x0, x1, paint)
   }
   ctx.restore()
@@ -480,8 +487,7 @@ function drawBarColumn(
  *
  * The picture a reader means by "a logo": the height of a letter *is* its
  * share, so a column where two bases split evenly is two half-height letters
- * rather than one full-height letter and a number somewhere else. Drawn from
- * the least common upward, so the winner sits on top where the eye lands.
+ * rather than one full-height letter and a number somewhere else.
  */
 function drawLogoColumn(
   ctx: CanvasRenderingContext2D,
@@ -502,43 +508,231 @@ function drawLogoColumn(
     const share = counts.counts[from + lane] / depth
     if (share > 0) seen.push({ base: lane, share })
   }
-  seen.sort((a, b) => a.share - b.share)
+  // Most frequent on *top*, which is the convention every sequence logo shares
+  // — so a reader who knows one knows this. `across` counts outward from the
+  // map and the letters stack along it, so the largest goes first.
+  seen.sort((a, b) => b.share - a.share)
 
-  // Uniform horizontal scale and a per-letter vertical one, so the glyphs stay
-  // in the same column and only their height carries the number. `VectorTarget`
-  // sees ordinary text with a transform, so the PDF export is untouched.
   const width = x1 - x0
   const mid = (x0 + x1) / 2
   let across = 0
   for (const { base, share } of seen) {
     const height = frame.thickness * share
-    if (height < 1) {
+    if (height < 2) {
       across += height
       continue
     }
+    const letter = BASE_LETTERS[base] ?? 'N'
     ctx.save()
     ctx.fillStyle = BASE_COLOURS[base] ?? BASE_COLOURS[4]
-    const centre = across + height / 2
-    const cx = laneX(frame, mid, centre)
-    const cy = laneY(frame, mid, centre)
-    ctx.translate(cx, cy)
-    // A glyph is about 0.7 em wide and 0.72 em tall in the fonts this uses; the
-    // scale puts it in the column rather than assuming it already fits.
-    const metrics = ctx.measureText(BASE_LETTERS[base] ?? 'N')
-    const emWidth = Math.max(1, metrics.width)
-    ctx.scale((width * 0.92) / emWidth, height / EM_HEIGHT)
-    ctx.fillText(BASE_LETTERS[base] ?? 'N', 0, 0)
+    // Measured rather than assumed. A glyph's cap height is a property of the
+    // font, and the one number that must not be guessed here: scaling by a
+    // *ratio* as though it were a length is how every letter comes out an order
+    // of magnitude too tall and the logo covers the lane below it.
+    const metrics = ctx.measureText(letter)
+    const cap = Math.max(1, metrics.actualBoundingBoxAscent || 1)
+    const em = Math.max(1, metrics.width)
+
+    // The glyph sits on its baseline, so the transform is anchored at the
+    // *bottom* of its slot — whichever canvas end that is, since `across` runs
+    // backwards against the canvas on two of the four edges.
+    const y0 = laneY(frame, mid, across)
+    const y1 = laneY(frame, mid, across + height)
+    const x = laneX(frame, mid, across)
+    ctx.translate(x, Math.max(y0, y1))
+    ctx.scale((width * 0.9) / em, height / cap)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillText(letter, 0, 0)
     ctx.restore()
     across += height
   }
 }
 
+// ---------------------------------------------------------------------------
+// The three bands, and what fills them
+// ---------------------------------------------------------------------------
+
 /**
- * The height of a capital letter, as a fraction of the font size.
+ * Room kept clear at the top of an alignment lane for its own name and detail.
  *
- * Measured rather than derived, because `measureText` reports a width and the
- * cap height is not portable across the fonts this runs in. `0.72` is the
- * conventional cap-height ratio and is close enough that a logo's letters
- * touch without overlapping.
+ * Every other lane draws its label *over* its data, with a halo, and that works
+ * because a track is low wherever it is low — there is usually somewhere for
+ * two lines of text to sit. An alignment lane has no such place: the coverage
+ * band is dense by construction and the pile fills whatever is left, so a label
+ * over either is a label read through ink. Reserving the strip costs two rows
+ * of reads and is the difference between a lane whose name can be read and one
+ * whose name is decoration.
  */
-const EM_HEIGHT = 0.72
+export const NAME_BAND = 30
+
+/** Thickness of the coverage band inside an alignment lane. */
+export const COVERAGE_BAND = 34
+/** Gap between the three bands, so they read as three and not one. */
+export const BAND_GAP = 3
+/** One read row, and the gap under it. */
+export const READ_ROW = 7
+export const READ_ROW_GAP = 2
+/** Below this the consensus is a bar chart; above it, a stack of glyphs. */
+export const LOGO_MIN_THICKNESS = 26
+
+/**
+ * The consensus band's thickness, which is zero until it can say anything.
+ *
+ * A consensus over columns a pixel wide is a row of coloured ticks that repeats
+ * the coverage band above it, so it is not drawn at all until reads are
+ * individually visible — and it grows once a letter fits, because that is where
+ * it starts carrying the thing the coverage band cannot.
+ */
+export function consensusBandFor(rung: ReadRung, frame: LaneFrame): number {
+  if (rung === 'coverage') return 0
+  if (rung === 'bases') return Math.min(40, Math.max(18, frame.thickness * 0.2))
+  return Math.min(22, Math.max(10, frame.thickness * 0.12))
+}
+
+/**
+ * How many read rows a lane has room for.
+ *
+ * What is left after the coverage band and the consensus, which is what the
+ * worker thins the pile against. A lane too short for a single row still asks
+ * for one: the alternative is a request for zero reads, and a pile of none is
+ * indistinguishable from a failure.
+ */
+export function rowsFor(frame: LaneFrame, rung: ReadRung, labelled: boolean): number {
+  const spare =
+    frame.thickness -
+    (labelled ? NAME_BAND : 0) -
+    COVERAGE_BAND -
+    consensusBandFor(rung, frame) -
+    BAND_GAP * 2
+  return Math.max(1, Math.floor(spare / (READ_ROW + READ_ROW_GAP)))
+}
+
+/**
+ * Depth per pixel, from the base counts the pile already carries.
+ *
+ * Not a second request. The counts under a pile are made from the *same* reads
+ * it was thinned out of (`bam/reads.ts`), so deriving the coverage band from
+ * them is both cheaper and more honest than asking `sample` for the same window
+ * again — two fetches could answer from two different moments and draw a pile
+ * that does not match its own summary.
+ */
+export function depthProfile(
+  frame: LaneFrame,
+  axis: LocusAxis,
+  window: { piles: readonly ReadPile[]; bases: readonly BaseCounts[] },
+): { profile: PixelProfile; limits: { min: number; max: number } } | null {
+  const from = Math.floor(frame.alongFrom)
+  const slots = Math.max(1, Math.ceil(frame.alongTo) - from)
+  const mean = new Float32Array(slots).fill(Number.NaN)
+  const sum = new Float64Array(slots)
+  const weight = new Float64Array(slots)
+  let max = 0
+  let any = false
+
+  for (let i = 0; i < window.piles.length; i++) {
+    const counts = window.bases[i]
+    if (counts === undefined) continue
+    const segment = axis.segmentOf(window.piles[i].contig)
+    if (segment === null || !(segment.bpPerUnit > 0)) continue
+    for (let at = 0; at < counts.span; at++) {
+      let depth = 0
+      for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[at * BASE_LANES + lane]
+      if (depth === 0) continue
+      const base = counts.start + at
+      // Every pixel the base *covers*, not the one its left edge lands on.
+      // Above one pixel per base the two are different: filling only the edge
+      // leaves the pixels between them empty, and a profile of alternating
+      // values and NaN draws as a picket fence rather than as a depth curve.
+      const unit0 = segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit
+      const unit1 = segment.unitStart + (base + 1 - segment.bpStart) / segment.bpPerUnit
+      const p0 = frame.toPixel(unit0)
+      const p1 = frame.toPixel(unit1)
+      const first = Math.max(0, Math.round(Math.min(p0, p1)) - from)
+      const last = Math.min(slots - 1, Math.max(first, Math.round(Math.max(p0, p1)) - 1 - from))
+      for (let slot = first; slot <= last; slot++) {
+        sum[slot] += depth
+        weight[slot] += 1
+      }
+      if (depth > max) max = depth
+      any = true
+    }
+  }
+  if (!any) return null
+  for (let i = 0; i < slots; i++) if (weight[i] > 0) mean[i] = sum[i] / weight[i]
+
+  return {
+    profile: { from, mean, low: mean, high: mean, envelope: false, extent: { min: 0, max } },
+    // Floored at a real zero, for the reason the sampled coverage band is:
+    // depth is a count, and autoscaling from its own minimum makes a thin
+    // region look covered.
+    limits: { min: 0, max: Math.max(1, max) },
+  }
+}
+
+/**
+ * A colour per category, from the lane's own colour.
+ *
+ * The lane's colour is what a reader chose and what the swatch on its row
+ * shows, so the first category keeps it exactly and the rest are rotations of
+ * its hue — which keeps a two-category colouring (the strands) legible as *one
+ * track drawn two ways* rather than as two unrelated tracks.
+ */
+export function readColoursFor(
+  window: { piles: readonly ReadPile[] },
+  colour: string,
+): string[] {
+  const groups = window.piles[0]?.groups ?? ['reads']
+  if (groups.length <= 1) return [colour]
+  const base = hueOf(colour)
+  return groups.map((_, i) =>
+    i === 0 ? colour : `hsl(${Math.round((base + (i * 360) / (groups.length + 1)) % 360)} 55% 48%)`,
+  )
+}
+
+/** The hue of a `#rrggbb`, so a palette can be rotated from it. */
+function hueOf(colour: string): number {
+  const hex = /^#?([0-9a-f]{6})$/i.exec(colour.trim())
+  if (hex === null) return 210
+  const value = Number.parseInt(hex[1], 16)
+  const r = ((value >> 16) & 255) / 255
+  const g = ((value >> 8) & 255) / 255
+  const b = (value & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  if (max === min) return 210
+  const d = max - min
+  const h =
+    max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return (h * 60 + 360) % 360
+}
+
+/**
+ * The line under an alignment lane's name.
+ *
+ * Says what the pile *is* rather than repeating the coverage axis above it, and
+ * names the two things a reader cannot see: that reads were dropped to fit, and
+ * where the mismatch colouring came from — because "no mismatches here" and
+ * "this file cannot tell me" are the same empty picture (§8.13).
+ */
+export function pileDetail(window: {
+  kept: number
+  total: number
+  capped: boolean
+  diffs: string
+  note?: string
+}): string {
+  if (window.note !== undefined) return window.note
+  const reads = window.capped
+    ? `${window.kept.toLocaleString()} of ${window.total.toLocaleString()} reads`
+    : `${window.kept.toLocaleString()} reads`
+  const diffs =
+    window.diffs === 'none'
+      ? 'no reference to compare'
+      : window.diffs === 'md'
+        ? 'MD'
+        : window.diffs === 'cigar'
+          ? '=/X'
+          : 'reference'
+  return `${reads} · ${diffs}`
+}

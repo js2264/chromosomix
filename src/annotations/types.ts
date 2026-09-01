@@ -555,12 +555,14 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
               : kind === 'classes'
                 ? 20
                 : // An alignment lane is taller than a bigWig from the start,
-                  // because it is not one band but a stack of them (§8.13) —
-                  // and a reader who came to look at reads and found a 90-pixel
-                  // smear would spend their first gesture resizing it. A stored
-                  // session keeps whatever they set instead.
+                  // because it is not one band but a stack of three (§8.13):
+                  // depth, the consensus, and however many rows of reads are
+                  // left. At 120 the pile got four rows and the consensus a
+                  // strip too thin to hold a letter, so a reader who came to
+                  // look at reads spent their first gesture resizing it. A
+                  // stored session keeps whatever they set instead.
                   kind === 'alignments'
-                  ? 120
+                  ? 240
                   : 16,
     // Bars, because one cell is one unit: a metadata column has a value per
     // genome, per contig or per bin and nothing in between, so a line drawn
