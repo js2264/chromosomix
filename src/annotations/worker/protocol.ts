@@ -50,6 +50,10 @@ export type DetectedFormat =
   | 'sizes'
   | 'hdf5'
   | 'fasta'
+  // Aligned reads (§8.13). Named `bam` and not `alignments` because this is
+  // what the *bytes* turned out to be, and CRAM — which is refused, and for its
+  // own reasons — would be a second member here rather than the same one.
+  | 'bam'
 
 /**
  * How to reach the bytes, in the shape that survives `postMessage`.
@@ -111,6 +115,7 @@ export interface AnnotationResultMap {
   register: null
   run: TaskResult
   drop: null
+  cancel: null
 }
 
 export type AnnotationRequestKind = keyof AnnotationResultMap
@@ -168,6 +173,24 @@ export type AnnotationRequest =
       inputs: TaskInputs
     }
   | { id: number; kind: 'drop'; entry: string }
+  /**
+   * Call off a request that is still running.
+   *
+   * This worker went without one for a long time, and the reason is written in
+   * `client.ts`: the longest request was a third of a second, and the shortest
+   * was the one a pan would cancel a hundred of. Alignments end that. A window
+   * of alignment records is tens of BGZF blocks to inflate before a single
+   * record is decoded, and a fast drag across a deep region queues one of those
+   * per frame — behind which every bigWig's `sample` waits, because this thread
+   * answers them all and `onmessage` fires each `handle` without a queue.
+   *
+   * Cooperative, exactly as `reader.worker.ts`'s is: the worker checks between
+   * units of work and stops at the next boundary rather than being killed
+   * mid-write, and the check is only reached because the work yields with
+   * `yieldToEventLoop()` — a microtask would drain inside the same task and
+   * this message would sit unread until the work it cancels had finished.
+   */
+  | { id: number; kind: 'cancel'; target: number }
 
 export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
   Extract<AnnotationRequest, { kind: K }>,
@@ -176,7 +199,12 @@ export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
 
 export type AnnotationResponse =
   | { type: 'result'; id: number; payload: unknown }
-  | { type: 'error'; id: number; message: string }
+  /**
+   * `cancelled` distinguishes "you called this off" from "this went wrong", so
+   * a lane that has moved on can drop the answer silently instead of drawing a
+   * failure the reader caused by panning.
+   */
+  | { type: 'error'; id: number; message: string; cancelled?: boolean }
   // Only an analysis task reports progress from here. A `load` or a `sample` is
   // over in milliseconds and a bar for one would flicker; a metaplot over five
   // thousand features and four tracks is a job, and §18.3 says a job reports.

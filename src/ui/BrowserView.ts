@@ -32,6 +32,7 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
+import { hasTrackControls } from '../annotations/types'
 import type { AnnotationEntry, BaseRegion, FeatureSet } from '../annotations/types'
 import {
   assemblyAxis,
@@ -1524,7 +1525,15 @@ export class BrowserView {
               ? { ...row.entry, label: `${row.entry.label} · GC` }
               : row.entry,
           ),
-          detail: { kind: 'limits', ...limits },
+          // A note wins the detail line. It is only ever set where the lane
+          // drew *nothing* (§8.13) — a window of alignments too deep to read at
+          // this width — and a pair of limits under an empty lane would be
+          // describing an axis with no data on it, which reads as "there is
+          // nothing here" rather than "there is too much here to draw".
+          detail:
+            first.profile.note === undefined
+              ? { kind: 'limits', ...limits }
+              : { kind: 'text', text: first.profile.note },
           at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
@@ -1639,7 +1648,7 @@ export class BrowserView {
       const owner = entries.find((entry) => entry.id === swatch.id)
       if (owner !== undefined) this.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
     }
-    if (boxes.auto !== null && entries.some((entry) => entry.kind === 'track')) {
+    if (boxes.auto !== null && entries.some((entry) => hasTrackControls(entry.kind))) {
       this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
   }
@@ -3020,7 +3029,7 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   if (lane === null) return null
   const tracks = lane.profiles
     .map((row) => row.entry)
-    .filter((entry) => entry.kind === 'track')
+    .filter((entry) => hasTrackControls(entry.kind))
   return tracks.length === 0 ? null : tracks
 }
 

@@ -40,6 +40,16 @@ export interface PixelProfile {
   /** `true` when `low`/`high` are a genuine envelope rather than copies of the mean. */
   envelope: boolean
   /**
+   * Why this profile is empty, when the file could say.
+   *
+   * Carried through from {@link TrackSampleSet.note} rather than looked up
+   * beside it, because by the time a lane is drawn the samples are gone and the
+   * profile is all there is — and "no reads here" and "too many reads here to
+   * draw" must not paint identically (§8.13). Absent for every other kind,
+   * which is every kind that can answer any window it is asked.
+   */
+  note?: string
+  /**
    * What "autoscale to what is in view" resolves to.
    *
    * The means' own range, because the means are what is drawn. This used to be
@@ -73,7 +83,16 @@ export function profileOf(
   const mean = new Float32Array(slots).fill(Number.NaN)
   const low = new Float32Array(slots).fill(Number.NaN)
   const high = new Float32Array(slots).fill(Number.NaN)
-  const empty: PixelProfile = { from, mean, low, high, envelope: false, extent: null }
+  const note = samples?.note
+  const empty: PixelProfile = {
+    from,
+    mean,
+    low,
+    high,
+    envelope: false,
+    extent: null,
+    ...(note === undefined ? {} : { note }),
+  }
   if (samples === null || samples.regions.length === 0) return empty
 
   const sum = new Float64Array(slots)

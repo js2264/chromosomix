@@ -1188,7 +1188,14 @@ export class AnnotationLanes {
                 ? { ...member, label: `${member.label} · GC` }
                 : member,
             ),
-            detail: { kind: 'limits', ...shown },
+            // A note wins the detail line, for the reason `BrowserView` gives
+            // at its own copy of this: it is only ever set where the lane drew
+            // nothing, and limits under an empty lane read as "there is nothing
+            // here" rather than "there is too much here to draw" (§8.13).
+            detail:
+              first.profile.note === undefined
+                ? { kind: 'limits', ...shown }
+                : { kind: 'text', text: first.profile.note },
             at: labelEndFor(frame, shown, first.entry.style.flip),
           }
         }

@@ -30,6 +30,7 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
+import { hasTrackControls } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
@@ -850,7 +851,7 @@ export class AnnotationCard {
     if (entry.card === 'linear' && this.props.context !== 'browser') {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
-    if (entry.kind === 'track') out.push(this.limits(entry), this.group(entry))
+    if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No
     // group, though — GC shares no units with anything else on the stack, so
@@ -898,7 +899,7 @@ export class AnnotationCard {
       'div',
       { class: 'ann-inline' },
       heightField(this.props.store, entry),
-      ...(entry.kind === 'track' ? [this.mode(entry), this.flip(entry)] : []),
+      ...(hasTrackControls(entry.kind) ? [this.mode(entry), this.flip(entry)] : []),
       ...(entry.kind === 'sequence' ? [this.mode(entry)] : []),
     )
   }
@@ -995,7 +996,7 @@ export class AnnotationCard {
   private groupNames(): string[] {
     const names = new Set<string>()
     for (const row of this.props.store.entries) {
-      if (row.kind === 'track' && row.style.group !== '') names.add(row.style.group)
+      if (hasTrackControls(row.kind) && row.style.group !== '') names.add(row.style.group)
     }
     return [...names].sort((a, b) => a.localeCompare(b))
   }

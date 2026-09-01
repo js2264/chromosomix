@@ -98,17 +98,35 @@ describe('routing a name', () => {
     expect(routeOf('rep1.mmetacool::entries/rep1')).toBe('map')
   })
 
+  it('sends a BAM to the genome door', () => {
+    // It annotates a genome and its `@SQ` table can declare one, so it is the
+    // same door a bigWig goes through (§8.13). Whether the file behind the name
+    // opens is a question about its bytes and its index, settled where a
+    // refusal can carry a message.
+    expect(routeOf('reads.bam')).toBe('genome')
+  })
+
   /**
    * `unknown` is "no route", not "broken", and the row says which.
    *
-   * A `.tbi` in particular is not junk — it is the index for the file beside it
-   * — so telling a reader it is unopenable without saying that would send them
+   * An index in particular is not junk — it is half of the file beside it — so
+   * telling a reader it is unopenable without saying that would send them
    * looking for a problem that does not exist.
    */
   it('explains a row it cannot offer, and says nothing about one it can', () => {
-    expect(unroutableNote('reads.bam')).toBe('Not a format this viewer opens.')
+    expect(unroutableNote('mystery.xyz')).toBe('Not a format this viewer opens.')
     expect(unroutableNote('genes.bed.gz.tbi')).toContain('tabix index')
+    expect(unroutableNote('reads.bam.bai')).toContain('BAM index')
+    expect(unroutableNote('reads.bam.csi')).toContain('BAM index')
     expect(unroutableNote('rep1.cool')).toBeNull()
+    expect(unroutableNote('reads.bam')).toBeNull()
+  })
+
+  it('says what to do with a CRAM rather than only that it cannot be opened', () => {
+    // Refused for its own reason and not as collateral: CRAM cannot be read
+    // without its exact reference, conventionally from somebody else's
+    // registry, which C1 and C5 forbid outright.
+    expect(unroutableNote('reads.cram')).toContain('samtools view -b')
   })
 })
 

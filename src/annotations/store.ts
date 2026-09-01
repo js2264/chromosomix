@@ -41,7 +41,7 @@ import type {
   Placement,
   StoredEntry,
 } from './types'
-import { LANE_EDGES, defaultStyle, normalisePlacement, placementOn } from './types'
+import { LANE_EDGES, defaultStyle, hasTrackControls, normalisePlacement, placementOn } from './types'
 
 /**
  * The colour a newly loaded annotation gets, cycled.
@@ -887,7 +887,7 @@ export class AnnotationStore {
   scaleGroups(): Map<string, AnnotationEntry[]> {
     const out = new Map<string, AnnotationEntry[]>()
     for (const entry of this.items) {
-      if (entry.kind !== 'track' || entry.style.group === '') continue
+      if (!hasTrackControls(entry.kind) || entry.style.group === '') continue
       const bucket = out.get(entry.style.group)
       if (bucket === undefined) out.set(entry.style.group, [entry])
       else bucket.push(entry)
@@ -1110,6 +1110,7 @@ const KINDS: AnnotationKind[] = [
   'pairs',
   'sequence',
   'metadata',
+  'alignments',
   'classes',
 ]
 const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']

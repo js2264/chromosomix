@@ -49,6 +49,12 @@ export function routeOf(uri: string): FileRoute {
   ) {
     return 'genome'
   }
+  // A BAM annotates a genome and can declare one, so it is the same door as a
+  // bigWig (§8.13) — even though, unlike every other name on that list, it may
+  // yet be refused for want of an index. Routing is about which front door a
+  // name belongs to; whether the file behind it opens is settled by its bytes,
+  // where a refusal can carry a message.
+  if (/\.bam$/i.test(name)) return 'genome'
   return 'unknown'
 }
 
@@ -62,6 +68,15 @@ export function unroutableNote(name: string): string | null {
   if (routeOf(name) !== 'unknown') return null
   if (/\.tbi$/i.test(name)) {
     return 'A tabix index. Load the file it indexes and this is picked up with it.'
+  }
+  if (/\.(bai|csi)$/i.test(name)) {
+    // Worth its own sentence rather than falling into the line below, because a
+    // reader looking at a `.bai` greyed out beside a `.bam` is one step from
+    // concluding the pair cannot be opened at all.
+    return 'A BAM index. Load the .bam it indexes and this is picked up with it.'
+  }
+  if (/\.cram$/i.test(name)) {
+    return 'CRAM needs its exact reference genome, which this viewer will not fetch. Convert it with `samtools view -b`.'
   }
   return 'Not a format this viewer opens.'
 }

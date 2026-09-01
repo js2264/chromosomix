@@ -53,6 +53,12 @@ export type AnnotationKind =
   | 'sequence'
   | 'metadata'
   | 'classes'
+  // Aligned reads (§8.13). The second kind after `sequence` whose *picture*
+  // changes with the zoom rather than merely its resolution — depth where a
+  // pixel is a hundred bases, the pile itself where a read is wider than one —
+  // and the first whose finer rungs exist only in the 1D browser, because a
+  // read cannot be drawn where a pixel is a matrix bin.
+  | 'alignments'
 
 /**
  * Which card an entry belongs to; see §8.1.
@@ -172,7 +178,9 @@ export const LANE_EDGES: readonly LaneEdge[] = ['top', 'right', 'bottom', 'left'
  * because at a bin per pixel a sequence can only be its GC content.
  */
 export function drawsAProfile(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'sequence' || kind === 'metadata'
+  return (
+    kind === 'track' || kind === 'sequence' || kind === 'metadata' || kind === 'alignments'
+  )
 }
 
 /**
@@ -184,7 +192,29 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
  * ⌘-scroll and the autoscale button all ask this.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'metadata'
+  return kind === 'track' || kind === 'metadata' || kind === 'alignments'
+}
+
+/**
+ * Whether a lane of this kind gets the *whole* set of a track's controls:
+ * typed limits, autoscale-group membership, the mode and flip switches, and the
+ * ceiling drag.
+ *
+ * A third predicate rather than a fourth spelling of `kind === 'track'`, and it
+ * is here because those four behaviours were gated by that literal at four
+ * scattered call sites — `store.scaleGroups`, two arms of `AnnotationCard`, and
+ * `BrowserView.scalableLane`. Four literals is not a rule, it is a rule spelled
+ * four times, and the way it fails is instructive: setting
+ * {@link hasAMovableAxis} reaches none of them, so a new kind gets a ceiling
+ * drag that works beside the map and silently does nothing in the browser.
+ *
+ * Deliberately narrower than {@link hasAMovableAxis}. A metadata column may be
+ * rescaled and may not join a group: it is a column of the open file rather
+ * than a measurement, and putting one on a shared axis with a bigWig would be
+ * asserting they are in the same units.
+ */
+export function hasTrackControls(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'alignments'
 }
 
 /** Whether this kind is one of the file's own columns (§8.12). */
@@ -379,6 +409,21 @@ export interface TrackSampleSet {
   regions: TrackSamples[]
   /** Value extent across every region returned, ignoring NaN. `null` if empty. */
   extent: { min: number; max: number } | null
+  /**
+   * Why there is nothing here, when there is nothing here.
+   *
+   * Every other kind answers this question by not being asked it: a bigWig has
+   * zoom levels all the way out, a FASTA is held whole, a computed vector spans
+   * whatever it was computed over. An alignment file has none of those, so a
+   * window can be *legitimately unanswerable* — too many bytes to read at this
+   * width — and an empty lane and a lane over a region with no reads in it
+   * would otherwise look identical (§8.13).
+   *
+   * A sentence for the reader, not a code: it goes under the lane's name, and
+   * the doctrine at §10 is that a refusal names the actual state and the
+   * concrete fix. Absent means the answer is simply the answer.
+   */
+  note?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +536,14 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
               ? 56
               : kind === 'classes'
                 ? 20
-                : 16,
+                : // An alignment lane is taller than a bigWig from the start,
+                  // because it is not one band but a stack of them (§8.13) —
+                  // and a reader who came to look at reads and found a 90-pixel
+                  // smear would spend their first gesture resizing it. A stored
+                  // session keeps whatever they set instead.
+                  kind === 'alignments'
+                  ? 120
+                  : 16,
     // Bars, because one cell is one unit: a metadata column has a value per
     // genome, per contig or per bin and nothing in between, so a line drawn
     // through the tops of them would interpolate between two MAGs that have no
