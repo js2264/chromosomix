@@ -81,6 +81,7 @@ import {
   resolveLimits,
   scaledTo,
   type PixelProfile,
+  laneNote,
 } from '../render/tracks'
 import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
@@ -1193,10 +1194,7 @@ export class AnnotationLanes {
             // at its own copy of this: it is only ever set where the lane drew
             // nothing, and limits under an empty lane read as "there is nothing
             // here" rather than "there is too much here to draw" (§8.13).
-            detail:
-              first.profile.note === undefined
-                ? { kind: 'limits', ...shown }
-                : { kind: 'text', text: first.profile.note },
+            detail: laneNote(profiles) ?? { kind: 'limits', ...shown },
             at: labelEndFor(frame, shown, first.entry.style.flip),
           }
         }

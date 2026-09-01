@@ -74,6 +74,8 @@ function fakeDirectory(paths: readonly string[], at = ''): FileSystemDirectoryHa
   return handle as unknown as FileSystemDirectoryHandle
 }
 
+const PAIRED = ['reads.bam', 'reads.bam.bai', 'genes.gtf.gz', 'genes.gtf.gz.tbi']
+
 const TREE = [
   'hum53/map.mcool',
   'hum53/deep/inner.bw',
@@ -284,5 +286,51 @@ describe('the listing cap', () => {
     ).list('')
     expect(granted.entries.length).toBeLessThanOrEqual(1000)
     expect(granted.truncated).toBe(true)
+  })
+})
+
+describe('picking a file that comes in a pair', () => {
+  // A `.bam` picked out of a listing whose `.bai` is one row down and drawn
+  // inert should not then be refused for want of an index (§8.13) — and a
+  // bgzipped feature file should not quietly read itself whole.
+  /** Both folder shapes answer this the same way, so both are asked. */
+  const pickIn = async (
+    names: string[],
+    want: string,
+  ): Promise<Array<string | undefined>> => {
+    const paths = names.map((name) => `run2/${name}`)
+    const snap = snapshotFolder('s', 'run2', paths.map((path) => fileAt(path)))
+    const granted = handleFolder('dir:0', 'run2', fakeDirectory(names))
+    const out: Array<string | undefined> = []
+    for (const at of [snap, granted]) {
+      const listing = await at.list('')
+      const entry = listing.entries.find((row) => row.name === want)
+      expect(entry, want).toBeDefined()
+      out.push((await at.pick(entry as FolderEntry)).index?.name)
+    }
+    return out
+  }
+
+  it('hands over the index sitting beside a BAM', async () => {
+    expect(await pickIn(PAIRED, 'reads.bam')).toEqual(['reads.bam.bai', 'reads.bam.bai'])
+  })
+
+  it('hands over a tabix sidecar the same way', async () => {
+    expect(await pickIn(PAIRED, 'genes.gtf.gz')).toEqual([
+      'genes.gtf.gz.tbi',
+      'genes.gtf.gz.tbi',
+    ])
+  })
+
+  it('offers nothing for a file that has no pair in the folder', async () => {
+    expect(await pickIn(['reads.bam', 'ATAC.bw'], 'ATAC.bw')).toEqual([undefined, undefined])
+    expect(await pickIn(['reads.bam', 'ATAC.bw'], 'reads.bam')).toEqual([undefined, undefined])
+  })
+
+  it('takes the bare spelling where that is what the folder holds', async () => {
+    expect(await pickIn(['reads.bam', 'reads.bai'], 'reads.bam')).toEqual([
+      'reads.bai',
+      'reads.bai',
+    ])
   })
 })

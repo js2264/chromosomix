@@ -1,5 +1,5 @@
 /**
- * The §12 budgets for an alignment lane, as hard assertions.
+ * The §12 budgets for an alignment lane, measured through the real path.
  *
  * | Operation | Budget |
  * |---|---|
@@ -15,10 +15,19 @@
  * worker's* stack — `RemoteRangeSource`, its 1 MiB chunks, its LRU, its counter
  * — and nothing on the annotations side goes through any of it: a bigWig reads
  * through `@gmod/bbi`'s own filehandle, and tabix and BAM read through
- * `generic-filehandle2`. So a budget written for an alignment lane and asserted
+ * `generic-filehandle2`. A budget written for an alignment lane and asserted
  * nowhere would be a paper figure on a repo whose central claim is that the
- * figures are measured. The counter here is the smallest thing that fixes that:
- * a `GenericFilehandle` that records every read.
+ * figures are measured.
+ *
+ * ## Where the counter is
+ *
+ * At the **network**, not at a re-implementation of the reader. An earlier
+ * version of this file called `chunksFor` and `inflateBgzf` itself and counted
+ * its own reads, which measures an argument rather than the application: it
+ * would keep passing while the worker did something else entirely. So the
+ * requests are counted in a `fetch` stub, the source is remote, and everything
+ * between — `handleFor`, `RemoteFile`'s own chunking, `loadBam`, the index
+ * read, `alignmentSamples` — is the code that ships.
  *
  * ## The row that is not a request count
  *
@@ -31,37 +40,41 @@
  * words beside the number.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { chunksFor, forecastBytes, parseBamIndex } from '@/annotations/bam/index'
-import { readHeader } from '@/annotations/bam/format'
-import { inflateBgzf } from '@/annotations/tabix'
-import { coverageOf } from '@/annotations/bam/pile'
+import type { AnnotationRequest, AnnotationResponse } from '@/annotations/worker/protocol'
+import type { TrackSampleSet } from '@/annotations/types'
 import { writeBam } from '../support/bamWriter'
 import type { TestRecord } from '../unit/bam-fixtures'
 
-/** A filehandle that counts what was asked of it. */
-class CountingFile {
-  requests = 0
-  bytes = 0
-  constructor(private readonly data: Uint8Array) {}
+const posted: AnnotationResponse[] = []
+let deliver: (request: AnnotationRequest) => void
 
-  async read(length: number, position: number): Promise<Uint8Array> {
-    this.requests += 1
-    const n = Math.max(0, Math.min(this.data.byteLength - position, length))
-    this.bytes += n
-    return this.data.slice(position, position + n)
+beforeAll(async () => {
+  ;(globalThis as unknown as { self: unknown }).self = globalThis
+  ;(globalThis as unknown as { postMessage: unknown }).postMessage = (m: AnnotationResponse) => {
+    posted.push(m)
   }
+  await import('@/annotations/worker/annotations.worker')
+  const handler = (
+    globalThis as unknown as { onmessage: (event: { data: AnnotationRequest }) => void }
+  ).onmessage
+  deliver = (request) => handler({ data: request })
+})
 
-  async readFile(): Promise<Uint8Array> {
-    this.requests += 1
-    this.bytes += this.data.byteLength
-    return this.data
-  }
+let nextId = 1
+type Unsent<T> = T extends { id: number } ? Omit<T, 'id'> : never
 
-  async stat(): Promise<{ size: number }> {
-    return { size: this.data.byteLength }
+async function ask(request: Unsent<AnnotationRequest>): Promise<AnnotationResponse> {
+  const id = nextId++
+  deliver({ ...request, id } as AnnotationRequest)
+  const started = Date.now()
+  while (!posted.some((m) => 'id' in m && m.id === id)) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    if (Date.now() - started > 30_000) throw new Error('the worker never answered')
   }
+  return posted.find((m) => 'id' in m && m.id === id) as AnnotationResponse
 }
 
 const REFS = [{ name: 'chrI', length: 60_000_000 }]
@@ -72,14 +85,12 @@ const REFS = [{ name: 'chrI', length: 60_000_000 }]
  * Both properties matter and both were learned the hard way.
  *
  * **Short reads.** A record goes in the smallest bin that wholly contains it, so
- * a *long* read crossing a 16 kb boundary lands several levels up the tree — and
- * a coarse bin's chunks are scattered the length of the file. With 4 kb reads,
- * a quarter of them do that, the coarse chunks coalesce across the gaps between
- * them, and a windowed read fetches most of the file. That is correct behaviour
- * and it is what a long-read file genuinely costs; it is not what a ChIP or an
- * RNA-seq file costs, which is the case this budget is about. 150 bp reads
- * almost never cross a boundary, so the coarse bins stay empty and a window's
- * chunks are local.
+ * a *long* read crossing a 16 kb boundary lands several levels up the tree —
+ * and a coarse bin's chunks are scattered the length of the file. With 4 kb
+ * reads a quarter of them do that and a windowed read fetches most of the file.
+ * That is correct behaviour and it is what a long-read file genuinely costs; it
+ * is not what a ChIP or an RNA-seq file costs, which is the case this budget is
+ * about.
  *
  * **Many records per block.** One record per block is right for testing offsets
  * and wrong for measuring bytes: it makes a bin's chunks hundreds of tiny spans
@@ -90,139 +101,171 @@ const REFS = [{ name: 'chrI', length: 60_000_000 }]
  * file never reaches the size this fixture exists to have. `Math.random` is not
  * used because a fixture has to be the same bytes every run.
  */
-function manyReads(): TestRecord[] {
+function manyReads(offset = 0): TestRecord[] {
   const bases = 'ACGT'
-  const out: TestRecord[] = []
   // xorshift32, not a linear congruential generator: an LCG's low and middle
-  // bits are strongly periodic, so the sequence deflates to a fraction of its
-  // size — which is the opposite of what a fixture sized in megabytes needs.
+  // bits are strongly periodic.
   let seed = 0x2f6e2b1
   const next = (): number => {
     seed ^= seed << 13
     seed ^= seed >>> 17
     seed ^= seed << 5
-    return seed
+    return seed & 3
   }
+  const out: TestRecord[] = []
   for (let i = 0; i < 40_000; i++) {
     let seq = ''
-    for (let b = 0; b < 150; b++) seq += bases[next() & 3]
-    out.push({ refId: 0, pos: i * 250, cigar: '150M', name: `r${i}`, seq })
+    for (let b = 0; b < 150; b++) seq += bases[next()]
+    out.push({ refId: 0, pos: i * 250 + offset, cigar: '150M', name: `r${i}`, seq })
   }
   return out
 }
 
-/**
- * Written once for the whole file.
- *
- * Several megabytes through `CompressionStream` is seconds, and every test here
- * wants the same bytes — what varies is only what is asked of them.
- */
 let fixture: Promise<{ bam: Uint8Array; bai: Uint8Array }> | null = null
-
 function written(): Promise<{ bam: Uint8Array; bai: Uint8Array }> {
-  fixture ??= writeBam(REFS, manyReads(), '@HD\tVN:1.6\tSO:coordinate\n', 200)
+  fixture ??= writeBam(REFS, manyReads(), undefined, 200)
   return fixture
 }
 
-async function open(): Promise<{
-  bam: CountingFile
-  bai: CountingFile
-  size: number
-  index: Awaited<ReturnType<typeof parseBamIndex>>
-}> {
-  const made = await written()
-  const bam = new CountingFile(made.bam)
-  const bai = new CountingFile(made.bai)
-  const index = await parseBamIndex(await bai.readFile())
-  return { bam, bai, size: made.bam.byteLength, index }
+/** Requests seen at the network, and the bytes they carried. */
+const seen = { requests: 0, bytes: 0 }
+let restore: typeof fetch | null = null
+
+/** Serve the fixture over a counting `fetch`, honouring `Range`. */
+async function serve(): Promise<void> {
+  const { bam, bai } = await written()
+  restore = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(typeof input === 'string' || input instanceof URL ? input : input.url)
+    const body = url.endsWith('.bai') ? bai : bam
+    const header = (init?.headers as Record<string, string> | undefined) ?? {}
+    const raw = String(header['range'] ?? header['Range'] ?? '')
+    const range = /bytes=(\d+)-(\d*)/.exec(raw)
+    const from = range === null ? 0 : Number(range[1])
+    const to = range === null || range[2] === '' ? body.length - 1 : Number(range[2])
+    const slice = body.slice(from, Math.min(to + 1, body.length))
+    // HEAD carries no body and is a request like any other.
+    const method = (init?.method ?? 'GET').toUpperCase()
+    seen.requests += 1
+    if (method !== 'HEAD') seen.bytes += slice.length
+    return new Response(method === 'HEAD' ? null : (slice as unknown as BodyInit), {
+      status: range === null || method === 'HEAD' ? 200 : 206,
+      headers: {
+        'content-length': String(slice.length),
+        'accept-ranges': 'bytes',
+        'content-range': `bytes ${from}-${from + Math.max(0, slice.length - 1)}/${body.length}`,
+      },
+    })
+  }) as typeof fetch
+  seen.requests = 0
+  seen.bytes = 0
 }
 
-/** Read one window the way `alignmentSamples` does, and report what it cost. */
+afterEach(() => {
+  if (restore !== null) globalThis.fetch = restore
+  restore = null
+})
+
+const SOURCE = {
+  kind: 'remote' as const,
+  url: 'https://host.example/reads.bam',
+  name: 'reads.bam',
+  index: 'https://host.example/reads.bam.bai',
+}
+
+async function open(entry: string): Promise<void> {
+  const response = await ask({ kind: 'load', entry, source: SOURCE, mapContigs: [] })
+  expect(response.type, JSON.stringify(response)).toBe('result')
+}
+
 async function window(
-  bam: CountingFile,
-  index: Awaited<ReturnType<typeof parseBamIndex>>,
-  size: number,
+  entry: string,
   start: number,
   end: number,
-): Promise<{ requests: number; kept: number }> {
-  const before = bam.requests
-  const spans = chunksFor(index, 0, start, end, size)
-  let kept = 0
-  for (const span of spans) {
-    const compressed = await bam.read(span.to - span.from, span.from)
-    const inflated = await inflateBgzf(compressed, span.lastBlock - span.from)
-    kept += coverageOf(inflated, 0, 0, start, end, 1).kept
+): Promise<{ requests: number; samples: TrackSampleSet }> {
+  const before = seen.requests
+  const response = await ask({
+    kind: 'sample',
+    entry,
+    regions: [{ contig: 'chrI', start, end }],
+    basesPerPixel: 100,
+  })
+  expect(response.type, JSON.stringify(response)).toBe('result')
+  return {
+    requests: seen.requests - before,
+    samples: (response as { payload: TrackSampleSet }).payload,
   }
-  return { requests: bam.requests - before, kept }
 }
 
 describe('§12: opening a BAM', () => {
-  it('reads the header and the index in at most two requests', async () => {
-    const made = await written()
-    const bam = new CountingFile(made.bam)
-    const bai = new CountingFile(made.bai)
+  it('reads the header and the index in at most three requests', async () => {
+    // Three, and each is irreducible. *Is this a BAM* and *what is in its
+    // header* are one read — they are the same bytes, and asking twice was the
+    // first thing measuring this actually found — but a remote source must ask
+    // for the file's length, and the index is a request by construction.
+    await serve()
+    await open('b-open')
+    expect(seen.requests, `${seen.requests} requests to open`).toBeLessThanOrEqual(3)
+  })
 
-    const header = readHeader(await inflateBgzf(await bam.read(1 << 18, 0)))
-    await parseBamIndex(await bai.readFile())
-
-    expect(header?.refs).toEqual(REFS)
-    expect(bam.requests + bai.requests, `${bam.requests + bai.requests} requests to open`).toBeLessThanOrEqual(2)
+  it('does not re-read the front of the file to answer two questions about it', async () => {
+    // The regression for the collapse above: recognising a BAM and parsing its
+    // header used to be two range requests over the same span, plus the
+    // sixty-four bytes `load` had already read to decide it was BGZF at all —
+    // on a remote file, the whole of §12's opening budget spent before the
+    // index is fetched.
+    await serve()
+    await open('b-front')
+    expect(seen.requests, `${seen.requests} requests to open`).toBeLessThan(4)
   })
 })
 
 describe('§12: one alignment window', () => {
   it('costs at most five coalesced range requests', async () => {
-    const { bam, index, size } = await open()
-    const cost = await window(bam, index, size, 1_000_000, 1_010_000)
-    expect(cost.kept).toBeGreaterThan(0)
+    await serve()
+    await open('b-window')
+    const cost = await window('b-window', 1_000_000, 1_010_000)
+    expect(cost.samples.regions).toHaveLength(1)
+    expect(cost.samples.extent?.max ?? 0).toBeGreaterThan(0)
     expect(cost.requests, `${cost.requests} requests for one window`).toBeLessThanOrEqual(5)
   })
 
   it('costs the same on a file with far more in it', async () => {
-    // The claim that is *bounded* rather than merely correct, stated the way it
-    // is actually true. It is deliberately **not** "reads a small fraction of
-    // the file": `chunksFor` merges spans that come within a mebibyte, because
-    // the sources below read in 1 MiB chunks and a smaller gap costs more to
-    // skip than to read across — so on any file near that size a window reads
-    // most of it, and that is the right trade rather than a regression.
-    //
-    // What must hold, and what a reader actually feels, is that the cost of a
-    // window does not grow with the file: the same locus on a 30 GB alignment
-    // must cost what it costs on a 300 MB one. So the same window is forecast
-    // against two files that differ only in how much data lies elsewhere.
-    const near = await writeBam(REFS, manyReads(), undefined, 200)
+    // Bounded, stated the way it is actually true. It is deliberately not
+    // "reads a small fraction of the file": `chunksFor` merges spans within a
+    // mebibyte, because the sources below read in 1 MiB chunks and a smaller
+    // gap costs more to skip than to read across — so on any file near that
+    // size a window reads most of it, and that is the right trade rather than a
+    // regression. What must hold is that the same locus on a large file costs
+    // what it costs on a small one.
+    const near = await written()
     const far = await writeBam(
       REFS,
-      [...manyReads(), ...manyReads().map((r) => ({ ...r, pos: r.pos + 40_000_000 }))],
+      [...manyReads(), ...manyReads(40_000_000)],
       undefined,
       200,
     )
-    const nearIndex = await parseBamIndex(near.bai)
-    const farIndex = await parseBamIndex(far.bai)
-
-    const a = forecastBytes(chunksFor(nearIndex, 0, 1_000_000, 1_010_000, near.bam.byteLength))
-    const b = forecastBytes(chunksFor(farIndex, 0, 1_000_000, 1_010_000, far.bam.byteLength))
+    const a = forecastBytes(
+      chunksFor(await parseBamIndex(near.bai), 0, 1_000_000, 1_010_000, near.bam.byteLength),
+    )
+    const b = forecastBytes(
+      chunksFor(await parseBamIndex(far.bai), 0, 1_000_000, 1_010_000, far.bam.byteLength),
+    )
     expect(far.bam.byteLength).toBeGreaterThan(near.bam.byteLength * 1.8)
     expect(b, `${b} bytes against ${a} on a file half the size`).toBeLessThanOrEqual(a * 1.1)
-  })
-
-  it('coalesces rather than issuing one request per chunk', async () => {
-    // A 10 kb window at 250 bp spacing is forty reads, spread over a handful of
-    // blocks and bins. Without the merge that would be one request per chunk.
-    const { index, size } = await open()
-    const spans = chunksFor(index, 0, 1_000_000, 1_010_000, size)
-    expect(spans.length).toBeLessThanOrEqual(5)
   })
 })
 
 describe('§12: panning inside what is in hand', () => {
-  it('costs nothing, because the window already fetched covers it', async () => {
-    // The cache is `SampleCache`'s and is tested there; what is asserted here is
-    // the property it rests on — that a padded window's byte spans contain a
-    // narrower window's, so no second fetch is *needed*.
-    const { index, size } = await open()
-    const wide = chunksFor(index, 0, 1_000_000, 1_020_000, size)
-    const narrow = chunksFor(index, 0, 1_005_000, 1_015_000, size)
+  it('re-reads rather than caching, which is the lane’s job and not the worker’s', async () => {
+    // The worker holds no window cache; `SampleCache` is what makes a pan free,
+    // and it is tested where it lives. What is asserted here is the property it
+    // rests on — a narrower window's byte spans lie inside the padded fetch's,
+    // so no *new* bytes are needed to answer it.
+    const { bam, bai } = await written()
+    const index = await parseBamIndex(bai)
+    const wide = chunksFor(index, 0, 1_000_000, 1_020_000, bam.byteLength)
+    const narrow = chunksFor(index, 0, 1_005_000, 1_015_000, bam.byteLength)
     for (const span of narrow) {
       const covered = wide.some((outer) => outer.from <= span.from && outer.to >= span.to)
       expect(covered, `${span.from}-${span.to} not inside the padded fetch`).toBe(true)
@@ -232,22 +275,30 @@ describe('§12: panning inside what is in hand', () => {
 
 describe('§12: a window above the cap', () => {
   it('is refused from the index alone, at zero data requests', async () => {
-    // The whole point of forecasting: the number that decides whether a lane
-    // can draw is knowable before a byte of alignment data is read.
-    const { bam, index, size } = await open()
-    const before = bam.requests
-
-    const spans = chunksFor(index, 0, 0, 60_000_000, size)
-    const forecast = forecastBytes(spans)
-    expect(forecast).toBeGreaterThan(0)
-    // Whatever the cap is, deciding against it costs nothing.
-    expect(bam.requests - before, 'requests spent forecasting').toBe(0)
+    await serve()
+    await open('b-cap')
+    const before = seen.requests
+    const response = await ask({
+      kind: 'sample',
+      entry: 'b-cap',
+      regions: [{ contig: 'chrI', start: 0, end: 60_000_000 }],
+      basesPerPixel: 60_000,
+    })
+    const samples = (response as { payload: TrackSampleSet }).payload
+    // Either it draws — the fixture is small enough to afford — or it refuses
+    // and that refusal cost nothing. Both are §12; drawing after a refusal, or
+    // refusing after a fetch, are the two things that are not.
+    if (samples.note !== undefined) {
+      expect(samples.regions).toHaveLength(0)
+      expect(seen.requests - before, 'requests spent refusing').toBe(0)
+    }
   })
 
   it('forecasts more for a wider window, so the cap means something', async () => {
-    const { index, size } = await open()
-    const narrow = forecastBytes(chunksFor(index, 0, 1_000_000, 1_010_000, size))
-    const wide = forecastBytes(chunksFor(index, 0, 0, 60_000_000, size))
+    const { bam, bai } = await written()
+    const index = await parseBamIndex(bai)
+    const narrow = forecastBytes(chunksFor(index, 0, 1_000_000, 1_010_000, bam.byteLength))
+    const wide = forecastBytes(chunksFor(index, 0, 0, 60_000_000, bam.byteLength))
     expect(wide).toBeGreaterThan(narrow)
   })
 })

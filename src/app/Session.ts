@@ -2562,14 +2562,19 @@ export class Session {
 
   async addPicked(picked: PickedFile, placement?: Placement, map?: string): Promise<void> {
     if (picked.source.kind === 'local') {
+      // The sidecar the folder found beside it travels with the file, on both
+      // roads. Without it a `.bam` picked from a listing is refused for want of
+      // an index that is one row down in the same listing (§8.13).
+      const both =
+        picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index]
       // No placement means a drop with no aim behind it — the panel's arrow, or
       // the content area — and that is exactly `dropFiles`'s case, including the
       // empty seat it fills rather than adds to.
       if (placement === undefined && map === undefined) {
-        await this.dropFiles([picked.source.file])
+        await this.dropFiles(both)
         return
       }
-      this.dropped(picked.source.file, placement, map)
+      this.dropped(picked.source.file, placement, map, picked.index)
       return
     }
     await this.addRemote(picked.uri, picked.source, placement, map)

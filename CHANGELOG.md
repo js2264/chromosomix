@@ -14,7 +14,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Alignment files open, and their coverage is a lane.** Drop a `.bam` with its
+- **Alignment files open, and their coverage is a lane.** The reader and the
+  coverage band; the consensus band and the pile of individual reads are
+  specified at SPECS §8.13 and are not drawn yet. Drop a `.bam` with its
   `.bai` or `.csi` beside it — or point at one by URL — and the depth over the
   window is drawn like any other track: on any of the map's four edges, in the
   1D browser, with limits, an autoscale group, the ceiling drag, the readout and
@@ -53,8 +55,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   an RNA-seq gene as a solid block. Secondary and supplementary alignments are
   excluded, since they are one molecule reported twice and they cluster exactly
   where the number is read most carefully. Duplicates are **kept** unless asked
-  otherwise, because marking them is a pipeline's decision and hiding them
-  silently would disagree with every other reading of the same file.
+  otherwise — the filter is in the reader and has no control on the lane yet —
+  because marking them is a pipeline's decision and hiding them silently would
+  disagree with every other reading of the same file.
 
   The reader is written here, with no new runtime dependency, for the reason
   `hic/format.ts` and `annotations/tabix.ts` both give at length. `@gmod/bam`
@@ -88,9 +91,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   wrong until there is a stored shape that can name an operation and its
   operands.
 
-- **The README no longer states a rule SPECS overturned.** It still said
-  annotations were *absent* on a `.metacool`; §8.5 replaced that gate with an
-  honest overlap report in MAGs some time ago.
+- **The README no longer states a rule SPECS overturned.** It said in two
+  places that annotations were *absent* on a `.metacool` — once in prose and
+  once in the milestone table, where the Metadata card was still described as
+  the only annotation such a file gets. §8.5 replaced that gate with an honest
+  overlap report in MAGs some time ago.
 
 - **Tabs can be called something.** A tab is labelled by its file, which is the
   right default and a poor name for the work: four tabs reading

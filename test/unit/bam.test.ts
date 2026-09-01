@@ -34,7 +34,7 @@ import {
 } from '@/annotations/bam/index'
 import { coverageOf, eachAlignedBlock } from '@/annotations/bam/pile'
 
-import { baiBytes, bamBytes, tagBytes } from './bam-fixtures'
+import { baiBytes, bamBytes, bgzfBlock, csiBytes, tagBytes } from './bam-fixtures'
 
 const REFS = [
   { name: 'chrI', length: 230_218 },
@@ -401,6 +401,104 @@ describe('the index', () => {
 
   it('refuses bytes that are neither BAI nor CSI', async () => {
     await expect(parseBamIndex(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(/not a BAM index/)
+  })
+})
+
+describe('CSI, the index a long chromosome must have', () => {
+  // BAI cannot address a reference past 2^29 bp, so wheat, axolotl, lungfish
+  // and any concatenated pseudo-genome are CSI or nothing. Three things differ
+  // and a reader has to get all three right: the geometry is declared rather
+  // than fixed, there is no linear index — a `loffset` per bin does its work —
+  // and the file is BGZF compressed, which a `.bai` is not.
+
+  /** CSI's default geometry for a long reference: one level deeper than BAI. */
+  const MIN_SHIFT = 14
+  const DEPTH = 6
+
+  /** The first bin of the deepest level, for `depth` levels of eight. */
+  const deepest = (depth: number): number => {
+    let offset = 0
+    for (let level = 0; level < depth; level++) offset += 1 << (level * 3)
+    return offset
+  }
+
+  it('reads a CSI through its BGZF wrapper and reports its geometry', async () => {
+    const raw = csiBytes([[{ bin: deepest(DEPTH), loffset: 0, chunks: [[1000, 2000]] }]], MIN_SHIFT, DEPTH)
+    const index = await parseBamIndex(await bgzfBlock(raw))
+    expect(index.format).toBe('csi')
+    expect(index.minShift).toBe(MIN_SHIFT)
+    expect(index.depth).toBe(DEPTH)
+  })
+
+  it('reads one stored flat too, since the two are handed around together', async () => {
+    const raw = csiBytes([[{ bin: deepest(DEPTH), loffset: 0, chunks: [[1000, 2000]] }]], MIN_SHIFT, DEPTH)
+    expect((await parseBamIndex(raw)).format).toBe('csi')
+  })
+
+  it('steps over the auxiliary block rather than reading it as a reference count', async () => {
+    // `l_aux` is where a tabix-style header lives in a CSI, and a reader that
+    // assumes it is empty reads the aux bytes as `n_ref`.
+    const aux = new TextEncoder().encode('some auxiliary data')
+    const raw = csiBytes([[{ bin: deepest(DEPTH), loffset: 0, chunks: [[1000, 2000]] }]], MIN_SHIFT, DEPTH, aux)
+    const index = await parseBamIndex(await bgzfBlock(raw))
+    expect(index.refs).toHaveLength(1)
+    expect(index.refs[0].bins.get(deepest(DEPTH))).toHaveLength(1)
+  })
+
+  it('resolves a region through the declared geometry', async () => {
+    const bin = deepest(DEPTH)
+    const index = await parseBamIndex(
+      await bgzfBlock(csiBytes([[{ bin, loffset: 0, chunks: [[1000, 2000]] }]], MIN_SHIFT, DEPTH)),
+    )
+    const spans = chunksFor(index, 0, 0, 16_384, 10_000_000)
+    expect(spans).toHaveLength(1)
+    expect(spans[0].from).toBe(1000)
+  })
+
+  it('uses loffset as its floor, since it has no linear index', async () => {
+    // The one thing that makes a CSI query bounded. A bin near the root spans
+    // the reference; without a floor a narrow window fetches every chunk in it.
+    const bin = deepest(DEPTH)
+    const index = await parseBamIndex(
+      await bgzfBlock(
+        csiBytes(
+          [
+            [
+              // The bin covering the query, whose records start at block 5000.
+              { bin: bin + 1, loffset: 5000, chunks: [[5000, 6000]] },
+              // A root-level bin holding something long since finished with.
+              { bin: 0, loffset: 0, chunks: [[100, 200]] },
+            ],
+          ],
+          MIN_SHIFT,
+          DEPTH,
+        ),
+      ),
+    )
+    const spans = chunksFor(index, 0, 16_384, 32_768, 10_000_000)
+    expect(spans.some((span) => span.from === 100)).toBe(false)
+    expect(spans.some((span) => span.from === 5000)).toBe(true)
+  })
+
+  it('addresses a coordinate past what BAI can reach', async () => {
+    // 2^29 is the whole reason this format is read. The shift for the top level
+    // of a depth-6 index is 32, and a JavaScript `>>` takes its count modulo 32
+    // — so this is also the regression test for that.
+    const far = 600_000_000
+    const bins = reg2bins(far, far + 1000, MIN_SHIFT, DEPTH)
+    expect(bins).toHaveLength(DEPTH + 1)
+    // The root bin is 0 and every level below it is addressed, not wrapped.
+    expect(bins[0]).toBe(0)
+    expect(new Set(bins).size).toBe(bins.length)
+    expect(Math.max(...bins)).toBeGreaterThan(deepest(DEPTH))
+  })
+
+  it('does not wrap a shift of 32 back onto the coordinate itself', async () => {
+    // The bug directly: `x >> 32` is `x` in JavaScript, so the top level would
+    // have produced one bin per base of the window.
+    const wide = reg2bins(0, 600_000_000, MIN_SHIFT, DEPTH)
+    expect(wide.length).toBeLessThan(100_000)
+    expect(wide[0]).toBe(0)
   })
 })
 

@@ -74,6 +74,15 @@ export interface FolderListing {
 export interface PickedFile {
   uri: string
   source: SourceSpec
+  /**
+   * The sidecar index sitting beside it in the folder, where there is one.
+   *
+   * A `.bam` picked out of a listing whose `.bai` is right there, one row down
+   * and drawn as inert, should not be refused for want of an index (§8.13) —
+   * and a bgzipped feature file should not quietly read itself whole. Local
+   * only: a bucket's sidecar is named by URL and guessed by the loader.
+   */
+  index?: File
 }
 
 /**

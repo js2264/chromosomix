@@ -577,3 +577,25 @@ export function formatLimit(value: number): string {
   if (magnitude >= 1) return String(Number(value.toFixed(2)))
   return String(Number(value.toPrecision(2)))
 }
+
+/**
+ * The one note a lane can show, or `null` when it should show its range instead.
+ *
+ * Only where **every** member is refused. A note is set where a profile drew
+ * nothing (§8.13), and a lane holds one profile or an overlay group of them —
+ * so reading it off the first member alone would let one refused alignment lane
+ * take the value range away from the bigWig overlaid with it, which is drawing
+ * fine and is the thing the reader is looking at.
+ *
+ * The first note rather than a joined list, for the same reason it is kept
+ * short: it is drawn in the name column's gutter, and two sentences there widen
+ * that column for every lane in the stack.
+ */
+export function laneNote(
+  profiles: ReadonlyArray<{ profile: PixelProfile }>,
+): { kind: 'text'; text: string } | null {
+  if (profiles.length === 0) return null
+  const notes = profiles.map((row) => row.profile.note)
+  if (notes.some((note) => note === undefined)) return null
+  return { kind: 'text', text: notes[0] as string }
+}

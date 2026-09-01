@@ -247,3 +247,60 @@ export function baiBytes(
   }
   return out
 }
+
+export interface TestCsiBin {
+  bin: number
+  /** The lowest virtual offset in this bin — CSI's stand-in for a linear index. */
+  loffset: number
+  chunks: Array<[number, number]>
+}
+
+/**
+ * A `.csi` body — **uncompressed**; wrap it with {@link bgzfBlock} to make a file.
+ *
+ * CSI is the index a reference longer than 2^29 bp must have, because BAI
+ * cannot address one. It differs from BAI in three ways that all matter to a
+ * reader: its geometry is declared rather than fixed, it carries a `loffset`
+ * per bin instead of a linear index, and — unlike a `.bai` — it is BGZF
+ * compressed, like a `.tbi`.
+ */
+export function csiBytes(
+  refs: TestCsiBin[][],
+  minShift = 14,
+  depth = 6,
+  aux = new Uint8Array(0),
+): Uint8Array {
+  let size = 16 + aux.length + 4
+  for (const bins of refs) {
+    size += 4
+    for (const bin of bins) size += 4 + 8 + 4 + bin.chunks.length * 16
+  }
+  const out = new Uint8Array(size)
+  const view = new DataView(out.buffer)
+  out.set([0x43, 0x53, 0x49, 1], 0) // 'CSI\1'
+  view.setInt32(4, minShift, true)
+  view.setInt32(8, depth, true)
+  view.setInt32(12, aux.length, true)
+  out.set(aux, 16)
+  let at = 16 + aux.length
+  view.setInt32(at, refs.length, true)
+  at += 4
+  for (const bins of refs) {
+    view.setInt32(at, bins.length, true)
+    at += 4
+    for (const bin of bins) {
+      view.setUint32(at, bin.bin, true)
+      at += 4
+      view.setBigUint64(at, BigInt(bin.loffset) << 16n, true)
+      at += 8
+      view.setInt32(at, bin.chunks.length, true)
+      at += 4
+      for (const [from, to] of bin.chunks) {
+        view.setBigUint64(at, BigInt(from) << 16n, true)
+        view.setBigUint64(at + 8, BigInt(to) << 16n, true)
+        at += 16
+      }
+    }
+  }
+  return out
+}

@@ -273,9 +273,13 @@ So that the absence of each is legible as a decision rather than as an oversight
 *(BAM was on this list, and is not any more.* The line read "real formats, wrong app — a contact-map
 browser that reads alignments is two applications", and the strongest part of it was never the
 formats but the *scope*: a viewer that reads alignments in order to build contact matrices from them
-would indeed be a second application. That is still refused, at SPECS §13. What is built instead is
-narrower and is an annotation like any other — a coverage lane over the genome the map is already
-about, with the pile and the consensus that follow from it living only where a base can have a pixel.
+would indeed be a second application. That is still refused, at SPECS §13. What is *specified*
+instead is narrower and is an annotation like any other: a coverage lane over the genome the map is
+already about, with a consensus band and a pile of individual reads above it in zoom, living only
+where a base can have a pixel (§8.13). **What is built so far is the reader and the coverage lane.**
+The pile and the consensus are specified and not yet drawn, which is a fact worth writing down here
+rather than leaving a reader to discover: this entry describes a decision that has been taken and a
+feature that is part-built.
 The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` collides with the
 C1/C3 corollary, so that corollary is now *scoped* — it protects the contact map's opening path,
 which is what makes the no-preprocessing claim true — and the narrow rule that replaces it is stated

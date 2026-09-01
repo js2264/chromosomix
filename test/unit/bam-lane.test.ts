@@ -206,22 +206,56 @@ describe('the two refusals', () => {
     // commonest remote failure is no index at that address rather than a
     // corrupt one. Saying "could not be read" would send a reader looking for
     // a broken file that does not exist.
-    const response = await ask({
-      kind: 'load',
-      entry: 'e-remote',
-      source: {
-        kind: 'remote',
-        url: 'https://example.invalid/reads.bam',
-        name: 'reads.bam',
-        index: 'https://example.invalid/reads.bam.bai',
-      },
-      mapContigs: [],
-    })
-    expect(response.type).toBe('error')
-    const message = (response as { message: string }).message
-    // Whatever failed first — the fetch of the file or of its index — the way
-    // out is named, because there is no other place to put an index URL.
-    expect(message.length).toBeGreaterThan(0)
+    //
+    // Served here rather than pointed at a dead host, because a host that does
+    // not resolve fails at the *file* read and never reaches the branch this
+    // test is named after.
+    const { bam } = await bamFile()
+    const bytes = new Uint8Array(await bam.arrayBuffer())
+    const previous = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(typeof input === 'string' || input instanceof URL ? input : input.url)
+      if (url.endsWith('.bai') || url.endsWith('.csi')) {
+        return new Response(null, { status: 404, statusText: 'Not Found' })
+      }
+      const range = /bytes=(\d+)-(\d*)/.exec(
+        String((init?.headers as Record<string, string> | undefined)?.['range'] ?? ''),
+      )
+      const from = range === null ? 0 : Number(range[1])
+      const to = range === null || range[2] === '' ? bytes.length - 1 : Number(range[2])
+      const slice = bytes.slice(from, Math.min(to + 1, bytes.length))
+      return new Response(slice as unknown as BodyInit, {
+        status: range === null ? 200 : 206,
+        headers: {
+          'content-length': String(slice.length),
+          'content-range': `bytes ${from}-${from + slice.length - 1}/${bytes.length}`,
+        },
+      })
+    }) as typeof fetch
+
+    try {
+      const response = await ask({
+        kind: 'load',
+        entry: 'e-remote',
+        source: {
+          kind: 'remote',
+          url: 'https://host.example/reads.bam',
+          name: 'reads.bam',
+          index: 'https://host.example/reads.bam.bai',
+        },
+        mapContigs: [],
+      })
+      expect(response.type).toBe('error')
+      const message = (response as { message: string }).message
+      // The branch the test is named after: the file read fine, the index did
+      // not exist at the guessed address, and the way out is the one convention
+      // there is for saying where it really is.
+      expect(message).toContain('No index could be read')
+      expect(message).toContain('#index=')
+      expect(message).not.toContain('samtools index')
+    } finally {
+      globalThis.fetch = previous
+    }
   })
 
   it('tells a broken index apart from an absent one', async () => {
@@ -345,8 +379,12 @@ describe('the coverage lane', () => {
     })
     const refused = (wide as { payload: TrackSampleSet }).payload
     expect(refused.regions).toHaveLength(0)
-    expect(refused.note).toContain('MB of reads here')
+    // Short on purpose: it is drawn where the value range goes, in the name
+    // column's gutter, so a sentence of advice there widens that column for
+    // every lane in the stack.
+    expect(refused.note).toContain('MB of reads')
     expect(refused.note).toContain('zoom in')
+    expect(refused.note?.length ?? 0).toBeLessThan(40)
 
     // And the same file at a width it *can* afford still draws, so the cap is a
     // ceiling rather than a lane that never works.

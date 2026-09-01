@@ -1577,6 +1577,11 @@ wrote (§18.7).
 A `.bam` opens as a lane, and it is the first kind here that arrives with a rule of its own attached
 to it (§1). Everything below is that rule and what follows from it.
 
+**What is built is the reader and the coverage band.** The consensus band and the pile of individual
+reads are specified here — the rung rule they follow, the surface they are confined to and why — and
+are not yet drawn. That is said at the top rather than left to be inferred, because a specification
+that reads as a description of working software is worse than one that is merely incomplete.
+
 **The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
 file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
 gigabytes and the demo yeast one is not the case worth designing for. The index is the only thing
@@ -1628,9 +1633,10 @@ covered: it is reference the read is aligned *across* rather than *over*, and co
 RNA-seq gene as a solid block and erases the only thing the picture was for. A `D` is covered,
 because a deletion is a base the read asserts something about. Secondary and supplementary
 alignments are excluded, because they are one molecule reported twice and they cluster at repeats and
-breakpoints — the loci where the number is being read most carefully. Duplicates are **kept** unless
-the reader asks otherwise: marking them is a pipeline's decision, and hiding them silently would make
-this app disagree with every other reading of the same file. And the value is covered bases per bin
+breakpoints — the loci where the number is being read most carefully. Duplicates are **kept**: marking them is a
+pipeline's decision, and hiding them silently would make this app disagree with every other reading
+of the same file. The filter that would let a reader exclude them exists in the reader and has no
+control on the lane yet, which is the honest statement of where that is. And the value is covered bases per bin
 divided by bin width rather than a count of reads touching the bin, which is the same number at base
 resolution and an order of magnitude smaller at any other.
 
@@ -1747,7 +1753,7 @@ Every refusal names the file's actual state and the concrete fix.
 | BAM with no index beside it | State that a BAM is read by region and has no whole-file fallback, name the sidecar to drop, and give `samtools index <file>`. Distinct from the row below: "there is no index" and "the index you gave me is not one" have different fixes (§8.13) |
 | BAM whose index cannot be read | Name what went wrong reading it, and give `samtools index <file>` to re-make it |
 | BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>` |
-| CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b` |
+| CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name; a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
 
 ---
 
@@ -1794,7 +1800,7 @@ the cost it exists to police:
 
 | Operation | Budget |
 |---|---|
-| Open a BAM: header + index | ≤ 2 range requests, and the index read is reported in **bytes** because a request count says nothing useful about a whole-file read |
+| Open a BAM: header + index | ≤ 3 range requests — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
 | One alignment window | ≤ 5 coalesced range requests |
 | Pan inside the window already fetched | 0 requests |
 | A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |

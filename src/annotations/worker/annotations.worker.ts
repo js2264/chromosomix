@@ -13,7 +13,7 @@
  */
 
 import { BigBed, BigWig } from '@gmod/bbi'
-import { BGZF_MAX_BLOCK, inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
+import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
 import { isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
@@ -572,14 +572,16 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   // makes below, and the reason both are answered here rather than routed to
   // the reader worker. No index is needed to read a header, so this question is
   // answerable for a file that {@link load} would go on to refuse.
-  if (isBgzf(head) && (await looksLikeBam(handle))) {
+  if (isBgzf(head)) {
     const size = await sizeOf(handle)
-    const header = await readBamHeader(handle, size ?? Number.MAX_SAFE_INTEGER)
-    return {
-      format: 'bam',
-      contigs: header.refs.map((ref) => ({ name: ref.name, length: ref.length })),
-      origin: 'features',
-      exact: true,
+    const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
+    if (header !== null) {
+      return {
+        format: 'bam',
+        contigs: header.refs.map((ref) => ({ name: ref.name, length: ref.length })),
+        origin: 'features',
+        exact: true,
+      }
     }
   }
 
@@ -818,8 +820,17 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   // container, so the question is one inflate of the first block deep. A
   // bgzipped *text* file falls through it and takes the tabix path it always
   // did.
-  if (isBgzf(head) && (await looksLikeBam(handle))) {
-    return loadBam(entry, source, handle, mapContigs)
+  if (isBgzf(head)) {
+    const size = await sizeOf(handle)
+    const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
+    // A BGZF file that is not a BAM is a bgzipped text file, and takes the
+    // tabix road below exactly as it always did.
+    if (header !== null) {
+      if (size === null) {
+        throw new Error(`${source.name} cannot be measured, and a BAM is read by byte range.`)
+      }
+      return loadBam(entry, source, handle, mapContigs, header, size)
+    }
   }
   if (looksLikeFasta(head)) return loadFasta(entry, await readFasta(source, handle), mapContigs)
 
@@ -1377,29 +1388,37 @@ const HEADER_MAX_READ = 1 << 24
  * compressed. A bgzipped GTF answers `false` here and goes down the tabix road
  * it always did.
  */
-async function looksLikeBam(handle: BlobFile | RemoteFile): Promise<boolean> {
-  try {
-    const first = await inflateBgzf(await handle.read(BGZF_MAX_BLOCK, 0), 0)
-    return isBam(first)
-  } catch {
-    // Not inflatable is not a BAM, and is not this function's error to raise:
-    // the road it falls through to reads the file whole and reports properly.
-    return false
-  }
-}
-
-/** Read and inflate enough of the front of the file to hold the whole header. */
-async function readBamHeader(
+/**
+ * The front of a BGZF file, inflated once and answered twice.
+ *
+ * *Is this a BAM* and *what is in its header* are two questions about the same
+ * bytes, and asking them separately cost two range requests over the same span
+ * — plus a third, because `load` had already read the first sixty-four bytes to
+ * decide the file was BGZF at all. On a remote file that is §12's whole budget
+ * for opening one, spent before the index is even fetched.
+ *
+ * `null` means the file is BGZF and is not a BAM, which is an ordinary answer:
+ * a bgzipped GTF takes the tabix road from here.
+ */
+async function readBamFront(
   handle: BlobFile | RemoteFile,
   size: number,
-): Promise<BamHeader> {
+): Promise<BamHeader | null> {
   let want = HEADER_FIRST_READ
   for (;;) {
-    const compressed = await handle.read(Math.min(want, size), 0)
-    const inflated = await inflateBgzf(compressed)
+    let inflated: Uint8Array
+    try {
+      inflated = await inflateBgzf(await handle.read(Math.min(want, size), 0))
+    } catch {
+      // Not inflatable is not a BAM, and is not this function's error to raise:
+      // the road it falls through to reads the file whole and reports properly.
+      return null
+    }
+    if (!isBam(inflated)) return null
     const header = readHeader(inflated)
     if (header !== null) return header
-    // `null` means the buffer stopped mid-table. Nothing else does.
+    // `null` from `readHeader` means the buffer stopped mid-table — the
+    // multi-block header of a co-assembly — and nothing else does.
     if (want >= size || want >= HEADER_MAX_READ) {
       throw new Error('This BAM\'s header is truncated: its reference table does not end.')
     }
@@ -1420,13 +1439,10 @@ async function loadBam(
   source: WireSource,
   handle: BlobFile | RemoteFile,
   mapContigs: NamedSequence[],
+  /** Already read, by whichever branch decided this was a BAM — never re-read. */
+  header: BamHeader,
+  size: number,
 ): Promise<LoadResult> {
-  const size = await sizeOf(handle)
-  if (size === null) {
-    throw new Error(`${source.name} cannot be measured, and a BAM is read by byte range.`)
-  }
-  const header = await readBamHeader(handle, size)
-
   if (header.sortOrder === 'queryname' || header.sortOrder === 'unsorted') {
     // Not a technicality: every byte this reader fetches is addressed by an
     // index that only describes a coordinate-sorted file, so a name-sorted one
@@ -1571,7 +1587,11 @@ async function alignmentSamples(
       basesPerPixel,
       regions: [],
       extent: null,
-      note: `${formatBytes(forecast)} of reads here — zoom in to draw them, or load a bigWig of the coverage`,
+      // Short on purpose. It is drawn where a lane's value range goes, and that
+      // sits in the name column's gutter: a sentence of advice there widens the
+      // gutter for every lane in the stack. The number and the way out are what
+      // a reader can act on; the bigWig-sidecar suggestion lives in §8.13.
+      note: `${formatBytes(forecast)} of reads — zoom in`,
     }
   }
 

@@ -106,6 +106,7 @@ import {
   resolveLimits,
   scaledTo,
   type PixelProfile,
+  laneNote,
 } from '../render/tracks'
 import { button, el, fmt } from './dom'
 import { GroupsCard } from './GroupsCard'
@@ -1532,10 +1533,7 @@ export class BrowserView {
           // this width — and a pair of limits under an empty lane would be
           // describing an axis with no data on it, which reads as "there is
           // nothing here" rather than "there is too much here to draw".
-          detail:
-            first.profile.note === undefined
-              ? { kind: 'limits', ...limits }
-              : { kind: 'text', text: first.profile.note },
+          detail: laneNote(lane.profiles) ?? { kind: 'limits', ...limits },
           at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
