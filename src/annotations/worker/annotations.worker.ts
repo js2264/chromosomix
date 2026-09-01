@@ -1581,10 +1581,20 @@ async function alignmentSamples(
   return {
     basesPerPixel,
     regions: out,
-    // Depth is a count and its floor is a real zero, not the smallest value
-    // that happened to be sampled: a lane autoscaled from 3 to 40 would make an
-    // uncovered region look covered.
-    extent: min <= max ? { min: 0, max } : null,
+    // Two decisions in one line.
+    //
+    // The floor is a real zero rather than the smallest value sampled, because
+    // depth is a count: a lane autoscaled from 3 to 40 draws a region with
+    // three reads on it as though it had none, and one with forty as though it
+    // were saturated.
+    //
+    // And an all-zero window has **no** extent rather than `{0, 0}`. A region
+    // with no reads in it is still answered — the lane draws a flat line on its
+    // baseline, which is the honest picture and is distinguishable from a lane
+    // that was never asked — but a zero-height axis is not a range, and handing
+    // one to `resolveLimits` is how a lane ends up rescaled to nothing the
+    // moment a reader pans across an empty contig.
+    extent: min <= max && max > 0 ? { min: 0, max } : null,
   }
 }
 
