@@ -1577,10 +1577,9 @@ wrote (§18.7).
 A `.bam` opens as a lane, and it is the first kind here that arrives with a rule of its own attached
 to it (§1). Everything below is that rule and what follows from it.
 
-**What is built is the reader and the coverage band.** The consensus band and the pile of individual
-reads are specified here — the rung rule they follow, the surface they are confined to and why — and
-are not yet drawn. That is said at the top rather than left to be inferred, because a specification
-that reads as a description of working software is worse than one that is merely incomplete.
+**What is built is the reader, the coverage band, the consensus band and the pile**, with its
+controls, its per-read card, and mates and split reads drawn. What is deliberately absent is listed
+at the end of this section, each with its own reason.
 
 **The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
 file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
@@ -1602,7 +1601,7 @@ looks like an answer. The `@HD SO:` line is read and the refusal says `samtools 
 **Three bands, and only the first of them is anywhere but the browser.** The lane holds *coverage*,
 which is a value per pixel and is therefore a track in every sense §8.2 means — it goes through
 `sample`, inherits `profileOf`, the readout, the four edges and the figure, and joins an autoscale
-group with any other track over the same assembly. Above it in zoom the lane will grow a *consensus*
+group with any other track over the same assembly. Above it in zoom the lane grows a *consensus*
 band and a *pile* of individual reads, and those two exist only in the 1D browser. The rule is
 geometry rather than policy: a read is drawn along the axis at its own extent, and beside a heatmap
 the axis is an axis of matrix bins where the finest unit is a bin and not a base. There is nothing
@@ -1635,10 +1634,40 @@ because a deletion is a base the read asserts something about. Secondary and sup
 alignments are excluded, because they are one molecule reported twice and they cluster at repeats and
 breakpoints — the loci where the number is being read most carefully. Duplicates are **kept**: marking them is a
 pipeline's decision, and hiding them silently would make this app disagree with every other reading
-of the same file. The filter that would let a reader exclude them exists in the reader and has no
-control on the lane yet, which is the honest statement of where that is. And the value is covered bases per bin
-divided by bin width rather than a count of reads touching the bin, which is the same number at base
-resolution and an order of magnitude smaller at any other.
+of the same file. It is offered as a switch instead, and it is off until a reader turns it on. And
+the value is covered bases per bin divided by bin width rather than a count of reads touching the
+bin, which is the same number at base resolution and an order of magnitude smaller at any other.
+
+**The lane's controls travel on the request that needs them.** Colouring, a mapping-quality floor,
+the duplicate switch and the split-read switch are a per-lane style like a colour or a ceiling, and
+they are stored with the session and validated on the way back in. What is worth stating is where
+they are *read*: they are fields on the `sample` and `reads` requests rather than state configured
+once per open file. State would make the answer to a request depend on the order two messages
+happened to arrive in, and it would leave the caches on the main thread keyed on nothing that
+changed — so a reader's click would do nothing until they panned. Carried on the request, a cache
+miss is a mismatched key rather than a race.
+
+The two keys those caches use are deliberately different widths. Everything in the style changes
+which reads exist or how they are packed, so the pile refetches on any of it. Depth is a *count*,
+and a count does not care how the reads that made it were coloured or whether their mates were
+joined — so the coverage cache watches only the floor and the duplicate switch. Without that split,
+trying a colouring would discard a whole-genome coverage scan, which is the most expensive read in
+the application, for a change that cannot move the line by a pixel.
+
+**Split reads are drawn and never counted.** A supplementary alignment is a further piece of one
+molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
+junction a long read spans — so showing it is how a reader sees a split, and counting it would report
+one fragment as two. The switch therefore reaches the pile and cannot reach the depth, which is the
+one asymmetry in this lane and is deliberate. Such a read is drawn outlined rather than faded, since
+faded already means "soft clip" here; and it is never joined to the primary as though it were a
+mate, because it is the same end of the template rather than the other one.
+
+**A click on a read opens a card, and the card fetches nothing.** Every field on it — the flags in
+words, the CIGAR, the clips, the mate's locus, the insert size, the category it was coloured as —
+is already in the pile the lane drew, which is why it answers at once and why it cannot disagree with
+the rectangle that was clicked. The fields a BAM uses to mean "not recorded" are shown as that
+rather than as numbers: `tlen: 0` is no insert size, `MAPQ 255` is not a mapping quality, and a mate
+with no position is not a mate at position zero.
 
 **The reader is written here**, as `hic/format.ts` and `annotations/tabix.ts` are and for the reason
 they both give at length: every read in this application goes through a source that counts its
@@ -1659,7 +1688,9 @@ and the forecast.
 **Not built, and each for its own reason.** No **mate fetching**: a mate lives at `PNEXT`, which is
 off-screen by definition for anything but a short insert, so following them is one uncoalescable
 range request per visible read with no locality at all. The mate's coordinates are decoded and shown;
-the bytes are not chased. No **variant calling** — §18.9's argument about a half-good caller inside a
+the bytes are not chased. No **`SA` walk**: a split read's other pieces are drawn where the window
+already holds them, from the supplementary records themselves, and the tag naming pieces *outside*
+the window is not followed — for the same locality reason the mate is not. No **variant calling** — §18.9's argument about a half-good caller inside a
 viewer applies here with more force, not less. No **contact matrix derived from alignments**: that is
 the second application GAPS' original refusal was drawing a line against, and it still is. And no
 **CRAM**, which is refused on stronger ground than "wrong app": it cannot be decoded without the
@@ -1803,6 +1834,7 @@ the cost it exists to police:
 | Open a BAM: header + index | ≤ 3 range requests — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
 | One alignment window | ≤ 5 coalesced range requests |
 | Pan inside the window already fetched | 0 requests |
+| Change a lane control | one window's reads again, and **0** for the coverage band — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count. A colouring is also a packing, so the pile refetches on it; depth is a count and does not care, which is why the two caches watch keys of different widths (§8.13) |
 | A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
 
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to
@@ -1849,9 +1881,11 @@ Four further non-features arrive with §18, for reasons given at §18.9: no loop
 contact-based contig reordering or scaffolding; **no writing of `.cool`, `.mcool` or `.metacool`** —
 a decision rather than a limitation, since h5wasm could create one; and no differential APA.
 
-Four more arrive with §8.13, each with its own reason rather than one shared one: no **mate
+Five more arrive with §8.13, each with its own reason rather than one shared one: no **mate
 fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
-**variant calling** (§18.9's argument about a half-good caller, which applies here with more force);
+**`SA` walk** — a split read's other pieces are drawn where the window already holds them, and
+following the tag out of the window is the mate problem again under another name; no **variant
+calling** (§18.9's argument about a half-good caller, which applies here with more force);
 no **contact matrix derived from alignments** (the second application the original refusal was
 drawing a line against); and no **CRAM** — which is refused on stronger ground than the others,
 since it cannot be decoded without the exact reference its records name, fetched from a third-party

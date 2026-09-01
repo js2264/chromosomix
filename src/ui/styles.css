@@ -1977,6 +1977,65 @@ p {
   cursor: default;
 }
 
+/* Which colour is which category, under the control that decides it.
+
+   Wraps rather than scrolls: the longest key here is four categories of three
+   words, and a settings body two hundred pixels wide fits them in two lines. */
+.ann-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  padding: 0.1rem 0 0.25rem;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}
+
+.ann-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Round, and the same size as the swatch on a lane's name: a reader should
+   recognise it as the same kind of mark without being told. */
+.ann-key-chip {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* Three switches on one line where they fit, two and one where they do not.
+   `.ann-inline` does not wrap — it is for a pair of fields that must stay
+   level — and these are independent buttons with nothing to line up. */
+.ann-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* A switch that reads as a word rather than as a picture.
+
+   For the two on an alignment lane — join mates, hide duplicates — which have
+   no glyph anyone would recognise and are states the lane is *in* rather than
+   actions. Smaller and quieter than a `.btn` until it is on, so a settings body
+   with two of them in it does not read as two things to press. */
+.btn-chip {
+  padding: 0.15rem 0.45rem;
+  font-size: var(--step--2);
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  /* Two words on two lines reads as two controls. The row wraps instead. */
+  white-space: nowrap;
+}
+
+.btn-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .btn-quiet {
   border-color: transparent;
   background: transparent;

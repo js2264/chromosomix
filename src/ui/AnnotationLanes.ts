@@ -92,6 +92,7 @@ import {
   drawsAProfile,
   hasAMovableAxis,
   isMetadata,
+  readsOf,
   type AnnotationEntry,
   type FeatureSet,
   type LaneEdge,
@@ -1105,6 +1106,11 @@ export class AnnotationLanes {
         domain: frame.domain,
         pixels: Math.abs(frame.alongTo - frame.alongFrom),
         ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
+        // The lane's read controls reach the coverage beside the map too. A
+        // MAPQ floor set in the browser is a claim about which alignments count,
+        // not about one view of them, and a lane that answered it in one place
+        // and not the other would be two different numbers under one name.
+        ...(entry.kind === 'alignments' ? { reads: readsOf(entry.style) } : {}),
       }) ?? null
     )
   }

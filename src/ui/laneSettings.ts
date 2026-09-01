@@ -16,7 +16,9 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import type { AnnotationEntry } from '../annotations/types'
+import { COLOUR_BY, readsOf, type AnnotationEntry, type ColourBy } from '../annotations/types'
+import { groupsFor } from '../annotations/bam/reads'
+import { readPalette } from '../render/alignments'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
 
@@ -227,5 +229,199 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     },
     el('span', { class: 'field-label', text: 'limits' }),
     el('div', { class: 'ann-limits' }, min, max, auto),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The alignment lane's own controls (§8.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a colouring means, in the words that go under it.
+ *
+ * Written out rather than left to the name, because four of the six are only
+ * obvious once you already know what they do: `mate` and `pair` sound like the
+ * same control, and `insert` sounds like an insertion in a CIGAR when what it
+ * colours is the distance between two ends of a template.
+ */
+const COLOUR_HINTS: Record<ColourBy, string> = {
+  strand: 'Forward and reverse, which is the default and the one that costs nothing to read.',
+  pair: 'The strand of the first read in each template — the usual way to read stranded RNA-seq.',
+  insert: 'Template length: pairs further apart than a normal library are picked out.',
+  mate: 'Where the mate went — the same sequence, a different one, or nowhere.',
+  mapq: 'Mapping quality, banded, so an ambiguous pile-up is visible as one.',
+  none: 'One colour, when the point is the shape of the pile rather than the reads in it.',
+}
+
+/**
+ * How the pile is coloured, which is also how it is grouped into rows.
+ *
+ * The one control on this lane a reader is expected to reach for often, so it
+ * is a select rather than a menu: the six answers are short and the difference
+ * between them is the whole reason to look at reads instead of coverage.
+ *
+ * It is not only a palette. A colouring is a partition, and the pile is packed
+ * so that reads of one category share rows (`bam/reads.ts`) — so changing it
+ * refetches, which is why it lives in the style the cache is keyed on rather
+ * than in the renderer.
+ */
+export function colourByField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', { class: 'select' })
+  for (const by of COLOUR_BY) {
+    select.appendChild(el('option', { value: by, text: by, title: COLOUR_HINTS[by] }))
+  }
+  select.value = reads.colourBy
+  select.title = COLOUR_HINTS[reads.colourBy]
+  select.addEventListener('change', () => {
+    const by = select.value as ColourBy
+    select.title = COLOUR_HINTS[by]
+    store.restyle(entry.id, { reads: { ...readsOf(entry.style), colourBy: by } })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'colour by' }),
+    select,
+  )
+}
+
+/**
+ * The key: which colour is which category.
+ *
+ * Here rather than on the canvas, and that is a decision rather than a
+ * shortcut. A legend drawn in the lane has to go somewhere, and every place in
+ * an alignment lane is already something — the pile fills it, the coverage band
+ * is a curve, the gutter is the name. Drawn in the card it sits directly under
+ * the control that decides it, it can be read at any lane height, and it is
+ * selectable text rather than pixels.
+ *
+ * It is built from `groupsFor` and `readPalette` — the same two functions the
+ * worker and the renderer use — so it cannot drift from the picture. Nothing
+ * about it depends on data being loaded, which is why it is right even while
+ * the first window of reads is still being fetched.
+ */
+export function colourLegend(entry: AnnotationEntry): HTMLElement | null {
+  const groups = groupsFor(readsOf(entry.style).colourBy)
+  // One category is not a key, it is a restatement of the lane's own colour.
+  if (groups.length <= 1) return null
+  const colours = readPalette(groups, entry.style.colour)
+  const chips = groups.map((name, i) =>
+    el(
+      'span',
+      { class: 'ann-key-item' },
+      el('span', { class: 'ann-key-chip', style: { background: colours[i] } }),
+      el('span', { text: name }),
+    ),
+  )
+  return el('div', { class: 'ann-key' }, ...chips)
+}
+
+/**
+ * The mapping-quality floor, in the same shape as the height box.
+ *
+ * A number rather than a slider or a set of presets, because MAPQ is a number a
+ * reader arrives already holding: pipelines are written against 20, 30 or 60,
+ * and a control that could not express the one in the protocol would be a
+ * control nobody trusted.
+ *
+ * It changes what is *counted*, not only what is drawn — the coverage band and
+ * the depth beside the map move with it — which is the reason it is worth
+ * having here rather than as a rendering trick.
+ */
+export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const box = el('input', {
+    class: 'input input-num ann-size',
+    type: 'number',
+    value: String(reads.minMapq),
+    title:
+      'Skip alignments below this mapping quality. It changes the depth as well as the pile, ' +
+      'so the coverage here agrees with what the reads show. 0 keeps everything.',
+  })
+  box.min = '0'
+  box.max = '255'
+  box.step = '1'
+  box.addEventListener('change', () => {
+    const typed = Math.round(Number(box.value))
+    const current = readsOf(entry.style)
+    if (!Number.isFinite(typed)) {
+      box.value = String(current.minMapq)
+      return
+    }
+    const clamped = Math.max(0, Math.min(255, typed))
+    box.value = String(clamped)
+    store.restyle(entry.id, { reads: { ...current, minMapq: clamped } })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'min MAPQ' }),
+    box,
+  )
+}
+
+/**
+ * The three switches: join mates, show split reads, hide marked duplicates.
+ *
+ * Text buttons rather than icons, and together on one row, because none of them
+ * has a picture anyone would recognise and all three are states the lane is
+ * *in*. They carry `aria-pressed` for the same reason the flip does.
+ *
+ * `duplicates` reads as what it *hides* rather than as what it keeps, which is
+ * the way round the reader is thinking about it — and it is off by default, on
+ * the argument `bam/pile.ts` makes: marking duplicates is a pipeline's
+ * decision, and hiding them unasked would make this app disagree with every
+ * other reading of the same file.
+ */
+export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const pairs = button(
+    'pairs',
+    () => store.restyle(entry.id, { reads: { ...readsOf(entry.style), pairs: !readsOf(entry.style).pairs } }),
+    {
+      class: `btn btn-chip${reads.pairs ? ' is-on' : ''}`,
+      title:
+        'Draw the thread joining the two ends of a template, so a pair reads as one fragment ' +
+        'rather than as two reads that happen to be near each other.',
+    },
+  )
+  pairs.setAttribute('aria-pressed', String(reads.pairs))
+
+  const duplicates = button(
+    'hide duplicates',
+    () =>
+      store.restyle(entry.id, {
+        reads: { ...readsOf(entry.style), hideDuplicates: !readsOf(entry.style).hideDuplicates },
+      }),
+    {
+      class: `btn btn-chip${reads.hideDuplicates ? ' is-on' : ''}`,
+      title:
+        'Skip alignments flagged as PCR or optical duplicates. Off by default: whether they are ' +
+        'marked at all is the pipeline’s decision, not this viewer’s.',
+    },
+  )
+  duplicates.setAttribute('aria-pressed', String(reads.hideDuplicates))
+
+  const splits = button(
+    'split reads',
+    () =>
+      store.restyle(entry.id, {
+        reads: { ...readsOf(entry.style), splits: !readsOf(entry.style).splits },
+      }),
+    {
+      class: `btn btn-chip${reads.splits ? ' is-on' : ''}`,
+      title:
+        'Also draw supplementary alignments — the further pieces of a read the aligner had to ' +
+        'split across a breakpoint. They are outlined, and they are never counted in the depth.',
+    },
+  )
+  splits.setAttribute('aria-pressed', String(reads.splits))
+
+  return el(
+    'div',
+    { class: 'field field-block' },
+    el('span', { class: 'field-label', text: 'reads' }),
+    el('div', { class: 'ann-chips' }, pairs, splits, duplicates),
   )
 }

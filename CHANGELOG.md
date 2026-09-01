@@ -14,15 +14,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Alignment files open, and their coverage is a lane.** The reader and the
-  coverage band; the consensus band and the pile of individual reads are
-  specified at SPECS §8.13 and are not drawn yet. Drop a `.bam` with its
+- **Alignment files open, and their reads are a lane.** Drop a `.bam` with its
   `.bai` or `.csi` beside it — or point at one by URL — and the depth over the
   window is drawn like any other track: on any of the map's four edges, in the
   1D browser, with limits, an autoscale group, the ceiling drag, the readout and
   the exported figure, because it goes through the one funnel every lane's
   values already come out of. A `.bam` can also *start* a browser session on its
   own, since its `@SQ` table is every sequence and its exact length.
+
+  **Zoom in and the lane stops being a curve.** Past the width at which a read
+  is more than a few pixels it becomes a pile of individual molecules in packed
+  rows, with a consensus band between the pile and the depth — bars while a base
+  owns a pixel, a stacked sequence logo once a column is wide enough to hold a
+  letter. Both live only in the 1D browser, and that is geometry rather than
+  policy: beside a heatmap the axis is an axis of matrix bins, where the finest
+  unit is a bin and not a base, so there is nothing for a read to be drawn *on*.
+
+  A read is a rectangle only when nothing happened to it, and the exceptions are
+  what anyone is looking at: a deletion is a rule through a gap because the read
+  spans it and says it is absent, a spliced gap is a thinner rule because the
+  read says nothing about what it skipped, an insertion is a tick between two
+  bases with no width of its own, a soft clip is drawn faintly outside the
+  aligned extent, and a mismatch is a coloured column — from `=`/`X` where the
+  aligner wrote them, from `MD` where it did not, and from a FASTA already open
+  in this session where neither is there. The lane says which of the three it
+  used, or that it had nothing to compare against, rather than drawing an
+  agreement it did not check.
+
+  **The controls are the pile's, not a track's.** Colour by strand, by pair, by
+  insert size, by where the mate went, or by mapping quality — a colouring is
+  also a grouping, so it decides how the pile packs into rows — with a key under
+  the picker naming every category. Beside it a mapping-quality floor, which
+  moves the depth as well as the reads so the band and the pile cannot disagree,
+  and three switches: join mates, show split reads, hide marked duplicates. All
+  of it is stored with the session.
+
+  **Split reads are drawn and never counted.** A supplementary alignment is a
+  further piece of one molecule the aligner had to split across a breakpoint, so
+  drawing it is how a reader sees the split and counting it would report one
+  fragment as two. It is outlined rather than faded — faded already means "soft
+  clip" here — and it is never joined to its primary as though it were a mate.
+
+  **A click on a read opens a card and fetches nothing.** The flags in words
+  with the raw number beside them, the CIGAR, the clips, where the mate went,
+  the insert size, the category it was coloured as. Every field is already in
+  the pile the lane drew, which is why it answers at once and why it cannot
+  disagree with the rectangle that was clicked — and the fields a BAM uses to
+  mean "not recorded" are shown as that rather than as numbers.
 
   **This is the one format allowed to require a companion file, and that took an
   argument rather than a line of code.** SPECS §13 listed required companion
@@ -55,9 +93,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   an RNA-seq gene as a solid block. Secondary and supplementary alignments are
   excluded, since they are one molecule reported twice and they cluster exactly
   where the number is read most carefully. Duplicates are **kept** unless asked
-  otherwise — the filter is in the reader and has no control on the lane yet —
-  because marking them is a pipeline's decision and hiding them silently would
-  disagree with every other reading of the same file.
+  otherwise, because marking them is a pipeline's decision and hiding them
+  silently would disagree with every other reading of the same file.
 
   The reader is written here, with no new runtime dependency, for the reason
   `hic/format.ts` and `annotations/tabix.ts` both give at length. `@gmod/bam`

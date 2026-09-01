@@ -32,7 +32,7 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { drawnFromSamples, hasTrackControls } from '../annotations/types'
+import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
   BAND_GAP,
@@ -46,12 +46,19 @@ import {
   pileDetail,
   READ_ROW,
   READ_ROW_GAP,
+  readAt,
   readColoursFor,
   readRungFor,
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import type { AnnotationEntry, BaseRegion, FeatureSet, ReadWindow } from '../annotations/types'
+import type {
+  AnnotationEntry,
+  BaseRegion,
+  FeatureSet,
+  ReadPile,
+  ReadWindow,
+} from '../annotations/types'
 import {
   assemblyAxis,
   findContig,
@@ -139,6 +146,8 @@ import {
 import { LaneEditor } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
+import { openReadDialog } from './ReadDialog'
+import { FLAG } from '../annotations/bam/format'
 import {
   NAME_COLUMN_DEFAULT,
   clampNameColumn,
@@ -353,6 +362,16 @@ export class BrowserView {
   private lanes: Lane[] = []
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: ReturnType<typeof layoutFeatures> }>()
+  /**
+   * The band each alignment lane's reads were drawn in, for the same reason.
+   *
+   * A pile band is three bands down from the lane's own rectangle — name,
+   * coverage, consensus — and recomputing that split at click time would be the
+   * geometry written twice, which §8.4 exists to forbid. What is kept is the
+   * frame the paint actually used, so a click cannot land on a different row
+   * from the one under the pointer.
+   */
+  private readonly pileBands = new Map<string, { frame: LaneFrame; window: ReadWindow }>()
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
   private gripping: string | null = null
@@ -1315,6 +1334,7 @@ export class BrowserView {
     drawBoundaries(ctx, ruler, this.rulerHeight, foot)
 
     this.layouts.clear()
+    this.pileBands.clear()
     this.rangeHits = []
     this.nameHits = []
     this.marks = []
@@ -1497,6 +1517,7 @@ export class BrowserView {
     const row = lane.reads[0]
     const { entry, frame } = lane
     const style = entry.style
+    const reads = readsOf(style)
     // The label's strip first, so the name and the read count are not read
     // through the depth curve — see `NAME_BAND`.
     const [, coverage, consensus, pile] = laneBands(
@@ -1518,7 +1539,11 @@ export class BrowserView {
       drawTrack(ctx, coverage, depth.profile, {
         colour: style.colour,
         mode: style.mode,
-        limits: depth.limits,
+        // Through `resolveLimits`, so a lane pinned to a fixed ceiling keeps it
+        // across the read rung. Without it the band autoscales here and obeys
+        // the typed pair one zoom step out, which reads as the axis jumping on
+        // its own — and it is the same control in the same card either way.
+        limits: resolveLimits(style.limits, depth.limits),
         guideColour: palette.labelColor,
         haloColour: palette.labelHaloColor,
         font: scaleFont(LANE_FONT),
@@ -1543,13 +1568,15 @@ export class BrowserView {
       }
     }
 
+    this.pileBands.set(entry.id, { frame: pile, window: row.window })
+
     const colours = readColoursFor(row.window, style.colour)
     for (const one of row.window.piles) {
       drawReads(ctx, pile, this.axis, one, {
         colours,
         rowHeight: READ_ROW,
         rowGap: READ_ROW_GAP,
-        pairs: true,
+        pairs: reads.pairs,
         diffs: row.window.diffs !== 'none',
         opacity: style.opacity,
         font: scaleFont(LANE_FONT),
@@ -1881,6 +1908,7 @@ export class BrowserView {
             // span over the pixel span *is* bases per pixel.
             basesPerPixel:
               (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
+            style: readsOf(member.style),
           })
           if (window !== null) {
             lane.reads.push({ entry: member, window, rung })
@@ -1899,6 +1927,7 @@ export class BrowserView {
         domain: lane.frame.domain,
         pixels: this.scale.pixels,
         ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
+        ...(member.kind === 'alignments' ? { reads: readsOf(member.style) } : {}),
       })
       lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
     }
@@ -2742,6 +2771,26 @@ export class BrowserView {
         if (band !== null) this.goTo(band.contig)
         return
       }
+      // Reads first. A pile fills the lane it is in, so every click inside one
+      // would otherwise fall through to "reveal this track" — which is the
+      // right answer for the gaps between reads and the wrong one for the reads
+      // themselves.
+      const read = this.readAtPoint(x, y)
+      if (read !== null) {
+        this.featureDialog?.close()
+        const span = paddedSpan(read.pile.refStart[read.index], read.pile.refEnd[read.index])
+        const contig = read.pile.contig
+        this.featureDialog = openReadDialog({
+          pile: read.pile,
+          index: read.index,
+          source: read.source,
+          onGoTo: () => this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`),
+          onClose: () => {
+            this.featureDialog = null
+          },
+        })
+        return
+      }
       const hit = this.featureAtPoint(x, y)
       if (hit === null) {
         // Nothing under the pointer but the lane itself, and a press on a lane
@@ -2779,6 +2828,32 @@ export class BrowserView {
         },
       })
     }, DOUBLE_CLICK_MS)
+  }
+
+  /**
+   * The read under a canvas point, or `null`.
+   *
+   * {@link featureAtPoint}'s twin, over the bands the last paint recorded. It
+   * asks `readAt` — the drawing module's own inverse — rather than reimplementing
+   * the row arithmetic here, which is what keeps the click and the rectangle
+   * agreeing (§8.4).
+   */
+  private readAtPoint(
+    x: number,
+    y: number,
+  ): { pile: ReadPile; index: number; source: string } | null {
+    for (const lane of this.lanes) {
+      const band = this.pileBands.get(lane.entry.id)
+      if (band === undefined) continue
+      // Backwards, so a lane drawn over another answers first — the same
+      // last-drawn-wins rule `featureAt` follows within one lane.
+      for (let i = band.window.piles.length - 1; i >= 0; i--) {
+        const pile = band.window.piles[i]
+        const at = readAt(band.frame, this.axis, pile, READ_ROW, READ_ROW_GAP, x, y)
+        if (at !== null) return { pile, index: at, source: lane.entry.label }
+      }
+    }
+    return null
   }
 
   private featureAtPoint(
@@ -2929,6 +3004,24 @@ export class BrowserView {
         )
         parts.push(`${entry.label} ${letter}`)
       }
+    }
+    const read = this.readAtPoint(x, y)
+    if (read !== null) {
+      const { pile, index } = read
+      const name = pile.names[index] ?? ''
+      const strand = (pile.flags[index] & FLAG.REVERSE) !== 0 ? '−' : '+'
+      rows.push(
+        el('div', { class: 'cell-tip-row' }, el('span', {
+          class: 'cell-tip-key',
+          text: `${name === '' ? 'read' : name}   ${pile.contig}:${fmt.int(pile.refStart[index] + 1)}–${fmt.int(pile.refEnd[index])} (${strand})`,
+        })),
+      )
+      rows.push(
+        el('div', { class: 'cell-tip-row' }, el('span', {
+          class: 'hint',
+          text: `MAPQ ${pile.mapq[index]} · click for the whole record`,
+        })),
+      )
     }
     const feature = this.featureAtPoint(x, y)
     if (feature !== null) {

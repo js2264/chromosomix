@@ -41,7 +41,14 @@ import type {
   Placement,
   StoredEntry,
 } from './types'
-import { LANE_EDGES, defaultStyle, hasTrackControls, normalisePlacement, placementOn } from './types'
+import {
+  LANE_EDGES,
+  defaultStyle,
+  hasTrackControls,
+  normalisePlacement,
+  placementOn,
+  readStyleOf,
+} from './types'
 
 /**
  * The colour a newly loaded annotation gets, cycled.
@@ -1002,7 +1009,18 @@ export class AnnotationStore {
       // over it would cost the import. See {@link readLead}.
       const { lead: raw, ...rest } = value
       const lead = readLead(raw)
-      rows.push(lead === undefined ? rest : { ...rest, lead })
+      const row = lead === undefined ? rest : { ...rest, lead }
+      // The second field normalised here rather than checked in the guard, and
+      // for the opposite reason to `lead`'s: this one has a *safe* reading of
+      // every malformed value, so clamping it costs nothing and refusing the
+      // row would cost the file. The guard checks only that `style` is an
+      // object, which is enough to hand a renderer a negative MAPQ floor or a
+      // colouring it has never heard of — see {@link readStyleOf}.
+      rows.push(
+        row.style.reads === undefined
+          ? row
+          : { ...row, style: { ...row.style, reads: readStyleOf(row.style.reads) } },
+      )
     }
     return rows
   }

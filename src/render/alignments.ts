@@ -44,10 +44,14 @@ import { BASE_COLOURS } from './sequence'
  * is why it is five entries in the same order as {@link BASE_COLOURS}.
  */
 const BASE_LETTERS = ['A', 'C', 'G', 'T', 'N'] as const
-import { laneIsHorizontal, laneRect, laneX, laneY, type LaneFrame } from './lane'
+import { canvasToAcross, laneIsHorizontal, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import { basePixels } from './sequence'
 import type { BaseCounts, ReadPile } from '../annotations/types'
 import { BASE_LANES } from '../annotations/bam/reads'
+import { FLAG } from '../annotations/bam/format'
+
+/** The one flag bit this module draws differently; see {@link drawOne}. */
+const SUPPLEMENTARY = FLAG.SUPPLEMENTARY
 import type { LocusAxis } from './locus'
 import type { PixelProfile } from './tracks'
 
@@ -178,6 +182,58 @@ export function drawReads(
 }
 
 /**
+ * The read under a canvas point, or `null`.
+ *
+ * The inverse of {@link drawReads}, and it has to be built out of the same two
+ * conversions — the axis one and `laneRect`'s — or a click lands on the read
+ * above the one that was pointed at. That is the reason it lives here beside
+ * the drawing rather than in the view: the two answers are one piece of
+ * geometry, and §8.4 says a lane's geometry is decided in one place.
+ *
+ * The *last* match wins, as `featureAt` does and for the same reason: within a
+ * row the reads are in axis order and later ones paint over earlier ones, so
+ * the one on top is the one that was clicked.
+ *
+ * Soft clips are inside the target. They are drawn, faintly, outside the
+ * aligned extent — and a reader who clicks the faint part is asking about the
+ * read it belongs to, not about the gap behind it.
+ */
+export function readAt(
+  frame: LaneFrame,
+  axis: LocusAxis,
+  pile: ReadPile,
+  rowHeight: number,
+  rowGap: number,
+  x: number,
+  y: number,
+): number | null {
+  const segment = axis.segmentOf(pile.contig)
+  if (segment === null || !(segment.bpPerUnit > 0)) return null
+  const along = laneIsHorizontal(frame.orientation) ? x : y
+  const across = canvasToAcross(frame, laneIsHorizontal(frame.orientation) ? y : x)
+  if (across < 0 || across > frame.thickness) return null
+  // The gap below a row belongs to that row. It is two pixels and a pointer is
+  // not that accurate, so treating it as a miss would make every third click on
+  // a dense pile do nothing.
+  const row = Math.floor(across / (rowHeight + rowGap))
+
+  const at = (base: number): number =>
+    frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
+  let found: number | null = null
+  for (let i = 0; i < pile.length; i++) {
+    if (pile.row[i] !== row) continue
+    // A read narrower than a pixel is still a target: the drawn block is
+    // rounded to one, so a hit area measured exactly would be unhittable at the
+    // zoom where reads first appear.
+    const a = at(pile.refStart[i] - pile.clipStart[i])
+    const b = at(pile.refEnd[i] + pile.clipEnd[i])
+    if (along < Math.min(a, b) - 1 || along > Math.max(a, b) + 1) continue
+    found = i
+  }
+  return found
+}
+
+/**
  * One read: its blocks, its gaps and its indels.
  *
  * Walks the CIGAR rather than filling the extent, because the extent is the one
@@ -236,6 +292,27 @@ function drawOne(
       continue
     }
     // `S`, `H` and `P` move along the read, never along the reference.
+  }
+
+  // A supplementary alignment is outlined, and nothing else is. It is one piece
+  // of a molecule the aligner split across a breakpoint, so it must be readable
+  // *as* a piece — a plain block would say "another read here", which is the
+  // one thing it is not. An outline rather than a fainter fill, because faint
+  // is already what a soft clip means on this lane and two faint things a row
+  // apart cannot be told apart.
+  if ((pile.flags[i] & SUPPLEMENTARY) !== 0) {
+    const [x, y, w, h] = laneRect(
+      frame,
+      at(pile.refStart[i]),
+      at(pile.refEnd[i]),
+      across,
+      across + paint.rowHeight,
+    )
+    ctx.save()
+    ctx.strokeStyle = paint.guideColour
+    ctx.lineWidth = 1
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, w - 1), Math.max(1, h - 1))
+    ctx.restore()
   }
 }
 
@@ -682,7 +759,18 @@ export function readColoursFor(
   window: { piles: readonly ReadPile[] },
   colour: string,
 ): string[] {
-  const groups = window.piles[0]?.groups ?? ['reads']
+  return readPalette(window.piles[0]?.groups ?? ['reads'], colour)
+}
+
+/**
+ * The palette for a set of categories, from the lane's own colour.
+ *
+ * Split out of {@link readColoursFor} so the settings card can draw the same
+ * key without a pile in hand: the categories are a pure function of the
+ * colouring (`groupsFor`), so a legend built from them cannot disagree with
+ * the picture — which a second hand-written palette eventually would.
+ */
+export function readPalette(groups: readonly string[], colour: string): string[] {
   if (groups.length <= 1) return [colour]
   const base = hueOf(colour)
   return groups.map((_, i) =>

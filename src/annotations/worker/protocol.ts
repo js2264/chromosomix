@@ -19,6 +19,7 @@ import type {
   AnnotationPayload,
   BaseRegion,
   ContigOverlap,
+  ReadStyle,
   ReadWindow,
   Region,
   TrackSampleSet,
@@ -156,6 +157,21 @@ export type AnnotationRequest =
       regions: Region[]
       /** Drives the file's own zoom-level choice; `basesPerSpan` in bbi's terms. */
       basesPerPixel: number
+      /**
+       * The lane's read controls, for the one kind that has any.
+       *
+       * On the request rather than held per entry in the worker, which is the
+       * decision worth recording. A `configure` message setting `OpenBam.filter`
+       * would be one message where this is a field — but it makes the answer to
+       * a `sample` depend on the order two messages happened to arrive in, and
+       * it leaves the cached samples on this side keyed on nothing that changed.
+       * Carrying the controls means a request states in full what it is asking,
+       * and a cache mismatch is a mismatched key rather than a race.
+       *
+       * Optional because no other kind has these controls; absent means the
+       * defaults, which is what every non-alignment lane sends.
+       */
+      reads?: ReadStyle
     }
   // The residues themselves, which only a FASTA can answer and only a view
   // zoomed in far enough to draw them ever asks for. Separate from `sample`
@@ -203,6 +219,12 @@ export type AnnotationRequest =
       maxRows: number
       /** Bases per pixel, so the worker knows whether names could be read. */
       basesPerPixel: number
+      /**
+       * The lane's read controls. Required here, unlike on `sample`: only an
+       * alignment lane ever sends this request, so there is no caller for whom
+       * the field would be meaningless.
+       */
+      reads: ReadStyle
     }
   | { id: number; kind: 'drop'; entry: string }
   /**

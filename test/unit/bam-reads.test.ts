@@ -28,6 +28,9 @@ const OPTIONS = {
   maxReads: 20_000,
   colourBy: 'strand' as const,
   withNames: true,
+  // The header's `@SQ` table, which the worker supplies in the application:
+  // a `next_refID` is an index into it and means nothing without it.
+  refNameOf: (id: number): string | undefined => REFS[id]?.name,
 }
 
 function pileFor(records: TestRecord[], start = 0, end = 2000, options = {}): ReturnType<typeof pileOf> {
@@ -297,7 +300,7 @@ describe('pairs', () => {
       { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'alone', flag: 0x1, nextRefId: 1, nextPos: 5000 },
     ])
     expect(pile.mate[0]).toBe(-1)
-    expect(pile.mateContig[0]).toBe(1)
+    expect(pile.contigs[pile.mateContig[0]]).toBe('chrII')
     expect(pile.matePos[0]).toBe(5000)
   })
 
@@ -306,6 +309,126 @@ describe('pairs', () => {
     records.push({ refId: 0, pos: 500, cigar: '50M', seq: 'A'.repeat(50), name: 'frag1', flag: 0x1 })
     const { pile } = pileFor(records)
     expect([...pile.mate]).toEqual([1, 0, -1])
+  })
+
+  it('does not join a read to its own supplementary alignment', () => {
+    // The case the split-read switch creates: two records, one name, and they
+    // are two pieces of the *same* end rather than the two ends of a template.
+    // Joined, they would be drawn with an insert thread across a breakpoint no
+    // template spans — the picture asserting a fragment that does not exist.
+    const { pile } = pileFor(
+      [
+        { refId: 0, pos: 100, cigar: '50M50S', seq: 'A'.repeat(100), name: 'chim', flag: 0x1 | 0x40 },
+        { refId: 0, pos: 900, cigar: '50S50M', seq: 'A'.repeat(100), name: 'chim', flag: 0x1 | 0x40 | 0x800 },
+      ],
+      0,
+      2000,
+      { filter: { ...DEFAULT_FILTER, exclude: DEFAULT_FILTER.exclude & ~0x800 } },
+    )
+    expect(pile.length).toBe(2)
+    expect([...pile.mate]).toEqual([-1, -1])
+  })
+
+  it('does not join two records that are the same end of a template', () => {
+    // Both first-in-pair: whatever these two are, they are not each other's
+    // mate, and a name is not enough to say that they are.
+    const { pile } = pileFor([
+      { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'twin', flag: 0x1 | 0x40 },
+      { refId: 0, pos: 900, cigar: '50M', seq: 'A'.repeat(50), name: 'twin', flag: 0x1 | 0x40 },
+    ])
+    expect([...pile.mate]).toEqual([-1, -1])
+  })
+})
+
+describe('split reads', () => {
+  const chimera: TestRecord[] = [
+    { refId: 0, pos: 100, cigar: '50M50S', seq: 'A'.repeat(100), name: 'chim', flag: 0x1 | 0x40 },
+    { refId: 0, pos: 900, cigar: '50S50M', seq: 'A'.repeat(100), name: 'chim', flag: 0x1 | 0x40 | 0x800 },
+  ]
+
+  it('leaves supplementary alignments out by default', () => {
+    // `total` here is records that passed the *filter*, not records looked at —
+    // it is what the keep rate is budgeted against — so the excluded piece is
+    // absent from both numbers rather than counted and then dropped.
+    const { pile, total, kept } = pileFor(chimera)
+    expect(total).toBe(1)
+    expect(kept).toBe(1)
+    expect(pile.length).toBe(1)
+    expect(pile.refStart[0]).toBe(100)
+  })
+
+  it('admits them when the filter says so, keeping the flag that says what they are', () => {
+    // The renderer outlines a supplementary alignment and nothing else, so the
+    // bit has to survive into the pile for the drawing to be able to.
+    const { pile } = pileFor(chimera, 0, 2000, {
+      filter: { ...DEFAULT_FILTER, exclude: DEFAULT_FILTER.exclude & ~0x800 },
+    })
+    expect(pile.length).toBe(2)
+    expect(pile.flags[1] & 0x800).toBe(0x800)
+    expect(pile.refStart[1]).toBe(900)
+  })
+})
+
+describe('naming a mate’s sequence', () => {
+  // `next_refID` is an index into the header's `@SQ` list and nothing in a
+  // window of records says what that sequence is called, so the caller supplies
+  // the table. Getting this wrong is the shape of "every read is a
+  // translocation", which is why it is pinned rather than left to the renderer.
+  const REF_NAMES = (id: number): string | undefined => REFS[id]?.name
+
+  it('names the read’s own sequence the way the caller does, not the way the file does', () => {
+    // The naming ladder (§5.9): a file saying `1` under a map saying `chrI`.
+    // Comparing the file's spelling against the window's would report every
+    // ordinary mate as being somewhere else.
+    const bytes = bamBytes([{ name: '1', length: 230_218 }, { name: '2', length: 813_184 }], [
+      { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'a', flag: 0x1, nextRefId: 0, nextPos: 400 },
+    ])
+    const from = readHeader(bytes)?.recordsFrom ?? 0
+    const { pile } = pileOf(bytes, from, 'chrI', 0, 0, 2000, {
+      ...OPTIONS,
+      refNameOf: (id: number) => ['1', '2'][id],
+    })
+    expect(pile.contigs[pile.mateContig[0]]).toBe('chrI')
+  })
+
+  it('carries only the sequences this window’s mates land on', () => {
+    // Not the header's whole table: a scaffolded assembly has a hundred
+    // thousand entries in it, and it would be sent per window.
+    const { pile } = pileFor(
+      [
+        { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'a', flag: 0x1, nextRefId: 0, nextPos: 400 },
+        { refId: 0, pos: 200, cigar: '50M', seq: 'A'.repeat(50), name: 'b', flag: 0x1, nextRefId: 1, nextPos: 900 },
+        { refId: 0, pos: 300, cigar: '50M', seq: 'A'.repeat(50), name: 'c', flag: 0x1, nextRefId: 1, nextPos: 950 },
+      ],
+      0,
+      2000,
+      { refNameOf: REF_NAMES },
+    )
+    expect(pile.contigs).toEqual(['chrI', 'chrII'])
+    expect([...pile.mateContig]).toEqual([0, 1, 1])
+  })
+
+  it('says nothing rather than guessing when it was given no table', () => {
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'a', flag: 0x1, nextRefId: 1, nextPos: 900 },
+    ])
+    const from = readHeader(bytes)?.recordsFrom ?? 0
+    const { pile } = pileOf(bytes, from, 'chrI', 0, 0, 2000, {
+      ...OPTIONS,
+      refNameOf: undefined,
+    })
+    expect(pile.contigs).toEqual([''])
+  })
+
+  it('leaves a record with no mate at minus one', () => {
+    const { pile } = pileFor(
+      [{ refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'a', flag: 0 }],
+      0,
+      2000,
+      { refNameOf: REF_NAMES },
+    )
+    expect(pile.mateContig[0]).toBe(-1)
+    expect(pile.contigs).toEqual([])
   })
 })
 

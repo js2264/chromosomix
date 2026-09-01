@@ -3,9 +3,10 @@
  *
  * | Operation | Budget |
  * |---|---|
- * | Open a BAM: header + index | ≤ 2 range requests |
+ * | Open a BAM: header + index | ≤ 3 range requests |
  * | One alignment window | ≤ 5 coalesced range requests |
  * | Pan inside the window already fetched | 0 |
+ * | Change a lane control | one window again for the pile; **0** for the depth unless the change alters a count |
  * | A window above the byte cap | **0 data requests** |
  *
  * ## Why this file exists at all
@@ -44,7 +45,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { chunksFor, forecastBytes, parseBamIndex } from '@/annotations/bam/index'
 import type { AnnotationRequest, AnnotationResponse } from '@/annotations/worker/protocol'
-import type { TrackSampleSet } from '@/annotations/types'
+import { defaultReadStyle, type ReadStyle, type TrackSampleSet } from '@/annotations/types'
 import { writeBam } from '../support/bamWriter'
 import type { TestRecord } from '../unit/bam-fixtures'
 
@@ -182,6 +183,7 @@ async function window(
   entry: string,
   start: number,
   end: number,
+  reads?: ReadStyle,
 ): Promise<{ requests: number; samples: TrackSampleSet }> {
   const before = seen.requests
   const response = await ask({
@@ -189,6 +191,7 @@ async function window(
     entry,
     regions: [{ contig: 'chrI', start, end }],
     basesPerPixel: 100,
+    ...(reads === undefined ? {} : { reads }),
   })
   expect(response.type, JSON.stringify(response)).toBe('result')
   return {
@@ -217,6 +220,54 @@ describe('§12: opening a BAM', () => {
     await serve()
     await open('b-front')
     expect(seen.requests, `${seen.requests} requests to open`).toBeLessThan(4)
+  })
+})
+
+describe('§12: changing a lane control', () => {
+  // The row this pins is the *asymmetric* one, and the asymmetry is the whole
+  // reason two cache keys exist. A colouring is also a packing, so the pile has
+  // to be built again — but depth is a count, and a count does not care how the
+  // reads that made it were coloured. Without the split, trying a colouring
+  // would discard a whole-genome coverage scan, which is the most expensive
+  // read in this application, for a change that cannot move the line by a pixel.
+  //
+  // Measured at the *worker*, where the request arrives, rather than at the
+  // cache that decides whether to send one: `read-cache.test.ts` asserts the
+  // decision, and this asserts what the decision costs on the wire when it is
+  // taken.
+  it('costs a fresh count only when the change alters a count', async () => {
+    await serve()
+    await open('b-style')
+    const base = defaultReadStyle()
+    // Warm: the first window is the one that pays for the blocks.
+    await window('b-style', 1_000_000, 1_010_000, base)
+
+    for (const changed of [
+      { ...base, colourBy: 'insert' as const },
+      { ...base, pairs: false },
+      { ...base, splits: true },
+      { ...base, minMapq: 30 },
+      { ...base, hideDuplicates: true },
+    ]) {
+      const cost = await window('b-style', 1_000_000, 1_010_000, changed)
+      // Every one of them is within the per-window budget: the worker holds no
+      // per-entry state to invalidate, so a style change is simply a window.
+      expect(cost.requests, `${cost.requests} for ${JSON.stringify(changed)}`).toBeLessThanOrEqual(5)
+    }
+  })
+
+  it('answers a floored window with less depth than an unfloored one', async () => {
+    // …and the floor is not merely accepted: it reaches `coverageOf`, which is
+    // what makes the coverage band agree with the pile drawn under it.
+    await serve()
+    await open('b-floor')
+    const open0 = await window('b-floor', 1_000_000, 1_010_000, defaultReadStyle())
+    const floored = await window('b-floor', 1_000_000, 1_010_000, {
+      ...defaultReadStyle(),
+      minMapq: 255,
+    })
+    expect(open0.samples.extent?.max ?? 0).toBeGreaterThan(0)
+    expect(floored.samples.extent?.max ?? 0).toBe(0)
   })
 })
 

@@ -40,7 +40,7 @@
  */
 
 import { BASE_CODE } from '../fasta'
-import type { BaseCounts, ReadPile } from '../types'
+import type { BaseCounts, ColourBy, ReadPile } from '../types'
 import {
   consumesQuery,
   consumesReference,
@@ -51,9 +51,6 @@ import {
   type RecordCursor,
 } from './format'
 import type { PileFilter } from './pile'
-
-/** How reads are coloured, which is also how they are grouped into rows. */
-export type ColourBy = 'strand' | 'mapq' | 'pair' | 'mate' | 'insert' | 'none'
 
 /** Six counts per position: A, C, G, T, N, deletion. */
 export const BASE_LANES = 6
@@ -70,6 +67,18 @@ export interface PileOptions {
   colourBy: ColourBy
   /** Keep read names, which a reader can only ask for when reads are wide enough. */
   withNames: boolean
+  /**
+   * A file reference id → the name to show for it.
+   *
+   * Handed in because this module has the *ids* and only the worker has the
+   * table: a `next_refID` is an index into the BAM header's own `@SQ` list, and
+   * nothing in a window of records says what that sequence is called. Without
+   * it a mate on another chromosome can only be reported as a number.
+   *
+   * Absent leaves {@link ReadPile.contigs} empty, which is honest — the pile
+   * then reports that it does not know rather than guessing.
+   */
+  refNameOf?: (refId: number) => string | undefined
   /** Reference bases for the window, for mismatches. Absent means none available. */
   reference?: { start: number; bases: Uint8Array }
 }
@@ -669,8 +678,41 @@ function pack(
 
   for (let i = 0; i < length; i++) pile.group[i] = categoryOf(held[i], options.colourBy, refId)
 
+  nameMates(pile, refId, contig, options)
   joinMates(pile, held)
   return pile
+}
+
+/**
+ * Turn each mate's *file* reference id into an index into {@link ReadPile.contigs}.
+ *
+ * Two things happen here and both matter. The ids are compacted — a window
+ * whose mates land on three sequences carries three names, not the header's
+ * whole `@SQ` list, which for a scaffolded assembly is a hundred thousand
+ * strings sent per window.
+ *
+ * And the read's *own* sequence is named with the name the caller asked about
+ * rather than the file's. Those differ whenever the map and the file disagree
+ * about spelling (§5.9): a file saying `1` under a map saying `chr1` would
+ * otherwise report every ordinary mate as being on another sequence, which is
+ * the shape of "this library has translocations everywhere".
+ */
+function nameMates(pile: ReadPile, refId: number, contig: string, options: PileOptions): void {
+  const seen = new Map<number, number>()
+  for (let i = 0; i < pile.length; i++) {
+    const id = pile.mateContig[i]
+    if (id < 0) {
+      pile.mateContig[i] = -1
+      continue
+    }
+    let at = seen.get(id)
+    if (at === undefined) {
+      at = pile.contigs.length
+      pile.contigs.push(id === refId ? contig : (options.refNameOf?.(id) ?? ''))
+      seen.set(id, at)
+    }
+    pile.mateContig[i] = at
+  }
 }
 
 /**
@@ -690,9 +732,20 @@ function joinMates(pile: ReadPile, held: Held[]): void {
       seen.set(name, i)
       continue
     }
-    // Only the two ends of one template, never a third record wearing the name
-    // — a secondary alignment excluded by the default filter, or a name reused.
-    if (pile.mate[first] === -1 && pile.mate[i] === -1) {
+    // Only the two ends of one template, never a third record wearing the name.
+    // Three things wear it: a secondary alignment (excluded by every filter
+    // here), a *supplementary* one — which the split-read switch deliberately
+    // admits — and a name genuinely reused across templates. The flags settle
+    // the first two: a supplementary record is another piece of the same end,
+    // not the other end, and joining it would draw an insert thread across a
+    // breakpoint that no template spans.
+    const either = pile.flags[first] | pile.flags[i]
+    if (
+      pile.mate[first] === -1 &&
+      pile.mate[i] === -1 &&
+      (either & FLAG.SUPPLEMENTARY) === 0 &&
+      ((pile.flags[first] ^ pile.flags[i]) & (FLAG.FIRST_IN_PAIR | FLAG.SECOND_IN_PAIR)) !== 0
+    ) {
       pile.mate[first] = i
       pile.mate[i] = first
     }

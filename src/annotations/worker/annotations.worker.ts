@@ -14,10 +14,10 @@
 
 import { BigBed, BigWig } from '@gmod/bbi'
 import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
-import { isBam, readHeader, type BamHeader } from '../bam/format'
+import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
-import { pileOf, type ColourBy } from '../bam/reads'
+import { pileOf } from '../bam/reads'
 import {
   IntervalTrack,
   parseBedGraph,
@@ -61,6 +61,7 @@ import type {
   ContigOverlap,
   FeatureSet,
   ReadPile,
+  ReadStyle,
   ReadWindow,
   Region,
   TrackSamples,
@@ -257,10 +258,6 @@ interface OpenBam {
   refIdOf: Map<string, number>
   /** The file's own reference names, in file order, for the ladder. */
   refNames: string[]
-  /** Which records count. Per entry, because it is a per-lane control. */
-  filter: PileFilter
-  /** How the pile is coloured, which is also how it is grouped. */
-  colourBy: ColourBy
 }
 
 const alignments = new Map<string, OpenBam>()
@@ -419,7 +416,7 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'load':
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
-      return sample(request.entry, request.regions, request.basesPerPixel, request.id)
+      return sample(request.entry, request.regions, request.basesPerPixel, request.reads, request.id)
     case 'register':
       vectors.set(request.entry, request.vector)
       return null
@@ -430,7 +427,14 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'assembly':
       return assemblyOf(request.source)
     case 'reads':
-      return readsFor(request.entry, request.regions, request.maxRows, request.basesPerPixel, request.id)
+      return readsFor(
+        request.entry,
+        request.regions,
+        request.maxRows,
+        request.basesPerPixel,
+        request.reads,
+        request.id,
+      )
     case 'cancel':
       // Recorded for anything that has not already settled — which includes an
       // id that has not *started*, because a `cancel` routinely overtakes the
@@ -511,7 +515,12 @@ async function runTask(
     },
     // Under the *task's* id, so cancelling the analysis cancels the reads it
     // is waiting on rather than leaving them to finish into nothing.
-    sample: (entry, regions, basesPerPixel) => sample(entry, regions, basesPerPixel, request.id),
+    // No read style: a task asks a track for values, and the lane controls it
+    // would otherwise inherit are a property of a *view*. An analysis over a
+    // BAM therefore reads the default filter, which is the one `bam/pile.ts`
+    // defends and the only one reproducible from the recorded provenance.
+    sample: (entry, regions, basesPerPixel) =>
+      sample(entry, regions, basesPerPixel, undefined, request.id),
     lengthOf: (contig) => request.inputs.contigLengths?.[contig],
   }
   const outputs = await runner(job)
@@ -1280,13 +1289,14 @@ async function sample(
   entry: string,
   regions: Region[],
   basesPerPixel: number,
+  style: ReadStyle | undefined,
   id: number,
 ): Promise<TrackSampleSet> {
   // Asked first, because it is the only probe that can decline and the only one
   // that can be called off — and because an alignment entry is in no other
   // store, so reaching any of them would mean it had already gone wrong.
   const open = alignments.get(entry)
-  if (open !== undefined) return alignmentSamples(id, open, regions, basesPerPixel)
+  if (open !== undefined) return alignmentSamples(id, open, regions, basesPerPixel, style)
 
   // A FASTA answers the same question with the same shape of answer, and this
   // is where the two formats part company: one has zoom levels on disk, the
@@ -1530,8 +1540,6 @@ async function loadBam(
     size,
     refIdOf,
     refNames: header.refs.map((ref) => ref.name),
-    filter: { ...DEFAULT_FILTER },
-    colourBy: 'strand',
   })
 
   return {
@@ -1560,11 +1568,47 @@ async function loadBam(
  * something other than what it says — the rule `__unbinned__` and the bigBed
  * truncation notice are both instances of.
  */
+/**
+ * The record filter a lane's controls come to, for **depth**.
+ *
+ * The part of a `ReadStyle` that decides what is *counted*, read on every
+ * request rather than stored: see the note on the `sample` request in
+ * `protocol.ts` for why the controls travel rather than being configured.
+ *
+ * `hideDuplicates` adds to the default exclusions rather than replacing them,
+ * so turning it on cannot quietly re-admit the secondary and supplementary
+ * alignments that `bam/pile.ts` argues out of every count. Nothing here can
+ * admit a supplementary alignment at all — see {@link pileFilterOf}.
+ */
+function filterOf(style: ReadStyle | undefined): PileFilter {
+  if (style === undefined) return DEFAULT_FILTER
+  return {
+    exclude: DEFAULT_EXCLUDE | (style.hideDuplicates ? FLAG.DUPLICATE : 0),
+    minMapq: style.minMapq,
+  }
+}
+
+/**
+ * The same, for the **pile** — where one switch more is allowed.
+ *
+ * `splits` admits supplementary alignments, and this is the only place in the
+ * application where they are admitted. The asymmetry is the point and it is
+ * not an oversight: a supplementary record is a second piece of one molecule,
+ * so drawing it shows a reader where the molecule went, and counting it would
+ * report one fragment as two. Depth therefore never sees them, however the
+ * lane is set.
+ */
+function pileFilterOf(style: ReadStyle): PileFilter {
+  const base = filterOf(style)
+  return style.splits ? { ...base, exclude: base.exclude & ~FLAG.SUPPLEMENTARY } : base
+}
+
 async function alignmentSamples(
   id: number,
   open: OpenBam,
   regions: Region[],
   basesPerPixel: number,
+  style: ReadStyle | undefined,
 ): Promise<TrackSampleSet> {
   const refIdOf = (name: string): number | undefined => {
     const held = open.refIdOf.get(name)
@@ -1631,7 +1675,7 @@ async function alignmentSamples(
         Math.floor(plan.region.start),
         Math.ceil(plan.region.end),
         bins,
-        open.filter,
+        filterOf(style),
       )
       // Summed across spans rather than concatenated: a read overlapping the
       // window may live in any of them, and the bins are the same bins.
@@ -1727,6 +1771,7 @@ async function readsFor(
   regions: Region[],
   maxRows: number,
   basesPerPixel: number,
+  style: ReadStyle,
   id: number,
 ): Promise<ReadWindow> {
   const open = alignments.get(entry)
@@ -1801,11 +1846,15 @@ async function readsFor(
         Math.floor(plan.region.start),
         Math.ceil(plan.region.end),
         {
-          filter: open.filter,
+          filter: pileFilterOf(style),
           maxRows,
           maxReads: MAX_READS,
-          colourBy: open.colourBy,
+          colourBy: style.colourBy,
           withNames: basesPerPixel <= NAMES_BELOW,
+          // The header's own table, which is the only place a `next_refID`
+          // means anything. Held here rather than sent: `nameMates` asks it for
+          // the handful of ids a window's mates actually land on.
+          refNameOf: (id: number) => open.refNames[id],
           ...(reference === undefined ? {} : { reference }),
         },
       )

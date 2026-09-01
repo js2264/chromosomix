@@ -276,10 +276,10 @@ formats but the *scope*: a viewer that reads alignments in order to build contac
 would indeed be a second application. That is still refused, at SPECS §13. What is *specified*
 instead is narrower and is an annotation like any other: a coverage lane over the genome the map is
 already about, with a consensus band and a pile of individual reads above it in zoom, living only
-where a base can have a pixel (§8.13). **What is built so far is the reader and the coverage lane.**
-The pile and the consensus are specified and not yet drawn, which is a fact worth writing down here
-rather than leaving a reader to discover: this entry describes a decision that has been taken and a
-feature that is part-built.
+where a base can have a pixel (§8.13). All three bands are built, with the pile's own controls, its
+per-read card, mates and split reads. What is still refused inside that scope is listed at the end
+of §8.13, and the one worth repeating here is that **no matrix is ever built from alignments** —
+that was the second application this entry was drawing a line against, and it still is.
 The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` collides with the
 C1/C3 corollary, so that corollary is now *scoped* — it protects the contact map's opening path,
 which is what makes the no-preprocessing claim true — and the narrow rule that replaces it is stated

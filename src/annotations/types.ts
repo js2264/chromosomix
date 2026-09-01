@@ -498,6 +498,12 @@ export type OverlayShape = 'border' | 'element'
  * mean widening a union that three other call sites switch on.
  */
 export interface AnnotationStyle {
+  /**
+   * The controls only an alignment lane has (§8.13).
+   *
+   * Optional, so nothing else changes shape — see {@link ReadStyle}.
+   */
+  reads?: ReadStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
@@ -579,6 +585,10 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     radius: 7,
     opacity: kind === 'pairs' ? 0.9 : 1,
     flip: false,
+    // Present only where it means something, which is the whole point of it
+    // being optional — see {@link ReadStyle}. `readsOf` supplies the same
+    // defaults for a lane whose stored style predates this field.
+    ...(kind === 'alignments' ? { reads: defaultReadStyle() } : {}),
   }
 }
 
@@ -812,7 +822,13 @@ export interface ReadPile {
   /** The SAM flag, whole — strand, pairing and the rest are read off it. */
   flags: Uint16Array
   mapq: Uint8Array
-  /** Index into {@link contigs} for the mate, or `-1` where there is none. */
+  /**
+   * Index into {@link contigs} for the mate, or `-1` where there is none.
+   *
+   * An index into that compact table rather than the file's own reference id:
+   * see `nameMates`, which does the remapping and is also what puts the *map's*
+   * spelling on the read's own sequence.
+   */
   mateContig: Int32Array
   /** The mate's leftmost position, or `-1`. */
   matePos: Int32Array
@@ -852,7 +868,13 @@ export interface ReadPile {
   diffPos: Int32Array
   /** The base the *read* has there, as a `BASE_CODE` value. */
   diffBase: Uint8Array
-  /** Contig names this pile refers to, for mates on another sequence. */
+  /**
+   * Contig names this pile refers to, for mates on another sequence.
+   *
+   * Only the ones some mate in this window actually lands on — a header's whole
+   * `@SQ` list is a hundred thousand strings on a scaffolded assembly, and it
+   * would be sent per window. Empty when nothing here has a mate.
+   */
   contigs: string[]
   /** Category labels, indexed by {@link group}. */
   groups: string[]
@@ -873,6 +895,130 @@ export interface BaseCounts {
    * is `counts.subarray(at * 6, at * 6 + 6)`.
    */
   counts: Uint32Array
+}
+
+/**
+ * How a pile is coloured, which is also how it is grouped.
+ *
+ * Here rather than in `bam/reads.ts` because it crosses the worker boundary
+ * *and* is written into a stored session: a type in either position cannot live
+ * in a module that imports this one.
+ */
+export type ColourBy = 'strand' | 'mapq' | 'pair' | 'mate' | 'insert' | 'none'
+
+/**
+ * The controls an alignment lane has that no other kind does (§8.13).
+ *
+ * A nested optional record rather than fields on {@link AnnotationStyle}
+ * itself. The doc there defends one flat shape for every kind, and it is right
+ * to: a `mode` or a `colour` means something for all of them. These do not —
+ * a MAPQ floor is meaningless on a bedGraph — and being optional means no
+ * existing kind, no `defaultStyle` arm and no stored row changes shape.
+ */
+export interface ReadStyle {
+  colourBy: ColourBy
+  /** Reads below this mapping quality are not drawn, and not counted. */
+  minMapq: number
+  /**
+   * Hide reads a pipeline marked as duplicates.
+   *
+   * Off by default, and that is the decision §8.13 records: marking them is a
+   * pipeline's choice, and hiding them silently would make this app disagree
+   * with every other reading of the same file.
+   */
+  hideDuplicates: boolean
+  /** Draw the thread joining the two ends of a template. */
+  pairs: boolean
+  /**
+   * Show supplementary alignments — the other pieces of a split read.
+   *
+   * Off by default and separate from everything else here, because it is the
+   * one switch that changes what an alignment *is*. A supplementary record is a
+   * second piece of one molecule that the aligner could not place in one run:
+   * across a structural breakpoint, across a fusion, or across the junction a
+   * long read spans. Showing them is how a reader sees a split; counting them
+   * would be counting the same molecule twice.
+   *
+   * So it reaches the pile and never the depth — see `readFilterKey`, which
+   * deliberately does not mention it.
+   */
+  splits: boolean
+}
+
+/** What an alignment lane starts with. */
+export function defaultReadStyle(): ReadStyle {
+  return { colourBy: 'strand', minMapq: 0, hideDuplicates: false, pairs: true, splits: false }
+}
+
+/**
+ * One lane's read controls, whether or not its style carries any.
+ *
+ * The accessor every reader of the field goes through, so that `reads` being
+ * optional costs one call rather than a `??` at each of a dozen sites — and so
+ * that a session stored before this field existed opens with the defaults
+ * instead of with `undefined` reaching a renderer.
+ */
+export function readsOf(style: AnnotationStyle): ReadStyle {
+  return style.reads ?? defaultReadStyle()
+}
+
+/**
+ * Read a stored read style back, clamping every field.
+ *
+ * Stored state outlives the build that wrote it and arrives from a share link,
+ * so this is untrusted input: `isStoredEntry` checks that `style` is an object
+ * and no more, which is enough to hand a renderer a negative MAPQ or a colouring
+ * it has never heard of.
+ */
+export function readStyleOf(value: unknown): ReadStyle {
+  const fallback = defaultReadStyle()
+  if (typeof value !== 'object' || value === null) return fallback
+  const row = value as Record<string, unknown>
+  const by = row['colourBy']
+  const mapq = row['minMapq']
+  return {
+    colourBy: COLOUR_BY.includes(by as ColourBy) ? (by as ColourBy) : fallback.colourBy,
+    minMapq:
+      typeof mapq === 'number' && Number.isFinite(mapq)
+        ? Math.max(0, Math.min(255, Math.round(mapq)))
+        : fallback.minMapq,
+    hideDuplicates: row['hideDuplicates'] === true,
+    pairs: row['pairs'] !== false,
+    splits: row['splits'] === true,
+  }
+}
+
+/** Every colouring, in the order they are offered. */
+export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'none']
+
+/**
+ * The whole style as a cache key, for the caches that hold *reads*.
+ *
+ * Every field is in it, because every field changes the answer rather than only
+ * the drawing: the colouring is also the grouping and therefore the row
+ * packing, and the floor and the duplicate switch decide which reads exist at
+ * all. `pairs` is the arguable one — mate threads are drawn from columns the
+ * pile already carries — and it is included because the worker is handed the
+ * whole style, so a key covering part of it would be a trap the first time a
+ * field crossed that line.
+ */
+export function readStyleKey(style: ReadStyle): string {
+  const flags = `${style.hideDuplicates ? 'd' : ''}${style.pairs ? 'p' : ''}${style.splits ? 's' : ''}`
+  return `${style.colourBy}|${style.minMapq}|${flags}`
+}
+
+/**
+ * The style as a cache key, for the caches that hold *coverage*.
+ *
+ * Deliberately narrower than {@link readStyleKey}: depth is a count, and a
+ * count does not care how the reads that made it were coloured or whether their
+ * mates were joined. Using the wider key here would throw away a whole-genome
+ * coverage scan every time a reader tried a different colouring — the most
+ * expensive read in the application, discarded for a change that cannot move
+ * the line by a pixel.
+ */
+export function readFilterKey(style: ReadStyle): string {
+  return `${style.minMapq}|${style.hideDuplicates ? 'd' : ''}`
 }
 
 /** Where a lane's disagreements came from, or why there are none. */

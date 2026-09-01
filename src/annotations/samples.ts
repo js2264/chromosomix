@@ -16,7 +16,7 @@
 
 import type { LocusAxis } from '../render/locus'
 import { combineSamples, type TrackOp } from './derived'
-import type { TrackSampleSet } from './types'
+import { readFilterKey, type ReadStyle, type TrackSampleSet } from './types'
 import type { AnnotationClient } from './worker/client'
 
 /**
@@ -32,6 +32,14 @@ interface Held {
   bucket: number
   /** Genomic span held per contig. */
   covered: Map<string, [number, number]>
+  /**
+   * The read controls these were counted under, for the one kind that has any.
+   *
+   * `''` for every other kind, which is not a special case so much as the
+   * truthful answer: nothing about a bigWig's samples depends on a filter, so
+   * every window of one agrees with every other.
+   */
+  filter: string
   samples: TrackSampleSet
 }
 
@@ -115,6 +123,14 @@ export class SampleCache {
      * entry it is about to draw and passes it through.
      */
     derived?: { a: string; b: string; op: TrackOp }
+    /**
+     * An alignment lane's read controls (§8.13), where the lane is one.
+     *
+     * Only the counting half of them reaches the key — see {@link readFilterKey}
+     * — but the whole style goes on the wire, so the worker builds its filter
+     * from one place rather than from a projection this cache chose.
+     */
+    reads?: ReadStyle
   }): TrackSampleSet | null {
     // A derived lane fetches nothing of its own. Both operands are asked for the
     // same window at the same resolution — through this same method, so they are
@@ -130,6 +146,7 @@ export class SampleCache {
     }
 
     const key = `${options.entry}:${options.scope}`
+    const filter = options.reads === undefined ? '' : readFilterKey(options.reads)
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.samples ?? null
@@ -141,10 +158,24 @@ export class SampleCache {
     // ask for the same level under a different name.
     const bucket = 2 ** Math.round(Math.log2(Math.max(1, bases / pixels)))
 
-    if (cached !== null && cached.bucket === bucket && covers(cached.covered, view)) {
+    if (
+      cached !== null &&
+      cached.bucket === bucket &&
+      cached.filter === filter &&
+      covers(cached.covered, view)
+    ) {
       return cached.samples
     }
-    if (this.inflight.has(key)) return cached?.samples ?? null
+    // A filter change mid-flight replaces the request rather than waiting
+    // behind it: what is decoding counted the wrong records, so its answer will
+    // be thrown away the moment it lands. Every other reason to be in flight
+    // still waits — a pan's answer is right, only late.
+    const running = this.inflight.get(key)
+    if (running !== undefined) {
+      if (cached === null || cached.filter === filter) return cached?.samples ?? null
+      running.cancel()
+      this.inflight.delete(key)
+    }
 
     const wanted = options.axis.windows(options.domain, FETCH_PAD)
     const request = this.client.cancellable<'sample'>({
@@ -156,6 +187,7 @@ export class SampleCache {
         end: window.end,
       })),
       basesPerPixel: bucket,
+      ...(options.reads === undefined ? {} : { reads: options.reads }),
     })
     this.inflight.set(key, request)
     void request.promise
@@ -163,7 +195,7 @@ export class SampleCache {
         if (this.disposed) return
         const covered = new Map<string, [number, number]>()
         for (const window of wanted) covered.set(window.contig, [window.start, window.end])
-        this.held.set(key, { bucket, covered, samples })
+        this.held.set(key, { bucket, covered, filter, samples })
         this.onChange()
       })
       .catch(() => {

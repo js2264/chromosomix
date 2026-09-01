@@ -21,7 +21,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { AnnotationRequest, AnnotationResponse } from '@/annotations/worker/protocol'
-import type { TrackSampleSet } from '@/annotations/types'
+import { defaultReadStyle, type ReadWindow, type TrackSampleSet } from '@/annotations/types'
 import { writeBam } from '../support/bamWriter'
 import type { TestRecord } from './bam-fixtures'
 
@@ -442,6 +442,111 @@ describe('the coverage lane', () => {
     // Reads every 137 bp of 100 bp each is depth well under one on average, but
     // firmly above nothing — which is what the bug produces.
     expect(drawn.extent?.max ?? 0).toBeGreaterThan(0.5)
+  })
+
+  it('applies the lane’s MAPQ floor to the depth, so the two agree', async () => {
+    // The reason the controls travel on the request rather than being stored
+    // per entry in the worker: the coverage band and the pile are two pictures
+    // of one set of records, and a floor that reached only the pile would make
+    // them disagree in the one place a reader would trust them to agree.
+    const { bam, bai } = await bamFile({
+      records: [
+        { refId: 0, pos: 1000, cigar: '100M', name: 'good', seq: 'A'.repeat(100), mapq: 60 },
+        { refId: 0, pos: 1000, cigar: '100M', name: 'poor', seq: 'A'.repeat(100), mapq: 3 },
+      ],
+    })
+    const loaded = await ask({
+      kind: 'load',
+      entry: 'e-mapq',
+      source: { kind: 'local', file: bam, name: 'reads.bam', index: bai },
+      mapContigs: REFS.map((ref) => ({ name: ref.name, length: ref.length })),
+    })
+    expect(loaded.type, JSON.stringify(loaded)).toBe('result')
+
+    const window = { contig: 'chrI', start: 1000, end: 1100 }
+    const open = await ask({
+      kind: 'sample',
+      entry: 'e-mapq',
+      regions: [window],
+      basesPerPixel: 100,
+    })
+    expect((open as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(2, 6)
+
+    const floored = await ask({
+      kind: 'sample',
+      entry: 'e-mapq',
+      regions: [window],
+      basesPerPixel: 100,
+      reads: { ...defaultReadStyle(), minMapq: 30 },
+    })
+    expect((floored as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(1, 6)
+  })
+
+  it('draws split reads when asked and never counts them', async () => {
+    // The one asymmetry in the whole lane, and it is deliberate: a supplementary
+    // record is a second piece of one molecule, so drawing it shows where the
+    // molecule went and counting it would report one fragment as two. The switch
+    // therefore reaches the pile and cannot reach the depth.
+    const { bam, bai } = await bamFile({
+      records: [
+        { refId: 0, pos: 1000, cigar: '50M50S', name: 'chim', seq: 'A'.repeat(100), flag: 0x1 | 0x40 },
+        { refId: 0, pos: 1050, cigar: '50S50M', name: 'chim', seq: 'A'.repeat(100), flag: 0x1 | 0x40 | 0x800 },
+      ],
+    })
+    const loaded = await ask({
+      kind: 'load',
+      entry: 'e-split',
+      source: { kind: 'local', file: bam, name: 'reads.bam', index: bai },
+      mapContigs: REFS.map((ref) => ({ name: ref.name, length: ref.length })),
+    })
+    expect(loaded.type, JSON.stringify(loaded)).toBe('result')
+
+    const regions = [{ contig: 'chrI', start: 900, end: 1200 }]
+    const withSplits = { ...defaultReadStyle(), splits: true }
+
+    const plain = await ask({
+      kind: 'reads',
+      entry: 'e-split',
+      regions,
+      maxRows: 40,
+      basesPerPixel: 0.5,
+      reads: defaultReadStyle(),
+    })
+    const split = await ask({
+      kind: 'reads',
+      entry: 'e-split',
+      regions,
+      maxRows: 40,
+      basesPerPixel: 0.5,
+      reads: withSplits,
+    })
+    const readsIn = (response: AnnotationResponse): number =>
+      ((response as { payload: ReadWindow }).payload.piles ?? []).reduce(
+        (sum, pile) => sum + pile.length,
+        0,
+      )
+    expect(readsIn(plain)).toBe(1)
+    expect(readsIn(split)).toBe(2)
+
+    // …and the depth is the same number either way.
+    const depthPlain = await ask({
+      kind: 'sample',
+      entry: 'e-split',
+      regions,
+      basesPerPixel: 1,
+      reads: defaultReadStyle(),
+    })
+    const depthSplit = await ask({
+      kind: 'sample',
+      entry: 'e-split',
+      regions,
+      basesPerPixel: 1,
+      reads: withSplits,
+    })
+    expect((depthSplit as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(
+      (depthPlain as { payload: TrackSampleSet }).payload.extent?.max ?? -1,
+      6,
+    )
   })
 
   it('forgets the file when the row is dropped', async () => {

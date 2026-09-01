@@ -20,7 +20,7 @@
  */
 
 import type { LocusAxis } from '../render/locus'
-import type { ReadWindow } from './types'
+import { readStyleKey, type ReadStyle, type ReadWindow } from './types'
 import type { AnnotationClient } from './worker/client'
 
 /**
@@ -46,6 +46,8 @@ const ROW_STEP = 8
 interface Held {
   covered: Map<string, [number, number]>
   rows: number
+  /** The controls the held window was fetched under; see {@link readStyleKey}. */
+  style: string
   window: ReadWindow
 }
 
@@ -95,19 +97,36 @@ export class ReadCache {
     /** Rows the lane can draw, which the worker thins against. */
     rows: number
     basesPerPixel: number
+    /** The lane's read controls, which decide what is fetched as well as how it looks. */
+    style: ReadStyle
   }): ReadWindow | null {
     const rows = Math.max(ROW_STEP, Math.ceil(options.rows / ROW_STEP) * ROW_STEP)
     const key = `${options.entry}:${options.scope}`
+    const style = readStyleKey(options.style)
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.window ?? null
     // A budget that has only *shrunk* is answered from what is held: the pile
     // already has more rows than the lane can show, and the extra ones are
     // simply not drawn. Refetching would thin it harder for no visible gain.
-    if (cached !== null && cached.rows >= rows && covers(cached.covered, view)) {
+    if (
+      cached !== null &&
+      cached.rows >= rows &&
+      cached.style === style &&
+      covers(cached.covered, view)
+    ) {
       return cached.window
     }
-    if (this.inflight.has(key)) return cached?.window ?? null
+    // A style change mid-flight has to *replace* the request, not wait behind
+    // it: what is decoding was asked under the old controls and its answer will
+    // be discarded the moment it lands, so leaving it in place would mean the
+    // reader's click did nothing until they moved the view.
+    const running = this.inflight.get(key)
+    if (running !== undefined) {
+      if (cached === null || cached.style === style) return cached?.window ?? null
+      running.cancel()
+      this.inflight.delete(key)
+    }
 
     const wanted = options.axis.windows(options.domain, FETCH_PAD)
     const request = this.client.cancellable<'reads'>({
@@ -120,6 +139,7 @@ export class ReadCache {
       })),
       maxRows: rows,
       basesPerPixel: options.basesPerPixel,
+      reads: options.style,
     })
     this.inflight.set(key, request)
     void request.promise
@@ -132,7 +152,7 @@ export class ReadCache {
         // would leave that window permanently uncovered and refetch it on
         // every frame for as long as a reader looked at it.
         for (const at of wanted) covered.set(at.contig, [at.start, at.end])
-        this.held.set(key, { covered, rows, window })
+        this.held.set(key, { covered, rows, style, window })
         this.onChange()
       })
       .catch(() => {

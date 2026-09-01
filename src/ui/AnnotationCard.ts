@@ -42,11 +42,15 @@ import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
 import {
+  colourByField,
+  colourLegend,
   flipButton,
   heightField,
   limitsField,
+  mapqField,
   modeField,
   opacityField,
+  readToggles,
 } from './laneSettings'
 
 /**
@@ -864,6 +868,23 @@ export class AnnotationCard {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
     if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))
+    // The controls no other kind has (§8.13). After the limits, because those
+    // are about the coverage band at the top of the lane and these are about
+    // the reads under it — and because a reader who has zoomed out far enough
+    // to see only coverage has no use for them yet.
+    if (entry.kind === 'alignments') {
+      const key = colourLegend(entry)
+      out.push(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          colourByField(this.props.store, entry),
+          mapqField(this.props.store, entry),
+        ),
+      )
+      if (key !== null) out.push(key)
+      out.push(readToggles(this.props.store, entry))
+    }
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No
     // group, though — GC shares no units with anything else on the stack, so
