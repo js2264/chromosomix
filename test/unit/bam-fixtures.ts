@@ -85,7 +85,7 @@ export function recordBytes(record: TestRecord): Uint8Array {
   const packedSeq = packSeq(seq)
   const tags = record.tags ?? new Uint8Array(0)
   const size =
-    36 + nameBytes.length + cigar.length * 4 + packedSeq.length + seq.length + tags.length
+    32 + nameBytes.length + cigar.length * 4 + packedSeq.length + seq.length + tags.length
   const out = new Uint8Array(4 + size)
   const view = new DataView(out.buffer)
   view.setInt32(0, size, true)
@@ -100,7 +100,7 @@ export function recordBytes(record: TestRecord): Uint8Array {
   view.setInt32(24, record.nextRefId ?? -1, true)
   view.setInt32(28, record.nextPos ?? -1, true)
   view.setInt32(32, record.tlen ?? 0, true)
-  let at = 40
+  let at = 36
   out.set(nameBytes, at)
   at += nameBytes.length
   for (const op of cigar) {

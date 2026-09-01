@@ -37,7 +37,7 @@
 const BAM_MAGIC = [0x42, 0x41, 0x4d, 0x01]
 
 /** The fixed part of an alignment record, before `read_name` begins. */
-export const RECORD_PREFIX_BYTES = 36
+export const RECORD_PREFIX_BYTES = 32
 
 /**
  * The flag bits, named.
