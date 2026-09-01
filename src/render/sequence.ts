@@ -36,10 +36,10 @@ import type { LocusAxis } from './locus'
 export const BASE_COLOURS = ['#3d9950', '#2f6fb5', '#d59225', '#c8483f', '#8b939c'] as const
 
 /** Below this many pixels per base, a column is thinner than the ink in it. */
-const COLUMN_MIN_WIDTH = 1
+export const COLUMN_MIN_WIDTH = 1
 
 /** Below this, a letter does not fit between its neighbours. */
-const LETTER_MIN_WIDTH = 6
+export const LETTER_MIN_WIDTH = 6
 
 /** …and a lane shorter than this has no room for one across. */
 const LETTER_MIN_THICKNESS = 12
@@ -134,7 +134,7 @@ export function drawSequence(
 }
 
 /** The residue as a glyph: upper case, whatever the file wrote. */
-function letterOf(byte: number): string {
+export function letterOf(byte: number): string {
   return String.fromCharCode(byte >= 0x61 && byte <= 0x7a ? byte - 0x20 : byte)
 }
 

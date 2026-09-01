@@ -15,7 +15,14 @@
  * needs at the resolution it needs them (spec §8.2, §8.4).
  */
 
-import type { AnnotationPayload, BaseRegion, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type {
+  AnnotationPayload,
+  BaseRegion,
+  ContigOverlap,
+  ReadWindow,
+  Region,
+  TrackSampleSet,
+} from '../types'
 import type { BinVector } from './binVector'
 import type { AnalysisFraming, Params, TaskResult } from '../../analysis/types'
 import type { TaskInputs } from '../../analysis/worker/protocol'
@@ -116,6 +123,7 @@ export interface AnnotationResultMap {
   run: TaskResult
   drop: null
   cancel: null
+  reads: ReadWindow
 }
 
 export type AnnotationRequestKind = keyof AnnotationResultMap
@@ -171,6 +179,30 @@ export type AnnotationRequest =
       params: Params
       framing: AnalysisFraming
       inputs: TaskInputs
+    }
+  /**
+   * The reads themselves, and the base counts under them (§8.13).
+   *
+   * Its own request rather than a wider `sample`, and for the reason `bases`
+   * is: it is a different *kind* of answer. `sample` returns a value per pixel
+   * and every lane in the application draws it the same way; this returns
+   * individual molecules with rows, mates, CIGARs and disagreements, over a
+   * window a screen of readable reads covers rather than a chromosome.
+   *
+   * Only the 1D browser ever sends one. A read is drawn along the axis at its
+   * own extent, and beside a heatmap the axis is an axis of matrix bins where
+   * the finest unit is a bin — there is nothing there for a read to be drawn
+   * *on*.
+   */
+  | {
+      id: number
+      kind: 'reads'
+      entry: string
+      regions: Region[]
+      /** Rows the lane can draw, which is what the thinning is budgeted against. */
+      maxRows: number
+      /** Bases per pixel, so the worker knows whether names could be read. */
+      basesPerPixel: number
     }
   | { id: number; kind: 'drop'; entry: string }
   /**

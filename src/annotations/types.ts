@@ -769,3 +769,142 @@ export interface StoredEntry {
   /** Which feature set the search reads; see {@link AnnotationEntry.primary}. */
   primary?: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Alignments: a window of reads (§8.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * The reads under one window, packed as parallel arrays.
+ *
+ * The same shape, for the same reason, as {@link FeatureSet}: twenty thousand
+ * reads as an array of objects is megabytes of pointer-chasing to draw a
+ * picture that is a few thousand rectangles, and none of it survives
+ * `postMessage` without being copied. Everything here is a typed array or a
+ * `string[]`, so `transfersFor` moves the buffers rather than cloning them.
+ *
+ * Unlike a `FeatureSet` this is **not** the whole file. It is one window,
+ * fetched for one view and thrown away when the view moves, because a BAM has
+ * no bounded whole-file form to hold (§8.13). That is also why the rows are
+ * packed here rather than at paint time: row assignment depends on which *other*
+ * reads are present, so packing per frame would make reads jump rows under the
+ * hand.
+ */
+export interface ReadPile {
+  /** The map's spelling for the sequence these are on. */
+  contig: string
+  /** The window packed, which is wider than the view by `FETCH_PAD`. */
+  start: number
+  end: number
+  /** Number of reads. Every per-read array below is this long. */
+  length: number
+  /** First aligned reference base. Soft clips are *not* included. */
+  refStart: Int32Array
+  /** One past the last aligned reference base. */
+  refEnd: Int32Array
+  /** Soft-clipped bases before `refStart` and after `refEnd`, for drawing them. */
+  clipStart: Int32Array
+  clipEnd: Int32Array
+  /** Which packed row this read is drawn in. */
+  row: Int16Array
+  /** The SAM flag, whole — strand, pairing and the rest are read off it. */
+  flags: Uint16Array
+  mapq: Uint8Array
+  /** Index into {@link contigs} for the mate, or `-1` where there is none. */
+  mateContig: Int32Array
+  /** The mate's leftmost position, or `-1`. */
+  matePos: Int32Array
+  /** Observed template length; `0` where the file carries none. */
+  tlen: Int32Array
+  /** Index into {@link groups} — which colour this read takes. */
+  group: Uint8Array
+  /**
+   * The other end of this template, as an index into this pile, or `-1`.
+   *
+   * Resolved here and not by the renderer, because it is a join over the whole
+   * window and doing it per frame is a map rebuilt sixty times a second. `-1`
+   * covers both "not paired" and "the mate is outside this window", which are
+   * drawn the same way: a stub, not a line to nowhere.
+   */
+  mate: Int32Array
+  /**
+   * The read's CIGAR, flattened: ops `opAt[i] … opAt[i + 1]`.
+   *
+   * The same `n + 1` offset array a `FeatureSet` flattens its exons with. A
+   * read needs its ops rather than only its extent because an insertion, a
+   * deletion and a spliced gap are three different marks, and the gap in
+   * particular is most of what an RNA-seq pile is *for*.
+   */
+  opAt: Int32Array
+  opCode: Uint8Array
+  opLen: Int32Array
+  /**
+   * Where this read disagrees with the reference, flattened the same way.
+   *
+   * Empty for every read when {@link ReadWindow.diffs} is `'none'` — which is
+   * the common case, since neither `bwa` nor `minimap2` writes an `MD` tag by
+   * default and `=`/`X` operations are rarer still.
+   */
+  diffAt: Int32Array
+  /** Reference position of each disagreement. */
+  diffPos: Int32Array
+  /** The base the *read* has there, as a `BASE_CODE` value. */
+  diffBase: Uint8Array
+  /** Contig names this pile refers to, for mates on another sequence. */
+  contigs: string[]
+  /** Category labels, indexed by {@link group}. */
+  groups: string[]
+  /** Read names, kept only where a reader could ask for one. `[]` otherwise. */
+  names: string[]
+}
+
+/** Base composition of one window, six counts per reference position. */
+export interface BaseCounts {
+  start: number
+  /** Positions counted; `counts` is `6 × span` long. */
+  span: number
+  /**
+   * `A C G T N -` per position, in that order — the first five are
+   * {@link BASE_CODE}'s own order and the sixth is a deletion.
+   *
+   * One flat array rather than six, so it transfers as one buffer and a column
+   * is `counts.subarray(at * 6, at * 6 + 6)`.
+   */
+  counts: Uint32Array
+}
+
+/** Where a lane's disagreements came from, or why there are none. */
+export type DiffSource =
+  /** The aligner wrote `=`/`X` operations, which say it outright. */
+  | 'cigar'
+  /** Derived from the `MD` tag against the read's own bases. */
+  | 'md'
+  /** Compared against a FASTA already open in this worker. */
+  | 'reference'
+  /** Nothing to compare against — *not* "no differences here". */
+  | 'none'
+
+/** The answer to a `reads` request: what to draw, and what was left out. */
+export interface ReadWindow {
+  piles: ReadPile[]
+  /** Base composition for the consensus band, one entry per pile. */
+  bases: BaseCounts[]
+  /** Reads the window held before filtering and downsampling. */
+  total: number
+  /** Reads actually returned. */
+  kept: number
+  /** `true` when reads were dropped to fit — the lane says so (§8.13). */
+  capped: boolean
+  /** How many rows the packing used, so a lane can size itself. */
+  rows: number
+  /**
+   * Where the disagreements came from.
+   *
+   * Surfaced rather than inferred, because "no mismatches in this window" and
+   * "mismatches cannot be computed for this file" are the same empty picture
+   * and must not read as the same claim.
+   */
+  diffs: DiffSource
+  /** Why nothing was returned, when nothing was — the same contract as `TrackSampleSet.note`. */
+  note?: string
+}

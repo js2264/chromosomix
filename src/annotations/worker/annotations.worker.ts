@@ -17,6 +17,7 @@ import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
 import { isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
+import { pileOf, type ColourBy } from '../bam/reads'
 import {
   IntervalTrack,
   parseBedGraph,
@@ -55,9 +56,12 @@ import {
   sniffFormat,
 } from '../parse'
 import type {
+  BaseCounts,
   BaseRegion,
   ContigOverlap,
   FeatureSet,
+  ReadPile,
+  ReadWindow,
   Region,
   TrackSamples,
   TrackSampleSet,
@@ -255,6 +259,8 @@ interface OpenBam {
   refNames: string[]
   /** Which records count. Per entry, because it is a per-lane control. */
   filter: PileFilter
+  /** How the pile is coloured, which is also how it is grouped. */
+  colourBy: ColourBy
 }
 
 const alignments = new Map<string, OpenBam>()
@@ -423,6 +429,8 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return bases(request.entry, request.regions)
     case 'assembly':
       return assemblyOf(request.source)
+    case 'reads':
+      return readsFor(request.entry, request.regions, request.maxRows, request.basesPerPixel, request.id)
     case 'cancel':
       // Recorded for anything that has not already settled — which includes an
       // id that has not *started*, because a `cancel` routinely overtakes the
@@ -1523,6 +1531,7 @@ async function loadBam(
     refIdOf,
     refNames: header.refs.map((ref) => ref.name),
     filter: { ...DEFAULT_FILTER },
+    colourBy: 'strand',
   })
 
   return {
@@ -1674,6 +1683,179 @@ async function alignmentSamples(
     // moment a reader pans across an empty contig.
     extent: min <= max && max > 0 ? { min: 0, max } : null,
   }
+}
+
+/**
+ * How many compressed bytes a *read* window may cost.
+ *
+ * Lower than the coverage cap, and deliberately. A coverage band answers a
+ * question about a whole region and is worth waiting a moment for; a pile is
+ * only legible at a width where the bytes under it are few, so a pile that
+ * needs four megabytes is a pile nobody can read anyway. Refusing early is
+ * kinder than drawing twenty thousand one-pixel rectangles.
+ */
+const READ_BYTE_CAP = 4 << 20
+
+/**
+ * The widest window that is offered reads at all.
+ *
+ * Independent of the byte cap and needed beside it: a sparse region can be
+ * cheap in bytes and still be a megabase wide, where a 100 bp read is a fifth
+ * of a pixel. Reads stop meaning anything long before the bytes run out.
+ */
+const READ_MAX_SPAN = 200_000
+
+/**
+ * The bases-per-pixel at which a read's *name* could be read off the screen.
+ *
+ * Names are the largest thing in a pile — one string per read — and they are
+ * only ever wanted for a dialog. But they are also what joins two records into
+ * one template, so they are always *read* in the worker and only sometimes
+ * shipped (`bam/reads.ts`).
+ */
+const NAMES_BELOW = 40
+
+/**
+ * The reads under a window, packed and ready to draw (§8.13).
+ *
+ * The second road out of an open BAM, standing to {@link alignmentSamples}
+ * exactly as `bases` stands to `sample`: a different kind of answer over a
+ * narrower window, asked for only by a surface that can draw it.
+ */
+async function readsFor(
+  entry: string,
+  regions: Region[],
+  maxRows: number,
+  basesPerPixel: number,
+  id: number,
+): Promise<ReadWindow> {
+  const open = alignments.get(entry)
+  if (open === undefined) {
+    throw new Error('This track is no longer open. Drop the file again.')
+  }
+  const empty: ReadWindow = {
+    piles: [], bases: [], total: 0, kept: 0, capped: false, rows: 0, diffs: 'none',
+  }
+
+  const refIdOf = (name: string): number | undefined => {
+    const held = open.refIdOf.get(name)
+    if (held !== undefined) return held
+    const at = contigIndexOf(open.refNames, name)
+    if (at < 0) return undefined
+    open.refIdOf.set(name, at)
+    return at
+  }
+
+  const wanted = regions.filter(
+    (region) => refIdOf(region.contig) !== undefined && region.end > region.start,
+  )
+  if (wanted.length === 0) return empty
+
+  const span = wanted.reduce((sum, region) => sum + (region.end - region.start), 0)
+  if (span > READ_MAX_SPAN) {
+    return { ...empty, note: `${trim(span / 1000)} kb — too wide to draw reads` }
+  }
+
+  const plans = wanted.map((region) => ({
+    region,
+    refId: refIdOf(region.contig) as number,
+    spans: chunksFor(
+      open.index,
+      refIdOf(region.contig) as number,
+      Math.max(0, Math.floor(region.start)),
+      Math.ceil(region.end),
+      open.size,
+    ),
+  }))
+  const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
+  if (forecast > READ_BYTE_CAP) {
+    return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
+  }
+
+  const piles: ReadPile[] = []
+  const bases: BaseCounts[] = []
+  let total = 0
+  let kept = 0
+  let capped = false
+  let rows = 0
+  let usedMd = false
+  let usedCigar = false
+  let usedReference = false
+
+  for (const plan of plans) {
+    // Residues for this window, if some FASTA in this worker happens to hold
+    // them. Free where it answers, and the only mismatch source that works on
+    // an assembly nobody has published — see `bam/reads.ts`.
+    const reference = residuesFor(plan.region)
+    if (reference !== undefined) usedReference = true
+
+    for (const byteSpan of plan.spans) {
+      if (!(await stillWanted(id))) throw abortError()
+      const compressed = await open.handle.read(byteSpan.to - byteSpan.from, byteSpan.from)
+      const inflated = await inflateBgzf(compressed, byteSpan.lastBlock - byteSpan.from)
+      const result = pileOf(
+        inflated,
+        byteSpan.dataFrom,
+        plan.region.contig,
+        plan.refId,
+        Math.floor(plan.region.start),
+        Math.ceil(plan.region.end),
+        {
+          filter: open.filter,
+          maxRows,
+          maxReads: MAX_READS,
+          colourBy: open.colourBy,
+          withNames: basesPerPixel <= NAMES_BELOW,
+          ...(reference === undefined ? {} : { reference }),
+        },
+      )
+      total += result.total
+      kept += result.kept
+      capped = capped || result.capped
+      rows = Math.max(rows, result.rows)
+      usedMd = usedMd || result.usedMd
+      usedCigar = usedCigar || result.usedCigar
+      if (result.pile.length > 0 || piles.length === 0) {
+        piles.push(result.pile)
+        bases.push(result.counts)
+      }
+    }
+  }
+
+  return {
+    piles,
+    bases,
+    total,
+    kept,
+    capped,
+    rows,
+    // In the order `bam/reads.ts` tries them, so the lane names the most direct
+    // source that actually answered.
+    diffs: usedCigar ? 'cigar' : usedMd ? 'md' : usedReference ? 'reference' : 'none',
+  }
+}
+
+/** A hard ceiling on reads, whatever the rows allow. */
+const MAX_READS = 20_000
+
+/**
+ * Residues covering a region, from any FASTA this worker already holds.
+ *
+ * A scan across the open sequence stores rather than one lookup, because they
+ * are keyed by the *entry* that owns them and an alignment lane has no idea
+ * which row a genome was dropped as. Cheap: there is rarely more than one, and
+ * this runs once per fetched window rather than per frame.
+ */
+function residuesFor(region: Region): { start: number; bases: Uint8Array } | undefined {
+  for (const store of sequences.values()) {
+    const held = basesOf(store, region.contig)
+    if (held === undefined) continue
+    const start = Math.max(0, Math.floor(region.start))
+    const end = Math.min(held.length, Math.ceil(region.end))
+    if (end <= start) continue
+    return { start, bases: held.subarray(start, end) }
+  }
+  return undefined
 }
 
 /** `8.4 MB`, for a refusal that has to name a number a reader can act on. */
