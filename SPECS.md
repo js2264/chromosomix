@@ -19,9 +19,18 @@ These are hard, and everything below follows from them.
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
 | C5 | Static hosting only | Public files are objects on a bucket; private files never leave the machine. The desktop build changes only where the *app* comes from, never where the data comes from |
 
-C3 and C1 together mean the app can never *require* a companion file. C4 means a whole class of
-code — run gathering, fallback query planners, `genome_extent` failure paths — is deleted rather
-than written.
+C3 and C1 together mean the app can never *require* a companion file **for a contact map**. That
+scope is the whole of what the rule was ever protecting: a file straight from `metacooler create`
+must open with nothing beside it, and that is what makes the no-preprocessing claim true. It is not
+a claim about every byte the app will ever read. An annotation format arrives with conventions of
+its own, and one of them — a BAM — has no whole-file fallback that respects §12 at all: it is read
+by region, and the index is the only thing that makes reading by region bounded. The narrow rule
+that follows is stated positively at §8.13 rather than left as an exception: **a format whose index
+is its only bounded read may refuse without one, and the refusal names the command that fixes it.**
+Every other format keeps the rule unchanged, and the opportunism at §8.11 is unaffected.
+
+C4 means a whole class of code — run gathering, fallback query planners, `genome_extent` failure
+paths — is deleted rather than written.
 
 ---
 
@@ -1070,7 +1079,8 @@ them.
 
 **Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
 on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
-comparison), **tracks** (bigWig, any number, resolved as lines or areas), and **bed-like files** (any
+comparison), **tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number,
+resolved as lines or areas), and **bed-like files** (any
 number, resolved as genomic segments). Each is placed on any of the map's four edges — above, below,
 or down either side — or on several at once; each carries its own limits, style, colour and value
 scaling; and any set of tracks may share one autoscale group.
@@ -1292,7 +1302,14 @@ It is **opportunistic in exactly §3.4's sense**, and the fallbacks are the
 feature: a plain GTF still works, a bgzipped one with no index still works, and
 an index that is absent, corrupt, truncated or for another assembly falls back to
 the whole-file read rather than refusing the track. An index that can prevent a
-file from opening is worse than no index. Two further guards follow from that: a
+file from opening is worse than no index.
+
+That rule is about an index which makes a *working* read faster, and it stands
+unchanged for every format it was written about. Where the index is the only
+bounded read a format has, its absence is a property of **the file** rather than
+of the index, and there is no read to fall back to — so the refusal is the honest
+answer and it names the command. See §8.13, which is the one format that is in
+that position. Two further guards follow from that: a
 sidecar is only *asked* for when the file is a `.gz`, and a span set that would
 read more than four fifths of the file is abandoned, because a saving that is not
 one costs a round trip to discover and nothing else.
@@ -1555,6 +1572,95 @@ table under `#` comment lines naming the file, the table and the column: a lane 
 level the view is, and a reader checking a bar against the file needs the rows the file actually
 wrote (§18.7).
 
+### 8.13 Alignments
+
+A `.bam` opens as a lane, and it is the first kind here that arrives with a rule of its own attached
+to it (§1). Everything below is that rule and what follows from it.
+
+**The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
+file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
+gigabytes and the demo yeast one is not the case worth designing for. The index is the only thing
+that makes reading by region bounded, so a BAM without one is refused **by name**, and the refusal
+says `samtools index`. That is the narrow carve-out §1 states positively, and it costs nothing
+anywhere else: §8.11's opportunism is about an index that makes a working read *faster*, and it is
+unchanged for every format it was written about. A `.bai` and a `.csi` are both read, decided by
+their magic bytes rather than their suffix, and both spellings `samtools index` writes are paired
+with the file they belong to. A remote file names its own — `<url>.bai`, guessed and never probed,
+since §12 has no request to spend discovering that a file has no index — and where the guess cannot
+work, a presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+
+The second refusal is **sort order**, and it is not a technicality. Every byte this reader fetches is
+addressed by an index that describes a coordinate-sorted file; a name-sorted one handed to a region
+query answers with whatever happened to be in those blocks, which is worse than refusing because it
+looks like an answer. The `@HD SO:` line is read and the refusal says `samtools sort`.
+
+**Three bands, and only the first of them is anywhere but the browser.** The lane holds *coverage*,
+which is a value per pixel and is therefore a track in every sense §8.2 means — it goes through
+`sample`, inherits `profileOf`, the readout, the four edges and the figure, and joins an autoscale
+group with any other track over the same assembly. Above it in zoom the lane will grow a *consensus*
+band and a *pile* of individual reads, and those two exist only in the 1D browser. The rule is
+geometry rather than policy: a read is drawn along the axis at its own extent, and beside a heatmap
+the axis is an axis of matrix bins where the finest unit is a bin and not a base. There is nothing
+for a read to be drawn *on* there. The same is already true of the FASTA lane, which is GC content
+beside a map and residues only in the browser (§8.8), and alignments are that shape with one more
+rung.
+
+**Above what it can afford, the lane draws nothing and says why.** This is the one place an
+alignment lane differs from every other kind, and it follows from having no summary layer: depth over
+a window is a full read of the reads under it, so a window can be legitimately unanswerable. The
+forecast comes from the index alone — the byte spans a region resolves to, summed before anything is
+fetched — so a window too deep to draw is refused at **zero data requests** rather than discovered
+part-way through a fetch. What the lane then shows is its name, an empty band, and a sentence naming
+the number and the way forward.
+
+The estimate that would have filled that space was considered and refused. The BAI linear index
+gives compressed **bytes** per 16 kb window, which is not depth: it varies with read length and with
+how well the reads compressed, it is floored at 16 kb, and CSI carries no linear index at all — so on
+the files with the longest chromosomes it would simply be absent. Drawn on a depth axis it would be
+the first quantitative lane in this application that means something other than what it says, which
+is the rule `__unbinned__` (§7.4) and the bigBed truncation notice (§8.7) are both instances of. A
+bigWig of the coverage is the honest answer at that width and the message names it, because
+`@gmod/bbi` is already here and reads one.
+
+**What a bin holds is mean depth**, and three decisions inside that are worth writing down because
+each is a place a viewer can quietly disagree with `samtools` and never say so. A CIGAR `N` is not
+covered: it is reference the read is aligned *across* rather than *over*, and counting it draws an
+RNA-seq gene as a solid block and erases the only thing the picture was for. A `D` is covered,
+because a deletion is a base the read asserts something about. Secondary and supplementary
+alignments are excluded, because they are one molecule reported twice and they cluster at repeats and
+breakpoints — the loci where the number is being read most carefully. Duplicates are **kept** unless
+the reader asks otherwise: marking them is a pipeline's decision, and hiding them silently would make
+this app disagree with every other reading of the same file. And the value is covered bases per bin
+divided by bin width rather than a count of reads touching the bin, which is the same number at base
+resolution and an order of magnitude smaller at any other.
+
+**The reader is written here**, as `hic/format.ts` and `annotations/tabix.ts` are and for the reason
+they both give at length: every read in this application goes through a source that counts its
+requests, caches its chunks and signs them where a bucket needs it, and a parser that fetches for
+itself sits outside all three. `@gmod/bam` is a devDependency and the fixtures are read with it,
+exactly as `hic-straw` reads the `.hic` ones — because a round trip against our own writer proves the
+two agree and cannot prove they are right, and the first thing that oracle caught was a record prefix
+off by four bytes in both halves at once.
+
+Most of the byte layer was already written. `annotations/tabix.ts` has BGZF, virtual offsets, span
+coalescing and the §5.9 name ladder, and a `.bai` is the same binning index a `.tbi` is. What it does
+*not* have is the part this needs: it collapses every bin to one span per sequence and drops the low
+sixteen bits of every offset, deliberately and for a reason that holds there — a feature lane holds a
+whole `FeatureSet` and draws the visible part (§8.4). A contig's worth of BAM cannot work that way,
+so `annotations/bam/index.ts` keeps bin-level chunks, both halves of every offset, the linear index
+and the forecast.
+
+**Not built, and each for its own reason.** No **mate fetching**: a mate lives at `PNEXT`, which is
+off-screen by definition for anything but a short insert, so following them is one uncoalescable
+range request per visible read with no locality at all. The mate's coordinates are decoded and shown;
+the bytes are not chased. No **variant calling** — §18.9's argument about a half-good caller inside a
+viewer applies here with more force, not less. No **contact matrix derived from alignments**: that is
+the second application GAPS' original refusal was drawing a line against, and it still is. And no
+**CRAM**, which is refused on stronger ground than "wrong app": it cannot be decoded without the
+exact reference its records were compressed against, identified by an M5 checksum and conventionally
+fetched from somebody else's registry — which C1 and C5 forbid outright — or supplied as a second
+required file, which is the rule §1 has just been at pains to keep narrow.
+
 ---
 
 ## 9. cool and mcool
@@ -1638,6 +1744,10 @@ Every refusal names the file's actual state and the concrete fix.
 | Range refers to unknown label | List genomes and contigs, truncated |
 | Coordinate suffix on a genome name | State that genome ranges are whole-genome |
 | Remote: ranges unsupported / CORS blocked | Distinguish the two; name the host |
+| BAM with no index beside it | State that a BAM is read by region and has no whole-file fallback, name the sidecar to drop, and give `samtools index <file>`. Distinct from the row below: "there is no index" and "the index you gave me is not one" have different fixes (§8.13) |
+| BAM whose index cannot be read | Name what went wrong reading it, and give `samtools index <file>` to re-make it |
+| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>` |
+| CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b` |
 
 ---
 
@@ -1677,6 +1787,18 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 
+And for an alignment lane (§8.13), where the open cost is separated from the window cost for the same
+reason the table above separates opening a file from loading one MAG's matrix — a `.bai` for a human
+WGS file is single-digit megabytes read once, and folding that into a per-window budget would hide
+the cost it exists to police:
+
+| Operation | Budget |
+|---|---|
+| Open a BAM: header + index | ≤ 2 range requests, and the index read is reported in **bytes** because a request count says nothing useful about a whole-file read |
+| One alignment window | ≤ 5 coalesced range requests |
+| Pan inside the window already fetched | 0 requests |
+| A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
+
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to
 satisfy and is therefore the one that is tested first:
 
@@ -1702,7 +1824,9 @@ chromatin files. Held in reserve — adopting it would not change any file forma
 ## 13. Explicit non-features
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
-computation of any kind; required companion files; required preprocessing; support for orderings other
+computation of any kind; required companion files **for a contact map** (§1 states the scope, and
+§8.13 the one format that falls outside it: where an index is a format's only bounded read, its
+absence is refused by name); required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
 not a category); write access of any kind, in either target; an auto-update service; and a desktop
 build with a feature set of its own — the package is a delivery mechanism, and the formats, views
@@ -1718,6 +1842,14 @@ second is refused.
 Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
 contact-based contig reordering or scaffolding; **no writing of `.cool`, `.mcool` or `.metacool`** —
 a decision rather than a limitation, since h5wasm could create one; and no differential APA.
+
+Four more arrive with §8.13, each with its own reason rather than one shared one: no **mate
+fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
+**variant calling** (§18.9's argument about a half-good caller, which applies here with more force);
+no **contact matrix derived from alignments** (the second application the original refusal was
+drawing a line against); and no **CRAM** — which is refused on stronger ground than the others,
+since it cannot be decoded without the exact reference its records name, fetched from a third-party
+registry (C1, C5) or supplied as a second required file.
 
 There is exactly **one** observable difference between them, and it is a host-compatibility
 difference rather than a feature: the desktop build can ask a host not to compress, which a page is
@@ -3285,6 +3417,12 @@ login node with no route to the website; a reviewer who will not install an unsi
 should not have to; a laptop holding unpublished patient-derived data, which is the reader §11 was
 written for. §11's promise — nothing is uploaded — holds in every build, but only in this one is it
 structural rather than a claim, because there is no origin to upload to.
+
+A remote file cannot be opened here at all — there is no origin to read one from — which is a
+property of the target and not a bug in any format. It matters most for a `.bam`, since a dropped
+one and its index are the *only* way to get alignments into this build, so the interface says so
+rather than failing at it: the URL box is what is absent, and a dropped pair works exactly as it
+does everywhere else.
 
 **Four things a `file://` page cannot do.** Each was measured in Chromium before the config was
 written, and each is absolute rather than a degradation:

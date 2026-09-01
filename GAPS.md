@@ -259,8 +259,27 @@ So that the absence of each is legible as a decision rather than as an oversight
 - **KR balancing** — `render/derive.ts:80` and SPECS §7.5 settle it; ICE is the same answer.
 - **Variable-bin files, non-`genome-then-length` orderings** — §3.3, §14. The judgement call recorded
   at §14 (whether the refusal message alone is enough) is a question for first users, unchanged.
-- **BAM / CRAM / VCF** — real formats, wrong app. A contact-map browser that reads alignments is two
-  applications.
+- **CRAM** — refused on its own ground rather than as collateral, and the ground is stronger than
+  "wrong app". A CRAM cannot be decoded without the exact reference its records were compressed
+  against, identified by an M5 checksum and conventionally fetched from a third-party registry — which
+  C1 and C5 forbid outright — or supplied as a second required file, which is the rule §1 has been at
+  pains to keep narrow. Converting with `samtools view -b` is the answer and the folder view says so.
+- **VCF** — still open, and worth separating from the line it used to share. The argument against it
+  was never really its own: it is a small indexed text format that this app already has the
+  machinery for (`annotations/tabix.ts`), and what it is missing is a picture — a variant lane is not
+  a track and not a segment set, and nobody has said what it should look like beside a contact map.
+  That is a design question rather than a refusal.
+
+*(BAM was on this list, and is not any more.* The line read "real formats, wrong app — a contact-map
+browser that reads alignments is two applications", and the strongest part of it was never the
+formats but the *scope*: a viewer that reads alignments in order to build contact matrices from them
+would indeed be a second application. That is still refused, at SPECS §13. What is built instead is
+narrower and is an annotation like any other — a coverage lane over the genome the map is already
+about, with the pile and the consensus that follow from it living only where a base can have a pixel.
+The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` collides with the
+C1/C3 corollary, so that corollary is now *scoped* — it protects the contact map's opening path,
+which is what makes the no-preprocessing claim true — and the narrow rule that replaces it is stated
+positively at §8.13 rather than left as an exception.)*
 - **WebGL rendering** — the technique at §7.2 re-rasterises on three events and never on pan or zoom.
   There is nothing here for a GPU to fix; G5 is where the real cost is.
 - **Accounts, sharing, collaboration** — C1.

@@ -14,6 +14,84 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Alignment files open, and their coverage is a lane.** Drop a `.bam` with its
+  `.bai` or `.csi` beside it — or point at one by URL — and the depth over the
+  window is drawn like any other track: on any of the map's four edges, in the
+  1D browser, with limits, an autoscale group, the ceiling drag, the readout and
+  the exported figure, because it goes through the one funnel every lane's
+  values already come out of. A `.bam` can also *start* a browser session on its
+  own, since its `@SQ` table is every sequence and its exact length.
+
+  **This is the one format allowed to require a companion file, and that took an
+  argument rather than a line of code.** SPECS §13 listed required companion
+  files among the explicit non-features, and §1 said C1 and C3 together mean the
+  app can never require one. The scope of that rule is now written down: it
+  protects the *contact map's* opening path, which is what makes the
+  no-preprocessing claim true, and it was never a claim about every byte the app
+  reads. A BAM has no whole-file fallback that respects §12 at all — it is read
+  by region and the index is the only thing that makes reading by region bounded
+  — so the narrow rule replacing it is stated positively at §8.13: a format whose
+  index is its only bounded read may refuse without one, and the refusal names
+  the command. Two do: `samtools index` for a file with no index beside it, and
+  `samtools sort` for one that is not in coordinate order, because a name-sorted
+  file handed to a region query answers with whatever was in those blocks, which
+  is worse than refusing because it looks like an answer.
+
+  **Above what it can afford, the lane draws nothing and says why.** There is no
+  summary layer in a BAM, so depth over a window is a full read of the reads
+  under it, and a window can be legitimately unanswerable. The forecast is made
+  from the index alone, so a window too deep to draw is refused at zero data
+  requests rather than discovered part-way through a fetch. Drawing the BAI
+  linear index's byte density there instead was considered and refused: it is
+  compressed bytes per 16 kb rather than depth, wrong wherever read length
+  varies, and absent entirely on CSI — it would be the first quantitative lane
+  here that means something other than what it says.
+
+  Three decisions inside the depth itself, each a place a viewer can quietly
+  disagree with `samtools` and never say so. A CIGAR `N` is **not** covered — it
+  is reference the read is aligned across rather than over, and counting it draws
+  an RNA-seq gene as a solid block. Secondary and supplementary alignments are
+  excluded, since they are one molecule reported twice and they cluster exactly
+  where the number is read most carefully. Duplicates are **kept** unless asked
+  otherwise, because marking them is a pipeline's decision and hiding them
+  silently would disagree with every other reading of the same file.
+
+  The reader is written here, with no new runtime dependency, for the reason
+  `hic/format.ts` and `annotations/tabix.ts` both give at length. `@gmod/bam`
+  is a devDependency and reads the fixtures alongside it, exactly as `hic-straw`
+  reads the `.hic` ones — and the first thing it caught was a record prefix off
+  by four bytes in this repo's reader *and* its fixture builder at once, which
+  is precisely the mutual misunderstanding a round trip cannot see.
+
+### Fixed
+
+- **A file and its index dropped together are now actually paired.** The loader
+  has always paired a `.tbi` with the file it indexes, and `Session.dropped` —
+  which decides what a single file *is* — could only ever be asked about one
+  file at a time, so every caller looped it over the batch and the loader was
+  handed one file at a time. A plain drop of a bgzipped GTF and its `.tbi` onto
+  the window therefore read the GTF whole and drew the index as a refused row.
+  The pairing rule now lives in one function that both roads go through.
+
+- **A re-opened local track keeps its index.** A grant was remembered for the
+  file and not for the sidecar, so a reload re-attached the `.gz` and lost the
+  `.tbi`, quietly going back to reading the whole file. Changing resolution did
+  the same thing by a different route: `carry` rebuilt the source without it.
+  The index now lives on the source rather than beside it, so every road that
+  carries a source forward carries the index too.
+
+- **A derived track is no longer restored as a file that never existed.** It is
+  computed from two other rows and holds no bytes and no recipe the stored shape
+  can carry, so it fell through to `{ kind: 'local' }` and came back as a
+  detached local row under the derived track's label, offering to re-open a file
+  that has never been on any disk. It is not persisted now, which is the smaller
+  wrong until there is a stored shape that can name an operation and its
+  operands.
+
+- **The README no longer states a rule SPECS overturned.** It still said
+  annotations were *absent* on a `.metacool`; §8.5 replaced that gate with an
+  honest overlap report in MAGs some time ago.
+
 - **Tabs can be called something.** A tab is labelled by its file, which is the
   right default and a poor name for the work: four tabs reading
   `matrix_1000.mcool` off four runs are four identical labels whose only
