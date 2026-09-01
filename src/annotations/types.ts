@@ -75,10 +75,18 @@ export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata'
  * Where the bytes come from. The same two-case split as the reader's
  * `SourceSpec` (§6.1), and for the same reason: a dropped `File` is handed
  * around by reference and never uploaded (§11), a URL is fetched in ranges.
+ *
+ * `index` is the sidecar — a `.tbi`, a `.bai` or a `.csi` — and it lives *here*
+ * rather than being handed to the loader alongside the source, because a
+ * sidecar is not a fact about one load: it is part of how these bytes are
+ * reached. Every road that carries a source forward therefore carries the index
+ * with it, which is the difference between a BAM that survives a resolution
+ * change and one that comes back refusing to open (§8.13). It is never
+ * persisted — a `File` cannot be — so a restored row asks for the pair again.
  */
 export type AnnotationSource =
-  | { kind: 'local'; file: File; name: string }
-  | { kind: 'remote'; url: string; name: string }
+  | { kind: 'local'; file: File; name: string; index?: File }
+  | { kind: 'remote'; url: string; name: string; index?: string }
   | ComputedSource
   | MetadataSource
 

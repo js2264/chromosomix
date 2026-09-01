@@ -21,7 +21,7 @@
  * one URL hash (spec §5.5).
  */
 
-import { AnnotationLoader } from '../annotations/loader'
+import { AnnotationLoader, pairIndexes } from '../annotations/loader'
 import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -1780,9 +1780,7 @@ export class Session {
       // alongside it, which is exactly the two-step the note asks for done in
       // one gesture.
       await this.openConfigFile(config)
-      for (const file of files) {
-        if (file !== config) this.dropped(file)
-      }
+      this.droppedAll(files.filter((file) => file !== config))
       return
     }
     if (files.length === 1) {
@@ -1793,6 +1791,7 @@ export class Session {
     const lead = maps[0] ?? files.find((file) => this.routeOf(file.name) === 'genome') ?? files[0]
     await this.open(lead.name, { kind: 'local', file: lead })
     if (this.destroyed) return
+    const rest: File[] = []
     for (const file of files) {
       if (file === lead) continue
       // Every spare map, and in the order they were selected — the deck is a
@@ -1801,8 +1800,9 @@ export class Session {
         this.addCompanion(file)
         continue
       }
-      this.dropped(file)
+      rest.push(file)
     }
+    this.droppedAll(rest)
   }
 
   async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
@@ -2467,14 +2467,16 @@ export class Session {
       await this.open(seat.name, { kind: 'local', file: seat })
       if (this.destroyed) return
     }
+    const rest: File[] = []
     for (const file of files) {
       if (file === seat) continue
       if (maps.includes(file)) {
         this.addCompanion(file)
         continue
       }
-      this.dropped(file)
+      rest.push(file)
     }
+    this.droppedAll(rest)
   }
 
   /**
@@ -2635,7 +2637,31 @@ export class Session {
    * through the routing rather than around it: a `.cool` aimed at the bottom of
    * the map is still a map, not a track drawn along the bottom.
    */
-  private dropped(file: File, placement?: Placement, map?: string): void {
+  /**
+   * Route a whole drop, having first paired each sidecar with what it indexes.
+   *
+   * The pairing has to happen *here*, before anything is routed, and that is
+   * the whole reason this exists. `dropped` decides what one file is — a
+   * workspace, a map, a `chrom.sizes`, a track — and it can only be asked about
+   * one file at a time; but a sidecar is not a file *about* itself, it is half
+   * of a pair, and every caller was looping `dropped` over the batch and so
+   * handing the loader one file at a time. `AnnotationLoader.addFiles` pairs
+   * what it is given, and it was never given both.
+   *
+   * That was a live bug for `.tbi` before a BAM existed: dropping a bgzipped
+   * GTF and its index together read the GTF whole and drew the `.tbi` as a
+   * refused row. For a BAM it would not be a slow path but a broken one, since
+   * there is no whole-file fallback to land in (§8.13).
+   *
+   * A sidecar whose file is *not* in the batch is passed through untouched, so
+   * it reaches the loader alone and is refused by name — which is more use than
+   * silently doing nothing.
+   */
+  private droppedAll(files: readonly File[], placement?: Placement, map?: string): void {
+    for (const { file, index } of pairIndexes(files)) this.dropped(file, placement, map, index)
+  }
+
+  private dropped(file: File, placement?: Placement, map?: string, index?: File): void {
     // A saved workspace, before anything else looks at it: it is not a track,
     // it is the window it was saved from.
     if (looksLikeConfig(file.name)) {
@@ -2664,7 +2690,7 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
-    held.loader.addFiles([file], placement)
+    held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -4274,7 +4300,7 @@ export class Session {
           // is what importing has always meant and is right for every drop but
           // this one.
           loadOnEdge: (files, edge) => {
-            for (const file of files) this.dropped(file, placementOn(edge), map)
+            this.droppedAll(files, placementOn(edge), map)
           },
           // The same aim, at a row out of the Files panel. Resolved here rather
           // than in the panel that took the drop, because reading the file is a

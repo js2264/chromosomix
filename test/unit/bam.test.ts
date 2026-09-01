@@ -34,7 +34,7 @@ import {
 } from '@/annotations/bam/index'
 import { coverageOf, eachAlignedBlock } from '@/annotations/bam/pile'
 
-import { baiBytes, bamBytes, recordBytes, tagBytes, concat } from './bam-fixtures'
+import { baiBytes, bamBytes, tagBytes } from './bam-fixtures'
 
 const REFS = [
   { name: 'chrI', length: 230_218 },

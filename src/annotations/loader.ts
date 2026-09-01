@@ -84,25 +84,19 @@ export class AnnotationLoader {
     // "select both and drag" the whole of the gesture. A `.tbi` dropped alone
     // has nothing to index and is passed through to be refused by name, which
     // is more use than silently doing nothing.
-    const indexes = new Map<string, File>()
-    for (const file of files) {
-      if (/\.tbi$/i.test(file.name)) indexes.set(file.name.replace(/\.tbi$/i, ''), file)
-    }
-    const paired = files.filter((file) => !(/\.tbi$/i.test(file.name) && hasBase(files, file)))
-    for (const file of paired) {
+    for (const { file, index } of pairIndexes(files)) {
       const held = this.store.entries.find(
         (entry) => entry.status === 'detached' && entry.source.name === file.name,
       )
       if (held !== undefined) {
-        this.reattach(held.id, file)
+        this.reattach(held.id, file, index)
         continue
       }
       this.begin(
-        { kind: 'local', file, name: file.name },
+        { kind: 'local', file, name: file.name, ...(index === undefined ? {} : { index }) },
         undefined,
         undefined,
         placement,
-        indexes.get(file.name),
       )
     }
   }
@@ -119,8 +113,14 @@ export class AnnotationLoader {
   addUrl(url: string, label?: string, placement?: Placement): void {
     const trimmed = url.trim()
     if (trimmed === '') return
-    const name = trimmed.split('/').pop() ?? trimmed
-    this.begin({ kind: 'remote', url: trimmed, name }, label, undefined, placement)
+    const { address, index } = splitIndexFragment(trimmed)
+    const name = address.split('/').pop() ?? address
+    this.begin(
+      { kind: 'remote', url: address, name, ...(index === undefined ? {} : { index }) },
+      label,
+      undefined,
+      placement,
+    )
   }
 
   /**
@@ -229,7 +229,20 @@ export class AnnotationLoader {
       this.store.update(id, { summary: 'dropped file — re-open it to draw it again' })
       return
     }
-    this.reattach(id, file)
+    // And the sidecar, under whichever name it was remembered by. Re-attaching
+    // the file alone is why a reloaded `.gz` used to come back reading itself
+    // whole; for a BAM it is the difference between a row that reopens and one
+    // that reopens refusing, since there is no whole-file fallback (§8.13).
+    let index: File | undefined
+    for (const candidate of indexNamesFor(name)) {
+      const held = await resolveHandle(candidate)
+      if (held !== null) {
+        index = held
+        break
+      }
+    }
+    if (this.store.byId(id)?.status !== 'detached') return
+    this.reattach(id, file, index)
   }
 
   /**
@@ -238,15 +251,17 @@ export class AnnotationLoader {
    * The id is kept, so the row does not jump to the bottom of the card and the
    * settings the reader chose stay attached to the thing they chose them for.
    */
-  reattach(id: string, file: File): void {
+  reattach(id: string, file: File, index?: File): void {
     const entry = this.store.byId(id)
     if (entry === undefined) return
-    this.store.update(id, {
-      status: 'loading',
-      source: { kind: 'local', file, name: file.name },
-      error: undefined,
-    })
-    void this.read(id, { kind: 'local', file, name: file.name }, false)
+    const source: AnnotationSource = {
+      kind: 'local',
+      file,
+      name: file.name,
+      ...(index === undefined ? {} : { index }),
+    }
+    this.store.update(id, { status: 'loading', source, error: undefined })
+    void this.read(id, toWire(source), false)
   }
 
   /**
@@ -300,20 +315,25 @@ export class AnnotationLoader {
     label?: string,
     stored?: StoredEntry,
     placement?: Placement,
-    index?: File,
   ): AnnotationEntry {
     // Where the browser gave a grant for this file, write it down: a track is as
     // worth remembering as the map it is drawn beside, and eight bigWigs to
     // re-drop is the larger share of what a reload used to cost. Keyed on the
     // file's name, which is what a restored row carries and looks itself up by.
     if (source.kind === 'local') {
-      const file = source.file
-      void grantFor(file).then(
-        (handle) => {
-          if (handle !== null) void rememberHandle(source.name, handle, file)
-        },
-        () => undefined,
-      )
+      // The sidecar as well as the file. Remembering only the file is why a
+      // reloaded `.gz` used to come back having lost its `.tbi` and read
+      // itself whole — and for a BAM the same omission is the difference
+      // between a row that reopens and one that reopens refusing (§8.13).
+      for (const file of [source.file, source.index]) {
+        if (file === undefined) continue
+        void grantFor(file).then(
+          (handle) => {
+            if (handle !== null) void rememberHandle(file.name, handle, file)
+          },
+          () => undefined,
+        )
+      }
     }
     const guess = guessOf(source.name)
     const entry = this.store.begin({
@@ -342,7 +362,7 @@ export class AnnotationLoader {
     })
     // `stored === undefined` is what makes the style a *guess*: a restored row
     // brings the settings a reader chose, and those are never re-derived.
-    void this.read(entry.id, toWire(source, index), stored === undefined)
+    void this.read(entry.id, toWire(source), stored === undefined)
     return entry
   }
 
@@ -415,19 +435,135 @@ export class AnnotationLoader {
  * source with an `undefined` URL, which is what the previous two-case ternary
  * would have done the moment the third case existed.
  */
-/** Whether the file this `.tbi` names was dropped alongside it. */
-function hasBase(files: readonly File[], index: File): boolean {
-  const base = index.name.replace(/\.tbi$/i, '')
-  return files.some((file) => file.name === base)
+/**
+ * Split `<url>#index=<url>` into the two URLs it names.
+ *
+ * The one place a reader can say where an index really is, and it exists
+ * because the guess cannot always be made: `<url>.bai` is meaningless against a
+ * presigned URL, against one carrying a query string, and against any bucket
+ * that publishes its index under a different key. A fragment rather than a
+ * second input box, because a URL is what gets pasted into chat, into a
+ * notebook and into this app's own box — so the pair travels as one string or
+ * it does not travel (§8.13).
+ *
+ * The fragment is stripped from the address, since a `#` is never sent to a
+ * server and leaving it on would only make the name shown for the file wrong.
+ */
+export function splitIndexFragment(url: string): { address: string; index?: string } {
+  const at = url.indexOf('#index=')
+  if (at < 0) return { address: url }
+  const index = url.slice(at + '#index='.length).trim()
+  const address = url.slice(0, at)
+  return index === '' ? { address } : { address, index: decodeURIComponent(index) }
 }
 
-function toWire(source: AnnotationSource, index?: File): WireSource {
+/**
+ * The sidecar suffixes this app pairs with the file they index.
+ *
+ * `.tbi` indexes a bgzipped text file and is opportunistic — the file opens
+ * without it (§8.11). `.bai` and `.csi` index a BAM and are not: there is no
+ * whole-file fallback at §12's budgets, so the pair is the unit, and a BAM
+ * arriving without its index is refused by name (§8.13). One regular
+ * expression for all three, because *pairing* is the same gesture whichever it
+ * is; what differs is only what happens when the pairing fails.
+ */
+const INDEX_SUFFIX = /\.(tbi|bai|csi)$/i
+
+/** Whether this file is a sidecar index rather than something to draw. */
+export function isIndexName(name: string): boolean {
+  return INDEX_SUFFIX.test(name)
+}
+
+/**
+ * The names a sidecar could be the index for.
+ *
+ * Two, because `samtools index` writes both spellings: `reads.bam.bai` beside
+ * `reads.bam`, and — with an explicit output path, which is what every pipeline
+ * that renames its outputs does — `reads.bai`. A reader who drops the pair they
+ * have must not have to know which convention produced it.
+ */
+export function basesForIndex(name: string): string[] {
+  const stem = name.replace(INDEX_SUFFIX, '')
+  return /\.(bai|csi)$/i.test(name) && !/\.bam$/i.test(stem)
+    ? [stem, `${stem}.bam`]
+    : [stem]
+}
+
+/**
+ * The names a sidecar for `base` could have been remembered under.
+ *
+ * The reverse of {@link basesForIndex}, and it exists for one road only: a
+ * restored row knows the name of its file and nothing about its index, because
+ * a `File` does not survive session storage. Both suffixes and both spellings
+ * are offered, most specific first, and the first that a grant answers for is
+ * the one taken.
+ */
+export function indexNamesFor(base: string): string[] {
+  if (/\.bam$/i.test(base)) {
+    const stem = base.replace(/\.bam$/i, '')
+    return [`${base}.bai`, `${base}.csi`, `${stem}.bai`, `${stem}.csi`]
+  }
+  if (/\.gz$/i.test(base)) return [`${base}.tbi`]
+  return []
+}
+
+/** A file to open, and the sidecar dropped alongside it if there was one. */
+export interface PairedDrop {
+  file: File
+  index?: File
+}
+
+/**
+ * Group a dropped batch into the files to open and the indexes that belong to them.
+ *
+ * The one implementation of the pairing rule, because there are two roads into
+ * it and they used to disagree. {@link AnnotationLoader.addFiles} pairs what it
+ * is handed; `Session.dropped` decides what a single file *is* — a workspace, a
+ * map, a `chrom.sizes`, a track — and every caller was looping it over the
+ * batch, so the loader was handed one file at a time and the pairing never
+ * fired for a plain drop onto the window. A `.tbi` losing that race read a file
+ * whole that it had an index for; a `.bai` losing it loses the file (§8.13).
+ *
+ * A sidecar whose file is not in the batch is returned as its own entry rather
+ * than dropped, so it reaches the loader alone and is refused by name — more
+ * use than silently doing nothing.
+ */
+export function pairIndexes(files: readonly File[]): PairedDrop[] {
+  const bases = new Map<string, File>()
+  for (const file of files) if (!isIndexName(file.name)) bases.set(file.name, file)
+
+  const indexOf = new Map<File, File>()
+  const spent = new Set<File>()
+  for (const file of files) {
+    if (!isIndexName(file.name)) continue
+    for (const name of basesForIndex(file.name)) {
+      const base = bases.get(name)
+      // First claim wins, in the order `basesForIndex` offers: `reads.bam.bai`
+      // names one file exactly, so a directory holding both spellings pairs
+      // each with its own rather than both with the first.
+      if (base === undefined || indexOf.has(base)) continue
+      indexOf.set(base, file)
+      spent.add(file)
+      break
+    }
+  }
+
+  const out: PairedDrop[] = []
+  for (const file of files) {
+    if (spent.has(file)) continue
+    const index = indexOf.get(file)
+    out.push(index === undefined ? { file } : { file, index })
+  }
+  return out
+}
+
+function toWire(source: AnnotationSource): WireSource {
   if (source.kind === 'local') {
     return {
       kind: 'local',
       file: source.file,
       name: source.name,
-      ...(index === undefined ? {} : { index }),
+      ...(source.index === undefined ? {} : { index: source.index }),
     }
   }
   if (source.kind === 'remote') {
@@ -435,15 +571,33 @@ function toWire(source: AnnotationSource, index?: File): WireSource {
       kind: 'remote',
       url: source.url,
       name: source.name,
-      // Named optimistically rather than probed. A `HEAD` to find out costs the
-      // same round trip as the miss does, and the worker treats *every* index
-      // failure — absent, corrupt, for another file — as "read it whole", which
-      // is what would have happened anyway. Only offered for a `.gz`, so an
-      // uncompressed file never asks.
-      ...(/\.gz$/i.test(source.url) ? { index: `${source.url}.tbi` } : {}),
+      ...(remoteIndexFor(source) === undefined ? {} : { index: remoteIndexFor(source) as string }),
     }
   }
   throw new Error(`${source.name} is a computed track and has no file to load.`)
+}
+
+/**
+ * The sidecar URL for a remote file, guessed or given.
+ *
+ * A given one always wins: a presigned URL, or one carrying a query string,
+ * can never usefully have `.bai` appended to it, so `#index=<url>` is the way
+ * a reader says where the index really is — and it is the only way, because
+ * there is no second place to put it (§8.13).
+ *
+ * Otherwise it is **guessed optimistically and never probed**. A `HEAD` to find
+ * out costs the same round trip the miss does, and §12 does not have a request
+ * to spend on finding out that a file has no index. For a `.gz` the guess is
+ * free either way — the worker treats every index failure as "read it whole",
+ * which is what would have happened anyway. For a `.bam` the guess is the whole
+ * of how the pair is found, so both spellings `samtools index` writes are
+ * offered, the exact one first.
+ */
+function remoteIndexFor(source: { url: string; index?: string }): string | undefined {
+  if (source.index !== undefined) return source.index
+  if (/\.gz$/i.test(source.url)) return `${source.url}.tbi`
+  if (/\.bam$/i.test(source.url)) return `${source.url}.bai`
+  return undefined
 }
 
 /**

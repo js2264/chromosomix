@@ -1020,8 +1020,21 @@ const STORE_SCOPE = 'annotations'
  */
 const LANES_SCOPE = 'deck:lanes'
 
-/** An entry worth remembering: one that finished loading from a nameable source. */
+/**
+ * An entry worth remembering: one that finished loading from a nameable source.
+ *
+ * A **derived** row is not one, and saying so here is what stops it coming back
+ * as something it never was. It is computed from two other rows
+ * (`annotations/derived.ts`) and holds no bytes and no recipe that
+ * {@link StoredEntry} can carry — so it used to fall through {@link toStored}'s
+ * last arm and be written as `{ kind: 'local' }`, which restored a *detached
+ * local file* under the derived row's label: a row offering to re-open a file
+ * that has never existed, on a disk where it cannot be found. Losing the row
+ * across a reload is the smaller wrong, and it is the honest one until there is
+ * a stored shape that can name an operation and its two operands.
+ */
 function persistable(entry: AnnotationEntry): boolean {
+  if (entry.source.kind === 'derived') return false
   return entry.status === 'ready' || entry.status === 'detached'
 }
 
@@ -1058,7 +1071,15 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
                 table: entry.source.table,
                 column: entry.source.column,
               }
-            : { kind: 'local', name: entry.source.name },
+            : // `local` and `detached`, which are one case here on purpose: a
+              // detached row *is* a local file whose handle this browser no
+              // longer holds, and writing it as one is what brings it back with
+              // its colours and its limits, waiting to be pointed at the same
+              // file again (§8.6). `derived` never reaches this arm — see
+              // {@link persistable}. The `File` itself is not written, and nor
+              // is `index`: neither survives storage, so a restored row asks
+              // for the pair again.
+              { kind: 'local', name: entry.source.name },
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
