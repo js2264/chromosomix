@@ -59,7 +59,25 @@ export const DELETION_LANE = 5
 
 /** What a caller wants out of a window. */
 export interface PileOptions {
+  /**
+   * Which records are **counted** — the base composition, and therefore the
+   * consensus band and the depth curve drawn from it.
+   */
   filter: PileFilter
+  /**
+   * Which records are **drawn**, where that is a wider set than the counted one.
+   *
+   * Defaults to {@link filter}, and the one caller that widens it is the
+   * split-read switch (§8.13). The two must be separable here rather than in
+   * the worker, because both passes happen inside this function: a supplementary
+   * alignment is a second piece of one molecule, so drawing it shows a reader
+   * where the molecule went and *counting* it reports one fragment as two — in
+   * the depth and in the consensus alike.
+   *
+   * Must be a superset of {@link filter}. Nothing checks that, because the only
+   * way to build one is to clear an exclusion bit.
+   */
+  pile?: PileFilter
   /** Rows the lane can draw. Reads beyond it are thinned away. */
   maxRows: number
   /** A hard ceiling on reads, whatever the rows allow. */
@@ -136,13 +154,22 @@ export function pileOf(
   // Two passes over one buffer. The first counts bases and decides the keep
   // rate; the second builds the arrays. Counting first is what lets the
   // consensus come from the *whole* window while the pile is thinned.
+  //
+  // Two filters, tested separately in the one pass. The pile's is the wider of
+  // the two and is what `total` and the thinning are budgeted against, since
+  // those are about what will be *drawn*; the counting filter is what reaches
+  // `countBases`, and it never admits a supplementary alignment however the
+  // lane is set.
+  const drawn = options.pile ?? options.filter
   let total = 0
   const keys: number[] = []
   forEachRecord(bytes, from, (cursor) => {
-    if (!wanted(cursor, refId, start, end, options.filter)) return
+    if (!wanted(cursor, refId, start, end, drawn)) return
     total++
     keys.push(thinKey(bytes, cursor.at + 32, cursor.at + 32 + cursor.nameBytes - 1))
-    countBases(bytes, view, cursor, counts, countsFrom, span)
+    if (wanted(cursor, refId, start, end, options.filter)) {
+      countBases(bytes, view, cursor, counts, countsFrom, span)
+    }
   })
 
   // The keep rate, as a *threshold* on the hash rather than a count: every read
@@ -155,7 +182,7 @@ export function pileOf(
   const held: Held[] = []
   let index = 0
   forEachRecord(bytes, from, (cursor) => {
-    if (!wanted(cursor, refId, start, end, options.filter)) return
+    if (!wanted(cursor, refId, start, end, drawn)) return
     const key = keys[index++]
     if (key >= rate) return
     held.push(read(bytes, view, cursor, options, rows))
@@ -727,23 +754,28 @@ function joinMates(pile: ReadPile, held: Held[]): void {
   for (let i = 0; i < held.length; i++) {
     const name = held[i].name
     if (name === '') continue
+    // A supplementary record is skipped outright rather than tested against
+    // whatever else wears the name. Two reasons, and the second is the one that
+    // bit: it is another piece of the *same* end, so joining it would draw an
+    // insert thread across a breakpoint no template spans — and if it merely
+    // lost the comparison it would still have claimed the name below, which for
+    // a split whose second piece maps upstream is the first record in
+    // coordinate order. The two genuine ends would then never meet each other,
+    // so turning on split reads would silently remove the threads from exactly
+    // the templates it was turned on to look at.
+    if ((pile.flags[i] & FLAG.SUPPLEMENTARY) !== 0) continue
     const first = seen.get(name)
     if (first === undefined) {
       seen.set(name, i)
       continue
     }
-    // Only the two ends of one template, never a third record wearing the name.
-    // Three things wear it: a secondary alignment (excluded by every filter
-    // here), a *supplementary* one — which the split-read switch deliberately
-    // admits — and a name genuinely reused across templates. The flags settle
-    // the first two: a supplementary record is another piece of the same end,
-    // not the other end, and joining it would draw an insert thread across a
-    // breakpoint that no template spans.
-    const either = pile.flags[first] | pile.flags[i]
+    // Only the two *ends* of one template. A name is not enough to say that two
+    // records are each other's mate — it is also what a reused name and a third
+    // alignment of one end look like — so the flags have to agree that these
+    // are opposite ends.
     if (
       pile.mate[first] === -1 &&
       pile.mate[i] === -1 &&
-      (either & FLAG.SUPPLEMENTARY) === 0 &&
       ((pile.flags[first] ^ pile.flags[i]) & (FLAG.FIRST_IN_PAIR | FLAG.SECOND_IN_PAIR)) !== 0
     ) {
       pile.mate[first] = i

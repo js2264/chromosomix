@@ -35,10 +35,8 @@ import type { AnnotationClient } from '../annotations/worker/client'
 import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
-  BAND_GAP,
-  COVERAGE_BAND,
-  consensusBandFor,
-  NAME_BAND,
+  alignmentBands,
+  depthExtent,
   depthProfile,
   drawConsensus,
   drawReads,
@@ -110,7 +108,6 @@ import {
   snapTo,
   withinGrip,
   type LaneFrame,
-  laneBands,
 } from '../render/lane'
 import {
   drawLaneLabel,
@@ -300,7 +297,21 @@ interface Lane {
    * The rung is carried alongside so the paint and the hit test cannot come to
    * different conclusions about which picture is on screen.
    */
-  reads: Array<{ entry: AnnotationEntry; window: ReadWindow; rung: ReadRung }>
+  reads: Array<{
+    entry: AnnotationEntry
+    window: ReadWindow
+    rung: ReadRung
+    /**
+     * The deepest base in the window, for the autoscale group.
+     *
+     * Carried here rather than computed in the paint, because the group is
+     * resolved for the whole stack in a pass that runs *before* any lane is
+     * painted — so a lane that only knew its own depth at paint time would
+     * contribute nothing to its group, and the other members would rescale the
+     * moment this one crossed the read rung.
+     */
+    extent: { min: number; max: number } | null
+  }>
 }
 
 export class BrowserView {
@@ -1512,6 +1523,7 @@ export class BrowserView {
   private paintAlignments(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
+    groups: Map<string, { min: number; max: number }>,
     palette: ReturnType<typeof readCanvasPalette>,
   ): { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' } | null {
     const row = lane.reads[0]
@@ -1519,31 +1531,27 @@ export class BrowserView {
     const style = entry.style
     const reads = readsOf(style)
     // The label's strip first, so the name and the read count are not read
-    // through the depth curve — see `NAME_BAND`.
-    const [, coverage, consensus, pile] = laneBands(
-      frame,
-      [
-        { fixed: this.text ? NAME_BAND : 0 },
-        { fixed: COVERAGE_BAND },
-        { fixed: consensusBandFor(row.rung, frame) },
-        { fill: true },
-      ],
-      BAND_GAP,
-    )
+    // through the depth curve — see `NAME_BAND`. Through `alignmentBands`
+    // because the row budget `fill` sent to the worker and the hit test behind
+    // a click both measure the last of these, and three expressions of one
+    // split is how they came to disagree (§8.4).
+    const [, coverage, consensus, pile] = alignmentBands(frame, row.rung, this.text)
 
     // The coverage band, from the base counts already in hand rather than a
     // second request: the pile and its summary are then the same reads, which
     // is the one thing a reader would notice if it were not true.
     const depth = depthProfile(coverage, this.axis, row.window)
     if (depth !== null) {
-      drawTrack(ctx, coverage, depth.profile, {
+      drawTrack(ctx, coverage, depth, {
         colour: style.colour,
         mode: style.mode,
-        // Through `resolveLimits`, so a lane pinned to a fixed ceiling keeps it
-        // across the read rung. Without it the band autoscales here and obeys
-        // the typed pair one zoom step out, which reads as the axis jumping on
-        // its own — and it is the same control in the same card either way.
-        limits: resolveLimits(style.limits, depth.limits),
+        // The same two steps every other lane's values go through: the group
+        // first, then the lane's own limits. Without the group an alignment
+        // lane would obey its group at the coverage rung and its own window at
+        // the read rung; without `resolveLimits` a typed ceiling would hold one
+        // zoom step out and be ignored here. Both read as the axis jumping on
+        // its own, from the same control in the same card.
+        limits: resolveLimits(style.limits, extentFor(entry, row.extent, groups)),
         guideColour: palette.labelColor,
         haloColour: palette.labelHaloColor,
         font: scaleFont(LANE_FONT),
@@ -1609,7 +1617,7 @@ export class BrowserView {
     } | null = null
     clipLane(ctx, frame)
     if (lane.reads.length > 0) {
-      label = this.paintAlignments(ctx, lane, palette)
+      label = this.paintAlignments(ctx, lane, groups, palette)
     } else if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
         drawSequence(ctx, frame, this.axis, regions, {
@@ -1862,13 +1870,30 @@ export class BrowserView {
 
   /** The pair a track's axis is drawn with right now, group included. */
   private shownLimits(id: string): { min: number; max: number } | null {
-    const groups = this.groupRanges()
+    const extent = this.extentOf(id)
     for (const lane of this.lanes) {
-      const row = lane.profiles.find((profile) => profile.entry.id === id)
-      if (row === undefined) continue
-      return resolveLimits(row.entry.style.limits, extentFor(row.entry, row.profile.extent, groups))
+      const entry = this.memberOf(lane, id)
+      if (entry === null) continue
+      return resolveLimits(entry.style.limits, extent)
     }
     return null
+  }
+
+  /**
+   * One member of a lane by id, whether it is drawing a profile or a pile.
+   *
+   * An alignment lane past the read rung has no `profiles` row — its depth
+   * comes from the base counts under the pile — so a lookup written over
+   * `profiles` alone silently stops finding it exactly when the reader zooms
+   * in, and the ceiling drag and the autoscale button go dead on the lane they
+   * are drawn on.
+   */
+  private memberOf(lane: Lane, id: string): AnnotationEntry | null {
+    return (
+      lane.profiles.find((row) => row.entry.id === id)?.entry ??
+      lane.reads.find((row) => row.entry.id === id)?.entry ??
+      null
+    )
   }
 
   /** Resolve every lane's samples and profiles for this frame. */
@@ -1911,7 +1936,7 @@ export class BrowserView {
             style: readsOf(member.style),
           })
           if (window !== null) {
-            lane.reads.push({ entry: member, window, rung })
+            lane.reads.push({ entry: member, window, rung, extent: depthExtent(window) })
             continue
           }
           // Nothing in hand yet. Fall through to the coverage line rather than
@@ -1943,12 +1968,17 @@ export class BrowserView {
    */
   private groupRanges(): Map<string, { min: number; max: number }> {
     return resolveGroupExtents(
-      this.lanes.flatMap((lane) =>
-        lane.profiles.map(({ entry, profile }) => ({
+      this.lanes.flatMap((lane) => [
+        ...lane.profiles.map(({ entry, profile }) => ({
           group: entry.style.group,
           extent: profile.extent,
         })),
-      ),
+        // An alignment lane past the read rung has no profile — its depth comes
+        // from the base counts under the pile — and it is still a member of its
+        // group. Without this the group loses a member exactly when the reader
+        // zooms in, so every *other* lane in it rescales.
+        ...lane.reads.map(({ entry, extent }) => ({ group: entry.style.group, extent })),
+      ]),
       (group) => this.props.groups.scalingOf(group),
     )
   }
@@ -2739,15 +2769,20 @@ export class BrowserView {
     for (const lane of this.lanes) {
       const row = lane.profiles.find((profile) => profile.entry.id === id)
       if (row !== undefined) return extentFor(row.entry, row.profile.extent, groups)
+      // …and the pile's own depth, for an alignment lane past the read rung.
+      const pile = lane.reads.find((read) => read.entry.id === id)
+      if (pile !== undefined) return extentFor(pile.entry, pile.extent, groups)
     }
     return null
   }
 
   private nudgeCeiling(lane: Lane, factor: number): void {
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
-    const target = row?.entry ?? lane.entry
+    const pile = lane.reads.find((read) => read.entry.id === lane.entry.id) ?? lane.reads[0]
+    const target = row?.entry ?? pile?.entry ?? lane.entry
     if (!hasTrackControls(target.kind)) return
-    const next = nudgedLimits(target.style.limits, row?.profile.extent ?? null, factor)
+    const extent = row?.profile.extent ?? pile?.extent ?? null
+    const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }
 
@@ -3269,7 +3304,11 @@ const NO_OFFSET = { left: 0, top: 0 }
  */
 function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   if (lane === null) return null
-  const tracks = lane.profiles
+  // Both roads to a value axis. An alignment lane past the read rung draws its
+  // depth from the base counts under the pile and has no `profiles` row, so a
+  // list built from `profiles` alone would make the ceiling drag stop working
+  // on it at exactly the zoom where the reader is looking hardest at the depth.
+  const tracks = [...lane.profiles, ...lane.reads]
     .map((row) => row.entry)
     .filter((entry) => hasTrackControls(entry.kind))
   return tracks.length === 0 ? null : tracks

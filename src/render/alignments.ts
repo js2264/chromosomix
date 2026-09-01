@@ -44,7 +44,15 @@ import { BASE_COLOURS } from './sequence'
  * is why it is five entries in the same order as {@link BASE_COLOURS}.
  */
 const BASE_LETTERS = ['A', 'C', 'G', 'T', 'N'] as const
-import { canvasToAcross, laneIsHorizontal, laneRect, laneX, laneY, type LaneFrame } from './lane'
+import {
+  canvasToAcross,
+  laneBands,
+  laneIsHorizontal,
+  laneRect,
+  laneX,
+  laneY,
+  type LaneFrame,
+} from './lane'
 import { basePixels } from './sequence'
 import type { BaseCounts, ReadPile } from '../annotations/types'
 import { BASE_LANES } from '../annotations/bam/reads'
@@ -216,6 +224,13 @@ export function readAt(
   // not that accurate, so treating it as a miss would make every third click on
   // a dense pile do nothing.
   const row = Math.floor(across / (rowHeight + rowGap))
+  // …but not the strip below the *last* drawn row, which `drawReads` leaves
+  // empty when the band does not divide evenly. A click there would open a card
+  // for a read that is not on the screen, which is the one way a hit test can
+  // be wrong and look right.
+  if (row >= Math.max(0, Math.floor((frame.thickness + rowGap) / (rowHeight + rowGap)))) {
+    return null
+  }
 
   const at = (base: number): number =>
     frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
@@ -676,13 +691,49 @@ export function consensusBandFor(rung: ReadRung, frame: LaneFrame): number {
  * indistinguishable from a failure.
  */
 export function rowsFor(frame: LaneFrame, rung: ReadRung, labelled: boolean): number {
-  const spare =
-    frame.thickness -
-    (labelled ? NAME_BAND : 0) -
-    COVERAGE_BAND -
-    consensusBandFor(rung, frame) -
-    BAND_GAP * 2
-  return Math.max(1, Math.floor(spare / (READ_ROW + READ_ROW_GAP)))
+  return Math.max(1, rowsIn(alignmentBands(frame, rung, labelled)[3]))
+}
+
+/**
+ * The lane's four bands: the name strip, the depth, the consensus, the pile.
+ *
+ * One function because §8.4 means it: the paint lays these out, the row budget
+ * sent to the worker is measured against the last of them, and the hit test
+ * inverts it. Three readings of one split, and when they were three
+ * *expressions* of it the budget over-stated the pile by a gap — `laneBands`
+ * puts a gap between every pair of four parts, which is three, and the budget
+ * subtracted two.
+ *
+ * The name strip is a band of zero thickness when the surface draws no text,
+ * rather than a part that is absent: keeping the shape at four is what lets
+ * every caller index it the same way.
+ */
+export function alignmentBands(
+  frame: LaneFrame,
+  rung: ReadRung,
+  labelled: boolean,
+): [LaneFrame, LaneFrame, LaneFrame, LaneFrame] {
+  return laneBands(
+    frame,
+    [
+      { fixed: labelled ? NAME_BAND : 0 },
+      { fixed: COVERAGE_BAND },
+      { fixed: consensusBandFor(rung, frame) },
+      { fill: true },
+    ],
+    BAND_GAP,
+  ) as [LaneFrame, LaneFrame, LaneFrame, LaneFrame]
+}
+
+/**
+ * How many rows of reads a band of this thickness draws.
+ *
+ * The one expression of it, used by the budget, by {@link drawReads} and by
+ * {@link readAt}. The `+ rowGap` is not a fudge: the last row needs no gap
+ * under it, so a band of exactly `n * row + (n - 1) * gap` holds `n` rows.
+ */
+function rowsIn(band: LaneFrame): number {
+  return Math.max(0, Math.floor((band.thickness + READ_ROW_GAP) / (READ_ROW + READ_ROW_GAP)))
 }
 
 /**
@@ -694,17 +745,45 @@ export function rowsFor(frame: LaneFrame, rung: ReadRung, labelled: boolean): nu
  * again — two fetches could answer from two different moments and draw a pile
  * that does not match its own summary.
  */
+/**
+ * The deepest position in a window's base counts, without a frame.
+ *
+ * Split out of {@link depthProfile} because the extent is needed *before* the
+ * bands are laid out: a lane in an autoscale group has to contribute its range
+ * to the group's, and the group is resolved once for the whole stack in a pass
+ * that runs before any lane is painted. It is frame-independent — the deepest
+ * base is the deepest base however wide the lane is drawn — so the two cannot
+ * disagree.
+ */
+export function depthExtent(window: {
+  bases: readonly BaseCounts[]
+}): { min: number; max: number } | null {
+  let max = 0
+  let any = false
+  for (const counts of window.bases) {
+    for (let at = 0; at < counts.span; at++) {
+      let depth = 0
+      for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[at * BASE_LANES + lane]
+      if (depth === 0) continue
+      if (depth > max) max = depth
+      any = true
+    }
+  }
+  // Floored at a real zero, as the sampled coverage band is: depth is a count,
+  // and autoscaling from its own minimum makes a thin region look covered.
+  return any ? { min: 0, max } : null
+}
+
 export function depthProfile(
   frame: LaneFrame,
   axis: LocusAxis,
   window: { piles: readonly ReadPile[]; bases: readonly BaseCounts[] },
-): { profile: PixelProfile; limits: { min: number; max: number } } | null {
+): PixelProfile | null {
   const from = Math.floor(frame.alongFrom)
   const slots = Math.max(1, Math.ceil(frame.alongTo) - from)
   const mean = new Float32Array(slots).fill(Number.NaN)
   const sum = new Float64Array(slots)
   const weight = new Float64Array(slots)
-  let max = 0
   let any = false
 
   for (let i = 0; i < window.piles.length; i++) {
@@ -731,20 +810,17 @@ export function depthProfile(
         sum[slot] += depth
         weight[slot] += 1
       }
-      if (depth > max) max = depth
       any = true
     }
   }
   if (!any) return null
   for (let i = 0; i < slots; i++) if (weight[i] > 0) mean[i] = sum[i] / weight[i]
 
-  return {
-    profile: { from, mean, low: mean, high: mean, envelope: false, extent: { min: 0, max } },
-    // Floored at a real zero, for the reason the sampled coverage band is:
-    // depth is a count, and autoscaling from its own minimum makes a thin
-    // region look covered.
-    limits: { min: 0, max: Math.max(1, max) },
-  }
+  // The extent comes from {@link depthExtent} rather than from `max` above, so
+  // there is one answer to "how deep is this window" rather than two that agree
+  // by inspection: this loop skips a pile whose contig the axis has never heard
+  // of, and the group pass — which runs before any of this — cannot.
+  return { from, mean, low: mean, high: mean, envelope: false, extent: depthExtent(window) }
 }
 
 /**

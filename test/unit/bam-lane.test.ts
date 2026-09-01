@@ -487,10 +487,14 @@ describe('the coverage lane', () => {
     // record is a second piece of one molecule, so drawing it shows where the
     // molecule went and counting it would report one fragment as two. The switch
     // therefore reaches the pile and cannot reach the depth.
+    // The two pieces **overlap**. With them side by side the peak is 1 whether
+    // or not the supplementary is counted, so the depth assertion below would
+    // pass against a reader that counted it — which is the one thing it is here
+    // to rule out.
     const { bam, bai } = await bamFile({
       records: [
         { refId: 0, pos: 1000, cigar: '50M50S', name: 'chim', seq: 'A'.repeat(100), flag: 0x1 | 0x40 },
-        { refId: 0, pos: 1050, cigar: '50S50M', name: 'chim', seq: 'A'.repeat(100), flag: 0x1 | 0x40 | 0x800 },
+        { refId: 0, pos: 1000, cigar: '50S50M', name: 'chim', seq: 'A'.repeat(100), flag: 0x1 | 0x40 | 0x800 },
       ],
     })
     const loaded = await ask({
@@ -528,7 +532,26 @@ describe('the coverage lane', () => {
     expect(readsIn(plain)).toBe(1)
     expect(readsIn(split)).toBe(2)
 
-    // …and the depth is the same number either way.
+    // …and the depth is the same number either way, on **both** roads to it.
+    // The zoomed-out one goes through `sample`; the zoomed-in one is drawn from
+    // the base counts that come back beside the pile, and those are counted
+    // inside `pileOf` — which is where a filter widened for the pile leaks into
+    // a count if the two are not kept apart.
+    const peakOf = (response: AnnotationResponse): number => {
+      const window = (response as { payload: ReadWindow }).payload
+      let max = 0
+      for (const counts of window.bases) {
+        for (let at = 0; at < counts.span; at++) {
+          let depth = 0
+          for (let lane = 0; lane < 6; lane++) depth += counts.counts[at * 6 + lane]
+          if (depth > max) max = depth
+        }
+      }
+      return max
+    }
+    expect(peakOf(plain), 'depth under the pile, splits off').toBe(1)
+    expect(peakOf(split), 'depth under the pile, splits on').toBe(1)
+
     const depthPlain = await ask({
       kind: 'sample',
       entry: 'e-split',
@@ -543,10 +566,8 @@ describe('the coverage lane', () => {
       basesPerPixel: 1,
       reads: withSplits,
     })
-    expect((depthSplit as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(
-      (depthPlain as { payload: TrackSampleSet }).payload.extent?.max ?? -1,
-      6,
-    )
+    expect((depthPlain as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(1, 6)
+    expect((depthSplit as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(1, 6)
   })
 
   it('forgets the file when the row is dropped', async () => {

@@ -939,8 +939,12 @@ export interface ReadStyle {
    * long read spans. Showing them is how a reader sees a split; counting them
    * would be counting the same molecule twice.
    *
-   * So it reaches the pile and never the depth — see `readFilterKey`, which
-   * deliberately does not mention it.
+   * So it reaches what is *drawn* and never what is *counted*. Both roads to a
+   * count are held to that: `readFilterKey` deliberately does not mention it,
+   * so the sampled depth never sees it — and `pileOf` takes two filters, so the
+   * base counts that make the read-rung depth and the consensus do not see it
+   * either. The second half is the one that is easy to lose: those counts are
+   * computed in the same function that builds the pile.
    */
   splits: boolean
 }
@@ -957,6 +961,12 @@ export function defaultReadStyle(): ReadStyle {
  * optional costs one call rather than a `??` at each of a dozen sites — and so
  * that a session stored before this field existed opens with the defaults
  * instead of with `undefined` reaching a renderer.
+ *
+ * It does **not** validate, and that is worth being explicit about: the
+ * clamping happens once, at the boundary, in `AnnotationStore.stored`. That is
+ * enough only because `reads` is not among the per-map style overrides and no
+ * caller resolves a lane style before reaching here. If either changes, this is
+ * where {@link readStyleOf} has to be called instead.
  */
 export function readsOf(style: AnnotationStyle): ReadStyle {
   return style.reads ?? defaultReadStyle()
@@ -992,18 +1002,21 @@ export function readStyleOf(value: unknown): ReadStyle {
 export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'none']
 
 /**
- * The whole style as a cache key, for the caches that hold *reads*.
+ * The style as a cache key, for the caches that hold *reads*.
  *
- * Every field is in it, because every field changes the answer rather than only
- * the drawing: the colouring is also the grouping and therefore the row
- * packing, and the floor and the duplicate switch decide which reads exist at
- * all. `pairs` is the arguable one — mate threads are drawn from columns the
- * pile already carries — and it is included because the worker is handed the
- * whole style, so a key covering part of it would be a trap the first time a
- * field crossed that line.
+ * Four of the five fields are in it, because each changes what comes back: the
+ * colouring is also the grouping and therefore the row packing, and the floor,
+ * the duplicate switch and the split switch decide which reads exist at all.
+ *
+ * `pairs` is deliberately **out**. It is the one field the worker never reads —
+ * a mate thread is drawn from columns the pile already carries, so the reply is
+ * byte-identical with it on or off — and putting it in the key spends a whole
+ * window of BGZF decoding on a switch that only changes what the renderer does
+ * with what it already has. If that ever stops being true, this is the line
+ * that has to change with it.
  */
 export function readStyleKey(style: ReadStyle): string {
-  const flags = `${style.hideDuplicates ? 'd' : ''}${style.pairs ? 'p' : ''}${style.splits ? 's' : ''}`
+  const flags = `${style.hideDuplicates ? 'd' : ''}${style.splits ? 's' : ''}`
   return `${style.colourBy}|${style.minMapq}|${flags}`
 }
 

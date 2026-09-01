@@ -16,7 +16,13 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import { COLOUR_BY, readsOf, type AnnotationEntry, type ColourBy } from '../annotations/types'
+import {
+  COLOUR_BY,
+  readsOf,
+  type AnnotationEntry,
+  type ColourBy,
+  type ReadStyle,
+} from '../annotations/types'
 import { groupsFor } from '../annotations/bam/reads'
 import { readPalette } from '../render/alignments'
 import { button, el, trimNumber } from './dom'
@@ -254,6 +260,36 @@ const COLOUR_HINTS: Record<ColourBy, string> = {
 }
 
 /**
+ * The read controls **as the store holds them now**, and the write that follows.
+ *
+ * Every other control on this card patches one top-level field — `{ size }`,
+ * `{ mode }`, `{ limits }` — and lets `restyle` merge it over whatever the store
+ * currently has. A nested record cannot do that: writing `{ reads: {...} }`
+ * replaces the whole record, so the other four fields come from wherever the
+ * caller read them.
+ *
+ * Read from the *store* rather than from the `entry` the field was built with,
+ * because that snapshot goes stale in a way peculiar to this card:
+ * `AnnotationCard.render` defers rebuilding while a control holds focus, so
+ * after typing in the MAPQ box the row on screen is older than the store. A
+ * write built from it silently reverts the reader's previous edit — set a floor
+ * of 30, then pick a colouring, and the floor is gone.
+ */
+function patchReads(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  patch: Partial<ReadStyle>,
+): void {
+  const live = store.byId(entry.id) ?? entry
+  store.restyle(entry.id, { reads: { ...readsOf(live.style), ...patch } })
+}
+
+/** The same, for reading a control's current value back. */
+function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
+  return readsOf((store.byId(entry.id) ?? entry).style)
+}
+
+/**
  * How the pile is coloured, which is also how it is grouped into rows.
  *
  * The one control on this lane a reader is expected to reach for often, so it
@@ -276,7 +312,7 @@ export function colourByField(store: AnnotationStore, entry: AnnotationEntry): H
   select.addEventListener('change', () => {
     const by = select.value as ColourBy
     select.title = COLOUR_HINTS[by]
-    store.restyle(entry.id, { reads: { ...readsOf(entry.style), colourBy: by } })
+    patchReads(store, entry, { colourBy: by })
   })
   return el(
     'label',
@@ -344,14 +380,13 @@ export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
   box.step = '1'
   box.addEventListener('change', () => {
     const typed = Math.round(Number(box.value))
-    const current = readsOf(entry.style)
     if (!Number.isFinite(typed)) {
-      box.value = String(current.minMapq)
+      box.value = String(liveReads(store, entry).minMapq)
       return
     }
     const clamped = Math.max(0, Math.min(255, typed))
     box.value = String(clamped)
-    store.restyle(entry.id, { reads: { ...current, minMapq: clamped } })
+    patchReads(store, entry, { minMapq: clamped })
   })
   return el(
     'label',
@@ -378,7 +413,7 @@ export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTM
   const reads = readsOf(entry.style)
   const pairs = button(
     'pairs',
-    () => store.restyle(entry.id, { reads: { ...readsOf(entry.style), pairs: !readsOf(entry.style).pairs } }),
+    () => patchReads(store, entry, { pairs: !liveReads(store, entry).pairs }),
     {
       class: `btn btn-chip${reads.pairs ? ' is-on' : ''}`,
       title:
@@ -390,10 +425,7 @@ export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTM
 
   const duplicates = button(
     'hide duplicates',
-    () =>
-      store.restyle(entry.id, {
-        reads: { ...readsOf(entry.style), hideDuplicates: !readsOf(entry.style).hideDuplicates },
-      }),
+    () => patchReads(store, entry, { hideDuplicates: !liveReads(store, entry).hideDuplicates }),
     {
       class: `btn btn-chip${reads.hideDuplicates ? ' is-on' : ''}`,
       title:
@@ -405,10 +437,7 @@ export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTM
 
   const splits = button(
     'split reads',
-    () =>
-      store.restyle(entry.id, {
-        reads: { ...readsOf(entry.style), splits: !readsOf(entry.style).splits },
-      }),
+    () => patchReads(store, entry, { splits: !liveReads(store, entry).splits }),
     {
       class: `btn btn-chip${reads.splits ? ' is-on' : ''}`,
       title:

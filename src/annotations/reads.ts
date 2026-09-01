@@ -51,9 +51,16 @@ interface Held {
   window: ReadWindow
 }
 
+/** A request that is running, and what it was asked under. */
+interface Running {
+  cancel: () => void
+  /** The controls *this request* carries — not the ones already drawn. */
+  style: string
+}
+
 export class ReadCache {
   private readonly held = new Map<string, Held>()
-  private readonly inflight = new Map<string, { cancel: () => void }>()
+  private readonly inflight = new Map<string, Running>()
   private disposed = false
 
   constructor(
@@ -121,9 +128,16 @@ export class ReadCache {
     // it: what is decoding was asked under the old controls and its answer will
     // be discarded the moment it lands, so leaving it in place would mean the
     // reader's click did nothing until they moved the view.
+    //
+    // Against the *running request's* style, and never against the held
+    // window's. The held one records what last landed, so between a control
+    // change and the first landing it is permanently the old style — and a test
+    // written that way fires on every frame, cancelling the request it just
+    // issued and issuing another. A pointer moving over the canvas schedules a
+    // frame each time, so the pile would never land at all.
     const running = this.inflight.get(key)
     if (running !== undefined) {
-      if (cached === null || cached.style === style) return cached?.window ?? null
+      if (running.style === style) return cached?.window ?? null
       running.cancel()
       this.inflight.delete(key)
     }
@@ -141,10 +155,14 @@ export class ReadCache {
       basesPerPixel: options.basesPerPixel,
       reads: options.style,
     })
-    this.inflight.set(key, request)
+    const slot: Running = { cancel: request.cancel, style }
+    this.inflight.set(key, slot)
     void request.promise
       .then((window) => {
-        if (this.disposed) return
+        // Superseded while it was in flight: a cancel rejects, but a reply
+        // already on the wire when the cancel was sent resolves anyway, and
+        // storing it would put a window nobody asked for under the new key.
+        if (this.disposed || this.inflight.get(key) !== slot) return
         const covered = new Map<string, [number, number]>()
         // What was asked for rather than what came back, for the reason
         // `BaseCache` gives at its own copy of this: a reply carries nothing
@@ -160,7 +178,13 @@ export class ReadCache {
         // the lane keeps what it had, the card reports a load failure if there
         // was one, and the next view change tries again.
       })
-      .finally(() => this.inflight.delete(key))
+      .finally(() => {
+        // Only if this promise still owns the slot. Two requests share a key
+        // for as long as it takes a cancelled one to reject, and an
+        // unconditional delete here removes the *replacement's* entry — which
+        // is what lets the next frame issue a third without even cancelling.
+        if (this.inflight.get(key) === slot) this.inflight.delete(key)
+      })
 
     return cached?.window ?? null
   }

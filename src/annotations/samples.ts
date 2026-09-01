@@ -27,6 +27,13 @@ import type { AnnotationClient } from './worker/client'
  */
 export const FETCH_PAD = 0.5
 
+/** A request that is running, and what it was asked under. */
+interface Running {
+  cancel: () => void
+  /** The filter *this request* carries — not the one already drawn. */
+  filter: string
+}
+
 interface Held {
   /** The power-of-two bases-per-pixel these were fetched at. */
   bucket: number
@@ -55,7 +62,7 @@ export class SampleCache {
    * so one that nobody is waiting for any more holds up every other lane's
    * `sample` behind it (§8.13).
    */
-  private readonly inflight = new Map<string, { cancel: () => void }>()
+  private readonly inflight = new Map<string, Running>()
   private disposed = false
 
   constructor(
@@ -170,9 +177,15 @@ export class SampleCache {
     // behind it: what is decoding counted the wrong records, so its answer will
     // be thrown away the moment it lands. Every other reason to be in flight
     // still waits — a pan's answer is right, only late.
+    //
+    // Against the *running request's* filter, never against the held samples'.
+    // The held one records what last landed, so between a control change and
+    // the first landing it is permanently the old filter, and a test written
+    // that way cancels the request it just issued on every frame — of which a
+    // pointer moving over the canvas schedules one each time.
     const running = this.inflight.get(key)
     if (running !== undefined) {
-      if (cached === null || cached.filter === filter) return cached?.samples ?? null
+      if (running.filter === filter) return cached?.samples ?? null
       running.cancel()
       this.inflight.delete(key)
     }
@@ -189,10 +202,14 @@ export class SampleCache {
       basesPerPixel: bucket,
       ...(options.reads === undefined ? {} : { reads: options.reads }),
     })
-    this.inflight.set(key, request)
+    const slot: Running = { cancel: request.cancel, filter }
+    this.inflight.set(key, slot)
     void request.promise
       .then((samples) => {
-        if (this.disposed) return
+        // Superseded while in flight: a cancel rejects, but a reply already on
+        // the wire when the cancel was sent resolves anyway, and storing it
+        // would file the old filter's numbers under the new key.
+        if (this.disposed || this.inflight.get(key) !== slot) return
         const covered = new Map<string, [number, number]>()
         for (const window of wanted) covered.set(window.contig, [window.start, window.end])
         this.held.set(key, { bucket, covered, filter, samples })
@@ -204,7 +221,12 @@ export class SampleCache {
         // tries again. A *cancelled* one lands here too and wants exactly the
         // same nothing — it was called off because the answer stopped mattering.
       })
-      .finally(() => this.inflight.delete(key))
+      .finally(() => {
+        // Only if this promise still owns the slot — two requests share a key
+        // for as long as it takes a cancelled one to reject, and deleting
+        // unconditionally would remove the replacement's entry.
+        if (this.inflight.get(key) === slot) this.inflight.delete(key)
+      })
 
     return cached?.samples ?? null
   }

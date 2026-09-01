@@ -122,6 +122,18 @@ describe('finding the read under a point', () => {
     expect(readAt(frame, axis, stacked, ROW, GAP, 250, 103)).toBe(1)
   })
 
+  it('ignores the strip below the last drawn row', () => {
+    // The band is 60 and a row is 9, so `drawReads` draws six rows and leaves
+    // six pixels empty at the bottom. A read packed into row 6 was fetched (the
+    // budget is quantised upward) and is not on the screen — opening a card for
+    // it is the one way a hit test can be wrong and look right.
+    const below = pileOf([{ start: 100, end: 200, row: 6 }])
+    expect(readAt(frame, axis, below, ROW, GAP, 150, 100 + 57)).toBeNull()
+    // …and the last row that *is* drawn still answers.
+    const last = pileOf([{ start: 100, end: 200, row: 5 }])
+    expect(readAt(frame, axis, last, ROW, GAP, 150, 100 + 48)).toBe(0)
+  })
+
   it('says nothing about a contig the axis has never heard of', () => {
     const elsewhere = { ...pileOf([{ start: 100, end: 200, row: 0 }]), contig: 'chrZ' }
     expect(readAt(frame, axis, elsewhere, ROW, GAP, 150, 103)).toBeNull()

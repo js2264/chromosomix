@@ -18,7 +18,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { AnnotationStore } from '@/annotations/store'
-import { defaultStyle, readsOf, type AnnotationEntry } from '@/annotations/types'
+import {
+  defaultStyle,
+  readsOf,
+  type AnnotationEntry,
+  type ReadStyle,
+} from '@/annotations/types'
 import { colourByField, colourLegend, mapqField, readToggles } from '@/ui/laneSettings'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -144,27 +149,41 @@ describe('the switches', () => {
   })
 
   it('turns each one over without disturbing the others', () => {
+    const cases: Array<[number, Partial<ReadStyle>]> = [
+      [0, { pairs: false, splits: false, hideDuplicates: false }],
+      [1, { pairs: true, splits: true, hideDuplicates: false }],
+      [2, { pairs: true, splits: false, hideDuplicates: true }],
+    ]
+    for (const [at, expected] of cases) {
+      // A row of chips each, because the card rebuilds when the store changes.
+      const made = make()
+      chips(made)[at].click()
+      expect(readsOf(now(made).style), `chip ${at}`).toMatchObject(expected)
+    }
+  })
+
+  it('does not revert the last edit when the card has not rebuilt yet', () => {
+    // The trap a nested style field sets. Every other control patches one
+    // top-level field and lets the store merge it; a `{ reads: {...} }` write
+    // replaces the whole record, so it has to be built from what the store has
+    // *now*. `AnnotationCard.render` defers rebuilding while a control holds
+    // focus, so the entry a field was built with is routinely older than the
+    // store — set a floor, pick a colouring, and the floor was silently gone.
     const made = make()
-    const [pairs] = chips(made)
-    pairs.click()
-    expect(readsOf(now(made).style)).toMatchObject({
-      pairs: false,
-      splits: false,
-      hideDuplicates: false,
-    })
+    const mapq = mapqField(made.store, made.entry)
+    const colour = colourByField(made.store, made.entry)
+    document.body.append(mapq, colour)
 
-    // A fresh row of chips, because the card rebuilds when the store changes.
-    const [, splits] = chips(make())
-    splits.click()
+    const box = mapq.querySelector('input') as HTMLInputElement
+    box.value = '30'
+    box.dispatchEvent(new Event('change'))
 
-    const second = make()
-    const [, , duplicates] = chips(second)
-    duplicates.click()
-    expect(readsOf(now(second).style)).toMatchObject({
-      pairs: true,
-      splits: false,
-      hideDuplicates: true,
-    })
+    // …and now the *stale* select, built from the pre-edit snapshot.
+    const select = colour.querySelector('select') as HTMLSelectElement
+    select.value = 'insert'
+    select.dispatchEvent(new Event('change'))
+
+    expect(readsOf(now(made).style)).toMatchObject({ colourBy: 'insert', minMapq: 30 })
   })
 
   it('says that split reads are drawn and never counted', () => {

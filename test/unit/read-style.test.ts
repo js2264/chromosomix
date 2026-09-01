@@ -106,21 +106,17 @@ describe('reading a stored style back', () => {
 })
 
 describe('the reads key', () => {
-  it('separates every field, because every one of them refetches', () => {
+  it('separates every field the worker reads, because each one refetches', () => {
     const keys = new Set<string>([readStyleKey(base)])
     for (const by of COLOUR_BY) keys.add(readStyleKey(withField('colourBy', by)))
     keys.add(readStyleKey(withField('minMapq', 30)))
     keys.add(readStyleKey(withField('hideDuplicates', true)))
-    keys.add(readStyleKey(withField('pairs', false)))
     keys.add(readStyleKey(withField('splits', true)))
-    // Six colourings and four switches, and the default is one of the six.
-    expect(keys.size).toBe(COLOUR_BY.length + 4)
+    // Six colourings and three switches, and the default is one of the six.
+    expect(keys.size).toBe(COLOUR_BY.length + 3)
   })
 
   it('does not confuse two switches with one another', () => {
-    expect(readStyleKey(withField('pairs', false))).not.toBe(
-      readStyleKey(withField('splits', true)),
-    )
     expect(readStyleKey(withField('hideDuplicates', true))).not.toBe(
       readStyleKey(withField('splits', true)),
     )
@@ -198,5 +194,18 @@ describe('surviving a stored session', () => {
     })
     store.update(entry.id, { status: 'ready' })
     expect(AnnotationStore.stored(uri)[0]?.style.reads).toBeUndefined()
+  })
+})
+
+describe('the cache keys, once more, against the two roads to a count', () => {
+  it('leaves the one switch the worker never reads out of the reads key', () => {
+    // Toggling mate threads is a renderer decision over columns the pile
+    // already carries, so putting it in the key would spend a window of BGZF
+    // decoding on a change the reply cannot express.
+    expect(readStyleKey(withField('pairs', false))).toBe(readStyleKey(base))
+  })
+
+  it('keeps the split switch in it, since that changes which reads come back', () => {
+    expect(readStyleKey(withField('splits', true))).not.toBe(readStyleKey(base))
   })
 })

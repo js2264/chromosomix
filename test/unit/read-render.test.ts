@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { drawReads, type ReadPaint } from '@/render/alignments'
+import { alignmentBands, drawReads, rowsFor, type ReadPaint } from '@/render/alignments'
 import { LocusAxis } from '@/render/locus'
 import type { LaneFrame } from '@/render/lane'
 import type { ReadPile } from '@/annotations/types'
@@ -301,5 +301,24 @@ describe('the row budget', () => {
     const rows = drawReads(ctx, frame, axis, many, paint, 'reads')
     expect(rows).toBe(11)
     expect(calls.filter((call) => call.op === 'fillRect')).toHaveLength(11)
+  })
+
+  it('asks the worker for exactly the rows the band will draw', () => {
+    // The budget, the paint and the hit test are three readings of one split,
+    // and `alignmentBands` exists so they cannot be three *expressions* of it.
+    // They were: the budget subtracted two band gaps where `laneBands` inserts
+    // three between four parts, so it over-stated the pile by three pixels and
+    // asked for a row that could never be drawn.
+    for (const thickness of [120, 160, 200, 240, 241, 242, 300]) {
+      for (const labelled of [true, false]) {
+        const lane = { ...frame, thickness }
+        const band = alignmentBands(lane, 'reads', labelled)[3]
+        const { ctx } = recorder()
+        const drew = drawReads(ctx, band, axis, pileOf([]), paint, 'reads')
+        expect(rowsFor(lane, 'reads', labelled), `${thickness}px, labelled=${labelled}`).toBe(
+          Math.max(1, drew),
+        )
+      }
+    }
   })
 })

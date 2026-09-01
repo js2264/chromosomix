@@ -1846,7 +1846,11 @@ async function readsFor(
         Math.floor(plan.region.start),
         Math.ceil(plan.region.end),
         {
-          filter: pileFilterOf(style),
+          // Two filters, and the asymmetry is the whole of the split-read
+          // switch: `filter` is what is counted and never sees a supplementary
+          // alignment, `pile` is what is drawn and does when the reader asks.
+          filter: filterOf(style),
+          pile: pileFilterOf(style),
           maxRows,
           maxReads: MAX_READS,
           colourBy: style.colourBy,

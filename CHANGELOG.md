@@ -49,11 +49,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and three switches: join mates, show split reads, hide marked duplicates. All
   of it is stored with the session.
 
+  Four of the five reach the worker on the request that needs them; joining
+  mates is the one the worker never reads, so toggling it redraws what is
+  already in hand rather than fetching a window again. A change made while the
+  previous window is still decoding replaces it — the test is against the
+  *running request's* controls, never against the drawn window's, which between
+  a change and the first landing is permanently the old one.
+
   **Split reads are drawn and never counted.** A supplementary alignment is a
   further piece of one molecule the aligner had to split across a breakpoint, so
   drawing it is how a reader sees the split and counting it would report one
-  fragment as two. It is outlined rather than faded — faded already means "soft
-  clip" here — and it is never joined to its primary as though it were a mate.
+  fragment as two. Both roads to a count are held to that: the sampled depth,
+  and the base counts that make the read-rung depth and the consensus. It is
+  outlined rather than faded — faded already means "soft clip" here — and it is
+  never joined to its primary as though it were a mate.
 
   **A click on a read opens a card and fetches nothing.** The flags in words
   with the raw number beside them, the CIGAR, the clips, where the mate went,

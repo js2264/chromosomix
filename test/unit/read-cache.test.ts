@@ -46,6 +46,34 @@ class FakeWorker {
       this.reply({ type: 'result', id: message.id, payload } as AnnotationResponse)
     }
   }
+
+  /**
+   * Answer every `cancel` the way the real worker does.
+   *
+   * Without this a cancelled request never settles, so nothing that runs in its
+   * `finally` ever runs — and a test written over a worker that swallows
+   * cancels cannot see a bug in exactly that path. `annotations.worker.ts`
+   * replies to a cancelled request with `cancelled: true`.
+   */
+  settleCancels(): void {
+    for (const message of this.sent) {
+      if (message.kind !== 'cancel') continue
+      this.reply({
+        type: 'error',
+        id: message.target,
+        message: 'cancelled',
+        cancelled: true,
+      } as AnnotationResponse)
+    }
+  }
+
+  get reads(): AnnotationRequest[] {
+    return this.sent.filter((message) => message.kind === 'reads')
+  }
+
+  get cancels(): number[] {
+    return this.sent.flatMap((message) => (message.kind === 'cancel' ? [message.target] : []))
+  }
 }
 
 const axis = {
@@ -69,6 +97,19 @@ const EMPTY_SAMPLES = { basesPerPixel: 1, regions: [], extent: null }
 
 const domain: readonly [number, number] = [0, 1000]
 
+/**
+ * Let a settled request finish unwinding.
+ *
+ * `.then` → `.catch` → `.finally` is three microtasks, and the slot is released
+ * in the last of them. Two ticks leaves a settled request still holding its
+ * key, which is not a bug — the next frame merely cancels an id the worker has
+ * already finished with — but it is noise a test should not be reading as
+ * signal.
+ */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 4; i++) await Promise.resolve()
+}
+
 function readsOn(): { worker: FakeWorker; cache: ReadCache } {
   const worker = new FakeWorker()
   const cache = new ReadCache(
@@ -84,8 +125,7 @@ async function askTwice(style: ReadStyle): Promise<AnnotationRequest[]> {
   const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
   cache.readsFor({ ...options, style: defaultReadStyle() })
   worker.settle(EMPTY_READS)
-  await Promise.resolve()
-  await Promise.resolve()
+  await flush()
   cache.readsFor({ ...options, style })
   return worker.sent.filter((message) => message.kind === 'reads')
 }
@@ -107,19 +147,101 @@ describe('the pile', () => {
     expect(await askTwice(defaultReadStyle())).toHaveLength(1)
   })
 
-  it('asks again for every field of the style, because every one of them refetches', async () => {
+  it('asks again for every field the worker actually reads', async () => {
     const base = defaultReadStyle()
     for (const changed of [
       { ...base, colourBy: 'mate' as const },
       { ...base, minMapq: 30 },
       { ...base, hideDuplicates: true },
-      { ...base, pairs: false },
       { ...base, splits: true },
     ]) {
       const sent = await askTwice(changed)
       expect(sent, JSON.stringify(changed)).toHaveLength(2)
       expect(sent[1].kind === 'reads' ? sent[1].reads : null).toEqual(changed)
     }
+  })
+
+  it('does not refetch for the one switch the worker never reads', async () => {
+    // `pairs` decides whether the renderer joins two columns the pile already
+    // carries. The reply is byte-identical either way, so spending a window of
+    // BGZF decoding on it would buy nothing at all.
+    expect(await askTwice({ ...defaultReadStyle(), pairs: false })).toHaveLength(1)
+  })
+
+  it('does not re-issue on every frame while a new style is still decoding', async () => {
+    // The failure this pins is a starvation loop, and it is invisible: the lane
+    // keeps drawing, one style behind. `Held.style` is what last *landed*, so a
+    // guard written against it is permanently unequal to the new style between
+    // the control change and the first landing — and a pointer moving over the
+    // canvas schedules a frame each time, so every frame cancelled the request
+    // the frame before had issued. On a real BAM the new pile never arrives.
+    const { worker, cache } = readsOn()
+    const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
+    cache.readsFor({ ...options, style: defaultReadStyle() })
+    worker.settle(EMPTY_READS)
+    await flush()
+
+    const changed = { ...defaultReadStyle(), colourBy: 'mate' as const }
+    for (let frame = 0; frame < 20; frame++) {
+      cache.readsFor({ ...options, style: changed })
+      worker.settleCancels()
+      await Promise.resolve()
+    }
+    // One for the first window, one for the change, and nothing for the other
+    // nineteen frames.
+    expect(worker.reads).toHaveLength(2)
+    expect(worker.cancels).toHaveLength(0)
+  })
+
+  it('replaces a request whose style nobody is waiting for, even before one has landed', async () => {
+    // The mirror image, and the case the code exists for: a reader working the
+    // control faster than the first window comes back. Nothing has landed, so a
+    // guard written against the held window would leave the stale decode in
+    // place — and this worker has no queue, so it holds up every other lane.
+    const { worker, cache } = readsOn()
+    const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
+    cache.readsFor({ ...options, style: defaultReadStyle() })
+    const stale = worker.sent[0].id
+    cache.readsFor({ ...options, style: { ...defaultReadStyle(), colourBy: 'mate' } })
+    expect(worker.cancels).toContain(stale)
+    expect(worker.reads).toHaveLength(2)
+  })
+
+  it('keeps the replacement in flight when the cancelled one finally settles', async () => {
+    // Two requests share a key for as long as it takes a cancelled one to
+    // reject. A `finally` that deletes by key alone removes the *replacement's*
+    // entry, and the next frame then issues a third without even cancelling —
+    // which is how one control change became twenty decodes.
+    const { worker, cache } = readsOn()
+    const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
+    cache.readsFor({ ...options, style: defaultReadStyle() })
+    const changed = { ...defaultReadStyle(), colourBy: 'mate' as const }
+    cache.readsFor({ ...options, style: changed })
+    worker.settleCancels()
+    await flush()
+
+    cache.readsFor({ ...options, style: changed })
+    expect(worker.reads).toHaveLength(2)
+  })
+
+  it('throws away an answer that arrived after it was superseded', async () => {
+    // A cancel and a reply can cross: the worker posts, the cancel is sent, and
+    // the reply lands anyway. Storing it would file the old style's window under
+    // the new key, and the lane would draw it until the view moved.
+    const { worker, cache } = readsOn()
+    const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
+    cache.readsFor({ ...options, style: defaultReadStyle() })
+    const first = worker.sent[0]
+    const changed = { ...defaultReadStyle(), colourBy: 'mate' as const }
+    cache.readsFor({ ...options, style: changed })
+    // The superseded request answers anyway.
+    worker.reply({ type: 'result', id: first.id, payload: EMPTY_READS } as AnnotationResponse)
+    await flush()
+
+    // Nothing was held under the new key, so the next frame still waits rather
+    // than believing it has the window.
+    cache.readsFor({ ...options, style: changed })
+    expect(worker.reads).toHaveLength(2)
   })
 
   it('replaces a request in flight rather than waiting behind it', async () => {
@@ -132,8 +254,7 @@ describe('the pile', () => {
     const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
     cache.readsFor({ ...options, style: defaultReadStyle() })
     worker.settle(EMPTY_READS)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
 
     cache.readsFor({ ...options, style: { ...defaultReadStyle(), colourBy: 'insert' } })
     const stale = worker.sent[worker.sent.length - 1].id
@@ -168,8 +289,7 @@ describe('the coverage beside it', () => {
     const options = { entry: 'a', scope: 'browser', axis, domain, pixels: 100 }
     cache.samplesFor({ ...options, reads: defaultReadStyle() })
     worker.settle(EMPTY_SAMPLES)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
     cache.samplesFor({ ...options, ...(reads === undefined ? {} : { reads }) })
     return worker.sent.filter((message) => message.kind === 'sample')
   }
@@ -201,6 +321,30 @@ describe('the coverage beside it', () => {
     expect(await coverageTwice({ ...base, splits: true })).toHaveLength(1)
   })
 
+  it('does not re-issue on every frame while a new filter is still counting', async () => {
+    // The same starvation loop as the pile's, over the most expensive read in
+    // the application: a whole-genome coverage scan, cancelled and reissued
+    // once per pointer move.
+    const worker = new FakeWorker()
+    const cache = new SampleCache(
+      new AnnotationClient(() => worker as unknown as Worker),
+      () => undefined,
+    )
+    const options = { entry: 'a', scope: 'browser', axis, domain, pixels: 100 }
+    cache.samplesFor({ ...options, reads: defaultReadStyle() })
+    worker.settle(EMPTY_SAMPLES)
+    await flush()
+
+    const floored = { ...defaultReadStyle(), minMapq: 30 }
+    for (let frame = 0; frame < 20; frame++) {
+      cache.samplesFor({ ...options, reads: floored })
+      worker.settleCancels()
+      await Promise.resolve()
+    }
+    expect(worker.sent.filter((m) => m.kind === 'sample')).toHaveLength(2)
+    expect(worker.cancels).toHaveLength(0)
+  })
+
   it('leaves every other kind of lane alone, which sends no controls at all', async () => {
     const worker = new FakeWorker()
     const cache = new SampleCache(
@@ -210,8 +354,7 @@ describe('the coverage beside it', () => {
     const options = { entry: 'bigwig', scope: 'browser', axis, domain, pixels: 100 }
     cache.samplesFor(options)
     worker.settle(EMPTY_SAMPLES)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
     cache.samplesFor(options)
     const sent = worker.sent.filter((message) => message.kind === 'sample')
     expect(sent).toHaveLength(1)

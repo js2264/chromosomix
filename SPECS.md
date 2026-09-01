@@ -1657,8 +1657,12 @@ the application, for a change that cannot move the line by a pixel.
 **Split reads are drawn and never counted.** A supplementary alignment is a further piece of one
 molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
 junction a long read spans — so showing it is how a reader sees a split, and counting it would report
-one fragment as two. The switch therefore reaches the pile and cannot reach the depth, which is the
-one asymmetry in this lane and is deliberate. Such a read is drawn outlined rather than faded, since
+one fragment as two. The switch therefore reaches what is *drawn* and cannot reach what is
+*counted*, which is the one asymmetry in this lane and is deliberate. There are two roads to a count
+and both are held to it: the sampled depth never sees the switch at all, and the base counts that
+make the read-rung depth *and the consensus* are taken under a second, narrower filter — because
+those counts are computed inside the same function that builds the pile, which is exactly where a
+filter widened for drawing leaks into a number. Such a read is drawn outlined rather than faded, since
 faded already means "soft clip" here; and it is never joined to the primary as though it were a
 mate, because it is the same end of the template rather than the other one.
 
