@@ -82,6 +82,40 @@ function reads(): TestRecord[] {
   return out
 }
 
+/**
+ * Enough incompressible sequence that a whole-chromosome window is over the cap.
+ *
+ * Long reads with random bases, packed a hundred to a block: the packed
+ * sequence is four bits a base and does not deflate, which is what makes the
+ * file large, and few large blocks rather than many small ones is what keeps
+ * building it to a couple of seconds.
+ */
+function deepReads(): TestRecord[] {
+  const bases = 'ACGT'
+  // xorshift32, not a linear congruential generator: an LCG's low and middle
+  // bits are strongly periodic, so `(seed >>> 16) & 3` produces a sequence that
+  // deflates to a fraction of its size — which is the opposite of what a
+  // fixture sized in megabytes needs.
+  let seed = 0x51f3a7
+  const next = (): number => {
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    return seed & 3
+  }
+  const out: TestRecord[] = []
+  // Eight thousand, not four. A base packs into four bits but only four of the
+  // sixteen codes are ACGT, so the packed sequence still carries two bits of
+  // entropy per nibble and deflate halves it — a file sized from the raw base
+  // count comes out at half what was intended.
+  for (let i = 0; i < 8000; i++) {
+    const seq = new Array<string>(4000)
+    for (let b = 0; b < 4000; b++) seq[b] = bases[next()]
+    out.push({ refId: 0, pos: i * 4000, cigar: '4000M', name: `d${i}`, seq: seq.join('') })
+  }
+  return out
+}
+
 async function bamFile(
   options: { sort?: string; records?: TestRecord[] } = {},
 ): Promise<{ bam: File; bai: File }> {
@@ -251,6 +285,58 @@ describe('the coverage lane', () => {
     expect(samples.extent).toBeNull()
     // And no note: nothing was refused, the answer is simply the answer.
     expect(samples.note).toBeUndefined()
+  })
+
+  it('draws nothing above what it can afford, and says why', async () => {
+    // Decision 4 of §8.13, and the whole of what makes an alignment lane
+    // bounded. The refusal is made from the *forecast* — the byte spans the
+    // index resolves the window to — so it costs no data requests, and what the
+    // reader gets is a lane that names the number rather than one that is
+    // mysteriously blank.
+    const big = await writeBam(
+      [{ name: 'chrI', length: 40_000_000 }],
+      deepReads(),
+      undefined,
+      100,
+    )
+    expect(big.bam.byteLength).toBeGreaterThan(8 << 20)
+
+    const response = await ask({
+      kind: 'load',
+      entry: 'e-cap',
+      source: {
+        kind: 'local',
+        file: new File([big.bam as BlobPart], 'deep.bam'),
+        name: 'deep.bam',
+        index: new File([big.bai as BlobPart], 'deep.bam.bai'),
+      },
+      mapContigs: [{ name: 'chrI', length: 40_000_000 }],
+    })
+    expect(response.type, JSON.stringify(response)).toBe('result')
+
+    const wide = await ask({
+      kind: 'sample',
+      entry: 'e-cap',
+      regions: [{ contig: 'chrI', start: 0, end: 40_000_000 }],
+      basesPerPixel: 40_000,
+    })
+    const refused = (wide as { payload: TrackSampleSet }).payload
+    expect(refused.regions).toHaveLength(0)
+    expect(refused.note).toContain('MB of reads here')
+    expect(refused.note).toContain('zoom in')
+
+    // And the same file at a width it *can* afford still draws, so the cap is a
+    // ceiling rather than a lane that never works.
+    const narrow = await ask({
+      kind: 'sample',
+      entry: 'e-cap',
+      regions: [{ contig: 'chrI', start: 100_000, end: 110_000 }],
+      basesPerPixel: 100,
+    })
+    const drawn = (narrow as { payload: TrackSampleSet }).payload
+    expect(drawn.note).toBeUndefined()
+    expect(drawn.regions).toHaveLength(1)
+    expect(drawn.extent?.max).toBeGreaterThan(0)
   })
 
   it('forgets the file when the row is dropped', async () => {

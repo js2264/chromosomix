@@ -279,19 +279,31 @@ function binOffsetOfLevel(level: number): number {
  * coordinate-sorted, the earliest offset among them is where our records must
  * already have finished.
  *
- * Scanning up to eight bins per level is exactly enough to cover everything
- * after the query, because eight bins at one level are one bin at the level
- * above: the tree is what makes the walk bounded, and it is ~8 × (depth + 1)
- * probes rather than a pass over every populated bin — which on a human
- * chromosome is a hundred thousand of them, per frame.
+ * The walk is up to eight bins per level, coarsening as it goes, and it is
+ * **best-effort by design**. A record lives in exactly one bin, so a short read
+ * far past the query sits in a deep bin no coarse scan will reach, and the walk
+ * may find nothing — in which case there is no ceiling and every chunk is a
+ * candidate, which is exactly the behaviour before this existed. That is the
+ * safe direction: a ceiling that is too *high* costs bytes, and one that is too
+ * *low* silently drops reads. Bounded at ~8 × (depth + 1) probes rather than a
+ * pass over every populated bin, which on a human chromosome is a hundred
+ * thousand of them, per frame.
  */
 function highestOffset(ref: RefIndex, end: number, index: BamIndex): bigint {
   let best: bigint | null = null
   let shift = index.minShift
   for (let level = index.depth; level >= 0; level--) {
     const offset = binOffsetOfLevel(level)
+    // Bins are numbered consecutively *within* a level and the levels run on
+    // from one another, so a scan that walks off the end of one level walks
+    // into the next — where bin numbers mean something else entirely. Level 1
+    // holds eight bins, 1 to 8, and bin 9 is the first of level 2: reading it
+    // as "the ninth bin of level 1" produces a ceiling from a bin that is not
+    // after the query at all, and every chunk beyond it is then dropped. That
+    // loses reads, silently, and only on a query near the end of a reference.
+    const levelBins = 1 << (level * 3)
     const after = (Math.max(0, end - 1) >> shift) + 1
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 8 && after + i < levelBins; i++) {
       const chunks = ref.bins.get(offset + after + i)
       if (chunks === undefined) continue
       for (const chunk of chunks) {

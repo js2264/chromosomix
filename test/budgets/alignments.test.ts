@@ -93,10 +93,15 @@ const REFS = [{ name: 'chrI', length: 60_000_000 }]
 function manyReads(): TestRecord[] {
   const bases = 'ACGT'
   const out: TestRecord[] = []
+  // xorshift32, not a linear congruential generator: an LCG's low and middle
+  // bits are strongly periodic, so the sequence deflates to a fraction of its
+  // size — which is the opposite of what a fixture sized in megabytes needs.
   let seed = 0x2f6e2b1
   const next = (): number => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff
-    return seed >>> 16
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    return seed
   }
   for (let i = 0; i < 40_000; i++) {
     let seq = ''

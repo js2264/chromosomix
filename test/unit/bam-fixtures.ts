@@ -15,10 +15,26 @@ async function deflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
-/** Wrap a payload as one BGZF member, `BC` subfield and all. */
+/** The largest a BGZF member may be. The format guarantees it; `BSIZE` is 16 bits. */
+export const MAX_BLOCK = 1 << 16
+
+/**
+ * Wrap a payload as one BGZF member, `BC` subfield and all.
+ *
+ * Refuses a payload that would not fit rather than writing one that does not.
+ * `BSIZE` is a `uint16`, so an oversized block truncates silently and produces
+ * a file whose blocks appear to be a few hundred bytes long — which reads as a
+ * corrupt file rather than as a fixture bug, some distance from here.
+ */
 export async function bgzfBlock(payload: Uint8Array): Promise<Uint8Array> {
   const deflated = await deflateRaw(payload)
   const total = 12 + 6 + deflated.length + 8
+  if (total > MAX_BLOCK) {
+    throw new Error(
+      `a BGZF block cannot exceed ${MAX_BLOCK} bytes and this one is ${total}: ` +
+        'split the records across more blocks',
+    )
+  }
   const out = new Uint8Array(total)
   const view = new DataView(out.buffer)
   out.set([0x1f, 0x8b, 8, 4, 0, 0, 0, 0, 0, 0xff], 0)

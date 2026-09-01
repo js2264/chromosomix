@@ -313,12 +313,14 @@ describe('the index', () => {
         {
           bins: [
             { bin: 4681, chunks: [[1000, 1100]] },
-            // A read that lives in a coarse bin because it crosses a boundary,
-            // sitting late in the file — after everything the query wants.
+            // A read that crosses a boundary and so lives in a bin near the
+            // root, sitting late in the file — after everything the query
+            // wants, but in a bin whose *range* covers the query.
             { bin: 1, chunks: [[90_000_000, 90_000_100]] },
-            // …and the deepest bin covering where that read starts, which is
-            // what gives the ceiling something to find.
-            { bin: 4681 + 4000, chunks: [[90_000_000, 90_000_100]] },
+            // The next 16 kb window along, which is what gives the ceiling
+            // something to find: its records start after the query ends, so
+            // nothing at or beyond its first chunk can overlap.
+            { bin: 4682, chunks: [[50_000_000, 50_000_100]] },
           ],
           linear: [0],
         },
@@ -327,6 +329,32 @@ describe('the index', () => {
     const spans = chunksFor(index, 0, 0, 16_384, 100_000_000)
     expect(spans.every((span) => span.from < 90_000_000)).toBe(true)
     expect(forecastBytes(spans)).toBeLessThan(1 << 20)
+  })
+
+  it('finds no ceiling rather than a wrong one, when nothing is after the query', () => {
+    // Bins are numbered consecutively *within* a level and the levels run on
+    // from one another, so a scan that walks off the end of one level walks
+    // into the next — where the numbers mean something else. Level 1 holds
+    // eight bins, 1 to 8, and bin 9 is the first of level 2. Reading bin 9 as
+    // "the ninth bin of level 1" yields a ceiling from a bin that is not after
+    // the query at all, and every chunk beyond it is dropped: reads lost,
+    // silently, only near the end of a reference. Here the only populated bins
+    // *contain* the query, so the honest answer is no ceiling and every chunk
+    // kept.
+    return parseBamIndex(
+      baiBytes([
+        {
+          bins: [
+            { bin: 4681, chunks: [[1000, 1100]] },
+            { bin: 9, chunks: [[80_000_000, 80_000_100]] },
+          ],
+          linear: [0],
+        },
+      ]),
+    ).then((index) => {
+      const spans = chunksFor(index, 0, 0, 16_384, 100_000_000)
+      expect(spans.some((span) => span.from === 80_000_000)).toBe(true)
+    })
   })
 
   it('keeps a chunk that begins before the window ends', async () => {

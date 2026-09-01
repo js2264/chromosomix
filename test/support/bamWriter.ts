@@ -80,9 +80,7 @@ export async function writeBam(
   const bins = refs.map(() => new Map<number, Array<[bigint, bigint]>>())
   const linear = refs.map(() => [] as number[])
 
-  for (let from = 0; from < records.length; from += recordsPerBlock) {
-    const group = records.slice(from, from + recordsPerBlock)
-    const encoded = group.map((record) => recordBytes(record))
+  for (const { group, encoded } of blocksOf(records, recordsPerBlock)) {
     const block = await bgzfBlock(concat(encoded))
     const blockAt = at
     blocks.push(block)
@@ -159,6 +157,42 @@ function writeBai(
       at += 8
     }
   }
+  return out
+}
+
+/**
+ * How much uncompressed data a block may hold here.
+ *
+ * Under BGZF's 64 KiB ceiling with room to spare, because deflate can *expand*
+ * incompressible input slightly and a fixture full of random sequence is
+ * exactly that. `recordsPerBlock` is a cap and this is the real bound: a caller
+ * asking for a hundred 4 kb reads in one block is asking for six hundred
+ * kilobytes, and the block-size field is sixteen bits.
+ */
+const MAX_BLOCK_PAYLOAD = 58_000
+
+/** Group records into blocks that fit, honouring the caller's cap as a maximum. */
+function blocksOf(
+  records: TestRecord[],
+  recordsPerBlock: number,
+): Array<{ group: TestRecord[]; encoded: Uint8Array[] }> {
+  const out: Array<{ group: TestRecord[]; encoded: Uint8Array[] }> = []
+  let group: TestRecord[] = []
+  let encoded: Uint8Array[] = []
+  let bytes = 0
+  for (const record of records) {
+    const one = recordBytes(record)
+    if (group.length > 0 && (group.length >= recordsPerBlock || bytes + one.length > MAX_BLOCK_PAYLOAD)) {
+      out.push({ group, encoded })
+      group = []
+      encoded = []
+      bytes = 0
+    }
+    group.push(record)
+    encoded.push(one)
+    bytes += one.length
+  }
+  if (group.length > 0) out.push({ group, encoded })
   return out
 }
 
