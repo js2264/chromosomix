@@ -252,7 +252,7 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
  */
 const COLOUR_HINTS: Record<ColourBy, string> = {
   strand: 'Forward and reverse, which is the default and the one that costs nothing to read.',
-  pair: 'The strand of the first read in each template — the usual way to read stranded RNA-seq.',
+  pair: 'Proper pairs against the ones the aligner could not place as a pair — where discordant reads are.',
   insert: 'Template length: pairs further apart than a normal library are picked out.',
   mate: 'Where the mate went — the same sequence, a different one, or nowhere.',
   mapq: 'Mapping quality, banded, so an ambiguous pile-up is visible as one.',
@@ -290,18 +290,26 @@ function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
 }
 
 /**
- * How the pile is coloured, which is also how it is grouped into rows.
+ * How the pile is coloured.
  *
  * The one control on this lane a reader is expected to reach for often, so it
  * is a select rather than a menu: the six answers are short and the difference
  * between them is the whole reason to look at reads instead of coverage.
  *
- * It is not only a palette. A colouring is a partition, and the pile is packed
- * so that reads of one category share rows (`bam/reads.ts`) — so changing it
- * refetches, which is why it lives in the style the cache is keyed on rather
- * than in the renderer.
+ * It refetches. The category each read falls into is decided in the worker and
+ * comes back as a column of the pile (`bam/reads.ts`), so a different colouring
+ * is a different reply — which is why this lives in the style the caches are
+ * keyed on rather than in the renderer.
+ *
+ * It is a *colouring* and not a grouping: the rows are packed by position
+ * alone, so the categories are interleaved down the pile rather than banded.
+ * Grouping — a band per category — is a separate thing this lane does not do.
  */
-export function colourByField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+export function colourByField(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  onPicked?: (by: ColourBy) => void,
+): HTMLElement {
   const reads = readsOf(entry.style)
   const select = el('select', { class: 'select' })
   for (const by of COLOUR_BY) {
@@ -309,17 +317,24 @@ export function colourByField(store: AnnotationStore, entry: AnnotationEntry): H
   }
   select.value = reads.colourBy
   select.title = COLOUR_HINTS[reads.colourBy]
-  select.addEventListener('change', () => {
-    const by = select.value as ColourBy
-    select.title = COLOUR_HINTS[by]
-    patchReads(store, entry, { colourBy: by })
-  })
-  return el(
+  const field = el(
     'label',
     { class: 'field ann-field ann-field-tight' },
     el('span', { class: 'field-label', text: 'colour by' }),
     select,
   )
+  select.addEventListener('change', () => {
+    const by = select.value as ColourBy
+    select.title = COLOUR_HINTS[by]
+    patchReads(store, entry, { colourBy: by })
+    // The key is refreshed here rather than left to the card's own rebuild.
+    // `AnnotationCard.render` defers while a control holds focus, and picking
+    // from a select leaves the focus on it — so the lane repainted in the new
+    // colours while the legend under the picker went on naming the old ones,
+    // until the reader happened to click somewhere else.
+    onPicked?.(by)
+  })
+  return field
 }
 
 /**
@@ -337,20 +352,31 @@ export function colourByField(store: AnnotationStore, entry: AnnotationEntry): H
  * about it depends on data being loaded, which is why it is right even while
  * the first window of reads is still being fetched.
  */
-export function colourLegend(entry: AnnotationEntry): HTMLElement | null {
-  const groups = groupsFor(readsOf(entry.style).colourBy)
+export function colourLegend(entry: AnnotationEntry, by?: ColourBy): HTMLElement {
+  const host = el('div', { class: 'ann-key' })
+  fillLegend(host, entry.style.colour, by ?? readsOf(entry.style).colourBy)
+  return host
+}
+
+/** Redraw a key in place, for {@link colourByField}'s change handler. */
+export function fillLegend(host: HTMLElement, colour: string, by: ColourBy): void {
+  const groups = groupsFor(by)
   // One category is not a key, it is a restatement of the lane's own colour.
-  if (groups.length <= 1) return null
-  const colours = readPalette(groups, entry.style.colour)
-  const chips = groups.map((name, i) =>
-    el(
-      'span',
-      { class: 'ann-key-item' },
-      el('span', { class: 'ann-key-chip', style: { background: colours[i] } }),
-      el('span', { text: name }),
+  if (groups.length <= 1) {
+    host.replaceChildren()
+    return
+  }
+  const colours = readPalette(groups, colour)
+  host.replaceChildren(
+    ...groups.map((name, i) =>
+      el(
+        'span',
+        { class: 'ann-key-item' },
+        el('span', { class: 'ann-key-chip', style: { background: colours[i] } }),
+        el('span', { text: name }),
+      ),
     ),
   )
-  return el('div', { class: 'ann-key' }, ...chips)
 }
 
 /**

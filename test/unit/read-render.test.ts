@@ -20,7 +20,17 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { alignmentBands, drawReads, rowsFor, type ReadPaint } from '@/render/alignments'
+import {
+  BAND_GAP,
+  COVERAGE_BAND,
+  NAME_BAND,
+  alignmentBands,
+  consensusBandFor,
+  drawReads,
+  readRungFor,
+  rowsFor,
+  type ReadPaint,
+} from '@/render/alignments'
 import { LocusAxis } from '@/render/locus'
 import type { LaneFrame } from '@/render/lane'
 import type { ReadPile } from '@/annotations/types'
@@ -303,22 +313,67 @@ describe('the row budget', () => {
     expect(calls.filter((call) => call.op === 'fillRect')).toHaveLength(11)
   })
 
+  it('lays the bands out where an independent reading of the rule says', () => {
+    // Stated from the constants rather than from `alignmentBands`, because a
+    // test built from the function under test moves with it: comparing
+    // `rowsFor` to `drawReads` over the same band object passes even if
+    // `laneBands` counts the wrong number of gaps, since both sides shift
+    // together. Four parts means THREE gaps, and getting that wrong by one is
+    // the bug this pins.
+    const thickness = 240
+    const [name, coverage, consensus, pileBand] = alignmentBands(
+      { ...frame, thickness, acrossFrom: 0 },
+      'reads',
+      true,
+    )
+    const gaps = 3
+    expect(name.thickness).toBe(NAME_BAND)
+    expect(coverage.thickness).toBe(COVERAGE_BAND)
+    expect(consensus.thickness).toBe(consensusBandFor('reads', { ...frame, thickness }))
+    expect(pileBand.thickness).toBeCloseTo(
+      thickness - NAME_BAND - COVERAGE_BAND - consensus.thickness - BAND_GAP * gaps,
+      6,
+    )
+    // …and they are laid end to end with one gap between each pair.
+    expect(coverage.acrossFrom).toBeCloseTo(name.thickness + BAND_GAP, 6)
+    expect(consensus.acrossFrom).toBeCloseTo(coverage.acrossFrom + COVERAGE_BAND + BAND_GAP, 6)
+    expect(pileBand.acrossFrom).toBeCloseTo(
+      consensus.acrossFrom + consensus.thickness + BAND_GAP,
+      6,
+    )
+    // An unlabelled lane keeps the four-part shape — a zero-thickness strip
+    // that still consumes its gap — so every caller can index it the same way.
+    const bare = alignmentBands({ ...frame, thickness, acrossFrom: 0 }, 'reads', false)
+    expect(bare[0].thickness).toBe(0)
+    expect(bare[3].thickness).toBeCloseTo(pileBand.thickness + NAME_BAND, 6)
+  })
+
   it('asks the worker for exactly the rows the band will draw', () => {
-    // The budget, the paint and the hit test are three readings of one split,
-    // and `alignmentBands` exists so they cannot be three *expressions* of it.
-    // They were: the budget subtracted two band gaps where `laneBands` inserts
-    // three between four parts, so it over-stated the pile by three pixels and
-    // asked for a row that could never be drawn.
     for (const thickness of [120, 160, 200, 240, 241, 242, 300]) {
       for (const labelled of [true, false]) {
         const lane = { ...frame, thickness }
         const band = alignmentBands(lane, 'reads', labelled)[3]
         const { ctx } = recorder()
         const drew = drawReads(ctx, band, axis, pileOf([]), paint, 'reads')
-        expect(rowsFor(lane, 'reads', labelled), `${thickness}px, labelled=${labelled}`).toBe(
-          Math.max(1, drew),
-        )
+        expect(rowsFor(lane, 'reads', labelled), `${thickness}px, labelled=${labelled}`).toBe(drew)
       }
     }
+  })
+
+  it('stops calling itself the reads rung once no read row fits', () => {
+    // The fixed bands take about eighty pixels before the first row, so a lane
+    // dragged short enough has a pile band that can hold nothing. Answering
+    // "reads" there drew an empty lane and still spent a whole BAM window on
+    // it, so zooming *in* made the picture disappear. Below that it is a
+    // coverage lane — which is what it was one zoom step out.
+    const zoomed = { ...frame, domain: [0, 300] as [number, number] }
+    expect(readRungFor({ ...zoomed, thickness: 240 }, 'browser', 1, true)).not.toBe('coverage')
+    expect(readRungFor({ ...zoomed, thickness: 40 }, 'browser', 1, true)).toBe('coverage')
+    expect(readRungFor({ ...zoomed, thickness: 12 }, 'browser', 1, true)).toBe('coverage')
+    // Unlabelled, the name strip's thirty pixels come back, so the same lane
+    // can hold reads at a thickness where a labelled one cannot.
+    const edge = { ...zoomed, thickness: 78 }
+    expect(readRungFor(edge, 'browser', 1, true)).toBe('coverage')
+    expect(readRungFor(edge, 'browser', 1, false)).not.toBe('coverage')
   })
 })

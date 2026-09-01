@@ -44,6 +44,7 @@ import { stepperField } from './trackControls'
 import {
   colourByField,
   colourLegend,
+  fillLegend,
   flipButton,
   heightField,
   limitsField,
@@ -873,17 +874,23 @@ export class AnnotationCard {
     // the reads under it — and because a reader who has zoomed out far enough
     // to see only coverage has no use for them yet.
     if (entry.kind === 'alignments') {
+      // The key is built first and handed to the picker, so a colouring chosen
+      // with the focus still on the select refreshes it immediately — this card
+      // defers its own rebuild while a control holds focus, and the lane does
+      // not.
       const key = colourLegend(entry)
       out.push(
         el(
           'div',
           { class: 'ann-inline' },
-          colourByField(this.props.store, entry),
+          colourByField(this.props.store, entry, (by) =>
+            fillLegend(key, entry.style.colour, by),
+          ),
           mapqField(this.props.store, entry),
         ),
+        key,
+        readToggles(this.props.store, entry),
       )
-      if (key !== null) out.push(key)
-      out.push(readToggles(this.props.store, entry))
     }
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No

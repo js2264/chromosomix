@@ -18,6 +18,9 @@
  * next kind added to one list and not the other.
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -122,6 +125,49 @@ describe('the kinds that draw no profile at all', () => {
       expect(hasAMovableAxis(kind), kind).toBe(false)
       expect(hasTrackControls(kind), kind).toBe(false)
       expect(drawnFromSamples(kind), kind).toBe(false)
+    }
+  })
+})
+
+/**
+ * Every cache the browser view holds is reconciled, and torn down, together.
+ *
+ * `ReadCache` shipped with `prune` and `destroy` written, documented and called
+ * from nowhere: the view reconciled its samples and its residues against the
+ * store on every frame and simply never mentioned its third cache. That is the
+ * same shape of failure this file exists for — nothing errors, nothing looks
+ * wrong, a dropped BAM just keeps a decode running in front of every other
+ * lane's `sample` and holds the largest payload the worker sends for the life
+ * of the tab.
+ *
+ * Asserted against the source, because there is no runtime surface that would
+ * show it: the caches are private and the leak is invisible by construction. A
+ * fourth cache added to the view and not to both lists fails here.
+ */
+describe('the browser view lets go of everything it holds', () => {
+  const source = readFileSync(join(process.cwd(), 'src/ui/BrowserView.ts'), 'utf8')
+
+  /** The caches constructed as fields of the view. */
+  const CACHES = ['cache', 'bases', 'piles']
+
+  it('constructs exactly the caches these tests know about', () => {
+    // If this fails, a cache was added or renamed and the two below are now
+    // asserting less than they claim.
+    const built = [...source.matchAll(/this\.(\w+) = new (?:Sample|Base|Read)Cache\(/g)].map(
+      (m) => m[1],
+    )
+    expect(built.sort()).toEqual([...CACHES].sort())
+  })
+
+  it('prunes every one of them against the live entries, once per frame', () => {
+    for (const cache of CACHES) {
+      expect(source, `${cache}.prune`).toContain(`this.${cache}.prune(live)`)
+    }
+  })
+
+  it('destroys every one of them when the view goes away', () => {
+    for (const cache of CACHES) {
+      expect(source, `${cache}.destroy`).toContain(`this.${cache}.destroy()`)
     }
   })
 })

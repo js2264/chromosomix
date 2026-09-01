@@ -48,12 +48,15 @@ class FakeWorker {
   }
 
   /**
-   * Answer every `cancel` the way the real worker does.
+   * Settle every outstanding `cancel` as a cancellation error.
    *
-   * Without this a cancelled request never settles, so nothing that runs in its
-   * `finally` ever runs — and a test written over a worker that swallows
-   * cancels cannot see a bug in exactly that path. `annotations.worker.ts`
-   * replies to a cancelled request with `cancelled: true`.
+   * Deliberately *not* a model of the real worker, which cancels cooperatively:
+   * `annotations.worker.ts` marks the id and the running handler notices at its
+   * next `stillWanted` check, so a request that has already posted its result
+   * settles as a result and one that has not settles as `cancelled: true`. What
+   * this reproduces is only the second half — enough to drive the `finally`
+   * path, which is what these tests are about. The first half is covered
+   * separately by the crossed-reply test below.
    */
   settleCancels(): void {
     for (const message of this.sent) {
@@ -238,9 +241,13 @@ describe('the pile', () => {
     worker.reply({ type: 'result', id: first.id, payload: EMPTY_READS } as AnnotationResponse)
     await flush()
 
-    // Nothing was held under the new key, so the next frame still waits rather
-    // than believing it has the window.
-    cache.readsFor({ ...options, style: changed })
+    // The distinguishing observation is what the cache now *holds*: with the
+    // guard nothing was stored, so `peek` is null and the next frame is still
+    // waiting. Without it the superseded window is filed under the new style and
+    // handed straight back — and asserting only the request count cannot see
+    // that, because the second request is in flight either way.
+    expect(cache.peek('a', 'browser')).toBeNull()
+    expect(cache.readsFor({ ...options, style: changed })).toBeNull()
     expect(worker.reads).toHaveLength(2)
   })
 
@@ -276,6 +283,72 @@ describe('the pile', () => {
     cache.readsFor({ ...options, style: defaultReadStyle() })
     expect(worker.sent.filter((m) => m.kind === 'reads')).toHaveLength(1)
     expect(worker.sent.some((m) => m.kind === 'cancel')).toBe(false)
+  })
+})
+
+describe('letting go of a lane', () => {
+  // `prune` and `destroy` were written, documented and never called from
+  // anywhere — the view reconciled its two other caches every frame and not
+  // this one. A BAM removed mid-decode left the worker inflating BGZF blocks
+  // for a lane that no longer existed, in front of every other lane's `sample`,
+  // and left the largest payload this worker sends alive for the life of the
+  // tab. These pin the behaviour; `BrowserView.draw`/`destroy` are what call it.
+  it('cancels a decode nobody is waiting for any more', () => {
+    const { worker, cache } = readsOn()
+    cache.readsFor({
+      entry: 'a',
+      scope: 'browser',
+      axis,
+      domain,
+      rows: 24,
+      basesPerPixel: 1,
+      style: defaultReadStyle(),
+    })
+    const asked = worker.sent[0].id
+    cache.prune(new Set())
+    expect(worker.cancels).toContain(asked)
+  })
+
+  it('leaves a decode alone while its lane is still there', () => {
+    const { worker, cache } = readsOn()
+    cache.readsFor({
+      entry: 'a',
+      scope: 'browser',
+      axis,
+      domain,
+      rows: 24,
+      basesPerPixel: 1,
+      style: defaultReadStyle(),
+    })
+    cache.prune(new Set(['a']))
+    expect(worker.cancels).toHaveLength(0)
+  })
+
+  it('drops the window it was holding, so the reads do not outlive the lane', async () => {
+    const { worker, cache } = readsOn()
+    const options = { entry: 'a', scope: 'browser', axis, domain, rows: 24, basesPerPixel: 1 }
+    cache.readsFor({ ...options, style: defaultReadStyle() })
+    worker.settle(EMPTY_READS)
+    await flush()
+    expect(cache.peek('a', 'browser')).not.toBeNull()
+    cache.prune(new Set())
+    expect(cache.peek('a', 'browser')).toBeNull()
+  })
+
+  it('calls off everything when the view goes away', () => {
+    const { worker, cache } = readsOn()
+    cache.readsFor({
+      entry: 'a',
+      scope: 'browser',
+      axis,
+      domain,
+      rows: 24,
+      basesPerPixel: 1,
+      style: defaultReadStyle(),
+    })
+    const asked = worker.sent[0].id
+    cache.destroy()
+    expect(worker.cancels).toContain(asked)
   })
 })
 

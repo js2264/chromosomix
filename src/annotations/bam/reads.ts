@@ -93,8 +93,9 @@ export interface PileOptions {
    * nothing in a window of records says what that sequence is called. Without
    * it a mate on another chromosome can only be reported as a number.
    *
-   * Absent leaves {@link ReadPile.contigs} empty, which is honest — the pile
-   * then reports that it does not know rather than guessing.
+   * Absent leaves every name in {@link ReadPile.contigs} an empty string — the
+   * table is still built, so `mateContig` stays a valid index into it, and the
+   * pile reports that it does not know the name rather than guessing one.
    */
   refNameOf?: (refId: number) => string | undefined
   /** Reference bases for the window, for mismatches. Absent means none available. */
@@ -596,6 +597,15 @@ function categoryOf(one: Held, by: ColourBy, refId: number): number {
       return 2
     case 'mate':
       if ((one.flag & FLAG.PAIRED) === 0) return 0
+      // The *flag*, not `next_refID`. A mapped read whose mate is unmapped is
+      // written by bwa, bowtie2, samtools fixmate and GATK with RNEXT `=` and
+      // PNEXT equal to its own position — the SAM specification recommends it,
+      // so the mate is placed beside its partner rather than left floating — and
+      // reading the reference id instead put every one of them in "same
+      // sequence". The category existed, had a swatch in the legend, and could
+      // never be reached; and clicking such a read opened a card that said
+      // "unmapped", because `ReadDialog` reads the flag.
+      if ((one.flag & FLAG.MATE_UNMAPPED) !== 0) return 1
       if (one.mateContig < 0) return 1
       return one.mateContig === refId ? 2 : 3
     case 'insert': {

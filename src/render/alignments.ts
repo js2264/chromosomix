@@ -92,12 +92,22 @@ export function readRungFor(
   frame: LaneFrame,
   surface: LaneSurface,
   bpPerUnit = 1,
+  labelled = true,
 ): ReadRung {
   if (surface !== 'browser') return 'coverage'
   const perBase = basePixels(frame) / Math.max(1e-9, bpPerUnit)
-  if (perBase >= LETTER_MIN_PIXELS) return 'bases'
-  if (perBase >= READ_MIN_PIXELS / AVERAGE_READ) return 'reads'
-  return 'coverage'
+  const rung = perBase >= LETTER_MIN_PIXELS ? 'bases' : perBase >= READ_MIN_PIXELS / AVERAGE_READ ? 'reads' : 'coverage'
+  if (rung === 'coverage') return 'coverage'
+  // Zoom is not the only thing that decides this. The name strip, the depth
+  // band and the consensus are fixed heights and take about eighty pixels
+  // before the first read row, so a lane dragged short enough has a pile band
+  // that can hold nothing — and the pile is what the rung is *for*. Answering
+  // `reads` there drew an empty lane and still spent a whole BAM window on it,
+  // so zooming *in* made the picture disappear.
+  //
+  // Below that, the lane is a coverage lane. Which is what it was one zoom step
+  // out, and what it looks like: the reader loses nothing they could see.
+  return rowsIn(alignmentBands(frame, rung, labelled)[3]) >= 1 ? rung : 'coverage'
 }
 
 /**
@@ -154,7 +164,7 @@ export function drawReads(
   ctx.save()
   ctx.globalAlpha = paint.opacity
   const step = paint.rowHeight + paint.rowGap
-  const rowsDrawn = Math.max(0, Math.floor((frame.thickness + paint.rowGap) / step))
+  const rowsDrawn = rowsAcross(frame.thickness, paint.rowHeight, paint.rowGap)
 
   // Pair lines first, so a read is never drawn under the thread joining it to
   // its mate — the line is context and the reads are the subject.
@@ -220,6 +230,15 @@ export function readAt(
   const along = laneIsHorizontal(frame.orientation) ? x : y
   const across = canvasToAcross(frame, laneIsHorizontal(frame.orientation) ? y : x)
   if (across < 0 || across > frame.thickness) return null
+  // …and the same bound on the *other* axis, which the paint gets for free from
+  // `clipLane` and an inverse does not. Without it a click in the name column —
+  // a strip at least fifty pixels wide, whose documented answer is "reveal this
+  // track" — lands on a read that begins off the left edge of the view. The
+  // window is fetched a whole view-width wider on each side, so those reads are
+  // there in quantity.
+  const from = Math.min(frame.alongFrom, frame.alongTo)
+  const to = Math.max(frame.alongFrom, frame.alongTo)
+  if (along < from || along > to) return null
   // The gap below a row belongs to that row. It is two pixels and a pointer is
   // not that accurate, so treating it as a miss would make every third click on
   // a dense pile do nothing.
@@ -228,9 +247,7 @@ export function readAt(
   // empty when the band does not divide evenly. A click there would open a card
   // for a read that is not on the screen, which is the one way a hit test can
   // be wrong and look right.
-  if (row >= Math.max(0, Math.floor((frame.thickness + rowGap) / (rowHeight + rowGap)))) {
-    return null
-  }
+  if (row >= rowsAcross(frame.thickness, rowHeight, rowGap)) return null
 
   const at = (base: number): number =>
     frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
@@ -728,12 +745,21 @@ export function alignmentBands(
 /**
  * How many rows of reads a band of this thickness draws.
  *
- * The one expression of it, used by the budget, by {@link drawReads} and by
- * {@link readAt}. The `+ rowGap` is not a fudge: the last row needs no gap
- * under it, so a band of exactly `n * row + (n - 1) * gap` holds `n` rows.
+ * The one expression of it — genuinely one, now: the budget, {@link drawReads}
+ * and {@link readAt} all call this rather than inlining the arithmetic, which
+ * they did until the doc above said they did not. The row height and gap are
+ * arguments because the paint takes them from `ReadPaint` rather than from the
+ * module constants.
+ *
+ * The `+ rowGap` is not a fudge: the last row needs no gap under it, so a band
+ * of exactly `n * row + (n - 1) * gap` holds `n` rows.
  */
+export function rowsAcross(thickness: number, rowHeight: number, rowGap: number): number {
+  return Math.max(0, Math.floor((thickness + rowGap) / (rowHeight + rowGap)))
+}
+
 function rowsIn(band: LaneFrame): number {
-  return Math.max(0, Math.floor((band.thickness + READ_ROW_GAP) / (READ_ROW + READ_ROW_GAP)))
+  return rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP)
 }
 
 /**
@@ -745,35 +771,6 @@ function rowsIn(band: LaneFrame): number {
  * again — two fetches could answer from two different moments and draw a pile
  * that does not match its own summary.
  */
-/**
- * The deepest position in a window's base counts, without a frame.
- *
- * Split out of {@link depthProfile} because the extent is needed *before* the
- * bands are laid out: a lane in an autoscale group has to contribute its range
- * to the group's, and the group is resolved once for the whole stack in a pass
- * that runs before any lane is painted. It is frame-independent — the deepest
- * base is the deepest base however wide the lane is drawn — so the two cannot
- * disagree.
- */
-export function depthExtent(window: {
-  bases: readonly BaseCounts[]
-}): { min: number; max: number } | null {
-  let max = 0
-  let any = false
-  for (const counts of window.bases) {
-    for (let at = 0; at < counts.span; at++) {
-      let depth = 0
-      for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[at * BASE_LANES + lane]
-      if (depth === 0) continue
-      if (depth > max) max = depth
-      any = true
-    }
-  }
-  // Floored at a real zero, as the sampled coverage band is: depth is a count,
-  // and autoscaling from its own minimum makes a thin region look covered.
-  return any ? { min: 0, max } : null
-}
-
 export function depthProfile(
   frame: LaneFrame,
   axis: LocusAxis,
@@ -814,13 +811,31 @@ export function depthProfile(
     }
   }
   if (!any) return null
-  for (let i = 0; i < slots; i++) if (weight[i] > 0) mean[i] = sum[i] / weight[i]
+  let max = 0
+  for (let i = 0; i < slots; i++) {
+    if (weight[i] <= 0) continue
+    mean[i] = sum[i] / weight[i]
+    if (mean[i] > max) max = mean[i]
+  }
 
-  // The extent comes from {@link depthExtent} rather than from `max` above, so
-  // there is one answer to "how deep is this window" rather than two that agree
-  // by inspection: this loop skips a pile whose contig the axis has never heard
-  // of, and the group pass — which runs before any of this — cannot.
-  return { from, mean, low: mean, high: mean, envelope: false, extent: depthExtent(window) }
+  // The extent is the deepest *pixel*, over the pixels this profile actually
+  // drew — not the deepest base, and not over the whole fetched window.
+  //
+  // Both halves of that matter and each was wrong once. The window is fetched
+  // three view-widths wide (`ReadCache.FETCH_PAD`) and can be a whole locus
+  // stale, so a peak measured over it belongs to something nobody is looking
+  // at; and this lane shares an autoscale group with bigWigs whose extent is
+  // `profileOf`'s per-pixel mean over the view, so a per-*base* maximum would
+  // change the units of this lane's contribution at the read rung — the same
+  // "two different numbers under one name" the rung is supposed to avoid.
+  return {
+    from,
+    mean,
+    low: mean,
+    high: mean,
+    envelope: false,
+    extent: { min: 0, max },
+  }
 }
 
 /**

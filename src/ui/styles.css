@@ -2018,8 +2018,9 @@ p {
 
    For the three on an alignment lane — join mates, show split reads, hide
    marked duplicates — which have no glyph anyone would recognise and are states
-   the lane is *in* rather than actions. Smaller and quieter than a `.btn` until it is on, so a settings body
-   with two of them in it does not read as two things to press. */
+   the lane is *in* rather than actions. Smaller and quieter than a `.btn` until
+   it is on, so a settings body with three of them in it does not read as three
+   things to press. */
 .btn-chip {
   padding: 0.15rem 0.45rem;
   font-size: var(--step--2);

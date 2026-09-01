@@ -122,6 +122,24 @@ describe('finding the read under a point', () => {
     expect(readAt(frame, axis, stacked, ROW, GAP, 250, 103)).toBe(1)
   })
 
+  it('ignores the name column, which the paint is clipped out of', () => {
+    // A lane starts at `alongFrom`, not at the canvas edge: everything to the
+    // left is the name column, whose documented answer to a click is "reveal
+    // this track". `clipLane` keeps the paint out of it; an inverse written
+    // without the same bound answers there, and the reads it answers with are
+    // the ones fetched a whole view-width off the left edge (`FETCH_PAD`), so
+    // they are not merely off-lane, they are off-screen.
+    const gutter = { ...frame, alongFrom: 150, alongTo: 900 }
+    const pile = pileOf([{ start: 100, end: 800, row: 0 }])
+    expect(readAt(gutter, axis, pile, ROW, GAP, 400, 103)).toBe(0)
+    expect(readAt(gutter, axis, pile, ROW, GAP, 149, 103)).toBeNull()
+    expect(readAt(gutter, axis, pile, ROW, GAP, 20, 103)).toBeNull()
+    // …and the far edge too, for a lane that does not run to the canvas end.
+    const short = { ...frame, alongFrom: 0, alongTo: 500 }
+    expect(readAt(short, axis, pile, ROW, GAP, 400, 103)).toBe(0)
+    expect(readAt(short, axis, pile, ROW, GAP, 600, 103)).toBeNull()
+  })
+
   it('ignores the strip below the last drawn row', () => {
     // The band is 60 and a row is 9, so `drawReads` draws six rows and leaves
     // six pixels empty at the bottom. A read packed into row 6 was fetched (the

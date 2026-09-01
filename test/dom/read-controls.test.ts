@@ -24,7 +24,13 @@ import {
   type AnnotationEntry,
   type ReadStyle,
 } from '@/annotations/types'
-import { colourByField, colourLegend, mapqField, readToggles } from '@/ui/laneSettings'
+import {
+  colourByField,
+  colourLegend,
+  fillLegend,
+  mapqField,
+  readToggles,
+} from '@/ui/laneSettings'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -202,8 +208,7 @@ describe('the key', () => {
       reads: { ...readsOf(made.entry.style), colourBy: 'mate' },
     })
     const key = colourLegend(now(made))
-    expect(key).not.toBeNull()
-    document.body.append(key as HTMLElement)
+    document.body.append(key)
     expect(textsOf(document.body, '.ann-key-item')).toEqual([
       'unpaired',
       'mate unmapped',
@@ -214,7 +219,7 @@ describe('the key', () => {
 
   it('gives the lane’s own colour to the first category, so the two agree', () => {
     const made = make()
-    const key = colourLegend(now(made)) as HTMLElement
+    const key = colourLegend(now(made))
     document.body.append(key)
     const chips = all<HTMLElement>(key, '.ann-key-chip')
     expect(chips).toHaveLength(2)
@@ -228,6 +233,30 @@ describe('the key', () => {
     made.store.restyle(made.entry.id, {
       reads: { ...readsOf(made.entry.style), colourBy: 'none' },
     })
-    expect(colourLegend(now(made))).toBeNull()
+    expect(colourLegend(now(made)).children).toHaveLength(0)
+  })
+
+  it('is refreshed by the picker, since the card will not rebuild under focus', () => {
+    // The card defers its own rebuild while a control holds focus, and picking
+    // from a select leaves the focus on it — so the lane repainted in the new
+    // colours while the legend under the picker went on naming the old ones,
+    // until the reader happened to click somewhere else.
+    const made = make()
+    const key = colourLegend(made.entry)
+    const field = colourByField(made.store, made.entry, (by) =>
+      fillLegend(key, made.entry.style.colour, by),
+    )
+    document.body.append(field, key)
+    expect(textsOf(key, '.ann-key-item')).toEqual(['forward', 'reverse'])
+
+    const select = field.querySelector('select') as HTMLSelectElement
+    select.value = 'mate'
+    select.dispatchEvent(new Event('change'))
+    expect(textsOf(key, '.ann-key-item')).toEqual([
+      'unpaired',
+      'mate unmapped',
+      'same sequence',
+      'another sequence',
+    ])
   })
 })

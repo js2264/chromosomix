@@ -329,6 +329,30 @@ describe('pairs', () => {
     expect([...pile.mate]).toEqual([-1, -1])
   })
 
+  it('joins the two real ends even when a supplementary piece sorts before them', () => {
+    // The ordering case, and the reason a supplementary record is skipped
+    // outright rather than merely losing the comparison: a split whose second
+    // piece maps *upstream* puts the supplementary first in coordinate order,
+    // and a rule that let the first record wearing a name claim the slot left
+    // the two genuine ends unable to ever find each other. Turning on split
+    // reads then removed the threads from exactly the templates it was turned
+    // on to look at — and only for some files, depending on their order.
+    const { pile } = pileFor(
+      [
+        { refId: 0, pos: 100, cigar: '50S50M', seq: 'A'.repeat(100), name: 'frag', flag: 0x1 | 0x40 | 0x800 },
+        { refId: 0, pos: 500, cigar: '50M50S', seq: 'A'.repeat(100), name: 'frag', flag: 0x1 | 0x40 },
+        { refId: 0, pos: 900, cigar: '50M', seq: 'A'.repeat(50), name: 'frag', flag: 0x1 | 0x80 },
+      ],
+      0,
+      2000,
+      { filter: { ...DEFAULT_FILTER, exclude: DEFAULT_FILTER.exclude & ~0x800 } },
+    )
+    expect(pile.length).toBe(3)
+    // The supplementary is drawn and joined to nothing; the two primaries find
+    // each other across it.
+    expect([...pile.mate]).toEqual([-1, 2, 1])
+  })
+
   it('does not join two records that are the same end of a template', () => {
     // Both first-in-pair: whatever these two are, they are not each other's
     // mate, and a name is not enough to say that they are.
@@ -449,6 +473,28 @@ describe('colouring', () => {
       { refId: 0, pos: 500, cigar: '50M', seq: 'A'.repeat(50), name: 'c', mapq: 60 },
     ], 0, 2000, { colourBy: 'mapq' })
     expect([...pile.group]).toEqual([0, 1, 2])
+  })
+
+  it('finds an unmapped mate by its flag, not by its reference id', () => {
+    // The recommended encoding, and what bwa/bowtie2/fixmate/GATK all write: a
+    // mapped read whose mate is unmapped carries RNEXT `=` and PNEXT equal to
+    // its own position, so the mate is placed beside its partner. Reading the
+    // reference id instead put every one of these in "same sequence" — the
+    // "mate unmapped" category had a swatch in the legend and could never be
+    // reached, while the read card, which does read the flag, said "unmapped".
+    const { pile } = pileFor(
+      [
+        { refId: 0, pos: 100, cigar: '50M', seq: 'A'.repeat(50), name: 'orphan', flag: 0x1 | 0x40 | 0x8, nextRefId: 0, nextPos: 100 },
+        { refId: 0, pos: 300, cigar: '50M', seq: 'A'.repeat(50), name: 'ok', flag: 0x1 | 0x40, nextRefId: 0, nextPos: 500 },
+        { refId: 0, pos: 700, cigar: '50M', seq: 'A'.repeat(50), name: 'away', flag: 0x1 | 0x40, nextRefId: 1, nextPos: 900 },
+        { refId: 0, pos: 900, cigar: '50M', seq: 'A'.repeat(50), name: 'single', flag: 0 },
+      ],
+      0,
+      2000,
+      { colourBy: 'mate' },
+    )
+    expect(pile.groups).toEqual(['unpaired', 'mate unmapped', 'same sequence', 'another sequence'])
+    expect([...pile.group]).toEqual([1, 2, 3, 0])
   })
 
   it('names every category it can produce', () => {

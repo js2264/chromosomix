@@ -36,7 +36,6 @@ import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/type
 import { ReadCache } from '../annotations/reads'
 import {
   alignmentBands,
-  depthExtent,
   depthProfile,
   drawConsensus,
   drawReads,
@@ -302,15 +301,21 @@ interface Lane {
     window: ReadWindow
     rung: ReadRung
     /**
-     * The deepest base in the window, for the autoscale group.
+     * The depth curve, resolved here rather than in the paint.
      *
-     * Carried here rather than computed in the paint, because the group is
-     * resolved for the whole stack in a pass that runs *before* any lane is
-     * painted — so a lane that only knew its own depth at paint time would
-     * contribute nothing to its group, and the other members would rescale the
-     * moment this one crossed the read rung.
+     * Two things need it and they run in that order: the autoscale group is
+     * resolved for the whole stack *before* any lane is painted, so a lane that
+     * only knew its depth at paint time would contribute nothing to its group
+     * and the other members would rescale the moment it crossed the read rung.
+     *
+     * The *lane's* frame is passed to `depthProfile` rather than the coverage
+     * band's, and that is safe rather than approximate: `laneBand` spreads the
+     * frame and rewrites only `acrossFrom` and `thickness`, so every input
+     * `depthProfile` reads — `alongFrom`, `alongTo`, `toPixel` — is identical
+     * in both. One pass, one number, and the paint cannot disagree with the
+     * group about how deep this window is.
      */
-    extent: { min: number; max: number } | null
+    depth: PixelProfile | null
   }>
 }
 
@@ -704,6 +709,7 @@ export class BrowserView {
     this.observer?.disconnect()
     this.cache.destroy()
     this.bases.destroy()
+    this.piles.destroy()
     setReadout('')
   }
 
@@ -1237,9 +1243,28 @@ export class BrowserView {
   }
 
   private draw(): void {
+    // The plot options *before* the lanes are filled, not only before they are
+    // painted. `fill` reads `this.text`: the name strip is one of an alignment
+    // lane's fixed bands, so whether the lane is labelled decides whether a
+    // read row fits at all and therefore which rung the lane fetches for. Read
+    // after the fill, it would fetch against the previous frame's answer and
+    // paint against this one — the two disagreeing for a frame on every toggle.
+    const options = getPlotOptions()
+    this.text = options.text
+    this.fills = options.fills
+    this.outline = options.outline
+    this.baseline = options.baseline
+    this.crosshair = options.crosshair
+
     const live = new Set(this.props.store.entries.map((entry) => entry.id))
     this.cache.prune(live)
     this.bases.prune(live)
+    // The third cache, and it was missed when it was added. Its `prune` and
+    // `destroy` were written, documented and never called — so a BAM removed
+    // mid-decode left the worker inflating BGZF blocks for a lane that no
+    // longer existed, in front of every other lane's `sample`, and left the
+    // largest payload this worker sends alive for the life of the tab.
+    this.piles.prune(live)
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     const width = Math.max(1, this.stage.clientWidth)
     this.canvasWidth = width
@@ -1247,7 +1272,6 @@ export class BrowserView {
     // the axis begins, so it has to be settled before the scale knows how many
     // pixels it has. Capped at a third of the window — a column wider than that
     // is a panel, and the tracks are what this view is.
-    const options = getPlotOptions()
     this.nameColumn =
       options.gutter && options.text
         ? clampNameColumn(this.pinnedColumn ?? Math.round(this.wantGutter), width)
@@ -1303,7 +1327,9 @@ export class BrowserView {
     chrome = true,
   ): void {
     // Read once for the whole frame: every lane asks the same question, and the
-    // export asks it too so that what is saved is what was on screen.
+    // export asks it too so that what is saved is what was on screen. `draw`
+    // has already done this for its own pass; the export enters here directly,
+    // which is why it is read in both places rather than only in `draw`.
     const options = getPlotOptions()
     this.text = options.text
     this.fills = options.fills
@@ -1527,7 +1553,12 @@ export class BrowserView {
     palette: ReturnType<typeof readCanvasPalette>,
   ): { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' } | null {
     const row = lane.reads[0]
-    const { entry, frame } = lane
+    const { frame } = lane
+    // The row's own entry, not the lane's. They are the same for a lane of one,
+    // and they are not for an overlaid group — where taking the lane's would
+    // paint the first member's reads in a second member's colour and file the
+    // hit-test band under the wrong id.
+    const entry = row.entry
     const style = entry.style
     const reads = readsOf(style)
     // The label's strip first, so the name and the read count are not read
@@ -1537,12 +1568,15 @@ export class BrowserView {
     // split is how they came to disagree (§8.4).
     const [, coverage, consensus, pile] = alignmentBands(frame, row.rung, this.text)
 
-    // The coverage band, from the base counts already in hand rather than a
-    // second request: the pile and its summary are then the same reads, which
-    // is the one thing a reader would notice if it were not true.
-    const depth = depthProfile(coverage, this.axis, row.window)
+    // The curve `fill` already resolved, drawn into the coverage band. Not
+    // recomputed here: `laneBand` changes only the across axis, so the two
+    // calls would return the same numbers at the cost of a second pass over
+    // every base in the window — and of a way for the group and the picture to
+    // come to disagree.
+    const depth = row.depth
     if (depth !== null) {
-      drawTrack(ctx, coverage, depth, {
+      const limits = resolveLimits(style.limits, extentFor(entry, depth.extent, groups))
+      const paint = {
         colour: style.colour,
         mode: style.mode,
         // The same two steps every other lane's values go through: the group
@@ -1551,7 +1585,7 @@ export class BrowserView {
         // the read rung; without `resolveLimits` a typed ceiling would hold one
         // zoom step out and be ignored here. Both read as the axis jumping on
         // its own, from the same control in the same card.
-        limits: resolveLimits(style.limits, extentFor(entry, row.extent, groups)),
+        limits,
         guideColour: palette.labelColor,
         haloColour: palette.labelHaloColor,
         font: scaleFont(LANE_FONT),
@@ -1560,7 +1594,15 @@ export class BrowserView {
         baseline: this.baseline,
         flip: false,
         opacity: style.opacity,
-      })
+      }
+      // Drawn twice while a ceiling is being dragged — once as it stood, faded
+      // and still, and once as the hand is asking for it — exactly as the
+      // profiles branch does. The drag can *start* on a pile lane, so without
+      // this it was a gesture with no feedback at all until release, on the one
+      // lane where the ceiling matters most.
+      const dragged = this.scaling?.id === entry.id ? this.scaling.factor : null
+      if (dragged === null) drawTrack(ctx, coverage, depth, paint)
+      else drawTrackScaling(ctx, coverage, depth, paint, scaledTo(limits, dragged))
     }
 
     if (consensus.thickness > 0) {
@@ -1920,7 +1962,9 @@ export class BrowserView {
       // track; at or past it, it is a pile with a consensus under it and the
       // reads are fetched instead (§8.13).
       if (member.kind === 'alignments') {
-        const rung = readRungFor(lane.frame, 'browser')
+        // `this.text` because the name strip is one of the fixed bands, so
+        // whether the lane is labelled changes whether a read row fits at all.
+        const rung = readRungFor(lane.frame, 'browser', 1, this.text)
         if (rung !== 'coverage') {
           const rows = rowsFor(lane.frame, rung, this.text)
           const window = this.piles.readsFor({
@@ -1936,7 +1980,12 @@ export class BrowserView {
             style: readsOf(member.style),
           })
           if (window !== null) {
-            lane.reads.push({ entry: member, window, rung, extent: depthExtent(window) })
+            lane.reads.push({
+              entry: member,
+              window,
+              rung,
+              depth: depthProfile(lane.frame, this.axis, window),
+            })
             continue
           }
           // Nothing in hand yet. Fall through to the coverage line rather than
@@ -1977,7 +2026,10 @@ export class BrowserView {
         // from the base counts under the pile — and it is still a member of its
         // group. Without this the group loses a member exactly when the reader
         // zooms in, so every *other* lane in it rescales.
-        ...lane.reads.map(({ entry, extent }) => ({ group: entry.style.group, extent })),
+        ...lane.reads.map(({ entry, depth }) => ({
+          group: entry.style.group,
+          extent: depth?.extent ?? null,
+        })),
       ]),
       (group) => this.props.groups.scalingOf(group),
     )
@@ -2771,17 +2823,22 @@ export class BrowserView {
       if (row !== undefined) return extentFor(row.entry, row.profile.extent, groups)
       // …and the pile's own depth, for an alignment lane past the read rung.
       const pile = lane.reads.find((read) => read.entry.id === id)
-      if (pile !== undefined) return extentFor(pile.entry, pile.extent, groups)
+      if (pile !== undefined) return extentFor(pile.entry, pile.depth?.extent ?? null, groups)
     }
     return null
   }
 
   private nudgeCeiling(lane: Lane, factor: number): void {
+    const groups = this.groupRanges()
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
     const pile = lane.reads.find((read) => read.entry.id === lane.entry.id) ?? lane.reads[0]
     const target = row?.entry ?? pile?.entry ?? lane.entry
     if (!hasTrackControls(target.kind)) return
-    const extent = row?.profile.extent ?? pile?.extent ?? null
+    // Through the group, as the drag does. Nudging from the lane's *own* peak
+    // while its axis is showing the group's is one notch moving the ceiling by
+    // a factor of the wrong number — a lane peaking at 5 in a group drawn to
+    // 100 jumps to 6.25 instead of 125.
+    const extent = extentFor(target, row?.profile.extent ?? pile?.depth?.extent ?? null, groups)
     const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }

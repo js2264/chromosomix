@@ -1647,12 +1647,25 @@ happened to arrive in, and it would leave the caches on the main thread keyed on
 changed — so a reader's click would do nothing until they panned. Carried on the request, a cache
 miss is a mismatched key rather than a race.
 
-The two keys those caches use are deliberately different widths. Everything in the style changes
-which reads exist or how they are packed, so the pile refetches on any of it. Depth is a *count*,
-and a count does not care how the reads that made it were coloured or whether their mates were
-joined — so the coverage cache watches only the floor and the duplicate switch. Without that split,
-trying a colouring would discard a whole-genome coverage scan, which is the most expensive read in
-the application, for a change that cannot move the line by a pixel.
+The two keys those caches use are deliberately different widths. Four of the five fields change what
+comes back — the colouring decides the category column the worker sends, and the floor, the duplicate
+switch and the split switch decide which reads exist — so the pile refetches on any of those. The
+fifth, joining mates, is drawn from columns the pile already carries and is in no key at all. Depth
+is a *count*, and a count does not care how the reads that made it were coloured — so the coverage
+cache watches only the floor and the duplicate switch. Without that split, trying a colouring would
+discard a whole-genome coverage scan, which is the most expensive read in the application, for a
+change that cannot move the line by a pixel.
+
+A change made while the previous window is still decoding **replaces** it. What is decoding was asked
+under controls nobody is looking at any more, and this worker has no queue — so leaving it in place
+holds up every other lane's `sample` behind an answer that will be thrown away. The test is against
+the *running request's* controls and never against the drawn window's: written the other way it is
+permanently unequal between the change and the first landing, so every frame cancels the request the
+frame before issued, and on a real file the new pile never arrives at all.
+
+What the colouring is **not** is a grouping. The rows are packed by position alone, so the categories
+are interleaved down the pile rather than banded; a band per category is a separate feature and is
+not built.
 
 **Split reads are drawn and never counted.** A supplementary alignment is a further piece of one
 molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
@@ -1838,7 +1851,7 @@ the cost it exists to police:
 | Open a BAM: header + index | ≤ 3 range requests — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
 | One alignment window | ≤ 5 coalesced range requests |
 | Pan inside the window already fetched | 0 requests |
-| Change a lane control | one window's reads again, and **0** for the coverage band — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count. A colouring is also a packing, so the pile refetches on it; depth is a count and does not care, which is why the two caches watch keys of different widths (§8.13) |
+| Change a lane control | one window's reads again, and **0** for the coverage band — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count. Joining mates costs **nothing**: it is drawn from columns the pile already carries. Depth is a count and does not care how the reads were coloured, which is why the two caches watch keys of different widths (§8.13) |
 | A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
 
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to

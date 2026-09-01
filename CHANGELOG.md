@@ -42,9 +42,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   agreement it did not check.
 
   **The controls are the pile's, not a track's.** Colour by strand, by pair, by
-  insert size, by where the mate went, or by mapping quality — a colouring is
-  also a grouping, so it decides how the pile packs into rows — with a key under
-  the picker naming every category. Beside it a mapping-quality floor, which
+  insert size, by where the mate went, or by mapping quality, with a key under
+  the picker naming every category. It colours; it does not *group* — the rows
+  are packed by position, so the categories are interleaved down the pile rather
+  than banded, and a band per category is not built. Beside it a mapping-quality floor, which
   moves the depth as well as the reads so the band and the pile cannot disagree,
   and three switches: join mates, show split reads, hide marked duplicates. All
   of it is stored with the session.
@@ -63,6 +64,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and the base counts that make the read-rung depth and the consensus. It is
   outlined rather than faded — faded already means "soft clip" here — and it is
   never joined to its primary as though it were a mate.
+
+  A lane dragged shorter than about ninety pixels is a coverage lane again,
+  whatever the zoom: the name strip, the depth band and the consensus take that
+  much before the first read row, so below it the rung answers `coverage` rather
+  than drawing an empty lane and spending a BAM window on it.
 
   **A click on a read opens a card and fetches nothing.** The flags in words
   with the raw number beside them, the CIGAR, the clips, where the mate went,

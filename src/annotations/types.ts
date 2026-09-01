@@ -898,7 +898,13 @@ export interface BaseCounts {
 }
 
 /**
- * How a pile is coloured, which is also how it is grouped.
+ * How a pile is coloured.
+ *
+ * Not how it is *grouped*: `place` in `bam/reads.ts` packs rows by position and
+ * has never looked at the category, so the colours are interleaved down the
+ * pile. A band per category is a separate feature this lane does not have, and
+ * saying otherwise here was the doc describing an intention rather than a
+ * function.
  *
  * Here rather than in `bam/reads.ts` because it crosses the worker boundary
  * *and* is written into a stored session: a type in either position cannot live
@@ -1005,7 +1011,7 @@ export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq'
  * The style as a cache key, for the caches that hold *reads*.
  *
  * Four of the five fields are in it, because each changes what comes back: the
- * colouring is also the grouping and therefore the row packing, and the floor,
+ * colouring decides the category column the worker sends back, and the floor,
  * the duplicate switch and the split switch decide which reads exist at all.
  *
  * `pairs` is deliberately **out**. It is the one field the worker never reads —
