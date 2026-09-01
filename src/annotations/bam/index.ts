@@ -259,6 +259,52 @@ function binOffsetOfLevel(level: number): number {
   return offset
 }
 
+/**
+ * The offset of the first record that starts at or after `end` — the ceiling.
+ *
+ * The counterpart to {@link lowestOffset}, and leaving it out is a mistake that
+ * is invisible in every content assertion and enormous in the forecast. The
+ * linear index prunes chunks *before* a window. Nothing prunes chunks *after*
+ * it, and a coarse bin holds records from anywhere in the reference — so a bin
+ * one level from the root, holding a handful of reads scattered the length of a
+ * chromosome, drags the span for a 10 kb window out to the end of the file.
+ * Measured on a small fixture: 1.4 kB of actual records, and a forecast of
+ * 371 kB. Every read is correct; the *gate* is not, and a gate that refuses
+ * windows it could draw is the whole feature failing quietly.
+ *
+ * The bound is available because a record goes in the smallest bin that wholly
+ * contains it, so every record in a bin starts within that bin's range. A bin
+ * whose range begins at or after `end` therefore holds only records that start
+ * at or after `end`, none of which can overlap — and since the file is
+ * coordinate-sorted, the earliest offset among them is where our records must
+ * already have finished.
+ *
+ * Scanning up to eight bins per level is exactly enough to cover everything
+ * after the query, because eight bins at one level are one bin at the level
+ * above: the tree is what makes the walk bounded, and it is ~8 × (depth + 1)
+ * probes rather than a pass over every populated bin — which on a human
+ * chromosome is a hundred thousand of them, per frame.
+ */
+function highestOffset(ref: RefIndex, end: number, index: BamIndex): bigint {
+  let best: bigint | null = null
+  let shift = index.minShift
+  for (let level = index.depth; level >= 0; level--) {
+    const offset = binOffsetOfLevel(level)
+    const after = (Math.max(0, end - 1) >> shift) + 1
+    for (let i = 0; i < 8; i++) {
+      const chunks = ref.bins.get(offset + after + i)
+      if (chunks === undefined) continue
+      for (const chunk of chunks) {
+        if (best === null || chunk.begin < best) best = chunk.begin
+      }
+    }
+    shift += 3
+  }
+  // Nothing after the query: every chunk found is a candidate, which is what
+  // the absence of a ceiling has always meant.
+  return best ?? BigInt(Number.MAX_SAFE_INTEGER) << 16n
+}
+
 /** A byte range to fetch, in the shape `inflateBgzf` and the sources want. */
 export interface ByteSpan {
   from: number
@@ -297,12 +343,18 @@ export function chunksFor(
   const ref = index.refs[refId]
   if (ref === undefined) return []
   const floor = lowestOffset(ref, Math.max(0, start), index)
+  const ceiling = highestOffset(ref, Math.max(1, end), index)
 
   const wanted: Chunk[] = []
   for (const bin of reg2bins(Math.max(0, start), Math.max(1, end), index.minShift, index.depth)) {
     const chunks = ref.bins.get(bin)
     if (chunks === undefined) continue
-    for (const chunk of chunks) if (chunk.end > floor) wanted.push(chunk)
+    // Both ends. A chunk ending before the floor holds nothing that reaches the
+    // window; one beginning at or after the ceiling holds nothing that starts
+    // before the window ends.
+    for (const chunk of chunks) {
+      if (chunk.end > floor && chunk.begin < ceiling) wanted.push(chunk)
+    }
   }
   if (wanted.length === 0) return []
 

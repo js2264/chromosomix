@@ -300,6 +300,46 @@ describe('the index', () => {
     expect(spans.some((span) => span.from === 100)).toBe(false)
   })
 
+  it('prunes chunks that begin after the window, not only those that end before it', async () => {
+    // The ceiling, and leaving it out is invisible in every content assertion
+    // and enormous in the forecast. A record goes in the smallest bin that
+    // wholly contains it, so a bin near the root holds a handful of reads
+    // scattered the length of the reference — and without an upper bound those
+    // chunks drag a 10 kb window's span out to the end of the file. Here bin 1
+    // spans the whole reference and holds a chunk far past the query; bin 4681
+    // holds the reads actually under it.
+    const index = await parseBamIndex(
+      baiBytes([
+        {
+          bins: [
+            { bin: 4681, chunks: [[1000, 1100]] },
+            // A read that lives in a coarse bin because it crosses a boundary,
+            // sitting late in the file — after everything the query wants.
+            { bin: 1, chunks: [[90_000_000, 90_000_100]] },
+            // …and the deepest bin covering where that read starts, which is
+            // what gives the ceiling something to find.
+            { bin: 4681 + 4000, chunks: [[90_000_000, 90_000_100]] },
+          ],
+          linear: [0],
+        },
+      ]),
+    )
+    const spans = chunksFor(index, 0, 0, 16_384, 100_000_000)
+    expect(spans.every((span) => span.from < 90_000_000)).toBe(true)
+    expect(forecastBytes(spans)).toBeLessThan(1 << 20)
+  })
+
+  it('keeps a chunk that begins before the window ends', async () => {
+    // The ceiling must not be so eager that it drops the window's own reads:
+    // the bound is "starts at or after the query end", not "is near it".
+    const index = await parseBamIndex(
+      baiBytes([
+        { bins: [{ bin: 4681, chunks: [[1000, 2000]] }], linear: [0] },
+      ]),
+    )
+    expect(chunksFor(index, 0, 0, 16_384, 10_000_000)).toHaveLength(1)
+  })
+
   it('merges chunks that touch and keeps distant ones apart', async () => {
     const index = await parseBamIndex(
       baiBytes([

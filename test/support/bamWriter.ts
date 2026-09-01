@@ -49,15 +49,26 @@ export interface WrittenBam {
 /**
  * Write `records` as a BGZF BAM with a BAI beside it.
  *
- * One record per block, deliberately. It is a pathological layout for a real
- * file and the ideal one for a test: every record gets a distinct virtual
- * offset with a zero within-block part, so a reader that drops the low sixteen
- * bits and a reader that keeps them cannot be told apart by luck.
+ * `recordsPerBlock` decides the layout, and the two useful settings are the two
+ * extremes of what a real file does.
+ *
+ * **One record per block** — the default — is pathological for a real file and
+ * ideal for testing offsets: every record gets a distinct virtual offset whose
+ * within-block part is zero, so a reader that drops the low sixteen bits and one
+ * that keeps them cannot be told apart by luck.
+ *
+ * **Many records per block** is what `samtools` actually writes, and it is what
+ * a budget assertion needs. A block holds tens of kilobytes of records, so the
+ * chunk for a bin is a handful of blocks rather than hundreds — which is the
+ * layout in which a windowed read is *visibly* a small part of the file, and it
+ * exercises the non-zero within-block offsets a one-per-block file never
+ * produces.
  */
 export async function writeBam(
   refs: Array<{ name: string; length: number }>,
   records: TestRecord[],
   headerText = '@HD\tVN:1.6\tSO:coordinate\n',
+  recordsPerBlock = 1,
 ): Promise<WrittenBam> {
   const headerBlock = await bgzfBlock(bamBytes(refs, [], headerText))
   const blocks: Uint8Array[] = [headerBlock]
@@ -69,27 +80,39 @@ export async function writeBam(
   const bins = refs.map(() => new Map<number, Array<[bigint, bigint]>>())
   const linear = refs.map(() => [] as number[])
 
-  for (const record of records) {
-    const block = await bgzfBlock(recordBytes(record))
-    const begin = BigInt(at) << 16n
-    const end = BigInt(at + block.length) << 16n
+  for (let from = 0; from < records.length; from += recordsPerBlock) {
+    const group = records.slice(from, from + recordsPerBlock)
+    const encoded = group.map((record) => recordBytes(record))
+    const block = await bgzfBlock(concat(encoded))
+    const blockAt = at
     blocks.push(block)
     at += block.length
 
-    const span = referenceSpan(record.cigar)
-    const bin = reg2bin(record.pos, record.pos + Math.max(1, span))
-    const forRef = bins[record.refId]
-    const held = forRef.get(bin)
-    if (held === undefined) forRef.set(bin, [[begin, end]])
-    else held.push([begin, end])
+    // Each record's virtual offset is this block's start in the file, shifted
+    // up sixteen bits, plus where the record begins *inside* the inflated
+    // block — which is the half `parseTabix` throws away and this must not.
+    let within = 0
+    for (let i = 0; i < group.length; i++) {
+      const record = group[i]
+      const begin = (BigInt(blockAt) << 16n) | BigInt(within)
+      within += encoded[i].length
+      const end = (BigInt(blockAt) << 16n) | BigInt(within)
 
-    // The linear index: the lowest offset of any record overlapping each 16 kb
-    // window the record touches.
-    const slots = linear[record.refId]
-    const first = record.pos >> 14
-    const last = (record.pos + Math.max(1, span) - 1) >> 14
-    for (let slot = first; slot <= last; slot++) {
-      if (slots[slot] === undefined) slots[slot] = at - block.length
+      const span = referenceSpan(record.cigar)
+      const bin = reg2bin(record.pos, record.pos + Math.max(1, span))
+      const forRef = bins[record.refId]
+      const held = forRef.get(bin)
+      if (held === undefined) forRef.set(bin, [[begin, end]])
+      else held.push([begin, end])
+
+      // The linear index: the lowest offset of any record overlapping each
+      // 16 kb window the record touches.
+      const slots = linear[record.refId]
+      const first = record.pos >> 14
+      const last = (record.pos + Math.max(1, span) - 1) >> 14
+      for (let slot = first; slot <= last; slot++) {
+        if (slots[slot] === undefined) slots[slot] = blockAt
+      }
     }
   }
 
