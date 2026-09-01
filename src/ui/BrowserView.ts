@@ -32,7 +32,7 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { hasTrackControls } from '../annotations/types'
+import { drawnFromSamples, hasTrackControls } from '../annotations/types'
 import type { AnnotationEntry, BaseRegion, FeatureSet } from '../annotations/types'
 import {
   assemblyAxis,
@@ -908,7 +908,7 @@ export class BrowserView {
    */
   autoscaleAll(): void {
     for (const entry of this.props.store.entries) {
-      if (entry.kind !== 'track' || entry.style.limits.auto) continue
+      if (!hasTrackControls(entry.kind) || entry.style.limits.auto) continue
       this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
     }
   }
@@ -1502,7 +1502,9 @@ export class BrowserView {
               ? member.style.opacity * OVERLAY_DIM
               : member.style.opacity,
         }
-        if (dragged === null || member.kind !== 'track') drawTrack(ctx, frame, profile, paint)
+        if (dragged === null || !hasTrackControls(member.kind)) {
+          drawTrack(ctx, frame, profile, paint)
+        }
         else drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
       }
       const first = lane.profiles[0]
@@ -1742,7 +1744,7 @@ export class BrowserView {
         lane.residues.push({ entry: member, regions: regions ?? [] })
         continue
       }
-      if (member.kind !== 'track' && member.kind !== 'sequence') continue
+      if (!drawnFromSamples(member.kind)) continue
       const samples = this.cache.samplesFor({
         entry: member.id,
         scope: 'browser',
@@ -2549,7 +2551,7 @@ export class BrowserView {
     this.schedule()
     if (held === null || held.factor === 1) return
     for (const member of members) {
-      if (member.kind !== 'track') continue
+      if (!hasTrackControls(member.kind)) continue
       const next = nudgedLimits(member.style.limits, this.extentOf(member.id), held.factor)
       if (next !== null) this.props.store.restyle(member.id, { limits: next })
     }
@@ -2568,7 +2570,7 @@ export class BrowserView {
   private nudgeCeiling(lane: Lane, factor: number): void {
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
     const target = row?.entry ?? lane.entry
-    if (target.kind !== 'track') return
+    if (!hasTrackControls(target.kind)) return
     const next = nudgedLimits(target.style.limits, row?.profile.extent ?? null, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }

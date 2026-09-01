@@ -196,6 +196,24 @@ export function hasAMovableAxis(kind: AnnotationKind): boolean {
 }
 
 /**
+ * Whether a lane of this kind is filled from the annotations worker's `sample`.
+ *
+ * The question `BrowserView.fill` and `AnnotationLanes.buildEdge` ask before
+ * they go and fetch anything, and it used to be spelled `kind !== 'track' &&
+ * kind !== 'sequence'` at both. That is the most dangerous shape a kind test
+ * takes here, because a kind missing from it is not drawn *badly* — it is not
+ * drawn at all, and the lane is simply empty with no error anywhere.
+ *
+ * `metadata` is deliberately not in this list even though it draws a profile
+ * and has a movable axis: its values are columns of the open file's own tables
+ * and come from `cellsFor`, not from the worker (§8.12). Two roads to a
+ * profile, and this names the one that goes over the wire.
+ */
+export function drawnFromSamples(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'sequence' || kind === 'alignments'
+}
+
+/**
  * Whether a lane of this kind gets the *whole* set of a track's controls:
  * typed limits, autoscale-group membership, the mode and flip switches, and the
  * ceiling drag.

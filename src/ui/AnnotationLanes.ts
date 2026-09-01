@@ -87,6 +87,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
   LANE_EDGES,
+  drawnFromSamples,
   drawsAProfile,
   hasAMovableAxis,
   isMetadata,
@@ -1033,7 +1034,7 @@ export class AnnotationLanes {
         // A sequence is a value track from here: beside a map, where a pixel is
         // a whole bin, a FASTA can only ever be its GC content — the residues
         // need a base per pixel and a bin is a thousand of them.
-        if (axis === null || (member.kind !== 'track' && member.kind !== 'sequence')) continue
+        if (axis === null || !drawnFromSamples(member.kind)) continue
         profiles.push({
           entry: member,
           profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
