@@ -362,6 +362,50 @@ describe('the coverage lane', () => {
     expect(drawn.extent?.max).toBeGreaterThan(0)
   })
 
+  it('reads a file whose records straddle blocks, part-way through it', async () => {
+    // The layout `bgzf_write` actually produces: blocks are cut when the buffer
+    // fills, with no idea that records exist, so a record beginning near the
+    // end of a block continues into the next one. A window whose byte span
+    // starts at a later block therefore starts at the *tail* of a record, and
+    // a walk beginning at the block boundary reads those bytes as a record
+    // length — yielding nothing, silently.
+    const many: TestRecord[] = []
+    for (let i = 0; i < 900; i++) {
+      many.push({
+        refId: 0,
+        pos: 1000 + i * 137,
+        cigar: '100M',
+        name: `s${i}`,
+        seq: 'ACGT'.repeat(20 + (i % 17)),
+      })
+    }
+    const written = await writeBam(REFS, many, undefined, 1, true)
+    const response = await ask({
+      kind: 'load',
+      entry: 'e-straddle',
+      source: {
+        kind: 'local',
+        file: new File([written.bam as BlobPart], 'straddle.bam'),
+        name: 'straddle.bam',
+        index: new File([written.bai as BlobPart], 'straddle.bam.bai'),
+      },
+      mapContigs: REFS.map((ref) => ({ name: ref.name, length: ref.length })),
+    })
+    expect(response.type, JSON.stringify(response)).toBe('result')
+
+    const samples = await ask({
+      kind: 'sample',
+      entry: 'e-straddle',
+      regions: [{ contig: 'chrI', start: 100_000, end: 120_000 }],
+      basesPerPixel: 200,
+    })
+    const drawn = (samples as { payload: TrackSampleSet }).payload
+    expect(drawn.regions).toHaveLength(1)
+    // Reads every 137 bp of 100 bp each is depth well under one on average, but
+    // firmly above nothing — which is what the bug produces.
+    expect(drawn.extent?.max ?? 0).toBeGreaterThan(0.5)
+  })
+
   it('forgets the file when the row is dropped', async () => {
     // A BAI is megabytes and the handle behind it is live; neither should
     // outlive the row that owns it.

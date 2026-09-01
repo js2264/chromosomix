@@ -508,6 +508,25 @@ describe('coverage', () => {
     expect([...result.depth]).toEqual([0, 0, 0, 0])
   })
 
+  it('counts a long-CIGAR read, rather than reading its placeholder as an intron', () => {
+    // A record with >65,535 ops keeps `<l_seq>S<ref_len>N` in the record and
+    // the truth in a CG tag. Measuring the span works either way; walking it
+    // does not — the S consumes no reference and the N is a skip, so a
+    // spliced-aware pass emits nothing and the read contributes no depth while
+    // still being counted as kept.
+    const real = [(50 << 4) | 0, (100 << 4) | 3, (50 << 4) | 0]
+    const tags = tagBytes([{ tag: 'CG', type: 'B', subtype: 'I', value: real }])
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '4S200N', seq: 'ACGT', tags },
+    ])
+    const result = coverageOf(bytes, from(bytes), 0, 0, 200, 4)
+    expect(result.kept).toBe(1)
+    expect(result.depth[0]).toBeCloseTo(1, 6)   // 0-50 aligned
+    expect(result.depth[1]).toBeCloseTo(0, 6)   // 50-100 the real intron
+    expect(result.depth[2]).toBeCloseTo(0, 6)   // 100-150 the real intron
+    expect(result.depth[3]).toBeCloseTo(1, 6)   // 150-200 aligned
+  })
+
   it('emits the aligned blocks a spliced read is made of', () => {
     const bytes = bamBytes(REFS, [{ refId: 0, pos: 100, cigar: '50M100N50M' }])
     const blocks: Array<[number, number]> = []

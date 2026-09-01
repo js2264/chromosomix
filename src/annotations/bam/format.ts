@@ -486,3 +486,26 @@ function isLongCigarPlaceholder(cigar: Uint32Array, seqLength: number): boolean 
   const softClip = (cigar[0] & 0xf) === 4 && cigar[0] >>> 4 === seqLength
   return softClip && (cigar[1] & 0xf) === 3
 }
+
+/**
+ * The real ops of a record whose CIGAR is too long to fit in the record.
+ *
+ * `null` for the overwhelming majority, which have an ordinary CIGAR and pay
+ * two comparisons for the question. Where it is not null, the ops in the record
+ * are the `<l_seq>S<ref_len>N` stand-in — and that matters to anything walking
+ * the CIGAR rather than merely measuring it, because the `N` is a *skip* and a
+ * pass that honours skips will emit no aligned block at all. The reference
+ * *span* is right either way, which is why the record's end never needs this.
+ */
+export function longCigarOf(bytes: Uint8Array, cursor: RecordCursor): Uint32Array | null {
+  if (cursor.cigarOps !== 2) return null
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const first = view.getUint32(cursor.cigarAt, true)
+  const second = view.getUint32(cursor.cigarAt + 4, true)
+  if ((first & 0xf) !== 4 || first >>> 4 !== cursor.seqLength) return null
+  if ((second & 0xf) !== 3) return null
+  const qualAt = cursor.seqAt + ((cursor.seqLength + 1) >> 1)
+  const tags = readTags(bytes, qualAt + cursor.seqLength, cursor.at + cursor.bytes - 4)
+  const long = tags['CG']
+  return Array.isArray(long) ? Uint32Array.from(long) : null
+}

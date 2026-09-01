@@ -709,6 +709,17 @@ export interface StoredEntry {
     kind: 'local' | 'remote' | 'computed' | 'metadata'
     name: string
     url?: string
+    /**
+     * `remote` only: the sidecar index, where it was *named* rather than guessed.
+     *
+     * A guessed one (`<url>.bai`) is re-derived on every load and needs no
+     * storage. A named one cannot be: `#index=` exists precisely for the URLs
+     * where appending a suffix means nothing — a presigned URL, or one carrying
+     * a query string — so dropping it here would make a share link and a
+     * reloaded tab open a BAM this app cannot index (§8.13). A local `File`
+     * still cannot be written down and is not.
+     */
+    index?: string
     task?: string
     recipe?: Record<string, unknown>
     framing?: string

@@ -96,7 +96,7 @@ async function ours(
       bam.subarray(span.from, span.to),
       span.lastBlock - span.from,
     )
-    forEachRecord(inflated, 0, (cursor) => {
+    forEachRecord(inflated, span.dataFrom, (cursor) => {
       if (cursor.refId !== refId) return
       if (cursor.end <= start || cursor.pos >= end) return
       out.push({ name: readNameAt(inflated, cursor), pos: cursor.pos, end: cursor.end })
@@ -120,6 +120,82 @@ async function theirs(
     }))
     .sort((a, b) => a.pos - b.pos || a.name.localeCompare(b.name))
 }
+
+/**
+ * The same comparison over a file whose blocks are cut at byte boundaries.
+ *
+ * This is what `bgzf_write` produces and therefore what every `samtools` BAM
+ * looks like: records straddle blocks, so a virtual offset's within-block part
+ * is genuinely non-zero and a reader that ignores it starts mid-record. The
+ * one-record-per-block fixtures above cannot catch that, because every record
+ * in them begins exactly where a block does.
+ */
+describe('against @gmod/bam, on a file whose records straddle blocks', () => {
+  // Far enough into the reference that the span for it begins at a block other
+  // than the first — which is the only place the bug can show.
+  const LATE_FROM = 100_000
+  const LATE_TO = 120_000
+
+  const MANY: TestRecord[] = []
+  for (let i = 0; i < 900; i++) {
+    MANY.push({
+      refId: 0,
+      pos: 1000 + i * 137,
+      cigar: '100M',
+      name: `straddle-${i}`,
+      // Varying lengths, so records do not land on a common stride and some of
+      // them must cross a block boundary.
+      seq: 'ACGT'.repeat(20 + (i % 17)),
+    })
+  }
+
+  async function open(): Promise<{ bam: Uint8Array; bai: Uint8Array; oracle: BamFile }> {
+    const { bam, bai } = await writeBam(REFS, MANY, undefined, 1, true)
+    const oracle = new BamFile({
+      bamFilehandle: new BytesFile(bam) as never,
+      baiFilehandle: new BytesFile(bai) as never,
+    })
+    await oracle.getHeader()
+    return { bam, bai, oracle }
+  }
+
+  it('produces within-block offsets at all, or it is testing nothing', async () => {
+    const { bai } = await open()
+    const index = await parseBamIndex(bai)
+    const offsets = [...index.refs[0].bins.values()]
+      .flat()
+      .map((chunk) => Number(chunk.begin & 0xffffn))
+    expect(offsets.some((offset) => offset !== 0)).toBe(true)
+  })
+
+  it('has a query whose span begins part-way into a block, or it tests nothing', async () => {
+    // The distinction that makes this fixture worth its bytes. A query whose
+    // span starts at the *first* record block begins at a record boundary
+    // anyway, so ignoring the within-block offset merely reads some extra
+    // records and every assertion still passes. The bug only shows where the
+    // span begins at a later block — one that opens with the tail of a record
+    // carried over from the block before it.
+    const { bam, bai } = await open()
+    const index = await parseBamIndex(bai)
+    const spans = chunksFor(index, 0, LATE_FROM, LATE_TO, bam.byteLength)
+    expect(spans[0].from).toBeGreaterThan(0)
+    expect(spans[0].dataFrom).toBeGreaterThan(0)
+  })
+
+  it('finds the same reads as the oracle, in a window part-way through the file', async () => {
+    const { bam, bai, oracle } = await open()
+    const mine = await ours(bam, bai, 0, LATE_FROM, LATE_TO)
+    expect(mine.length).toBeGreaterThan(50)
+    expect(mine).toEqual(await theirs(oracle, 'chrI', LATE_FROM, LATE_TO))
+  })
+
+  it('finds the same reads at the very start, where the walk begins at zero', async () => {
+    const { bam, bai, oracle } = await open()
+    expect(await ours(bam, bai, 0, 1000, 3000)).toEqual(
+      await theirs(oracle, 'chrI', 1000, 3000),
+    )
+  })
+})
 
 describe('against @gmod/bam', () => {
   it('reads the same header', async () => {

@@ -194,6 +194,23 @@ function parseCsi(bytes: Uint8Array): BamIndex {
 }
 
 /**
+ * `value >> bits`, for a `bits` that may reach 32.
+ *
+ * JavaScript takes a shift count **modulo 32**, so `x >> 32` is `x >> 0` —
+ * which is `x`, not zero. That is not a corner case here: htslib chooses a
+ * CSI's depth by `for (n_lvls = 0, s = 1 << min_shift; max_len > s; ++n_lvls,
+ * s <<= 3)`, so a reference longer than 2^29 bp gets `min_shift 14, depth 6`
+ * and the top level's shift is exactly 32 — on precisely the genomes CSI exists
+ * for, and the ones this module's own header names.
+ *
+ * Division rather than a special case, because it is right for every width and
+ * a coordinate here is far below 2^53.
+ */
+function shiftRight(value: number, bits: number): number {
+  return Math.floor(value / 2 ** bits)
+}
+
+/**
  * Every bin that can hold a record overlapping `[start, end)`.
  *
  * The generalised form, which BAI is the `minShift: 14, depth: 5` case of. Each
@@ -212,8 +229,8 @@ export function reg2bins(
   let shift = minShift + depth * 3
   let offset = 0
   for (let level = 0; level <= depth; level++) {
-    const from = offset + (start >> shift)
-    const to = offset + (last >> shift)
+    const from = offset + shiftRight(start, shift)
+    const to = offset + shiftRight(last, shift)
     for (let bin = from; bin <= to; bin++) out.push(bin)
     offset += 1 << (level * 3)
     shift -= 3
@@ -235,7 +252,7 @@ export function reg2bins(
  */
 function lowestOffset(ref: RefIndex, start: number, index: BamIndex): bigint {
   if (ref.linear !== null) {
-    const slot = start >> index.minShift
+    const slot = shiftRight(start, index.minShift)
     if (ref.linear.length === 0) return 0n
     return ref.linear[Math.min(slot, ref.linear.length - 1)]
   }
@@ -246,7 +263,7 @@ function lowestOffset(ref: RefIndex, start: number, index: BamIndex): bigint {
   let offset = 0
   for (let level = index.depth; level >= 0; level--) {
     offset = binOffsetOfLevel(level)
-    const held = ref.loffset.get(offset + (start >> shift))
+    const held = ref.loffset.get(offset + shiftRight(start, shift))
     if (held !== undefined) return held
     shift += 3
   }
@@ -302,7 +319,7 @@ function highestOffset(ref: RefIndex, end: number, index: BamIndex): bigint {
     // after the query at all, and every chunk beyond it is then dropped. That
     // loses reads, silently, and only on a query near the end of a reference.
     const levelBins = 1 << (level * 3)
-    const after = (Math.max(0, end - 1) >> shift) + 1
+    const after = shiftRight(Math.max(0, end - 1), shift) + 1
     for (let i = 0; i < 8 && after + i < levelBins; i++) {
       const chunks = ref.bins.get(offset + after + i)
       if (chunks === undefined) continue
@@ -329,6 +346,24 @@ export interface ByteSpan {
    * without reading its header, and the decode should not pay for the slack.
    */
   lastBlock: number
+  /**
+   * Where the first wanted record begins *inside* the first inflated block.
+   *
+   * The other half of a virtual offset, and the half `tabix.ts` throws away —
+   * which is safe there and is not safe here. A BGZF block boundary is not a
+   * record boundary: `bgzf_write` copies bytes into a 64 KiB buffer and flushes
+   * it when full, so `samtools` splits records across blocks routinely, and any
+   * read longer than a block must be split. Starting the walk at inflated
+   * offset 0 then begins in the middle of whatever record the previous block
+   * ran out on, reads its bytes as a record length, and yields either nothing
+   * or garbage — silently, since a nonsense record fails the position filter
+   * like any other.
+   *
+   * Merged spans take the *first* chunk's offset, which is all that is needed:
+   * once the walk is aligned to a record it stays aligned, and the extra
+   * records between merged chunks are filtered by position like any others.
+   */
+  dataFrom: number
 }
 
 /** How far apart two spans may be before reading across the gap costs more than skipping it. */
@@ -373,19 +408,22 @@ export function chunksFor(
   wanted.sort((a, b) => (a.begin < b.begin ? -1 : a.begin > b.begin ? 1 : 0))
   const spans: ByteSpan[] = []
   for (const chunk of wanted) {
-    // The high 48 bits are the block's offset in the file; the low 16 are the
-    // offset within the inflated block. A fetch is in compressed bytes, so only
-    // the block offsets matter here — and the last block has to be read whole,
-    // because its length is inside it.
+    // A virtual offset is `(block offset << 16) | offset within the block`.
+    // The high 48 bits say which bytes to fetch; the low 16 say where the
+    // record actually starts once they are inflated, and both are needed —
+    // see {@link ByteSpan.dataFrom}.
     const from = Number(chunk.begin >> 16n)
+    const dataFrom = Number(chunk.begin & 0xffffn)
     const lastBlock = Number(chunk.end >> 16n)
     const to = Math.min(fileSize, lastBlock + BGZF_MAX_BLOCK)
     const previous = spans[spans.length - 1]
     if (previous !== undefined && from <= previous.to + COALESCE_GAP) {
       previous.to = Math.max(previous.to, to)
       previous.lastBlock = Math.max(previous.lastBlock, lastBlock)
+      // `dataFrom` is *not* widened: it belongs to the span's first block, and
+      // the walk from there runs continuously through everything merged in.
     } else {
-      spans.push({ from, to, lastBlock })
+      spans.push({ from, to, lastBlock, dataFrom })
     }
   }
   return spans

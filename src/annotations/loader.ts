@@ -150,7 +150,15 @@ export class AnnotationLoader {
       if (row.source.kind === 'metadata') continue
       if (row.source.kind === 'remote' && row.source.url !== undefined) {
         this.begin(
-          { kind: 'remote', url: row.source.url, name: row.source.name },
+          {
+            kind: 'remote',
+            url: row.source.url,
+            name: row.source.name,
+            // A named sidecar comes back with the row. Without it a restored
+            // BAM on a presigned URL reopens with a guessed `<url>.bai` that
+            // cannot exist, and refuses.
+            ...(row.source.index === undefined ? {} : { index: row.source.index }),
+          },
           row.label,
           row,
         )
@@ -296,7 +304,12 @@ export class AnnotationLoader {
       label: entry.label,
       source:
         entry.source.kind === 'remote'
-          ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
+          ? {
+              kind: 'remote',
+              name: entry.source.name,
+              url: entry.source.url,
+              ...(entry.source.index === undefined ? {} : { index: entry.source.index }),
+            }
           : { kind: 'local', name: entry.source.name },
       visible: entry.visible,
       placement: entry.placement,
@@ -481,7 +494,17 @@ export function splitIndexFragment(url: string): { address: string; index?: stri
   if (at < 0) return { address: url }
   const index = url.slice(at + '#index='.length).trim()
   const address = url.slice(0, at)
-  return index === '' ? { address } : { address, index: decodeURIComponent(index) }
+  if (index === '') return { address }
+  // A malformed percent-escape throws `URIError`, and this runs inside the URL
+  // box's submit handler where nothing catches it: one stray `%` and the box
+  // stops responding with no message anywhere. The escaped form is a courtesy
+  // for URLs carrying their own `&` and `#`; a string that will not decode is
+  // taken as written, which is what a reader who typed it meant.
+  try {
+    return { address, index: decodeURIComponent(index) }
+  } catch {
+    return { address, index }
+  }
 }
 
 /**

@@ -69,7 +69,21 @@ export async function writeBam(
   records: TestRecord[],
   headerText = '@HD\tVN:1.6\tSO:coordinate\n',
   recordsPerBlock = 1,
+  /**
+   * Cut blocks at fixed byte boundaries, letting records straddle them.
+   *
+   * What `bgzf_write` actually does: it copies bytes into a buffer and flushes
+   * when the buffer is full, with no idea that records exist. So a record
+   * beginning near the end of a block continues into the next one, routinely,
+   * in every file `samtools` has ever written — and a reader that starts its
+   * walk at the beginning of a block rather than at the virtual offset's own
+   * within-block part begins in the middle of a record and reads its bytes as
+   * a length. The two block layouts above cannot catch that, because both put
+   * every record wholly inside one block.
+   */
+  straddle = false,
 ): Promise<WrittenBam> {
+  if (straddle) return writeStraddled(refs, records, headerText)
   const headerBlock = await bgzfBlock(bamBytes(refs, [], headerText))
   const blocks: Uint8Array[] = [headerBlock]
   let at = headerBlock.length
@@ -158,6 +172,81 @@ function writeBai(
     }
   }
   return out
+}
+
+/**
+ * The same file, with blocks cut at byte boundaries rather than record ones.
+ *
+ * The record stream is built whole and then sliced, exactly as `bgzf_write`
+ * slices its buffer, so a record that does not happen to end on a block
+ * boundary continues into the block after it. Every record's virtual offset
+ * therefore carries a genuine within-block part, and a reader that ignores it
+ * starts mid-record.
+ */
+async function writeStraddled(
+  refs: Array<{ name: string; length: number }>,
+  records: TestRecord[],
+  headerText: string,
+): Promise<WrittenBam> {
+  const headerBlock = await bgzfBlock(bamBytes(refs, [], headerText))
+  const encoded = records.map((record) => recordBytes(record))
+
+  // Where each record begins in the uncompressed stream of records.
+  const startsAt: number[] = []
+  let total = 0
+  for (const one of encoded) {
+    startsAt.push(total)
+    total += one.length
+  }
+  const stream = concat(encoded)
+
+  // Cut the stream into equal pieces and compress each, remembering where each
+  // piece began in the stream and where its block landed in the file.
+  const blocks: Uint8Array[] = [headerBlock]
+  const pieceStartsAt: number[] = []
+  const pieceFileAt: number[] = []
+  let at = headerBlock.length
+  for (let from = 0; from < stream.length; from += MAX_BLOCK_PAYLOAD) {
+    const piece = stream.subarray(from, Math.min(from + MAX_BLOCK_PAYLOAD, stream.length))
+    const block = await bgzfBlock(piece)
+    pieceStartsAt.push(from)
+    pieceFileAt.push(at)
+    blocks.push(block)
+    at += block.length
+  }
+  blocks.push(await bgzfBlock(new Uint8Array(0)))
+
+  /** The virtual offset of a byte position in the record stream. */
+  const virtualOf = (streamAt: number): bigint => {
+    let piece = 0
+    while (piece + 1 < pieceStartsAt.length && pieceStartsAt[piece + 1] <= streamAt) piece++
+    return (BigInt(pieceFileAt[piece]) << 16n) | BigInt(streamAt - pieceStartsAt[piece])
+  }
+
+  const bins = refs.map(() => new Map<number, Array<[bigint, bigint]>>())
+  const linear = refs.map(() => [] as number[])
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    const begin = virtualOf(startsAt[i])
+    const end = virtualOf(startsAt[i] + encoded[i].length)
+    const span = referenceSpan(record.cigar)
+    const bin = reg2bin(record.pos, record.pos + Math.max(1, span))
+    const forRef = bins[record.refId]
+    const held = forRef.get(bin)
+    if (held === undefined) forRef.set(bin, [[begin, end]])
+    else held.push([begin, end])
+
+    const slots = linear[record.refId]
+    const first = record.pos >> 14
+    const last = (record.pos + Math.max(1, span) - 1) >> 14
+    for (let slot = first; slot <= last; slot++) {
+      // The block the record *starts* in — a floor, so the block holding its
+      // first byte is the one a query must begin reading at.
+      if (slots[slot] === undefined) slots[slot] = Number(begin >> 16n)
+    }
+  }
+
+  return { bam: concat(blocks), bai: writeBai(bins, linear) }
 }
 
 /**

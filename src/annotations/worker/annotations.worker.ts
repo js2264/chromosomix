@@ -335,6 +335,25 @@ setInterval(() => {
  */
 const cancelled = new Set<number>()
 
+/**
+ * Ids currently being handled, so a `cancel` for a settled one can be dropped.
+ *
+ * Without it the set only ever shrinks through the target's own `finally`, and
+ * a cancel that arrives *after* its target finished — which is the ordinary
+ * case, since every `cancellable` caller in this codebase cancels a superseded
+ * handle whether or not it has already answered — leaves its id behind for the
+ * life of the tab. The counter is monotonic, so that is a slow leak rather than
+ * a bounded one.
+ */
+const inFlight = new Set<number>()
+
+/**
+ * The largest id that has been handled, so a cancel can tell "not yet started"
+ * from "long finished". Ids are allotted in order by one client, so anything
+ * above this has not arrived and anything at or below it is over.
+ */
+let highestSettled = 0
+
 /** Whether this request has been called off since it started. */
 function isCancelled(id: number): boolean {
   return cancelled.has(id)
@@ -362,6 +381,7 @@ function abortError(): Error {
 }
 
 async function handle(request: AnnotationRequest): Promise<void> {
+  inFlight.add(request.id)
   try {
     const payload = await dispatch(request)
     // Asked for and then not wanted: the answer is thrown away rather than
@@ -379,10 +399,12 @@ async function handle(request: AnnotationRequest): Promise<void> {
     }
     ;(self as unknown as Worker).postMessage(response)
   } finally {
-    // Whatever happened, this id is settled and must not hold an entry: the
-    // counter is monotonic, so a set that only grew would be a slow leak for
-    // the life of the tab.
+    // Whatever happened, this id is settled and must not hold an entry in
+    // either set: the counter is monotonic, so a set that only grew would be a
+    // slow leak for the life of the tab.
+    inFlight.delete(request.id)
     cancelled.delete(request.id)
+    if (request.id > highestSettled) highestSettled = request.id
   }
 }
 
@@ -402,10 +424,14 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'assembly':
       return assemblyOf(request.source)
     case 'cancel':
-      // Recorded even when nothing is running under that id yet. The `cancel`
-      // routinely arrives while its target is still awaiting its first read,
-      // and a set consulted only at the moment of arrival would miss it.
-      cancelled.add(request.target)
+      // Recorded for anything that has not already settled — which includes an
+      // id that has not *started*, because a `cancel` routinely overtakes the
+      // request it names while that one is still awaiting its first read. What
+      // is dropped is a cancel for an id already finished with: it can change
+      // nothing, and remembering it forever is how the set leaks.
+      if (inFlight.has(request.target) || request.target > highestSettled) {
+        cancelled.add(request.target)
+      }
       return null
     case 'drop': {
       tracks.delete(request.entry)
@@ -1449,15 +1475,25 @@ async function loadBam(
     )
   }
 
-  const refNames = header.refs.map((ref) => ref.name)
-  const renaming = renameContigs([...refNames], mapContigs)
-  // `renameContigs` rewrites in place, so the renamed spellings are what the
-  // map asks by and `refIdOf` is built from them — while `refNames` keeps the
-  // file's own, which is what the §5.9 ladder searches for a deck companion
-  // asking by a third convention.
+  // Renamed into the map's vocabulary at the door (§5.9), exactly as a bigWig
+  // is and for the same reason: the contig list this reports, the overlap it is
+  // judged by and the regions it is later asked for are then all in one
+  // spelling. **With the lengths** the `@SQ` table carries, because a matcher
+  // given names alone has nothing to check its own guesses against — an hg19
+  // alignment on an hg38 map would rename `MT` onto `chrM` and report it as an
+  // ordinary match.
+  const renaming = renameInto(header.refs, mapContigs)
+  const contigs = renaming.names
+
+  // The map's spelling to this file's reference id. `renameInto` preserves the
+  // source order, so index *is* the id; the file's own spellings are added
+  // after and never overwrite a rename, for the deck companion that asks by a
+  // third convention.
   const refIdOf = new Map<string, number>()
-  for (let id = 0; id < refNames.length; id++) refIdOf.set(refNames[id], id)
-  for (let id = 0; id < header.refs.length; id++) refIdOf.set(header.refs[id].name, id)
+  for (let id = 0; id < contigs.length; id++) refIdOf.set(contigs[id], id)
+  for (let id = 0; id < header.refs.length; id++) {
+    if (!refIdOf.has(header.refs[id].name)) refIdOf.set(header.refs[id].name, id)
+  }
 
   alignments.set(entry, {
     handle,
@@ -1471,8 +1507,8 @@ async function loadBam(
 
   return {
     format: 'bam',
-    contigs: refNames,
-    overlap: overlapReport(refNames, mapContigs, renaming),
+    contigs,
+    overlap: overlapReport(contigs, mapContigs, renaming),
     summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${index.format.toUpperCase()}`,
   }
 }
@@ -1554,7 +1590,10 @@ async function alignmentSamples(
       const inflated = await inflateBgzf(compressed, byteSpan.lastBlock - byteSpan.from)
       const result = coverageOf(
         inflated,
-        0,
+        // Not zero. A BGZF block boundary is not a record boundary, so the
+        // first wanted record starts wherever the chunk's virtual offset says
+        // inside this block — see `bam/index.ts`'s `ByteSpan.dataFrom`.
+        byteSpan.dataFrom,
         plan.refId,
         Math.floor(plan.region.start),
         Math.ceil(plan.region.end),

@@ -1051,7 +1051,15 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
     label: entry.label,
     source:
       entry.source.kind === 'remote'
-        ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
+        ? {
+            kind: 'remote',
+            name: entry.source.name,
+            url: entry.source.url,
+            // Only where it was named. A guessed sidecar is re-derived on every
+            // load; a named one is the only way to index a presigned URL, and
+            // losing it across a reload reopens a BAM that cannot be read.
+            ...(entry.source.index === undefined ? {} : { index: entry.source.index }),
+          }
         : entry.source.kind === 'computed'
           ? {
               kind: 'computed',
@@ -1127,6 +1135,11 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   if (kind !== 'local' && kind !== 'remote' && kind !== 'computed' && kind !== 'metadata') {
     return false
   }
+  // Stored state outlives the build that wrote it and reaches here from a share
+  // link, so it is untrusted input. An `index` that is not a string would be
+  // handed to `fetch` as a URL.
+  const index = (source as Record<string, unknown>)['index']
+  if (index !== undefined && typeof index !== 'string') return false
   // A metadata row that lost either half of its address names no column, and a
   // row that names no column can only come back as an empty lane.
   if (kind === 'metadata') {

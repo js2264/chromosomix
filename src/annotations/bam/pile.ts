@@ -34,7 +34,13 @@
  * thousand bins costs two writes rather than two thousand.
  */
 
-import { consumesReference, DEFAULT_EXCLUDE, forEachRecord, type RecordCursor } from './format'
+import {
+  consumesReference,
+  DEFAULT_EXCLUDE,
+  forEachRecord,
+  longCigarOf,
+  type RecordCursor,
+} from './format'
 
 /** Which records a pass counts. */
 export interface PileFilter {
@@ -157,11 +163,21 @@ export function eachAlignedBlock(
   emit: (start: number, end: number) => void,
 ): void {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  // A record with more than 65,535 ops keeps `<l_seq>S<ref_len>N` in the record
+  // and the truth in a `CG` tag. Measuring the span works either way, because
+  // the `N` carries the reference length — but *walking* it does not: the `S`
+  // consumes no reference and the `N` is a skip, so a spliced-aware pass emits
+  // nothing at all and the read contributes no depth while still being counted.
+  const long = longCigarOf(bytes, cursor)
+  const ops = long === null ? cursor.cigarOps : long.length
+  const opAt = (i: number): number =>
+    long === null ? view.getUint32(cursor.cigarAt + i * 4, true) : long[i]
+
   let at = cursor.pos
   let blockStart = cursor.pos
   let open = false
-  for (let i = 0; i < cursor.cigarOps; i++) {
-    const packed = view.getUint32(cursor.cigarAt + i * 4, true)
+  for (let i = 0; i < ops; i++) {
+    const packed = opAt(i)
     const op = packed & 0xf
     const length = packed >>> 4
     if (op === 3) {
