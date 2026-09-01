@@ -35,6 +35,7 @@ import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
+import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { bucketBrowseButton } from './browseButton'
 import { mapsOrLead, placementField } from './lanePlacement'
@@ -391,10 +392,21 @@ export class AnnotationCard {
         text: `computed by ${entry.source.task} · run it again from the Analysis panel to redraw it`,
       })
     }
+    // `multiple`, because some formats are a *pair*. A BAM without its index
+    // re-attaches and immediately refuses (§8.13), and a bgzipped feature file
+    // without its `.tbi` re-attaches and silently reads itself whole — so the
+    // picker takes both and `pairIndexes` sorts out which is which, exactly as
+    // a drop of the two does.
     const input = el('input', { class: 'hidden-input', type: 'file' })
+    input.multiple = true
     input.addEventListener('change', () => {
-      const file = input.files?.[0]
-      if (file !== undefined) this.props.loader.reattach(entry.id, file)
+      const chosen = [...(input.files ?? [])]
+      if (chosen.length === 0) return
+      // The pair whose file is the one this row is waiting for, where the
+      // reader picked several; otherwise simply the first.
+      const paired = pairIndexes(chosen)
+      const match = paired.find((pair) => pair.file.name === entry.source.name) ?? paired[0]
+      this.props.loader.reattach(entry.id, match.file, match.index)
     })
     const pick = button('re-open this file', () => input.click(), {
       class: 'btn btn-quiet',

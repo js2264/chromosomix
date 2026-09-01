@@ -17,7 +17,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AnnotationClient, isCancellation } from '@/annotations/worker/client'
+import { SampleCache } from '@/annotations/samples'
 import type { AnnotationRequest, AnnotationResponse } from '@/annotations/worker/protocol'
+import type { LocusAxis } from '@/render/locus'
 
 /** A worker that records what it was sent and answers only when told to. */
 class FakeWorker {
@@ -149,5 +151,51 @@ describe('what a cancelled request settles as', () => {
       payload: { basesPerPixel: 1, regions: [], extent: null },
     })
     await expect(request.promise).resolves.toMatchObject({ basesPerPixel: 1 })
+  })
+})
+
+describe('who actually calls it off', () => {
+  /** A one-contig axis, which is all `samplesFor` needs to ask for a window. */
+  const axis = {
+    windows: (domain: readonly [number, number]) => [
+      { contig: 'chrI', start: domain[0], end: domain[1] },
+    ],
+    segmentOf: () => null,
+  } as unknown as LocusAxis
+
+  function asking(): { worker: FakeWorker; cache: SampleCache } {
+    const worker = new FakeWorker()
+    const cache = new SampleCache(
+      new AnnotationClient(() => worker as unknown as Worker),
+      () => undefined,
+    )
+    cache.samplesFor({ entry: 'a', scope: 'browser', axis, domain: [0, 1000], pixels: 100 })
+    return { worker, cache }
+  }
+
+  const cancelsIn = (worker: FakeWorker): number[] =>
+    worker.sent.filter((m) => m.kind === 'cancel').map((m) => (m.kind === 'cancel' ? m.target : -1))
+
+  it('calls off a read whose track has been dropped', () => {
+    // The case worth having: a lane removed while its first window is still
+    // decoding has nothing cached, so the read is being done for nobody — and
+    // this worker has no queue, so it holds up every other lane behind it.
+    const { worker, cache } = asking()
+    const asked = worker.sent[0].id
+    cache.prune(new Set())
+    expect(cancelsIn(worker)).toContain(asked)
+  })
+
+  it('leaves a read alone while its track is still there', () => {
+    const { worker, cache } = asking()
+    cache.prune(new Set(['a']))
+    expect(cancelsIn(worker)).toHaveLength(0)
+  })
+
+  it('calls off everything when the view goes away', () => {
+    const { worker, cache } = asking()
+    const asked = worker.sent[0].id
+    cache.destroy()
+    expect(cancelsIn(worker)).toContain(asked)
   })
 })

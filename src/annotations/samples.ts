@@ -37,7 +37,17 @@ interface Held {
 
 export class SampleCache {
   private readonly held = new Map<string, Held>()
-  private readonly inflight = new Set<string>()
+  /**
+   * The requests in flight, and how to call each of them off.
+   *
+   * A `Set` of keys until an alignment lane existed, because every other read
+   * here is over in milliseconds and the only thing the set was for was not
+   * asking twice. A window of alignment records is tens of BGZF blocks to
+   * inflate before the first record is decoded, and this worker has no queue —
+   * so one that nobody is waiting for any more holds up every other lane's
+   * `sample` behind it (§8.13).
+   */
+  private readonly inflight = new Map<string, { cancel: () => void }>()
   private disposed = false
 
   constructor(
@@ -48,6 +58,10 @@ export class SampleCache {
 
   destroy(): void {
     this.disposed = true
+    // The tab is going, or the panel is. Whatever is still decoding is being
+    // decoded for nobody.
+    for (const request of this.inflight.values()) request.cancel()
+    this.inflight.clear()
     this.held.clear()
   }
 
@@ -60,6 +74,14 @@ export class SampleCache {
    * worth of typed arrays for as long as the file is open.
    */
   prune(live: ReadonlySet<string>): void {
+    // The in-flight map first, and *not* guarded by `held.size`: a track dropped
+    // while its first read is still running has nothing held yet, which is
+    // exactly the case where the read is worth calling off.
+    for (const [key, request] of [...this.inflight]) {
+      if (live.has(key.slice(0, key.lastIndexOf(':')))) continue
+      request.cancel()
+      this.inflight.delete(key)
+    }
     if (this.held.size === 0) return
     for (const key of [...this.held.keys()]) {
       if (!live.has(key.slice(0, key.lastIndexOf(':')))) this.held.delete(key)
@@ -125,18 +147,18 @@ export class SampleCache {
     if (this.inflight.has(key)) return cached?.samples ?? null
 
     const wanted = options.axis.windows(options.domain, FETCH_PAD)
-    this.inflight.add(key)
-    void this.client
-      .request<'sample'>({
-        kind: 'sample',
-        entry: options.entry,
-        regions: wanted.map((window) => ({
-          contig: window.contig,
-          start: window.start,
-          end: window.end,
-        })),
-        basesPerPixel: bucket,
-      })
+    const request = this.client.cancellable<'sample'>({
+      kind: 'sample',
+      entry: options.entry,
+      regions: wanted.map((window) => ({
+        contig: window.contig,
+        start: window.start,
+        end: window.end,
+      })),
+      basesPerPixel: bucket,
+    })
+    this.inflight.set(key, request)
+    void request.promise
       .then((samples) => {
         if (this.disposed) return
         const covered = new Map<string, [number, number]>()
@@ -147,7 +169,8 @@ export class SampleCache {
       .catch(() => {
         // A failed sample is not an error screen: the track keeps whatever it
         // had, the card already reports a load failure, and the next view change
-        // tries again.
+        // tries again. A *cancelled* one lands here too and wants exactly the
+        // same nothing — it was called off because the answer stopped mattering.
       })
       .finally(() => this.inflight.delete(key))
 
