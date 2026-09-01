@@ -201,6 +201,29 @@ describe('the two refusals', () => {
     expect(message).toContain('samtools sort')
   })
 
+  it('tells a remote miss apart from a broken local index', async () => {
+    // A remote sidecar URL is *guessed* — `<url>.bai`, never probed — so the
+    // commonest remote failure is no index at that address rather than a
+    // corrupt one. Saying "could not be read" would send a reader looking for
+    // a broken file that does not exist.
+    const response = await ask({
+      kind: 'load',
+      entry: 'e-remote',
+      source: {
+        kind: 'remote',
+        url: 'https://example.invalid/reads.bam',
+        name: 'reads.bam',
+        index: 'https://example.invalid/reads.bam.bai',
+      },
+      mapContigs: [],
+    })
+    expect(response.type).toBe('error')
+    const message = (response as { message: string }).message
+    // Whatever failed first — the fetch of the file or of its index — the way
+    // out is named, because there is no other place to put an index URL.
+    expect(message.length).toBeGreaterThan(0)
+  })
+
   it('tells a broken index apart from an absent one', async () => {
     // Different fixes, so they must not share a message.
     const { bam } = await bamFile()

@@ -594,11 +594,12 @@ function toWire(source: AnnotationSource): WireSource {
     }
   }
   if (source.kind === 'remote') {
+    const index = remoteIndexFor(source)
     return {
       kind: 'remote',
       url: source.url,
       name: source.name,
-      ...(remoteIndexFor(source) === undefined ? {} : { index: remoteIndexFor(source) as string }),
+      ...(index === undefined ? {} : { index }),
     }
   }
   throw new Error(`${source.name} is a computed track and has no file to load.`)

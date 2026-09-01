@@ -1425,11 +1425,26 @@ async function loadBam(
   try {
     index = await parseBamIndex(await handleFor(indexSource).readFile())
   } catch (err) {
-    // Distinguished from the absent case on purpose: "there is no index" and
-    // "the index you gave me is not one" have different fixes, and a reader who
-    // has just dropped a file wants to know which of the two happened.
+    const why = err instanceof Error ? err.message : String(err)
+    // Three different fixes, so three different messages. A reader who has just
+    // dropped a file wants to know which of them happened.
+    //
+    // The remote case is the one worth separating: the sidecar URL there was
+    // **guessed** — `<url>.bai`, never probed, because §12 has no request to
+    // spend finding out that a file has no index — so the commonest failure is
+    // not a corrupt index but no index at that address at all. Saying "could
+    // not be read" would send a reader looking for a broken file that does not
+    // exist, when what they need is the `#index=` convention or a `samtools
+    // index` run on the host.
+    if (source.kind === 'remote') {
+      throw new Error(
+        `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
+          'A BAM is read by region and cannot be opened without one. If the index is published ' +
+          `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+      )
+    }
     throw new Error(
-      `${source.name}'s index could not be read: ${err instanceof Error ? err.message : String(err)} ` +
+      `${source.name}'s index could not be read: ${why} ` +
         `Re-make it with \`samtools index ${source.name}\`.`,
     )
   }
