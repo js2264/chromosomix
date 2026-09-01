@@ -91,6 +91,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   wrong until there is a stored shape that can name an operation and its
   operands.
 
+- **A BAM's chromosomes are no longer described as guesses.** Its `@SQ` table
+  carries a length per reference, so the lengths are exact — but the assembly
+  was reported with origin `features`, which is what `lengthsAreExact` reads,
+  so the Genome card said they were *inferred from the features* and that each
+  sequence ended at its last read. It has its own origin now, and the card says
+  *from the BAM's @SQ header*.
+
+- **The three places that list what this app opens now mention BAM.** The
+  landing page, the Tracks card and — the one worth spelling out — the landing
+  page's note that a file dropped with its index beside it is one track and not
+  two.
+
 - **The README no longer states a rule SPECS overturned.** It said in two
   places that annotations were *absent* on a `.metacool` — once in prose and
   once in the milestone table, where the Metadata card was still described as

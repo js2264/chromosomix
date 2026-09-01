@@ -1193,7 +1193,7 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', {
       class: 'ann-drop-hint',
       text:
-        'bigWig, bigBed, GTF, BED, BEDPE or FASTA. Click to choose, or drop one anywhere on ' +
+        'bigWig, bigBed, GTF, BED, BEDPE, FASTA or an indexed BAM. Click to choose, or drop one anywhere on ' +
         'this card — what it is and where it is drawn come from the file itself.',
     }),
   )

@@ -26,7 +26,17 @@ export interface Contig {
 }
 
 /** Where an assembly's lengths came from, which decides how far to trust them. */
-export type AssemblyOrigin = 'sizes' | 'bigwig' | 'bigbed' | 'fasta' | 'features' | 'cooler'
+export type AssemblyOrigin =
+  | 'sizes'
+  | 'bigwig'
+  | 'bigbed'
+  | 'fasta'
+  | 'features'
+  | 'cooler'
+  // A BAM's `@SQ` table, which carries a length per reference and is therefore
+  // exact — the same standing as a bigWig's header, and not the lower bound a
+  // feature file gives (§8.13).
+  | 'bam'
 
 export interface Assembly {
   /** What names it: the URI of the file its lengths were read from. */

@@ -579,7 +579,11 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
       return {
         format: 'bam',
         contigs: header.refs.map((ref) => ({ name: ref.name, length: ref.length })),
-        origin: 'features',
+        // Its own origin, not `features`. `lengthsAreExact` reads this, and a
+        // BAM's `@SQ` table carries a length per reference — so calling it a
+        // feature file made the browser tell a reader its chromosomes end at
+        // their last read, when they end where the header says.
+        origin: 'bam',
         exact: true,
       }
     }

@@ -292,6 +292,7 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   fasta: 'the sequences themselves',
   features: 'inferred from the features',
   cooler: 'from the cooler’s /chroms',
+  bam: 'from the BAM’s @SQ header',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */
