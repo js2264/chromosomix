@@ -19,9 +19,11 @@ import {
   basesForIndex,
   indexNamesFor,
   isIndexName,
+  leadOf,
   pairIndexes,
   splitIndexFragment,
 } from '@/annotations/loader'
+import { routeOf } from '@/browse/route'
 import { AnnotationStore } from '@/annotations/store'
 import { useMemoryStores } from '@/state/idb'
 
@@ -100,6 +102,47 @@ describe('grouping a batch', () => {
 
   it('returns an orphan sidecar as its own entry', () => {
     expect(names([file('reads.bam.bai')])).toEqual([['reads.bam.bai', undefined]])
+  })
+})
+
+describe('choosing what opens the session', () => {
+  // `Session.openFiles` chooses among *pairs*, and that is the whole point.
+  // Choosing from the raw list picks `reads.bam`, opens it without the
+  // `reads.bam.bai` sitting right beside it, and leaves the index to be routed
+  // on its own — a browser on the BAM's reference table, the BAM refused for
+  // want of an index, and an orphan row for the index, all from the one gesture
+  // the feature exists for.
+  const lead = (names: string[]): { file: string; index?: string } | undefined => {
+    const chosen = leadOf(pairIndexes(names.map(file)), routeOf)
+    return chosen === undefined
+      ? undefined
+      : { file: chosen.file.name, index: chosen.index?.name }
+  }
+
+  it('opens a BAM with its index, from a drop of the pair', () => {
+    expect(lead(['reads.bam', 'reads.bam.bai'])).toEqual({
+      file: 'reads.bam',
+      index: 'reads.bam.bai',
+    })
+  })
+
+  it('is not fooled by the index arriving first', () => {
+    expect(lead(['reads.bam.bai', 'reads.bam'])).toEqual({
+      file: 'reads.bam',
+      index: 'reads.bam.bai',
+    })
+  })
+
+  it('still prefers a contact map over anything that merely names a genome', () => {
+    expect(lead(['reads.bam', 'reads.bam.bai', 'rep1.mcool'])?.file).toBe('rep1.mcool')
+  })
+
+  it('prefers a genome file over one it has no route for', () => {
+    expect(lead(['notes.txt', 'reads.bam', 'reads.bam.bai'])?.file).toBe('reads.bam')
+  })
+
+  it('answers with nothing for an empty drop rather than throwing', () => {
+    expect(lead([])).toBeUndefined()
   })
 })
 

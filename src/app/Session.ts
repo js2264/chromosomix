@@ -21,7 +21,7 @@
  * one URL hash (spec §5.5).
  */
 
-import { AnnotationLoader, pairIndexes } from '../annotations/loader'
+import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -1787,32 +1787,39 @@ export class Session {
       await this.open(files[0].name, { kind: 'local', file: files[0] })
       return
     }
+    // Paired *before* a lead is chosen, which matters for exactly one gesture
+    // and it is the central one: `reads.bam` and `reads.bam.bai` dropped on an
+    // empty window. Choosing the lead from the raw list picks the `.bam`,
+    // opens it without its index, and leaves the `.bai` to be routed on its
+    // own — a browser on the BAM's reference table, the BAM refused for want of
+    // an index, and an orphan row for the index that was right there.
+    const paired = pairIndexes(files)
     const maps = files.filter((file) => this.routeOf(file.name) === 'map')
-    const lead = maps[0] ?? files.find((file) => this.routeOf(file.name) === 'genome') ?? files[0]
-    await this.open(lead.name, { kind: 'local', file: lead })
+    const leadPair = leadOf(paired, (name) => this.routeOf(name))
+    if (leadPair === undefined) return
+    const lead = leadPair.file
+    await this.open(lead.name, { kind: 'local', file: lead }, undefined, leadPair.index)
     if (this.destroyed) return
-    const rest: File[] = []
-    for (const file of files) {
-      if (file === lead) continue
+    for (const pair of paired) {
+      if (pair.file === lead) continue
       // Every spare map, and in the order they were selected — the deck is a
       // list and the reader's order is the only one that means anything.
-      if (maps.includes(file)) {
-        this.addCompanion(file)
+      if (maps.includes(pair.file)) {
+        this.addCompanion(pair.file)
         continue
       }
-      rest.push(file)
+      this.dropped(pair.file, undefined, undefined, pair.index)
     }
-    this.droppedAll(rest)
   }
 
-  async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
+  async open(uri: string, source: SourceSpec, carry?: ViewState, index?: File): Promise<void> {
     if (this.opening === uri) return
     // A file that is not a contact map starts a genome browser instead. Decided
     // by name first, and by the bytes when the name does not say — see
     // {@link routeOf}.
     const route = this.routeOf(uri)
     if (route === 'genome') {
-      await this.openGenome(uri, source, carry?.locus)
+      await this.openGenome(uri, source, carry?.locus, false, index)
       return
     }
     // The tracks this session is holding, before anything is torn down. A map
@@ -2056,6 +2063,16 @@ export class Session {
      * `view=browser` link to a cooler silently opened the map instead.
      */
     insist = false,
+    /**
+     * The sidecar dropped alongside, where there was one.
+     *
+     * Threaded this far because the file that names the genome becomes its own
+     * first track, and for a BAM that track cannot open without its index
+     * (§8.13). Dropping `reads.bam` and `reads.bam.bai` on an empty window is
+     * *the* gesture for this feature, and without this it opened a browser on
+     * the BAM's own `@SQ` table and then refused the BAM.
+     */
+    index?: File,
   ): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
@@ -2115,8 +2132,13 @@ export class Session {
       // genome. Adding it again gives the same track twice, under one name, with
       // one of the two carrying the settings.
       if (result.format !== 'sizes' && this.annotations !== null && !this.alreadyLoaded(source)) {
-        if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
-        else this.annotations.loader.addUrl(source.url)
+        if (source.kind === 'local') {
+          // Both halves, so `addFiles` can pair them. One is how a BAM opens a
+          // browser on its own reference table and is then refused as a track.
+          this.annotations.loader.addFiles(
+            index === undefined ? [source.file] : [source.file, index],
+          )
+        } else this.annotations.loader.addUrl(source.url)
       }
       const target: ViewState = {
         uri,

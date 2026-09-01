@@ -437,6 +437,32 @@ export class AnnotationLoader {
  * would have done the moment the third case existed.
  */
 /**
+ * Which of a dropped batch opens the session, once the sidecars are paired.
+ *
+ * A map first, then anything that can declare a genome, then whatever came
+ * first — which is the order `Session.openFiles` has always used. What is new
+ * is that it chooses among **pairs** rather than among files, and that is the
+ * whole of why it is a function: choosing from the raw list picks `reads.bam`,
+ * opens it without the `reads.bam.bai` sitting right beside it, and leaves the
+ * index to be routed on its own. The result is a browser on the BAM's own
+ * reference table, the BAM refused for want of an index, and an orphan row for
+ * the index — from the one gesture the feature exists for (§8.13).
+ *
+ * `route` is passed in rather than imported so this stays in the annotations
+ * layer, which does not know about the app's front doors.
+ */
+export function leadOf(
+  paired: readonly PairedDrop[],
+  route: (name: string) => 'map' | 'genome' | 'unknown',
+): PairedDrop | undefined {
+  return (
+    paired.find((pair) => route(pair.file.name) === 'map') ??
+    paired.find((pair) => route(pair.file.name) === 'genome') ??
+    paired[0]
+  )
+}
+
+/**
  * Split `<url>#index=<url>` into the two URLs it names.
  *
  * The one place a reader can say where an index really is, and it exists
