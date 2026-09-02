@@ -1690,9 +1690,23 @@ instead of threading it; `reads` packs every record on its own, for a single-end
 **Each band is resizable, and the pile takes what is left.** An alignment lane is three pictures
 stacked in one lane, so one lane height cannot say "more consensus" or "more reads" — and the pile is
 the one that runs out first, since a peak deeper than its band drops its tail. The two boundaries
-above the pile are dragged the way a lane's own floor is, with the same rule drawn on hover and the
-same live write, and a band dragged shut is hidden: that is the honest reading of the gesture, and a
-floor at some minimum would leave a strip of nothing a reader cannot remove.
+above the pile are dragged the way a lane's own floor is, with the same live write, and a band
+dragged shut is hidden: that is the honest reading of the gesture, and a floor at some minimum would
+leave a strip of nothing a reader cannot remove. A press takes the **nearest** boundary rather than
+the first one found, because a shut band leaves its own boundary a gap's width from the one above it
+— well inside the grip's reach — and a first-match rule would make shutting a band irreversible.
+
+Each boundary carries a hairline **at rest**, which is the opposite of what the name column's edge
+does and is right for the opposite reason: a column's edge is visible anyway, because the names stop
+at it, while these sit between two pictures that abut. Nothing said they could be dragged, so nobody
+found out. It is an affordance and never reaches a figure.
+
+The boundary itself is one function, `bandEdge`. `laneBand` stores a band's `acrossFrom` in *canvas*
+coordinates while its `thickness` is a length, so `acrossFrom + thickness` reads like the far edge
+and is a canvas coordinate — which displaced every grip by the lane's own origin, and on a top or
+left lane pointed the wrong way. That is the shape of mistake §8.4's one-place rule exists for, and
+it is why the test that pins it uses a non-zero parent origin at all four orientations: at zero the
+error is invisible.
 
 The depth band's thickness is stored as a number; the consensus band's is stored as `null` until it
 is moved, because its default is not a constant — it grows with the lane so a logo has room for a

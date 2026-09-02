@@ -109,6 +109,7 @@ import {
   gripBox,
   groupRuns,
   acrossToCanvas,
+  bandEdge,
   canvasToAcross,
   laneIsHorizontal,
   snapTo,
@@ -1530,6 +1531,29 @@ export class BrowserView {
         const across = this.gripRow(lane)
         drawGrip(ctx, lane.frame, across, palette.labelColor, lane.entry.id === active ? 1 : GRIP_IDLE)
       }
+      // And a hairline on every boundary inside an alignment lane that can be
+      // moved. At rest rather than on hover, which is the opposite of what the
+      // name column's edge does — and right here for the reason that one is
+      // wrong here: a column's edge is *visible anyway*, because the names stop
+      // at it, and these boundaries are between two pictures that abut. Nothing
+      // said they could be dragged, so nobody found out.
+      //
+      // Never on a figure: it is an affordance, not data.
+      ctx.save()
+      ctx.strokeStyle = palette.labelColor
+      ctx.globalAlpha = BAND_RULE_IDLE
+      ctx.lineWidth = 1
+      for (const lane of this.lanes) {
+        for (const grip of this.bandGrips.get(lane.entry.id) ?? []) {
+          if (grip.across <= 0) continue
+          const edge = Math.round(acrossToCanvas(lane.frame, grip.across)) + 0.5
+          ctx.beginPath()
+          ctx.moveTo(this.gutter, edge)
+          ctx.lineTo(width, edge)
+          ctx.stroke()
+        }
+      }
+      ctx.restore()
     }
     if (this.drag?.mode === 'select') {
       const from = Math.min(this.drag.x0, this.drag.x)
@@ -1636,8 +1660,8 @@ export class BrowserView {
     // — the same reason `pileBands` is remembered, and the same rule: a hit test
     // built from a second reading of the split is a second reading that drifts.
     this.bandGrips.set(entry.id, [
-      { which: 'coverage', across: coverage.acrossFrom + coverage.thickness, rung: row.rung },
-      { which: 'consensus', across: consensus.acrossFrom + consensus.thickness, rung: row.rung },
+      { which: 'coverage', across: bandEdge(frame, coverage), rung: row.rung },
+      { which: 'consensus', across: bandEdge(frame, consensus), rung: row.rung },
     ])
 
     // The curve `fill` already resolved, drawn into the coverage band. Not
@@ -2462,18 +2486,27 @@ export class BrowserView {
       const row = lane.reads[0]
       if (row === undefined) continue
       const across = canvasToAcross(lane.frame, laneIsHorizontal(lane.frame.orientation) ? y : x)
+      // The **nearest** boundary in range, not the first one found. A band
+      // dragged shut leaves its own boundary a gap's width — three pixels —
+      // from the one above it, well inside the grip's reach, so a first-match
+      // rule always answered with the upper one and a shut band could never be
+      // reopened. Ties go to the later boundary for the same reason: it is the
+      // one whose band has nothing left to grab.
+      let best: { which: 'coverage' | 'consensus'; away: number } | null = null
       for (const grip of grips) {
-        // A band dragged shut has nothing to grab: its two boundaries land on
-        // the same pixel, and the one that reopens it is the one above.
         if (grip.across <= 0) continue
-        if (Math.abs(across - grip.across) > LANE_GRIP) continue
+        const away = Math.abs(across - grip.across)
+        if (away > LANE_GRIP) continue
+        if (best === null || away <= best.away) best = { which: grip.which, away }
+      }
+      if (best !== null) {
         const reads = readsOf(row.entry.style)
         const bands = alignmentBands(lane.frame, row.rung, this.text, bandSizes(row.entry.style))
         return {
           entry: row.entry,
-          which: grip.which,
+          which: best.which,
           size:
-            grip.which === 'coverage'
+            best.which === 'coverage'
               ? reads.coverageBand
               : // `null` means "follow the lane", so a drag has to start from
                 // the thickness that was actually drawn rather than from a
@@ -3568,6 +3601,20 @@ const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
  * be seen without hunting.
  */
 const GRIP_IDLE = 0.45
+
+/**
+ * How faint a band boundary is when nobody is pointing at it.
+ *
+ * The same strength as a lane handle at rest ({@link GRIP_IDLE}), which is this
+ * application's answer to "an affordance nobody is pointing at". Fainter was
+ * tried first and measured: at 0.22 the rule under the depth curve came out
+ * within a few values of the fill it sits on, and the one over the pile's white
+ * was barely there — a line drawn and not seen is the same as no line, and the
+ * whole reason it exists is that nothing said these boundaries could be moved.
+ *
+ * The hover rule that replaces it is the accent colour at twice the width.
+ */
+const BAND_RULE_IDLE = 0.4
 
 
 /** Clear space between the end of a name and the start of the data. */

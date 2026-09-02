@@ -123,6 +123,21 @@ export function canvasToAcross(frame: LaneFrame, canvas: number): number {
 }
 
 /**
+ * The far edge of a band, in its **parent lane's** across units.
+ *
+ * The one expression of a conversion that is easy to write wrong and hard to
+ * see wrong. `laneBand` stores `acrossFrom` in *canvas* coordinates while
+ * `thickness` is a length, so `band.acrossFrom + band.thickness` looks like the
+ * far edge and is a canvas coordinate — which on a bottom lane is off by the
+ * parent's own origin, and on a top lane points the wrong way entirely. A hit
+ * test written that way puts a lane's drag handles somewhere below the thing
+ * they resize, which is exactly what it did.
+ */
+export function bandEdge(parent: LaneFrame, band: LaneFrame): number {
+  return canvasToAcross(parent, band.acrossFrom) + band.thickness
+}
+
+/**
  * A band inside a lane, as a frame of its own.
  *
  * `from` and `span` are across-offsets in the parent's coordinates, so `from`

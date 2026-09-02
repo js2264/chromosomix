@@ -36,6 +36,7 @@ import {
 } from '@/render/alignments'
 import type { PairLayout } from '@/annotations/types'
 import { LocusAxis } from '@/render/locus'
+import { acrossToCanvas, bandEdge, laneOutward } from '@/render/lane'
 import type { LaneFrame } from '@/render/lane'
 import type { ReadPile } from '@/annotations/types'
 
@@ -505,6 +506,32 @@ describe('the row budget', () => {
     const bare = alignmentBands({ ...frame, thickness, acrossFrom: 0 }, 'reads', false)
     expect(bare[0].thickness).toBe(0)
     expect(bare[3].thickness).toBeCloseTo(pileBand.thickness + NAME_BAND, 6)
+  })
+
+  it('puts a band boundary where the band actually ends, at every edge', () => {
+    // The conversion that was wrong: `laneBand` stores `acrossFrom` in *canvas*
+    // coordinates while `thickness` is a length, so `acrossFrom + thickness`
+    // reads like the far edge and is a canvas coordinate. Compared against an
+    // across offset it displaced every drag handle by the lane's own origin —
+    // the grips sat well below the bands they resize. The parent's `acrossFrom`
+    // is deliberately non-zero here, because at zero the bug is invisible.
+    for (const orientation of ['bottom', 'top', 'left', 'right'] as const) {
+      const lane = { ...frame, orientation, acrossFrom: 300, thickness: 240 }
+      const [name, coverage, consensus, pileBand] = alignmentBands(lane, 'reads', true)
+      // The far edge in across units, and the same edge converted back to the
+      // canvas, are the same place.
+      for (const band of [name, coverage, consensus, pileBand]) {
+        const edge = bandEdge(lane, band)
+        expect(acrossToCanvas(lane, edge), orientation).toBeCloseTo(
+          band.acrossFrom + laneOutward(orientation) * band.thickness,
+          6,
+        )
+      }
+      // …and the boundaries run in order down the lane, inside it.
+      expect(bandEdge(lane, coverage)).toBeGreaterThan(bandEdge(lane, name))
+      expect(bandEdge(lane, consensus)).toBeGreaterThan(bandEdge(lane, coverage))
+      expect(bandEdge(lane, pileBand)).toBeCloseTo(lane.thickness, 6)
+    }
   })
 
   it('gives a band the thickness a reader set, and the pile the rest', () => {
