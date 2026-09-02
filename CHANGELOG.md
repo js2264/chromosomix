@@ -64,6 +64,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   *running request's* controls, never against the drawn window's, which between
   a change and the first landing is permanently the old one.
 
+  **Each band of the lane is resizable.** The depth band and the consensus band
+  have draggable boundaries of their own — the lane's own floor gesture, one
+  level in, with the same rule on hover — and the pile takes whatever is left.
+  Drag one shut and it is hidden. It is also the lever for a pile deeper than
+  its band, which is why the caption names it.
+
   **Split reads are drawn and never counted.** A supplementary alignment is a
   further piece of one molecule the aligner had to split across a breakpoint, so
   drawing it is how a reader sees the split and counting it would report one

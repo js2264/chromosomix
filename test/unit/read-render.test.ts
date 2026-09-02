@@ -507,6 +507,49 @@ describe('the row budget', () => {
     expect(bare[3].thickness).toBeCloseTo(pileBand.thickness + NAME_BAND, 6)
   })
 
+  it('gives a band the thickness a reader set, and the pile the rest', () => {
+    const lane = { ...frame, thickness: 240, acrossFrom: 0 }
+    const stock = alignmentBands(lane, 'reads', true)
+    const taller = alignmentBands(lane, 'reads', true, { coverage: 80, consensus: 40 })
+    expect(taller[1].thickness).toBe(80)
+    expect(taller[2].thickness).toBe(40)
+    // Every pixel the two bands took comes out of the pile and nowhere else.
+    expect(stock[3].thickness - taller[3].thickness).toBeCloseTo(
+      80 - stock[1].thickness + 40 - stock[2].thickness,
+      6,
+    )
+  })
+
+  it('lets a band be dragged shut, and keeps the consensus shut at the coverage rung', () => {
+    const lane = { ...frame, thickness: 240, acrossFrom: 0 }
+    const closed = alignmentBands(lane, 'reads', true, { coverage: 0, consensus: 0 })
+    expect(closed[1].thickness).toBe(0)
+    expect(closed[2].thickness).toBe(0)
+    // Zero is a real answer, so the pile takes everything but the name strip
+    // and the three gaps that hold the shape at four parts.
+    expect(closed[3].thickness).toBeCloseTo(240 - NAME_BAND - BAND_GAP * 3, 6)
+
+    // …and a stored thickness cannot hold the consensus open where there is no
+    // consensus to draw.
+    expect(consensusBandFor('coverage', lane, { coverage: 34, consensus: 40 })).toBe(0)
+  })
+
+  it('follows the lane while the consensus band is untouched', () => {
+    // `null` is not a missing number — the default grows with the lane so a
+    // logo has room for a letter, and a reader who has not moved it is asking
+    // to keep following that.
+    const short = { ...frame, thickness: 160 }
+    const tall = { ...frame, thickness: 400 }
+    const untouched = { coverage: 34, consensus: null }
+    expect(consensusBandFor('bases', tall, untouched)).toBeGreaterThan(
+      consensusBandFor('bases', short, untouched),
+    )
+    // …and stops following it the moment they do.
+    const set = { coverage: 34, consensus: 30 }
+    expect(consensusBandFor('bases', tall, set)).toBe(30)
+    expect(consensusBandFor('bases', short, set)).toBe(30)
+  })
+
   it('asks the worker for exactly the rows the band will draw', () => {
     for (const thickness of [120, 160, 200, 240, 241, 242, 300]) {
       for (const labelled of [true, false]) {

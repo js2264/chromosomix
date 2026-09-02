@@ -966,11 +966,38 @@ export interface ReadStyle {
    * computed in the same function that builds the pile.
    */
   splits: boolean
+  /**
+   * The depth band's thickness in pixels, and the consensus band's.
+   *
+   * An alignment lane is three pictures stacked in one lane, and only the pile
+   * fills what is left — so a reader who wants to read the consensus, or wants
+   * more rows of reads, has no way to say so with one lane height. `0` hides a
+   * band outright, which is the honest reading of dragging it shut.
+   *
+   * Pixels rather than shares of the lane, for the reason the lane's own
+   * `size` is: the band is *n* pixels tall on the screen you are looking at,
+   * and a share would resize under a lane drag nobody aimed at it.
+   *
+   * The consensus band is `null` until a reader moves it, because its default
+   * is not a constant: it grows with the lane so a logo has room for a letter
+   * (`consensusBandFor`). A stored number is a reader's answer; `null` is "keep
+   * following the lane".
+   */
+  coverageBand: number
+  consensusBand: number | null
 }
 
 /** What an alignment lane starts with. */
 export function defaultReadStyle(): ReadStyle {
-  return { colourBy: 'strand', minMapq: 0, hideDuplicates: false, layout: 'pairs', splits: false }
+  return {
+    colourBy: 'strand',
+    minMapq: 0,
+    hideDuplicates: false,
+    layout: 'pairs',
+    splits: false,
+    coverageBand: 34,
+    consensusBand: null,
+  }
 }
 
 /**
@@ -1020,7 +1047,23 @@ export function readStyleOf(value: unknown): ReadStyle {
         ? 'reads'
         : fallback.layout,
     splits: row['splits'] === true,
+    coverageBand: band(row['coverageBand'], fallback.coverageBand),
+    consensusBand: row['consensusBand'] === null ? null : band(row['consensusBand'], null),
   }
+}
+
+/**
+ * A stored band thickness, clamped.
+ *
+ * `MAX_BAND` rather than the lane's own maximum: a band taller than that leaves
+ * no pile, and a lane whose every pixel is depth curve is a track — which this
+ * already is, one zoom step out.
+ */
+const MAX_BAND = 300
+
+function band<T extends number | null>(value: unknown, fallback: T): number | T {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.max(0, Math.min(MAX_BAND, Math.round(value)))
 }
 
 /** Every colouring, in the order they are offered. */

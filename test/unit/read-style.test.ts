@@ -46,6 +46,8 @@ describe('the default', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
+      coverageBand: 34,
+      consensusBand: null,
     })
   })
 
@@ -68,6 +70,8 @@ describe('reading a stored style back', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
+      coverageBand: 50,
+      consensusBand: 20,
     }
     expect(readStyleOf(stored)).toEqual(stored)
   })
@@ -84,6 +88,21 @@ describe('reading a stored style back', () => {
     expect(readStyleOf({ ...base, minMapq: 30.7 }).minMapq).toBe(31)
     expect(readStyleOf({ ...base, minMapq: Number.NaN }).minMapq).toBe(0)
     expect(readStyleOf({ ...base, minMapq: 'thirty' }).minMapq).toBe(0)
+  })
+
+  it('clamps a band thickness, and keeps null meaning "follow the lane"', () => {
+    // `null` is not a missing number: the consensus band's default grows with
+    // the lane so a logo has room for a letter, and a reader who has not moved
+    // it is asking to keep following that.
+    expect(readStyleOf({ consensusBand: null }).consensusBand).toBeNull()
+    expect(readStyleOf({}).consensusBand).toBeNull()
+    expect(readStyleOf({ consensusBand: 26 }).consensusBand).toBe(26)
+    expect(readStyleOf({ consensusBand: 'tall' }).consensusBand).toBeNull()
+    // Zero is a real answer — a band dragged shut — and is not clamped away.
+    expect(readStyleOf({ coverageBand: 0 }).coverageBand).toBe(0)
+    expect(readStyleOf({ coverageBand: -40 }).coverageBand).toBe(0)
+    expect(readStyleOf({ coverageBand: 9000 }).coverageBand).toBe(300)
+    expect(readStyleOf({ coverageBand: 'tall' }).coverageBand).toBe(34)
   })
 
   it('reads the switches as booleans and nothing else', () => {
@@ -171,6 +190,8 @@ describe('surviving a stored session', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
+      coverageBand: 12,
+      consensusBand: null,
     }
     expect(roundTrip(set)).toEqual(set)
   })
@@ -186,6 +207,8 @@ describe('surviving a stored session', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
+      coverageBand: 34,
+      consensusBand: null,
     })
   })
 

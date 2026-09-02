@@ -94,6 +94,7 @@ export function readRungFor(
   surface: LaneSurface,
   bpPerUnit = 1,
   labelled = true,
+  sizes?: BandSizes,
 ): ReadRung {
   if (surface !== 'browser') return 'coverage'
   const perBase = basePixels(frame) / Math.max(1e-9, bpPerUnit)
@@ -108,7 +109,7 @@ export function readRungFor(
   //
   // Below that, the lane is a coverage lane. Which is what it was one zoom step
   // out, and what it looks like: the reader loses nothing they could see.
-  return rowsIn(alignmentBands(frame, rung, labelled)[3]) >= 1 ? rung : 'coverage'
+  return rowsIn(alignmentBands(frame, rung, labelled, sizes)[3]) >= 1 ? rung : 'coverage'
 }
 
 /**
@@ -896,8 +897,13 @@ export const LOGO_MIN_THICKNESS = 26
  * individually visible — and it grows once a letter fits, because that is where
  * it starts carrying the thing the coverage band cannot.
  */
-export function consensusBandFor(rung: ReadRung, frame: LaneFrame): number {
+export function consensusBandFor(rung: ReadRung, frame: LaneFrame, sizes?: BandSizes): number {
+  // Never at the coverage rung, whatever a reader set: there is no consensus to
+  // draw there, and a band held open by a stored number would be a strip of
+  // nothing between the depth curve and the lane's floor.
   if (rung === 'coverage') return 0
+  const set = sizes?.consensus
+  if (set !== null && set !== undefined) return Math.max(0, set)
   if (rung === 'bases') return Math.min(40, Math.max(18, frame.thickness * 0.2))
   return Math.min(22, Math.max(10, frame.thickness * 0.12))
 }
@@ -932,17 +938,35 @@ export function alignmentBands(
   frame: LaneFrame,
   rung: ReadRung,
   labelled: boolean,
+  sizes?: BandSizes,
 ): [LaneFrame, LaneFrame, LaneFrame, LaneFrame] {
   return laneBands(
     frame,
     [
       { fixed: labelled ? NAME_BAND : 0 },
-      { fixed: COVERAGE_BAND },
-      { fixed: consensusBandFor(rung, frame) },
+      { fixed: coverageBandFor(sizes) },
+      { fixed: consensusBandFor(rung, frame, sizes) },
       { fill: true },
     ],
     BAND_GAP,
   ) as [LaneFrame, LaneFrame, LaneFrame, LaneFrame]
+}
+
+/**
+ * The two band thicknesses a reader has set, where they have set them.
+ *
+ * Passed rather than read from a style, because this module draws and knows
+ * nothing about the store — the same reason `ReadPaint` takes colours rather
+ * than an entry.
+ */
+export interface BandSizes {
+  coverage: number
+  /** `null` keeps the default, which follows the lane; see {@link consensusBandFor}. */
+  consensus: number | null
+}
+
+function coverageBandFor(sizes?: BandSizes): number {
+  return sizes === undefined ? COVERAGE_BAND : Math.max(0, sizes.coverage)
 }
 
 /**

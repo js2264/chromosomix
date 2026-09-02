@@ -1687,6 +1687,18 @@ two ends of a fragment landed on different rows and the thread ran from one of t
 that was not there — the picture read as a scatter of unrelated reads. `fragments` fills that gap
 instead of threading it; `reads` packs every record on its own, for a single-ended library.
 
+**Each band is resizable, and the pile takes what is left.** An alignment lane is three pictures
+stacked in one lane, so one lane height cannot say "more consensus" or "more reads" — and the pile is
+the one that runs out first, since a peak deeper than its band drops its tail. The two boundaries
+above the pile are dragged the way a lane's own floor is, with the same rule drawn on hover and the
+same live write, and a band dragged shut is hidden: that is the honest reading of the gesture, and a
+floor at some minimum would leave a strip of nothing a reader cannot remove.
+
+The depth band's thickness is stored as a number; the consensus band's is stored as `null` until it
+is moved, because its default is not a constant — it grows with the lane so a logo has room for a
+letter. `null` means "keep following the lane", and a number means a reader has answered. Neither can
+hold the consensus band open at the coverage rung, where there is no consensus to draw.
+
 **Thinning is a property of the zoom, so the cache key carries one.** The pile is thinned in the
 worker against the lane's row budget over the fetched window, so a window fetched for a wide view
 holds about a third of a narrow view's reads. Answering a zoom from it drew a third of the pile while
