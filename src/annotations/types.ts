@@ -933,8 +933,21 @@ export interface ReadStyle {
    * with every other reading of the same file.
    */
   hideDuplicates: boolean
-  /** Draw the thread joining the two ends of a template. */
-  pairs: boolean
+  /**
+   * How a template is laid out, and what is drawn between its two ends.
+   *
+   * `pairs` is the default and is what a paired library wants: both ends on one
+   * row, joined by a dotted thread. It replaced a `pairs: boolean` that drew a
+   * solid thread and left the packing to position alone — so the two ends of a
+   * fragment landed on different rows at any real depth, and the thread ran
+   * from one of them towards a mate that was not there. The picture read as a
+   * scatter of unrelated reads.
+   *
+   * `fragments` fills the gap instead of threading it, for a reader who wants
+   * the fragment as one object; `reads` packs every record on its own, which is
+   * what a single-ended library wants and what this lane did originally.
+   */
+  layout: PairLayout
   /**
    * Show supplementary alignments — the other pieces of a split read.
    *
@@ -957,7 +970,7 @@ export interface ReadStyle {
 
 /** What an alignment lane starts with. */
 export function defaultReadStyle(): ReadStyle {
-  return { colourBy: 'strand', minMapq: 0, hideDuplicates: false, pairs: true, splits: false }
+  return { colourBy: 'strand', minMapq: 0, hideDuplicates: false, layout: 'pairs', splits: false }
 }
 
 /**
@@ -999,13 +1012,31 @@ export function readStyleOf(value: unknown): ReadStyle {
         ? Math.max(0, Math.min(255, Math.round(mapq)))
         : fallback.minMapq,
     hideDuplicates: row['hideDuplicates'] === true,
-    pairs: row['pairs'] !== false,
+    // A session stored before this was a mode carries `pairs: false`, which
+    // meant "do not join them" — which is `reads`.
+    layout: PAIR_LAYOUTS.includes(row['layout'] as PairLayout)
+      ? (row['layout'] as PairLayout)
+      : row['pairs'] === false
+        ? 'reads'
+        : fallback.layout,
     splits: row['splits'] === true,
   }
 }
 
 /** Every colouring, in the order they are offered. */
 export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'none']
+
+/**
+ * How the two ends of a template are laid out. See {@link ReadStyle.layout}.
+ *
+ * Here rather than in `render/alignments.ts` for the reason {@link ColourBy} is:
+ * it is persisted into a stored session, so it cannot live in a module that
+ * imports this one.
+ */
+export type PairLayout = 'pairs' | 'fragments' | 'reads'
+
+/** Every layout, in the order they are offered. */
+export const PAIR_LAYOUTS: PairLayout[] = ['pairs', 'fragments', 'reads']
 
 /**
  * The style as a cache key, for the caches that hold *reads*.
@@ -1024,6 +1055,14 @@ export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq'
 export function readStyleKey(style: ReadStyle): string {
   const flags = `${style.hideDuplicates ? 'd' : ''}${style.splits ? 's' : ''}`
   return `${style.colourBy}|${style.minMapq}|${flags}`
+}
+
+/**
+ * The lane's own reading of a stored `pairs` boolean, for the one caller that
+ * still has to understand the old spelling. See {@link ReadStyle.layout}.
+ */
+export function joinsPairs(style: ReadStyle): boolean {
+  return style.layout !== 'reads'
 }
 
 /**

@@ -145,10 +145,9 @@ describe('the switches', () => {
     return all<HTMLButtonElement>(row, '.btn-chip')
   }
 
-  it('starts with mates joined and the other two off', () => {
+  it('starts with both switches off', () => {
     const made = make()
     expect(chips(made).map((chip) => chip.getAttribute('aria-pressed'))).toEqual([
-      'true',
       'false',
       'false',
     ])
@@ -156,9 +155,8 @@ describe('the switches', () => {
 
   it('turns each one over without disturbing the others', () => {
     const cases: Array<[number, Partial<ReadStyle>]> = [
-      [0, { pairs: false, splits: false, hideDuplicates: false }],
-      [1, { pairs: true, splits: true, hideDuplicates: false }],
-      [2, { pairs: true, splits: false, hideDuplicates: true }],
+      [0, { splits: true, hideDuplicates: false }],
+      [1, { splits: false, hideDuplicates: true }],
     ]
     for (const [at, expected] of cases) {
       // A row of chips each, because the card rebuilds when the store changes.
@@ -194,7 +192,7 @@ describe('the switches', () => {
 
   it('says that split reads are drawn and never counted', () => {
     const made = make()
-    const [, splits] = chips(made)
+    const [splits] = chips(made)
     splits.click()
     expect(readsOf(now(made).style).splits).toBe(true)
     expect(splits.title).toContain('never counted in the depth')

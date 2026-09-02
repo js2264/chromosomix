@@ -1667,6 +1667,33 @@ What the colouring is **not** is a grouping. The rows are packed by position alo
 are interleaved down the pile rather than banded; a band per category is a separate feature and is
 not built.
 
+**The rows are packed for the window on screen, on the main thread.** They were packed in the worker,
+over the window that was *fetched* — and that window is three view-widths, so a reader who zoomed in
+was shown a packing made for a picture three times wider. Two more things followed from it: a window
+read as several byte spans came back as several piles each numbering its rows from zero, which
+collided when they were drawn into one band; and a template could not be packed as a unit at all,
+because which reads share a row is a question about the picture and answering it in the worker would
+mean re-reading the file to change a drawing.
+
+What is given up is row stability under a pan, which the worker's packing had and this does not. It
+is worth it because that stability was already a half-truth — the packer only ever saw the reads that
+survived thinning, so any change of row budget re-packed everything — and because a row that is
+stable and wrong is not the better failure.
+
+**A template is the unit, and the layout says what is drawn between its ends.** `pairs` is the
+default: both ends on one row, joined by a dotted thread across the part nobody sequenced. It
+replaced a switch that drew a solid thread and left the packing to position, so at any real depth the
+two ends of a fragment landed on different rows and the thread ran from one of them towards a mate
+that was not there — the picture read as a scatter of unrelated reads. `fragments` fills that gap
+instead of threading it; `reads` packs every record on its own, for a single-ended library.
+
+**Thinning is a property of the zoom, so the cache key carries one.** The pile is thinned in the
+worker against the lane's row budget over the fetched window, so a window fetched for a wide view
+holds about a third of a narrow view's reads. Answering a zoom from it drew a third of the pile while
+the caption reported the wide window's numbers. The held window now carries the octave of view span
+it was thinned for, and a zoom of one octave refetches — the same shape §8.4 already requires of a
+sampled track, bounded at one refetch per halving, and unmoved by a pan (§2).
+
 **Split reads are drawn and never counted.** A supplementary alignment is a further piece of one
 molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
 junction a long read spans — so showing it is how a reader sees a split, and counting it would report

@@ -79,10 +79,19 @@ class FakeWorker {
   }
 }
 
+/**
+ * One contig, and a `windows` that honours the pad the way `LocusAxis` does.
+ *
+ * The pad matters: `ReadCache` fetches `windows(domain, FETCH_PAD)` and records
+ * *that* as covered, then tests the unpadded view against it. A stub that
+ * ignored the pad recorded the view as covered and made every pan look like a
+ * miss — which is the opposite of the contract §2 states.
+ */
 const axis = {
-  windows: (domain: readonly [number, number]) => [
-    { contig: 'chrI', start: domain[0], end: domain[1] },
-  ],
+  windows: (domain: readonly [number, number], pad = 0) => {
+    const margin = (domain[1] - domain[0]) * pad
+    return [{ contig: 'chrI', start: domain[0] - margin, end: domain[1] + margin }]
+  },
   segmentOf: () => null,
 } as unknown as LocusAxis
 
@@ -164,11 +173,12 @@ describe('the pile', () => {
     }
   })
 
-  it('does not refetch for the one switch the worker never reads', async () => {
-    // `pairs` decides whether the renderer joins two columns the pile already
-    // carries. The reply is byte-identical either way, so spending a window of
-    // BGZF decoding on it would buy nothing at all.
-    expect(await askTwice({ ...defaultReadStyle(), pairs: false })).toHaveLength(1)
+  it('does not refetch for the fields the worker never reads', async () => {
+    // The layout decides how the renderer packs and joins columns the pile
+    // already carries. The reply is byte-identical either way, so spending a
+    // window of BGZF decoding on it would buy nothing at all.
+    expect(await askTwice({ ...defaultReadStyle(), layout: 'fragments' })).toHaveLength(1)
+    expect(await askTwice({ ...defaultReadStyle(), layout: 'reads' })).toHaveLength(1)
   })
 
   it('does not re-issue on every frame while a new style is still decoding', async () => {
@@ -286,6 +296,58 @@ describe('the pile', () => {
   })
 })
 
+describe('zooming inside the window already in hand', () => {
+  // The pile is *thinned* in the worker against the row budget, over the window
+  // that was fetched — three view-widths. So a window fetched for a wide view
+  // holds about a third of a narrow view's reads, and answering a zoom from it
+  // draws a third of the pile while the caption reports the wide window's
+  // numbers. Measured on a uniform 20x pile: 103 kept of 581, of which 29 fall
+  // in the visible middle third, against 106 for a fetch scoped to that third.
+  const spanning = (from: number, to: number) => ({
+    entry: 'a',
+    scope: 'browser',
+    axis,
+    domain: [from, to] as readonly [number, number],
+    rows: 24,
+    basesPerPixel: 1,
+    style: defaultReadStyle(),
+  })
+
+  it('refetches when the view has zoomed by an octave', async () => {
+    const { worker, cache } = readsOn()
+    cache.readsFor(spanning(0, 8000))
+    worker.settle(EMPTY_READS)
+    await flush()
+    // Well inside what was fetched, so `covers` passes — and the old rule
+    // stopped there.
+    cache.readsFor(spanning(3000, 4000))
+    expect(worker.reads).toHaveLength(2)
+  })
+
+  it('does not refetch for a pan, however far it goes inside the pad', async () => {
+    // §2: a pan performs no read. The bucket is over the span, so it cannot
+    // change when only the position does.
+    const { worker, cache } = readsOn()
+    cache.readsFor(spanning(0, 8000))
+    worker.settle(EMPTY_READS)
+    await flush()
+    cache.readsFor(spanning(1000, 9000))
+    cache.readsFor(spanning(2000, 10_000))
+    expect(worker.reads).toHaveLength(1)
+  })
+
+  it('does not refetch for a zoom too small to change the thinning', async () => {
+    // Bounded refetches on a continuous zoom: one per halving, not one per
+    // frame. A ten per cent nudge stays in the same octave.
+    const { worker, cache } = readsOn()
+    cache.readsFor(spanning(0, 8000))
+    worker.settle(EMPTY_READS)
+    await flush()
+    cache.readsFor(spanning(0, 7600))
+    expect(worker.reads).toHaveLength(1)
+  })
+})
+
 describe('letting go of a lane', () => {
   // `prune` and `destroy` were written, documented and never called from
   // anywhere — the view reconciled its two other caches every frame and not
@@ -389,7 +451,7 @@ describe('the coverage beside it', () => {
     // packing; the depth is a count, and a count does not care.
     const base = defaultReadStyle()
     expect(await coverageTwice({ ...base, colourBy: 'insert' })).toHaveLength(1)
-    expect(await coverageTwice({ ...base, pairs: false })).toHaveLength(1)
+    expect(await coverageTwice({ ...base, layout: 'reads' })).toHaveLength(1)
     // Splits are drawn and never counted, so they cannot reach a depth curve.
     expect(await coverageTwice({ ...base, splits: true })).toHaveLength(1)
   })

@@ -50,9 +50,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and three switches: join mates, show split reads, hide marked duplicates. All
   of it is stored with the session.
 
-  Four of the five reach the worker on the request that needs them; joining
-  mates is the one the worker never reads, so toggling it redraws what is
-  already in hand rather than fetching a window again. A change made while the
+  Four of the five reach the worker on the request that needs them; the layout
+  is the one the worker never reads, so changing it redraws what is already in
+  hand rather than fetching a window again.
+
+  **A pair is drawn as a pair.** Both ends of a template on one row, joined by a
+  dotted thread across the part that was not sequenced — with `fragments` and
+  `reads` beside it in the card for a reader who wants the fragment as one bar,
+  or a single-ended library packed record by record. The old switch drew a solid
+  thread and packed by position alone, so at any real depth the two ends landed
+  on different rows and the thread ran towards a mate that was not there. A change made while the
   previous window is still decoding replaces it — the test is against the
   *running request's* controls, never against the drawn window's, which between
   a change and the first landing is permanently the old one.

@@ -46,6 +46,7 @@ import { BASE_COLOURS } from './sequence'
 const BASE_LETTERS = ['A', 'C', 'G', 'T', 'N'] as const
 import {
   canvasToAcross,
+  clipLane,
   laneBands,
   laneIsHorizontal,
   laneRect,
@@ -54,7 +55,7 @@ import {
   type LaneFrame,
 } from './lane'
 import { basePixels } from './sequence'
-import type { BaseCounts, ReadPile } from '../annotations/types'
+import type { BaseCounts, PairLayout, ReadPile } from '../annotations/types'
 import { BASE_LANES } from '../annotations/bam/reads'
 import { FLAG } from '../annotations/bam/format'
 
@@ -128,14 +129,179 @@ export interface ReadPaint {
   rowHeight: number
   /** Gap between rows. */
   rowGap: number
-  /** Draw the line joining two ends of a template. */
-  pairs: boolean
+  /**
+   * How a template is laid out and what is drawn between its two ends.
+   *
+   * `pairs` draws both reads on one row with a dotted thread across the gap —
+   * the default, because a pair *is* one fragment and two blocks a row apart
+   * joined by nothing read as two unrelated reads. `fragments` fills the gap
+   * instead, for a reader who wants the fragment as one object. `reads` packs
+   * every record on its own, which is what a single-ended library wants.
+   */
+  layout: PairLayout
   /** Draw mismatching bases, where the file gave any. */
   diffs: boolean
   opacity: number
   font: string
   /** Ink for the marks that are not a category: gaps, clips, outlines. */
   guideColour: string
+}
+
+// ---------------------------------------------------------------------------
+// Packing the pile into rows, for the window that is on screen
+// ---------------------------------------------------------------------------
+
+/**
+ * How the reads of a template are laid out together.
+ *
+ * `reads` packs every record on its own, which is what a single-ended library
+ * wants and what this lane did from the start. The other two treat the template
+ * as the unit — both ends on one row — and differ only in what is drawn between
+ * them: a thread, or ink.
+ */
+/** Where every read of a window goes, packed for the window on screen. */
+export interface PileLayout {
+  /** One row per read of the pile it belongs to; `-1` for a read left out. */
+  row: Int16Array
+  /** Rows the packing used, which may exceed what the band can draw. */
+  rows: number
+  /** Reads placed at all — those overlapping the visible window. */
+  placed: number
+  /** …of which this many landed past the last row the band draws. */
+  hidden: number
+}
+
+/**
+ * The gap between two reads on one row, in **pixels**.
+ *
+ * Pixels rather than base pairs, which is what the worker's packer used. A gap
+ * of three bases is a third of a pixel at 10 bases per pixel — so two reads a
+ * hundred bases apart were drawn touching, and a row read as one long fragment.
+ * That is the whole reason a reader cannot tell where one read ends here.
+ */
+const ROW_PAD = 2
+
+/**
+ * Pack a window's reads into rows, for the window that is on screen.
+ *
+ * ## Why this is not the worker's job
+ *
+ * It used to be, and the packing came back on the wire in `ReadPile.row`. Three
+ * things were wrong with that and all three are visible on a real file:
+ *
+ * **The rows were packed for the window that was *fetched*.** That window is
+ * three view-widths (`ReadCache.FETCH_PAD`), so a reader who zooms in is shown
+ * a packing made for a picture three times wider, and the rows it needed.
+ *
+ * **A window read as several byte spans came back as several piles, each
+ * numbering its rows from zero.** Drawn into one band they collided, and two
+ * reads a chunk boundary apart were drawn on top of each other. Packing every
+ * pile of the window into one row space is what fixes that, and it can only be
+ * done where all of them are in hand.
+ *
+ * **A template cannot be packed as a unit in the worker.** The mate join is
+ * resolved there, but which reads share a row is a question about the picture —
+ * it changes with a switch in the settings card — and re-fetching a window to
+ * answer it would be a BAM read for a drawing decision.
+ *
+ * What is given up is row *stability under a pan*: a read can change row when
+ * the window moves, where the worker's packing held it still for as long as the
+ * bytes were in hand. That trade is worth taking because the old stability was
+ * already a half-truth — the packer only ever saw the reads that survived
+ * thinning, so any change of budget re-packed everything anyway — and because
+ * a row that is stable but wrong is not the better failure.
+ *
+ * ## What it does
+ *
+ * Greedy first fit over the units in coordinate order, which is what makes the
+ * rows compact and the picture stable left to right. Units are read extents
+ * including their soft clips, because a clip is drawn and two of them
+ * overlapping would be two reads drawn over each other.
+ *
+ * Reads outside `[from, to)` are left out entirely — `row = -1` — so the rows
+ * count what is on screen and nothing else.
+ */
+export function packPile(
+  piles: readonly ReadPile[],
+  axis: LocusAxis,
+  frame: LaneFrame,
+  from: number,
+  to: number,
+  layout: PairLayout,
+  rowsDrawn: number,
+): PileLayout[] {
+  const out: PileLayout[] = piles.map((pile) => ({
+    row: new Int16Array(pile.length).fill(-1),
+    rows: 0,
+    placed: 0,
+    hidden: 0,
+  }))
+
+  // One unit per thing that occupies a row: a read, or a whole template where
+  // the layout asks for that. Collected across every pile first, because they
+  // share one row space — see the docblock.
+  const units: Array<{ pile: number; a: number; b: number; start: number; end: number }> = []
+  for (let p = 0; p < piles.length; p++) {
+    const pile = piles[p]
+    const segment = axis.segmentOf(pile.contig)
+    if (segment === null || !(segment.bpPerUnit > 0)) continue
+    const unitOf = (base: number): number =>
+      segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit
+    const paired = layout !== 'reads'
+    for (let i = 0; i < pile.length; i++) {
+      const mate = paired ? pile.mate[i] : -1
+      // Once per template, from its left-hand end: the other end is placed with
+      // it, so meeting it again is not a second unit.
+      if (mate >= 0 && mate < i) continue
+      let lo = pile.refStart[i] - pile.clipStart[i]
+      let hi = pile.refEnd[i] + pile.clipEnd[i]
+      if (mate > i) {
+        lo = Math.min(lo, pile.refStart[mate] - pile.clipStart[mate])
+        hi = Math.max(hi, pile.refEnd[mate] + pile.clipEnd[mate])
+      }
+      const start = unitOf(lo)
+      const end = unitOf(hi)
+      // Off screen entirely. The pad is fetched so a pan is free, not so that
+      // it is drawn — and counting it would make the rows and the caption
+      // describe a picture three times wider than the one on the screen.
+      if (end <= from || start >= to) continue
+      units.push({ pile: p, a: i, b: mate > i ? mate : -1, start, end })
+    }
+  }
+
+  // Coordinate order, because greedy first fit is only compact over a sorted
+  // stream. A pile arrives sorted, but two piles interleave and a template's
+  // extent is not its first read's.
+  units.sort((one, two) => one.start - two.start || one.end - two.end)
+
+  // The gap, in axis units, from a gap in pixels. `toPixel` is affine, so one
+  // subtraction settles the scale for the whole window.
+  const perUnit = Math.abs(frame.toPixel(1) - frame.toPixel(0))
+  const gap = perUnit > 0 ? ROW_PAD / perUnit : 0
+
+  const ends: number[] = []
+  for (const unit of units) {
+    let row = ends.length
+    for (let r = 0; r < ends.length; r++) {
+      if (ends[r] + gap <= unit.start) {
+        row = r
+        break
+      }
+    }
+    if (row === ends.length) ends.push(unit.end)
+    else ends[row] = unit.end
+    const held = out[unit.pile]
+    held.row[unit.a] = row
+    held.placed++
+    if (row >= rowsDrawn) held.hidden++
+    if (unit.b >= 0) {
+      held.row[unit.b] = row
+      held.placed++
+      if (row >= rowsDrawn) held.hidden++
+    }
+  }
+  for (const held of out) held.rows = ends.length
+  return out
 }
 
 /**
@@ -149,6 +315,7 @@ export function drawReads(
   frame: LaneFrame,
   axis: LocusAxis,
   pile: ReadPile,
+  placed: PileLayout,
   paint: ReadPaint,
   rung: ReadRung,
 ): number {
@@ -168,11 +335,13 @@ export function drawReads(
 
   // Pair lines first, so a read is never drawn under the thread joining it to
   // its mate — the line is context and the reads are the subject.
-  if (paint.pairs) drawPairs(ctx, frame, pile, paint, at, step, rowsDrawn)
+  if (paint.layout !== 'reads') {
+    drawPairs(ctx, frame, pile, placed, paint, at, step, rowsDrawn)
+  }
 
   for (let i = 0; i < pile.length; i++) {
-    const row = pile.row[i]
-    if (row >= rowsDrawn) continue
+    const row = placed.row[i]
+    if (row < 0 || row >= rowsDrawn) continue
     const across = row * step
     const colour = paint.colours[pile.group[i]] ?? paint.colours[0] ?? '#4478b8'
 
@@ -220,6 +389,7 @@ export function readAt(
   frame: LaneFrame,
   axis: LocusAxis,
   pile: ReadPile,
+  placed: PileLayout,
   rowHeight: number,
   rowGap: number,
   x: number,
@@ -253,7 +423,7 @@ export function readAt(
     frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
   let found: number | null = null
   for (let i = 0; i < pile.length; i++) {
-    if (pile.row[i] !== row) continue
+    if (placed.row[i] !== row) continue
     // A read narrower than a pixel is still a target: the drawn block is
     // rounded to one, so a hit area measured exactly would be unhittable at the
     // zoom where reads first appear.
@@ -388,25 +558,44 @@ function drawPairs(
   ctx: CanvasRenderingContext2D,
   frame: LaneFrame,
   pile: ReadPile,
+  placed: PileLayout,
   paint: ReadPaint,
   at: (base: number) => number,
   step: number,
   rowsDrawn: number,
 ): void {
+  const fragment = paint.layout === 'fragments'
   ctx.save()
-  ctx.globalAlpha = paint.opacity * 0.45
+  // A thread is context and is drawn faintly; a fragment body is the subject
+  // and is drawn as the read is, because in that layout the gap is not a gap —
+  // it is the part of the fragment nobody sequenced.
+  ctx.globalAlpha = paint.opacity * (fragment ? 0.55 : 0.45)
+  if (!fragment) {
+    // Dotted, and this is the whole difference between a pair that reads as a
+    // pair and one that reads as a fragment: a solid rule between two blocks on
+    // one row is indistinguishable from a fragment drawn through. The dashes
+    // are in pixels, so they are the same length at every zoom.
+    ctx.setLineDash([2, 3])
+  }
   for (let i = 0; i < pile.length; i++) {
     const mate = pile.mate[i]
     // Once per pair, from the left-hand end — otherwise every line is drawn
     // twice, which is visible wherever the lines are translucent.
     if (mate <= i) continue
-    if (pile.row[i] >= rowsDrawn) continue
+    const row = placed.row[i]
+    if (row < 0 || row >= rowsDrawn) continue
     const gapFrom = Math.min(pile.refEnd[i], pile.refEnd[mate])
     const gapTo = Math.max(pile.refStart[i], pile.refStart[mate])
     if (gapTo <= gapFrom) continue
-    const middle = pile.row[i] * step + paint.rowHeight / 2
-    line(ctx, frame, at(gapFrom), at(gapTo), middle, paint.guideColour, 1)
+    const across = row * step
+    if (fragment) {
+      const colour = paint.colours[pile.group[i]] ?? paint.colours[0] ?? '#4478b8'
+      fill(ctx, frame, at(gapFrom), at(gapTo), across, paint.rowHeight, colour)
+      continue
+    }
+    line(ctx, frame, at(gapFrom), at(gapTo), across + paint.rowHeight / 2, paint.guideColour, 1)
   }
+  ctx.setLineDash([])
   ctx.restore()
 }
 
@@ -531,6 +720,11 @@ export function drawConsensus(
     frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
 
   ctx.save()
+  // Clipped to its own band, which is the belt to the braces above. Fixing the
+  // mismeasured cap height stops the logo eating the coverage band; this stops
+  // the last letter of a column, or a round capital's overshoot below its
+  // baseline, from reaching the pile by a pixel.
+  clipLane(ctx, frame)
   ctx.globalAlpha = paint.opacity
   ctx.font = paint.font
   ctx.textAlign = 'center'
@@ -634,6 +828,17 @@ function drawLogoColumn(
     const letter = BASE_LETTERS[base] ?? 'N'
     ctx.save()
     ctx.fillStyle = BASE_COLOURS[base] ?? BASE_COLOURS[4]
+    // **Before** the measurement, not after it. `actualBoundingBoxAscent` is
+    // defined as the distance from the line `textBaseline` names to the top of
+    // the glyph — it is baseline-relative, not a font constant — and
+    // `drawConsensus` leaves the baseline on `middle` for the bar path. Measured
+    // there, a capital came back about 0.42em instead of 0.71em, so `height /
+    // cap` was ~1.7x too large and every letter overshot its slot by most of its
+    // own height. On the browser's bottom lane the slot nearest the map is
+    // directly under the coverage band, so the tallest letter of a near-
+    // unanimous column ate it.
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
     // Measured rather than assumed. A glyph's cap height is a property of the
     // font, and the one number that must not be guessed here: scaling by a
     // *ratio* as though it were a length is how every letter comes out an order
@@ -650,8 +855,6 @@ function drawLogoColumn(
     const x = laneX(frame, mid, across)
     ctx.translate(x, Math.max(y0, y1))
     ctx.scale((width * 0.9) / em, height / cap)
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'alphabetic'
     ctx.fillText(letter, 0, 0)
     ctx.restore()
     across += height
@@ -894,17 +1097,38 @@ function hueOf(colour: string): number {
  * where the mismatch colouring came from — because "no mismatches here" and
  * "this file cannot tell me" are the same empty picture (§8.13).
  */
-export function pileDetail(window: {
-  kept: number
-  total: number
-  capped: boolean
-  diffs: string
-  note?: string
-}): string {
+export function pileDetail(
+  window: {
+    kept: number
+    total: number
+    capped: boolean
+    diffs: string
+    note?: string
+  },
+  placed: readonly PileLayout[] = [],
+): string {
   if (window.note !== undefined) return window.note
-  const reads = window.capped
-    ? `${window.kept.toLocaleString()} of ${window.total.toLocaleString()} reads`
-    : `${window.kept.toLocaleString()} reads`
+  // What is on the screen, not what came back. The reply covers three
+  // view-widths, so its counts describe a picture the reader is not looking at
+  // — and they do not move when the view zooms inside the window that was
+  // fetched, which is how a caption that says "203 of 394" ends up over a
+  // drawing of thirty.
+  const here = placed.reduce((sum, one) => sum + one.placed, 0)
+  const hidden = placed.reduce((sum, one) => sum + one.hidden, 0)
+  const reads =
+    placed.length === 0
+      ? window.capped
+        ? `${window.kept.toLocaleString()} of ${window.total.toLocaleString()} reads`
+        : `${window.kept.toLocaleString()} reads`
+      : hidden > 0
+        ? // The one number the lane owed a reader and never gave: a pile taller
+          // than its band drops its tail silently, and a caption that counted
+          // the dropped reads as drawn is why a peak of depth forty looked like
+          // a peak of depth nine.
+          `${(here - hidden).toLocaleString()} of ${here.toLocaleString()} reads — taller lane for the rest`
+        : window.capped
+          ? `${here.toLocaleString()} reads, thinned`
+          : `${here.toLocaleString()} reads`
   const diffs =
     window.diffs === 'none'
       ? 'no reference to compare'

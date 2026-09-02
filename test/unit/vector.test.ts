@@ -254,7 +254,10 @@ describe('VectorPage', () => {
     const content = await contentOf(await bytesOf(await page.toBlob()))
     expect((content.match(/\(name\) Tj/g) ?? []).length).toBe(2)
     // Stroke first, at the halo's colour and width; then the fill over it.
-    expect(content).toMatch(/1 1 1 RG\n3 w\n0 j\nBT\n1 Tr/)
+    // `[] 0 d` is the dash pattern, part of the stroke state since the
+    // alignment lane needed a dotted mate thread: empty is solid, which is what
+    // an empty pattern means on a canvas too.
+    expect(content).toMatch(/1 1 1 RG\n3 w\n0 j\n\[\] 0 d\nBT\n1 Tr/)
     expect(content.indexOf('1 Tr')).toBeLessThan(content.indexOf('0 Tr'))
   })
 

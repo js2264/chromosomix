@@ -18,9 +18,11 @@
 import type { AnnotationStore } from '../annotations/store'
 import {
   COLOUR_BY,
+  PAIR_LAYOUTS,
   readsOf,
   type AnnotationEntry,
   type ColourBy,
+  type PairLayout,
   type ReadStyle,
 } from '../annotations/types'
 import { groupsFor } from '../annotations/bam/reads'
@@ -423,11 +425,11 @@ export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
 }
 
 /**
- * The three switches: join mates, show split reads, hide marked duplicates.
+ * The two switches: show split reads, hide marked duplicates.
  *
- * Text buttons rather than icons, and together on one row, because none of them
- * has a picture anyone would recognise and all three are states the lane is
- * *in*. They carry `aria-pressed` for the same reason the flip does.
+ * Text buttons rather than icons, and together on one row, because neither has
+ * a picture anyone would recognise and both are states the lane is *in*. They
+ * carry `aria-pressed` for the same reason the flip does.
  *
  * `duplicates` reads as what it *hides* rather than as what it keeps, which is
  * the way round the reader is thinking about it — and it is off by default, on
@@ -437,17 +439,6 @@ export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
  */
 export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
   const reads = readsOf(entry.style)
-  const pairs = button(
-    'pairs',
-    () => patchReads(store, entry, { pairs: !liveReads(store, entry).pairs }),
-    {
-      class: `btn btn-chip${reads.pairs ? ' is-on' : ''}`,
-      title:
-        'Draw the thread joining the two ends of a template, so a pair reads as one fragment ' +
-        'rather than as two reads that happen to be near each other.',
-    },
-  )
-  pairs.setAttribute('aria-pressed', String(reads.pairs))
 
   const duplicates = button(
     'hide duplicates',
@@ -477,6 +468,46 @@ export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTM
     'div',
     { class: 'field field-block' },
     el('span', { class: 'field-label', text: 'reads' }),
-    el('div', { class: 'ann-chips' }, pairs, splits, duplicates),
+    el('div', { class: 'ann-chips' }, splits, duplicates),
+  )
+}
+
+/**
+ * How the two ends of a template are laid out.
+ *
+ * A select rather than a switch, because it is three answers and not two — and
+ * because which one a reader wants is a property of their library, not a thing
+ * they toggle back and forth. Paired is the default: it is what a paired-end
+ * file is, and drawing the two ends on separate rows joined by nothing made a
+ * fragment read as two unrelated reads.
+ */
+const LAYOUT_HINTS: Record<PairLayout, string> = {
+  pairs:
+    'Both ends of a template on one row, joined by a dotted thread across the part that was not ' +
+    'sequenced. The default, and what a paired-end library is.',
+  fragments:
+    'The whole template as one bar, gap filled. For reading fragment coverage rather than reads.',
+  reads:
+    'Every record packed on its own, mates unjoined. What a single-ended library wants.',
+}
+
+export function layoutField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', { class: 'select' })
+  for (const mode of PAIR_LAYOUTS) {
+    select.appendChild(el('option', { value: mode, text: mode, title: LAYOUT_HINTS[mode] }))
+  }
+  select.value = reads.layout
+  select.title = LAYOUT_HINTS[reads.layout]
+  select.addEventListener('change', () => {
+    const mode = select.value as PairLayout
+    select.title = LAYOUT_HINTS[mode]
+    patchReads(store, entry, { layout: mode })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'draw as' }),
+    select,
   )
 }

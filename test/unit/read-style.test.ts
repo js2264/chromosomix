@@ -44,7 +44,7 @@ describe('the default', () => {
       colourBy: 'strand',
       minMapq: 0,
       hideDuplicates: false,
-      pairs: true,
+      layout: 'pairs',
       splits: false,
     })
   })
@@ -66,7 +66,7 @@ describe('reading a stored style back', () => {
       colourBy: 'insert',
       minMapq: 30,
       hideDuplicates: true,
-      pairs: false,
+      layout: 'reads',
       splits: true,
     }
     expect(readStyleOf(stored)).toEqual(stored)
@@ -90,8 +90,13 @@ describe('reading a stored style back', () => {
     // `pairs` defaults *on*, so anything but an explicit `false` keeps it on;
     // the other two default off and want an explicit `true`. Written out
     // because the two directions are easy to get backwards.
-    expect(readStyleOf({ pairs: 'no' }).pairs).toBe(true)
-    expect(readStyleOf({ pairs: false }).pairs).toBe(false)
+    // `pairs` was a boolean before it was a mode, and `false` meant "do not
+    // join them" — which is now `reads`. A stored session must not silently
+    // change what it draws.
+    expect(readStyleOf({ layout: 'nonsense' }).layout).toBe('pairs')
+    expect(readStyleOf({ pairs: false }).layout).toBe('reads')
+    expect(readStyleOf({ pairs: true }).layout).toBe('pairs')
+    expect(readStyleOf({ layout: 'fragments' }).layout).toBe('fragments')
     expect(readStyleOf({ hideDuplicates: 1 }).hideDuplicates).toBe(false)
     expect(readStyleOf({ hideDuplicates: true }).hideDuplicates).toBe(true)
     expect(readStyleOf({ splits: 1 }).splits).toBe(false)
@@ -135,7 +140,7 @@ describe('the coverage key', () => {
     for (const by of COLOUR_BY) {
       expect(readFilterKey(withField('colourBy', by))).toBe(readFilterKey(base))
     }
-    expect(readFilterKey(withField('pairs', false))).toBe(readFilterKey(base))
+    expect(readFilterKey(withField('layout', 'reads'))).toBe(readFilterKey(base))
     // Splits are drawn and never counted — see `pileFilterOf` in the worker.
     expect(readFilterKey(withField('splits', true))).toBe(readFilterKey(base))
   })
@@ -164,7 +169,7 @@ describe('surviving a stored session', () => {
       colourBy: 'mate',
       minMapq: 30,
       hideDuplicates: true,
-      pairs: false,
+      layout: 'reads',
       splits: true,
     }
     expect(roundTrip(set)).toEqual(set)
@@ -179,7 +184,7 @@ describe('surviving a stored session', () => {
       colourBy: 'strand',
       minMapq: 0,
       hideDuplicates: false,
-      pairs: true,
+      layout: 'pairs',
       splits: false,
     })
   })
@@ -202,7 +207,8 @@ describe('the cache keys, once more, against the two roads to a count', () => {
     // Toggling mate threads is a renderer decision over columns the pile
     // already carries, so putting it in the key would spend a window of BGZF
     // decoding on a change the reply cannot express.
-    expect(readStyleKey(withField('pairs', false))).toBe(readStyleKey(base))
+    expect(readStyleKey(withField('layout', 'reads'))).toBe(readStyleKey(base))
+    expect(readStyleKey(withField('layout', 'fragments'))).toBe(readStyleKey(base))
   })
 
   it('keeps the split switch in it, since that changes which reads come back', () => {

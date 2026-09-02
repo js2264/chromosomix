@@ -37,6 +37,9 @@ import { ReadCache } from '../annotations/reads'
 import {
   alignmentBands,
   depthProfile,
+  packPile,
+  rowsAcross,
+  type PileLayout,
   drawConsensus,
   drawReads,
   LOGO_MIN_THICKNESS,
@@ -316,6 +319,14 @@ interface Lane {
      * group about how deep this window is.
      */
     depth: PixelProfile | null
+    /**
+     * Where every read of the window sits, packed for the window on screen.
+     *
+     * One layout per pile, sharing one row space — see `packPile`. Resolved
+     * here so the paint and the hit test use the same one, and so the caption
+     * can say how much of the pile did not fit.
+     */
+    placed: PileLayout[]
   }>
 }
 
@@ -387,7 +398,10 @@ export class BrowserView {
    * frame the paint actually used, so a click cannot land on a different row
    * from the one under the pointer.
    */
-  private readonly pileBands = new Map<string, { frame: LaneFrame; window: ReadWindow }>()
+  private readonly pileBands = new Map<
+    string,
+    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[] }
+  >()
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
   private gripping: string | null = null
@@ -1618,15 +1632,17 @@ export class BrowserView {
       }
     }
 
-    this.pileBands.set(entry.id, { frame: pile, window: row.window })
+    this.pileBands.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
 
     const colours = readColoursFor(row.window, style.colour)
-    for (const one of row.window.piles) {
-      drawReads(ctx, pile, this.axis, one, {
+    for (let i = 0; i < row.window.piles.length; i++) {
+      const placed = row.placed[i]
+      if (placed === undefined) continue
+      drawReads(ctx, pile, this.axis, row.window.piles[i], placed, {
         colours,
         rowHeight: READ_ROW,
         rowGap: READ_ROW_GAP,
-        pairs: reads.pairs,
+        layout: reads.layout,
         diffs: row.window.diffs !== 'none',
         opacity: style.opacity,
         font: scaleFont(LANE_FONT),
@@ -1637,7 +1653,7 @@ export class BrowserView {
     if (!this.text) return null
     return {
       entries: [entry],
-      detail: { kind: 'text', text: pileDetail(row.window) },
+      detail: { kind: 'text', text: pileDetail(row.window, row.placed) },
       at: 'near',
     }
   }
@@ -1980,11 +1996,23 @@ export class BrowserView {
             style: readsOf(member.style),
           })
           if (window !== null) {
+            // The band the pile will be drawn into, so the packing knows how
+            // many rows will actually be shown — the same split the paint uses.
+            const band = alignmentBands(lane.frame, rung, this.text)[3]
             lane.reads.push({
               entry: member,
               window,
               rung,
               depth: depthProfile(lane.frame, this.axis, window),
+              placed: packPile(
+                window.piles,
+                this.axis,
+                lane.frame,
+                lane.frame.domain[0],
+                lane.frame.domain[1],
+                readsOf(member.style).layout,
+                rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP),
+              ),
             })
             continue
           }
@@ -2941,7 +2969,9 @@ export class BrowserView {
       // last-drawn-wins rule `featureAt` follows within one lane.
       for (let i = band.window.piles.length - 1; i >= 0; i--) {
         const pile = band.window.piles[i]
-        const at = readAt(band.frame, this.axis, pile, READ_ROW, READ_ROW_GAP, x, y)
+        const placed = band.placed[i]
+        if (placed === undefined) continue
+        const at = readAt(band.frame, this.axis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
         if (at !== null) return { pile, index: at, source: lane.entry.label }
       }
     }

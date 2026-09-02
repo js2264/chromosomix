@@ -27,10 +27,14 @@ import {
   alignmentBands,
   consensusBandFor,
   drawReads,
+  packPile,
   readRungFor,
+  rowsAcross,
   rowsFor,
+  type PileLayout,
   type ReadPaint,
 } from '@/render/alignments'
+import type { PairLayout } from '@/annotations/types'
 import { LocusAxis } from '@/render/locus'
 import type { LaneFrame } from '@/render/lane'
 import type { ReadPile } from '@/annotations/types'
@@ -42,11 +46,13 @@ interface Call {
   fill: string
   width: number
   alpha: number
+  dash: number[]
 }
 
 /** A context that records the subset `drawReads` draws through. */
 function recorder(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
   const calls: Call[] = []
+  let dash: number[] = []
   const state = { strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, globalAlpha: 1 }
   const stack: Array<typeof state> = []
   const note = (op: string, ...args: number[]): void => {
@@ -57,6 +63,7 @@ function recorder(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
       fill: String(state.fillStyle),
       width: state.lineWidth,
       alpha: state.globalAlpha,
+      dash: [...dash],
     })
   }
   const ctx = {
@@ -79,6 +86,8 @@ function recorder(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
     moveTo: (x: number, y: number) => note('moveTo', x, y),
     lineTo: (x: number, y: number) => note('lineTo', x, y),
     stroke: () => note('stroke'),
+    setLineDash: (pattern: number[]) => { dash = [...pattern] },
+    getLineDash: () => [...dash],
     fillText: (_text: string, x: number, y: number) => note('fillText', x, y),
     measureText: () => ({ width: 6, actualBoundingBoxAscent: 7 }),
   }
@@ -104,7 +113,7 @@ const paint: ReadPaint = {
   colours: ['#0072b2'],
   rowHeight: 7,
   rowGap: 2,
-  pairs: true,
+  layout: 'pairs',
   diffs: false,
   opacity: 1,
   font: '10px sans-serif',
@@ -170,11 +179,161 @@ function pileOf(reads: Spec[]): ReadPile {
   return pile
 }
 
+/**
+ * The layout for a fixture, packed the way the view packs it.
+ *
+ * The rows are assigned on the main thread now, over the visible window, so a
+ * renderer test that wants a particular row has to say so through the layout
+ * rather than through `pile.row`. `packPile` is the real packer; these tests use
+ * it so the rows they assert are the rows the application would produce.
+ */
+function layoutFor(pile: ReadPile, over: Partial<ReadPaint> = {}): PileLayout {
+  const rowsDrawn = rowsAcross(frame.thickness, paint.rowHeight, paint.rowGap)
+  return packPile(
+    [pile],
+    axis,
+    frame,
+    frame.domain[0],
+    frame.domain[1],
+    over.layout ?? paint.layout,
+    rowsDrawn,
+  )[0]
+}
+
 function drawn(pile: ReadPile, over: Partial<ReadPaint> = {}): Call[] {
   const { ctx, calls } = recorder()
-  drawReads(ctx, frame, axis, pile, { ...paint, ...over }, 'reads')
+  drawReads(ctx, frame, axis, pile, layoutFor(pile, over), { ...paint, ...over }, 'reads')
   return calls
 }
+
+describe('packing the pile for the window on screen', () => {
+  /** A pile of plain reads, with mates where a pair is given. */
+  function pileWith(
+    reads: Array<{ start: number; end: number; mate?: number; clipStart?: number; clipEnd?: number }>,
+  ): ReadPile {
+    const pile = pileOf(
+      reads.map((read) => ({
+        start: read.start,
+        ops: [[0, read.end - read.start] as [number, number]],
+        ...(read.clipStart === undefined ? {} : { clipStart: read.clipStart }),
+        ...(read.clipEnd === undefined ? {} : { clipEnd: read.clipEnd }),
+      })),
+    )
+    reads.forEach((read, i) => {
+      pile.mate[i] = read.mate ?? -1
+    })
+    return pile
+  }
+
+  const pack = (pile: ReadPile, layout: PairLayout, from = 0, to = 900, rowsDrawn = 100) =>
+    packPile([pile], axis, frame, from, to, layout, rowsDrawn)[0]
+
+  it('packs by position, first fit, so a sparse window uses one row', () => {
+    const pile = pileWith([
+      { start: 100, end: 200 },
+      { start: 300, end: 400 },
+      { start: 500, end: 600 },
+    ])
+    const placed = pack(pile, 'reads')
+    expect([...placed.row]).toEqual([0, 0, 0])
+    expect(placed.rows).toBe(1)
+  })
+
+  it('stacks what overlaps', () => {
+    const pile = pileWith([
+      { start: 100, end: 400 },
+      { start: 200, end: 500 },
+      { start: 300, end: 600 },
+    ])
+    expect([...pack(pile, 'reads').row]).toEqual([0, 1, 2])
+  })
+
+  it('leaves room for the soft clips it will draw', () => {
+    // The clip is drawn outside the aligned extent, so packing on the aligned
+    // extent alone puts two reads' clips on top of each other.
+    const clipped = pileWith([
+      { start: 100, end: 200, clipEnd: 60 },
+      { start: 210, end: 300 },
+    ])
+    expect([...pack(clipped, 'reads').row]).toEqual([0, 1])
+    const bare = pileWith([
+      { start: 100, end: 200 },
+      { start: 210, end: 300 },
+    ])
+    expect([...pack(bare, 'reads').row]).toEqual([0, 0])
+  })
+
+  it('puts both ends of a template on one row, and only in a paired layout', () => {
+    // The whole of the reported symptom: packed by position, the two ends of a
+    // fragment land on different rows at any real depth, and the thread between
+    // them runs from one of them towards a mate that is not there.
+    const pile = pileWith([
+      { start: 100, end: 200, mate: 1 },
+      { start: 400, end: 500, mate: 0 },
+      { start: 250, end: 350 },
+    ])
+    const paired = pack(pile, 'pairs')
+    expect(paired.row[0]).toBe(paired.row[1])
+    expect(paired.row[2]).not.toBe(paired.row[0])
+
+    // …and unpaired, the middle read takes the gap between them.
+    const alone = pack(pile, 'reads')
+    expect([...alone.row]).toEqual([0, 0, 0])
+  })
+
+  it('packs fragments and pairs identically — they differ only in the ink', () => {
+    const pile = pileWith([
+      { start: 100, end: 200, mate: 1 },
+      { start: 400, end: 500, mate: 0 },
+      { start: 250, end: 350 },
+    ])
+    expect([...pack(pile, 'fragments').row]).toEqual([...pack(pile, 'pairs').row])
+  })
+
+  it('leaves out what is off screen, so the rows count what is drawn', () => {
+    // The window is fetched three view-widths wide so a pan is free. Packing
+    // that whole width would give the visible reads the rows of a picture three
+    // times bigger — which is the bug this exists to fix.
+    const pile = pileWith([
+      { start: 10, end: 90 },
+      { start: 400, end: 500 },
+      { start: 820, end: 890 },
+    ])
+    const placed = pack(pile, 'reads', 300, 600)
+    expect([...placed.row]).toEqual([-1, 0, -1])
+    expect(placed.placed).toBe(1)
+    expect(placed.rows).toBe(1)
+  })
+
+  it('shares one row space across the piles of one window', () => {
+    // A window read as two byte spans comes back as two piles, and each used to
+    // number its rows from zero — so drawn into one band they collided and two
+    // reads a chunk boundary apart were drawn on top of each other.
+    const a = pileWith([{ start: 100, end: 400 }])
+    const b = pileWith([{ start: 200, end: 500 }])
+    const [first, second] = packPile([a, b], axis, frame, 0, 900, 'reads', 100)
+    expect(first.row[0]).toBe(0)
+    expect(second.row[0]).toBe(1)
+    expect(first.rows).toBe(2)
+  })
+
+  it('counts what will not fit, rather than dropping it silently', () => {
+    const deep = pileWith(
+      Array.from({ length: 12 }, () => ({ start: 100, end: 400 })),
+    )
+    const placed = pack(deep, 'reads', 0, 900, 5)
+    expect(placed.rows).toBe(12)
+    expect(placed.placed).toBe(12)
+    expect(placed.hidden).toBe(7)
+  })
+
+  it('says nothing about a contig the axis has never heard of', () => {
+    const elsewhere = { ...pileWith([{ start: 100, end: 200 }]), contig: 'chrZ' }
+    const placed = pack(elsewhere, 'reads')
+    expect(placed.placed).toBe(0)
+    expect([...placed.row]).toEqual([-1])
+  })
+})
 
 describe('one read', () => {
   it('fills its aligned blocks and nothing between them', () => {
@@ -295,7 +454,7 @@ describe('a pair', () => {
   })
 
   it('is left unjoined when the switch is off', () => {
-    const calls = drawn(pair, { pairs: false })
+    const calls = drawn(pair, { layout: 'reads' })
     expect(calls.filter((call) => call.op === 'moveTo')).toHaveLength(0)
     // …and the reads themselves are unaffected.
     expect(calls.filter((call) => call.op === 'fillRect')).toHaveLength(2)
@@ -308,7 +467,7 @@ describe('the row budget', () => {
     // twelfth read is fetched and simply not drawn.
     const many = pileOf(Array.from({ length: 20 }, (_, i) => ({ start: 100, ops: [[0, 50] as [number, number]], row: i })))
     const { ctx, calls } = recorder()
-    const rows = drawReads(ctx, frame, axis, many, paint, 'reads')
+    const rows = drawReads(ctx, frame, axis, many, layoutFor(many), paint, 'reads')
     expect(rows).toBe(11)
     expect(calls.filter((call) => call.op === 'fillRect')).toHaveLength(11)
   })
@@ -354,7 +513,16 @@ describe('the row budget', () => {
         const lane = { ...frame, thickness }
         const band = alignmentBands(lane, 'reads', labelled)[3]
         const { ctx } = recorder()
-        const drew = drawReads(ctx, band, axis, pileOf([]), paint, 'reads')
+        const empty = pileOf([])
+        const drew = drawReads(
+          ctx,
+          band,
+          axis,
+          empty,
+          { row: new Int16Array(0), rows: 0, placed: 0, hidden: 0 },
+          paint,
+          'reads',
+        )
         expect(rowsFor(lane, 'reads', labelled), `${thickness}px, labelled=${labelled}`).toBe(drew)
       }
     }

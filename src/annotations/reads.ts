@@ -43,11 +43,35 @@ const FETCH_PAD = 1
  */
 const ROW_STEP = 8
 
+/**
+ * The zoom bucket a held window is good for.
+ *
+ * The pile is *thinned* in the worker against the row budget of the lane that
+ * asked for it, over the window that was fetched — which is three view-widths
+ * (`FETCH_PAD`). So a window fetched for an eight-kilobase view holds about a
+ * third of that view's reads in any one-kilobase slice of it, and answering a
+ * zoom from it draws a third of the pile while the caption reports the wide
+ * window's numbers. Measured on a uniform 20x pile: 103 reads kept of 581, of
+ * which 29 fall in the visible middle third, against 106 for a fetch scoped to
+ * that third.
+ *
+ * So the span joins the key, in octaves — the same shape `SampleCache` uses for
+ * resolution, and for the same reason: a continuous zoom must refetch a bounded
+ * number of times rather than on every frame. One octave is one refetch per
+ * halving, and a pan does not change it at all, so §2's "a pan performs no
+ * read" is untouched.
+ */
+function zoomBucket(span: number): number {
+  return span > 0 ? Math.round(Math.log2(span)) : 0
+}
+
 interface Held {
   covered: Map<string, [number, number]>
   rows: number
   /** The controls the held window was fetched under; see {@link readStyleKey}. */
   style: string
+  /** The octave of view span it was thinned for; see {@link zoomBucket}. */
+  zoom: number
   window: ReadWindow
 }
 
@@ -56,6 +80,8 @@ interface Running {
   cancel: () => void
   /** The controls *this request* carries — not the ones already drawn. */
   style: string
+  /** …and the zoom octave it was asked for. */
+  zoom: number
 }
 
 export class ReadCache {
@@ -113,6 +139,7 @@ export class ReadCache {
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.window ?? null
+    const zoom = zoomBucket(view.reduce((sum, at) => sum + (at.end - at.start), 0))
     // A budget that has only *shrunk* is answered from what is held: the pile
     // already has more rows than the lane can show, and the extra ones are
     // simply not drawn. Refetching would thin it harder for no visible gain.
@@ -120,6 +147,7 @@ export class ReadCache {
       cached !== null &&
       cached.rows >= rows &&
       cached.style === style &&
+      cached.zoom === zoom &&
       covers(cached.covered, view)
     ) {
       return cached.window
@@ -137,7 +165,7 @@ export class ReadCache {
     // frame each time, so the pile would never land at all.
     const running = this.inflight.get(key)
     if (running !== undefined) {
-      if (running.style === style) return cached?.window ?? null
+      if (running.style === style && running.zoom === zoom) return cached?.window ?? null
       running.cancel()
       this.inflight.delete(key)
     }
@@ -155,7 +183,7 @@ export class ReadCache {
       basesPerPixel: options.basesPerPixel,
       reads: options.style,
     })
-    const slot: Running = { cancel: request.cancel, style }
+    const slot: Running = { cancel: request.cancel, style, zoom }
     this.inflight.set(key, slot)
     void request.promise
       .then((window) => {
@@ -170,7 +198,7 @@ export class ReadCache {
         // would leave that window permanently uncovered and refetch it on
         // every frame for as long as a reader looked at it.
         for (const at of wanted) covered.set(at.contig, [at.start, at.end])
-        this.held.set(key, { covered, rows, style, window })
+        this.held.set(key, { covered, rows, style, zoom, window })
         this.onChange()
       })
       .catch(() => {

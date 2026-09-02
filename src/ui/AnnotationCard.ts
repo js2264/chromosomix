@@ -47,6 +47,7 @@ import {
   fillLegend,
   flipButton,
   heightField,
+  layoutField,
   limitsField,
   mapqField,
   modeField,
@@ -889,6 +890,7 @@ export class AnnotationCard {
           mapqField(this.props.store, entry),
         ),
         key,
+        el('div', { class: 'ann-inline' }, layoutField(this.props.store, entry)),
         readToggles(this.props.store, entry),
       )
     }
