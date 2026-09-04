@@ -75,7 +75,46 @@ export class AnnotationLoader {
      * thing that can veto a match made across two nomenclatures.
      */
     private readonly mapContigs: NamedSequence[],
-  ) {}
+  ) {
+    // Tell the worker when a row goes. Nothing did, before this: `client.drop`
+    // had exactly one caller — the refusal path below — and `AnnotationStore.remove`
+    // dropped the row, its lanes and its placements and said nothing to the
+    // thread holding the file. So closing a bigWig left its open handle, and
+    // closing a BAM left its parsed index — single-digit megabytes for a human
+    // WGS file — alive for the life of the tab.
+    //
+    // Reconciled against the store rather than driven by a removal event, which
+    // is the same choice `SampleCache.prune` makes and for the same reason: the
+    // worker's stores are *derived*, and a subscription that fires on every
+    // change cannot miss one, where an event somebody forgets to send is a leak
+    // nobody sees.
+    // Never unsubscribed, and nothing to unsubscribe *from*: a loader is built
+    // beside the store it watches and the client it speaks to, and a session
+    // that changes genome replaces all three at once (`Session.setUpBrowser-
+    // Annotations`), destroying the worker as it goes.
+    store.subscribe(() => this.release())
+  }
+
+  /** Entries this loader has told the worker about, so it can say when they go. */
+  private readonly held = new Set<string>()
+
+  /**
+   * Drop what the store no longer has.
+   *
+   * By id rather than by count, because a row can come *back* under the same id
+   * — `reattach` re-issues `load` for a detached local file — and a reference
+   * count over a channel that can repeat itself is a count that never reaches
+   * zero.
+   */
+  private release(): void {
+    if (this.held.size === 0) return
+    const live = new Set(this.store.entries.map((entry) => entry.id))
+    for (const id of [...this.held]) {
+      if (live.has(id)) continue
+      this.held.delete(id)
+      this.client.drop(id)
+    }
+  }
 
   /**
    * Load one or more files, whatever they are.
@@ -415,6 +454,10 @@ export class AnnotationLoader {
     guessed: boolean,
   ): Promise<void> {
     try {
+      // Noted before the request rather than after it: a row removed while its
+      // own load is still in flight must still be released, and the reply may
+      // never come.
+      this.held.add(id)
       const result = await this.client.request<'load'>({
         kind: 'load',
         entry: id,
