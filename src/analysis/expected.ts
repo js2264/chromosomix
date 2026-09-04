@@ -337,3 +337,183 @@ export function expectedAt(curve: ExpectedCurve, offsetBins: number): number {
   const fraction = (offsetBins - left) / (right - left)
   return mean[left] + fraction * (mean[right] - mean[left])
 }
+
+// ---------------------------------------------------------------------------
+// The HiContacts convention
+// ---------------------------------------------------------------------------
+
+/**
+ * `unique(round(factor^n))`, with the width of each bin beside it.
+ *
+ * This is HiContacts' `PsBreaks()` table, generated rather than tabulated. That
+ * package ships 205 hard-coded break positions from 1 bp to 1.16 Gb and the 205
+ * widths beside them; the positions are exactly `unique(round(1.1^(0:219)))` and
+ * the widths exactly the differences between successive ones, which
+ * `test/unit/analysis-golden.test.ts` asserts against the shipped numbers one by
+ * one. Generating them means the file's own reach decides how far the
+ * table goes and {@link logBinCurve}'s `factor` still means what it says, rather
+ * than a genome larger than 1.16 Gb quietly piling its longest separations into
+ * a final bin.
+ *
+ * `pos` is one longer than `width`, because the width of the last usable bin is
+ * the distance to the break after it. The generator therefore runs one step past
+ * `maxDistance` — a table that stopped exactly at the data would have nothing to
+ * measure its own last bin with.
+ *
+ * The rounding is `Math.round`, which differs from R's `round` on an exact `.5`;
+ * no power of 1.1 lands there, and the test compares every entry against R's own
+ * output rather than trusting that.
+ */
+export function logRoundedBreaks(
+  factor: number,
+  maxDistance: number,
+): { pos: Float64Array; width: Float64Array } {
+  const step = Number.isFinite(factor) && factor > 1 ? factor : 1.1
+  const reach = Number.isFinite(maxDistance) && maxDistance > 0 ? maxDistance : 0
+  const pos: number[] = []
+  let last = -1
+  for (let n = 0; pos.length < 4096; n++) {
+    const value = Math.round(Math.pow(step, n))
+    if (value === last) continue
+    pos.push(value)
+    last = value
+    if (value > reach && pos.length >= 2) break
+  }
+  const width = new Float64Array(pos.length - 1)
+  for (let i = 0; i + 1 < pos.length; i++) width[i] = pos[i + 1] - pos[i]
+  return { pos: Float64Array.from(pos), width }
+}
+
+/**
+ * R's `findInterval(x, vec, all.inside = TRUE)`, for a sorted `pos`.
+ *
+ * The largest `i` with `pos[i] <= distance`, clamped into the bins that have a
+ * width — so a separation below the first break falls in the first bin rather
+ * than off the table, which is what puts the diagonal and the first off-diagonal
+ * of a binned map into the same 1 bp bin in HiContacts.
+ */
+function breakIndex(pos: Float64Array, distance: number): number {
+  const last = pos.length - 2
+  if (last < 0) return 0
+  if (distance < pos[0]) return 0
+  let lo = 0
+  let hi = last
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (pos[mid] <= distance) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
+/**
+ * P(s) as HiContacts reports it: a probability density over separation.
+ *
+ * A different quantity from {@link logBinCurve}, not a different smoothing of
+ * the same one, and the difference is the denominator. `logBinCurve` divides the
+ * contacts at a separation by **the number of bin pairs that could have held
+ * one**, which is the expected value three other tasks consume and the number
+ * cooltools' `expected-cis` reports. This divides them by **the number of
+ * contacts in the whole map** and then by the **width of the separation bin in
+ * base pairs** — the share of all cis contacts that fall at this distance, per
+ * base pair. Both are called P(s) in the literature and they are not
+ * interchangeable: the pair count falls off as a contig runs out of room, so the
+ * two curves agree in shape at short range and diverge as the separation
+ * approaches the length of the sequence, where one is dividing by a number
+ * heading for zero and the other is not.
+ *
+ * Three further details are HiContacts' and are reproduced exactly, because a
+ * curve that is off by one bin or by a factor of two is worse than one that is
+ * openly a different convention:
+ *
+ * - **The separation is the gap, not the offset.** `InteractionSet::pairdist(…,
+ *   type = 'gap')` is `max(start) − min(end) − 1` over the two anchors, and
+ *   HiCExperiment builds cooler bins as `IRanges(start + 1, end)`, so two bins
+ *   `k` apart are `(k − 1) · binsize` apart by that measure. Offset 1 lands at
+ *   0 bp and the diagonal at −binsize; both fall in the first break.
+ * - **Each unordered pair counts once.** The accumulator is fed dense squares
+ *   read back from an upper-triangular store, so every off-diagonal cell arrives
+ *   twice — harmless for a mean, fatal for a share of a total, since it would
+ *   halve the diagonal's weight against everything else. `mirrored` folds them.
+ * - **Empty bins are dropped**, as a `group_by` drops them, rather than drawn as
+ *   a gap.
+ *
+ * `minOffset` is still in bins and still floors the curve, and unlike
+ * {@link logBinCurve} it does **not** silently floor at 1: the diagonal belongs
+ * to the first break here, and dropping it would change the total that
+ * everything else is a share of.
+ */
+export function densityCurve(
+  curve: ExpectedCurve,
+  binsize: number,
+  factor: number,
+  minOffset: number,
+  mirrored: boolean,
+): { x: Float64Array; y: Float64Array; n: Float64Array } {
+  const bp = binsize > 0 ? binsize : 1
+  const floorOffset = Math.max(0, Math.ceil(Number.isFinite(minOffset) ? minOffset : 0))
+  const fold = mirrored ? 2 : 1
+  const breaks = logRoundedBreaks(factor, Math.max(0, curve.maxOffset - 1) * bp)
+  const bins = breaks.width.length
+  const contacts = new Float64Array(bins)
+  const cells = new Float64Array(bins)
+
+  let total = 0
+  for (let k = floorOffset; k <= curve.maxOffset; k++) {
+    const count = curve.count[k]
+    if (!(count > 0)) continue
+    const share = k === 0 ? 1 : fold
+    const value = curve.sum[k] / share
+    if (Number.isNaN(value)) continue
+    const at = breakIndex(breaks.pos, (k - 1) * bp)
+    contacts[at] += value
+    cells[at] += count / share
+    total += value
+  }
+  if (!(total > 0)) {
+    return { x: new Float64Array(0), y: new Float64Array(0), n: new Float64Array(0) }
+  }
+
+  const xs: number[] = []
+  const ys: number[] = []
+  const ns: number[] = []
+  for (let i = 0; i < bins; i++) {
+    if (cells[i] <= 0) continue
+    xs.push(breaks.pos[i])
+    ys.push(contacts[i] / total / breaks.width[i])
+    ns.push(cells[i])
+  }
+  return { x: Float64Array.from(xs), y: Float64Array.from(ys), n: Float64Array.from(ns) }
+}
+
+/**
+ * The same curve, scaled so it passes through 1 at 100 kb.
+ *
+ * HiContacts' `norm_p_unity`, and its definition of "at 100 kb" is followed
+ * exactly — the break *closest* to 100 000 bp, not an interpolation to it, since
+ * the point of the column is to let two samples measured on the same break table
+ * be compared without either being rescaled to something the other cannot hit.
+ *
+ * The curve is returned unchanged where that point is zero or missing, which is
+ * a map with no contacts at 100 kb at all: dividing by it would replace a
+ * readable curve with a column of infinities.
+ */
+export function scaleToUnityAt(
+  x: Float64Array,
+  y: Float64Array,
+  at: number,
+): { y: Float64Array; scaled: boolean } {
+  let best = -1
+  let distance = Infinity
+  for (let i = 0; i < x.length; i++) {
+    const away = Math.abs(x[i] - at)
+    if (away < distance) {
+      distance = away
+      best = i
+    }
+  }
+  if (best < 0 || !(y[best] > 0)) return { y, scaled: false }
+  const out = new Float64Array(y.length)
+  for (let i = 0; i < y.length; i++) out[i] = y[i] / y[best]
+  return { y: out, scaled: true }
+}

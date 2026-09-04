@@ -42,8 +42,10 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
 import {
   ExpectedAccumulator,
+  densityCurve,
   logBinCurve,
   logLogSlope,
+  scaleToUnityAt,
   type ExpectedCurve,
 } from '../expected'
 import {
@@ -297,7 +299,7 @@ async function measure(
   units: Unit[],
   balance: boolean,
   value: string,
-): Promise<ExpectedCurve[]> {
+): Promise<{ curves: ExpectedCurve[]; mirrored: boolean }> {
   // Flattened, because the shared helper asks about spans and a unit is a
   // *named group* of them — a genome-scope curve covers every contig of one MAG.
   const block = usableBlock(job, units.flatMap((unit) => unit.spans), balance)
@@ -310,7 +312,11 @@ async function measure(
       for (const span of units[u].spans) accumulator.addBlock(squareOf(block, span))
       out.push(accumulator.finish())
     }
-    return out
+    // A dense square read back from an upper-triangular store carries every
+    // off-diagonal pair twice, so this path is mirrored whatever the file's
+    // storage says. Invisible to a mean and not to a share of a total, which is
+    // why the flag travels with the curves rather than being rederived later.
+    return { curves: out, mirrored: true }
   }
 
   if (units.length === 1 && units[0].spans.length === 1) {
@@ -325,7 +331,7 @@ async function measure(
     job.throwIfCancelled()
     const accumulator = new ExpectedAccumulator(units[0].maxOffset)
     accumulator.addBlock(matrix)
-    return [accumulator.finish()]
+    return { curves: [accumulator.finish()], mirrored: true }
   }
 
   if (value !== DEFAULT_COUNT_COLUMN) {
@@ -338,7 +344,31 @@ async function measure(
         'from was not used. Narrow the scope to one sequence to measure that column instead.',
     )
   }
-  return scanUnits(job, units, balance)
+  // The pixel table, on the other hand, is mirrored only where the file itself
+  // stores both triangles — the same condition `countPairs` doubles its pair
+  // counts under.
+  return {
+    curves: await scanUnits(job, units, balance),
+    mirrored: job.mc.storageMode === 'square',
+  }
+}
+
+/**
+ * Where `norm: 'unity'` pins the curve, in base pairs.
+ *
+ * HiContacts' number, and hard-coded there too. It is a sensible place for a
+ * yeast or a mammalian map alike — far enough out to be past the near-diagonal
+ * and short enough to be inside every chromosome — and making it a parameter
+ * would mean two runs pinned at different separations could be plotted together
+ * and read as different biology.
+ */
+const UNITY_AT = 100_000
+
+/** What the ordinate is, per normalisation. */
+const Y_LABEL: Record<string, string> = {
+  perPair: 'Contact probability',
+  density: 'Contact probability density (per bp)',
+  unity: 'Contact probability density (1 at 100 kb)',
 }
 
 export const runExpected: TaskRunner = async (job) => {
@@ -346,6 +376,11 @@ export const runExpected: TaskRunner = async (job) => {
   const region = strParam(job.params, 'region', '').trim()
   const factor = numParam(job.params, 'factor', 1.1)
   const minSeparation = numParam(job.params, 'minSeparation', 0)
+  // Unrecognised falls back to the expected curve rather than to a HiContacts
+  // one, for the reason `planUnits` gives about the scope: a stored session from
+  // a later build must not silently change what the numbers mean.
+  const normValue = strParam(job.params, 'norm', 'perPair')
+  const norm = normValue === 'density' || normValue === 'unity' ? normValue : 'perPair'
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
@@ -368,27 +403,48 @@ export const runExpected: TaskRunner = async (job) => {
   // them are capped, by the drawer that has to fit them (`analysisPlots.ts`).
   const units = planned
 
-  const curves = await measure(job, units, balance, job.framing.value)
+  const { curves, mirrored } = await measure(job, units, balance, job.framing.value)
   job.throwIfCancelled()
 
   const series: CurveSeries[] = []
   const slopes: CurveSeries[] = []
   let silent = 0
+  let unscaled = 0
   for (let u = 0; u < units.length; u++) {
-    const binned = logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
+    const binned =
+      norm === 'perPair'
+        ? logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
+        : densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
     if (binned.x.length === 0) {
       silent++
       continue
     }
     let cells = 0
     for (const n of binned.n) cells += n
-    series.push({ name: units[u].name, x: binned.x, y: binned.y, n: cells })
+    // Per curve, exactly as HiContacts scales per group: the point of the column
+    // is that two samples cross at 100 kb, and a shared scale factor taken from
+    // one of them would put the crossing somewhere neither of them has.
+    let y = binned.y
+    if (norm === 'unity') {
+      const scaled = scaleToUnityAt(binned.x, y, UNITY_AT)
+      y = scaled.y
+      if (!scaled.scaled) unscaled++
+    }
+    series.push({ name: units[u].name, x: binned.x, y, n: cells })
     if (derivative) {
-      const slope = logLogSlope(binned.x, binned.y)
+      const slope = logLogSlope(binned.x, y)
       // Two points give no central difference at all, and a one-sided one at the
       // ends is a different estimator drawn on the same line — see `logLogSlope`.
       if (slope.x.length > 0) slopes.push({ name: units[u].name, x: slope.x, y: slope.y, n: cells })
     }
+  }
+  if (unscaled > 0) {
+    job.note(
+      `${unscaled.toLocaleString()} ${unscaled === 1 ? 'curve' : 'curves'} had no contacts at ` +
+        '100 kb, so ' +
+        `${unscaled === 1 ? 'it is' : 'they are'} drawn as the unscaled density. A sequence ` +
+        'shorter than 100 kb is the usual reason.',
+    )
   }
   if (silent > 0) {
     job.note(
@@ -405,7 +461,7 @@ export const runExpected: TaskRunner = async (job) => {
       label: 'Contact probability P(s)',
       series,
       xLabel: 'Genomic separation (bp)',
-      yLabel: 'Contact probability',
+      yLabel: Y_LABEL[norm],
       xScale: 'log',
       yScale: 'log',
     },

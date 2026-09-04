@@ -90,6 +90,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in front now decides, which is what a window-level preference carried per tab
   can honestly mean.
 
+- **P(s) can be the quantity HiContacts means by it.** A *Normalisation* choice on
+  the contact-probability task. The default is unchanged and is the **expected**
+  curve — contacts at a separation over the bin pairs that could have held one,
+  which is `cooltools expected-cis` and what observed/expected, the compartment
+  chain and the pileups are taken against. The other two are
+  `HiContacts::distanceLaw()`'s: the **probability density**, contacts over all
+  cis contacts and then over the width of the separation bin in base pairs, and
+  the same curve **scaled through 1 at 100 kb** (`norm_p_unity`), which is how
+  two samples are put on one axis.
+
+  They are different quantities rather than two smoothings of one. Both decay
+  like a power law and both are drawn on log-log axes, and they agree in shape
+  at short range — but the pair count runs out as the separation approaches the
+  length of a chromosome and the contact total does not, so the tails part.
+  Reading an exponent off the wrong one is the failure this exists to prevent.
+
+  **It reproduces that package rather than resembling it.** Picking a HiContacts
+  normalisation also switches the separation to its gap distance — two bins *k*
+  apart are `(k − 1)·binsize` apart there, so the diagonal and the first
+  off-diagonal share the first break — and the bins to its break table, which
+  turns out to be exactly `unique(round(1.1^n))` and is regenerated rather than
+  tabulated. `test/golden/analysis/hicontacts_ps.json` is built by running
+  HiContacts' own pipeline in R (`scripts/hicontacts_ps.R`, the first golden
+  whose dependency is a program rather than a Python module), and every break
+  position, density and unity-scaled value matches to 2e-6 on four chromosomes
+  and on the four pooled.
+
 - **Pattern detection, and it is chromosight.** A fifteenth task on the map card:
   loops, borders, hairpins, centromeres and stripes, found by correlating a
   template against a map detrended by its own distance law, with the smears

@@ -53,7 +53,13 @@ import {
   usableBins,
 } from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
-import { ExpectedAccumulator } from '@/analysis/expected'
+import {
+  ExpectedAccumulator,
+  densityCurve,
+  logBinCurve,
+  logRoundedBreaks,
+  scaleToUnityAt,
+} from '@/analysis/expected'
 import { diamondSums, insulationScore } from '@/analysis/insulation'
 import { leadingEigenpairs } from '@/analysis/linalg'
 import { referenceWindows, windowRow } from '@/analysis/metaplot'
@@ -191,6 +197,137 @@ suite('P(s), against cooltools.expected_cis', () => {
       expect(g.reference.raw[chrom].dist[1], chrom).toBe(1)
       expectSeries(ours, theirs, g.reference.tolerance, `cooltools ${chrom}`)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P(s), the other convention
+// ---------------------------------------------------------------------------
+
+interface HiContactsGolden {
+  binsize: number
+  chroms: string[]
+  pooled: string[]
+  factor: number
+  unity_at: number
+  tolerance: number
+  breaks: { pos: number[]; width: number[] }
+  max_offset: Record<string, number>
+  curves: Record<string, { x: number[]; norm_p: GoldenNumbers; norm_p_unity: GoldenNumbers }>
+}
+
+/**
+ * The same map, the other P(s), and the point is that they are not the same
+ * number.
+ *
+ * The suite above compares the *expected* curve — contacts over the pairs of
+ * bins that could have held them — against cooltools. This one compares the
+ * **probability density** — contacts over all contacts, per base pair — against
+ * `HiContacts::distanceLaw()`, run as R by `scripts/hicontacts_ps.R`. Both are
+ * called P(s), both are drawn on log-log axes with a slope near −1, and a figure
+ * that mixes them is wrong in a way nobody notices: they agree in shape at short
+ * range and separate as the separation approaches the length of a chromosome,
+ * where the pair count is running out and the contact total is not.
+ *
+ * Which is why the last test here is not a comparison at all but an assertion
+ * that the two *disagree*. Everything else in this file guards against an
+ * implementation drifting away from its oracle; that one guards against somebody
+ * deciding the two conventions are the same thing and deleting one.
+ */
+suite('P(s) as a density, against HiContacts::distanceLaw', () => {
+  const golden = ready ? loadAnalysisGolden<HiContactsGolden>('hicontacts_ps') : null
+
+  /** One unit's per-offset curve, from mirrored dense squares as the runner reads them. */
+  async function curveOf(chroms: string[], maxOffset: number) {
+    const accumulator = new ExpectedAccumulator(maxOffset)
+    for (const chrom of chroms) accumulator.addBlock(await demo.square(chrom, false))
+    return accumulator.finish()
+  }
+
+  it("regenerates HiContacts' break table, position by position", () => {
+    const g = golden!
+    // Far enough to reach the table's own last entry; `logRoundedBreaks` stops
+    // one step past what it is asked for, so the last width is the one HiContacts
+    // has no successor for and is not compared.
+    const ours = logRoundedBreaks(g.factor, g.breaks.pos[g.breaks.pos.length - 1] - 1)
+    expect(Array.from(ours.pos)).toEqual(g.breaks.pos)
+    expect(Array.from(ours.width)).toEqual(g.breaks.width.slice(0, ours.width.length))
+    // The head is where the rounding collapses distinct powers onto one integer,
+    // and where an off-by-one would be least visible in a log-log plot.
+    expect(Array.from(ours.pos.slice(0, 16))).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17,
+    ])
+  })
+
+  it('matches norm_p on every goldened chromosome', async () => {
+    const g = golden!
+    for (const chrom of g.chroms) {
+      const curve = await curveOf([chrom], g.max_offset[chrom])
+      const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+      // Exactly, not to a tolerance: the abscissa is a break position, and a
+      // curve drawn one break to the left of HiContacts' would still pass a
+      // relative comparison on y at every point.
+      expect(Array.from(ours.x), chrom).toEqual(g.curves[chrom].x)
+      expectSeries(ours.y, numbers(g.curves[chrom].norm_p), g.tolerance, `norm_p ${chrom}`)
+    }
+  })
+
+  it('matches norm_p over several spans pooled into one curve', async () => {
+    const g = golden!
+    const curve = await curveOf(g.pooled, g.max_offset.pooled)
+    const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+    expect(Array.from(ours.x)).toEqual(g.curves.pooled.x)
+    expectSeries(ours.y, numbers(g.curves.pooled.norm_p), g.tolerance, 'norm_p pooled')
+  })
+
+  it('matches norm_p_unity, scaled at the break nearest 100 kb', async () => {
+    const g = golden!
+    for (const chrom of [...g.chroms, 'pooled']) {
+      const spans = chrom === 'pooled' ? g.pooled : [chrom]
+      const curve = await curveOf(spans, g.max_offset[chrom])
+      const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+      const scaled = scaleToUnityAt(ours.x, ours.y, g.unity_at)
+      expect(scaled.scaled, chrom).toBe(true)
+      expectSeries(scaled.y, numbers(g.curves[chrom].norm_p_unity), g.tolerance, `unity ${chrom}`)
+    }
+  })
+
+  it('folds the mirrored square, and is visibly wrong without it', async () => {
+    const g = golden!
+    const chrom = g.chroms[0]
+    const curve = await curveOf([chrom], g.max_offset[chrom])
+    // Not folding leaves the diagonal counted once among off-diagonals counted
+    // twice, so the first break — which holds the diagonal and offset 1 — loses
+    // weight against everything else and every other point gains it. A quiet
+    // error: the curve still looks like a P(s).
+    const unfolded = densityCurve(curve, g.binsize, g.factor, 0, false)
+    const theirs = numbers(g.curves[chrom].norm_p)
+    expect(unfolded.x.length).toBe(theirs.length)
+    expect(Math.abs(unfolded.y[0] / theirs[0] - 1)).toBeGreaterThan(0.1)
+  })
+
+  it('is a different quantity from the expected curve, not a rescaling of it', async () => {
+    const g = golden!
+    const chrom = 'IV'
+    const curve = await curveOf([chrom], g.max_offset[chrom])
+    const density = densityCurve(curve, g.binsize, g.factor, 0, true)
+    const perPair = logBinCurve(curve, g.binsize, g.factor, 0)
+    // Both are decaying laws over the same map, so a ratio taken at one
+    // separation says nothing. What separates them is that the pair count falls
+    // to zero as the separation approaches the length of the chromosome and the
+    // contact total does not, so the ratio is not constant — and it moves in one
+    // direction, which is the direction that would flatten a tail somebody read
+    // an exponent off.
+    const at = (x: Float64Array, y: Float64Array, want: number): number => {
+      let best = 0
+      for (let i = 0; i < x.length; i++) {
+        if (Math.abs(x[i] - want) < Math.abs(x[best] - want)) best = i
+      }
+      return y[best]
+    }
+    const near = at(density.x, density.y, 10_000) / at(perPair.x, perPair.y, 10_000)
+    const far = at(density.x, density.y, 1_000_000) / at(perPair.x, perPair.y, 1_000_000)
+    expect(near / far).toBeGreaterThan(2)
   })
 })
 

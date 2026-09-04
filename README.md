@@ -410,7 +410,10 @@ compared to whatever relation actually holds — and three of those relations ar
 
 - **P(s)** equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the
   first two offsets. The mirrored dense block doubles both the sum and the count, and the mean is
-  what survives.
+  what survives. Under its other normalisation it equals `HiContacts::distanceLaw()` instead —
+  same break positions, same densities, same `norm_p_unity` — against that package's own pipeline
+  run in R by `scripts/hicontacts_ps.R`. The two are different quantities, not two smoothings of
+  one, and the suite ends by asserting that they disagree.
 - **Coverage** satisfies `cooltools_cis == ours + diagonal`, exactly. cooltools sums the pixel table
   by both ends so a diagonal pixel counts twice; this repo counts it once, deliberately, and the
   identity is the proof that the difference is the one intended and not an off-by-something.

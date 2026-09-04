@@ -77,10 +77,14 @@ is the kind of failure that gets "fixed" by halving something in the wrong place
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib
 import json
 import logging
 import math
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -139,10 +143,20 @@ def dump(obj: Any, path: Path) -> int:
     return len(text)
 
 
-def have(module: str) -> bool:
-    """Whether an optional dependency is importable, without importing it twice."""
+def have(dependency: str) -> bool:
+    """Whether an optional dependency is available.
+
+    A bare name is a Python module and is imported; a ``bin:`` prefix is a
+    program that has to be on ``PATH``. The second exists for the HiContacts
+    oracle, which is an R script: reproducing R's ``findInterval(..., all.inside
+    = TRUE)`` and its group semantics in numpy would make the oracle a second
+    implementation of the thing it checks, which is the one thing a golden may
+    not be.
+    """
+    if dependency.startswith("bin:"):
+        return shutil.which(dependency[4:]) is not None
     try:
-        importlib.import_module(module)
+        importlib.import_module(dependency)
     except ImportError:
         return False
     return True
@@ -280,6 +294,139 @@ def expected_golden(chroms: list[str]) -> dict:
 # ---------------------------------------------------------------------------
 # insulation
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# P(s), the HiContacts convention
+# ---------------------------------------------------------------------------
+
+
+def _folded_offsets(mat: np.ndarray) -> np.ndarray:
+    """Contacts per offset, each unordered pair of bins counted **once**.
+
+    ``direct_expected`` sums the mirrored square, where every off-diagonal pair
+    appears twice; that doubling is invisible to a mean and fatal to a share of a
+    total, because the diagonal appears once and would end up weighted half as
+    heavily as it should be against everything else. Folding here is the same
+    correction ``densityCurve``'s ``mirrored`` flag makes on the TypeScript side,
+    and doing it in both places on purpose is what lets the two be compared to
+    equality rather than to a fudge factor.
+
+    Exact on raw counts: the two copies are the same integers.
+    """
+    n = mat.shape[0]
+    out = np.zeros(n)
+    for k in range(n):
+        values = np.diagonal(mat, k)
+        out[k] = np.nansum(values)
+    return out
+
+
+def hicontacts_golden(chroms: list[str]) -> dict:
+    """``HiContacts::distanceLaw()`` over the same chromosomes, from R itself.
+
+    Five curves: each goldened chromosome on its own — which is what
+    ``distanceLaw(by_chr = TRUE)`` produces and what the app's contig scope
+    produces — and the four pooled, which is the whole-file scope and the path
+    where a curve is the sum of several spans.
+
+    Raw counts only. HiContacts reads ``scores(x, 'count')`` and has no balanced
+    branch, so a balanced comparison would be against a quantity that package
+    does not compute.
+    """
+    import cooler
+
+    clr = cooler.Cooler(str(COOLER))
+    binsize = int(clr.binsize)
+    rows: list[tuple[str, int, float]] = []
+    units: dict[str, int] = {}
+    pooled: dict[int, float] = {}
+    for chrom in chroms:
+        folded = _folded_offsets(square(clr, chrom, False))
+        units[chrom] = len(folded) - 1
+        for k, value in enumerate(folded):
+            if value:
+                rows.append((chrom, k, float(value)))
+                pooled[k] = pooled.get(k, 0.0) + float(value)
+    units["pooled"] = max(units[chrom] for chrom in chroms)
+    for k in sorted(pooled):
+        rows.append(("pooled", k, pooled[k]))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        source = Path(tmp) / "offsets.tsv"
+        result = Path(tmp) / "ps.tsv"
+        with source.open("w") as handle:
+            handle.write("unit\tk\tn\n")
+            for unit, k, value in rows:
+                handle.write(f"{unit}\t{k}\t{value!r}\n")
+        subprocess.run(
+            ["Rscript", str(ROOT / "scripts" / "hicontacts_ps.R"), str(source), str(binsize), str(result)],
+            check=True,
+        )
+        curves: dict[str, dict[str, list]] = {}
+        with result.open() as handle:
+            for row in csv.DictReader(handle, delimiter="\t"):
+                curve = curves.setdefault(
+                    row["unit"], {"x": [], "ninter": [], "norm_p": [], "norm_p_unity": []}
+                )
+                curve["x"].append(float(row["binned_distance"]))
+                curve["ninter"].append(float(row["ninter"]))
+                curve["norm_p"].append(float(row["norm_p"]))
+                curve["norm_p_unity"].append(float(row["norm_p_unity"]))
+
+    version = subprocess.run(
+        ["Rscript", "-e", 'cat(as.character(packageVersion("dplyr")))'],
+        check=False,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return {
+        "cooler": COOLER.name,
+        "binsize": binsize,
+        "chroms": list(chroms),
+        "pooled": list(chroms),
+        "factor": 1.1,
+        "unity_at": 100000,
+        "balance": False,
+        # The break table HiContacts ships, read back out of the oracle rather
+        # than restated: `logRoundedBreaks(1.1, ...)` has to reproduce it, and a
+        # test that compared against numbers typed in here would be comparing
+        # against a transcription.
+        "breaks": _ps_breaks(),
+        "max_offset": {unit: int(reach) for unit, reach in units.items()},
+        "curves": {
+            unit: {
+                "x": curve["x"],
+                "ninter": rounded(curve["ninter"]),
+                "norm_p": rounded(curve["norm_p"]),
+                "norm_p_unity": rounded(curve["norm_p_unity"]),
+            }
+            for unit, curve in curves.items()
+        },
+        "tolerance": TOL_F32,
+        "source": (
+            "HiContacts R/Ps.R @ 8d361a67, run by scripts/hicontacts_ps.R; "
+            "the gap distance and the mirror fold are documented there"
+        ),
+        "dplyr": version,
+    }
+
+
+def _ps_breaks() -> dict[str, list]:
+    """``PsBreaks()``, straight out of R, positions and widths."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "breaks.tsv"
+        subprocess.run(
+            ["Rscript", str(ROOT / "scripts" / "hicontacts_ps.R"), "--breaks", str(path)],
+            check=True,
+        )
+        pos: list[float] = []
+        width: list[float] = []
+        with path.open() as handle:
+            for row in csv.DictReader(handle, delimiter="\t"):
+                pos.append(float(row["break_pos"]))
+                width.append(float(row["binwidth"]))
+    return {"pos": pos, "width": width}
 
 
 def direct_diamond(mat: np.ndarray, window: int, min_valid: float) -> dict[str, Any]:
@@ -1406,6 +1553,7 @@ COVERAGE = {
     "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
     "overlap": "Jaccard and hit counts, against a per-base boolean mask",
+    "hicontacts_ps": "P(s) as a probability density, against HiContacts::distanceLaw in R",
 }
 
 
@@ -1517,6 +1665,7 @@ def main(argv: list[str] | None = None) -> int:
             },
         ),
         ("overlap", overlap_golden, (), {}),
+        ("hicontacts_ps", hicontacts_golden, ("bin:Rscript",), {"chroms": chroms}),
         (
             "chromosight",
             chromosight_golden,

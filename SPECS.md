@@ -2841,7 +2841,16 @@ Seventeen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what fo
 one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
-producing the **expected** curve three later tasks consume. *Coverage and marginals* — total, cis, trans
+producing the **expected** curve three later tasks consume. It offers the two normalisations the field
+means by *P(s)*, because they are different quantities and only one of them is the expected curve: the
+default divides the contacts at a separation by the **bin pairs that could have held one**, which is
+`cooltools expected-cis`; the other divides by the **contacts in the whole map** and then by the width
+of the separation bin in base pairs, which is `HiContacts::distanceLaw()`, optionally scaled through 1
+at 100 kb as that package's `norm_p_unity`. They agree in shape at short range and part company as the
+separation approaches the length of a sequence, where the pair count is heading for zero and the
+contact total is not — so a figure that mixes them reads a difference of convention as biology.
+Choosing the second switches the separation and the bins with it (§18.10), because a curve that is
+comparable in quantity but not in abscissa is not comparable. *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
@@ -3099,6 +3108,30 @@ pixels, the distance law is a mean of those values so the error does not stay wh
 the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousandths. That is four
 orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
 compares against an absolute floor.
+
+**And one golden is against R rather than Python, for the one task that has two published definitions.**
+`HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
+separation, per base pair — where cooltools' `expected-cis` is P(s) as a *mean per bin pair*. Both are
+in the catalogue entry above; the golden is what makes the second reproducible rather than merely
+similar, and it is exact at three places a near-miss would be invisible on a log-log plot. The
+**separation** is HiContacts' gap distance, `pairdist(type = 'gap')` over bins that HiCExperiment
+builds as `IRanges(start + 1, end)`, so two bins *k* apart are `(k − 1)·binsize` apart and the
+diagonal and the first off-diagonal share the first break — a one-bin shift, which is a factor of two
+at the left edge. The **bins** are that package's 205 hard-coded breaks, which are exactly
+`unique(round(1.1^n))`, so `logRoundedBreaks` regenerates them and the test compares all 205 rather
+than trusting the identity. And each unordered pair of bins counts **once**: the accumulator is fed
+mirrored dense squares, harmless to a mean and fatal to a share of a total, since the diagonal arrives
+once among off-diagonals that arrive twice.
+
+The oracle is `scripts/hicontacts_ps.R`, which is HiContacts' own pipeline copied line for line with
+one substitution — the two lines that read the map — rather than a transcription into numpy. That is
+the same rule the chromosight golden follows for the same reason: reproducing R's `findInterval(...,
+all.inside = TRUE)`, its `left_join` and its group semantics in another language would make the oracle
+a second implementation of the thing it checks. It is the first golden whose dependency is a program
+rather than an importable module, which is what the `bin:` prefix in the generator's `have()` is for,
+and like every other it is *named* in the manifest when it is skipped. The last test in the suite is
+not a comparison at all: it asserts that the two conventions **disagree**, and in which direction, so
+that nobody folds one into the other on the grounds that both are called P(s).
 
 ---
 

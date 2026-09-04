@@ -139,6 +139,51 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => scopeOf(params) === 'contig',
   },
   {
+    kind: 'choice',
+    key: 'norm',
+    label: 'Normalisation',
+    default: 'perPair',
+    /**
+     * Two quantities, both called P(s), and they are not interchangeable.
+     *
+     * The default divides the contacts at a separation by **the number of bin
+     * pairs that could have held one**. That is the *expected* value — what
+     * cooltools' `expected-cis` reports, and what the three tasks downstream of
+     * this one consume — and it is the only one of the two that has an obvious
+     * meaning cell by cell.
+     *
+     * The other two divide instead by **the total number of cis contacts in the
+     * map**, and then by the width of the separation bin in base pairs: the
+     * share of all contacts that fall at this distance, per base pair. That is
+     * what `HiContacts::distanceLaw()` returns as `norm_p` and `norm_p_unity`,
+     * and choosing it also switches the separation to HiContacts' gap distance
+     * and the bins to its break table, so the numbers line up point for point
+     * rather than merely resembling each other.
+     *
+     * The two agree in shape at short range and part company as the separation
+     * approaches the length of a sequence, where the pair count is heading for
+     * zero and the contact total is not. Neither is wrong; a figure that mixes
+     * them is.
+     */
+    options: [
+      {
+        value: 'perPair',
+        label: 'Mean per bin pair',
+        hint: 'The expected curve. What cooltools reports, and what O/E is taken against.',
+      },
+      {
+        value: 'density',
+        label: 'Probability density',
+        hint: "Share of all cis contacts per base pair. HiContacts' norm_p.",
+      },
+      {
+        value: 'unity',
+        label: 'Density, 1 at 100 kb',
+        hint: "The same curve through 1 at 100 kb, for comparing samples. HiContacts' norm_p_unity.",
+      },
+    ],
+  },
+  {
     kind: 'number',
     key: 'factor',
     label: 'Log bins per step',
@@ -169,6 +214,12 @@ const PARAMS: readonly ParamSpec[] = [
      */
     label: 'Minimum separation',
     hint: 'Drops the near-diagonal, where unligated fragments dominate.',
+    // Under the two HiContacts normalisations it also floors the *total* every
+    // point is a share of, and its default of zero keeps the diagonal — which
+    // HiContacts puts in the first break rather than dropping. Under the default
+    // normalisation the floor is one bin whatever this says, because offset zero
+    // has no place on a log axis.
+
     default: 0,
     min: 0,
     integer: true,
