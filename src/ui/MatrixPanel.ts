@@ -131,6 +131,8 @@ import {
   DEFAULT_LABEL_FONT,
   HeatmapView,
   type AxisCoordSet,
+  type AxisSpan,
+  type AxisSpanSet,
   type AxisCoords,
   type Cell,
   type PlotOptions,
@@ -4738,6 +4740,7 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
+    this.heatmap.setAxisSpans(this.axisSpansOf(data, turned))
     // The guides follow the two anchors rather than the two axes while this is
     // set, which is the whole of what the view is told about the turn.
     this.heatmap.setTurn(
@@ -4853,6 +4856,7 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
+    this.heatmap.setAxisSpans(this.axisSpansOf(data, turned))
     this.heatmap.setTurn(
       turned === null
         ? null
@@ -4970,6 +4974,31 @@ export class MatrixPanel {
         this.options.binsize,
         turned === null ? 1 : BIN_FRACTION,
       ),
+    }
+  }
+
+  /**
+   * The per-sequence rulers for the same two axes, where the axis has no single
+   * one.
+   *
+   * A whole genome, a selection of chromosomes, a `contig × contig` block: the
+   * axis is several sequences and {@link axisCoordsFor} refuses it, correctly,
+   * because no one line describes it. But the reader looking at it is asking
+   * the question they ask of a single chromosome — *where in this one am I* —
+   * and until now the answer on those views was the contig names and nothing
+   * else. One ruler per sequence answers it, each measured from that sequence's
+   * own first base, with the boundaries the axis already draws saying where one
+   * stops and the next begins.
+   *
+   * Empty wherever the single ruler already covers the axis, so the two never
+   * both draw, and empty under a turn on both axes: the column axis there is one
+   * sequence by {@link isTurnable}'s gate, and the row axis is a distance.
+   */
+  private axisSpansOf(data: MatrixResult, turned: RotatedBlock | null): AxisSpanSet {
+    if (turned !== null) return { rows: [], cols: [] }
+    return {
+      rows: axisSpansFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
+      cols: axisSpansFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
     }
   }
 
@@ -7604,6 +7633,60 @@ export function axisCoordsFor(
   const first = group.unitStart ?? extent[0] + group.start
   return { bpPerCell: binsize * fraction, bpAtOrigin: (extent[0] - first) * binsize }
 }
+
+/**
+ * A ruler per sequence, for an axis that has no single one.
+ *
+ * {@link axisCoordsFor}'s complement, and its refusals inverted: it answers for
+ * an axis of *one* contig at bin level, this answers for an axis of several,
+ * and above bin level neither answers at all — a cell there *is* a contig or a
+ * genome, and a position inside one would be an invention.
+ *
+ * Each stretch's line is stated in the **block's** coordinate frame, which is
+ * `axisCoordsFor`'s own arithmetic applied per group: `bpAtOrigin` is what this
+ * contig's ruler would read at cell zero of the block, negative for every
+ * contig but the first, so a tick's `unit` needs no offsetting to be a matrix
+ * coordinate like any other.
+ *
+ * A cell that several short sequences share is skipped, on {@link describeAxis}'s
+ * rule: the pixel is all of them, and a coordinate inside one of them names a
+ * place the picture does not show.
+ *
+ * And nothing at all past {@link MAX_RULED_SPANS}. A metagenome's axis is
+ * thousands of contigs, each a pixel or less: there is no room for a position on
+ * any of them, the names are already elided for the same reason, and building
+ * the list would cost more than the ruler it cannot draw.
+ */
+export function axisSpansFor(
+  groups: AxisGroup[],
+  extent: readonly [number, number],
+  level: 'bin' | 'contig' | 'genome',
+  binsize: number,
+): AxisSpan[] {
+  if (level !== 'bin' || !(binsize > 0)) return []
+  if (groups.length < 2 || groups.length > MAX_RULED_SPANS) return []
+  const out: AxisSpan[] = []
+  for (const group of groups) {
+    if ((group.merged?.length ?? 1) > 1) continue
+    if (!(group.end > group.start)) continue
+    const first = group.unitStart ?? extent[0] + group.start
+    out.push({
+      from: group.start,
+      to: group.end,
+      coords: { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize },
+    })
+  }
+  return out
+}
+
+/**
+ * How many sequences an axis may carry and still be ruled one at a time.
+ *
+ * A genome's worth, generously: sixteen chromosomes, or a few hundred scaffolds.
+ * Past that the stretches are narrower than a label and the answer is the same
+ * one the block names give — none — so the list is not built at all.
+ */
+const MAX_RULED_SPANS = 512
 
 /**
  * One side of the hover readout. At bin level the position inside the contig is
