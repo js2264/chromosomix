@@ -13,7 +13,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { compareRung, withoutSecond, type CompareCarry } from '../../src/app/Session'
-import type { ViewState } from '../../src/state/ViewState'
+import { serialiseViewState } from '../../src/state/ViewState'
+import type { ViewState } from '../../src/types'
 
 function carry(over: Partial<CompareCarry> = {}): CompareCarry {
   return {
@@ -63,7 +64,12 @@ describe('compareRung', () => {
 })
 
 describe('withoutSecond', () => {
-  it('removes the field rather than emptying it', () => {
+  it('says the second file is gone rather than saying nothing about it', () => {
+    // The distinction is the bug: `Session.withCompanions` carries `uri2`
+    // forward *unless the caller has said something about it*, and its test is
+    // `key in next`. A state that merely omits the key has said nothing, so the
+    // previous rung's second file is put straight back — and the pair the carry
+    // has just assembled is refused for having two bin sizes.
     const state: ViewState = {
       uri: 'rep1.mcool::/resolutions/1000',
       view: 'region',
@@ -71,16 +77,19 @@ describe('withoutSecond', () => {
       uri2: 'https://example.org/rep2.mcool::/resolutions/1000',
     }
     const stripped = withoutSecond(state)
-    expect('uri2' in stripped).toBe(false)
-    expect(stripped).toEqual({
-      uri: 'rep1.mcool::/resolutions/1000',
-      view: 'region',
-      region: 'chrII',
-    })
+    expect('uri2' in stripped).toBe(true)
+    expect(stripped.uri2).toBeUndefined()
+  })
+
+  it('serialises as a view with no second file', () => {
+    const state: ViewState = { uri: 'rep1.cool', view: 'contigs', uri2: 'rep2.cool' }
+    expect(serialiseViewState(withoutSecond(state))).toBe(
+      serialiseViewState({ uri: 'rep1.cool', view: 'contigs' }),
+    )
   })
 
   it('leaves a state that never named one alone', () => {
     const state: ViewState = { uri: 'rep1.cool', view: 'contigs' }
-    expect(withoutSecond(state)).toEqual(state)
+    expect(serialiseViewState(withoutSecond(state))).toBe(serialiseViewState(state))
   })
 })

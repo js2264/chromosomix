@@ -897,6 +897,21 @@ export interface AxisCoords {
    * the axis that is the whole reason to turn the picture came out blank.
    */
   tickGapPx?: number
+  /**
+   * The matrix coordinate the ruler turns around, for an axis that is measured
+   * outwards in two directions from a line in the middle of it.
+   *
+   * One case, and it is the mirrored two-file comparison: two turned bands
+   * meeting at a shared genomic axis, each labelled by how far its own contacts
+   * are from the diagonal (`render/rotate.ts`'s {@link separationCoords}). The
+   * line above is the whole of the ruler before the fold; past it the same line
+   * runs the other way, reflected about this coordinate — so `100 kb` appears
+   * twice, once on each side, which is exactly what the picture says.
+   *
+   * `undefined` for every ordinary axis, which is one line and one coordinate
+   * system throughout.
+   */
+  fold?: number
 }
 
 export interface AxisCoordSet {
@@ -912,6 +927,18 @@ const TICK_MIN_GAP_PX = 78
 
 /** Length of a tick mark, drawn inward from the data edge, in CSS pixels. */
 const TICK_LENGTH = 5
+
+/** How far a band's name sits from the line the two bands meet at, in pixels. */
+const BAND_LABEL_GAP = 5
+
+/**
+ * How far in from the left edge a band's name starts, in CSS pixels.
+ *
+ * Past the ruler up the side, which is drawn *inside* the plot whenever the
+ * left gutter is too narrow to hold it — which is the app's default, the
+ * gutters being sized for contig names a turned map does not draw.
+ */
+const BAND_LABEL_INDENT = 56
 
 /**
  * A round step covering `span` base pairs in at most `maxTicks` intervals.
@@ -940,6 +967,28 @@ export function bpTicks(
   domain: readonly [number, number],
   maxTicks: number,
 ): Array<{ bp: number; unit: number }> {
+  // A **folded** axis is two rulers, so it is two calls: the line as written up
+  // to the fold, and its reflection past it. Split here rather than inside the
+  // ladder below, because each half is an ordinary ruler over an ordinary
+  // domain and the alternative — a ladder that knows about folds — would put a
+  // special case in the arithmetic every axis in the app goes through.
+  const fold = coords.fold
+  if (fold !== undefined) {
+    const plain = { bpPerCell: coords.bpPerCell, bpAtOrigin: coords.bpAtOrigin }
+    // Reflected about the fold: `bpAtOrigin + (2 * fold - unit) * bpPerCell`,
+    // written as a line of its own so the recursion below has nothing to fold.
+    const mirrored = {
+      bpPerCell: -coords.bpPerCell,
+      bpAtOrigin: coords.bpAtOrigin + 2 * fold * coords.bpPerCell,
+    }
+    // Half the ticks each. The two halves are the same height whenever both are
+    // on screen, so they choose the same step and the pair reads as one ruler.
+    const half = Math.max(1, Math.floor(maxTicks / 2))
+    const out: Array<{ bp: number; unit: number }> = []
+    if (fold > domain[0]) out.push(...bpTicks(plain, [domain[0], Math.min(domain[1], fold)], half))
+    if (fold < domain[1]) out.push(...bpTicks(mirrored, [Math.max(domain[0], fold), domain[1]], half))
+    return out
+  }
   const near = coords.bpAtOrigin + domain[0] * coords.bpPerCell
   const far = coords.bpAtOrigin + domain[1] * coords.bpPerCell
   // A **descending** axis is not a special case so much as a turned one: up the
@@ -1514,7 +1563,23 @@ export class HeatmapView {
    * a turned map that reading runs along two 45° rays rather than along the two
    * axes. See {@link anchorRays}.
    */
-  private turn: { maxSeparation: number; direction: RotateDirection } | null = null
+  private turn: {
+    maxSeparation: number
+    direction: RotateDirection
+    /** First row of the mirrored band — see `render/rotate.ts`'s `RotatedBlock`. */
+    fold?: number
+  } | null = null
+  /**
+   * What each band of a mirrored pair is called, or `null` for one band.
+   *
+   * Two stacked rectangles are not self-describing the way a split square is:
+   * the square at least has a diagonal, and the card beside it draws the two
+   * triangles as ◥ and ◣. A mirrored pair meets at a straight line, so which
+   * file is which is a fact only the picture can carry — and it has to carry it
+   * on the canvas rather than in the DOM around it, because the reason to turn a
+   * map is to export it.
+   */
+  private turnLabels: [string, string] | null = null
   /** What the owner draws on the data; see {@link setOverlayPainter}. */
   private overlayPainter: OverlayPainter | null = null
 
@@ -2735,6 +2800,7 @@ export class HeatmapView {
         ncols: matrix.ncols,
         maxSeparation: turn.maxSeparation,
         direction: turn.direction,
+        ...(turn.fold === undefined ? {} : { fold: turn.fold }),
         originBin: 0,
       },
       cell.row,
@@ -3297,6 +3363,7 @@ export class HeatmapView {
     if (this.plot.dividers) this.drawSeparators()
     if (this.plot.breaks) this.drawBreaks()
     this.drawLabels()
+    this.drawBandLabels()
     this.drawOverlay()
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) {
@@ -3434,7 +3501,9 @@ export class HeatmapView {
    */
   framedRange(axis: 'rows' | 'cols'): { start: number; end: number; whole: boolean } | null {
     const coords = axis === 'rows' ? this.axisCoords.rows : this.axisCoords.cols
-    if (coords === null) return null
+    // A folded axis is measured outwards from a line in the middle of it, so it
+    // names no single range — the same reason a multi-contig axis answers `null`.
+    if (coords === null || coords.fold !== undefined) return null
     const scale = axis === 'rows' ? this.rowScale : this.colScale
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     const [d0, d1] = scale.domain
@@ -4047,12 +4116,22 @@ export class HeatmapView {
       // The apex is on the diagonal — separation zero, which is the bottom row
       // of an ordinary band and the top row of the mirrored half — and the two
       // arms leave it towards the far edge, which is the direction separation
-      // grows in. No snap: a 45° line cannot be put on the device grid.
-      const y = origin.y + this.rowScale.toPixel(rowForSeparation(turn, 0) + 0.5)
-      const away = turn.direction === 'up' ? -1 : 1
-      ctx.moveTo(x - ECHO_ARM, y + away * ECHO_ARM)
-      ctx.lineTo(x, y)
-      ctx.lineTo(x + ECHO_ARM, y + away * ECHO_ARM)
+      // grows in. A mirrored pair has one of these per band, meeting nose to
+      // nose on the shared axis, because the position is in both files. No
+      // snap: a 45° line cannot be put on the device grid.
+      const apexes: Array<{ row: number; away: number }> =
+        turn.fold === undefined
+          ? [{ row: rowForSeparation(turn, 0) + 0.5, away: turn.direction === 'up' ? -1 : 1 }]
+          : [
+              { row: rowForSeparation(turn, 0) + 0.5, away: -1 },
+              { row: turn.fold + 0.5, away: 1 },
+            ]
+      for (const apex of apexes) {
+        const y = origin.y + this.rowScale.toPixel(apex.row)
+        ctx.moveTo(x - ECHO_ARM, y + apex.away * ECHO_ARM)
+        ctx.lineTo(x, y)
+        ctx.lineTo(x + ECHO_ARM, y + apex.away * ECHO_ARM)
+      }
     }
     ctx.stroke()
     ctx.restore()
@@ -4063,14 +4142,17 @@ export class HeatmapView {
    *
    * `null` for an ordinary square block, which is every map but one.
    */
-  setTurn(turn: { maxSeparation: number; direction: RotateDirection } | null): void {
+  setTurn(
+    turn: { maxSeparation: number; direction: RotateDirection; fold?: number } | null,
+  ): void {
     const held = this.turn
     const same =
       (turn === null && held === null) ||
       (turn !== null &&
         held !== null &&
         turn.maxSeparation === held.maxSeparation &&
-        turn.direction === held.direction)
+        turn.direction === held.direction &&
+        turn.fold === held.fold)
     if (same) return
     // A band and a square pool differently — one stride for both axes against
     // one per axis ({@link Raster.strideX}) — so arriving at or leaving the turn
@@ -4080,6 +4162,21 @@ export class HeatmapView {
     // shape's pixels while it works that out.
     if ((turn === null) !== (held === null)) this.dirtyRaster = true
     this.turn = turn
+    this.changed()
+  }
+
+  /**
+   * Name the two bands of a mirrored pair, or `null` to draw neither.
+   *
+   * Kept apart from {@link setTurn} because it changes on its own: the geometry
+   * is re-cut on every zoom and the names are not, and a re-cut that carried
+   * them would make the panel restate a fact it has not learned anything new
+   * about.
+   */
+  setTurnLabels(labels: [string, string] | null): void {
+    const held = this.turnLabels
+    if (labels === null ? held === null : held?.[0] === labels[0] && held[1] === labels[1]) return
+    this.turnLabels = labels
     this.changed()
   }
 
@@ -4422,6 +4519,63 @@ export class HeatmapView {
    * Everything is computed from the axis scales on the frame it is drawn, so
    * the ticks track a pan or a zoom exactly, with no state to keep in step.
    */
+  /**
+   * Which file each band of a mirrored pair is, written on its own side of the
+   * line where the two meet.
+   *
+   * **At the fold, not in the corners.** The corners are where a picture
+   * normally puts a caption and all four of them are already spoken for: the
+   * ruler up the side is drawn *inside* the plot on the left, the base-pair
+   * ruler along the bottom edge, and the colour key floats over the top right.
+   * The fold is the one line on the picture that belongs to neither band and is
+   * the one a reader is already looking at — it is what makes this two maps
+   * rather than one — so a name on each side of it is read in the same glance
+   * as the thing it names.
+   *
+   * Indented past the ruler, and drawn with the halo every label on the canvas
+   * has, because near the fold both bands are data: the diagonal reaches the
+   * left-hand edge and is the brightest row in the picture.
+   *
+   * Nothing at all on an ordinary map: one band is named by the key in the
+   * corner and by the file card beside it, and a picture of one file that
+   * writes its own name on itself is a picture with a caption drawn twice.
+   */
+  private drawBandLabels(): void {
+    const labels = this.turnLabels
+    const fold = this.turn?.fold
+    if (labels === null || fold === undefined) return
+    const data = this.dataRect
+    if (data.width <= 0 || data.height <= 0) return
+    const plot = this.plotRect
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(data.x, data.y, data.width, data.height)
+    ctx.clip()
+    ctx.font = this.opts.labelFont
+    ctx.strokeStyle = this.opts.labelHaloColor
+    ctx.lineWidth = 3
+    ctx.lineJoin = 'round'
+    ctx.fillStyle = this.opts.labelColor
+    ctx.textAlign = 'left'
+    const x = data.x + BAND_LABEL_INDENT
+    // The fold in pixels, so a name never crosses into the other band however
+    // the picture is panned: each is placed against its own side of the line.
+    const axis = plot.y + this.rowScale.toPixel(fold)
+    for (const [which, label] of labels.entries()) {
+      if (label === '') continue
+      ctx.textBaseline = which === 0 ? 'alphabetic' : 'top'
+      const y = which === 0 ? axis - BAND_LABEL_GAP : axis + BAND_LABEL_GAP
+      // Clipped rather than clamped: a fold panned off the picture takes its
+      // labels with it, where clamping would leave both names stacked on
+      // whichever edge the line went out by, naming bands that are not there.
+      if (y < data.y || y > data.y + data.height) continue
+      ctx.strokeText(label, x, y)
+      ctx.fillText(label, x, y)
+    }
+    ctx.restore()
+  }
+
   private drawTicks(): void {
     const data = this.dataRect
     if (data.width <= 0 || data.height <= 0) return

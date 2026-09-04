@@ -1920,8 +1920,11 @@ export class Session {
       // second file is re-addressed below, so the reconciliation in `render`
       // does not spend the interval opening a file the gate is about to refuse
       // for having the bin size the reader has just moved away from.
+      //
+      // `compareCarry` is left standing until {@link restoreCarriedCompare}
+      // spends it, because it is also what tells `render` to leave the
+      // comparison alone in the meantime — see the note there.
       const carried = this.compareCarry
-      this.compareCarry = null
       const target = carried === null ? wantedTarget : withoutSecond(wantedTarget)
       // Asked of {@link navigate} rather than compared here, because what lands
       // in the store is the target *plus whatever it carried* — so a comparison
@@ -1978,6 +1981,10 @@ export class Session {
       this.showError(err, uri, source)
     } finally {
       this.opening = null
+      // An open that failed, or was redirected into an entry and handled there,
+      // leaves nothing to carry: a note still standing would go on telling
+      // `render` that a second file is on its way when nothing is coming.
+      this.compareCarry = null
       this.host.sessionChanged(this)
     }
   }
@@ -3759,6 +3766,10 @@ export class Session {
    * than carried into a refusal they would have to read as a bug.
    */
   private restoreCarriedCompare(carried: CompareCarry, uri: string, info: OpenResult): void {
+    // Spent here, and here only: while it stands, `render` leaves the
+    // comparison alone, and the whole point of the next two lines is that
+    // something is about to be in flight for it.
+    this.compareCarry = null
     const moved = compareRung(carried, info.binsize)
     if (moved === null) {
       this.compareCard?.set({
@@ -4726,7 +4737,15 @@ export class Session {
     // × on the card is what closes it, and that goes through `closeCompare`.
     const shareable = this.compare !== null && this.compare.source.kind === 'remote'
     const held = shareable ? (this.compare?.uri ?? null) : null
-    if (wanted !== held) {
+    // …and nothing at all while a second file is being **carried across a
+    // change of resolution**. This runs during the open — the first file is
+    // read, its annotations are rebuilt, and both of those are awaits — and the
+    // state it reconciles against is still the one being left, whose `uri2`
+    // names the previous rung. Acting on it opens the second file at the bin
+    // size the reader has just moved away from, and the gate refuses the pair
+    // it has itself just assembled: the comparison is on screen, and the card
+    // beside it says the two files' resolutions differ.
+    if (wanted !== held && this.compareCarry === null) {
       if (wanted === null) {
         if (shareable) this.dropCompare()
       } else {
@@ -4749,7 +4768,12 @@ export class Session {
     // as on `compare`, because the open is asynchronous and `render` runs many
     // times before it lands; without it a reload would start the same file four
     // times and each would terminate the last one's worker.
-    if (this.compare === null && this.compareOpening === null && state.uri2 === undefined) {
+    if (
+      this.compare === null &&
+      this.compareOpening === null &&
+      this.compareCarry === null &&
+      state.uri2 === undefined
+    ) {
       const local = recall<string>(this.memoryKey(state.uri), 'compare:local')
       if (typeof local === 'string' && local !== '') void this.reopenCompare(local)
     }
@@ -6182,16 +6206,19 @@ function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): Sc
  * are different failures and the gate names each of them (`ui/CompareCard.ts`).
  */
 /**
- * The same view without the second file in it.
+ * The same view with the second file **said to be gone**.
  *
- * A field is *removed* rather than set to `undefined`, on the rule
- * {@link Session.carryAcrossEntries} follows: the hash is written from the keys
- * that are present, and a state carrying `uri2: undefined` is a state that says
- * it has a second file whose name is nothing.
+ * Present and `undefined`, which is not the same thing as absent here and is
+ * the whole of why this is a function rather than a destructuring at the call
+ * site. {@link Session.withCompanions} carries `uri2` forward across a
+ * navigation *unless the caller has said something about it*, and the test it
+ * uses is `key in next` — so a state that merely omits the key is a state that
+ * has said nothing, and the previous rung's second file is put straight back
+ * into it. The hash is written from the keys whose value is defined
+ * (`serialiseViewState`), so this serialises exactly as an absent key does.
  */
 export function withoutSecond(state: ViewState): ViewState {
-  const { uri2: _second, ...rest } = state
-  return rest
+  return { ...state, uri2: undefined }
 }
 
 /**
