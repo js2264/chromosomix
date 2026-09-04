@@ -260,7 +260,32 @@ interface OpenBam {
   refNames: string[]
 }
 
+/**
+ * Every entry's open BAM — and, behind them, one open file per *file*.
+ *
+ * A BAM now opens as two rows, a coverage track and a pile of reads (§8.13), and
+ * they are the same bytes. Keyed by entry alone, the second row would open a
+ * second filehandle and parse the index again — and an index is the one part of
+ * opening a BAM that is not small: §12 budgets it in *bytes* precisely because a
+ * BAI for a human WGS file is single-digit megabytes. So the entry map holds a
+ * reference to a shared record, and the record is reference-counted: the last
+ * row to be dropped is the one that lets the file go.
+ */
 const alignments = new Map<string, OpenBam>()
+
+/** One record per file, by {@link fileKey}, with the rows holding it. */
+const openFiles = new Map<string, { open: OpenBam; holders: Set<string> }>()
+
+/**
+ * A file's identity, for sharing one open handle between rows.
+ *
+ * Name and size for a local file, the URL for a remote one — the same key
+ * {@link cacheKey} uses, and for the same reason: two `File` objects for one
+ * file are not `===`, so identity has to be something the file itself carries.
+ */
+function fileKey(source: WireSource): string {
+  return cacheKey(source)
+}
 
 /**
  * How many compressed bytes one window may cost before it is refused.
@@ -457,8 +482,16 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       vectors.delete(request.entry)
       signals.delete(request.entry)
       // A BAI for a human WGS file is single-digit megabytes and the handle
-      // behind it is a live filehandle; neither should outlive the row.
+      // behind it is a live filehandle; neither should outlive the *last* row
+      // holding it. Two rows share one open file, so this is a release rather
+      // than a delete — dropping the coverage track while the pile is still on
+      // screen must not close the file under it.
       alignments.delete(request.entry)
+      for (const [key, held] of openFiles) {
+        if (!held.holders.delete(request.entry)) continue
+        if (held.holders.size === 0) openFiles.delete(key)
+        break
+      }
       return null
     }
   }
@@ -1533,14 +1566,23 @@ async function loadBam(
     if (!refIdOf.has(header.refs[id].name)) refIdOf.set(header.refs[id].name, id)
   }
 
-  alignments.set(entry, {
+  const key = fileKey(source)
+  const shared = openFiles.get(key)
+  // A second row over a file already open takes the record the first one made,
+  // rather than the handle and index this call just built. The renaming above
+  // is per *load* and identical for both rows — same header, same map — so
+  // nothing about the first row's record is stale for the second.
+  const open: OpenBam = shared?.open ?? {
     handle,
     header,
     index,
     size,
     refIdOf,
     refNames: header.refs.map((ref) => ref.name),
-  })
+  }
+  if (shared === undefined) openFiles.set(key, { open, holders: new Set([entry]) })
+  else shared.holders.add(entry)
+  alignments.set(entry, open)
 
   return {
     format: 'bam',

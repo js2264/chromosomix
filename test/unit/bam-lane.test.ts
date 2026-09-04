@@ -570,6 +570,45 @@ describe('the coverage lane', () => {
     expect((depthSplit as { payload: TrackSampleSet }).payload.extent?.max).toBeCloseTo(1, 6)
   })
 
+  it('shares one open file between the two rows a BAM opens as', async () => {
+    // A BAM opens as a coverage track and a pile of reads over the same bytes.
+    // Keyed by row alone the second would parse the index again, and §12 budgets
+    // the index in *bytes* precisely because it is the one part of opening a BAM
+    // that is not small.
+    const { bam, bai } = await bamFile()
+    for (const entry of ['e-share-cov', 'e-share-reads']) {
+      const response = await ask({
+        kind: 'load',
+        entry,
+        source: { kind: 'local', file: bam, name: 'reads.bam', index: bai },
+        mapContigs: REFS.map((ref) => ({ name: ref.name, length: ref.length })),
+      })
+      expect(response.type, JSON.stringify(response)).toBe('result')
+    }
+
+    const window = { contig: 'chrI', start: 1000, end: 1100 }
+    // Dropping one row must not close the file under the other.
+    await ask({ kind: 'drop', entry: 'e-share-cov' })
+    const after = await ask({
+      kind: 'sample',
+      entry: 'e-share-reads',
+      regions: [window],
+      basesPerPixel: 100,
+    })
+    expect(after.type, JSON.stringify(after)).toBe('result')
+    expect((after as { payload: TrackSampleSet }).payload.extent?.max ?? 0).toBeGreaterThan(0)
+
+    // …and the last row out does close it.
+    await ask({ kind: 'drop', entry: 'e-share-reads' })
+    const gone = await ask({
+      kind: 'sample',
+      entry: 'e-share-reads',
+      regions: [window],
+      basesPerPixel: 100,
+    })
+    expect(gone.type).toBe('error')
+  })
+
   it('forgets the file when the row is dropped', async () => {
     // A BAI is megabytes and the handle behind it is live; neither should
     // outlive the row that owns it.
