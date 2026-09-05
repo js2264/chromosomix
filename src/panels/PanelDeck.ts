@@ -124,6 +124,51 @@ export interface ResolvedLocal {
   source: SourceSpec | null
 }
 
+/**
+ * A heading that can be typed into: an `<input>` that looks like text.
+ *
+ * The Tracks card's control, shared between the deck's own cell and a
+ * companion's because they are one gesture on two headings — see
+ * `ui/mapNames.ts` for what a map's name is and where it lives. An empty box
+ * hands the map back to its file name, which is what makes the rename undoable.
+ */
+function renameBox(
+  name: string,
+  title: string,
+  onRename: (name: string | null) => void,
+): HTMLInputElement {
+  const input = el('input', {
+    class: 'input deck-name',
+    type: 'text',
+    value: name,
+    title,
+  })
+  input.addEventListener('change', () => {
+    const typed = input.value.trim()
+    if (typed === name) {
+      input.value = name
+      return
+    }
+    onRename(typed === '' ? null : typed)
+    // The name comes back through a repaint of this heading, so the box is put
+    // back as it was rather than left holding a name nothing has accepted yet.
+    input.value = name
+  })
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      input.blur()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      input.value = name
+      input.blur()
+    }
+    event.stopPropagation()
+  })
+  input.addEventListener('pointerdown', (event) => event.stopPropagation())
+  return input
+}
+
 export interface PanelDeckProps {
   /**
    * Rewrite the `maps` key. `replace` always: adding a panel is not a
@@ -178,6 +223,26 @@ export interface PanelDeckProps {
   leadNaming?(): NameContext | undefined
   /** What the session's own map is called, for the placement control's rows. */
   leadLabel?(): string
+  /**
+   * What to call a companion, which is not always what its file is called.
+   *
+   * A map can be renamed (`ui/mapNames.ts`), and the names live with the
+   * session rather than with the deck — a deck is an arrangement of files and
+   * the session is what is holding them. A thunk of the URI so a panel that
+   * resolves itself into an entry of a collection asks again under the address
+   * it ended up at.
+   */
+  mapLabel?(uri: string): string
+  /** The reader typed a name into a companion's heading, or emptied the box. */
+  onRenameMap?(uri: string, name: string | null): void
+  /**
+   * The same, for the session's own map in cell 0.
+   *
+   * A separate handler rather than {@link onRenameMap} with the lead's URI,
+   * because the deck does not have that URI: it has a *name* for cell 0 and
+   * nothing else, which is the whole of what {@link leadName} is.
+   */
+  onRenameLead?(name: string | null): void
   /**
    * Whether the deck is turned 45°, or `undefined`.
    *
@@ -1167,6 +1232,13 @@ export class PanelDeck {
       preferBinsize: () => this.props.binsize?.(),
       onResolved: (uri) => this.resolveRef(slot, uri),
       onDragChange: (dragging) => this.setArranging(dragging),
+      // Against the *slot's* ref rather than the one captured above, for
+      // {@link remembered}'s reason: a companion handed a collection rewrites
+      // itself into one of its entries, and a name is filed under the file.
+      label: () => (slot.ref.kind === 'vacant' ? undefined : this.props.mapLabel?.(slot.ref.uri)),
+      onRename: (name) => {
+        if (slot.ref.kind !== 'vacant') this.props.onRenameMap?.(slot.ref.uri, name)
+      },
     })
     slot.panel.syncLock()
     return slot
@@ -1543,6 +1615,19 @@ export class PanelDeck {
     this.props.onStarChange?.()
   }
 
+  /**
+   * A map was renamed: put the new name where the old one was.
+   *
+   * Pushed rather than pulled, unlike everything else the deck shares, because
+   * a name is written into the DOM once and then left alone — the headings are
+   * not rebuilt per frame, which is the property that lets a reader type into
+   * one without it being taken away under them.
+   */
+  renamed(): void {
+    this.paintLeadHead()
+    for (const slot of this.slots) slot.panel?.syncName()
+  }
+
   /** Repaint every star, so exactly one of them is filled. */
   private paintStars(): void {
     this.leadStar.classList.toggle('is-on', this.starred === LEAD_MAP)
@@ -1785,12 +1870,12 @@ export class PanelDeck {
       return
     }
     this.leadHead.classList.remove('hidden')
+    const title = `${name} — the map this session is of, and the one the others follow`
+    const rename = this.props.onRenameLead
     this.leadHead.replaceChildren(
-      el('span', {
-        class: 'deck-name',
-        text: name,
-        title: `${name} — the map this session is of, and the one the others follow`,
-      }),
+      rename === undefined
+        ? el('span', { class: 'deck-name', text: name, title })
+        : renameBox(name, title, rename),
       this.leadStar,
     )
     this.paintStars()

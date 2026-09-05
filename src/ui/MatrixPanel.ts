@@ -5140,6 +5140,55 @@ export class MatrixPanel {
     else this.options.caption = { ...this.options.caption, file }
   }
 
+  /**
+   * Rename the maps this panel is drawing.
+   *
+   * A rename changes every place a map is *named* and nothing about what is in
+   * the picture, so it must not go through {@link setData} or {@link rederive}:
+   * the first re-reads the block and the second re-derives it, and on a gated
+   * whole-genome map (§7.3) rebuilding the view puts a full pixel scan back
+   * behind its button — the reader types a name and their map disappears.
+   *
+   * Written in place, as {@link setResolution} and {@link setCaptionFile} write
+   * the two facts beside it, and for the same reason: the readout, the derived
+   * label and the colour key all read the name at the moment they are drawn, so
+   * the only things that have to be *pushed* are the two that are painted once
+   * — the heading and the names on a mirrored pair's two bands.
+   *
+   * `second` is absent on a map with one file behind it, which is every map but
+   * one. The **heading** is not touched here, and that is not an oversight: on
+   * this session's own panel it names the *region*, and only a deck companion's
+   * heading is the file's name — {@link retitle} is that panel's own door.
+   */
+  setMapLabels(own: string, second?: string): void {
+    if (own !== '') this.setCaptionFile(own)
+    const compare = this.options.compare
+    if (compare !== undefined && second !== undefined) {
+      this.options.compare = { ...compare, labels: [own, second] }
+    }
+    this.heatmap.setTurnLabels(this.bandLabels(this.turned))
+    // The key's title carries the comparison — `rep1 / rep2` under a ratio — and
+    // is only rewritten when the colour scale moves. Forgetting what was painted
+    // is what makes the next frame write it again.
+    this.painted = null
+  }
+
+
+  /**
+   * Rewrite the heading, for a panel whose heading is the map's name.
+   *
+   * A deck companion is the only one: everywhere else the heading names the
+   * region, the genome, or the pair of them, and is a fact about the *view*
+   * rather than about the file. Kept apart from {@link setMapLabels} for that
+   * reason, and it moves `exportName` with it because a figure saved out of a
+   * companion is named after the map it is of.
+   */
+  retitle(title: string): void {
+    if (title === '') return
+    this.lastTitle = title
+    this.exportName = title
+    this.titleNode.textContent = title
+  }
 
   /**
    * Turn the block that was read into the block that is drawn.

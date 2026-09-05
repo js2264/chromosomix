@@ -40,6 +40,12 @@ import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
 import type { ViewState } from '../types'
+import {
+  MAP_NAMES_SCOPE,
+  cleanMapNames,
+  readMapNames,
+  type MapNames,
+} from '../ui/mapNames'
 
 /**
  * The format's own version.
@@ -187,6 +193,22 @@ export interface SessionConfig {
    */
   compare?: string
   /**
+   * What the reader called each map, when they called it anything.
+   *
+   * Keyed by the *file* each name is for, which is the same key
+   * `deck.looks` uses and for the same reason: a slot id is minted per deck and
+   * names nothing tomorrow, while a file is what a reader recognises. Every map
+   * the session was holding is in here — the one it is of, the one it was
+   * compared against, and every companion — because a name is a fact about the
+   * session rather than about any one of its files (`ui/mapNames.ts`).
+   *
+   * Carried for the reason the tab's own name is: four tabs reading
+   * `matrix_1000.mcool` off four runs are four identical labels, and so are four
+   * cells of a deck. Losing them on import is losing the only part of the
+   * arrangement that says what the figure is *of*.
+   */
+  mapNames?: Record<string, string>
+  /**
    * Where each track was drawn, when the answer is not "on the lead" (§16.8).
    *
    * Keyed by the *file* each companion was showing rather than by its panel id,
@@ -291,6 +313,17 @@ function sourceOf(value: unknown): { source?: SessionConfig['source'] } {
   }
 }
 
+/**
+ * `{ mapNames: … }` for a session whose maps were named, and nothing otherwise.
+ *
+ * Absent rather than empty, on {@link nameOf}'s rule: a config that says nothing
+ * about names leaves the importing tab's alone, and one that says `{}` would be
+ * a session asserting that none of its maps has a name.
+ */
+function namesOf(names: MapNames): { mapNames?: MapNames } {
+  return Object.keys(names).length === 0 ? {} : { mapNames: names }
+}
+
 /** `{ compare: … }` when a local second file was open, and nothing when not. */
 function compareOf(uri: string | null | undefined): { compare?: string } {
   return typeof uri === 'string' && uri !== '' ? { compare: uri } : {}
@@ -345,6 +378,7 @@ const SCOPES = {
   columns: 'deck:columns',
   locals: 'deck:locals',
   compareLocal: 'compare:local',
+  mapNames: MAP_NAMES_SCOPE,
   lanes: 'deck:lanes',
   looks: 'deck:looks',
   name: SESSION_NAME_SCOPE,
@@ -412,6 +446,7 @@ export function buildConfig(options: {
       recall<DeckLook[]>(key, SCOPES.looks),
     ),
     ...compareOf(recall<string>(key, SCOPES.compareLocal)),
+    ...namesOf(readMapNames(key)),
     ...lanesOf(recall<StoredLane[]>(key, SCOPES.lanes)),
     plot: options.plot,
     ...(options.panels === undefined ? {} : { panels: options.panels }),
@@ -459,6 +494,10 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   if (config.deck?.locals !== undefined) remember(key, SCOPES.locals, config.deck.locals)
   if (config.deck?.looks !== undefined) remember(key, SCOPES.looks, config.deck.looks)
   if (config.compare !== undefined) remember(key, SCOPES.compareLocal, config.compare)
+  // On the same rule as the three lines above: a config written before maps
+  // could be named must leave the names this tab already has alone rather than
+  // clearing every map back to its file.
+  if (config.mapNames !== undefined) remember(key, SCOPES.mapNames, config.mapNames)
   if (config.lanes !== undefined) remember(key, SCOPES.lanes, config.lanes)
   // Written only when the config names one, on the rule the three lines above
   // follow: importing a session from before tabs could be named must leave a tab
@@ -618,6 +657,10 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
       looksOf(deck['looks']),
     ),
     ...compareOf(typeof row['compare'] === 'string' ? row['compare'] : undefined),
+    // Through `ui/mapNames.ts`'s own reader rather than a second one here, on
+    // `looksOf`'s rule: what a name is — and how long, and what an empty one
+    // means — belongs beside the store that keeps them.
+    ...namesOf(cleanMapNames(row['mapNames'])),
     ...lanesOf(Array.isArray(row['lanes']) ? (row['lanes'] as StoredLane[]) : undefined),
     plot: (typeof row['plot'] === 'object' && row['plot'] !== null
       ? row['plot']

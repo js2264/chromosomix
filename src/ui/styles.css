@@ -6333,14 +6333,47 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* A panel's name, which is an `<input>` that looks like text until it has the
+   caret — the Tracks card's own control, and for its reason (`.ann-name`). The
+   frame appears on hover so the gesture is discoverable, and only then: a deck
+   of five boxed headings reads as a form rather than as five pictures. */
 .deck-name {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 2rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.05rem 0.2rem;
+  font: inherit;
   font-size: var(--step--1);
   font-weight: 600;
+  color: var(--text);
+  cursor: text;
+}
+
+.deck-name:hover {
+  border-color: var(--border);
+}
+
+.deck-name:focus,
+.deck-name:focus-visible {
+  border-color: var(--accent, #1f5fa9);
+  background: var(--bg-raised);
+  outline: none;
+  text-overflow: clip;
+}
+
+/* A vacant cell's name, and the lead's where a session offers no rename: plain
+   text, so this only has to undo the frame and the caret the rule above gives
+   every heading. */
+span.deck-name {
+  border-color: transparent;
+  background: none;
+  cursor: default;
 }
 
 /* The `::1000` after a companion's name: which rung of the collection this map

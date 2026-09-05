@@ -338,6 +338,58 @@ describe('what a tab carries beyond its tracks', () => {
     expect(recall<string>('kept|yeast.cool', 'session:name')).toBe('mine')
   })
 
+  it('carries what the reader called each of its maps', () => {
+    const key = 'named-maps|yeast.cool'
+    remember(key, 'map:names', {
+      'https://example.org/yeast.cool': 'wild type',
+      'https://example.org/rep2.mcool': 'G2/M',
+    })
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: key,
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    // Every map the session was holding, keyed by the file each name is for —
+    // the second file of a comparison and every companion of a deck included,
+    // which is why they live under the session's key rather than each file's.
+    expect(config.mapNames).toEqual({
+      'https://example.org/yeast.cool': 'wild type',
+      'https://example.org/rep2.mcool': 'G2/M',
+    })
+    expect(roundTrip(config)?.mapNames).toEqual(config.mapNames)
+
+    applyConfig(config, 'other|yeast.cool')
+    expect(recall<Record<string, string>>('other|yeast.cool', 'map:names')).toEqual(config.mapNames)
+  })
+
+  it('says nothing about a session whose maps are called what their files are', () => {
+    const config = buildConfig({
+      state: STATE,
+      memoryKey: 'plain|yeast.cool',
+      plot: DEFAULT_UI_PLOT_OPTIONS,
+      now: new Date(0),
+    })
+    // Absent rather than empty, on the tab name's rule: `{}` would be a session
+    // asserting that none of its maps has a name, and importing it would clear
+    // the names the reader had already given theirs.
+    expect('mapNames' in config).toBe(false)
+    remember('kept-maps|yeast.cool', 'map:names', { 'a.cool': 'mine' })
+    applyConfig(config, 'kept-maps|yeast.cool')
+    expect(recall<Record<string, string>>('kept-maps|yeast.cool', 'map:names')).toEqual({
+      'a.cool': 'mine',
+    })
+  })
+
+  it('drops a name a workspace file wrote that is not one', () => {
+    const read = parseTab({
+      state: STATE,
+      mapNames: { 'a.cool': 'kept', 'b.cool': 42, 'c.cool': '  ', '': 'nowhere' },
+    })
+    expect(read?.mapNames).toEqual({ 'a.cool': 'kept' })
+    expect('mapNames' in (parseTab({ state: STATE, mapNames: 'nonsense' }) ?? {})).toBe(false)
+  })
+
   it('carries which columns were folded, and how wide they were', () => {
     const panels = {
       'metacooler-viewer:annotations-collapsed': { folded: false, width: 460 },

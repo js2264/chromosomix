@@ -122,6 +122,14 @@ import { el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
+import {
+  MAP_NAMES_SCOPE,
+  mapLabelIn,
+  mapNameIn,
+  readMapNames,
+  withMapName,
+  type MapNames,
+} from '../ui/mapNames'
 import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
@@ -2943,7 +2951,12 @@ export class Session {
    */
   private newCompareCard(uri: string): CompareCard {
     return new CompareCard({
-      primaryLabel: () => fileLabel(this.file?.uri ?? uri),
+      primaryLabel: () => this.mapLabel(this.file?.uri ?? uri),
+      secondLabel: () => (this.compare === null ? undefined : this.mapLabel(this.compare.uri)),
+      onRename: (which, name) => {
+        const target = which === 1 ? (this.file?.uri ?? uri) : this.compare?.uri
+        if (target !== undefined) this.renameMap(target, name)
+      },
       hasPrimary: () => this.file !== null,
       onOpen: (source) => {
         // With a map already open this is the *second* file, which is a
@@ -3479,6 +3492,70 @@ export class Session {
     return fileMemoryKey(this.id, uri)
   }
 
+  /**
+   * The key this session's *own* memory hangs on, whatever is on screen.
+   *
+   * {@link memoryKey} for the file this session is of, and `null` before there
+   * is one. What it is for is the handful of facts that are about the session
+   * rather than about one of the files in it — the names of every map it is
+   * holding, above all, which have to sit under one key or a saved workspace
+   * would carry the lead's and none of the others' (`ui/mapNames.ts`).
+   */
+  private sessionKey(): string | null {
+    const uri = this.store.state?.uri ?? this.file?.uri ?? this.assembly?.uri
+    return uri === undefined ? null : this.memoryKey(uri)
+  }
+
+  /** Every map name this session is holding; `{}` before there is a file. */
+  private mapNames(): MapNames {
+    const key = this.sessionKey()
+    return key === null ? {} : readMapNames(key)
+  }
+
+  /**
+   * What to call one of this session's maps — the reader's name, else the file's.
+   *
+   * Every label on screen goes through here: the Contact maps card, a deck
+   * panel's heading, the readout under the pointer, the two bands of a turned
+   * comparison, and the caption on an exported figure. One function, so a map
+   * renamed in the card is renamed in the figure without anything having to be
+   * told.
+   */
+  mapLabel(uri: string): string {
+    return mapLabelIn(this.mapNames(), uri)
+  }
+
+  /**
+   * Call one of this session's maps something, or hand it back to its file name.
+   *
+   * `null` — or a box the reader emptied — is what makes a rename undoable, on
+   * the tab strip's rule. Everything on screen is rebuilt afterwards rather than
+   * patched: the name is on the card, in the heading, in the readout, in the
+   * key and in the caption, and a rename that moved four of those and not the
+   * fifth is the one way this can be quietly wrong.
+   */
+  private renameMap(uri: string, name: string | null): void {
+    const key = this.sessionKey()
+    if (key === null) return
+    const held = this.mapNames()
+    const next = withMapName(held, uri, name)
+    if (mapNameIn(next, uri) === mapNameIn(held, uri)) return
+    remember(key, MAP_NAMES_SCOPE, next)
+    this.compareCard?.sync()
+    this.deck?.renamed()
+    // Written into the mounted panel rather than through {@link remount}: a
+    // rename changes what the picture is *called* and nothing about what is in
+    // it, and rebuilding the view would put a gated whole-genome scan (§7.3)
+    // back behind its button — the reader types a name and their map goes away.
+    const own = this.file === null ? undefined : this.mapLabel(this.file.uri)
+    if (own !== undefined) {
+      this.current?.panel?.setMapLabels(
+        own,
+        this.compare === null ? undefined : this.mapLabel(this.compare.uri),
+      )
+    }
+  }
+
   // -------------------------------------------------------------------------
   // The second file (`render/compare.ts`)
   // -------------------------------------------------------------------------
@@ -3818,7 +3895,7 @@ export class Session {
     if (held === null || file === null || this.compareHidden) return undefined
     return {
       client: held.client,
-      labels: [fileLabel(file.uri), fileLabel(held.uri)],
+      labels: [this.mapLabel(file.uri), this.mapLabel(held.uri)],
       normalise: this.normalising(),
       onNormaliseChange: (on) => {
         remember(this.memoryKey(file.uri), 'compare:normalise', on)
@@ -3971,7 +4048,7 @@ export class Session {
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
       memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
-      leadName: () => (this.file === null ? undefined : fileLabel(this.file.uri)),
+      leadName: () => (this.file === null ? undefined : this.mapLabel(this.file.uri)),
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.
       derive: () => {
@@ -3999,7 +4076,13 @@ export class Session {
         const names = this.contigNames()
         return names === null ? undefined : NameIndex.for(names).context
       },
-      leadLabel: () => fileLabel(this.file?.uri ?? ''),
+      leadLabel: () => this.mapLabel(this.file?.uri ?? ''),
+      mapLabel: (uri) => this.mapLabel(uri),
+      onRenameMap: (uri, name) => this.renameMap(uri, name),
+      onRenameLead: (name) => {
+        const uri = this.file?.uri
+        if (uri !== undefined) this.renameMap(uri, name)
+      },
       // Stripped the same way and for the same two reasons. `onChange` would be
       // a sixth copy of a control over something the deck shares; `onAvailable`
       // would let a companion whose block has no diagonal un-turn the whole
@@ -5009,7 +5092,7 @@ export class Session {
    */
   private captionFor(state: ViewState): { file: string; genome?: string } {
     return {
-      file: fileLabel(state.uri),
+      file: this.mapLabel(state.uri),
       ...(state.genome === undefined ? {} : { genome: state.genome }),
     }
   }
