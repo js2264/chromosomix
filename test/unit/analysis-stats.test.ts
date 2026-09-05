@@ -14,7 +14,13 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { ExpectedAccumulator, densityCurve, expectedAt, logLogSlope } from '@/analysis/expected'
+import {
+  ExpectedAccumulator,
+  densityCurve,
+  expectedAt,
+  logBinCurve,
+  logLogSlope,
+} from '@/analysis/expected'
 import { makeRandom, randomInt, shuffled } from '@/analysis/random'
 import {
   bootstrapBand,
@@ -282,6 +288,69 @@ describe('ExpectedAccumulator', () => {
     acc.add(0, 100)
     expect(curve.sum[0]).toBe(4)
     expect(curve.mean[1]).toBeNaN()
+  })
+})
+
+describe('logBinCurve', () => {
+  it('weights the per-offset means by their evidence, in base pairs', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.addBlock(block(0, 0, SQUARE))
+    const binned = logBinCurve(acc.finish(), 1000, 2, 0)
+
+    // Edges 1, 2, 4 over offsets 1..3. The first bin is offset 1 alone; the
+    // second holds offsets 2 and 3, whose weighted mean is
+    // (4 × 4.5 + 2 × 6) / 6 = 5, at a mean offset of (4 × 2 + 2 × 3) / 6.
+    expect(Array.from(binned.y)).toHaveLength(2)
+    expect(binned.x[0]).toBeCloseTo(1000, 9)
+    expect(binned.y[0]).toBeCloseTo(2, 12)
+    expect(binned.n[0]).toBe(6)
+    expect(binned.x[1]).toBeCloseTo((14 / 6) * 1000, 9)
+    expect(binned.y[1]).toBeCloseTo(5, 12)
+    expect(binned.n[1]).toBe(6)
+  })
+
+  // The mirror is what makes this the *same* number as cooltools' `balanced.avg`
+  // rather than half or twice it: a dense square read back from an
+  // upper-triangular store doubles the sum and the count together, and a mean is
+  // what survives that. The density beside it has to fold the mirror by hand,
+  // for exactly the reason this one does not.
+  it('is unmoved by the mirrored square, which is why it is a mean', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.addBlock(block(0, 0, SQUARE))
+    const curve = acc.finish()
+    const half = {
+      ...curve,
+      sum: curve.sum.map((value) => value / 2),
+      count: curve.count.map((value) => value / 2),
+    }
+    const binned = logBinCurve(curve, 1000, 2, 0)
+    const halved = logBinCurve(half, 1000, 2, 0)
+    for (let i = 0; i < binned.y.length; i++) expect(halved.y[i]).toBeCloseTo(binned.y[i], 12)
+  })
+
+  it('drops empty log bins instead of punching holes in the plot', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.add(1, 8)
+    acc.add(3, 1)
+    const binned = logBinCurve(acc.finish(), 1000, 1.1, 0)
+    // Many of the bins at a factor of 1.1 are narrower than a bin of the file,
+    // and offset 2 was never observed; only the two populated offsets survive.
+    expect(Array.from(binned.x)).toEqual([1000, 3000])
+    expect(Array.from(binned.y)).toEqual([8, 1])
+  })
+
+  // In **bins**, not base pairs: the near-diagonal is a fact about the grid, so
+  // the same typed number has to mean the same trim at every resolution. And the
+  // floor is never below one, whatever is asked for — the mean at offset zero is
+  // the diagonal, which is not a contact between two loci.
+  it('floors the first bin at minOffset, and never below one offset', () => {
+    const acc = new ExpectedAccumulator(4)
+    for (let k = 0; k <= 4; k++) acc.add(k, k + 1)
+    expect(logBinCurve(acc.finish(), 1000, 2, 0).x[0]).toBeCloseTo(1000, 9)
+    const binned = logBinCurve(acc.finish(), 1000, 2, 3)
+    expect(binned.x[0]).toBeGreaterThanOrEqual(3000)
+    const coarse = logBinCurve(acc.finish(), 10_000, 2, 3)
+    expect(coarse.x[0]).toBeGreaterThanOrEqual(30_000)
   })
 })
 

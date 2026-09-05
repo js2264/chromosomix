@@ -2877,17 +2877,21 @@ Seventeen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what fo
 one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
-producing the **expected** curve three later tasks consume. Those are two different curves off one
-accumulator, and the split is deliberate. What the panel **plots** is the probability density —
-contacts at a separation over the contacts in the whole map, then over the width of the separation bin
-in base pairs — which is `HiContacts::distanceLaw()`'s `norm_p`, down to that package's gap distance and
-its break table, and with one deliberate correction to its denominator that §18.10 sets out. What observed/expected, the compartment chain and
-the pileups **divide by** is the mean contact per pair of bins at that separation, which is
-`cooltools expected-cis` and never leaves `expectedAt`. Both are called P(s) in the literature and they
-are not interchangeable: they agree in shape at short range and part company as the separation
-approaches the length of a sequence, where the pair count is heading for zero and the contact total is
-not. There is **no switch between them** — one is a figure and the other is a denominator, and a task
-that offered both as a choice would be inviting a reader to plot the denominator. *Coverage and marginals* — total, cis, trans
+producing the **expected** curve three later tasks consume. Two quantities are called P(s) and the task
+offers both, because they answer different questions and a figure that mixes them reads a difference of
+convention as biology: the **probability density**, which is the default — contacts at a separation over
+the contacts in the whole map, then over the separation the bin covers, which is
+`HiContacts::distanceLaw()`'s `norm_p` down to that package's gap distance and its break table, with one
+correction to its denominator that §18.10 sets out — and the **expected**, which is
+`cooltools expected-cis`: contacts over the bin pairs that could have held one, the polymer-physics
+reading, and the number most published scaling exponents refer to. `density / expected = pairs(s) /
+constant`, so they are the same picture while the separation is short against the sequences and diverge
+as it approaches the longest one: on the yeast demo, within 1 % below 10 kb, 13 % apart at 100 kb, a
+factor of fifty apart at 1.2 Mb — and on a mammalian map, whose chromosomes are two orders of magnitude
+longer, indistinguishable over everything anybody fits. The second is also what observed/expected, the
+compartment chain and the pileups **divide by**, and they reach it through `expectedAt` rather than
+through the panel: the plotted curve is a figure and the denominator is a denominator, and changing what
+is on screen must not change what an O/E is taken against. *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.

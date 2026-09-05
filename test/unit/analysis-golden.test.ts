@@ -53,7 +53,12 @@ import {
   usableBins,
 } from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
-import { ExpectedAccumulator, densityCurve, logRoundedBreaks } from '@/analysis/expected'
+import {
+  ExpectedAccumulator,
+  densityCurve,
+  logBinCurve,
+  logRoundedBreaks,
+} from '@/analysis/expected'
 import { diamondSums, insulationScore } from '@/analysis/insulation'
 import { leadingEigenpairs } from '@/analysis/linalg'
 import { referenceWindows, windowRow } from '@/analysis/metaplot'
@@ -176,6 +181,46 @@ suite('P(s), against cooltools.expected_cis', () => {
       }
     })
   }
+
+  it('log-bins cooltools\' curve as a weighted mean, which is what the panel plots', async () => {
+    // The suite above pins the per-offset means. What the P(s) task actually
+    // draws under `quantity: expected` is those means pooled into log bins, and
+    // the pooling rule is the part that can be wrong on its own: a bin at long
+    // range spans hundreds of offsets whose evidence differs by orders of
+    // magnitude, and averaging their means as equals would let the emptiest
+    // offset in the bin count as much as the fullest.
+    const g = golden!
+    for (const chrom of g.chroms) {
+      const dense = await demo.square(chrom, false)
+      const accumulator = new ExpectedAccumulator(dense.nrows - 1)
+      accumulator.addBlock(dense)
+      const curve = accumulator.finish()
+      const binned = logBinCurve(curve, 1000, 1.1, 0)
+
+      // The same bins, filled with cooltools' means and this repo's counts. The
+      // means are goldened equal above, so what is left under test is the
+      // weighting — and a mistake in it moves every point at long range.
+      const theirs = numbers(g.reference.raw[chrom].mean)
+      const edges: number[] = [1]
+      while (edges[edges.length - 1] < curve.maxOffset + 1) {
+        edges.push(edges[edges.length - 1] * 1.1)
+      }
+      const wanted: number[] = []
+      for (let e = 0; e + 1 < edges.length; e++) {
+        const from = Math.max(1, Math.ceil(edges[e]))
+        const to = Math.min(curve.maxOffset + 1, Math.ceil(edges[e + 1]))
+        let total = 0
+        let cells = 0
+        for (let k = from; k < to; k++) {
+          if (!(curve.count[k] > 0) || !Number.isFinite(theirs[k])) continue
+          total += theirs[k] * curve.count[k]
+          cells += curve.count[k]
+        }
+        if (cells > 0) wanted.push(total / cells)
+      }
+      expectSeries(binned.y, Float64Array.from(wanted), g.reference.tolerance, `binned ${chrom}`)
+    }
+  })
 
   it('agrees with cooltools cell for cell, not merely in shape', async () => {
     const g = golden!

@@ -43,6 +43,7 @@ import { parseRegionString } from '../../metacooler/range'
 import {
   ExpectedAccumulator,
   densityCurve,
+  logBinCurve,
   logLogSlope,
   type ExpectedCurve,
 } from '../expected'
@@ -379,6 +380,11 @@ export const runExpected: TaskRunner = async (job) => {
   const region = strParam(job.params, 'region', '').trim()
   const factor = numParam(job.params, 'factor', 1.1)
   const minSeparation = numParam(job.params, 'minSeparation', 0)
+  // Unrecognised falls back to the density, which is what the panel has drawn
+  // since the choice existed — the same rule `planUnits` follows for the scope,
+  // and for the same reason: a stored session from a later build must not
+  // silently change what the numbers on screen mean.
+  const expectedCis = strParam(job.params, 'quantity', 'density') === 'expected'
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
@@ -408,7 +414,9 @@ export const runExpected: TaskRunner = async (job) => {
   const slopes: CurveSeries[] = []
   let silent = 0
   for (let u = 0; u < units.length; u++) {
-    const binned = densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
+    const binned = expectedCis
+      ? logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
+      : densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
     if (binned.x.length === 0) {
       silent++
       continue
@@ -438,7 +446,9 @@ export const runExpected: TaskRunner = async (job) => {
       label: 'Contact probability P(s)',
       series,
       xLabel: 'Genomic separation (bp)',
-      yLabel: 'Contact probability density (per bp)',
+      yLabel: expectedCis
+        ? 'Mean contact per bin pair'
+        : 'Contact probability density (per bp)',
       xScale: 'log',
       yScale: 'log',
       xDomain: WINDOW,

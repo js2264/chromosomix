@@ -20,21 +20,28 @@
  * comes out of it — is an immutable record that a later task can hold on to
  * without worrying about who else is still adding to it.
  *
- * The module therefore has two readers and produces two things, and keeping them
- * apart is the whole of §18.8's P(s) entry. {@link expectedAt} serves the three
- * downstream tasks: the mean contact per pair of bins at a separation, which is
- * the denominator of an observed/expected and is cooltools' `expected-cis`.
- * {@link densityCurve} serves the reader: the share of all cis contacts that
- * fall at a separation, per base pair, which is what `HiContacts::distanceLaw()`
- * plots and what the panel draws. Both are called P(s) and they are not the same
- * curve — the pair count runs out as a separation approaches the length of a
- * sequence and the contact total does not — so nothing here converts one into
- * the other or treats a difference between them as an error.
+ * **Two quantities are called P(s) and this module produces both**, which is the
+ * whole of §18.8's entry. {@link logBinCurve} is the contacts at a separation
+ * over the **bin pairs that could have held one** — cooltools' `expected-cis`,
+ * the polymer-physics reading, and the number most published scaling exponents
+ * refer to; {@link expectedAt} is the same quantity per offset and is what the
+ * three downstream tasks divide by. {@link densityCurve} is the contacts over
+ * **all cis contacts**, per base pair — `HiContacts::distanceLaw()`'s `norm_p`,
+ * and the panel's default.
+ *
+ * They are not two smoothings of one curve. `ours/expected = pairs(s)/constant`,
+ * and the pair count runs out as a separation approaches the length of a
+ * sequence while the contact total does not, so the two agree in shape at short
+ * range and part company at long. On the yeast demo they are within 1 % below
+ * 10 kb, 13 % apart at 100 kb and a factor of fifty apart at 1.2 Mb. Nothing
+ * here converts one into the other or treats a difference between them as an
+ * error; the task offers both and says which is on screen.
  *
  * Everything is in **bins**, because that is what an offset is. Base pairs appear
- * exactly once, in {@link densityCurve}, which is the function whose output gets
- * an axis drawn on it.
+ * only in the two functions whose output gets an axis drawn on it.
  */
+
+import { logSpacedEdges } from './stats'
 
 // ---------------------------------------------------------------------------
 // The curve
@@ -186,6 +193,96 @@ export class ExpectedAccumulator {
 // ---------------------------------------------------------------------------
 // Reading the curve
 // ---------------------------------------------------------------------------
+
+/**
+ * The **expected** curve rebinned onto logarithmic separations, ready to plot.
+ *
+ * `y` is the contacts at a separation over **the bin pairs that could have held
+ * one** — `cooltools expected-cis`'s `balanced.avg`, and the quantity
+ * {@link expectedAt} hands the three downstream tasks. It is offered beside
+ * {@link densityCurve} because that is the number most published scaling
+ * exponents refer to: it is the polymer-physics reading of P(s), the probability
+ * that two loci that far apart are in contact, and it is what a slope is
+ * compared against −1 or −1.5 as.
+ *
+ * **The quantity is cooltools'; the bins are this file's.** `factor` is the same
+ * control the density uses, so a run at the default 1.1 is finer than cooltools'
+ * `logbin_expected`, which is ten bins to the decade — 1.2589. Matching it is
+ * typing that number, and the per-offset means underneath are identical either
+ * way (`test/golden/analysis/expected.json`).
+ *
+ * `x` is in **base pairs** — the only place in this module that leaves bins,
+ * because it is the axis a reader reads, and §18.2's rule that a length is a
+ * property of the question rather than of the file applies to an axis as much as
+ * to a parameter. `y` is the count-weighted mean of the per-offset means inside
+ * the bin, which is the same number as the bin's total divided by its total
+ * count, and is *not* the unweighted mean of the means: a log bin at long range
+ * spans hundreds of offsets whose evidence differs by orders of magnitude, and
+ * averaging their means as equals would let the emptiest offset in the bin count
+ * as much as the fullest. `n` is the cells behind the point, which is what the
+ * drawer prints when somebody asks why the tail is noisy.
+ *
+ * Unlike the density this **floors at one offset whatever `minOffset` says**:
+ * the mean at offset zero is the diagonal, which has no place on a log axis and
+ * no meaning as a contact between two loci.
+ *
+ * `minOffset` floors the first bin, **in bins of this file**. The near-diagonal
+ * offsets are dominated by unligated fragments and self-ligation rather than by
+ * polymer contact, so a P(s) plotted from offset zero has a false shoulder at
+ * its left edge that has misled people into reading a structural feature off it.
+ * A floor of at least one bin is enforced regardless, since offset zero is the
+ * diagonal and has no place on a log axis at all.
+ *
+ * Bins rather than base pairs, which is a change from what the form used to ask
+ * for: the near-diagonal is a fact about the grid, not about the genome, and a
+ * number typed in base pairs meant three bins at one resolution and one at the
+ * next. It is also the unit the accumulator counts in, so the conversion — and
+ * the rounding it did — is gone rather than moved.
+ *
+ * **Empty log bins are dropped, not emitted as `NaN`.** With a factor near one
+ * the bins at short range are narrower than a bin of the file, so many of them
+ * contain no integer offset at all — and a log-log plot punched full of holes is
+ * unreadable in a way that has nothing to do with the data. The abscissa is the
+ * count-weighted mean offset of the cells in the bin rather than the geometric
+ * centre of its edges, so a point sits where its evidence is: a bin spanning
+ * 1.0–1.1 bins holds only offset 1, and drawing it at 1.05 would place the point
+ * at a separation nothing in it has.
+ */
+export function logBinCurve(
+  curve: ExpectedCurve,
+  binsize: number,
+  factor: number,
+  minOffset: number,
+): { x: Float64Array; y: Float64Array; n: Float64Array } {
+  const bp = binsize > 0 ? binsize : 1
+  const floor = Number.isFinite(minOffset) ? minOffset : 0
+  const floorOffset = Math.max(1, Math.ceil(floor))
+  const edges = logSpacedEdges(floorOffset, curve.maxOffset + 1, factor)
+  const xs: number[] = []
+  const ys: number[] = []
+  const ns: number[] = []
+
+  for (let e = 0; e + 1 < edges.length; e++) {
+    const from = Math.max(floorOffset, Math.ceil(edges[e]))
+    const to = Math.min(curve.maxOffset + 1, Math.ceil(edges[e + 1]))
+    let total = 0
+    let cells = 0
+    let offsetWeight = 0
+    for (let k = from; k < to; k++) {
+      const count = curve.count[k]
+      if (count <= 0) continue
+      total += curve.sum[k]
+      cells += count
+      offsetWeight += count * k
+    }
+    if (cells <= 0) continue
+    xs.push((offsetWeight / cells) * bp)
+    ys.push(total / cells)
+    ns.push(cells)
+  }
+
+  return { x: Float64Array.from(xs), y: Float64Array.from(ys), n: Float64Array.from(ns) }
+}
 
 /**
  * The local slope of `log y` against `log x`, by central differences.
@@ -352,7 +449,7 @@ function breakIndex(pos: Float64Array, distance: number): number {
  * that fall at this distance, per base pair. `HiContacts::distanceLaw()`'s
  * `norm_p`, and the only curve this task plots.
  *
- * It is not {@link expectedAt}'s quantity rebinned. That one divides instead by
+ * It is not {@link logBinCurve}'s quantity rebinned. That one divides instead by
  * **the number of bin pairs that could have held a contact**, which is what an
  * observed/expected is taken against and what cooltools' `expected-cis` reports;
  * the two agree in shape at short range and diverge as the separation approaches

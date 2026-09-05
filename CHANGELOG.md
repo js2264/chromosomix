@@ -76,46 +76,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   companions' clips and closing the window used to lose all four, because a clip
   is not a navigation and nothing on the state road ever fired.
 
-### Fixed
+- **`Expected (cooltools)` beside the density on P(s).** A *Quantity* choice on
+  the contact-probability task. The default is unchanged — the probability
+  density, `HiContacts::distanceLaw()`'s `norm_p` — and the other setting plots
+  contacts at a separation over the **bin pairs that could have held one**,
+  which is what `cooltools expected-cis` reports and what a scaling exponent is
+  compared against −1 or −1.5 as.
 
-- **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
-  in the file has always recorded them — the dividers, the breaks, the labels,
-  the ticks, the crosshair, the tooltip — and the one road that could not apply
-  them was the road a workspace actually arrives on. A dropped single session and
-  a pasted share link went through `Session.openConfig`, which applies them; a
-  workspace file and the offer after a browser restart go through the shell,
-  which did not. So a figure saved with the dividers on and the crosshair off
-  came back with whatever the importing window happened to be set to, silently,
-  and looking exactly like the toggles had not been saved. The tab that ends up
-  in front now decides, which is what a window-level preference carried per tab
-  can honestly mean.
+  They differ by exactly one denominator: `density / expected = pairs(s) /
+  constant`. The pair count is flat while the separation is short against the
+  sequences and falls to zero at the longest one, so on the yeast demo the two
+  are within 1 % below 10 kb, 13 % apart at 100 kb and a factor of fifty apart
+  at 1.2 Mb — and on a mammalian map they agree over everything anybody fits.
 
-- **P(s) can be the quantity HiContacts means by it.** A *Normalisation* choice on
-  the contact-probability task. The default is unchanged and is the **expected**
-  curve — contacts at a separation over the bin pairs that could have held one,
-  which is `cooltools expected-cis` and what observed/expected, the compartment
-  chain and the pileups are taken against. The other two are
-  `HiContacts::distanceLaw()`'s: the **probability density**, contacts over all
-  cis contacts and then over the width of the separation bin in base pairs, and
-  the same curve **scaled through 1 at 100 kb** (`norm_p_unity`), which is how
-  two samples are put on one axis.
-
-  They are different quantities rather than two smoothings of one. Both decay
-  like a power law and both are drawn on log-log axes, and they agree in shape
-  at short range — but the pair count runs out as the separation approaches the
-  length of a chromosome and the contact total does not, so the tails part.
-  Reading an exponent off the wrong one is the failure this exists to prevent.
-
-  **It reproduces that package rather than resembling it.** Picking a HiContacts
-  normalisation also switches the separation to its gap distance — two bins *k*
-  apart are `(k − 1)·binsize` apart there, so the diagonal and the first
-  off-diagonal share the first break — and the bins to its break table, which
-  turns out to be exactly `unique(round(1.1^n))` and is regenerated rather than
-  tabulated. `test/golden/analysis/hicontacts_ps.json` is built by running
-  HiContacts' own pipeline in R (`scripts/hicontacts_ps.R`, the first golden
-  whose dependency is a program rather than a Python module), and every break
-  position, density and unity-scaled value matches to 2e-6 on four chromosomes
-  and on the four pooled.
+  Verified end to end rather than by construction: pooled genome-wide over the
+  yeast demo, `--quantity expected` reproduces `cooltools.expected_cis` to 4e-6,
+  which is the printing precision of the TSV. The quantity is cooltools'; the
+  bins are the task's own `factor`, so 1.2589 matches `logbin_expected`'s ten to
+  the decade. What O/E and the pileups divide by is untouched — they reach the
+  same numbers through `expectedAt`, never through the panel.
 
 - **Four text boxes on every curve, one per axis bound.** `x` from/to and `y`
   from/to, beside the `log x` / `log y` toggles. Empty means "fit the data", so
@@ -206,6 +185,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   picture in the same colours, and the difference between them is the result.
 
 ### Fixed
+
+- **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
+  in the file has always recorded them — the dividers, the breaks, the labels,
+  the ticks, the crosshair, the tooltip — and the one road that could not apply
+  them was the road a workspace actually arrives on. A dropped single session and
+  a pasted share link went through `Session.openConfig`, which applies them; a
+  workspace file and the offer after a browser restart go through the shell,
+  which did not. So a figure saved with the dividers on and the crosshair off
+  came back with whatever the importing window happened to be set to, silently,
+  and looking exactly like the toggles had not been saved. The tab that ends up
+  in front now decides, which is what a window-level preference carried per tab
+  can honestly mean.
 
 - **P(s) is smooth again: the density is divided by the separation a bin covers,
   not by the width of the break.** The curve had developed a sawtooth of a factor
