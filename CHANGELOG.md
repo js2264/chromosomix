@@ -184,6 +184,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   from 0.98 to 1.02 and one running from 0 to 4 would otherwise be the same
   picture in the same colours, and the difference between them is the result.
 
+- **A contact map can be called something.** A map is labelled by its file, which
+  is the right default and a poor name for the work: two conditions dropped in to
+  be compared are `mat_G1.mcool::1000` and `mat_G2M.mcool::1000`, and every one
+  of those characters is on the picture, in the readout under the pointer and in
+  the exported figure — where the two words that would tell a reader what they
+  are looking at are `G1` and `G2M`. Four replicates in a deck are four labels
+  differing in a digit. Click a map's name on the **Contact maps** card, or on a
+  deck cell's heading, and type. Enter commits, Escape abandons, and an **empty
+  box hands the map back to its file name**, which is what makes a rename
+  undoable — the Tracks card's own control in both places, so a reader who has
+  learned the gesture on a track has learned it here.
+
+  The name is used everywhere the map is named: the card that lists it, the
+  heading over its cell, the two bands of a turned comparison, the readout and
+  the tooltip, the derived label on a ratio, and the caption on an exported
+  figure. It is kept against the *file*, so it survives a change of resolution,
+  and it travels in the workspace, in the durable record and in a share link
+  beside the tab's own name. One consequence, which the deck's saved looks
+  already had: one file open twice in a session has one name.
+
+- **The turned view of a comparison shows both files.** A split map is the first
+  file above the matrix diagonal and the second below it, and turning it kept
+  only the upper triangle — so the second file, the entire reason the picture is
+  split, disappeared the moment the reader turned it. It is now drawn as a
+  **second band mirrored beneath the first**, the two meeting at one shared
+  genomic axis: the same position is the same column in both, so they are read
+  against each other at every place without the eye having to reflect one of them
+  through a diagonal first. The distance up the side runs outwards from the axis
+  in both directions, both bands are named on the picture, and a pointer in the
+  lower band reads the lower band's file. A ratio or a difference stays one band,
+  its two triangles being the same numbers twice.
+
+- **A map of several chromosomes now carries coordinates.** A whole genome, or a
+  selection of chromosomes, had the contig names and nothing else: an axis of
+  several sequences has no single coordinate system, so it drew none of the ticks
+  that assume one. It is now ruled **one chromosome at a time**, each measured
+  from its own first base, with the boundaries the axis already draws saying where
+  one ruler stops and the next begins — which is the question a reader is asking
+  of a whole-genome map as much as of a single chromosome. The long chromosomes
+  carry a position each and the short ones carry their name and nothing more,
+  which is the rule the names themselves are already elided by, and a metagenome's
+  thousands of pixel-wide contigs carry none.
+
 ### Fixed
 
 - **`metacooler-run apa --window 8` set the half-width and then died.** The CLI
@@ -192,6 +235,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   parameters the flag where the two collide, but the framing read it anyway, so
   the run set the half-width correctly and then failed with *"Unknown sequence
   label: 8"*. One name, one meaning, decided by whether the task claims it.
+
+- **A second map to compare against was lost on a change of resolution**, and
+  silently: the first map is a complete picture on its own, so nothing on screen
+  said the other one had gone, and the reader had to find and open it again at
+  every zoom level. A comparison belongs to the file it is a comparison *of*, so
+  opening another file puts it down — and a change of rung went through the same
+  door, though it is not a change of subject. The second file now comes across,
+  moved to **its own rung at the new bin size**: it has a ladder of its own, so
+  `rep2.mcool::/resolutions/1000` beside a 1 kb map is `…/5000` beside a 5 kb
+  one, looked up in that file's own entries. The reading carries with it — the
+  operation, the depth match, and whether the triangle was hidden. A file with no
+  rung at the new bin size cannot be compared there, two bin sizes in one square
+  being a pixel that means one thing above the diagonal and another below it, and
+  it is put down with the reason on the Contact maps card.
 
 - **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
   in the file has always recorded them — the dividers, the breaks, the labels,
