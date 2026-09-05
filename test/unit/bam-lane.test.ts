@@ -483,10 +483,10 @@ describe('the coverage lane', () => {
   })
 
   it('draws split reads when asked and never counts them', async () => {
-    // The one asymmetry in the whole lane, and it is deliberate: a supplementary
-    // record is a second piece of one molecule, so drawing it shows where the
-    // molecule went and counting it would report one fragment as two. The switch
-    // therefore reaches the pile and cannot reach the depth.
+    // The one asymmetry between a BAM's two rows, and it is deliberate: a
+    // supplementary record is a second piece of one molecule, so drawing it
+    // shows where the molecule went and counting it would report one fragment
+    // as two. The switch therefore reaches the pile and cannot reach the depth.
     // The two pieces **overlap**. With them side by side the peak is 1 whether
     // or not the supplementary is counted, so the depth assertion below would
     // pass against a reader that counted it — which is the one thing it is here
@@ -532,26 +532,11 @@ describe('the coverage lane', () => {
     expect(readsIn(plain)).toBe(1)
     expect(readsIn(split)).toBe(2)
 
-    // …and the depth is the same number either way, on **both** roads to it.
-    // The zoomed-out one goes through `sample`; the zoomed-in one is drawn from
-    // the base counts that come back beside the pile, and those are counted
-    // inside `pileOf` — which is where a filter widened for the pile leaks into
-    // a count if the two are not kept apart.
-    const peakOf = (response: AnnotationResponse): number => {
-      const window = (response as { payload: ReadWindow }).payload
-      let max = 0
-      for (const counts of window.bases) {
-        for (let at = 0; at < counts.span; at++) {
-          let depth = 0
-          for (let lane = 0; lane < 6; lane++) depth += counts.counts[at * 6 + lane]
-          if (depth > max) max = depth
-        }
-      }
-      return max
-    }
-    expect(peakOf(plain), 'depth under the pile, splits off').toBe(1)
-    expect(peakOf(split), 'depth under the pile, splits on').toBe(1)
-
+    // …and the depth is the same number either way. It is the row beside the
+    // pile now (§8.13) and answers through `sample`, so the switch has to fail
+    // to reach a whole other request rather than a filter one line away — but
+    // the claim is the one that mattered before the split, and it is the one a
+    // reader is relying on when they turn split reads on to see a breakpoint.
     const depthPlain = await ask({
       kind: 'sample',
       entry: 'e-split',

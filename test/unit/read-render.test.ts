@@ -22,11 +22,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BAND_GAP,
-  COVERAGE_BAND,
   NAME_BAND,
-  alignmentBands,
-  consensusBandFor,
+  READ_ROW,
   drawReads,
+  pileBands,
   packPile,
   readRungFor,
   rowsAcross,
@@ -36,7 +35,7 @@ import {
 } from '@/render/alignments'
 import type { PairLayout } from '@/annotations/types'
 import { LocusAxis } from '@/render/locus'
-import { acrossToCanvas, bandEdge, laneOutward } from '@/render/lane'
+import { acrossToCanvas, laneOutward } from '@/render/lane'
 import type { LaneFrame } from '@/render/lane'
 import type { ReadPile } from '@/annotations/types'
 
@@ -474,114 +473,48 @@ describe('the row budget', () => {
   })
 
   it('lays the bands out where an independent reading of the rule says', () => {
-    // Stated from the constants rather than from `alignmentBands`, because a
-    // test built from the function under test moves with it: comparing
-    // `rowsFor` to `drawReads` over the same band object passes even if
-    // `laneBands` counts the wrong number of gaps, since both sides shift
-    // together. Four parts means THREE gaps, and getting that wrong by one is
-    // the bug this pins.
-    const thickness = 240
-    const [name, coverage, consensus, pileBand] = alignmentBands(
-      { ...frame, thickness, acrossFrom: 0 },
-      'reads',
-      true,
-    )
-    const gaps = 3
+    // Stated from the constants rather than from `pileBands`, because a test
+    // built from the function under test moves with it: comparing `rowsFor` to
+    // `drawReads` over the same band object passes even if `laneBands` counts
+    // the wrong number of gaps, since both sides shift together. Two parts
+    // means ONE gap.
+    const thickness = 180
+    const [name, pile] = pileBands({ ...frame, thickness, acrossFrom: 0 }, NAME_BAND)
     expect(name.thickness).toBe(NAME_BAND)
-    expect(coverage.thickness).toBe(COVERAGE_BAND)
-    expect(consensus.thickness).toBe(consensusBandFor('reads', { ...frame, thickness }))
-    expect(pileBand.thickness).toBeCloseTo(
-      thickness - NAME_BAND - COVERAGE_BAND - consensus.thickness - BAND_GAP * gaps,
-      6,
-    )
-    // …and they are laid end to end with one gap between each pair.
-    expect(coverage.acrossFrom).toBeCloseTo(name.thickness + BAND_GAP, 6)
-    expect(consensus.acrossFrom).toBeCloseTo(coverage.acrossFrom + COVERAGE_BAND + BAND_GAP, 6)
-    expect(pileBand.acrossFrom).toBeCloseTo(
-      consensus.acrossFrom + consensus.thickness + BAND_GAP,
-      6,
-    )
-    // An unlabelled lane keeps the four-part shape — a zero-thickness strip
-    // that still consumes its gap — so every caller can index it the same way.
-    const bare = alignmentBands({ ...frame, thickness, acrossFrom: 0 }, 'reads', false)
+    expect(pile.thickness).toBeCloseTo(thickness - NAME_BAND - BAND_GAP, 6)
+    expect(pile.acrossFrom).toBeCloseTo(name.thickness + BAND_GAP, 6)
+    // An unlabelled lane keeps the two-part shape — a zero-thickness strip that
+    // still consumes its gap — so every caller can index it the same way.
+    const bare = pileBands({ ...frame, thickness, acrossFrom: 0 }, 0)
     expect(bare[0].thickness).toBe(0)
-    expect(bare[3].thickness).toBeCloseTo(pileBand.thickness + NAME_BAND, 6)
+    expect(bare[1].thickness).toBeCloseTo(pile.thickness + NAME_BAND, 6)
   })
 
-  it('puts a band boundary where the band actually ends, at every edge', () => {
-    // The conversion that was wrong: `laneBand` stores `acrossFrom` in *canvas*
-    // coordinates while `thickness` is a length, so `acrossFrom + thickness`
-    // reads like the far edge and is a canvas coordinate. Compared against an
-    // across offset it displaced every drag handle by the lane's own origin —
-    // the grips sat well below the bands they resize. The parent's `acrossFrom`
-    // is deliberately non-zero here, because at zero the bug is invisible.
+  it('cuts the same split at every edge', () => {
+    // `laneBand` stores `acrossFrom` in *canvas* coordinates while `thickness`
+    // is a length, so a band's far edge is `acrossFrom + outward * thickness`
+    // and not the sum of the two. The parent's own `acrossFrom` is deliberately
+    // non-zero here, because at zero the difference is invisible.
     for (const orientation of ['bottom', 'top', 'left', 'right'] as const) {
-      const lane = { ...frame, orientation, acrossFrom: 300, thickness: 240 }
-      const [name, coverage, consensus, pileBand] = alignmentBands(lane, 'reads', true)
-      // The far edge in across units, and the same edge converted back to the
-      // canvas, are the same place.
-      for (const band of [name, coverage, consensus, pileBand]) {
-        const edge = bandEdge(lane, band)
-        expect(acrossToCanvas(lane, edge), orientation).toBeCloseTo(
-          band.acrossFrom + laneOutward(orientation) * band.thickness,
-          6,
-        )
-      }
-      // …and the boundaries run in order down the lane, inside it.
-      expect(bandEdge(lane, coverage)).toBeGreaterThan(bandEdge(lane, name))
-      expect(bandEdge(lane, consensus)).toBeGreaterThan(bandEdge(lane, coverage))
-      expect(bandEdge(lane, pileBand)).toBeCloseTo(lane.thickness, 6)
+      const lane = { ...frame, orientation, acrossFrom: 300, thickness: 180 }
+      const [name, pile] = pileBands(lane, NAME_BAND)
+      // The pile begins one gap past the name strip and ends on the lane's own
+      // floor, whichever way the lane grows.
+      expect(name.thickness, orientation).toBe(NAME_BAND)
+      expect(pile.acrossFrom, orientation).toBeCloseTo(
+        lane.acrossFrom + laneOutward(orientation) * (NAME_BAND + BAND_GAP),
+        6,
+      )
+      const far = pile.acrossFrom + laneOutward(orientation) * pile.thickness
+      expect(acrossToCanvas(lane, lane.thickness), orientation).toBeCloseTo(far, 6)
     }
-  })
-
-  it('gives a band the thickness a reader set, and the pile the rest', () => {
-    const lane = { ...frame, thickness: 240, acrossFrom: 0 }
-    const stock = alignmentBands(lane, 'reads', true)
-    const taller = alignmentBands(lane, 'reads', true, { coverage: 80, consensus: 40 })
-    expect(taller[1].thickness).toBe(80)
-    expect(taller[2].thickness).toBe(40)
-    // Every pixel the two bands took comes out of the pile and nowhere else.
-    expect(stock[3].thickness - taller[3].thickness).toBeCloseTo(
-      80 - stock[1].thickness + 40 - stock[2].thickness,
-      6,
-    )
-  })
-
-  it('lets a band be dragged shut, and keeps the consensus shut at the coverage rung', () => {
-    const lane = { ...frame, thickness: 240, acrossFrom: 0 }
-    const closed = alignmentBands(lane, 'reads', true, { coverage: 0, consensus: 0 })
-    expect(closed[1].thickness).toBe(0)
-    expect(closed[2].thickness).toBe(0)
-    // Zero is a real answer, so the pile takes everything but the name strip
-    // and the three gaps that hold the shape at four parts.
-    expect(closed[3].thickness).toBeCloseTo(240 - NAME_BAND - BAND_GAP * 3, 6)
-
-    // …and a stored thickness cannot hold the consensus open where there is no
-    // consensus to draw.
-    expect(consensusBandFor('coverage', lane, { coverage: 34, consensus: 40 })).toBe(0)
-  })
-
-  it('follows the lane while the consensus band is untouched', () => {
-    // `null` is not a missing number — the default grows with the lane so a
-    // logo has room for a letter, and a reader who has not moved it is asking
-    // to keep following that.
-    const short = { ...frame, thickness: 160 }
-    const tall = { ...frame, thickness: 400 }
-    const untouched = { coverage: 34, consensus: null }
-    expect(consensusBandFor('bases', tall, untouched)).toBeGreaterThan(
-      consensusBandFor('bases', short, untouched),
-    )
-    // …and stops following it the moment they do.
-    const set = { coverage: 34, consensus: 30 }
-    expect(consensusBandFor('bases', tall, set)).toBe(30)
-    expect(consensusBandFor('bases', short, set)).toBe(30)
   })
 
   it('asks the worker for exactly the rows the band will draw', () => {
     for (const thickness of [120, 160, 200, 240, 241, 242, 300]) {
       for (const labelled of [true, false]) {
         const lane = { ...frame, thickness }
-        const band = alignmentBands(lane, 'reads', labelled)[3]
+        const band = pileBands(lane, labelled ? NAME_BAND : 0)[1]
         const { ctx } = recorder()
         const empty = pileOf([])
         const drew = drawReads(
@@ -593,25 +526,41 @@ describe('the row budget', () => {
           paint,
           'reads',
         )
-        expect(rowsFor(lane, 'reads', labelled), `${thickness}px, labelled=${labelled}`).toBe(drew)
+        expect(rowsFor(lane, labelled ? NAME_BAND : 0), `${thickness}px, labelled=${labelled}`).toBe(drew)
       }
     }
   })
 
-  it('stops calling itself the reads rung once no read row fits', () => {
-    // The fixed bands take about eighty pixels before the first row, so a lane
-    // dragged short enough has a pile band that can hold nothing. Answering
-    // "reads" there drew an empty lane and still spent a whole BAM window on
-    // it, so zooming *in* made the picture disappear. Below that it is a
-    // coverage lane — which is what it was one zoom step out.
+  it('draws nothing at all once no read row fits', () => {
+    // The name strip and its gap take thirty-three pixels before the first row,
+    // so a lane dragged short enough has a pile band that can hold nothing.
+    // Answering "reads" there drew an empty lane and still spent a whole BAM
+    // window on it, so zooming *in* made the picture disappear. `none` is the
+    // honest answer: this lane's only picture is the pile, and the depth over
+    // the same reads is the row beside it (§8.13).
     const zoomed = { ...frame, domain: [0, 300] as [number, number] }
-    expect(readRungFor({ ...zoomed, thickness: 240 }, 'browser', 1, true)).not.toBe('coverage')
-    expect(readRungFor({ ...zoomed, thickness: 40 }, 'browser', 1, true)).toBe('coverage')
-    expect(readRungFor({ ...zoomed, thickness: 12 }, 'browser', 1, true)).toBe('coverage')
-    // Unlabelled, the name strip's thirty pixels come back, so the same lane
-    // can hold reads at a thickness where a labelled one cannot.
-    const edge = { ...zoomed, thickness: 78 }
-    expect(readRungFor(edge, 'browser', 1, true)).toBe('coverage')
-    expect(readRungFor(edge, 'browser', 1, false)).not.toBe('coverage')
+    expect(readRungFor({ ...zoomed, thickness: 240 }, 'browser', 1, NAME_BAND)).not.toBe('none')
+    expect(readRungFor({ ...zoomed, thickness: 12 }, 'browser', 1, NAME_BAND)).toBe('none')
+    // The boundary itself, stated from the constants: the strip and its gap
+    // come off the top, and one row plus the gap it does not need under it is
+    // `READ_ROW + READ_ROW_GAP` less the gap — nine pixels of band for seven of
+    // read. One pixel either side of it, so an off-by-one moves this.
+    const fits = NAME_BAND + BAND_GAP + READ_ROW
+    expect(readRungFor({ ...zoomed, thickness: fits }, 'browser', 1, NAME_BAND)).not.toBe('none')
+    expect(readRungFor({ ...zoomed, thickness: fits - 1 }, 'browser', 1, NAME_BAND)).toBe('none')
+    // Unlabelled, the name strip's pixels come back, so the same lane can hold
+    // reads at a thickness where a labelled one cannot.
+    const edge = { ...zoomed, thickness: fits - 1 }
+    expect(readRungFor(edge, 'browser', 1, 0)).not.toBe('none')
+  })
+
+  it('draws nothing beside a map, whatever the zoom says', () => {
+    // A pile exists only in the 1D browser. Beside a heatmap the finest unit on
+    // the axis is a matrix bin, so `basePixels` can read like a browser zoomed
+    // right in and there is still nothing for a read to be drawn on — which is
+    // exactly why the surface is asked rather than inferred from the number.
+    const zoomed = { ...frame, domain: [0, 300] as [number, number], thickness: 240 }
+    expect(readRungFor(zoomed, 'browser', 1, NAME_BAND)).not.toBe('none')
+    expect(readRungFor(zoomed, 'map', 1, NAME_BAND)).toBe('none')
   })
 })

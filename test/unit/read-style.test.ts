@@ -46,13 +46,15 @@ describe('the default', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
-      coverageBand: 34,
-      consensusBand: null,
     })
   })
 
-  it('is on an alignment lane and on no other kind', () => {
+  it('is on both of a BAM’s rows and on no other kind', () => {
+    // The depth and the pile carry the same record, because the settings that
+    // are about *which reads count* are written through to both (§8.13) — and a
+    // depth row with no `reads` would have nowhere for the write to land.
     expect(defaultStyle('alignments', '#123456').reads).toEqual(base)
+    expect(defaultStyle('reads', '#123456').reads).toEqual(base)
     expect(defaultStyle('track', '#123456').reads).toBeUndefined()
     expect(defaultStyle('gtf', '#123456').reads).toBeUndefined()
   })
@@ -70,8 +72,6 @@ describe('reading a stored style back', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
-      coverageBand: 50,
-      consensusBand: 20,
     }
     expect(readStyleOf(stored)).toEqual(stored)
   })
@@ -90,19 +90,14 @@ describe('reading a stored style back', () => {
     expect(readStyleOf({ ...base, minMapq: 'thirty' }).minMapq).toBe(0)
   })
 
-  it('clamps a band thickness, and keeps null meaning "follow the lane"', () => {
-    // `null` is not a missing number: the consensus band's default grows with
-    // the lane so a logo has room for a letter, and a reader who has not moved
-    // it is asking to keep following that.
-    expect(readStyleOf({ consensusBand: null }).consensusBand).toBeNull()
-    expect(readStyleOf({}).consensusBand).toBeNull()
-    expect(readStyleOf({ consensusBand: 26 }).consensusBand).toBe(26)
-    expect(readStyleOf({ consensusBand: 'tall' }).consensusBand).toBeNull()
-    // Zero is a real answer — a band dragged shut — and is not clamped away.
-    expect(readStyleOf({ coverageBand: 0 }).coverageBand).toBe(0)
-    expect(readStyleOf({ coverageBand: -40 }).coverageBand).toBe(0)
-    expect(readStyleOf({ coverageBand: 9000 }).coverageBand).toBe(300)
-    expect(readStyleOf({ coverageBand: 'tall' }).coverageBand).toBe(34)
+  it('drops the band thicknesses a session stored before the split', () => {
+    // A BAM is two rows now (§8.13) and each has a lane height of its own, so
+    // the band a reader used to drag inside one lane has nowhere to be. A
+    // session written before that carries the two numbers; they are read past
+    // rather than kept, and nothing here answers to them.
+    const old = readStyleOf({ coverageBand: 50, consensusBand: 20 })
+    expect(old).toEqual(base)
+    expect(Object.keys(old).sort()).toEqual(Object.keys(base).sort())
   })
 
   it('reads the switches as booleans and nothing else', () => {
@@ -190,8 +185,6 @@ describe('surviving a stored session', () => {
       hideDuplicates: true,
       layout: 'reads',
       splits: true,
-      coverageBand: 12,
-      consensusBand: null,
     }
     expect(roundTrip(set)).toEqual(set)
   })
@@ -207,8 +200,6 @@ describe('surviving a stored session', () => {
       hideDuplicates: false,
       layout: 'pairs',
       splits: false,
-      coverageBand: 34,
-      consensusBand: null,
     })
   })
 

@@ -13,10 +13,11 @@ is how they differ. And a plain 1D genome browser for when there is no contact m
 `chrom.sizes`, a bigWig, a FASTA or an indexed BAM is enough to start one, and dropping a `.cool` on it turns the
 same tab into its map. Tick a few chromosomes and the axis becomes those chromosomes; open a FASTA
 and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in. An
-indexed BAM works the same way with one more rung: coverage zoomed out, then the reads themselves in
-packed rows with a consensus under the depth — coloured by strand, pair, insert size, mate or mapping
-quality, with mates joined, split reads outlined, and a click on any read opening its flags, its CIGAR,
-its clips, where its mate went and how far away.
+indexed BAM opens as **two** lanes: its depth, which is a coverage track like any other, and the
+reads themselves in packed rows — coloured by strand, pair, insert size, mate or mapping quality,
+with mates joined, split reads outlined, and a click on any read opening its flags, its CIGAR, its
+clips, where its mate went and how far away. Close either one and keep the other; the filters that
+decide which reads count are kept in step across both.
 
 And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fifteen tasks:
 P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, **pattern detection**

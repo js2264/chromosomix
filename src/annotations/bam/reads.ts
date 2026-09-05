@@ -40,7 +40,7 @@
  */
 
 import { BASE_CODE } from '../fasta'
-import type { BaseCounts, ColourBy, ReadPile } from '../types'
+import type { ColourBy, ReadPile } from '../types'
 import {
   consumesQuery,
   consumesReference,
@@ -52,32 +52,21 @@ import {
 } from './format'
 import type { PileFilter } from './pile'
 
-/** Six counts per position: A, C, G, T, N, deletion. */
-export const BASE_LANES = 6
-/** The index of the deletion lane in {@link BaseCounts.counts}. */
-export const DELETION_LANE = 5
-
 /** What a caller wants out of a window. */
 export interface PileOptions {
   /**
-   * Which records are **counted** — the base composition, and therefore the
-   * consensus band and the depth curve drawn from it.
+   * Which records are **drawn**.
+   *
+   * There used to be a second, narrower filter here, for the base counts this
+   * window also carried — a supplementary alignment is a second piece of one
+   * molecule, so drawing it shows a reader where the molecule went while
+   * *counting* it reports one fragment as two. Those counts are gone with the
+   * consensus band they fed (§8.13), and the depth a reader compares this pile
+   * against is now a row of its own, filtered on its own road (`coverageOf`,
+   * which `readFilterKey` deliberately keeps the split-read switch out of).
+   * So one filter, and it is the drawing one.
    */
   filter: PileFilter
-  /**
-   * Which records are **drawn**, where that is a wider set than the counted one.
-   *
-   * Defaults to {@link filter}, and the one caller that widens it is the
-   * split-read switch (§8.13). The two must be separable here rather than in
-   * the worker, because both passes happen inside this function: a supplementary
-   * alignment is a second piece of one molecule, so drawing it shows a reader
-   * where the molecule went and *counting* it reports one fragment as two — in
-   * the depth and in the consensus alike.
-   *
-   * Must be a superset of {@link filter}. Nothing checks that, because the only
-   * way to build one is to clear an exclusion bit.
-   */
-  pile?: PileFilter
   /** Rows the lane can draw. Reads beyond it are thinned away. */
   maxRows: number
   /** A hard ceiling on reads, whatever the rows allow. */
@@ -104,7 +93,6 @@ export interface PileOptions {
 
 export interface PileResult {
   pile: ReadPile
-  counts: BaseCounts
   total: number
   kept: number
   capped: boolean
@@ -148,29 +136,18 @@ export function pileOf(
   options: PileOptions,
 ): PileResult {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const span = Math.max(0, Math.ceil(end) - Math.floor(start))
-  const counts = new Uint32Array(span * BASE_LANES)
-  const countsFrom = Math.floor(start)
 
-  // Two passes over one buffer. The first counts bases and decides the keep
-  // rate; the second builds the arrays. Counting first is what lets the
-  // consensus come from the *whole* window while the pile is thinned.
-  //
-  // Two filters, tested separately in the one pass. The pile's is the wider of
-  // the two and is what `total` and the thinning are budgeted against, since
-  // those are about what will be *drawn*; the counting filter is what reaches
-  // `countBases`, and it never admits a supplementary alignment however the
-  // lane is set.
-  const drawn = options.pile ?? options.filter
+  // Two passes over one buffer. The first counts how many reads are in the
+  // window and decides the keep rate; the second builds the arrays. Counting
+  // first is what lets a read decide for itself whether it survives, so the
+  // answer does not depend on the order they arrive.
+  const drawn = options.filter
   let total = 0
   const keys: number[] = []
   forEachRecord(bytes, from, (cursor) => {
     if (!wanted(cursor, refId, start, end, drawn)) return
     total++
     keys.push(thinKey(bytes, cursor.at + 32, cursor.at + 32 + cursor.nameBytes - 1))
-    if (wanted(cursor, refId, start, end, options.filter)) {
-      countBases(bytes, view, cursor, counts, countsFrom, span)
-    }
   })
 
   // The keep rate, as a *threshold* on the hash rather than a count: every read
@@ -191,7 +168,6 @@ export function pileOf(
 
   return {
     pile: pack(held, contig, refId, start, end, options),
-    counts: { start: countsFrom, span, counts },
     total,
     kept: held.length,
     capped,
@@ -319,65 +295,6 @@ function place(rows: number[], from: number, to: number): number {
   }
   rows.push(to)
   return rows.length - 1
-}
-
-// ---------------------------------------------------------------------------
-// Base composition, which is what the consensus band is made of
-// ---------------------------------------------------------------------------
-
-/**
- * Add one read's bases to the window's per-position counts.
- *
- * Walks the CIGAR rather than the extent, because a read's bases and the
- * reference positions they sit at only line up between indels. Deletions are
- * counted in their own lane: a column where half the reads have a deletion is
- * exactly what a reader is looking for, and folding those into "no coverage"
- * would hide it.
- */
-function countBases(
-  bytes: Uint8Array,
-  view: DataView,
-  cursor: RecordCursor,
-  counts: Uint32Array,
-  from: number,
-  span: number,
-): void {
-  const long = longCigarOf(bytes, cursor)
-  const opCount = long === null ? cursor.cigarOps : long.length
-  const opAt = (i: number): number =>
-    long === null ? view.getUint32(cursor.cigarAt + i * 4, true) : long[i]
-
-  let refPos = cursor.pos
-  let queryPos = 0
-  for (let i = 0; i < opCount; i++) {
-    const packed = opAt(i)
-    const op = packed & 0xf
-    const length = packed >>> 4
-    if (op === 2) {
-      // A deletion: reference advances, the read has nothing there, and that
-      // absence is the observation.
-      for (let k = 0; k < length; k++) {
-        const at = refPos + k - from
-        if (at >= 0 && at < span) counts[at * BASE_LANES + DELETION_LANE]++
-      }
-      refPos += length
-      continue
-    }
-    if (consumesReference(op) && consumesQuery(op)) {
-      for (let k = 0; k < length; k++) {
-        const at = refPos + k - from
-        if (at >= 0 && at < span) {
-          const code = baseAt(bytes, cursor.seqAt, queryPos + k)
-          counts[at * BASE_LANES + code]++
-        }
-      }
-      refPos += length
-      queryPos += length
-      continue
-    }
-    if (consumesReference(op)) refPos += length
-    if (consumesQuery(op)) queryPos += length
-  }
 }
 
 /** The `BASE_CODE` value of the read's base at `index`, from the packed nibbles. */

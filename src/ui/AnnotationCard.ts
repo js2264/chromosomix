@@ -30,7 +30,7 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import { hasTrackControls } from '../annotations/types'
+import { hasTrackControls, readsAlignments } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
@@ -52,7 +52,8 @@ import {
   mapqField,
   modeField,
   opacityField,
-  readToggles,
+  duplicatesToggle,
+  splitsToggle,
 } from './laneSettings'
 
 /**
@@ -865,16 +866,33 @@ export class AnnotationCard {
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
     if (entry.card === 'linear') out.push(this.laneRow(entry))
     // Which edge of the map — a choice a 1D browser does not have, since there
-    // is one axis and everything is drawn along it.
-    if (entry.card === 'linear' && this.props.context !== 'browser') {
+    // is one axis and everything is drawn along it. And not offered for a pile
+    // either: reads are 1D-only (§8.13), so beside a map the row is there to be
+    // closed and renamed and nothing else. A control that silently does nothing
+    // is worse than an absent one.
+    if (entry.card === 'linear' && entry.kind !== 'reads' && this.props.context !== 'browser') {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
     if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))
-    // The controls no other kind has (§8.13). After the limits, because those
-    // are about the coverage band at the top of the lane and these are about
-    // the reads under it — and because a reader who has zoomed out far enough
-    // to see only coverage has no use for them yet.
-    if (entry.kind === 'alignments') {
+    // Which reads count, on both of a BAM's rows (§8.13). Written through to
+    // the other one — a mapping-quality floor applied to the pile and not to
+    // the depth beside it is two pictures of two different files under one name
+    // — which `patchReads` does, so the two controls need not know about each
+    // other.
+    if (readsAlignments(entry.kind)) {
+      out.push(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          mapqField(this.props.store, entry),
+          duplicatesToggle(this.props.store, entry),
+        ),
+      )
+    }
+    // …and how the pile is drawn, which only the pile has. A colouring and a
+    // pairing mean nothing to a depth curve, so they are not offered on the row
+    // that draws one.
+    if (entry.kind === 'reads') {
       // The key is built first and handed to the picker, so a colouring chosen
       // with the focus still on the select refreshes it immediately — this card
       // defers its own rebuild while a control holds focus, and the lane does
@@ -887,11 +905,10 @@ export class AnnotationCard {
           colourByField(this.props.store, entry, (by) =>
             fillLegend(key, entry.style.colour, by),
           ),
-          mapqField(this.props.store, entry),
+          layoutField(this.props.store, entry),
         ),
         key,
-        el('div', { class: 'ann-inline' }, layoutField(this.props.store, entry)),
-        readToggles(this.props.store, entry),
+        splitsToggle(this.props.store, entry),
       )
     }
     // A sequence lane's value axis is GC, and it is worth being able to clip:

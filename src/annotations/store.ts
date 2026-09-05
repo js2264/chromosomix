@@ -577,6 +577,8 @@ export class AnnotationStore {
      * first as well, every time the row was begun again.
      */
     lead?: StoredEntry['lead']
+    /** The other row over the same file; see {@link AnnotationEntry.partner}. */
+    partner?: string
   }): AnnotationEntry {
     const placement =
       options.placement === undefined
@@ -618,6 +620,7 @@ export class AnnotationStore {
             ? { ...base, flip: !base.flip }
             : base
         })(),
+      ...(options.partner === undefined ? {} : { partner: options.partner }),
     }
     // Only a *handed-in* id can already be here — a minted one is reserved past
     // everything this session has seen — and one that is, is this row arriving a
@@ -811,7 +814,18 @@ export class AnnotationStore {
       if (next.length === 0) break
       for (const entry of next) gone.add(entry.id)
     }
-    this.items = this.items.filter((entry) => !gone.has(entry.id))
+    this.items = this.items
+      .filter((entry) => !gone.has(entry.id))
+      // A BAM's two rows point at each other (§8.13), and closing one leaves
+      // the other holding an id nothing answers to. Cleared rather than left to
+      // be ignored on read: the link is what the settings card offers to write
+      // through, and a row that still claims a partner would be offering to
+      // change a lane that is not on screen.
+      .map((entry) =>
+        entry.partner !== undefined && gone.has(entry.partner)
+          ? { ...entry, partner: undefined }
+          : entry,
+      )
     // A lane naming a track that has gone would draw nothing and hold a slot in
     // every stack it was in, so the placements go with the import.
     this.lanes = this.lanes.filter((lane) => !gone.has(lane.track))
@@ -1121,6 +1135,7 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
         ? {}
         : { lead: { placement: lead.placement, ...(lead.style === undefined ? {} : { style: lead.style }) } }),
     ...(entry.primary === true ? { primary: true } : {}),
+    ...(entry.partner === undefined ? {} : { partner: entry.partner }),
   }
 }
 
@@ -1137,6 +1152,7 @@ const KINDS: AnnotationKind[] = [
   'sequence',
   'metadata',
   'alignments',
+  'reads',
   'classes',
 ]
 const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
@@ -1153,6 +1169,11 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   if (kind !== 'local' && kind !== 'remote' && kind !== 'computed' && kind !== 'metadata') {
     return false
   }
+  // Same reason as `index` below: stored state is untrusted input, and a
+  // `partner` that is not a string would be compared against row ids and
+  // written through to by the settings card.
+  const partner = row['partner']
+  if (partner !== undefined && typeof partner !== 'string') return false
   // Stored state outlives the build that wrote it and reaches here from a share
   // link, so it is untrusted input. An `index` that is not a string would be
   // handed to `fetch` as a URL.

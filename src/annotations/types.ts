@@ -53,12 +53,21 @@ export type AnnotationKind =
   | 'sequence'
   | 'metadata'
   | 'classes'
-  // Aligned reads (§8.13). The second kind after `sequence` whose *picture*
-  // changes with the zoom rather than merely its resolution — depth where a
-  // pixel is a hundred bases, the pile itself where a read is wider than one —
-  // and the first whose finer rungs exist only in the 1D browser, because a
-  // read cannot be drawn where a pixel is a matrix bin.
+  // A BAM's depth (§8.13): one value per pixel, an axis, a ceiling — a track in
+  // every sense except that its values are counted from reads rather than read
+  // out of a file.
   | 'alignments'
+  // The pile those reads make, which is a *second row* over the same file.
+  //
+  // Two kinds rather than two rungs of one, because they are two pictures with
+  // nothing in common: one is a curve against an axis and is drawn at every
+  // zoom on both surfaces, the other is a stack of rectangles that exists only
+  // in the 1D browser and only once a read is wider than a pixel. Sharing a
+  // lane made every question about it conditional — how tall is it, what does
+  // the ceiling drag do, which band did the click land in — and a reader who
+  // wanted the depth without the pile, or the pile without the depth, could ask
+  // for neither.
+  | 'reads'
 
 /**
  * Which card an entry belongs to; see §8.1.
@@ -208,9 +217,26 @@ export function hasAMovableAxis(kind: AnnotationKind): boolean {
  * and has a movable axis: its values are columns of the open file's own tables
  * and come from `cellsFor`, not from the worker (§8.12). Two roads to a
  * profile, and this names the one that goes over the wire.
+ *
+ * `reads` is not in it either, and for a third reason: it goes over the wire,
+ * but by its own request. A `sample` answers one number per pixel and a pile is
+ * not a number per pixel, so the road is `reads` — see `ReadCache`.
  */
 export function drawnFromSamples(kind: AnnotationKind): boolean {
   return kind === 'track' || kind === 'sequence' || kind === 'alignments'
+}
+
+/**
+ * Whether this kind reads a BAM, and so carries a {@link ReadStyle}.
+ *
+ * The two rows an imported BAM makes: the depth and the pile. They are one
+ * file, one open handle in the worker and one set of filters — a minimum
+ * mapping quality applied to the pile and not to the depth under it would be
+ * two pictures of two different files under one name — so everything that is
+ * about *which reads count* is asked of both through this.
+ */
+export function readsAlignments(kind: AnnotationKind): boolean {
+  return kind === 'alignments' || kind === 'reads'
 }
 
 /**
@@ -560,16 +586,16 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
               ? 56
               : kind === 'classes'
                 ? 20
-                : // An alignment lane is taller than a bigWig from the start,
-                  // because it is not one band but a stack of three (§8.13):
-                  // depth, the consensus, and however many rows of reads are
-                  // left. At 120 the pile got four rows and the consensus a
-                  // strip too thin to hold a letter, so a reader who came to
-                  // look at reads spent their first gesture resizing it. A
-                  // stored session keeps whatever they set instead.
+                : // A depth lane is a bigWig's picture and takes a bigWig's
+                  // height. The pile beside it is a stack of rows, and 180 is
+                  // about a dozen of them — enough that a heterozygous site
+                  // shows two alleles rather than a coin flip. Both are what a
+                  // reader *starts* at; a stored session keeps what they set.
                   kind === 'alignments'
-                  ? 240
-                  : 16,
+                  ? 90
+                  : kind === 'reads'
+                    ? 180
+                    : 16,
     // Bars, because one cell is one unit: a metadata column has a value per
     // genome, per contig or per bin and nothing in between, so a line drawn
     // through the tops of them would interpolate between two MAGs that have no
@@ -588,7 +614,7 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     // Present only where it means something, which is the whole point of it
     // being optional — see {@link ReadStyle}. `readsOf` supplies the same
     // defaults for a lane whose stored style predates this field.
-    ...(kind === 'alignments' ? { reads: defaultReadStyle() } : {}),
+    ...(readsAlignments(kind) ? { reads: defaultReadStyle() } : {}),
   }
 }
 
@@ -705,6 +731,21 @@ export interface AnnotationEntry {
    * and the others carry an empty one that makes them it.
    */
   primary?: boolean
+  /**
+   * The other row over the same file, where this row has one (§8.13).
+   *
+   * A BAM imports as two: its depth and its pile. They are separate rows all
+   * the way down — separate lanes, separate heights, either closable without
+   * the other — and what this holds together is the one thing that would be a
+   * lie if they drifted, *which reads are being counted*. A minimum mapping
+   * quality applied to the pile and not to the depth drawn above it is two
+   * pictures of two different files under one name, so `readStyleKey`'s
+   * settings are written through to both (`ui/laneSettings.ts`).
+   *
+   * Symmetric: each row names the other. Cleared on the survivor when one of
+   * them is closed, so a write-through cannot chase an id that has gone.
+   */
+  partner?: string
 }
 
 /** The part of an entry that is worth remembering across a reload (§8.6). */
@@ -780,6 +821,16 @@ export interface StoredEntry {
   lead?: { placement: Placement; style?: Partial<Pick<AnnotationStyle, 'limits' | 'flip'>> } | null
   /** Which feature set the search reads; see {@link AnnotationEntry.primary}. */
   primary?: boolean
+  /**
+   * The other row over the same BAM; see {@link AnnotationEntry.partner}.
+   *
+   * Written down because the pair is a *decision*, not a derivation. A reader
+   * who closed the pile and kept the depth must get back a lone depth row, and
+   * a restore that re-derived the pairing from "this row is a BAM" would hand
+   * them the pile again on every reload. Ids survive a restore intact, so the
+   * link comes back pointing at the same two rows.
+   */
+  partner?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -882,21 +933,6 @@ export interface ReadPile {
   names: string[]
 }
 
-/** Base composition of one window, six counts per reference position. */
-export interface BaseCounts {
-  start: number
-  /** Positions counted; `counts` is `6 × span` long. */
-  span: number
-  /**
-   * `A C G T N -` per position, in that order — the first five are
-   * {@link BASE_CODE}'s own order and the sixth is a deletion.
-   *
-   * One flat array rather than six, so it transfers as one buffer and a column
-   * is `counts.subarray(at * 6, at * 6 + 6)`.
-   */
-  counts: Uint32Array
-}
-
 /**
  * How a pile is coloured.
  *
@@ -958,33 +994,12 @@ export interface ReadStyle {
    * long read spans. Showing them is how a reader sees a split; counting them
    * would be counting the same molecule twice.
    *
-   * So it reaches what is *drawn* and never what is *counted*. Both roads to a
-   * count are held to that: `readFilterKey` deliberately does not mention it,
-   * so the sampled depth never sees it — and `pileOf` takes two filters, so the
-   * base counts that make the read-rung depth and the consensus do not see it
-   * either. The second half is the one that is easy to lose: those counts are
-   * computed in the same function that builds the pile.
+   * So it reaches what is *drawn* and never what is *counted*: `readFilterKey`
+   * deliberately does not mention it, so the depth row beside the pile never
+   * sees it, and `pileOf` takes two filters so the base counts made alongside
+   * the pile do not see it either.
    */
   splits: boolean
-  /**
-   * The depth band's thickness in pixels, and the consensus band's.
-   *
-   * An alignment lane is three pictures stacked in one lane, and only the pile
-   * fills what is left — so a reader who wants to read the consensus, or wants
-   * more rows of reads, has no way to say so with one lane height. `0` hides a
-   * band outright, which is the honest reading of dragging it shut.
-   *
-   * Pixels rather than shares of the lane, for the reason the lane's own
-   * `size` is: the band is *n* pixels tall on the screen you are looking at,
-   * and a share would resize under a lane drag nobody aimed at it.
-   *
-   * The consensus band is `null` until a reader moves it, because its default
-   * is not a constant: it grows with the lane so a logo has room for a letter
-   * (`consensusBandFor`). A stored number is a reader's answer; `null` is "keep
-   * following the lane".
-   */
-  coverageBand: number
-  consensusBand: number | null
 }
 
 /** What an alignment lane starts with. */
@@ -995,8 +1010,6 @@ export function defaultReadStyle(): ReadStyle {
     hideDuplicates: false,
     layout: 'pairs',
     splits: false,
-    coverageBand: 34,
-    consensusBand: null,
   }
 }
 
@@ -1047,23 +1060,7 @@ export function readStyleOf(value: unknown): ReadStyle {
         ? 'reads'
         : fallback.layout,
     splits: row['splits'] === true,
-    coverageBand: band(row['coverageBand'], fallback.coverageBand),
-    consensusBand: row['consensusBand'] === null ? null : band(row['consensusBand'], null),
   }
-}
-
-/**
- * A stored band thickness, clamped.
- *
- * `MAX_BAND` rather than the lane's own maximum: a band taller than that leaves
- * no pile, and a lane whose every pixel is depth curve is a track — which this
- * already is, one zoom step out.
- */
-const MAX_BAND = 300
-
-function band<T extends number | null>(value: unknown, fallback: T): number | T {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return Math.max(0, Math.min(MAX_BAND, Math.round(value)))
 }
 
 /** Every colouring, in the order they are offered. */
@@ -1136,8 +1133,6 @@ export type DiffSource =
 /** The answer to a `reads` request: what to draw, and what was left out. */
 export interface ReadWindow {
   piles: ReadPile[]
-  /** Base composition for the consensus band, one entry per pile. */
-  bases: BaseCounts[]
   /** Reads the window held before filtering and downsampling. */
   total: number
   /** Reads actually returned. */

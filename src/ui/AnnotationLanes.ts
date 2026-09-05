@@ -670,8 +670,15 @@ export class AnnotationLanes {
     // belongs beside.
     const locus = this.axisFor(edge) !== null
     const cells = this.metaAxisFor(edge) !== null
-    if (locus && cells) return entries
-    return entries.filter((entry) => (isMetadata(entry.kind) ? cells : locus))
+    // A pile is 1D-only (§8.13), whatever axis this edge has. Beside a heatmap
+    // the finest unit on the axis is a matrix bin, and a read is not a number
+    // of bins — there is nothing here for one to be drawn on. Filtered out
+    // before the axis question rather than answered `coverage` by it, because
+    // the row that *is* the coverage is a row of its own now and is already in
+    // this list.
+    const placeable = entries.filter((entry) => entry.kind !== 'reads')
+    if (locus && cells) return placeable
+    return placeable.filter((entry) => (isMetadata(entry.kind) ? cells : locus))
   }
 
   /**

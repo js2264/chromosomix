@@ -28,10 +28,18 @@ import {
   colourByField,
   colourLegend,
   fillLegend,
+  duplicatesToggle,
   mapqField,
-  readToggles,
+  splitsToggle,
 } from '@/ui/laneSettings'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+
+/** Two controls in one container, since the two switches are now two functions. */
+function el2(...parts: HTMLElement[]): HTMLElement {
+  const host = document.createElement('div')
+  host.append(...parts)
+  return host
+}
 
 let teardown: DomTeardown
 
@@ -48,19 +56,47 @@ interface Made {
   entry: AnnotationEntry
 }
 
-function make(): Made {
+function make(kind: 'alignments' | 'reads' = 'reads'): Made {
   const store = new AnnotationStore(`reads-${Math.random()}.metacool`, { persist: false })
   const entry = store.begin({
     card: 'linear',
-    kind: 'alignments',
+    kind,
     id: `bam-${Math.random()}`,
     label: 'sample.bam',
     source: { kind: 'local', name: 'sample.bam', file: new File([], 'sample.bam') },
     placement: { top: false, right: false, bottom: true, left: false },
-    style: defaultStyle('alignments', '#0072b2'),
+    style: defaultStyle(kind, '#0072b2'),
     visible: true,
   })
   return { store, entry }
+}
+
+/** A BAM as it actually imports: a depth row and a pile row, pointing at each other. */
+function makePair(): { store: AnnotationStore; depth: AnnotationEntry; pile: AnnotationEntry } {
+  const store = new AnnotationStore(`bam-${Math.random()}.metacool`, { persist: false })
+  const common = {
+    card: 'linear' as const,
+    source: { kind: 'local' as const, name: 'sample.bam', file: new File([], 'sample.bam') },
+    placement: { top: false, right: false, bottom: true, left: false },
+    visible: true,
+  }
+  const depth = store.begin({
+    ...common,
+    kind: 'alignments',
+    id: 'bam-depth',
+    label: 'sample',
+    style: defaultStyle('alignments', '#0072b2'),
+  })
+  const pile = store.begin({
+    ...common,
+    kind: 'reads',
+    id: 'bam-pile',
+    label: 'sample · reads',
+    style: defaultStyle('reads', '#0072b2'),
+    partner: depth.id,
+  })
+  store.update(depth.id, { partner: pile.id })
+  return { store, depth, pile }
 }
 
 /** The entry as the store now holds it — `begin` returns a snapshot, not a view. */
@@ -136,11 +172,8 @@ describe('the MAPQ floor', () => {
 
 describe('the switches', () => {
   function chips(made: Made): HTMLButtonElement[] {
-    const row = readToggles(made.store, made.entry)
+    const row = el2(splitsToggle(made.store, made.entry), duplicatesToggle(made.store, made.entry))
     document.body.append(row)
-    // The row wraps rather than clipping: three switches do not fit on one
-    // line of a settings body, and a clipped third one is a control nobody
-    // knows is there.
     expect(row.querySelector('.ann-chips')).not.toBeNull()
     return all<HTMLButtonElement>(row, '.btn-chip')
   }
@@ -196,6 +229,86 @@ describe('the switches', () => {
     splits.click()
     expect(readsOf(now(made).style).splits).toBe(true)
     expect(splits.title).toContain('never counted in the depth')
+  })
+})
+
+/**
+ * A BAM's two rows are one file, and the filters have to say so.
+ *
+ * The depth and the pile are separate rows all the way down — separate lanes,
+ * separate heights, either closable without the other (§8.13) — and the one
+ * thing that would be a lie if they drifted is *which reads count*. A mapping
+ * quality floor set on the pile and not on the depth above it is two pictures
+ * of two different files under one name, and the reader has no way of telling:
+ * both lanes are drawn, both look plausible, and the curve simply does not
+ * match the pile it is over.
+ */
+describe('the two rows a BAM imports as', () => {
+  it('carries a mapping-quality floor from either row to the other', () => {
+    for (const from of ['depth', 'pile'] as const) {
+      const bam = makePair()
+      const entry = from === 'depth' ? bam.depth : bam.pile
+      const field = mapqField(bam.store, entry)
+      document.body.append(field)
+      const box = field.querySelector('input') as HTMLInputElement
+      box.value = '30'
+      box.dispatchEvent(new Event('change'))
+
+      expect(readsOf(bam.store.byId('bam-depth')!.style).minMapq, `set on the ${from}`).toBe(30)
+      expect(readsOf(bam.store.byId('bam-pile')!.style).minMapq, `set on the ${from}`).toBe(30)
+    }
+  })
+
+  it('carries the duplicate switch across too', () => {
+    const bam = makePair()
+    const chip = duplicatesToggle(bam.store, bam.pile).querySelector('button') as HTMLButtonElement
+    document.body.append(chip)
+    chip.click()
+    expect(readsOf(bam.store.byId('bam-depth')!.style).hideDuplicates).toBe(true)
+    expect(readsOf(bam.store.byId('bam-pile')!.style).hideDuplicates).toBe(true)
+  })
+
+  it('keeps the pile’s own drawing settings to itself', () => {
+    // A colouring and a pairing describe a stack of rectangles and mean nothing
+    // to a depth curve; `splits` is one-sided on purpose, since a supplementary
+    // alignment is drawn and never counted. Writing any of the three through
+    // would refetch the depth for a change it cannot show.
+    const bam = makePair()
+    const colour = colourByField(bam.store, bam.pile)
+    document.body.append(colour)
+    const select = colour.querySelector('select') as HTMLSelectElement
+    select.value = 'insert'
+    select.dispatchEvent(new Event('change'))
+
+    const splits = splitsToggle(bam.store, bam.pile).querySelector('button') as HTMLButtonElement
+    document.body.append(splits)
+    splits.click()
+
+    expect(readsOf(bam.store.byId('bam-pile')!.style)).toMatchObject({
+      colourBy: 'insert',
+      splits: true,
+    })
+    expect(readsOf(bam.store.byId('bam-depth')!.style)).toMatchObject({
+      colourBy: 'strand',
+      splits: false,
+    })
+  })
+
+  it('writes only its own row once the other has been closed', () => {
+    // Closing one row clears the survivor's link (`AnnotationStore.remove`), so
+    // a write-through has nothing to chase. Without that this throws or, worse,
+    // restyles an id the store has minted to something else since.
+    const bam = makePair()
+    bam.store.remove(bam.depth.id)
+    const field = mapqField(bam.store, bam.pile)
+    document.body.append(field)
+    const box = field.querySelector('input') as HTMLInputElement
+    box.value = '30'
+    box.dispatchEvent(new Event('change'))
+
+    expect(bam.store.byId('bam-depth')).toBeUndefined()
+    expect(bam.store.byId('bam-pile')?.partner).toBeUndefined()
+    expect(readsOf(bam.store.byId('bam-pile')!.style).minMapq).toBe(30)
   })
 })
 

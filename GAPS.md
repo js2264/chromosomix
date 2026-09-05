@@ -274,10 +274,10 @@ So that the absence of each is legible as a decision rather than as an oversight
 browser that reads alignments is two applications", and the strongest part of it was never the
 formats but the *scope*: a viewer that reads alignments in order to build contact matrices from them
 would indeed be a second application. That is still refused, at SPECS §13. What is *specified*
-instead is narrower and is an annotation like any other: a coverage lane over the genome the map is
-already about, with a consensus band and a pile of individual reads above it in zoom, living only
-where a base can have a pixel (§8.13). All three bands are built, with the pile's own controls, its
-per-read card, mates and split reads. What is still refused inside that scope is listed at the end
+instead is narrower and is an annotation like any other: a BAM imports as two rows — a coverage
+track over the genome the map is already about, and a pile of individual reads that lives only where
+a base can have a pixel (§8.13). Both are built, with the pile's own controls, its per-read card,
+mates and split reads. What is still refused inside that scope is listed at the end
 of §8.13, and the one worth repeating here is that **no matrix is ever built from alignments** —
 that was the second application this entry was drawing a line against, and it still is.
 The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` collides with the

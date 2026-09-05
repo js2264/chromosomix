@@ -146,11 +146,15 @@ export class AnnotationLoader {
     // has nothing to index and is passed through to be refused by name, which
     // is more use than silently doing nothing.
     for (const { file, index } of pairIndexes(files)) {
-      const held = this.store.entries.find(
+      // Every detached row of that name, not the first. A BAM comes back from a
+      // reload as two of them (§8.13), and reattaching one would leave a reader
+      // who dropped the file again looking at a depth lane with the pile still
+      // asking to be pointed at the same file they had just pointed at.
+      const held = this.store.entries.filter(
         (entry) => entry.status === 'detached' && entry.source.name === file.name,
       )
-      if (held !== undefined) {
-        this.reattach(held.id, file, index)
+      if (held.length > 0) {
+        for (const row of held) this.reattach(row.id, file, index)
         continue
       }
       this.begin(
@@ -264,6 +268,10 @@ export class AnnotationLoader {
         // As on the remote road above: where the *lead* draws it, which is not
         // the same question as which edge the track defaults to.
         lead: row.lead,
+        // …and the other row over the same BAM. A pair that came back unlinked
+        // would look right and behave as two files, so a filter set on the pile
+        // would stop reaching the depth beside it.
+        ...(row.partner === undefined ? {} : { partner: row.partner }),
       })
       this.store.update(row.id, {
         status: 'detached',
@@ -375,6 +383,10 @@ export class AnnotationLoader {
       placement: entry.placement,
       style: entry.style,
       ...(entry.primary === true ? { primary: true } : {}),
+      // A BAM's two rows are carried one at a time, and each brings the other's
+      // id. Both are in the list being carried — `carry` is called for every
+      // row — so the link points at a row that is arriving too.
+      ...(entry.partner === undefined ? {} : { partner: entry.partner }),
     })
   }
 
@@ -431,6 +443,10 @@ export class AnnotationLoader {
             // through even when absent, which the store reads as "on the lead,
             // as `placement` says" — the behaviour every restore has had.
             lead: stored.lead,
+            // The other row over the same BAM, where this row had one. A pair
+            // that came back unlinked would look right and behave as two files:
+            // a filter set on the pile would stop reaching the depth above it.
+            ...(stored.partner === undefined ? {} : { partner: stored.partner }),
           }),
       ...(label === undefined ? {} : { label }),
     })
@@ -438,6 +454,47 @@ export class AnnotationLoader {
     // brings the settings a reader chose, and those are never re-derived.
     void this.read(entry.id, toWire(source), stored === undefined)
     return entry
+  }
+
+  /**
+   * Open the pile beside a BAM's depth (§8.13).
+   *
+   * A second row over the same file, and deliberately a *row* rather than a
+   * second band of the first one. The two are different pictures with nothing
+   * in common — one is a curve against a value axis, drawn at every zoom and on
+   * both surfaces; the other is a stack of rectangles that exists only in the
+   * 1D browser and only once a read is wider than a pixel — and sharing a lane
+   * made every question about them conditional: how tall is this, what does the
+   * ceiling drag do, which band did that click land in. As two rows each is
+   * resized, moved, hidden and closed like any other track, and the reader who
+   * wants only the depth closes the other one.
+   *
+   * The colour is the depth row's, because they are one file. Everything about
+   * *which reads count* is kept in step through {@link AnnotationEntry.partner}.
+   */
+  private pileFor(id: string): void {
+    const entry = this.store.byId(id)
+    if (entry === undefined) return
+    const source = entry.source
+    // Only a row with bytes behind it. Nothing else reaches here today — a
+    // `derived` or `computed` row is never a BAM — but `toWire` throws on one,
+    // and this is the call that would do it.
+    if (source.kind !== 'local' && source.kind !== 'remote') return
+    const pile = this.store.begin({
+      card: 'linear',
+      kind: 'reads',
+      source,
+      // Named apart, because the Tracks list is a list of names and two rows
+      // called `H3K9me3` differ there only by the picture beside them.
+      label: `${entry.label} · reads`,
+      placement: entry.placement,
+      style: defaultStyle('reads', entry.style.colour),
+      partner: entry.id,
+    })
+    this.store.update(entry.id, { partner: pile.id })
+    // `guessed: false`: this row's kind is not a guess to be corrected, and a
+    // pile that forked again would open a third row for every second one.
+    void this.read(pile.id, toWire(source), false)
   }
 
   /**
@@ -465,7 +522,18 @@ export class AnnotationLoader {
         mapContigs: this.mapContigs,
       })
       const card = cardFor(result.format)
-      const kind = card === null ? null : kindFor(card, result.format)
+      // What a *file* of this format is, which for a BAM is its depth — and the
+      // row's own kind wins where the row is the second one over that file. A
+      // pile is a BAM read a second way (§8.13), so re-deriving its kind from
+      // the format would fold it back into the coverage row it was made beside,
+      // on every restore and every reattach.
+      const already = this.store.byId(id)?.kind
+      const kind =
+        card === null
+          ? null
+          : already === 'reads' && result.format === 'bam'
+            ? 'reads'
+            : kindFor(card, result.format)
       if (card === null || kind === null) {
         this.store.update(id, { status: 'error', error: refusal(result.format) })
         this.client.drop(id)
@@ -488,12 +556,30 @@ export class AnnotationLoader {
         kind,
         ...restyle,
         status: 'ready',
-        summary: result.summary,
+        // A BAM's two rows come back from the same file with the same sentence
+        // under them — "2 references · BAI" — and in the Tracks panel their
+        // names are one truncated string apart. So each says which picture it
+        // is, first, where the column shows it (§8.13).
+        summary:
+          kind === 'alignments'
+            ? `coverage · ${result.summary}`
+            : kind === 'reads'
+              ? `reads · ${result.summary}`
+              : result.summary,
         overlap: result.overlap,
         ...(result.payload === undefined ? {} : { payload: result.payload }),
         ...(result.fileExtent === undefined ? {} : { fileExtent: result.fileExtent }),
         error: undefined,
       })
+      // A BAM is two pictures and they are now two rows. Made here rather than
+      // in `begin`, because until the bytes came back this was a file whose
+      // name ended in `.bam` — and a second row for a file that turns out to be
+      // something else is a row with nothing in it.
+      //
+      // `guessed` is what keeps this to *fresh imports*: a restored or carried
+      // row brings its own partner, and a reader who closed the pile and kept
+      // the depth would otherwise be handed the pile again on every reload.
+      if (guessed && kind === 'alignments') this.pileFor(id)
     } catch (err) {
       this.store.update(id, {
         status: 'error',

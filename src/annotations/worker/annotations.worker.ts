@@ -56,7 +56,6 @@ import {
   sniffFormat,
 } from '../parse'
 import type {
-  BaseCounts,
   BaseRegion,
   ContigOverlap,
   FeatureSet,
@@ -277,14 +276,20 @@ const alignments = new Map<string, OpenBam>()
 const openFiles = new Map<string, { open: OpenBam; holders: Set<string> }>()
 
 /**
- * A file's identity, for sharing one open handle between rows.
+ * An open BAM's identity, for sharing one handle and one parsed index between
+ * the two rows a BAM imports as.
  *
  * Name and size for a local file, the URL for a remote one — the same key
  * {@link cacheKey} uses, and for the same reason: two `File` objects for one
  * file are not `===`, so identity has to be something the file itself carries.
+ *
+ * **And its index**, because both halves are what a row actually reads through:
+ * a `.bai` and a `.csi` beside the same reads are two index formats over one
+ * file, and a key naming only the reads would hand the second row an index the
+ * first one built from a different sidecar.
  */
-function fileKey(source: WireSource): string {
-  return cacheKey(source)
+function fileKey(source: WireSource, index: WireSource): string {
+  return `${cacheKey(source)}|${cacheKey(index)}`
 }
 
 /**
@@ -1518,33 +1523,41 @@ async function loadBam(
         `\`samtools index ${source.name}\`.`,
     )
   }
+  const key = fileKey(source, indexSource)
+  const shared = openFiles.get(key)
   let index: BamIndex
-  try {
-    index = await parseBamIndex(await handleFor(indexSource).readFile())
-  } catch (err) {
-    const why = err instanceof Error ? err.message : String(err)
-    // Three different fixes, so three different messages. A reader who has just
-    // dropped a file wants to know which of them happened.
-    //
-    // The remote case is the one worth separating: the sidecar URL there was
-    // **guessed** — `<url>.bai`, never probed, because §12 has no request to
-    // spend finding out that a file has no index — so the commonest failure is
-    // not a corrupt index but no index at that address at all. Saying "could
-    // not be read" would send a reader looking for a broken file that does not
-    // exist, when what they need is the `#index=` convention or a `samtools
-    // index` run on the host.
-    if (source.kind === 'remote') {
+  // Read once per file, not once per row. A BAI for a human WGS alignment is
+  // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
+  // the depth and the pile — so paying that twice and throwing the second copy
+  // away is the whole cost of the second row.
+  if (shared !== undefined) index = shared.open.index
+  else
+    try {
+      index = await parseBamIndex(await handleFor(indexSource).readFile())
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err)
+      // Three different fixes, so three different messages. A reader who has just
+      // dropped a file wants to know which of them happened.
+      //
+      // The remote case is the one worth separating: the sidecar URL there was
+      // **guessed** — `<url>.bai`, never probed, because §12 has no request to
+      // spend finding out that a file has no index — so the commonest failure is
+      // not a corrupt index but no index at that address at all. Saying "could
+      // not be read" would send a reader looking for a broken file that does not
+      // exist, when what they need is the `#index=` convention or a `samtools
+      // index` run on the host.
+      if (source.kind === 'remote') {
+        throw new Error(
+          `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
+            'A BAM is read by region and cannot be opened without one. If the index is published ' +
+            `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+        )
+      }
       throw new Error(
-        `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
-          'A BAM is read by region and cannot be opened without one. If the index is published ' +
-          `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+        `${source.name}'s index could not be read: ${why} ` +
+          `Re-make it with \`samtools index ${source.name}\`.`,
       )
     }
-    throw new Error(
-      `${source.name}'s index could not be read: ${why} ` +
-        `Re-make it with \`samtools index ${source.name}\`.`,
-    )
-  }
 
   // Renamed into the map's vocabulary at the door (§5.9), exactly as a bigWig
   // is and for the same reason: the contig list this reports, the overlap it is
@@ -1566,8 +1579,6 @@ async function loadBam(
     if (!refIdOf.has(header.refs[id].name)) refIdOf.set(header.refs[id].name, id)
   }
 
-  const key = fileKey(source)
-  const shared = openFiles.get(key)
   // A second row over a file already open takes the record the first one made,
   // rather than the handle and index this call just built. The renaming above
   // is per *load* and identical for both rows — same header, same map — so
@@ -1621,6 +1632,11 @@ async function loadBam(
  * so turning it on cannot quietly re-admit the secondary and supplementary
  * alignments that `bam/pile.ts` argues out of every count. Nothing here can
  * admit a supplementary alignment at all — see {@link pileFilterOf}.
+ *
+ * Which is why the depth is a row of its own and not a band of the pile: the
+ * two rows over one BAM (§8.13) are filtered by these two functions, and a
+ * split read drawn in the pile must not appear as a second molecule in the
+ * curve beside it.
  */
 function filterOf(style: ReadStyle | undefined): PileFilter {
   if (style === undefined) return DEFAULT_FILTER
@@ -1637,8 +1653,9 @@ function filterOf(style: ReadStyle | undefined): PileFilter {
  * application where they are admitted. The asymmetry is the point and it is
  * not an oversight: a supplementary record is a second piece of one molecule,
  * so drawing it shows a reader where the molecule went, and counting it would
- * report one fragment as two. Depth therefore never sees them, however the
- * lane is set.
+ * report one fragment as two. The depth row therefore never sees them, however
+ * the pile beside it is set — and `readFilterKey` leaves `splits` out, so
+ * flipping the switch does not even invalidate the depth's cached samples.
  */
 function pileFilterOf(style: ReadStyle): PileFilter {
   const base = filterOf(style)
@@ -1821,7 +1838,7 @@ async function readsFor(
     throw new Error('This track is no longer open. Drop the file again.')
   }
   const empty: ReadWindow = {
-    piles: [], bases: [], total: 0, kept: 0, capped: false, rows: 0, diffs: 'none',
+    piles: [], total: 0, kept: 0, capped: false, rows: 0, diffs: 'none',
   }
 
   const refIdOf = (name: string): number | undefined => {
@@ -1860,7 +1877,6 @@ async function readsFor(
   }
 
   const piles: ReadPile[] = []
-  const bases: BaseCounts[] = []
   let total = 0
   let kept = 0
   let capped = false
@@ -1888,11 +1904,10 @@ async function readsFor(
         Math.floor(plan.region.start),
         Math.ceil(plan.region.end),
         {
-          // Two filters, and the asymmetry is the whole of the split-read
-          // switch: `filter` is what is counted and never sees a supplementary
-          // alignment, `pile` is what is drawn and does when the reader asks.
-          filter: filterOf(style),
-          pile: pileFilterOf(style),
+          // The pile's own filter, which is the only one that admits a
+          // supplementary alignment. What is *counted* is the depth row beside
+          // this one, and it goes through `filterOf` on its own road.
+          filter: pileFilterOf(style),
           maxRows,
           maxReads: MAX_READS,
           colourBy: style.colourBy,
@@ -1910,16 +1925,12 @@ async function readsFor(
       rows = Math.max(rows, result.rows)
       usedMd = usedMd || result.usedMd
       usedCigar = usedCigar || result.usedCigar
-      if (result.pile.length > 0 || piles.length === 0) {
-        piles.push(result.pile)
-        bases.push(result.counts)
-      }
+      if (result.pile.length > 0 || piles.length === 0) piles.push(result.pile)
     }
   }
 
   return {
     piles,
-    bases,
     total,
     kept,
     capped,

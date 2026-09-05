@@ -35,15 +35,11 @@ import type { AnnotationClient } from '../annotations/worker/client'
 import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
-  alignmentBands,
-  depthProfile,
-  type BandSizes,
   packPile,
+  pileBands,
   rowsAcross,
   type PileLayout,
-  drawConsensus,
   drawReads,
-  LOGO_MIN_THICKNESS,
   pileDetail,
   READ_ROW,
   READ_ROW_GAP,
@@ -108,10 +104,6 @@ import {
   gripAcross,
   gripBox,
   groupRuns,
-  acrossToCanvas,
-  bandEdge,
-  canvasToAcross,
-  laneIsHorizontal,
   snapTo,
   withinGrip,
   type LaneFrame,
@@ -296,11 +288,12 @@ interface Lane {
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
   /**
-   * The reads to draw, for an alignment lane zoomed in far enough (§8.13).
+   * The reads to draw, for a pile lane zoomed in far enough (§8.13).
    *
-   * Exclusive with {@link profiles} for the same entry, exactly as
-   * {@link residues} is: an alignment lane is a coverage line *or* a pile with
-   * its consensus, decided per frame from the frame itself by `readRungFor`.
+   * Empty rather than falling back to anything when the lane is too wide for a
+   * read to be a shape: a pile lane's only picture is the pile, and the depth a
+   * reader wants out here is the row beside this one.
+   *
    * The rung is carried alongside so the paint and the hit test cannot come to
    * different conclusions about which picture is on screen.
    */
@@ -308,22 +301,6 @@ interface Lane {
     entry: AnnotationEntry
     window: ReadWindow
     rung: ReadRung
-    /**
-     * The depth curve, resolved here rather than in the paint.
-     *
-     * Two things need it and they run in that order: the autoscale group is
-     * resolved for the whole stack *before* any lane is painted, so a lane that
-     * only knew its depth at paint time would contribute nothing to its group
-     * and the other members would rescale the moment it crossed the read rung.
-     *
-     * The *lane's* frame is passed to `depthProfile` rather than the coverage
-     * band's, and that is safe rather than approximate: `laneBand` spreads the
-     * frame and rewrites only `acrossFrom` and `thickness`, so every input
-     * `depthProfile` reads — `alongFrom`, `alongTo`, `toPixel` — is identical
-     * in both. One pass, one number, and the paint cannot disagree with the
-     * group about how deep this window is.
-     */
-    depth: PixelProfile | null
     /**
      * Where every read of the window sits, packed for the window on screen.
      *
@@ -395,31 +372,17 @@ export class BrowserView {
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: ReturnType<typeof layoutFeatures> }>()
   /**
-   * The band each alignment lane's reads were drawn in, for the same reason.
+   * The band each pile lane's reads were drawn in, for the same reason.
    *
-   * A pile band is three bands down from the lane's own rectangle — name,
-   * coverage, consensus — and recomputing that split at click time would be the
-   * geometry written twice, which §8.4 exists to forbid. What is kept is the
-   * frame the paint actually used, so a click cannot land on a different row
-   * from the one under the pointer.
+   * The pile sits under the lane's name strip, and recomputing that split at
+   * click time would be the geometry written twice, which §8.4 exists to
+   * forbid. What is kept is the frame the paint actually used, so a click
+   * cannot land on a different row from the one under the pointer.
    */
-  private readonly pileBands = new Map<
+  private readonly piled = new Map<
     string,
     { frame: LaneFrame; window: ReadWindow; placed: PileLayout[] }
   >()
-  /**
-   * The boundaries inside an alignment lane a reader can drag, from the paint.
-   *
-   * `across` is in the lane's own outward direction, so it is compared against
-   * `canvasToAcross` rather than against a canvas y — which is what makes this
-   * work on all four edges without a second expression of the geometry.
-   */
-  private readonly bandGrips = new Map<
-    string,
-    Array<{ which: 'coverage' | 'consensus'; across: number; rung: ReadRung }>
-  >()
-  /** The band boundary the pointer is on, so a rule can be drawn on it. */
-  private bandGripping: { entry: string; which: 'coverage' | 'consensus' } | null = null
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
   private gripping: string | null = null
@@ -471,14 +434,6 @@ export class BrowserView {
     | { mode: 'select'; x0: number; x: number }
     | { mode: 'column'; x0: number; from: number }
     | { mode: 'resize'; entry: AnnotationEntry; y0: number; size: number }
-    // One band of an alignment lane, which is the lane's own resize one level in.
-    | {
-        mode: 'band'
-        entry: AnnotationEntry
-        which: 'coverage' | 'consensus'
-        y0: number
-        size: number
-      }
     | { mode: 'reorder'; entry: AnnotationEntry; over: number }
     | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
@@ -1411,8 +1366,7 @@ export class BrowserView {
     drawBoundaries(ctx, ruler, this.rulerHeight, foot)
 
     this.layouts.clear()
-    this.pileBands.clear()
-    this.bandGrips.clear()
+    this.piled.clear()
     this.rangeHits = []
     this.nameHits = []
     this.marks = []
@@ -1481,26 +1435,6 @@ export class BrowserView {
       ctx.stroke()
       ctx.restore()
     }
-    // …and the same rule on a boundary *inside* an alignment lane. Drawn only
-    // across the data rather than the whole canvas: an inner boundary belongs
-    // to one lane, and a rule running through the name column would read as a
-    // divider between lanes.
-    const inner = this.bandGripping
-    if (inner !== null) {
-      const lane = this.lanes.find((one) => one.entry.id === inner.entry)
-      const grip = this.bandGrips.get(inner.entry)?.find((one) => one.which === inner.which)
-      if (lane !== undefined && grip !== undefined) {
-        ctx.save()
-        ctx.strokeStyle = CROSSHAIR_COLOR
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        const edge = acrossToCanvas(lane.frame, grip.across)
-        ctx.moveTo(this.gutter, edge)
-        ctx.lineTo(width, edge)
-        ctx.stroke()
-        ctx.restore()
-      }
-    }
     // The column's own edge, on the same terms: drawn where the pointer is on it
     // or while it is being dragged, and never on a figure. A column has no
     // visible boundary at rest — the names' right edge *is* the boundary — so
@@ -1531,29 +1465,6 @@ export class BrowserView {
         const across = this.gripRow(lane)
         drawGrip(ctx, lane.frame, across, palette.labelColor, lane.entry.id === active ? 1 : GRIP_IDLE)
       }
-      // And a hairline on every boundary inside an alignment lane that can be
-      // moved. At rest rather than on hover, which is the opposite of what the
-      // name column's edge does — and right here for the reason that one is
-      // wrong here: a column's edge is *visible anyway*, because the names stop
-      // at it, and these boundaries are between two pictures that abut. Nothing
-      // said they could be dragged, so nobody found out.
-      //
-      // Never on a figure: it is an affordance, not data.
-      ctx.save()
-      ctx.strokeStyle = palette.labelColor
-      ctx.globalAlpha = BAND_RULE_IDLE
-      ctx.lineWidth = 1
-      for (const lane of this.lanes) {
-        for (const grip of this.bandGrips.get(lane.entry.id) ?? []) {
-          if (grip.across <= 0) continue
-          const edge = Math.round(acrossToCanvas(lane.frame, grip.across)) + 0.5
-          ctx.beginPath()
-          ctx.moveTo(this.gutter, edge)
-          ctx.lineTo(width, edge)
-          ctx.stroke()
-        }
-      }
-      ctx.restore()
     }
     if (this.drag?.mode === 'select') {
       const from = Math.min(this.drag.x0, this.drag.x)
@@ -1622,22 +1533,19 @@ export class BrowserView {
   }
 
   /**
-   * Draw an alignment lane: coverage, consensus, then the pile (§8.13).
+   * Draw a pile lane: the name strip, then the reads under it (§8.13).
    *
-   * Three bands out of one lane frame, cut by `laneBands` — so they share the
-   * genomic axis exactly and a read cannot drift from the depth above it. The
-   * coverage band keeps the lane's own value axis, which is what lets the range
-   * under the name and the ceiling drag go on meaning something while the pile
-   * is what the reader is looking at.
+   * Two bands out of one lane frame, cut by `laneBands`. It used to be four —
+   * a depth curve and a consensus above the pile — and both are gone: the depth
+   * is the row beside this one, with its own height, its own axis and its own
+   * close button, and the consensus was a picture nobody asked for.
    */
-  private paintAlignments(
+  private paintPile(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
-    groups: Map<string, { min: number; max: number }>,
     palette: ReturnType<typeof readCanvasPalette>,
   ): { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' } | null {
     const row = lane.reads[0]
-    const { frame } = lane
     // The row's own entry, not the lane's. They are the same for a lane of one,
     // and they are not for an overlaid group — where taking the lane's would
     // paint the first member's reads in a second member's colour and file the
@@ -1646,75 +1554,12 @@ export class BrowserView {
     const style = entry.style
     const reads = readsOf(style)
     // The label's strip first, so the name and the read count are not read
-    // through the depth curve — see `NAME_BAND`. Through `alignmentBands`
-    // because the row budget `fill` sent to the worker and the hit test behind
-    // a click both measure the last of these, and three expressions of one
-    // split is how they came to disagree (§8.4).
-    const [, coverage, consensus, pile] = alignmentBands(
-      frame,
-      row.rung,
-      this.text,
-      bandSizes(style),
-    )
-    // The two boundaries a reader can move, remembered where the paint put them
-    // — the same reason `pileBands` is remembered, and the same rule: a hit test
-    // built from a second reading of the split is a second reading that drifts.
-    this.bandGrips.set(entry.id, [
-      { which: 'coverage', across: bandEdge(frame, coverage), rung: row.rung },
-      { which: 'consensus', across: bandEdge(frame, consensus), rung: row.rung },
-    ])
-
-    // The curve `fill` already resolved, drawn into the coverage band. Not
-    // recomputed here: `laneBand` changes only the across axis, so the two
-    // calls would return the same numbers at the cost of a second pass over
-    // every base in the window — and of a way for the group and the picture to
-    // come to disagree.
-    const depth = row.depth
-    if (depth !== null) {
-      const limits = resolveLimits(style.limits, extentFor(entry, depth.extent, groups))
-      const paint = {
-        colour: style.colour,
-        mode: style.mode,
-        // The same two steps every other lane's values go through: the group
-        // first, then the lane's own limits. Without the group an alignment
-        // lane would obey its group at the coverage rung and its own window at
-        // the read rung; without `resolveLimits` a typed ceiling would hold one
-        // zoom step out and be ignored here. Both read as the axis jumping on
-        // its own, from the same control in the same card.
-        limits,
-        guideColour: palette.labelColor,
-        haloColour: palette.labelHaloColor,
-        font: scaleFont(LANE_FONT),
-        fills: this.fills,
-        outline: this.outline,
-        baseline: this.baseline,
-        flip: false,
-        opacity: style.opacity,
-      }
-      // Drawn twice while a ceiling is being dragged — once as it stood, faded
-      // and still, and once as the hand is asking for it — exactly as the
-      // profiles branch does. The drag can *start* on a pile lane, so without
-      // this it was a gesture with no feedback at all until release, on the one
-      // lane where the ceiling matters most.
-      const dragged = this.scaling?.id === entry.id ? this.scaling.factor : null
-      if (dragged === null) drawTrack(ctx, coverage, depth, paint)
-      else drawTrackScaling(ctx, coverage, depth, paint, scaledTo(limits, dragged))
-    }
-
-    if (consensus.thickness > 0) {
-      for (let i = 0; i < row.window.piles.length; i++) {
-        const counts = row.window.bases[i]
-        if (counts === undefined) continue
-        drawConsensus(ctx, consensus, this.axis, row.window.piles[i].contig, counts, {
-          opacity: style.opacity,
-          font: scaleFont(LANE_FONT),
-          guideColour: palette.labelColor,
-          logo: row.rung === 'bases' && consensus.thickness >= LOGO_MIN_THICKNESS,
-        })
-      }
-    }
-
-    this.pileBands.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
+    // through the pile — see `NAME_BAND`. Through `pileBands` because the row
+    // budget `fill` sent to the worker and the hit test behind a click both
+    // measure the second of these, and three expressions of one split is how
+    // they came to disagree (§8.4).
+    const [, pile] = pileBands(lane.frame, this.nameBand())
+    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
 
     const colours = readColoursFor(row.window, style.colour)
     for (let i = 0; i < row.window.piles.length; i++) {
@@ -1757,7 +1602,7 @@ export class BrowserView {
     } | null = null
     clipLane(ctx, frame)
     if (lane.reads.length > 0) {
-      label = this.paintAlignments(ctx, lane, groups, palette)
+      label = this.paintPile(ctx, lane, palette)
     } else if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
         drawSequence(ctx, frame, this.axis, regions, {
@@ -1830,6 +1675,21 @@ export class BrowserView {
           // nothing here" rather than "there is too much here to draw".
           detail: laneNote(lane.profiles) ?? { kind: 'limits', ...limits },
           at: labelEndFor(frame, limits, first.entry.style.flip),
+        }
+      }
+    } else if (entry.kind === 'reads') {
+      // A pile lane with nothing to pile: too far out for a read to be wider
+      // than the ink it would take, or the window is still on its way. Drawn as
+      // its name and a sentence rather than as an empty rectangle — a lane that
+      // says nothing looks like a lane that is broken, and this one is neither
+      // broken nor going to fill in by itself. The depth over the same reads is
+      // the row beside it and is drawn at every zoom (§8.13), so the reader is
+      // not being asked to zoom in to see *nothing*.
+      if (this.text) {
+        label = {
+          entries: [entry],
+          detail: { kind: 'text', text: 'zoom in to see reads' },
+          at: 'near',
         }
       }
     } else if (entry.payload?.kind === 'pairs') {
@@ -2020,13 +1880,24 @@ export class BrowserView {
   }
 
   /**
+   * The strip a pile lane keeps clear at its top for its own two lines.
+   *
+   * Measured from the label's own metrics rather than taken as a constant:
+   * `nameTop`, `detailDrop` and `nameLine` all move with the reader's text
+   * size, and a fixed strip wrote the read count through the top row of reads
+   * the moment the type grew. Zero where this surface draws no text at all —
+   * an exported figure has no name on it and the whole lane is pile.
+   */
+  private nameBand(): number {
+    return this.text ? scaleLength(NAME_TOP + DETAIL_DROP + NAME_LINE) : 0
+  }
+
+  /**
    * One member of a lane by id, whether it is drawing a profile or a pile.
    *
-   * An alignment lane past the read rung has no `profiles` row — its depth
-   * comes from the base counts under the pile — so a lookup written over
-   * `profiles` alone silently stops finding it exactly when the reader zooms
-   * in, and the ceiling drag and the autoscale button go dead on the lane they
-   * are drawn on.
+   * A pile lane has no `profiles` row at all, so a lookup written over
+   * `profiles` alone would not find one — and the hit test, the readout and the
+   * card's own highlight all go through here.
    */
   private memberOf(lane: Lane, id: string): AnnotationEntry | null {
     return (
@@ -2054,54 +1925,48 @@ export class BrowserView {
         lane.residues.push({ entry: member, regions: regions ?? [] })
         continue
       }
-      // An alignment lane is the second whose *picture* changes with the zoom,
-      // and this is where that switch is thrown. Above the read rung it is a
-      // coverage line and goes down the sampled road below like any other
-      // track; at or past it, it is a pile with a consensus under it and the
-      // reads are fetched instead (§8.13).
-      if (member.kind === 'alignments') {
-        // `this.text` because the name strip is one of the fixed bands, so
-        // whether the lane is labelled changes whether a read row fits at all.
-        const rung = readRungFor(lane.frame, 'browser', 1, this.text, bandSizes(member.style))
-        if (rung !== 'coverage') {
-          const rows = rowsFor(lane.frame, rung, this.text)
-          const window = this.piles.readsFor({
-            entry: member.id,
-            scope: 'browser',
-            axis: this.axis,
-            domain: lane.frame.domain,
-            rows,
-            // The browser's axis is one unit per base (§5.8), so the domain
-            // span over the pixel span *is* bases per pixel.
-            basesPerPixel:
-              (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
-            style: readsOf(member.style),
-          })
-          if (window !== null) {
-            // The band the pile will be drawn into, so the packing knows how
-            // many rows will actually be shown — the same split the paint uses.
-            const band = alignmentBands(lane.frame, rung, this.text, bandSizes(member.style))[3]
-            lane.reads.push({
-              entry: member,
-              window,
-              rung,
-              depth: depthProfile(lane.frame, this.axis, window),
-              placed: packPile(
-                window.piles,
-                this.axis,
-                lane.frame,
-                lane.frame.domain[0],
-                lane.frame.domain[1],
-                readsOf(member.style).layout,
-                rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP),
-              ),
-            })
-            continue
-          }
-          // Nothing in hand yet. Fall through to the coverage line rather than
-          // blanking the lane: the reader keeps a picture while the reads
-          // arrive, which is the same contract every other cache here keeps.
-        }
+      // A pile lane draws reads or it draws nothing (§8.13) — the depth is the
+      // row beside it, not a rung of this one — so it never falls through to
+      // the sampled road below.
+      if (member.kind === 'reads') {
+        // `this.text` because the name strip is a fixed band, so whether the
+        // lane is labelled changes whether a read row fits at all.
+        const rung = readRungFor(lane.frame, 'browser', 1, this.nameBand())
+        if (rung === 'none') continue
+        const window = this.piles.readsFor({
+          entry: member.id,
+          scope: 'browser',
+          axis: this.axis,
+          domain: lane.frame.domain,
+          rows: rowsFor(lane.frame, this.nameBand()),
+          // The browser's axis is one unit per base (§5.8), so the domain
+          // span over the pixel span *is* bases per pixel.
+          basesPerPixel:
+            (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
+          style: readsOf(member.style),
+        })
+        // Nothing in hand yet — the lane stays empty for this frame and the
+        // reads land in the next, which is the contract every other cache here
+        // keeps.
+        if (window === null) continue
+        // The band the pile will be drawn into, so the packing knows how many
+        // rows will actually be shown — the same split the paint uses.
+        const band = pileBands(lane.frame, this.nameBand())[1]
+        lane.reads.push({
+          entry: member,
+          window,
+          rung,
+          placed: packPile(
+            window.piles,
+            this.axis,
+            lane.frame,
+            lane.frame.domain[0],
+            lane.frame.domain[1],
+            readsOf(member.style).layout,
+            rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP),
+          ),
+        })
+        continue
       }
       if (!drawnFromSamples(member.kind)) continue
       const samples = this.cache.samplesFor({
@@ -2131,14 +1996,6 @@ export class BrowserView {
         ...lane.profiles.map(({ entry, profile }) => ({
           group: entry.style.group,
           extent: profile.extent,
-        })),
-        // An alignment lane past the read rung has no profile — its depth comes
-        // from the base counts under the pile — and it is still a member of its
-        // group. Without this the group loses a member exactly when the reader
-        // zooms in, so every *other* lane in it rescales.
-        ...lane.reads.map(({ entry, depth }) => ({
-          group: entry.style.group,
-          extent: depth?.extent ?? null,
         })),
       ]),
       (group) => this.props.groups.scalingOf(group),
@@ -2465,59 +2322,6 @@ export class BrowserView {
     return this.nameColumn > 0 && y >= this.rulerHeight && Math.abs(x - this.gutter) <= COLUMN_GRIP
   }
 
-  /**
-   * The band boundary inside an alignment lane under the pointer, or `null`.
-   *
-   * Tested before the lane's own lower border, because the pile band's far edge
-   * *is* the lane's floor: a reader aiming at the boundary between the pile and
-   * the lane below would otherwise get whichever the code checked first, and
-   * the two do different things. The lane's own border keeps that pixel — it is
-   * the older gesture and the outer one — so the inner grips are the two
-   * boundaries *above* the pile and no more.
-   */
-  private bandGripAt(x: number, y: number): {
-    entry: AnnotationEntry
-    which: 'coverage' | 'consensus'
-    size: number
-  } | null {
-    for (const lane of this.lanes) {
-      const grips = this.bandGrips.get(lane.entry.id)
-      if (grips === undefined) continue
-      const row = lane.reads[0]
-      if (row === undefined) continue
-      const across = canvasToAcross(lane.frame, laneIsHorizontal(lane.frame.orientation) ? y : x)
-      // The **nearest** boundary in range, not the first one found. A band
-      // dragged shut leaves its own boundary a gap's width — three pixels —
-      // from the one above it, well inside the grip's reach, so a first-match
-      // rule always answered with the upper one and a shut band could never be
-      // reopened. Ties go to the later boundary for the same reason: it is the
-      // one whose band has nothing left to grab.
-      let best: { which: 'coverage' | 'consensus'; away: number } | null = null
-      for (const grip of grips) {
-        if (grip.across <= 0) continue
-        const away = Math.abs(across - grip.across)
-        if (away > LANE_GRIP) continue
-        if (best === null || away <= best.away) best = { which: grip.which, away }
-      }
-      if (best !== null) {
-        const reads = readsOf(row.entry.style)
-        const bands = alignmentBands(lane.frame, row.rung, this.text, bandSizes(row.entry.style))
-        return {
-          entry: row.entry,
-          which: best.which,
-          size:
-            best.which === 'coverage'
-              ? reads.coverageBand
-              : // `null` means "follow the lane", so a drag has to start from
-                // the thickness that was actually drawn rather than from a
-                // number that does not exist yet.
-                (reads.consensusBand ?? bands[2].thickness),
-        }
-      }
-    }
-    return null
-  }
-
   private laneAt(y: number): { lane: Lane; onBorder: boolean } | null {
     for (const lane of this.lanes) {
       const offset = y - lane.frame.acrossFrom
@@ -2603,15 +2407,6 @@ export class BrowserView {
         this.drag = { mode: 'select', x0: x, x }
         return
       }
-      // A boundary *inside* an alignment lane, which is the same gesture one
-      // level in. Before the lane's own border for the reason `bandGripAt`
-      // gives.
-      const band = this.bandGripAt(x, y)
-      if (band !== null) {
-        canvas.setPointerCapture(event.pointerId)
-        this.drag = { mode: 'band', entry: band.entry, which: band.which, y0: y, size: band.size }
-        return
-      }
       const hit = this.laneAt(y)
       // What is left once the handle has been ruled out: a lane's lower border
       // resizes it, and everything else is a pan (or a selection, with the key).
@@ -2644,11 +2439,6 @@ export class BrowserView {
         // promising one while the press does another is worse than either.
         const onRange = !onRuler && this.rangeAt(x, y) !== null
         const onGrip = !onRuler && !onRange && this.gripAt(x, y) !== null
-        const onBand = !onRuler && !onRange && !onGrip && this.bandGripAt(x, y)
-        this.bandGripping =
-          onBand === null || onBand === false
-            ? null
-            : { entry: onBand.entry.id, which: onBand.which }
         const onEdge = !onRuler && !onRange && !onGrip && this.onColumnEdge(x, y)
         const onLabel = !onRuler && !onRange && !onGrip && !onEdge && this.nameAt(x, y) !== null
         canvas.classList.toggle('is-grab', onGrip)
@@ -2659,7 +2449,7 @@ export class BrowserView {
         // the border belongs to, and the cursor is what says it can be dragged.
         canvas.classList.toggle(
           'is-resize-across',
-          !onRuler && !onRange && !onGrip && !onEdge && (this.gripping !== null || this.bandGripping !== null),
+          !onRuler && !onRange && !onGrip && !onEdge && this.gripping !== null,
         )
         // The one place this canvas shows a *system* cursor: the divider is a
         // hairline, and `col-resize` is the shape every application uses to say
@@ -2735,21 +2525,6 @@ export class BrowserView {
       if (drag.mode === 'resize') {
         this.props.store.restyle(drag.entry.id, {
           size: Math.max(LANE_MIN_SIZE, Math.round(drag.size + (y - drag.y0))),
-        })
-        return
-      }
-      if (drag.mode === 'band') {
-        // Down to nothing, which hides the band. That is the honest reading of
-        // dragging a boundary shut, and it is how a reader who wants only reads
-        // gets only reads — the alternative, a floor at some minimum, leaves a
-        // strip of nothing they cannot get rid of.
-        const size = Math.max(0, Math.round(drag.size + (y - drag.y0)))
-        const live = readsOf(this.props.store.byId(drag.entry.id)?.style ?? drag.entry.style)
-        this.props.store.restyle(drag.entry.id, {
-          reads:
-            drag.which === 'coverage'
-              ? { ...live, coverageBand: size }
-              : { ...live, consensusBand: size },
         })
         return
       }
@@ -3013,9 +2788,6 @@ export class BrowserView {
     for (const lane of this.lanes) {
       const row = lane.profiles.find((profile) => profile.entry.id === id)
       if (row !== undefined) return extentFor(row.entry, row.profile.extent, groups)
-      // …and the pile's own depth, for an alignment lane past the read rung.
-      const pile = lane.reads.find((read) => read.entry.id === id)
-      if (pile !== undefined) return extentFor(pile.entry, pile.depth?.extent ?? null, groups)
     }
     return null
   }
@@ -3023,14 +2795,13 @@ export class BrowserView {
   private nudgeCeiling(lane: Lane, factor: number): void {
     const groups = this.groupRanges()
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
-    const pile = lane.reads.find((read) => read.entry.id === lane.entry.id) ?? lane.reads[0]
-    const target = row?.entry ?? pile?.entry ?? lane.entry
+    const target = row?.entry ?? lane.entry
     if (!hasTrackControls(target.kind)) return
     // Through the group, as the drag does. Nudging from the lane's *own* peak
     // while its axis is showing the group's is one notch moving the ceiling by
     // a factor of the wrong number — a lane peaking at 5 in a group drawn to
     // 100 jumps to 6.25 instead of 125.
-    const extent = extentFor(target, row?.profile.extent ?? pile?.depth?.extent ?? null, groups)
+    const extent = extentFor(target, row?.profile.extent ?? null, groups)
     const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }
@@ -3127,7 +2898,7 @@ export class BrowserView {
     y: number,
   ): { pile: ReadPile; index: number; source: string } | null {
     for (const lane of this.lanes) {
-      const band = this.pileBands.get(lane.entry.id)
+      const band = this.piled.get(lane.entry.id)
       if (band === undefined) continue
       // Backwards, so a lane drawn over another answers first — the same
       // last-drawn-wins rule `featureAt` follows within one lane.
@@ -3509,6 +3280,9 @@ export class BrowserView {
 
 /** Where the track name sits inside its lane, from the lane's top edge. */
 const NAME_TOP = 9
+/** From that line's centre to the detail line's, and one line's room under it. */
+const NAME_LINE = 13
+const DETAIL_DROP = 14
 
 /**
  * The sizes this view writes its small print at.
@@ -3533,8 +3307,8 @@ function browserLabelStyle(): LaneLabelStyle {
     // larger.
     swatch: scaleLength(9),
     nameTop: scaleLength(NAME_TOP),
-    nameLine: scaleLength(13),
-    detailDrop: scaleLength(14),
+    nameLine: scaleLength(NAME_LINE),
+    detailDrop: scaleLength(DETAIL_DROP),
     inset: scaleLength(5),
     hitHeight: scaleLength(15),
     autoSlot: scaleLength(16),
@@ -3553,25 +3327,12 @@ const NO_OFFSET = { left: 0, top: 0 }
  * excluded for a reason of its own: GC content is a fraction, and an axis that
  * is not `[0, 1]` is not a fraction any more.
  */
-/**
- * One lane's stored band thicknesses, for the renderer.
- *
- * A two-line adapter, and it is here rather than in `render/alignments.ts`
- * because that module knows nothing about a style — the same boundary
- * `readColoursFor` and `ReadPaint` sit on.
- */
-function bandSizes(style: AnnotationEntry['style']): BandSizes {
-  const reads = readsOf(style)
-  return { coverage: reads.coverageBand, consensus: reads.consensusBand }
-}
-
 function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   if (lane === null) return null
-  // Both roads to a value axis. An alignment lane past the read rung draws its
-  // depth from the base counts under the pile and has no `profiles` row, so a
-  // list built from `profiles` alone would make the ceiling drag stop working
-  // on it at exactly the zoom where the reader is looking hardest at the depth.
-  const tracks = [...lane.profiles, ...lane.reads]
+  // `profiles` alone, which is now the whole of it: a pile lane has no value
+  // axis at all, and the depth a reader drags the ceiling of is the row beside
+  // it (§8.13).
+  const tracks = lane.profiles
     .map((row) => row.entry)
     .filter((entry) => hasTrackControls(entry.kind))
   return tracks.length === 0 ? null : tracks
@@ -3602,19 +3363,6 @@ const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
  */
 const GRIP_IDLE = 0.45
 
-/**
- * How faint a band boundary is when nobody is pointing at it.
- *
- * The same strength as a lane handle at rest ({@link GRIP_IDLE}), which is this
- * application's answer to "an affordance nobody is pointing at". Fainter was
- * tried first and measured: at 0.22 the rule under the depth curve came out
- * within a few values of the fill it sits on, and the one over the pile's white
- * was barely there — a line drawn and not seen is the same as no line, and the
- * whole reason it exists is that nothing said these boundaries could be moved.
- *
- * The hover rule that replaces it is the accent colour at twice the width.
- */
-const BAND_RULE_IDLE = 0.4
 
 
 /** Clear space between the end of a name and the start of the data. */

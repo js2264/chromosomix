@@ -1577,9 +1577,9 @@ wrote (§18.7).
 A `.bam` opens as a lane, and it is the first kind here that arrives with a rule of its own attached
 to it (§1). Everything below is that rule and what follows from it.
 
-**What is built is the reader, the coverage band, the consensus band and the pile**, with its
-controls, its per-read card, and mates and split reads drawn. What is deliberately absent is listed
-at the end of this section, each with its own reason.
+**What is built is the reader, the depth track and the pile of reads**, with their controls, the
+per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
+this section, each with its own reason.
 
 **The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
 file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
@@ -1598,16 +1598,43 @@ addressed by an index that describes a coordinate-sorted file; a name-sorted one
 query answers with whatever happened to be in those blocks, which is worse than refusing because it
 looks like an answer. The `@HD SO:` line is read and the refusal says `samtools sort`.
 
-**Three bands, and only the first of them is anywhere but the browser.** The lane holds *coverage*,
-which is a value per pixel and is therefore a track in every sense §8.2 means — it goes through
-`sample`, inherits `profileOf`, the readout, the four edges and the figure, and joins an autoscale
-group with any other track over the same assembly. Above it in zoom the lane grows a *consensus*
-band and a *pile* of individual reads, and those two exist only in the 1D browser. The rule is
-geometry rather than policy: a read is drawn along the axis at its own extent, and beside a heatmap
-the axis is an axis of matrix bins where the finest unit is a bin and not a base. There is nothing
-for a read to be drawn *on* there. The same is already true of the FASTA lane, which is GC content
-beside a map and residues only in the browser (§8.8), and alignments are that shape with one more
-rung.
+**A BAM imports as two rows, and only one of them is anywhere but the browser.** One is *depth* — a
+value per pixel, and therefore a track in every sense §8.2 means: it goes through `sample`, inherits
+`profileOf`, the readout, the four edges and the figure, and joins an autoscale group with any other
+track over the same assembly. The other is the *pile* of individual reads, which exists only in the
+1D browser. The rule is geometry rather than policy: a read is drawn along the axis at its own
+extent, and beside a heatmap the axis is an axis of matrix bins where the finest unit is a bin and
+not a base. There is nothing for a read to be drawn *on* there, so a pile row is never placed on a
+map, at any zoom.
+
+Two **rows** rather than two bands of one lane, and that is the shape the whole of the rest of this
+section follows from. They are two pictures with nothing in common — a curve against a value axis
+against a stack of rectangles — and sharing a lane made every question about them conditional: how
+tall is this, what does a ceiling drag do here, which band did that click land in, which of the two
+does a resize grow. As two rows each is resized, reordered, hidden, exported and **closed** like any
+other track, and a reader who wants the depth without the pile closes the pile. The lane machinery
+needed no case for either.
+
+What has to be paid for that is one link. The two rows point at each other, and everything that is
+about *which reads count* — the mapping-quality floor and the duplicate switch — is written through
+to both: a floor applied to the pile and not to the depth beside it is two pictures of two different
+files under one name, and nothing on screen would say so. How the pile is *drawn* — the colouring,
+the pair layout, the split-read switch — is the pile's alone, because none of it means anything to a
+curve. Closing one row clears the other's link, so a write-through cannot chase a row that has gone.
+In the worker the two rows share one open handle and one parsed index, keyed on the file **and its
+index**: a BAI for a human alignment is single-digit megabytes to fetch and to parse, and the second
+row must not pay that again to throw the result away.
+
+The pair is made when the bytes come back rather than when the file is dropped (§8.3), so a file
+named `.bam` that turns out to be something else gets one row; and it is made only for a **fresh
+import**, so a reader who closed the pile and kept the depth is not handed the pile again on every
+reload. The link is stored with the session, and the pile's kind survives its own load — a `bam` is
+`alignments` by format, and re-deriving the second row's kind from the format would fold it back
+into the first.
+
+The same two-pictures-one-file shape is already true of the FASTA lane, which is GC content beside a
+map and residues only in the browser (§8.8). Alignments differ in that the two pictures are far
+enough apart to be worth two rows.
 
 **Above what it can afford, the lane draws nothing and says why.** This is the one place an
 alignment lane differs from every other kind, and it follows from having no summary layer: depth over
@@ -1687,31 +1714,17 @@ two ends of a fragment landed on different rows and the thread ran from one of t
 that was not there — the picture read as a scatter of unrelated reads. `fragments` fills that gap
 instead of threading it; `reads` packs every record on its own, for a single-ended library.
 
-**Each band is resizable, and the pile takes what is left.** An alignment lane is three pictures
-stacked in one lane, so one lane height cannot say "more consensus" or "more reads" — and the pile is
-the one that runs out first, since a peak deeper than its band drops its tail. The two boundaries
-above the pile are dragged the way a lane's own floor is, with the same live write, and a band
-dragged shut is hidden: that is the honest reading of the gesture, and a floor at some minimum would
-leave a strip of nothing a reader cannot remove. A press takes the **nearest** boundary rather than
-the first one found, because a shut band leaves its own boundary a gap's width from the one above it
-— well inside the grip's reach — and a first-match rule would make shutting a band irreversible.
+**Each row is resized by its own floor**, which is what two rows bought and is the whole of the
+gesture: there is no boundary inside a lane to drag any more. A pile lane is cut into two bands and
+only two — a strip for its name and its read count, and the pile under it — and the strip is sized
+from the label's own metrics rather than from a constant, because those metrics grow with the
+reader's text size and a fixed strip wrote the read count through the top row of reads the moment
+the type did.
 
-Each boundary carries a hairline **at rest**, which is the opposite of what the name column's edge
-does and is right for the opposite reason: a column's edge is visible anyway, because the names stop
-at it, while these sit between two pictures that abut. Nothing said they could be dragged, so nobody
-found out. It is an affordance and never reaches a figure.
-
-The boundary itself is one function, `bandEdge`. `laneBand` stores a band's `acrossFrom` in *canvas*
-coordinates while its `thickness` is a length, so `acrossFrom + thickness` reads like the far edge
-and is a canvas coordinate — which displaced every grip by the lane's own origin, and on a top or
-left lane pointed the wrong way. That is the shape of mistake §8.4's one-place rule exists for, and
-it is why the test that pins it uses a non-zero parent origin at all four orientations: at zero the
-error is invisible.
-
-The depth band's thickness is stored as a number; the consensus band's is stored as `null` until it
-is moved, because its default is not a constant — it grows with the lane so a logo has room for a
-letter. `null` means "keep following the lane", and a number means a reader has answered. Neither can
-hold the consensus band open at the coverage rung, where there is no consensus to draw.
+A lane too short for a single read row draws **nothing**, and says *zoom in* rather than showing an
+empty rectangle. That is the same answer it gives when the reader is too far out for a read to be
+wider than the ink it would take, and it costs no fetch: the rung is decided from the frame, and the
+depth over the same reads is the row beside it, drawn at every zoom.
 
 **Thinning is a property of the zoom, so the cache key carries one.** The pile is thinned in the
 worker against the lane's row budget over the fetched window, so a window fetched for a wide view
@@ -1724,11 +1737,12 @@ sampled track, bounded at one refetch per halving, and unmoved by a pan (§2).
 molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
 junction a long read spans — so showing it is how a reader sees a split, and counting it would report
 one fragment as two. The switch therefore reaches what is *drawn* and cannot reach what is
-*counted*, which is the one asymmetry in this lane and is deliberate. There are two roads to a count
-and both are held to it: the sampled depth never sees the switch at all, and the base counts that
-make the read-rung depth *and the consensus* are taken under a second, narrower filter — because
-those counts are computed inside the same function that builds the pile, which is exactly where a
-filter widened for drawing leaks into a number. Such a read is drawn outlined rather than faded, since
+*counted*, which is the one asymmetry between a BAM's two rows and is deliberate. It is held by the
+split itself: the depth is its own row on its own road, and `readFilterKey` leaves the switch out
+entirely — so flipping it does not even invalidate the depth's cached samples. It used to be held by
+a second, narrower filter inside the function that builds the pile, because that function also
+counted bases; those counts are gone with the consensus they fed, and with them the one place a
+filter widened for drawing could leak into a number. Such a read is drawn outlined rather than faded, since
 faded already means "soft clip" here; and it is never joined to the primary as though it were a
 mate, because it is the same end of the template rather than the other one.
 
@@ -1760,8 +1774,11 @@ off-screen by definition for anything but a short insert, so following them is o
 range request per visible read with no locality at all. The mate's coordinates are decoded and shown;
 the bytes are not chased. No **`SA` walk**: a split read's other pieces are drawn where the window
 already holds them, from the supplementary records themselves, and the tag naming pieces *outside*
-the window is not followed — for the same locality reason the mate is not. No **variant calling** — §18.9's argument about a half-good caller inside a
-viewer applies here with more force, not less. No **contact matrix derived from alignments**: that is
+the window is not followed — for the same locality reason the mate is not. No **consensus band**: it was built, and it was a picture nobody asked for — a bar chart of the
+commonest base, then a sequence logo, occupying the height that made the pile useful and repeating
+what the mismatch marks in the reads already say. It is removed rather than deprecated, and with it
+the per-position base counts that fed it. No **variant calling** — §18.9's argument about a half-good
+caller inside a viewer applies here with more force, not less. No **contact matrix derived from alignments**: that is
 the second application GAPS' original refusal was drawing a line against, and it still is. And no
 **CRAM**, which is refused on stronger ground than "wrong app": it cannot be decoded without the
 exact reference its records were compressed against, identified by an M5 checksum and conventionally
@@ -1901,10 +1918,10 @@ the cost it exists to police:
 
 | Operation | Budget |
 |---|---|
-| Open a BAM: header + index | ≤ 3 range requests — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
+| Open a BAM: header + index | ≤ 3 range requests, **once for both rows** — the depth and the pile share one open handle and one parsed index — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
 | One alignment window | ≤ 5 coalesced range requests |
 | Pan inside the window already fetched | 0 requests |
-| Change a lane control | one window's reads again, and **0** for the coverage band — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count. Joining mates costs **nothing**: it is drawn from columns the pile already carries. Depth is a count and does not care how the reads were coloured, which is why the two caches watch keys of different widths (§8.13) |
+| Change a lane control | one window's reads again, and **0** for the depth row beside it — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count and the only two written through to both rows. Joining mates costs **nothing**: it is drawn from columns the pile already carries. Depth is a count and does not care how the reads were coloured, which is why the two caches watch keys of different widths (§8.13) |
 | A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
 
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to

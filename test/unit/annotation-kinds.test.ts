@@ -29,6 +29,7 @@ import {
   hasAMovableAxis,
   hasTrackControls,
   isMetadata,
+  readsAlignments,
   type AnnotationKind,
 } from '@/annotations/types'
 
@@ -42,6 +43,7 @@ const KINDS: AnnotationKind[] = [
   'metadata',
   'classes',
   'alignments',
+  'reads',
 ]
 
 describe('what a lane can be filled from', () => {
@@ -115,6 +117,44 @@ describe('an alignment lane', () => {
 
   it('is not one of the open file’s own columns', () => {
     expect(isMetadata('alignments')).toBe(false)
+  })
+})
+
+/**
+ * The pile is the other half of a BAM, and it is not a track.
+ *
+ * A BAM imports as two rows — the depth, which is a coverage profile in every
+ * sense, and the pile, which is a stack of rectangles. Every predicate above is
+ * about a *profile*, and answering any of them `true` for the pile would put a
+ * value axis on a lane that has no values: an autoscale group it would drag
+ * around by its read count, a ceiling that scales nothing, a `sample` fetched
+ * per frame and thrown away.
+ */
+describe('a pile lane', () => {
+  it('answers none of the profile questions', () => {
+    expect(drawsAProfile('reads')).toBe(false)
+    expect(hasAMovableAxis('reads')).toBe(false)
+    expect(hasTrackControls('reads')).toBe(false)
+    expect(isMetadata('reads')).toBe(false)
+  })
+
+  it('is not filled from `sample`, because a pile is not a number per pixel', () => {
+    // The one predicate whose false answer is *load-bearing* rather than merely
+    // correct: a `true` here would spend a `sample` request per frame on a lane
+    // that draws from `reads`, and the two would race for the same worker.
+    expect(drawnFromSamples('reads')).toBe(false)
+  })
+
+  it('shares the file, and so the filters, with the depth beside it', () => {
+    expect(readsAlignments('reads')).toBe(true)
+    expect(readsAlignments('alignments')).toBe(true)
+  })
+
+  it('is the only kind besides the depth that reads a BAM', () => {
+    for (const kind of KINDS) {
+      if (kind === 'reads' || kind === 'alignments') continue
+      expect(readsAlignments(kind), kind).toBe(false)
+    }
   })
 })
 

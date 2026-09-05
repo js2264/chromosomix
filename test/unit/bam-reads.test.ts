@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
 
 import { readHeader } from '@/annotations/bam/format'
 import { DEFAULT_FILTER } from '@/annotations/bam/pile'
-import { BASE_LANES, DELETION_LANE, groupsFor, pileOf, thinKey } from '@/annotations/bam/reads'
+import { groupsFor, pileOf, thinKey } from '@/annotations/bam/reads'
 import { bamBytes, tagBytes, type TestRecord } from './bam-fixtures'
 
 const REFS = [
@@ -162,52 +162,6 @@ describe('thinning', () => {
     expect(value).toBeGreaterThanOrEqual(0)
     expect(value).toBeLessThan(1)
     expect(thinKey(bytes, 0, bytes.length)).toBe(value)
-  })
-})
-
-describe('base composition, which needs no reference', () => {
-  it('counts a column', () => {
-    const { counts } = pileFor([
-      { refId: 0, pos: 100, cigar: '4M', seq: 'ACGT', name: 'a' },
-      { refId: 0, pos: 100, cigar: '4M', seq: 'ACGT', name: 'b' },
-      { refId: 0, pos: 100, cigar: '4M', seq: 'TCGT', name: 'c' },
-    ], 100, 104)
-    const column = (at: number): number[] =>
-      [...counts.counts.slice(at * BASE_LANES, at * BASE_LANES + BASE_LANES)]
-    // Position 100: two A, one T.
-    expect(column(0)).toEqual([2, 0, 0, 1, 0, 0])
-    expect(column(1)).toEqual([0, 3, 0, 0, 0, 0])
-  })
-
-  it('counts a deletion in its own lane, rather than as absence', () => {
-    // A column where half the reads have a deletion is exactly what a reader is
-    // looking for; folding it into "no coverage" hides it.
-    const { counts } = pileFor([
-      { refId: 0, pos: 100, cigar: '2M2D2M', seq: 'ACGT', name: 'a' },
-    ], 100, 106)
-    const at = 2 * BASE_LANES
-    expect(counts.counts[at + DELETION_LANE]).toBe(1)
-  })
-
-  it('is counted before thinning, so a deep column is not under-reported', () => {
-    const many: TestRecord[] = Array.from({ length: 300 }, (_, i) => ({
-      refId: 0, pos: 100, cigar: '4M', seq: 'ACGT', name: `r${i}`,
-    }))
-    const { counts, capped } = pileFor(many, 100, 104, { maxRows: 2 })
-    expect(capped).toBe(true)
-    expect(counts.counts[0]).toBe(300)
-  })
-
-  it('follows the CIGAR, so an insertion does not shift the columns', () => {
-    const { counts } = pileFor([
-      { refId: 0, pos: 100, cigar: '2M3I2M', seq: 'ACTTTGT', name: 'a' },
-    ], 100, 104)
-    const column = (at: number): number[] =>
-      [...counts.counts.slice(at * BASE_LANES, at * BASE_LANES + BASE_LANES)]
-    expect(column(0)).toEqual([1, 0, 0, 0, 0, 0]) // A
-    expect(column(1)).toEqual([0, 1, 0, 0, 0, 0]) // C
-    expect(column(2)).toEqual([0, 0, 1, 0, 0, 0]) // G, after the insertion
-    expect(column(3)).toEqual([0, 0, 0, 1, 0, 0]) // T
   })
 })
 

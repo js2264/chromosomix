@@ -284,7 +284,27 @@ function patchReads(
 ): void {
   const live = store.byId(entry.id) ?? entry
   store.restyle(entry.id, { reads: { ...readsOf(live.style), ...patch } })
+  // …and through to the other row over the same BAM, for the settings that are
+  // about which reads *count* rather than how they are drawn (§8.13). A
+  // mapping-quality floor on the pile and not on the depth above it is two
+  // pictures of two different files under one name.
+  const shared: Partial<ReadStyle> = {}
+  for (const key of LINKED) if (key in patch) shared[key] = patch[key] as never
+  if (Object.keys(shared).length === 0) return
+  const other = live.partner === undefined ? undefined : store.byId(live.partner)
+  if (other === undefined) return
+  store.restyle(other.id, { reads: { ...readsOf(other.style), ...shared } })
 }
+
+/**
+ * The read settings a BAM's two rows share.
+ *
+ * Which reads count, and nothing about how they are drawn: a colouring and a
+ * pairing describe a pile and mean nothing to a depth curve, and `splits` is
+ * deliberately one-sided — see {@link splitsToggle}. Those three are not
+ * offered on the depth row at all, so this list is the whole of the link.
+ */
+const LINKED = ['minMapq', 'hideDuplicates'] as const satisfies ReadonlyArray<keyof ReadStyle>
 
 /** The same, for reading a control's current value back. */
 function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
@@ -425,50 +445,62 @@ export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
 }
 
 /**
- * The two switches: show split reads, hide marked duplicates.
+ * Hide the alignments a pipeline marked as duplicates.
  *
- * Text buttons rather than icons, and together on one row, because neither has
- * a picture anyone would recognise and both are states the lane is *in*. They
- * carry `aria-pressed` for the same reason the flip does.
+ * A text button rather than an icon, because it has no picture anyone would
+ * recognise and it is a state the lane is *in*; it carries `aria-pressed` for
+ * the same reason the flip does. It reads as what it *hides* rather than as
+ * what it keeps, which is the way round the reader is thinking about it — and
+ * it is off by default, on the argument `bam/pile.ts` makes: marking duplicates
+ * is a pipeline's decision, and hiding them unasked would make this app
+ * disagree with every other reading of the same file.
  *
- * `duplicates` reads as what it *hides* rather than as what it keeps, which is
- * the way round the reader is thinking about it — and it is off by default, on
- * the argument `bam/pile.ts` makes: marking duplicates is a pipeline's
- * decision, and hiding them unasked would make this app disagree with every
- * other reading of the same file.
+ * On **both** of a BAM's rows, because it is about which reads count.
  */
-export function readToggles(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
-  const reads = readsOf(entry.style)
-
-  const duplicates = button(
+export function duplicatesToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).hideDuplicates
+  const chip = button(
     'hide duplicates',
     () => patchReads(store, entry, { hideDuplicates: !liveReads(store, entry).hideDuplicates }),
     {
-      class: `btn btn-chip${reads.hideDuplicates ? ' is-on' : ''}`,
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
       title:
-        'Skip alignments flagged as PCR or optical duplicates. Off by default: whether they are ' +
-        'marked at all is the pipeline’s decision, not this viewer’s.',
+        'Skip alignments flagged as PCR or optical duplicates, in the pile and in the depth ' +
+        'beside it. Off by default: whether they are marked at all is the pipeline’s decision, ' +
+        'not this viewer’s.',
     },
   )
-  duplicates.setAttribute('aria-pressed', String(reads.hideDuplicates))
+  chip.setAttribute('aria-pressed', String(on))
+  return el('div', { class: 'ann-chips' }, chip)
+}
 
-  const splits = button(
+/**
+ * Draw the further pieces of a read the aligner split across a breakpoint.
+ *
+ * The pile's alone, and that is the whole asymmetry: a supplementary record is
+ * a second piece of one molecule, so drawing it shows a reader where the
+ * molecule went and counting it would report one fragment as two. The depth row
+ * never sees them however this is set — `pileFilterOf` is the only place in the
+ * application that admits one.
+ */
+export function splitsToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).splits
+  const chip = button(
     'split reads',
     () => patchReads(store, entry, { splits: !liveReads(store, entry).splits }),
     {
-      class: `btn btn-chip${reads.splits ? ' is-on' : ''}`,
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
       title:
         'Also draw supplementary alignments — the further pieces of a read the aligner had to ' +
         'split across a breakpoint. They are outlined, and they are never counted in the depth.',
     },
   )
-  splits.setAttribute('aria-pressed', String(reads.splits))
-
+  chip.setAttribute('aria-pressed', String(on))
   return el(
     'div',
     { class: 'field field-block' },
     el('span', { class: 'field-label', text: 'reads' }),
-    el('div', { class: 'ann-chips' }, splits, duplicates),
+    el('div', { class: 'ann-chips' }, chip),
   )
 }
 

@@ -14,21 +14,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Alignment files open, and their reads are a lane.** Drop a `.bam` with its
-  `.bai` or `.csi` beside it — or point at one by URL — and the depth over the
-  window is drawn like any other track: on any of the map's four edges, in the
-  1D browser, with limits, an autoscale group, the ceiling drag, the readout and
-  the exported figure, because it goes through the one funnel every lane's
-  values already come out of. A `.bam` can also *start* a browser session on its
-  own, since its `@SQ` table is every sequence and its exact length.
+- **Alignment files open as two lanes.** Drop a `.bam` with its `.bai` or `.csi`
+  beside it — or point at one by URL — and it lands as *two* rows over the one
+  file: its **depth**, drawn like any other track (on any of the map's four
+  edges, in the 1D browser, with limits, an autoscale group, the ceiling drag,
+  the readout and the exported figure, because it goes through the one funnel
+  every lane's values already come out of), and the **reads** themselves, in
+  packed rows, once the view is narrow enough for a read to be more than a few
+  pixels. A `.bam` can also *start* a browser session on its own, since its
+  `@SQ` table is every sequence and its exact length.
 
-  **Zoom in and the lane stops being a curve.** Past the width at which a read
-  is more than a few pixels it becomes a pile of individual molecules in packed
-  rows, with a consensus band between the pile and the depth — bars while a base
-  owns a pixel, a stacked sequence logo once a column is wide enough to hold a
-  letter. Both live only in the 1D browser, and that is geometry rather than
+  Two rows rather than two bands of one lane, because they are two pictures with
+  nothing in common — a curve against a value axis, and a stack of rectangles.
+  Each is resized, reordered, hidden and **closed** on its own, so a reader who
+  wants the depth without the pile closes the pile and keeps the link they had.
+  Behind them is one open file and one parsed index, and the filters that decide
+  *which reads count* — the mapping-quality floor and the duplicate switch — are
+  written through to both, because a floor on the pile and not on the depth
+  above it is two pictures of two different files under one name.
+
+  The pile lives only in the 1D browser, and that is geometry rather than
   policy: beside a heatmap the axis is an axis of matrix bins, where the finest
   unit is a bin and not a base, so there is nothing for a read to be drawn *on*.
+  Too far out for a read to be wider than its own ink, or a lane dragged too
+  short to hold a row, and it says *zoom in* rather than drawing a smear — the
+  depth over the same reads is the lane beside it, and is drawn at every zoom.
 
   A read is a rectangle only when nothing happened to it, and the exceptions are
   what anyone is looking at: a deletion is a rule through a gap because the read
@@ -45,10 +55,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   insert size, by where the mate went, or by mapping quality, with a key under
   the picker naming every category. It colours; it does not *group* — the rows
   are packed by position, so the categories are interleaved down the pile rather
-  than banded, and a band per category is not built. Beside it a mapping-quality floor, which
-  moves the depth as well as the reads so the band and the pile cannot disagree,
-  and three switches: join mates, show split reads, hide marked duplicates. All
-  of it is stored with the session.
+  than banded, and a band per category is not built. Beside it the pair layout
+  and the split-read switch, which are the pile's alone; and on **both** rows the
+  mapping-quality floor and the duplicate switch, which are about which reads
+  count. All of it is stored with the session.
 
   Four of the five reach the worker on the request that needs them; the layout
   is the one the worker never reads, so changing it redraws what is already in
@@ -64,27 +74,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   *running request's* controls, never against the drawn window's, which between
   a change and the first landing is permanently the old one.
 
-  **Each band of the lane is resizable.** The depth band and the consensus band
-  have draggable boundaries of their own — the lane's own floor gesture, one
-  level in — and the pile takes whatever is left. A hairline marks each one at
-  rest, because unlike the name column's edge these boundaries have no other
-  visible sign, so nothing would say they could be moved. Drag one shut and it is
-  hidden; the nearest boundary wins a press, so a shut band can be reopened.
-  It is also the lever for a pile deeper than its band, which is why the caption
-  names it.
-
   **Split reads are drawn and never counted.** A supplementary alignment is a
   further piece of one molecule the aligner had to split across a breakpoint, so
   drawing it is how a reader sees the split and counting it would report one
-  fragment as two. Both roads to a count are held to that: the sampled depth,
-  and the base counts that make the read-rung depth and the consensus. It is
-  outlined rather than faded — faded already means "soft clip" here — and it is
-  never joined to its primary as though it were a mate.
-
-  A lane dragged shorter than about ninety pixels is a coverage lane again,
-  whatever the zoom: the name strip, the depth band and the consensus take that
-  much before the first read row, so below it the rung answers `coverage` rather
-  than drawing an empty lane and spending a BAM window on it.
+  fragment as two. The split is what holds that: the depth is its own row on its
+  own road, and the switch is not even in the key its samples are cached under,
+  so turning it on costs the depth nothing at all. It is outlined rather than
+  faded — faded already means "soft clip" here — and it is never joined to its
+  primary as though it were a mate.
 
   **A click on a read opens a card and fetches nothing.** The flags in words
   with the raw number beside them, the CIGAR, the clips, where the mate went,

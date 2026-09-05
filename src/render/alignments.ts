@@ -1,26 +1,27 @@
 /**
- * Drawing a pile of reads, the consensus under it, and the pairs between them.
+ * Drawing a pile of reads, and the pairs between them.
  *
- * ## Three rungs, and which surface each belongs to
+ * ## Where a pile can be drawn at all
  *
- * An alignment lane is the second kind here whose *picture* changes with the
- * zoom rather than only its resolution — the FASTA lane is the first, and this
- * is that shape with one more rung (§8.13):
+ * A BAM imports as two rows (§8.13): its depth, which is a coverage profile
+ * `drawTrack` paints like any other track, and the pile — this module. So there
+ * is no rung here at which this lane draws a curve. There are only the two at
+ * which it draws anything:
  *
- * - **coverage**, a value per pixel, which is a track in every sense §8.2 means
- *   and is drawn by `drawTrack` like any other;
  * - **reads**, individual molecules in packed rows, once a read is wider than a
  *   few pixels;
  * - **bases**, the same pile with a letter in every column, once a base owns
  *   one.
  *
- * {@link readRungFor} is the whole of that decision and it takes the *surface*
- * as an argument. Beside a heatmap the axis is an axis of matrix bins, where
- * the finest unit is a bin rather than a base — so there is nothing for a read
- * to be drawn on, and the answer there is always `coverage`. The rule is
- * geometry rather than policy, but it is stated as a rule because the geometry
- * alone cannot enforce it: `basePixels` measures pixels per *axis unit*, and a
- * map zoomed into a fine cooler has the same pixels-per-unit as a browser.
+ * …and `none` for everywhere else, where the lane says *zoom in* rather than
+ * drawing a smear. {@link readRungFor} is the whole of that decision and it
+ * takes the *surface* as an argument. Beside a heatmap the axis is an axis of
+ * matrix bins, where the finest unit is a bin rather than a base — so there is
+ * nothing for a read to be drawn on, and the answer there is always `none`. The
+ * rule is geometry rather than policy, but it is stated as a rule because the
+ * geometry alone cannot enforce it: `basePixels` measures pixels per *axis
+ * unit*, and a map zoomed into a fine cooler has the same pixels-per-unit as a
+ * browser.
  *
  * ## Why the pile is not just rectangles
  *
@@ -46,7 +47,6 @@ import { BASE_COLOURS } from './sequence'
 const BASE_LETTERS = ['A', 'C', 'G', 'T', 'N'] as const
 import {
   canvasToAcross,
-  clipLane,
   laneBands,
   laneIsHorizontal,
   laneRect,
@@ -55,17 +55,23 @@ import {
   type LaneFrame,
 } from './lane'
 import { basePixels } from './sequence'
-import type { BaseCounts, PairLayout, ReadPile } from '../annotations/types'
-import { BASE_LANES } from '../annotations/bam/reads'
+import type { PairLayout, ReadPile } from '../annotations/types'
 import { FLAG } from '../annotations/bam/format'
 
 /** The one flag bit this module draws differently; see {@link drawOne}. */
 const SUPPLEMENTARY = FLAG.SUPPLEMENTARY
 import type { LocusAxis } from './locus'
-import type { PixelProfile } from './tracks'
 
-/** Which picture an alignment lane draws. */
-export type ReadRung = 'coverage' | 'reads' | 'bases'
+/**
+ * Which picture a pile lane draws, if any.
+ *
+ * `none` is the answer everywhere a read is narrower than the ink it would take
+ * — the lane says *zoom in* rather than drawing a smear. It used to be called
+ * `coverage`, because the depth curve shared the lane and was what a reader saw
+ * out here; the depth is a row of its own now (§8.13) and this rung draws
+ * nothing at all.
+ */
+export type ReadRung = 'none' | 'reads' | 'bases'
 
 /** Which surface is asking — the one thing geometry cannot answer for itself. */
 export type LaneSurface = 'browser' | 'map'
@@ -79,10 +85,10 @@ const LETTER_MIN_PIXELS = 7
 /**
  * Which rung this frame is on.
  *
- * `surface` is not advisory. Reads and the consensus exist only in the 1D
- * browser (§8.13), and this is the one place that is decided — so a caller on
- * the map gets `coverage` whatever its zoom, and cannot get anything else by
- * arriving with a frame that happens to be finely scaled.
+ * `surface` is not advisory. A pile exists only in the 1D browser (§8.13), and
+ * this is the one place that is decided — so a caller on the map gets `none`
+ * whatever its zoom, and cannot get anything else by arriving with a frame that
+ * happens to be finely scaled.
  *
  * `bpPerUnit` converts the frame's own units into base pairs. It is `1` in the
  * browser, where the axis is the assembly laid out at one unit per base, and it
@@ -93,23 +99,18 @@ export function readRungFor(
   frame: LaneFrame,
   surface: LaneSurface,
   bpPerUnit = 1,
-  labelled = true,
-  sizes?: BandSizes,
+  nameBand = NAME_BAND,
 ): ReadRung {
-  if (surface !== 'browser') return 'coverage'
+  if (surface !== 'browser') return 'none'
   const perBase = basePixels(frame) / Math.max(1e-9, bpPerUnit)
-  const rung = perBase >= LETTER_MIN_PIXELS ? 'bases' : perBase >= READ_MIN_PIXELS / AVERAGE_READ ? 'reads' : 'coverage'
-  if (rung === 'coverage') return 'coverage'
-  // Zoom is not the only thing that decides this. The name strip, the depth
-  // band and the consensus are fixed heights and take about eighty pixels
-  // before the first read row, so a lane dragged short enough has a pile band
-  // that can hold nothing — and the pile is what the rung is *for*. Answering
-  // `reads` there drew an empty lane and still spent a whole BAM window on it,
-  // so zooming *in* made the picture disappear.
-  //
-  // Below that, the lane is a coverage lane. Which is what it was one zoom step
-  // out, and what it looks like: the reader loses nothing they could see.
-  return rowsIn(alignmentBands(frame, rung, labelled, sizes)[3]) >= 1 ? rung : 'coverage'
+  const rung = perBase >= LETTER_MIN_PIXELS ? 'bases' : perBase >= READ_MIN_PIXELS / AVERAGE_READ ? 'reads' : 'none'
+  if (rung === 'none') return 'none'
+  // Zoom is not the only thing that decides this. The name strip takes a fixed
+  // height off the top, so a lane dragged short enough has a pile band that can
+  // hold nothing — and the pile is what this lane *is*. Answering `reads` there
+  // drew an empty lane and still spent a whole BAM window on it, so zooming in
+  // made the picture disappear.
+  return rowsIn(pileBands(frame, nameBand)[1]) >= 1 ? rung : 'none'
 }
 
 /**
@@ -361,7 +362,7 @@ export function drawReads(
 
     drawOne(ctx, frame, pile, i, at, across, paint, colour)
 
-    if (paint.diffs && rung !== 'coverage') {
+    if (paint.diffs && rung !== 'none') {
       drawDiffs(ctx, frame, pile, i, at, across, paint, perBase, rung)
     }
   }
@@ -635,338 +636,76 @@ function line(
   ctx.restore()
 }
 
-// ---------------------------------------------------------------------------
-// The consensus, which needs no reference at all
-// ---------------------------------------------------------------------------
-
 /**
- * How a consensus band is painted.
- *
- * Two pictures of one thing, and the switch between them is width. A **bar** is
- * one column per position, coloured by the base that won and as tall as its
- * share — legible down to a pixel a base. A **logo** stacks every base that was
- * seen, each glyph scaled to its own frequency, and needs a column wide enough
- * to hold a letter and a band tall enough to stack four.
- */
-export interface ConsensusPaint {
-  opacity: number
-  font: string
-  /** Ink for the baseline and for a column nothing was observed at. */
-  guideColour: string
-  /**
-   * Draw stacked glyphs rather than one bar per column.
-   *
-   * A logo is the honest picture where a column is mixed — it shows *what* the
-   * minority was, not merely that there was one — and it is unreadable where a
-   * column is a pixel wide.
-   */
-  logo: boolean
-}
-
-/** What a column of the consensus turned out to be. */
-export interface ConsensusColumn {
-  /** `BASE_CODE` value of the commonest base, or `-1` where nothing was seen. */
-  base: number
-  /** Its share of the column, in `[0, 1]`. */
-  share: number
-  /** Reads counted at this position, deletions included. */
-  depth: number
-}
-
-/**
- * The commonest base at one position, and how sure that is.
- *
- * Deletions are counted in the depth but can never *win* the column: a
- * consensus is a claim about sequence, and "the consensus here is a gap" is not
- * a sequence — it is what the coverage band and the pile are already saying.
- */
-export function consensusAt(counts: BaseCounts, position: number): ConsensusColumn {
-  const at = position - counts.start
-  if (at < 0 || at >= counts.span) return { base: -1, share: 0, depth: 0 }
-  const from = at * BASE_LANES
-  let depth = 0
-  for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[from + lane]
-  if (depth === 0) return { base: -1, share: 0, depth: 0 }
-  let best = -1
-  let most = 0
-  // Only the four real bases compete. `N` is an absence of information and a
-  // deletion is an absence of sequence; neither is a letter to call.
-  for (let lane = 0; lane < 4; lane++) {
-    if (counts.counts[from + lane] > most) {
-      most = counts.counts[from + lane]
-      best = lane
-    }
-  }
-  return most === 0 ? { base: -1, share: 0, depth } : { base: best, share: most / depth, depth }
-}
-
-/**
- * Draw the consensus for one window.
- *
- * Every column is drawn, including the ones nothing was observed at — a gap in
- * a consensus band is a fact about the data and must not look like the edge of
- * the window.
- */
-export function drawConsensus(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  axis: LocusAxis,
-  contig: string,
-  counts: BaseCounts,
-  paint: ConsensusPaint,
-): void {
-  const segment = axis.segmentOf(contig)
-  if (segment === null || !(segment.bpPerUnit > 0)) return
-  const at = (base: number): number =>
-    frame.toPixel(segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit)
-
-  ctx.save()
-  // Clipped to its own band, which is the belt to the braces above. Fixing the
-  // mismeasured cap height stops the logo eating the coverage band; this stops
-  // the last letter of a column, or a round capital's overshoot below its
-  // baseline, from reaching the pile by a pixel.
-  clipLane(ctx, frame)
-  ctx.globalAlpha = paint.opacity
-  ctx.font = paint.font
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-
-  for (let position = counts.start; position < counts.start + counts.span; position++) {
-    const x0 = at(position)
-    const x1 = at(position + 1)
-    if (x1 < frame.alongFrom - 2 || x0 > frame.alongTo + 2) continue
-    // A logo is a *stack* of glyphs, which only reads along a horizontal lane:
-    // down the side of a map the letters would stack along the genomic axis and
-    // the picture would be nonsense. That edge gets the bar, which is the same
-    // number drawn a way that works there.
-    if (paint.logo && laneIsHorizontal(frame.orientation)) {
-      drawLogoColumn(ctx, frame, counts, position, x0, x1)
-    }
-    else drawBarColumn(ctx, frame, counts, position, x0, x1, paint)
-  }
-  ctx.restore()
-}
-
-/** One column as a bar: the winning base, as tall as its share. */
-function drawBarColumn(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  counts: BaseCounts,
-  position: number,
-  x0: number,
-  x1: number,
-  paint: ConsensusPaint,
-): void {
-  const column = consensusAt(counts, position)
-  if (column.base < 0) {
-    // Observed nothing here. A hairline on the baseline says so; leaving the
-    // column blank would look like the edge of the window.
-    if (column.depth === 0 && x1 - x0 >= 1) {
-      ctx.save()
-      ctx.globalAlpha = paint.opacity * 0.35
-      ctx.fillStyle = paint.guideColour
-      const [x, y, w, h] = laneRect(frame, x0, x1, 0, 1)
-      ctx.fillRect(x, y, w, h)
-      ctx.restore()
-    }
-    return
-  }
-  // Full height at a unanimous column, and never *less than* a sliver at a
-  // mixed one: a column drawn at a tenth of a pixel reads as an absence.
-  const height = Math.max(1, frame.thickness * column.share)
-  const [x, y, w, h] = laneRect(frame, x0, x1, 0, height)
-  ctx.fillStyle = BASE_COLOURS[column.base] ?? BASE_COLOURS[4]
-  ctx.fillRect(x, y, w, h)
-
-  if (x1 - x0 >= LETTER_MIN_PIXELS && frame.thickness >= 10) {
-    ctx.fillStyle = '#ffffff'
-    const mid = (x0 + x1) / 2
-    const centre = height / 2
-    ctx.fillText(BASE_LETTERS[column.base] ?? 'N', laneX(frame, mid, centre), laneY(frame, mid, centre))
-  }
-}
-
-/**
- * One column as a stack of glyphs, each scaled to its own frequency.
- *
- * The picture a reader means by "a logo": the height of a letter *is* its
- * share, so a column where two bases split evenly is two half-height letters
- * rather than one full-height letter and a number somewhere else.
- */
-function drawLogoColumn(
-  ctx: CanvasRenderingContext2D,
-  frame: LaneFrame,
-  counts: BaseCounts,
-  position: number,
-  x0: number,
-  x1: number,
-): void {
-  const from = (position - counts.start) * BASE_LANES
-  if (from < 0 || from >= counts.counts.length) return
-  let depth = 0
-  for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[from + lane]
-  if (depth === 0) return
-
-  const seen: Array<{ base: number; share: number }> = []
-  for (let lane = 0; lane < 4; lane++) {
-    const share = counts.counts[from + lane] / depth
-    if (share > 0) seen.push({ base: lane, share })
-  }
-  // Most frequent on *top*, which is the convention every sequence logo shares
-  // — so a reader who knows one knows this. `across` counts outward from the
-  // map and the letters stack along it, so the largest goes first.
-  seen.sort((a, b) => b.share - a.share)
-
-  const width = x1 - x0
-  const mid = (x0 + x1) / 2
-  let across = 0
-  for (const { base, share } of seen) {
-    const height = frame.thickness * share
-    if (height < 2) {
-      across += height
-      continue
-    }
-    const letter = BASE_LETTERS[base] ?? 'N'
-    ctx.save()
-    ctx.fillStyle = BASE_COLOURS[base] ?? BASE_COLOURS[4]
-    // **Before** the measurement, not after it. `actualBoundingBoxAscent` is
-    // defined as the distance from the line `textBaseline` names to the top of
-    // the glyph — it is baseline-relative, not a font constant — and
-    // `drawConsensus` leaves the baseline on `middle` for the bar path. Measured
-    // there, a capital came back about 0.42em instead of 0.71em, so `height /
-    // cap` was ~1.7x too large and every letter overshot its slot by most of its
-    // own height. On the browser's bottom lane the slot nearest the map is
-    // directly under the coverage band, so the tallest letter of a near-
-    // unanimous column ate it.
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'alphabetic'
-    // Measured rather than assumed. A glyph's cap height is a property of the
-    // font, and the one number that must not be guessed here: scaling by a
-    // *ratio* as though it were a length is how every letter comes out an order
-    // of magnitude too tall and the logo covers the lane below it.
-    const metrics = ctx.measureText(letter)
-    const cap = Math.max(1, metrics.actualBoundingBoxAscent || 1)
-    const em = Math.max(1, metrics.width)
-
-    // The glyph sits on its baseline, so the transform is anchored at the
-    // *bottom* of its slot — whichever canvas end that is, since `across` runs
-    // backwards against the canvas on two of the four edges.
-    const y0 = laneY(frame, mid, across)
-    const y1 = laneY(frame, mid, across + height)
-    const x = laneX(frame, mid, across)
-    ctx.translate(x, Math.max(y0, y1))
-    ctx.scale((width * 0.9) / em, height / cap)
-    ctx.fillText(letter, 0, 0)
-    ctx.restore()
-    across += height
-  }
-}
-
-// ---------------------------------------------------------------------------
-// The three bands, and what fills them
-// ---------------------------------------------------------------------------
-
-/**
- * Room kept clear at the top of an alignment lane for its own name and detail.
+ * Room kept clear at the top of a pile lane for its own name and detail, at the
+ * reader's default text size.
  *
  * Every other lane draws its label *over* its data, with a halo, and that works
  * because a track is low wherever it is low — there is usually somewhere for
- * two lines of text to sit. An alignment lane has no such place: the coverage
- * band is dense by construction and the pile fills whatever is left, so a label
- * over either is a label read through ink. Reserving the strip costs two rows
- * of reads and is the difference between a lane whose name can be read and one
- * whose name is decoration.
+ * two lines of text to sit. A pile has no such place: it fills the lane and is
+ * dense by construction, so a label over it is a label read through ink.
+ * Reserving the strip costs two rows of reads and is the difference between a
+ * lane whose name can be read and one whose name is decoration.
+ *
+ * Two lines, because a pile lane writes both: its name, and how many reads are
+ * in the window. Thirty pixels held only the first, and the second came out
+ * through the top row of reads — which is exactly the failure the strip exists
+ * to prevent. The number is `nameTop + detailDrop + nameLine` from
+ * `render/laneLabel.ts`: where the first line's centre goes, how far the detail
+ * drops below it, and one line's room under that.
+ *
+ * A *default* rather than the number, because those three scale with the
+ * reader's text size and this module cannot see it — {@link pileBands} takes
+ * the strip it should keep, and `BrowserView` computes it from the very
+ * constants it hands `render/laneLabel.ts`. A constant here would write over a
+ * reader who made the type larger; this one is what that sum comes to at the
+ * default size, and it is what every caller that draws no label uses.
  */
-export const NAME_BAND = 30
+export const NAME_BAND = 36
 
-/** Thickness of the coverage band inside an alignment lane. */
-export const COVERAGE_BAND = 34
-/** Gap between the three bands, so they read as three and not one. */
+/** Gap between the name strip and the pile, so they read as two and not one. */
 export const BAND_GAP = 3
 /** One read row, and the gap under it. */
 export const READ_ROW = 7
 export const READ_ROW_GAP = 2
-/** Below this the consensus is a bar chart; above it, a stack of glyphs. */
-export const LOGO_MIN_THICKNESS = 26
-
-/**
- * The consensus band's thickness, which is zero until it can say anything.
- *
- * A consensus over columns a pixel wide is a row of coloured ticks that repeats
- * the coverage band above it, so it is not drawn at all until reads are
- * individually visible — and it grows once a letter fits, because that is where
- * it starts carrying the thing the coverage band cannot.
- */
-export function consensusBandFor(rung: ReadRung, frame: LaneFrame, sizes?: BandSizes): number {
-  // Never at the coverage rung, whatever a reader set: there is no consensus to
-  // draw there, and a band held open by a stored number would be a strip of
-  // nothing between the depth curve and the lane's floor.
-  if (rung === 'coverage') return 0
-  const set = sizes?.consensus
-  if (set !== null && set !== undefined) return Math.max(0, set)
-  if (rung === 'bases') return Math.min(40, Math.max(18, frame.thickness * 0.2))
-  return Math.min(22, Math.max(10, frame.thickness * 0.12))
-}
 
 /**
  * How many read rows a lane has room for.
  *
- * What is left after the coverage band and the consensus, which is what the
- * worker thins the pile against. A lane too short for a single row still asks
- * for one: the alternative is a request for zero reads, and a pile of none is
+ * What is left under the name strip, which is what the worker thins the pile
+ * against. A lane too short for a single row still asks for one: the
+ * alternative is a request for zero reads, and a pile of none is
  * indistinguishable from a failure.
  */
-export function rowsFor(frame: LaneFrame, rung: ReadRung, labelled: boolean): number {
-  return Math.max(1, rowsIn(alignmentBands(frame, rung, labelled)[3]))
+export function rowsFor(frame: LaneFrame, nameBand = NAME_BAND): number {
+  return Math.max(1, rowsIn(pileBands(frame, nameBand)[1]))
 }
 
 /**
- * The lane's four bands: the name strip, the depth, the consensus, the pile.
+ * The lane's two bands: the name strip, and the pile under it.
  *
  * One function because §8.4 means it: the paint lays these out, the row budget
- * sent to the worker is measured against the last of them, and the hit test
+ * sent to the worker is measured against the second of them, and the hit test
  * inverts it. Three readings of one split, and when they were three
- * *expressions* of it the budget over-stated the pile by a gap — `laneBands`
- * puts a gap between every pair of four parts, which is three, and the budget
- * subtracted two.
+ * *expressions* of it the budget over-stated the pile by a gap.
  *
- * The name strip is a band of zero thickness when the surface draws no text,
- * rather than a part that is absent: keeping the shape at four is what lets
- * every caller index it the same way.
+ * `nameBand` is a thickness rather than a "is it labelled" flag, because the
+ * strip's right size is the label's own metrics and those live on the surface
+ * drawing it. Zero is a surface that writes no text — a band of no thickness
+ * rather than a part that is absent, so every caller can index the pair the
+ * same way.
+ *
+ * It used to be four bands — a name strip, a depth curve and a consensus above
+ * the pile — and every one of those is now a question this lane does not ask.
+ * The depth is a row of its own beside this one (§8.13); the consensus is gone.
+ * A band is not something a reader resizes any more, because a *lane* is.
  */
-export function alignmentBands(
-  frame: LaneFrame,
-  rung: ReadRung,
-  labelled: boolean,
-  sizes?: BandSizes,
-): [LaneFrame, LaneFrame, LaneFrame, LaneFrame] {
+export function pileBands(frame: LaneFrame, nameBand = NAME_BAND): [LaneFrame, LaneFrame] {
   return laneBands(
     frame,
-    [
-      { fixed: labelled ? NAME_BAND : 0 },
-      { fixed: coverageBandFor(sizes) },
-      { fixed: consensusBandFor(rung, frame, sizes) },
-      { fill: true },
-    ],
+    [{ fixed: Math.max(0, nameBand) }, { fill: true }],
     BAND_GAP,
-  ) as [LaneFrame, LaneFrame, LaneFrame, LaneFrame]
-}
-
-/**
- * The two band thicknesses a reader has set, where they have set them.
- *
- * Passed rather than read from a style, because this module draws and knows
- * nothing about the store — the same reason `ReadPaint` takes colours rather
- * than an entry.
- */
-export interface BandSizes {
-  coverage: number
-  /** `null` keeps the default, which follows the lane; see {@link consensusBandFor}. */
-  consensus: number | null
-}
-
-function coverageBandFor(sizes?: BandSizes): number {
-  return sizes === undefined ? COVERAGE_BAND : Math.max(0, sizes.coverage)
+  ) as [LaneFrame, LaneFrame]
 }
 
 /**
@@ -987,82 +726,6 @@ export function rowsAcross(thickness: number, rowHeight: number, rowGap: number)
 
 function rowsIn(band: LaneFrame): number {
   return rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP)
-}
-
-/**
- * Depth per pixel, from the base counts the pile already carries.
- *
- * Not a second request. The counts under a pile are made from the *same* reads
- * it was thinned out of (`bam/reads.ts`), so deriving the coverage band from
- * them is both cheaper and more honest than asking `sample` for the same window
- * again — two fetches could answer from two different moments and draw a pile
- * that does not match its own summary.
- */
-export function depthProfile(
-  frame: LaneFrame,
-  axis: LocusAxis,
-  window: { piles: readonly ReadPile[]; bases: readonly BaseCounts[] },
-): PixelProfile | null {
-  const from = Math.floor(frame.alongFrom)
-  const slots = Math.max(1, Math.ceil(frame.alongTo) - from)
-  const mean = new Float32Array(slots).fill(Number.NaN)
-  const sum = new Float64Array(slots)
-  const weight = new Float64Array(slots)
-  let any = false
-
-  for (let i = 0; i < window.piles.length; i++) {
-    const counts = window.bases[i]
-    if (counts === undefined) continue
-    const segment = axis.segmentOf(window.piles[i].contig)
-    if (segment === null || !(segment.bpPerUnit > 0)) continue
-    for (let at = 0; at < counts.span; at++) {
-      let depth = 0
-      for (let lane = 0; lane < BASE_LANES; lane++) depth += counts.counts[at * BASE_LANES + lane]
-      if (depth === 0) continue
-      const base = counts.start + at
-      // Every pixel the base *covers*, not the one its left edge lands on.
-      // Above one pixel per base the two are different: filling only the edge
-      // leaves the pixels between them empty, and a profile of alternating
-      // values and NaN draws as a picket fence rather than as a depth curve.
-      const unit0 = segment.unitStart + (base - segment.bpStart) / segment.bpPerUnit
-      const unit1 = segment.unitStart + (base + 1 - segment.bpStart) / segment.bpPerUnit
-      const p0 = frame.toPixel(unit0)
-      const p1 = frame.toPixel(unit1)
-      const first = Math.max(0, Math.round(Math.min(p0, p1)) - from)
-      const last = Math.min(slots - 1, Math.max(first, Math.round(Math.max(p0, p1)) - 1 - from))
-      for (let slot = first; slot <= last; slot++) {
-        sum[slot] += depth
-        weight[slot] += 1
-      }
-      any = true
-    }
-  }
-  if (!any) return null
-  let max = 0
-  for (let i = 0; i < slots; i++) {
-    if (weight[i] <= 0) continue
-    mean[i] = sum[i] / weight[i]
-    if (mean[i] > max) max = mean[i]
-  }
-
-  // The extent is the deepest *pixel*, over the pixels this profile actually
-  // drew — not the deepest base, and not over the whole fetched window.
-  //
-  // Both halves of that matter and each was wrong once. The window is fetched
-  // three view-widths wide (`ReadCache.FETCH_PAD`) and can be a whole locus
-  // stale, so a peak measured over it belongs to something nobody is looking
-  // at; and this lane shares an autoscale group with bigWigs whose extent is
-  // `profileOf`'s per-pixel mean over the view, so a per-*base* maximum would
-  // change the units of this lane's contribution at the read rung — the same
-  // "two different numbers under one name" the rung is supposed to avoid.
-  return {
-    from,
-    mean,
-    low: mean,
-    high: mean,
-    envelope: false,
-    extent: { min: 0, max },
-  }
 }
 
 /**
