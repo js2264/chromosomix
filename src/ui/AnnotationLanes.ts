@@ -71,6 +71,7 @@ import {
   type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
+import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
 import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
@@ -1272,8 +1273,10 @@ export class AnnotationLanes {
         // down to sixteen pixels still falls back to names inside the wide
         // features — the rule is one rule, and the lane's height decides.
         const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-        const layout = layoutFeatures(frame, axis, entry.payload.data, rows)
+        const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
+        const layout = layoutFeatures(frame, axis, entry.payload.data, rows, least)
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
+        const set = entry.payload.data
         const paint = {
           colour: entry.style.colour,
           guideColour: geometry.palette.guide,
@@ -1283,13 +1286,29 @@ export class AnnotationLanes {
           labels: text,
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
+          // The same rule as the browser's, on the same lane drawn beside a map
+          // (§8.14). A variant lane belongs on both surfaces — unlike a pile,
+          // which needs a base to have a pixel — because a variant is an
+          // interval and a bin is a range of them, so the density this collapses
+          // to at bin resolution is a true reading rather than a smear.
+          ...(entry.kind === 'variants'
+            ? {
+                colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
+                minWidth: least,
+              }
+            : {}),
         }
-        if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
-        else drawSegments(ctx, frame, entry.payload.data, layout, paint)
+        if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
+        else drawSegments(ctx, frame, set, layout, paint)
         if (text) {
           label = {
             entries: [entry],
-            detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+            detail: layout.dense
+              ? {
+                  kind: 'text',
+                  text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
+                }
+              : null,
             at: 'near',
           }
         }

@@ -49,6 +49,12 @@ export type AnnotationKind =
   | 'gtf'
   | 'track'
   | 'segments'
+  // Called variants (§8.14). A `FeatureSet` like `segments` and `gtf` are, and
+  // its own kind for the reason those two are each other's: they differ in what
+  // the reader *means* by a row, and that is what decides the controls, the
+  // card behind a click, and the colours the lane is drawn in. A peak has a
+  // score; a variant has a REF, an ALT and a thing that happened.
+  | 'variants'
   | 'pairs'
   | 'sequence'
   | 'metadata'

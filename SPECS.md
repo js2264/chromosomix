@@ -1829,6 +1829,106 @@ exact reference its records were compressed against, identified by an M5 checksu
 fetched from somebody else's registry — which C1 and C5 forbid outright — or supplied as a second
 required file, which is the rule §1 has just been at pains to keep narrow.
 
+### 8.14 Called variants
+
+A `.vcf` opens as a lane of the variants somebody called. It is a **`FeatureSet`
+like a BED and a GTF are** — no new payload, no new renderer, no new cache — and
+that is the whole design: a variant lane packs, draws, hit-tests, exports,
+searches, collapses and feeds an analysis through the code a peak set already
+uses. What it has of its own is a `kind`, because the *controls* and the *card*
+differ. A peak has a score; a variant has a REF, an ALT, and a thing that
+happened.
+
+The alternative was a payload arm of its own, and it was refused on the shape of
+its failure rather than on its size. `payload.kind === 'features'` is tested at a
+dozen sites across the browser, the map lanes, the search box, the export and the
+analysis inputs. A third arm breaks none of them — it makes every one of them
+*skip* the lane, silently, to be discovered one call site at a time.
+
+**A VCF was already being read, wrongly.** `sniffFormat`'s last line is
+`return 'bed'`, and `forEachRow` strips every `#` line — so a VCF arrived at the
+sniffer as `chrV 1000 rs100 A G …`, matched nothing, and was parsed as a BED
+whose every row failed the contig/start/end test. The refusal named a format the
+reader never handed over. That is the same failure a four-column bedGraph had
+before §8.11's sniffer existed, and it is why both sniffers are asked *before*
+the one that cannot say no.
+
+**The interval is the one thing that can lie.** A record spans the reference
+bases it is about, which is `POS .. POS + len(REF)` for a substitution, an MNV
+and an indel — VCF's padding base included, because that is what the record says
+and what every browser draws. The fourth shape is not spelled out: a symbolic
+ALT (`<DEL>`, `<DUP>`, `<INV>`) writes a single `N` in REF whatever the event's
+size, so `INFO/END` and `INFO/SVLEN` are read, and without them a forty-kilobase
+deletion draws as a one-pixel tick. That is a wrong answer that looks like an
+answer, which §10 does not permit anywhere else either.
+
+**A substitution is drawn in the colour of the base it substitutes to**, from the
+one table `render/sequence.ts` holds and `render/alignments.ts` already borrows.
+That is the whole of the ink rule and it buys the picture vertically: over one
+locus a heterozygous A>G reads as one column in inks that agree — the sequence
+row writes a green `A`, the pile puts orange `G` marks through half its reads,
+the depth row's mark rises to half, and the variant row draws an orange box
+saying somebody called it. A record with no single base behind it — an insertion,
+a deletion, a symbolic ALT, several ALTs at once — takes the palette's fifth
+slot, the grey an `N` is already drawn in, which in this application already
+means *no single-base answer*. The lane's own colour was tried there and is
+wrong visibly: the default is `#1f5fa9` and C is `#2f6fb5`, so an insertion and a
+substitution to C were one blue. The reader's colour is what the *density* rung
+is drawn in instead, which is where it does the work of telling two variant files
+apart.
+
+What the ink deliberately does not separate is an insertion from a deletion.
+**Extent** does, and it is exact and free: a forty-kilobase deletion is a
+forty-kilobase box and a SNV is one base, so the two classes worth separating are
+separated by the strongest channel on the lane. The rest is in the card behind a
+click, where `A>AGGT` and `AT>A` are two strings nobody confuses.
+
+**A single base is given three pixels to be seen and to be hit**, and that floor
+changes when the lane stops resolving individuals. The collapse rule is not "more
+features than pixels" — it is *more features than the lane can draw apart*, which
+is the drawn floor plus the gap that makes two read as two. At the old threshold
+a stretch of variants seven bases apart at whole-contig zoom drew as several
+hundred three-pixel marks that merged into one solid bar in whichever ink was
+laid down last, reading as a single three-kilobase variant. Collapsing says the
+true thing: there are many here. For every other feature lane the floor is zero
+and the rule is the `span / 2` it has always been — a peak one pixel wide *is*
+one pixel of genome.
+
+**A VCF can say what genome it is on, exactly.** Its
+`##contig=<ID=…,length=…>` block is a `chrom.sizes` written inside the file:
+declared rather than inferred, which is the tier a BAM's `@SQ` table and a
+bigWig's header sit at, and a tier above the "ends at its last feature" lower
+bound every other text feature format offers. So a dropped VCF opens a browser
+session over its real chromosomes (§5.8). The origin is its own member of
+`AssemblyOrigin` for the reason `bam` is one — `lengthsAreExact` reads that field
+and nothing else, so a VCF reporting `features` would tell a reader its
+chromosomes end at their last variant while an `exact: true` sat beside it being
+correct and being ignored. A file declaring no contigs is `features`, correctly.
+
+**Reading part of one is free.** A bgzipped VCF with a `.tbi` beside it takes
+`annotations/tabix.ts`'s road unchanged, because that road serves *text* and does
+not know what format the text is (§8.11). Which is also why the sniffer cannot
+depend on the header: `spansFor` starts at the first record's block, so the
+indexed path — the one the index exists for — delivers a VCF with every `#` line
+in the part of the file that was deliberately not fetched. The sniffer therefore
+has two roads, the declaration and the column shape, and the shape one is
+load-bearing rather than a fallback.
+
+**Not built.** The **genotype matrix**. A VCF's sample columns are a matrix of
+variants × samples, and that is a second application's worth of picture for a
+question a contact map is not asking — the same argument §13 makes about a
+viewer that builds matrices from alignments. The columns are *counted* and the
+count is said out loud in the lane's summary — *"1,284 variants · 2,504 samples
+not drawn"* — because a reader who brought a thousand-genome file should be told
+what the lane is showing them rather than left to infer it from a lane that looks
+complete. No **allele-frequency height**: AF is in the card and in the detail,
+and drawing it as a bar height would put three different measurements (AF from
+`INFO`, AF computed from genotypes, no AF at all) in one channel with nothing on
+screen saying which answered. No **BCF**, which is the binary encoding of the
+same file and needs its own header dictionary decoder for no picture that differs
+by a pixel; `bcftools view` writes the text. And no **variant calling**, which is
+§18.9's argument and not a new one.
+
 ---
 
 ## 9. cool and mcool

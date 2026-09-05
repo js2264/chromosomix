@@ -16,6 +16,8 @@ import { featureAt, layoutFeatures, rowsThatFit } from '../../src/render/feature
 import type { LaneFrame } from '../../src/render/lane'
 import { locusAxisFrom, type LocusAxis } from '../../src/render/locus'
 import { formatLimit, normaliser, profileOf, resolveLimits } from '../../src/render/tracks'
+import { FeatureBuilder } from '../../src/annotations/featureset'
+import type { FeatureSet } from '../../src/annotations/types'
 
 const BINSIZE = 1000
 
@@ -302,6 +304,65 @@ describe('the value axis', () => {
     expect(formatLimit(2.5)).toBe('2.5')
     expect(formatLimit(0.16046)).toBe('0.16')
     expect(formatLimit(1e-9)).toBe('1.0e-9')
+  })
+})
+
+/**
+ * When a lane stops trying to resolve individual features.
+ *
+ * The rule is not "more features than pixels" — it is *more features than the
+ * lane can draw apart*, and those differ the moment a lane gives its features a
+ * minimum drawn width. A variant is one base, drawn at a floor of three pixels
+ * so it can be seen and hit; at the old threshold a stretch of variants seven
+ * bases apart at whole-contig zoom drew as several hundred three-pixel marks
+ * that merged into one solid bar, in whichever ink was laid down last. That
+ * reads as one three-kilobase variant, which is a claim the file does not make.
+ * Collapsing says the true thing instead: there are many here.
+ */
+describe('collapsing to density', () => {
+  /** `n` one-base features spread evenly across `span` bases. */
+  function points(n: number, span: number): TrackSampleSet['regions'][number] {
+    return samples(Array.from({ length: n }, (_, i) => {
+      const at = Math.round((i * span) / n)
+      return [at, at + 1, 1] as [number, number, number]
+    })).regions[0]
+  }
+
+  function setOf(n: number, span: number): FeatureSet {
+    const region = points(n, span)
+    const builder = new FeatureBuilder()
+    for (let i = 0; i < region.starts.length; i++) {
+      builder.add('I', region.starts[i], region.ends[i])
+    }
+    return builder.finish()
+  }
+
+  it('keeps the old rule exactly where no minimum width is asked for', () => {
+    // A peak that is one pixel wide *is* one pixel of genome, and every caller
+    // but the variant lane still gets `span / 2`.
+    const frame = frameOf([0, 100_000], 1000)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(400, 100_000), 4).dense).toBe(false)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(600, 100_000), 4).dense).toBe(true)
+  })
+
+  it('collapses sooner once each feature is given room to be seen', () => {
+    // 400 marks across 1000 pixels is 2.5 pixels apart — under the three a
+    // variant is drawn at, so they merge. The old threshold called this sparse.
+    const frame = frameOf([0, 100_000], 1000)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(400, 100_000), 4, 3).dense).toBe(true)
+    // …and still resolves them where there is genuinely room.
+    expect(layoutFeatures(frame, yeastAxis(), setOf(100, 100_000), 4, 3).dense).toBe(false)
+  })
+
+  it('collapses at the width the marks actually need, not at a chosen number', () => {
+    // Stated from the constants: one mark needs its drawn floor plus the gap
+    // that makes two read as two. A test that pinned a count would pass while
+    // the floor and the threshold drifted apart.
+    const frame = frameOf([0, 100_000], 1000)
+    const each = 3 + 2
+    const fits = Math.floor(1000 / each)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(fits, 100_000), 4, 3).dense).toBe(false)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(fits + 40, 100_000), 4, 3).dense).toBe(true)
   })
 })
 

@@ -77,6 +77,23 @@ export function layoutFeatures(
   axis: LocusAxis,
   set: FeatureSet,
   maxRows: number,
+  /**
+   * The narrowest one feature will be *drawn* — {@link FeaturePaint.minWidth}.
+   *
+   * It belongs here as well as in the paint because it changes the answer to
+   * "can these be told apart", which is the question the collapse below asks. A
+   * variant is one base, which is a hairline at every zoom a chromosome is
+   * browsed at, so it is drawn at a floor of three pixels — and the moment
+   * records are closer together than that floor plus the gap between them, the
+   * marks *merge*. Merged, a stretch of mixed substitutions draws as one solid
+   * bar in whichever ink was laid down last, which reads as a single
+   * three-kilobase variant: a claim the file does not make. Collapsing to
+   * density instead says the true thing, which is that there are many here.
+   *
+   * Zero — every caller but the variant lane — leaves the rule exactly as it
+   * was: a peak that is one pixel wide *is* one pixel of genome.
+   */
+  leastWidth = 0,
 ): FeatureLayout {
   const placements: FeaturePlacement[] = []
   const span = Math.abs(frame.alongTo - frame.alongFrom)
@@ -102,10 +119,14 @@ export function layoutFeatures(
     }
   }
 
-  // More features than pixels: no packing exists that separates them, so say so
-  // and draw one row. The count is kept, because "17,400 features here" is the
-  // information the picture can still carry.
-  const dense = placements.length > span / 2
+  // More features than the lane can draw apart: no packing exists that separates
+  // them, so say so and draw one row. The count is kept, because "17,400
+  // features here" is the information the picture can still carry.
+  //
+  // The width one feature needs is its drawn floor plus the gap that makes two
+  // read as two — which for everything but a variant lane is the two pixels it
+  // has always been.
+  const dense = placements.length > span / Math.max(2, leastWidth + ROW_GAP)
   if (dense || maxRows <= 1) {
     return { placements, rows: 1, dense, total }
   }
@@ -169,6 +190,28 @@ export interface FeaturePaint {
    * while the name in it grew would clip the name it exists to hold.
    */
   labelBand?: number
+  /**
+   * A colour per feature, where one feature's ink is not the lane's.
+   *
+   * Only a variant lane has one today (§8.14): a substitution is drawn in the
+   * colour of the base it substitutes to, so the row agrees in a column with the
+   * sequence above it and the pile below it. Absent — which is every other
+   * caller — draws the whole set in {@link colour}, in one path, exactly as it
+   * always did.
+   *
+   * The index is into the {@link FeatureSet}, not into the layout, because that
+   * is what a placement carries and what the label pass already uses.
+   */
+  colourOf?: (index: number) => string
+  /**
+   * The narrowest a feature may be drawn, in pixels.
+   *
+   * A single base is a hairline at any zoom a reader browses at, and a lane of
+   * hairlines is a lane whose marks are hard to see and harder to hit. Absent
+   * keeps `laneRect`'s own floor of one pixel, which is right for a peak set —
+   * a peak that is one pixel wide *is* one pixel of genome.
+   */
+  minWidth?: number
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -197,25 +240,53 @@ export function drawSegments(
   const boxHeight = Math.max(3, rowHeight - band - 2)
   ctx.save()
   ctx.globalAlpha = paint.opacity
-  ctx.fillStyle = paint.colour
-  ctx.beginPath()
+  // Grouped by ink rather than one rectangle per fill: a lane of ten thousand
+  // boxes in one colour is one path, and a variant lane's five inks are five —
+  // which is the difference between one state change and ten thousand of them.
+  // The common case, no `colourOf`, is the single group it always was.
+  const byInk = new Map<string, FeaturePlacement[]>()
   for (const placement of layout.placements) {
-    const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
-    const [x, y, width, height] = laneRect(
-      frame,
-      placement.along0,
-      placement.along1,
-      top,
-      top + boxHeight,
-    )
-    ctx.rect(x, y, width, height)
+    const ink = paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index)
+    const held = byInk.get(ink)
+    if (held === undefined) byInk.set(ink, [placement])
+    else held.push(placement)
   }
-  ctx.fill()
+  for (const [ink, placements] of byInk) {
+    ctx.fillStyle = ink
+    ctx.beginPath()
+    for (const placement of placements) {
+      const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
+      const [x, y, width, height] = laneRect(
+        frame,
+        placement.along0,
+        widened(placement, paint),
+        top,
+        top + boxHeight,
+      )
+      ctx.rect(x, y, width, height)
+    }
+    ctx.fill()
+  }
 
   if (paint.labels && !layout.dense) {
     labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
+}
+
+/**
+ * A placement's far edge, widened to {@link FeaturePaint.minWidth} if it is set.
+ *
+ * Grown from the *start* rather than centred on the middle, so a variant's box
+ * begins where the variant begins: a mark centred on a single base would sit
+ * half a mark before the position it is about, and at the zoom where that
+ * matters — a reader checking a call against the residue under it — being one
+ * base out is the whole question.
+ */
+function widened(placement: FeaturePlacement, paint: FeaturePaint): number {
+  const least = paint.minWidth
+  if (least === undefined) return placement.along1
+  return Math.max(placement.along1, placement.along0 + least)
 }
 
 /**

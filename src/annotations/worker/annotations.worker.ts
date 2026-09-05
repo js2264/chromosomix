@@ -14,6 +14,7 @@
 
 import { BigBed, BigWig } from '@gmod/bbi'
 import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
+import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
@@ -667,11 +668,34 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
     return { format: 'sizes', contigs: parseChromSizes(text), origin: 'sizes', exact: true }
   }
 
-  // Same order as `load`, and for the same reason: a bedGraph is BED-shaped and
-  // would otherwise declare its assembly as a feature file's. The lengths are a
-  // lower bound either way, so the answer is the same shape — but the *format*
-  // is what routes the drop, and getting it wrong here sends a signal file to
-  // the segments path.
+  // Same order as `load`, and for the same reason: `sniffFormat` answers `bed`
+  // for anything it does not know, so every sniffer stricter than it has to be
+  // asked first or the file is routed as a BED. Getting this wrong here does
+  // not merely mislabel the row — it decides which road the *drop* takes.
+  //
+  // A VCF is the one text format that can answer this question **exactly**. Its
+  // `##contig=<ID=…,length=…>` lines are a chrom.sizes written inside the file:
+  // declared rather than inferred, which is the tier a BAM's `@SQ` table and a
+  // bigWig's header sit at, and a tier above the "ends at its last feature"
+  // lower bound every other feature file can offer. So a dropped VCF opens a
+  // browser session over its real chromosomes (§5.8) — and where it declares
+  // none, which is legal and common, it falls back to that lower bound like any
+  // other feature file rather than claiming a precision it has not got.
+  if (sniffVcf(text)) {
+    const declared = vcfContigs(text)
+    if (declared.length > 0) {
+      // `origin`, not `exact`, is what `lengthsAreExact` reads. Reporting
+      // `features` here would put "lengths inferred from the features in this
+      // file" under a genome whose lengths the file states outright — which is
+      // the mistake the `bam` origin was added to undo, made a second time.
+      return { format: 'vcf', contigs: declared, origin: 'vcf', exact: true }
+    }
+    const data = parseVcf(text)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'vcf', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   const signal = sniffSignal(text)
   if (signal !== null) {
     const set = signal === 'wig' ? parseWig(text) : parseBedGraph(text)
@@ -923,12 +947,20 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   const text = indexed ?? new TextDecoder().decode(bytes as Uint8Array)
   if (text.trim() === '') throw new Error('This file is empty.')
 
-  // Asked before the feature sniffer, because the two overlap: a four-column
-  // bedGraph is BED-shaped and `sniffFormat` would call it a BED, putting its
-  // value column in `name` and drawing a lane of featureless boxes. The signal
-  // sniffer is the stricter of the two — exactly four columns, numeric on every
-  // row it looks at, or a declaration line saying so — which is what lets it go
-  // first without capturing anything that is really a BED.
+  // Both asked before the feature sniffer, and for the one reason: `sniffFormat`
+  // never answers "not one of mine" — its last line is `return 'bed'` — so any
+  // format it does not know is silently parsed as a BED. That is what a
+  // four-column bedGraph did before `sniffSignal` existed (its value column
+  // landed in `name`), and it is what a VCF did before `sniffVcf` did: refused
+  // with a message naming a format the reader never handed over.
+  //
+  // Both are stricter than the sniffer they precede, which is what lets them go
+  // first without capturing anything that is really a BED. `sniffVcf` is asked
+  // first of the two only because it is the cheaper question on a file that is
+  // neither: a VCF has at least eight columns and a bedGraph has exactly four,
+  // so neither can capture the other whichever order they are asked in.
+  if (sniffVcf(text)) return loadVcf(text, mapContigs)
+
   const signal = sniffSignal(text)
   if (signal !== null) return loadSignal(entry, signal, text, mapContigs)
 
@@ -951,6 +983,33 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   // could read it — the cache exists for the other order, where a genome was
   // identified from this file a moment ago and the parse can be reused.
   return featureResult(format, data, mapContigs)
+}
+
+/**
+ * A VCF, as intervals (§8.14).
+ *
+ * Its own arm rather than a line in {@link featureResult}, because two things
+ * about the summary are the format's alone. A variant file's rows are
+ * *variants* and not *features* — the word a reader is looking for under the
+ * lane's name is the word their file uses. And the **samples are counted and
+ * said**: a VCF's genotype columns are a matrix of variants × samples, which is
+ * a picture this app does not draw (§13), so a reader who brought a
+ * thousand-genome file is told what the lane is showing them rather than left to
+ * work it out from a lane that looks complete.
+ */
+function loadVcf(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseVcf(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  const samples = samplesIn(text)
+  return {
+    format: 'vcf',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary:
+      `${count(data.length)} variant${data.length === 1 ? '' : 's'}` +
+      (samples === 0 ? '' : ` · ${count(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
+    payload: { kind: 'features', data },
+  }
 }
 
 /** One shape of answer for every format that resolves to intervals. */

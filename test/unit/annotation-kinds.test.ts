@@ -44,6 +44,7 @@ const KINDS: AnnotationKind[] = [
   'classes',
   'alignments',
   'reads',
+  'variants',
 ]
 
 describe('what a lane can be filled from', () => {
@@ -121,6 +122,45 @@ describe('an alignment lane', () => {
 })
 
 /**
+ * A variant set is a third feature kind, and nothing more than that.
+ *
+ * The whole design (§8.14) rests on it being a `FeatureSet` like a peak set and
+ * a gene model: no new payload arm, no new renderer, no new cache. Every one of
+ * those would have been a *silent* cost rather than a loud one —
+ * `payload.kind === 'features'` is tested at a dozen sites across the browser,
+ * the map lanes, the search box, the export and the analysis inputs, and a
+ * third arm makes each of them skip the lane rather than fail on it. So what is
+ * pinned here is the negative: the kind answers no profile question, and it is
+ * exactly as much of a track as a BED is, which is none.
+ */
+describe('a variant lane', () => {
+  it('is a feature kind and not a value one', () => {
+    expect(drawsAProfile('variants')).toBe(false)
+    expect(hasAMovableAxis('variants')).toBe(false)
+    expect(hasTrackControls('variants')).toBe(false)
+    expect(drawnFromSamples('variants')).toBe(false)
+    expect(isMetadata('variants')).toBe(false)
+  })
+
+  it('answers every predicate the way a peak set does', () => {
+    // The claim the design is built on, stated as an equality rather than as
+    // five literals: if a variant set ever stops behaving like `segments` under
+    // one of these, it has stopped being a `FeatureSet` and the reuse it was
+    // chosen for has quietly gone.
+    for (const ask of [drawsAProfile, hasAMovableAxis, hasTrackControls, drawnFromSamples, isMetadata]) {
+      expect(ask('variants'), ask.name).toBe(ask('segments'))
+    }
+  })
+
+  it('does not read a BAM, whatever else it has in common with one', () => {
+    // Both draw variants and neither is the other. `readsAlignments` gates the
+    // filters written through between a BAM's two rows, and a VCF has no reads
+    // to filter.
+    expect(readsAlignments('variants')).toBe(false)
+  })
+})
+
+/**
  * The pile is the other half of a BAM, and it is not a track.
  *
  * A BAM imports as two rows — the depth, which is a coverage profile in every
@@ -160,7 +200,7 @@ describe('a pile lane', () => {
 
 describe('the kinds that draw no profile at all', () => {
   it('leaves the feature kinds out of every axis question', () => {
-    for (const kind of ['gtf', 'segments', 'pairs', 'classes'] as AnnotationKind[]) {
+    for (const kind of ['gtf', 'segments', 'variants', 'pairs', 'classes'] as AnnotationKind[]) {
       expect(drawsAProfile(kind), kind).toBe(false)
       expect(hasAMovableAxis(kind), kind).toBe(false)
       expect(hasTrackControls(kind), kind).toBe(false)

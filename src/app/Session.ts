@@ -293,6 +293,7 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   features: 'inferred from the features',
   cooler: 'from the cooler’s /chroms',
   bam: 'from the BAM’s @SQ header',
+  vcf: 'declared by the VCF’s ##contig lines',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */

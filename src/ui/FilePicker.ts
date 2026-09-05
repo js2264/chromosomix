@@ -88,7 +88,7 @@ export class FilePicker {
         text:
           'or click to choose one. A contact map — .cool, .mcool, .hic, .metacool, .mmetacool — opens ' +
           'as a map; anything genomic (a chrom.sizes, a FASTA, a bigWig, a bigBed, a GTF, a BED, ' +
-          'a BEDPE, an indexed BAM) opens as a browser over that genome. Drop several at once and ' +
+          'a BEDPE, a VCF, an indexed BAM) opens as a browser over that genome. Drop several at once and ' +
           'they come up together: the first map is the one this tab is of, every other map is a ' +
           'panel beside it, and everything else is a track on top — and a file dropped with its ' +
           'index beside it, a .bam with its .bai or a .gz with its .tbi, is one track and not two.',

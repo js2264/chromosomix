@@ -69,7 +69,7 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'features',
         label: 'Feature set',
-        needsKinds: ['gtf', 'segments'],
+        needsKinds: ['gtf', 'segments', 'variants'],
         hint: 'On the diagonal, at each feature.',
       },
     ],

@@ -43,7 +43,7 @@ export function routeOf(uri: string): FileRoute {
   const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
   if (/\.(m?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
   if (
-    /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak)(\.gz)?$/i.test(
+    /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig)(\.gz)?$/i.test(
       name,
     )
   ) {

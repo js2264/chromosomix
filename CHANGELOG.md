@@ -14,6 +14,47 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **VCF opens as a lane of variants.** Drop a `.vcf`, or a `.vcf.gz` with its
+  `.tbi`, and the calls draw as boxes over the reference bases each record is
+  about — with the symbolic ones at their real size, read out of `INFO/END` and
+  `INFO/SVLEN`, because `<DEL>` writes a single `N` in REF whatever the deletion's
+  length and a forty-kilobase event drawn as a one-pixel tick is a wrong answer
+  that looks like an answer.
+
+  It was already being read, wrongly. The feature sniffer has no "none of mine"
+  answer — its last line is `return 'bed'` — and the row walker strips every `#`
+  line, so a VCF reached it as a nameless eight-column table, was parsed as a
+  BED, and was refused with *"all 7 lines failed the contig, start, end test that
+  every BED-like format begins with"*: a message naming a format the reader never
+  handed over.
+
+  **A substitution is drawn in the colour of the base it substitutes to.** Over
+  one locus with a FASTA and a BAM open, a heterozygous A>G now reads as one
+  column in inks that agree — the sequence row writes a green `A`, the pile puts
+  orange `G` marks through half its reads, the depth row's mark rises to half,
+  and the variant row draws an orange box saying somebody called it. A record with
+  no single base behind it — an insertion, a deletion, a structural variant,
+  several ALTs at once — takes the grey an `N` is already drawn in, which already
+  means *no single-base answer*. What separates an insertion from a deletion is
+  extent, which is exact: a forty-kilobase deletion is a forty-kilobase box.
+
+  A single base gets three pixels so it can be seen and clicked, and a lane stops
+  resolving individuals the moment they are closer together than that — which is
+  the rule that keeps a dense stretch from merging into one solid bar in
+  whichever ink was drawn last. Collapsed, it says how many are there instead.
+
+  A VCF also **says what genome it is on, exactly**: its `##contig` lines are a
+  `chrom.sizes` written inside the file, so a dropped VCF opens a browser over its
+  real chromosomes rather than reporting each one as ending at its last variant.
+  Reading part of a bgzipped one costs nothing new — it takes the same tabix road
+  a bgzipped GTF does.
+
+  The **genotype columns are not drawn**, and the lane says so: *"1,284 variants ·
+  2,504 samples not drawn"*. A matrix of variants × samples is a second
+  application's worth of picture for a question a contact map is not asking, and
+  a reader who brought a thousand-genome file should be told what they are looking
+  at rather than left to infer it.
+
 - **Alignment files open as two lanes.** Drop a `.bam` with its `.bai` or `.csi`
   beside it — or point at one by URL — and it lands as *two* rows over the one
   file: its **depth**, drawn like any other track (on any of the map's four

@@ -144,11 +144,14 @@ export interface ParamFormOptions {
 /** Which annotation kinds one entry parameter may name. */
 function kindsFor(spec: EntryParam): readonly AnnotationKind[] {
   switch (spec.kind) {
-    // A gene model and a peak set are one shape and two meanings (§8.1), and a
-    // task that wants intervals wants both: the distinction is which drop area
-    // the file landed in, which is the reader's business rather than a task's.
+    // A gene model, a peak set and a variant set are one shape and three
+    // meanings (§8.1, §8.14), and a task that wants intervals wants all of
+    // them: the distinction is what the reader means by a row, which is their
+    // business rather than a task's. Variants are the case that pays for
+    // itself — *contacts around called variants* and a variant-anchored
+    // aggregate are questions this app is for, and they cost this line.
     case 'featureSet':
-      return ['gtf', 'segments']
+      return ['gtf', 'segments', 'variants']
     case 'pairSet':
       return ['pairs']
     // `track` is deliberately not filtered by card. A synthetic lane is a track

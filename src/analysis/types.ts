@@ -165,7 +165,7 @@ export interface ChoiceOption {
    * how the descriptor says which halves of itself this file can run, and
    * `resolveChoiceDefaults` moves the value onto one that is offered.
    */
-  needsKinds?: ReadonlyArray<'gtf' | 'segments' | 'pairs' | 'track' | 'sequence'>
+  needsKinds?: ReadonlyArray<'gtf' | 'segments' | 'variants' | 'pairs' | 'track' | 'sequence'>
 }
 
 export interface ChoiceParam extends ParamBase {

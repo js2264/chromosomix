@@ -49,6 +49,7 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
+import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
 import type {
   AnnotationEntry,
   BaseRegion,
@@ -1709,8 +1710,10 @@ export class BrowserView {
       // its features. Below that height the band is refused and the names go
       // back inside, which is what a lane dragged very short should do.
       const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-      const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows)
+      const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
+      const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows, least)
       this.layouts.set(entry.id, { frame, layout })
+      const set = entry.payload.data
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
@@ -1720,13 +1723,28 @@ export class BrowserView {
         labels: this.text,
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
+        // A variant lane, and only a variant lane, draws each record in the ink
+        // of the base it substitutes to and gives a single base a floor to be
+        // seen and hit at (§8.14). Every other feature lane keeps the one path
+        // and the one-pixel floor it always had.
+        ...(entry.kind === 'variants'
+          ? {
+              colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
+              minWidth: least,
+            }
+          : {}),
       }
-      if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
-      else drawSegments(ctx, frame, entry.payload.data, layout, paint)
+      if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
+      else drawSegments(ctx, frame, set, layout, paint)
       if (this.text) {
         label = {
           entries: [entry],
-          detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+          detail: layout.dense
+            ? {
+                kind: 'text',
+                text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
+              }
+            : null,
           at: 'near',
         }
       }

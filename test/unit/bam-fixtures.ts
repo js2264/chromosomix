@@ -19,6 +19,29 @@ async function deflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
 export const MAX_BLOCK = 1 << 16
 
 /**
+ * CRC-32, the gzip polynomial, computed on the fly.
+ *
+ * A table would be faster and these are fixtures. What matters is that it is
+ * *there*: the trailer used to be written as a zero, which `tabix.ts`'s own
+ * inflater never looks at — so every BAM fixture in this suite was a gzip
+ * member no gzip decoder would accept, and nothing noticed because only the
+ * lenient reader ever read one. The moment a fixture went through the
+ * platform's `DecompressionStream`, which is the road every *text* format takes
+ * (`decodeAnnotationBytes`), it failed with an empty `TypeError` some distance
+ * from the cause.
+ */
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+/**
  * Wrap a payload as one BGZF member, `BC` subfield and all.
  *
  * Refuses a payload that would not fit rather than writing one that does not.
@@ -44,7 +67,7 @@ export async function bgzfBlock(payload: Uint8Array): Promise<Uint8Array> {
   view.setUint16(14, 2, true)
   view.setUint16(16, total - 1, true)
   out.set(deflated, 18)
-  view.setUint32(18 + deflated.length, 0, true)
+  view.setUint32(18 + deflated.length, crc32(payload), true)
   view.setUint32(18 + deflated.length + 4, payload.length, true)
   return out
 }

@@ -55,6 +55,10 @@ export type DetectedFormat =
   | 'gtf'
   | 'bed'
   | 'bedpe'
+  // Called variants (§8.14). Its own member rather than a `bed`, because what a
+  // reader means by a row is different — and because `kindFor` sends it to a
+  // kind with its own controls and its own card.
+  | 'vcf'
   | 'sizes'
   | 'hdf5'
   | 'fasta'

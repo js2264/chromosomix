@@ -72,7 +72,13 @@ function row(key: string, value: string): HTMLElement {
  * labelling a thing this code does not actually know the name of.
  */
 function attributeRows(detail: string): HTMLElement[] {
-  const KEYED = /^(source|score|signal|summit|-log10 [pq]) (.+)$/
+  // The keys the parsers actually write. A VCF's are the second set (§8.14) and
+  // they are the reason this list is worth keeping in one place: `REF>ALT` is
+  // the answer to the question the click asked and has no key at all, while
+  // `QUAL 60` and `filter q10` are two facts that read as one run-on string
+  // unless they are split here.
+  const KEYED =
+    /^(source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE) (.+)$/
   return detail
     .split(DETAIL_SEP)
     .map((part) => part.trim())

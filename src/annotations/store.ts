@@ -1153,6 +1153,7 @@ const KINDS: AnnotationKind[] = [
   'metadata',
   'alignments',
   'reads',
+  'variants',
   'classes',
 ]
 const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
