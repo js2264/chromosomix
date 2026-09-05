@@ -535,10 +535,14 @@ const VARIANT_LEAST = 0.2
  * holding a BAM's two rows, that put one red in one column under two different
  * claims: *the reads disagree here* on the depth, and *this read has a T here*
  * in the pile. A reader looking at a T>C site would have seen the same ink mean
- * the opposite thing an inch apart. Magenta sits in the widest gap the base
- * palette leaves — sixty degrees of hue from its nearest neighbour, where every
- * other gap is under forty — so it reads as this application's ink without
- * being any of the four letters. `baseColourClash` pins it.
+ * the opposite thing an inch apart.
+ *
+ * The four letters sit at hues 4 (T), 37 (G), 132 (A) and 211 (C), and the
+ * widest gap between them is the 153 degrees from C back round to T. Magenta at
+ * 300 is inside it, 64 degrees from its nearest neighbour — so it reads as this
+ * application's ink without being any of the letters. `track-variants.test.ts`
+ * pins it as a distance rather than as a string, because the fault was never
+ * that the constant was wrong: it was that nobody compared it to the palette.
  */
 export const VARIANT_COLOUR = '#9b3f9b'
 

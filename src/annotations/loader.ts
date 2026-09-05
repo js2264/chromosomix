@@ -61,7 +61,7 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.(bdg|bedgraph|wig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
   if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
-  if (/\.(vcf|bcf)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
+  if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   return { card: 'linear', kind: 'segments' }
 }

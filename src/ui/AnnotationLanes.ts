@@ -1294,7 +1294,6 @@ export class AnnotationLanes {
           ...(entry.kind === 'variants'
             ? {
                 colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
-                minWidth: least,
               }
             : {}),
         }

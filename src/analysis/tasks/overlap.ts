@@ -12,6 +12,7 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { READY, waitingFor } from '../types'
+import { isIntervalSet } from '../../annotations/types'
 
 const PARAMS: readonly ParamSpec[] = [
   { kind: 'featureSet', key: 'a', label: 'First set' },
@@ -53,7 +54,7 @@ export const OVERLAP_TASK: AnalysisTask = {
   // about a matrix, and the 1D browser is where a reader most often has them.
   availability: (context) => {
     const sets = context.entries.filter(
-      (entry) => entry.kind === 'gtf' || entry.kind === 'segments',
+      (entry) => isIntervalSet(entry.kind),
     ).length
     if (sets >= 2) return READY
     return waitingFor(

@@ -57,6 +57,13 @@ describe('telling a VCF from everything else', () => {
     expect(sniffVcf(vcf([SNV]))).toBe(true)
   })
 
+  it('takes it at its word even with nothing to look at', () => {
+    // The declaration is the only road that can answer here, so this is what
+    // makes it load-bearing rather than merely first: a call set with no
+    // variants in it is a real file, and the shape test has no row to inspect.
+    expect(sniffVcf('##fileformat=VCFv4.3\n##contig=<ID=chrV,length=20000>\n')).toBe(true)
+  })
+
   it('recognises one with no header at all, which is the indexed path', () => {
     // A `.vcf.gz` with a `.tbi` reaches the sniffer as bare records: `spansFor`
     // starts at the first record's block, so every `#` line is in the part of
@@ -85,18 +92,29 @@ describe('telling a VCF from everything else', () => {
     expect(sniffFormat(gtf)).toBe('gtf')
   })
 
-  it('does not capture a BED whose name and score columns look like alleles', () => {
-    // The near miss the column-2 test exists for, and the only one that reaches
-    // it: eight columns wide, an integer in column 1, and columns 3 and 4 that
-    // pass the allele test by coincidence. Everything else about a BED is
-    // caught earlier — a six-column one is too narrow, a narrowPeak has a
-    // number where ALT would be — so without this row the guard is untested and
-    // could be deleted with every other test still green.
-    const bed = 'chrV\t1000\t2000\tAGCT\tA\t500\t+\t7.2\n'.repeat(4)
-    expect(sniffVcf(bed)).toBe(false)
-    // …and a real narrowPeak, which is the ten-column file this would meet.
-    const peak = 'chrV\t1000\t2000\tpeak1\t500\t+\t7.2\t3.1\t2.0\t150\n'.repeat(4)
-    expect(sniffVcf(peak)).toBe(false)
+  it('does not capture the wide BED-family files it actually meets', () => {
+    // Every one of these is eight columns or more with an integer in column 1,
+    // so they reach the allele test — and each fails it for a different reason,
+    // which is what makes the test a set rather than one row. A narrowPeak and a
+    // gappedPeak put a numeric score where ALT belongs; a BED12's column 4 is a
+    // score and its column 5 a strand; a bedpe's column 4 is a coordinate.
+    const files = {
+      narrowPeak: 'chrV\t1000\t2000\tpeak1\t500\t+\t7.2\t3.1\t2.0\t150\n',
+      gappedPeak: 'chrV\t1000\t2000\tpk\t500\t+\t1000\t2000\t0\t2\t100,100\t0,900\t7.2\t3.1\t2.0\n',
+      bed12: 'chrV\t1000\t2000\tgene1\t0\t+\t1000\t2000\t0\t2\t100,100\t0,900\n',
+      bedpe: 'chrV\t1000\t2000\tchrV\t9000\t9500\tloop\t3\t+\t-\n',
+    }
+    for (const [name, row] of Object.entries(files)) {
+      expect(sniffVcf(row.repeat(4)), name).toBe(false)
+    }
+  })
+
+  it('does not capture a headed TSV that reaches the allele test', () => {
+    // The one shape left: eight columns, an integer POS, and words in 3 and 4.
+    // QUAL is what refuses it — a VCF's sixth column is a number or a dot, and
+    // this one is neither.
+    const tsv = 'chrV\t1000\tpromoter\tAGCT\tA\tstrong\tyes\tnote\n'.repeat(4)
+    expect(sniffVcf(tsv)).toBe(false)
   })
 
   it('does not capture a headed TSV whose second column is a word', () => {
@@ -106,11 +124,56 @@ describe('telling a VCF from everything else', () => {
     expect(sniffVcf(tsv)).toBe(false)
   })
 
-  it('is not fooled by one lucky row', () => {
-    // Four rows, the same number and the same reason `sniffSignal` uses. One
-    // VCF-shaped row is a coincidence a real file does not repeat.
-    expect(sniffVcf(vcf([SNV], false))).toBe(false)
-    expect(sniffVcf(vcf([SNV, INDEL, INSERT, SV], false))).toBe(true)
+  it('recognises a slice with only a record or two in it', () => {
+    // The road this shape test exists for. A tabix span over a sparse region, or
+    // a two-variant call set, arrives with no header and very few rows — and a
+    // four-row minimum (borrowed from `sniffSignal`, whose test is one condition
+    // where this is five) refused exactly those, sending them to the BED parser.
+    expect(sniffVcf(vcf([SNV], false))).toBe(true)
+    expect(sniffVcf(vcf([SNV, INDEL], false))).toBe(true)
+  })
+
+  it('refuses a file whose later rows are not records', () => {
+    // Every row inspected is still checked, so "one row is enough" is not "the
+    // first row decides".
+    expect(sniffVcf(vcf([SNV, INDEL], false) + 'chrV\t1000\t2000\tpeak\t5\t+\n')).toBe(false)
+  })
+})
+
+describe('the ID column, which VCF puts no convention on', () => {
+  it('keeps a record whose ID is a bare integer', () => {
+    // ClinVar's ID *is* an integer — its VariationID — on every row of a file
+    // millions of people have. The rule that a non-integer column 2 tells a VCF
+    // from a BED belongs to the sniffer; applied to the parser it dropped the
+    // whole file.
+    const rows = ['1 930248 1019397 G A . . ALLELEID=2193183 GT 0/1']
+    const set = only(vcf(rows))
+    expect(set.length).toBe(1)
+    expect(set.name[0]).toBe('1019397')
+    expect(set.start[0]).toBe(930247)
+  })
+
+  it('recognises a headerless slice of one, which is the worse failure', () => {
+    // With no `##fileformat` to fall back on — the indexed road — a rejected
+    // VCF does not error. It sniffs as a BED, and POS-to-VariationID becomes a
+    // ninety-kilobase box: a silently wrong answer that looks like an answer.
+    const rows = [
+      '1 930248 1019397 G A . . ALLELEID=2193183',
+      '1 930249 1019398 C T . . ALLELEID=2193184',
+    ]
+    expect(sniffVcf(vcf(rows, false))).toBe(true)
+  })
+
+  it('gives up the rule that cost it, and says what replaces it', () => {
+    // "Column 2 is not an integer, because a BED's third column is its end" is
+    // a good-looking rule that a real file breaks, so it is gone. What is left
+    // is what a VCF actually guarantees — allele-shaped REF and ALT, and a QUAL
+    // that is a number or a dot — and the contrived row the old rule caught
+    // (`chrV 1000 2000 AGCT A 500 + 7.2`, a BED whose name and score are DNA
+    // words) is now read as a VCF. That trade is deliberate: the row above is a
+    // file people have, and this row is one nobody writes.
+    const contrived = 'chrV\t1000\t2000\tAGCT\tA\t500\t+\t7.2\n'.repeat(4)
+    expect(sniffVcf(contrived)).toBe(true)
   })
 })
 
@@ -140,10 +203,48 @@ describe('what a record spans', () => {
 
   it('falls back to SVLEN where a symbolic record carries no END', () => {
     // Negative for a deletion by convention, and both signs are in real files.
+    // `END = POS + |SVLEN|`, so the half-open end is `start + |SVLEN| + 1`.
     const rows = ['chrV 4000 . N <DEL> 99 PASS SVTYPE=DEL;SVLEN=-800 GT 0/1 0/1']
-    expect(span(vcf(rows))).toEqual([3999, 4799])
+    expect(span(vcf(rows))).toEqual([3999, 4800])
     const positive = ['chrV 4000 . N <DUP> 99 PASS SVTYPE=DUP;SVLEN=800 GT 0/1 0/1']
-    expect(span(vcf(positive))).toEqual([3999, 4799])
+    expect(span(vcf(positive))).toEqual([3999, 4800])
+  })
+
+  it('does not give a symbolic insertion a reference span it has not got', () => {
+    // `SVLEN` on an `<INS>` is the length of the sequence going *in*, and the
+    // spec's own example writes `END=POS` beside `SVLEN=6027` for that reason.
+    // Taken as a span it drew a six-kilobase box for an event occupying one
+    // base — the same lie as an untreated `<DEL>`, pointing the other way.
+    const byAlt = ['3 9425916 . C <INS:ME:L1> 23 PASS IMPRECISE;SVTYPE=INS;SVLEN=6027']
+    expect(span(vcf(byAlt))).toEqual([9425915, 9425916])
+    // …and by SVTYPE alone, since a file may carry either.
+    const byType = ['3 9425916 . C <SOMETHING> 23 PASS SVTYPE=INS;SVLEN=6027']
+    expect(span(vcf(byType))).toEqual([9425915, 9425916])
+    // The spelled-out insertion has always been one base; the two now agree.
+    expect(span(vcf([INSERT]))[1] - span(vcf([INSERT]))[0]).toBe(1)
+  })
+
+  it('gives one record the same span written either legal way', () => {
+    // `END = POS + |SVLEN|`, so the half-open end is `start + |SVLEN| + 1`.
+    // Without the padding base the two spellings of one deletion drew spans a
+    // base apart.
+    const byEnd = ['2 321682 . T <DEL> 6 PASS SVTYPE=DEL;END=321887;SVLEN=-205']
+    const byLen = ['2 321682 . T <DEL> 6 PASS SVTYPE=DEL;SVLEN=-205']
+    expect(span(vcf(byLen))).toEqual(span(vcf(byEnd)))
+    expect(span(vcf(byLen))).toEqual([321681, 321887])
+  })
+
+  it('reads a multi-allelic SVLEN rather than collapsing to one base', () => {
+    // `SVLEN` is `Number=A`, so a multi-allelic record writes a list — which
+    // `Number()` reads as NaN. The largest magnitude is taken, because the box
+    // has to cover every allele the record declares.
+    const rows = ['2 321682 . T <DEL>,<DEL> 6 PASS SVTYPE=DEL;SVLEN=-205,-300']
+    expect(span(vcf(rows))).toEqual([321681, 321982])
+  })
+
+  it('keeps a telomere record, which VCF writes at POS 0', () => {
+    const rows = ['chrV 0 . N <DEL> 30 PASS SVTYPE=DEL;END=100']
+    expect(span(vcf(rows))).toEqual([0, 100])
   })
 
   it('keeps a symbolic record that carries neither, rather than dropping it', () => {
@@ -176,12 +277,25 @@ describe('what a record is', () => {
     expect(variantClass('A', 'G,ATT')).toBe('mixed')
   })
 
+  it('accepts a single breakend, which has no bracket', () => {
+    // One end of a junction whose partner is not in the file, written `.A` or
+    // `G.` — legal since 4.2 and dropped outright before.
+    const rows = ['chrV 1000 bnd1 A .A 60 PASS SVTYPE=BND', 'chrV 2000 bnd2 G G. 60 PASS SVTYPE=BND']
+    expect(only(vcf(rows)).length).toBe(2)
+  })
+
   it('reads past the alleles that are not alleles', () => {
     // `*` is the allele overlapped by an upstream deletion and `.` is a
     // monomorphic record; a gVCF is full of both and neither is an event.
     expect(variantClass('A', '*')).toBe('snv')
     expect(variantClass('A', '.')).toBe('snv')
     expect(variantClass('A', 'G,*')).toBe('snv')
+    // The case that shows the filter is doing something: measured by *length*,
+    // a one-character `*` against a two-base REF is a deletion — so a
+    // multi-base record overlapped by an upstream deletion would be reported as
+    // deleting bases nobody said were deleted.
+    expect(variantClass('AT', '*')).toBe('snv')
+    expect(variantClass('AT', 'A,*')).toBe('deletion')
   })
 })
 
@@ -211,6 +325,13 @@ describe('the columns a click reads back', () => {
     expect(detail).toContain('filter PASS')
     expect(detail).toContain('AF 0.5')
     expect(detail).toContain('DP 30')
+  })
+
+  it('says nothing where FILTER says nothing', () => {
+    // `.` is *not recorded* in FILTER as much as in QUAL and ID, and a card
+    // printing `filter .` would be labelling an absence as a value.
+    const rows = ['chrV 5000 . A G 60 . DP=9 GT 0/1 0/1']
+    expect(only(vcf(rows)).detail[0]).not.toContain('filter')
   })
 
   it('takes QUAL as the score, and leaves an unscored row unscored', () => {

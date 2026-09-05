@@ -24,28 +24,26 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
+  ANNOTATION_KINDS,
   drawnFromSamples,
   drawsAProfile,
   hasAMovableAxis,
   hasTrackControls,
+  isIntervalSet,
   isMetadata,
   readsAlignments,
   type AnnotationKind,
 } from '@/annotations/types'
 
-/** Every member of the union, so a new one cannot slip past these tests. */
-const KINDS: AnnotationKind[] = [
-  'gtf',
-  'track',
-  'segments',
-  'pairs',
-  'sequence',
-  'metadata',
-  'classes',
-  'alignments',
-  'reads',
-  'variants',
-]
+/**
+ * Every member of the union, so a new one cannot slip past these tests.
+ *
+ * Imported rather than re-listed. This file's whole subject is a kind missing
+ * from a list nobody notices, and a private copy here would be one more of
+ * exactly those — green while the application was wrong. `ANNOTATION_KINDS`
+ * carries a `satisfies` that fails to compile if it and the union drift.
+ */
+const KINDS: readonly AnnotationKind[] = ANNOTATION_KINDS
 
 describe('what a lane can be filled from', () => {
   it('gives every profile-drawing kind a road to its values', () => {
@@ -118,6 +116,53 @@ describe('an alignment lane', () => {
 
   it('is not one of the open file’s own columns', () => {
     expect(isMetadata('alignments')).toBe(false)
+  })
+})
+
+/**
+ * "An interval set" is one rule, and every place that asks gets the same answer.
+ *
+ * It was four literals — the analysis form's `kindsFor`, and the availability
+ * gates of overlap, metaplot and APA — and `variants` was added to the first
+ * without the other three. Nothing errored. What a reader got was a task whose
+ * parameter would happily accept a VCF sitting behind a gate that would not
+ * open for one, saying *load a BED or a GTF* while a variant set was on screen.
+ *
+ * Asserted against the **source**, because there is no runtime surface that
+ * shows the shape of the failure: each gate is a closure over an entry list,
+ * and testing them one at a time is what let three of them drift from the
+ * fourth in the first place. What this catches is a fifth site spelling the
+ * rule out again.
+ */
+describe('what counts as a set of intervals', () => {
+  const SITES = [
+    'src/analysis/tasks/overlap.ts',
+    'src/analysis/tasks/metaplot.ts',
+    'src/analysis/tasks/apa.ts',
+    'src/ui/ParamForm.ts',
+  ]
+
+  it('is asked through the predicate everywhere it is asked', () => {
+    for (const site of SITES) {
+      const source = readFileSync(join(process.cwd(), site), 'utf8')
+      expect(source, site).toContain('isIntervalSet')
+    }
+  })
+
+  it('is spelled out as a kind list nowhere', () => {
+    // The exact shape that drifted: `kind === 'gtf' || kind === 'segments'`.
+    for (const site of SITES) {
+      const source = readFileSync(join(process.cwd(), site), 'utf8')
+      const spelled = /kind === '(gtf|segments|variants)'\s*\|\|\s*\w+\.kind === '(gtf|segments|variants)'/
+      expect(spelled.test(source), `${site} spells the rule out`).toBe(false)
+    }
+  })
+
+  it('holds exactly the kinds that are FeatureSets', () => {
+    // The claim behind the predicate: these three differ in what a reader means
+    // by a row, not in what they are. A kind that is not a `FeatureSet` cannot
+    // be aggregated over and must not be offered.
+    expect(KINDS.filter(isIntervalSet).sort()).toEqual(['gtf', 'segments', 'variants'])
   })
 })
 

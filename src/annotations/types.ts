@@ -233,6 +233,54 @@ export function drawnFromSamples(kind: AnnotationKind): boolean {
 }
 
 /**
+ * Every {@link AnnotationKind}, once.
+ *
+ * A union cannot be enumerated at run time, so somewhere a list has to be
+ * written out — and it was written out three times: in the store's stored-row
+ * validator, in the kind tests, and very nearly in the analysis form. Three
+ * copies of a list whose whole job is to be complete is three chances for a new
+ * kind to be missing from one of them, which is the silent failure
+ * `annotation-kinds.test.ts` exists to catch.
+ *
+ * The `satisfies` is what makes this a *check* rather than a fourth copy: a
+ * kind added to the union and not to this array fails to compile here, and one
+ * here that is not in the union fails too.
+ */
+export const ANNOTATION_KINDS = [
+  'gtf',
+  'track',
+  'segments',
+  'variants',
+  'pairs',
+  'sequence',
+  'metadata',
+  'classes',
+  'alignments',
+  'reads',
+] as const satisfies readonly AnnotationKind[]
+
+/**
+ * Whether this kind is a set of intervals a task can aggregate over.
+ *
+ * A gene model, a peak set and a variant set are one shape and three meanings
+ * (§8.1, §8.14): they are all `FeatureSet`s, and which one a file is depends on
+ * what the reader means by a row rather than on anything a task cares about.
+ * Every task that takes "a BED or a GTF" takes all three.
+ *
+ * A function rather than a list spelled at each site, for the reason
+ * {@link hasTrackControls} is one and in the same words: four literals is not a
+ * rule, it is a rule spelled four times. It was spelled four times here — the
+ * form picker's `kindsFor`, and the availability gates of overlap, metaplot and
+ * APA — and adding `variants` to the first without the other three produced
+ * exactly the failure that shape produces: a task whose parameter would accept
+ * a VCF, sitting behind a gate that would not open for one, telling the reader
+ * to *load a BED or a GTF* while a variant set was on screen.
+ */
+export function isIntervalSet(kind: AnnotationKind): boolean {
+  return kind === 'gtf' || kind === 'segments' || kind === 'variants'
+}
+
+/**
  * Whether this kind reads a BAM, and so carries a {@link ReadStyle}.
  *
  * The two rows an imported BAM makes: the depth and the pile. They are one

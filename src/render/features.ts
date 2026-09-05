@@ -108,9 +108,16 @@ export function layoutFeatures(
     const segment = axis.segmentOf(window.contig)
     if (segment === null || !(segment.bpPerUnit > 0)) continue
     const [from, to] = featureRange(set, contig, window.start, window.end)
-    for (let i = from; i < to && placements.length < LAYOUT_CAP; i++) {
+    for (let i = from; i < to; i++) {
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue
+      // Counted before the cap is consulted, not after it. The loop used to
+      // stop dead at `LAYOUT_CAP`, which stopped the *count* with it — so the
+      // caption a collapsed lane writes ("17,400 features here") reported the
+      // cap rather than the window, and under-reported by however much a dense
+      // file exceeded it. The count is the one thing the picture can still
+      // carry once it has stopped resolving individuals; it must be the truth.
       total++
+      if (placements.length >= LAYOUT_CAP) continue
       const u0 = segment.unitStart + (set.start[i] - segment.bpStart) / segment.bpPerUnit
       const u1 = segment.unitStart + (set.end[i] - segment.bpStart) / segment.bpPerUnit
       const along0 = frame.toPixel(u0)
@@ -127,6 +134,23 @@ export function layoutFeatures(
   // read as two — which for everything but a variant lane is the two pixels it
   // has always been.
   const dense = placements.length > span / Math.max(2, leastWidth + ROW_GAP)
+
+  // Widened **into the placement**, here, once — so the box that is drawn, the
+  // box that is clicked and the box the packing keeps a row clear for are one
+  // number (§8.4). It was applied in the paint alone, which left a variant
+  // three pixels wide on screen and a fraction of a pixel wide to the pointer:
+  // two thirds of every mark was dead to hover and to click, and the spec said
+  // "three pixels to be seen and to be hit" while only the first was true.
+  //
+  // After the density decision and not before: a collapsed lane bins by
+  // position, and widening there would spread one variant's count over three
+  // pixels and inflate the profile.
+  if (leastWidth > 0 && !dense) {
+    for (const placement of placements) {
+      placement.along1 = Math.max(placement.along1, placement.along0 + leastWidth)
+    }
+  }
+
   if (dense || maxRows <= 1) {
     return { placements, rows: 1, dense, total }
   }
@@ -203,15 +227,6 @@ export interface FeaturePaint {
    * is what a placement carries and what the label pass already uses.
    */
   colourOf?: (index: number) => string
-  /**
-   * The narrowest a feature may be drawn, in pixels.
-   *
-   * A single base is a hairline at any zoom a reader browses at, and a lane of
-   * hairlines is a lane whose marks are hard to see and harder to hit. Absent
-   * keeps `laneRect`'s own floor of one pixel, which is right for a peak set —
-   * a peak that is one pixel wide *is* one pixel of genome.
-   */
-  minWidth?: number
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -259,7 +274,7 @@ export function drawSegments(
       const [x, y, width, height] = laneRect(
         frame,
         placement.along0,
-        widened(placement, paint),
+        placement.along1,
         top,
         top + boxHeight,
       )
@@ -272,21 +287,6 @@ export function drawSegments(
     labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
-}
-
-/**
- * A placement's far edge, widened to {@link FeaturePaint.minWidth} if it is set.
- *
- * Grown from the *start* rather than centred on the middle, so a variant's box
- * begins where the variant begins: a mark centred on a single base would sit
- * half a mark before the position it is about, and at the zoom where that
- * matters — a reader checking a call against the residue under it — being one
- * base out is the whole question.
- */
-function widened(placement: FeaturePlacement, paint: FeaturePaint): number {
-  const least = paint.minWidth
-  if (least === undefined) return placement.along1
-  return Math.max(placement.along1, placement.along0 + least)
 }
 
 /**

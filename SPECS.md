@@ -1872,7 +1872,8 @@ saying somebody called it. A record with no single base behind it — an inserti
 a deletion, a symbolic ALT, several ALTs at once — takes the palette's fifth
 slot, the grey an `N` is already drawn in, which in this application already
 means *no single-base answer*. The lane's own colour was tried there and is
-wrong visibly: the default is `#1f5fa9` and C is `#2f6fb5`, so an insertion and a
+wrong visibly: the first colour `ANNOTATION_PALETTE` hands out is `#0072b2` and
+C is `#2f6fb5`, ten degrees of hue apart, so on a stock lane an insertion and a
 substitution to C were one blue. The reader's colour is what the *density* rung
 is drawn in instead, which is where it does the work of telling two variant files
 apart.
@@ -1883,8 +1884,12 @@ forty-kilobase box and a SNV is one base, so the two classes worth separating ar
 separated by the strongest channel on the lane. The rest is in the card behind a
 click, where `A>AGGT` and `AT>A` are two strings nobody confuses.
 
-**A single base is given three pixels to be seen and to be hit**, and that floor
-changes when the lane stops resolving individuals. The collapse rule is not "more
+**A single base is given three pixels to be seen and to be hit**, written into
+the placement rather than applied at paint time — so the box that is drawn, the
+box the pointer finds and the box the packing keeps a row clear for are one
+number (§8.4). Applied in the paint alone, as it first was, two thirds of every
+mark was dead to hover and to click. The floor also changes when the lane stops
+resolving individuals. The collapse rule is not "more
 features than pixels" — it is *more features than the lane can draw apart*, which
 is the drawn floor plus the gap that makes two read as two. At the old threshold
 a stretch of variants seven bases apart at whole-contig zoom drew as several
@@ -1926,7 +1931,8 @@ and drawing it as a bar height would put three different measurements (AF from
 `INFO`, AF computed from genotypes, no AF at all) in one channel with nothing on
 screen saying which answered. No **BCF**, which is the binary encoding of the
 same file and needs its own header dictionary decoder for no picture that differs
-by a pixel; `bcftools view` writes the text. And no **variant calling**, which is
+by a pixel; `bcftools view` writes the text, and the name guess claims no `.bcf`
+so one is refused by its bytes like anything else. And no **variant calling**, which is
 §18.9's argument and not a new one.
 
 ---

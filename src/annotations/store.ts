@@ -42,6 +42,7 @@ import type {
   StoredEntry,
 } from './types'
 import {
+  ANNOTATION_KINDS,
   LANE_EDGES,
   defaultStyle,
   hasTrackControls,
@@ -1144,18 +1145,8 @@ function samePlacement(a: Placement, b: Placement): boolean {
   return LANE_EDGES.every((edge) => a[edge] === b[edge])
 }
 
-const KINDS: AnnotationKind[] = [
-  'gtf',
-  'track',
-  'segments',
-  'pairs',
-  'sequence',
-  'metadata',
-  'alignments',
-  'reads',
-  'variants',
-  'classes',
-]
+/** Every kind, from the one place that lists them (`annotations/types.ts`). */
+const KINDS: readonly AnnotationKind[] = ANNOTATION_KINDS
 const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
@@ -1238,7 +1229,7 @@ function sideOf(placement: Placement): LaneEdge | 'neither' {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|peaks|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
     '',
   )
 }

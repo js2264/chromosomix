@@ -354,6 +354,23 @@ describe('collapsing to density', () => {
     expect(layoutFeatures(frame, yeastAxis(), setOf(100, 100_000), 4, 3).dense).toBe(false)
   })
 
+  it('counts the whole window even where it stops placing', () => {
+    // `LAYOUT_CAP` bounds the *work*, not the truth. The loop used to stop dead
+    // at the cap, which stopped the count with it — so a collapsed lane's
+    // caption reported the cap rather than the window, silently under-reporting
+    // by however much a dense file exceeded it. The count is the one thing a
+    // collapsed picture can still carry, so it has to be the real number.
+    const many = 100_001
+    const builder = new FeatureBuilder()
+    // Inside the contig, so every one of them is genuinely in the window — the
+    // point is the cap, not the clipping.
+    for (let i = 0; i < many; i++) builder.add('I', i % 99_000, (i % 99_000) + 1)
+    const layout = layoutFeatures(frameOf([0, 100_000], 1000), yeastAxis(), builder.finish(), 4)
+    expect(layout.dense).toBe(true)
+    expect(layout.placements.length).toBeLessThanOrEqual(100_000)
+    expect(layout.total).toBe(many)
+  })
+
   it('collapses at the width the marks actually need, not at a chosen number', () => {
     // Stated from the constants: one mark needs its drawn floor plus the gap
     // that makes two read as two. A test that pinned a count would pass while

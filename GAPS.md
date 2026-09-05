@@ -264,17 +264,18 @@ So that the absence of each is legible as a decision rather than as an oversight
   against, identified by an M5 checksum and conventionally fetched from a third-party registry — which
   C1 and C5 forbid outright — or supplied as a second required file, which is the rule §1 has been at
   pains to keep narrow. Converting with `samtools view -b` is the answer and the folder view says so.
+
 *(**VCF** was on this list, and is not any more.* The entry read: "it is a small indexed text format
-  that this app already has the machinery for (`annotations/tabix.ts`), and what it is missing is a
-  picture — a variant lane is not a track and not a segment set, and nobody has said what it should
-  look like beside a contact map." Both halves turned out to be answerable. The picture is a
-  **segment set**, in the sense that matters: a variant is an interval, so it packs, draws,
-  hit-tests, exports and collapses through the code a peak set already uses, and what a variant lane
-  needs of its own is a kind rather than a renderer. Beside a contact map it collapses to density,
-  which is the one reduction of a point set that is exact at any interval width — so a bin's worth
-  of variants is a true reading rather than a smear, which is what a *pile* of reads could never be
-  and why that one is 1D-only. Specified at §8.14, with what is still refused inside the scope —
-  the genotype matrix above all — listed at the end of it.)*
+that this app already has the machinery for (`annotations/tabix.ts`), and what it is missing is a
+picture — a variant lane is not a track and not a segment set, and nobody has said what it should
+look like beside a contact map." Both halves turned out to be answerable. The picture is a
+**segment set**, in the sense that matters: a variant is an interval, so it packs, draws,
+hit-tests, exports and collapses through the code a peak set already uses, and what a variant lane
+needs of its own is a kind rather than a renderer. Beside a contact map it collapses to density,
+which is the one reduction of a point set that is exact at any interval width — so a bin's worth
+of variants is a true reading rather than a smear, which is what a *pile* of reads could never be
+and why that one is 1D-only. Specified at §8.14, with what is still refused inside the scope —
+the genotype matrix above all — listed at the end of it.)*
 
 *(BAM was on this list, and is not any more.* The line read "real formats, wrong app — a contact-map
 browser that reads alignments is two applications", and the strongest part of it was never the

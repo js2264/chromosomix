@@ -82,7 +82,7 @@ export function sniffVcf(text: string): boolean {
   let rows = 0
   let index = 0
   const length = text.length
-  while (index < length && rows < 4) {
+  while (index < length && rows < ENOUGH_ROWS) {
     let end = text.indexOf('\n', index)
     if (end < 0) end = length
     let stop = end
@@ -104,29 +104,72 @@ export function sniffVcf(text: string): boolean {
       continue
     }
     const columns = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/)
-    if (!looksLikeRecord(columns)) return false
+    if (!looksLikeUnheadedRecord(columns)) return false
     rows++
   }
-  // Four rows is enough to be sure and cheap enough to always pay — the same
-  // number and the same reasoning `sniffSignal` uses. One row that is
-  // VCF-shaped by coincidence is not four.
-  return rows >= 4
+  // One row is enough, and the reason is that this shape test is five
+  // conditions deep where `sniffSignal`'s — whose four-row rule this borrowed —
+  // is one. A row here has eight columns, an integer POS, a non-integer ID and
+  // two allele-shaped columns; a file whose first row is all four of those by
+  // coincidence is not a file this app has another parser for.
+  //
+  // Requiring four was the wrong trade in the direction that matters. What it
+  // refused was a *short* slice — a two-variant call set, or a tabix span over a
+  // sparse region, which is the road this sniffer's shape test exists to serve —
+  // and what it bought was protection against a hypothetical. Every row seen is
+  // still checked, so a file that fails on row three is still refused.
+  return rows >= 1
 }
 
+/** How many rows to look at before stopping. Cheap, and four is plenty. */
+const ENOUGH_ROWS = 4
+
 /**
- * Whether one row of columns is shaped like a VCF record.
+ * Whether one row of columns is a VCF record: the mandatory eight, an integer
+ * POS, and two allele-shaped columns.
  *
- * The eight mandatory columns, an integer POS, a non-integer ID, and two
- * allele-shaped columns. Deliberately *not* a check that ID is `.` or an rsID:
- * a caller is free to put anything there, and a sniffer that demanded a
- * convention would refuse files that are perfectly legal.
+ * This is what the **parser** keeps, and it is deliberately everything the spec
+ * requires and nothing more. VCF puts no convention on `ID` — it is a
+ * "semi-colon separated list of unique identifiers", and a bare integer is
+ * legal and common: ClinVar's ID column is its VariationID, a plain number on
+ * every row of a file millions of people have.
  */
 function looksLikeRecord(columns: string[]): boolean {
   if (columns.length < 8) return false
   if (!/^\d+$/.test(columns[1])) return false
-  // The column that tells this from a BED: a BED's third column is its end.
-  if (/^[+-]?\d+$/.test(columns[2])) return false
   return isAllele(columns[3]) && isAlt(columns[4])
+}
+
+/**
+ * The same, plus `QUAL` — the one further column whose *shape* the spec fixes.
+ *
+ * This is what the **sniffer** asks, and the two differ because they answer
+ * different questions: the parser asks whether to keep a row, and the sniffer
+ * asks which parser gets the file. The sniffer can afford to be stricter, and on
+ * the headerless road — a tabix slice, where every `#` line is in the part of
+ * the file that was never fetched — being right is entirely down to shape.
+ *
+ * It used to ask a sixth thing: that column 2 is **not** an integer, since a
+ * BED's third column is its end. That rule had to go, and the reason is worth
+ * writing down because it looks like a good rule. ClinVar's `ID` column *is* an
+ * integer — its VariationID — on every row of a file millions of people have,
+ * and VCF puts no convention on `ID` at all ("a semi-colon separated list of
+ * unique identifiers"). So the rule cost a real file to protect against a
+ * hypothetical one: a BED-family row that reaches this point already has eight
+ * columns, an integer in column 1, and *allele-shaped words in columns 3 and
+ * 4* — where every BED flavour puts a name and a numeric score, every peak
+ * format puts a numeric score, and a `+`/`-` strand fails `isAlt` outright.
+ * `QUAL` replaces it with a condition a VCF actually guarantees.
+ */
+function looksLikeUnheadedRecord(columns: string[]): boolean {
+  return looksLikeRecord(columns) && isQual(columns[5])
+}
+
+/** QUAL: a number, or `.` for *not recorded*. Nothing else is legal. */
+function isQual(value: string | undefined): boolean {
+  if (value === undefined) return false
+  if (value === '.') return true
+  return value !== '' && Number.isFinite(Number(value))
 }
 
 /** REF: one or more of the IUPAC bases, and nothing else. */
@@ -152,7 +195,11 @@ function isAlt(value: string | undefined): boolean {
         one === '*' ||
         isAllele(one) ||
         /^<[^<>]+>$/.test(one) ||
-        /[[\]]/.test(one),
+        /[[\]]/.test(one) ||
+        // A *single* breakend: one end of a junction whose partner is not in
+        // the file, written `.A` or `G.` — no bracket, and legal since 4.2.
+        /^\.[ACGTNacgtn]+$/.test(one) ||
+        /^[ACGTNacgtn]+\.$/.test(one),
     )
 }
 
@@ -235,21 +282,70 @@ function numberOf(value: string | undefined): number | undefined {
  * deletion is a one-pixel tick — a wrong answer that looks like an answer, and
  * the only place in this parser where one is possible.
  *
- * `SVLEN` is negative for a deletion by convention and both signs appear in real
- * files, so its magnitude is what is used. A symbolic record with neither tag
- * keeps its single padding base rather than being dropped: the file says
- * *something happened here* and this app's job is to draw what the file says.
+ * `END` is 1-based inclusive and `start` is already 0-based, so the two agree
+ * with no adjustment: `END` *is* the half-open end.
+ *
+ * `SVLEN` is the fallback, and it needs two corrections that `Math.abs` alone
+ * does not make.
+ *
+ * **An insertion consumes no reference.** `SVLEN` on an `<INS>` is the length of
+ * the sequence going *in*, and the spec's own example writes `END=POS` beside
+ * `SVLEN=6027` for exactly that reason. Taken as a span it drew a six-kilobase
+ * box for an event that occupies one base — the same lie as the untreated
+ * `<DEL>`, pointing the other way, and worse because it is a lie about a
+ * *region* rather than about a length. It is caught here rather than in
+ * `variantClass` because it is a fact about the reference, not about the call.
+ *
+ * **And the padding base counts.** VCF's relation is `END = POS + |SVLEN|`, so
+ * the half-open end is `start + |SVLEN| + 1`. Without the `+ 1` one record
+ * written two legal ways — `END=321887` and `SVLEN=-205` — drew two spans a base
+ * apart.
+ *
+ * A symbolic record with neither tag keeps its single padding base rather than
+ * being dropped: the file says *something happened here*, and this app's job is
+ * to draw what the file says.
  */
 function endOf(start: number, ref: string, alt: string, info: string): number {
   const plain = start + Math.max(1, ref.length)
   if (!/<[^<>]+>/.test(alt)) return plain
   const end = numberOf(infoOf(info, 'END'))
-  // `END` is 1-based inclusive and `start` is already 0-based, so the two agree
-  // without an adjustment — `END` *is* the half-open end.
   if (end !== undefined && end > start) return end
-  const span = numberOf(infoOf(info, 'SVLEN'))
-  if (span !== undefined && span !== 0) return start + Math.abs(span)
+  if (insertsWithoutSpanning(alt, info)) return plain
+  const span = svLenOf(info)
+  if (span > 0) return start + span + 1
   return plain
+}
+
+/**
+ * Whether a symbolic ALT puts sequence in without taking reference out.
+ *
+ * `<INS>` and everything under it — `<INS:ME:L1>`, `<INS:ME:ALU>` — plus the
+ * `SVTYPE` that says so, because a file may carry either and this has to be
+ * right on both.
+ */
+function insertsWithoutSpanning(alt: string, info: string): boolean {
+  if (/<INS(:|>)/i.test(alt)) return true
+  return /^INS(:|$)/i.test(infoOf(info, 'SVTYPE') ?? '')
+}
+
+/**
+ * `|SVLEN|`, or `0` where there is none to read.
+ *
+ * `SVLEN` is `Number=A` — one value per ALT — so a multi-allelic record writes
+ * `SVLEN=-205,300`, which `Number()` reads as `NaN` and which therefore
+ * collapsed a large structural variant to a single base. The largest magnitude
+ * is taken, because the span drawn has to cover every allele the record
+ * declares.
+ */
+function svLenOf(info: string): number {
+  const raw = infoOf(info, 'SVLEN')
+  if (raw === undefined || raw === '') return 0
+  let most = 0
+  for (const part of raw.split(',')) {
+    const one = numberOf(part)
+    if (one !== undefined && Math.abs(one) > most) most = Math.abs(one)
+  }
+  return most
 }
 
 /** How many samples a `#CHROM` line names, and whether one was seen at all. */
@@ -290,11 +386,10 @@ export function parseVcf(text: string): FeatureSet {
     const [contig, rawPos, id, ref, alt, qual, filter, info] = columns
     // VCF counts from one and this app counts from zero, everywhere and once —
     // the same conversion `parseWig` makes at its own door.
-    const start = Number(rawPos) - 1
-    if (!(start >= 0)) {
-      skipped++
-      return
-    }
+    // …and `POS = 0` is legal: it is VCF's telomere convention, a record about
+    // the position *before* the first base. Clamped rather than dropped, since
+    // the file is making a claim about a place this axis has.
+    const start = Math.max(0, Number(rawPos) - 1)
     builder.add(contig, start, endOf(start, ref, alt, info ?? ''), {
       // The rsID, where the file gives one. Both slots, and deliberately: `name`
       // is what the lane writes on the box and `id` is what the search box reads
@@ -320,7 +415,7 @@ export function parseVcf(text: string): FeatureSet {
   return set
 }
 
-/** Whether a set came from a file naming samples, for the summary line. */
+/** How many samples a file's `#CHROM` line names, for the summary line. */
 export function samplesIn(text: string): number {
   let found = 0
   eachLine(text, (line) => {

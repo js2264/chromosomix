@@ -1,13 +1,12 @@
 /**
  * The ink a called variant is drawn in.
  *
- * One rule: **a substitution takes the colour of the base it substitutes to**,
- * and everything else takes the lane's own colour. That is the whole of it, and
- * the reason it is worth a module is what it buys vertically. Open a FASTA, a
- * BAM and a VCF over one locus and a heterozygous A>G reads as one column in
- * three inks that agree — the sequence row writes a green `A`, the pile puts
- * blue `G` marks through half its reads, and the variant row draws a blue box
- * saying somebody called it. The colours come from the one table
+ * One rule: **a substitution takes the colour of the base it substitutes to**.
+ * That is the whole of it, and the reason it is worth a module is what it buys
+ * vertically. Open a FASTA, a BAM and a VCF over one locus and a heterozygous
+ * A>G reads as one column in inks that agree — the sequence row writes a green
+ * `A`, the pile puts orange `G` marks through half its reads, and the variant
+ * row draws an orange box saying somebody called it. The colours come from the one table
  * `render/sequence.ts` holds, which `render/alignments.ts` already borrows for
  * exactly this reason, so there is no second palette to keep in step.
  *
@@ -21,9 +20,10 @@
  * one entry in that table that is a neutral rather than a hue, so it can never
  * be mistaken for one of the four.
  *
- * The lane's **own** colour was tried there first and is wrong, visibly:
- * the default is `#1f5fa9` and `C` is `#2f6fb5`, so on a stock lane an
- * insertion and a substitution to C were the same blue. A reader's colour is
+ * The lane's **own** colour was tried there first and is wrong, visibly: the
+ * first colour `ANNOTATION_PALETTE` hands out is `#0072b2` and `C` is
+ * `#2f6fb5` — ten degrees of hue apart — so on a stock lane an insertion and a
+ * substitution to C were the same blue. A reader's colour is
  * not out of the picture — it is what the density rung is drawn in, which is
  * where it does the work of telling two variant files apart at a zoom where no
  * individual mark is legible anyway.
@@ -58,6 +58,11 @@ import { BASE_COLOURS } from './sequence'
  * single base sits half a mark before the position it is about, and at the zoom
  * where that matters — a reader checking a call against the residue under it —
  * being one base out is the whole question.
+ *
+ * Handed to `layoutFeatures`, which writes it into the placement — so the box
+ * that is drawn, the box that is clicked and the box the packing keeps a row
+ * clear for are the same box. Applied in the paint alone, as it first was, two
+ * thirds of every mark was dead to the pointer.
  */
 export const VARIANT_MIN_WIDTH = 3
 
@@ -72,9 +77,10 @@ const BASES = 'ACGT'
  * this is asked a few hundred times per frame — once per *placement*, which the
  * layout has already capped. The same pass that writes the labels.
  *
- * A record with several ALTs falls back even when they are all single bases:
- * `A>G,T` is two substitutions to two different bases and there is no single
- * honest colour for it, so it takes the lane's rather than picking one of them.
+ * A record with several ALTs takes the grey even when they are all single
+ * bases: `A>G,T` is two substitutions to two different bases and there is no
+ * single honest colour for it, so it says *no single-base answer* rather than
+ * picking one of them.
  */
 export function variantInk(detail: string, fallback: string): string {
   const arrow = detail.indexOf('>')
