@@ -207,6 +207,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **P(s) is smooth again: the density is divided by the separation a bin covers,
+  not by the width of the break.** The curve had developed a sawtooth of a factor
+  of two through the 10–30 kb decade, which buried the cohesin shoulder the
+  derivative is read for.
+
+  It is an aliasing artefact and `HiContacts::distanceLaw()` has it too. That
+  break table is `unique(round(1.1^n))` in base pairs and was built for a *pairs*
+  file, where a distance is continuous and the counts in a break really are
+  spread over its whole width. A contact matrix is not like that: its separations
+  sit on a lattice of `binsize`, and near 10 kb the breaks are about a kilobase
+  wide — so on a 1 kb map one break holds two lattice points and the next holds
+  one. Dividing both by their nominal widths makes the first almost twice as
+  dense as the second, bin after bin. On the yeast demo the log-log slope of that
+  curve moves by **0.83 between neighbouring points** and swings between +1.7 and
+  −2.9; the shoulder it hides is a change of about **0.26**, so the artefact was
+  an order of magnitude bigger than the feature.
+
+  Dividing by `offsets × binsize` is the same quantity — a share of all cis
+  contacts, per base pair — estimated on the lattice the data are actually on. It
+  moves the slope by **0.087** between neighbours, and it agrees with the nominal
+  width wherever a break is wide enough to hold several offsets, which is
+  everywhere past about 50 kb at 1 kb bins. HiContacts says as much itself: its
+  matrix branch prints *"the P(s) curve will be an approximation"* and its pairs
+  branch does not.
+
+  The golden now compares the **numerator** — the contacts in each break, break
+  for break — against HiContacts exactly, which is where a real disagreement
+  would show, and a new test asserts both roughness figures from the golden's own
+  numbers so the sawtooth cannot come back unnoticed.
+
 - **The CLI can use a loop set again.** `--pairs loops.bedpe` parsed the file,
   filed it under its *file name*, and then set the task's parameter to a *path*;
   every task that takes a feature or pair set looked under its own parameter key,

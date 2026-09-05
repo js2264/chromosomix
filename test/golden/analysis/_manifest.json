@@ -12,7 +12,7 @@
   "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
   "coverage": "cis marginals, against numpy and cooltools.coverage",
   "expected": "P(s) per chromosome, raw and balanced, against numpy and cooltools.expected_cis",
-  "hicontacts_ps": "P(s) as a probability density, against HiContacts::distanceLaw in R",
+  "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
   "insulation": "diamond sums and scores at three windows, against numpy and cooltools.insulation",
   "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
   "overlap": "Jaccard and hit counts, against a per-base boolean mask",

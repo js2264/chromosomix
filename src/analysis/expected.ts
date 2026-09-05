@@ -360,6 +360,32 @@ function breakIndex(pos: Float64Array, distance: number): number {
  * contact total is not. Both live in this module on purpose and neither is
  * derived from the other.
  *
+ * **The width is the separation the bin covers, not the width of the break**, and
+ * this is the one place the arithmetic departs from `HiContacts::distanceLaw()`
+ * on a binned map. It departs because that break table was built for a *pairs*
+ * file, where a distance is continuous and the counts in a break really are
+ * spread across its whole width. A contact matrix does not work like that: its
+ * separations sit on a lattice of `binsize`, and the breaks near ten kilobases
+ * are about a kilobase wide — so on a 1 kb map one break holds two lattice
+ * points and the next holds one, and dividing both by their nominal widths
+ * makes the first almost twice as dense as the second. The result is a sawtooth
+ * of a factor of two, alternating bin by bin, right through the decade where the
+ * cohesin shoulder is. Measured on `demo/yeast/Yeast_microC_G2M_1kb.cool`, the
+ * log-log slope of the nominal-width curve moves by **0.83 between neighbouring
+ * points** and swings between +1.7 and −2.9; against the width the data occupy
+ * it moves by **0.087**, and the shoulder at ten to twenty kilobases — a change
+ * of about 0.26 in slope — is a feature rather than a third of one tooth.
+ *
+ * HiContacts says as much itself: the matrix branch of `distanceLaw` prints
+ * *"the P(s) curve will be an approximation"* and the pairs branch does not, and
+ * this is what that approximation costs. Dividing by `offsets · binsize` is the
+ * same quantity — a share of all contacts, per base pair — estimated on the
+ * lattice the data are actually on, and the two agree wherever a break is wide
+ * enough to hold several offsets, which is everywhere past about 50 kb on a 1 kb
+ * map. `analysis-golden.test.ts` therefore compares the **numerator** and the
+ * break positions against HiContacts exactly, which is where a real
+ * disagreement would show, and asserts this denominator separately.
+ *
  * Three further details are HiContacts' and are reproduced exactly, because a
  * curve that is off by one bin or by a factor of two is worse than one that is
  * openly a different convention:
@@ -394,15 +420,21 @@ export function densityCurve(
   const bins = breaks.width.length
   const contacts = new Float64Array(bins)
   const cells = new Float64Array(bins)
+  const offsets = new Int32Array(bins)
 
   let total = 0
   for (let k = floorOffset; k <= curve.maxOffset; k++) {
+    const at = breakIndex(breaks.pos, (k - 1) * bp)
+    // Counted whether or not this offset carries anything. It is a separation
+    // the map *has*, so it is part of the range the bin stands for, and a bin
+    // whose only empty offset went uncounted would be a bin whose density was
+    // divided by less than it covers.
+    offsets[at] += 1
     const count = curve.count[k]
     if (!(count > 0)) continue
     const share = k === 0 ? 1 : fold
     const value = curve.sum[k] / share
     if (Number.isNaN(value)) continue
-    const at = breakIndex(breaks.pos, (k - 1) * bp)
     contacts[at] += value
     cells[at] += count / share
     total += value
@@ -417,7 +449,7 @@ export function densityCurve(
   for (let i = 0; i < bins; i++) {
     if (cells[i] <= 0) continue
     xs.push(breaks.pos[i])
-    ys.push(contacts[i] / total / breaks.width[i])
+    ys.push(contacts[i] / total / (offsets[i] * bp))
     ns.push(cells[i])
   }
   return { x: Float64Array.from(xs), y: Float64Array.from(ys), n: Float64Array.from(ns) }

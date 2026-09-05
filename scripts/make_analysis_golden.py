@@ -1548,7 +1548,7 @@ COVERAGE = {
     "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
     "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
     "overlap": "Jaccard and hit counts, against a per-base boolean mask",
-    "hicontacts_ps": "P(s) as a probability density, against HiContacts::distanceLaw in R",
+    "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
 }
 
 

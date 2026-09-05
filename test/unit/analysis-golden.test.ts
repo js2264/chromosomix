@@ -206,7 +206,7 @@ interface HiContactsGolden {
   tolerance: number
   breaks: { pos: number[]; width: number[] }
   max_offset: Record<string, number>
-  curves: Record<string, { x: number[]; norm_p: GoldenNumbers }>
+  curves: Record<string, { x: number[]; ninter: GoldenNumbers; norm_p: GoldenNumbers }>
 }
 
 /**
@@ -216,14 +216,17 @@ interface HiContactsGolden {
  * bins that could have held them — against cooltools, and that quantity is still
  * what observed/expected, the compartment chain and the pileups are taken
  * against. It is not what P(s) plots. What P(s) plots is the **probability
- * density** — contacts over all cis contacts, then over the width of the
- * separation bin in base pairs — and the oracle for it is
- * `HiContacts::distanceLaw()` itself, run as R by `scripts/hicontacts_ps.R`.
+ * density** — contacts over all cis contacts, then over the separation the bin
+ * covers — and the oracle for it is `HiContacts::distanceLaw()` itself, run as R
+ * by `scripts/hicontacts_ps.R`.
  *
- * Three of the four tests are exact comparisons and the fourth is not: it drives
- * `densityCurve` with the mirror fold turned off, to record what that failure
- * looks like. It looks like a P(s), which is why it is tested for rather than
- * left to be noticed.
+ * **What is compared is the numerator, break for break.** That is where every
+ * way of getting this wrong shows up: the gap distance being off by one bin, the
+ * break table being regenerated wrongly, the mirrored square not being folded so
+ * the diagonal is outweighed two to one. The *denominator* is deliberately not
+ * HiContacts' — see {@link densityCurve} — and the last test here is why: on a
+ * binned map, dividing by the nominal width of a break produces a sawtooth
+ * bigger than the biology, and the golden's own numbers are enough to show it.
  */
 suite('P(s) as a density, against HiContacts::distanceLaw', () => {
   const golden = ready ? loadAnalysisGolden<HiContactsGolden>('hicontacts_ps') : null
@@ -233,6 +236,41 @@ suite('P(s) as a density, against HiContacts::distanceLaw', () => {
     const accumulator = new ExpectedAccumulator(maxOffset)
     for (const chrom of chroms) accumulator.addBlock(await demo.square(chrom, false))
     return accumulator.finish()
+  }
+
+  /**
+   * How many bin separations each break holds, which is what the density divides
+   * by. Recomputed here from the golden's own break positions rather than taken
+   * from the kernel, so the two have to agree rather than being the same line
+   * read twice.
+   */
+  function offsetsPerBreak(g: HiContactsGolden, maxOffset: number): Map<number, number> {
+    const out = new Map<number, number>()
+    for (let k = 0; k <= maxOffset; k++) {
+      const gap = (k - 1) * g.binsize
+      let at = 0
+      for (let i = 0; i < g.breaks.pos.length - 1; i++) {
+        if (g.breaks.pos[i] <= gap) at = i
+      }
+      out.set(g.breaks.pos[at], (out.get(g.breaks.pos[at]) ?? 0) + 1)
+    }
+    return out
+  }
+
+  /** Mean absolute change in log-log slope between neighbouring points. */
+  function roughness(x: readonly number[], y: readonly number[], from: number, to: number): number {
+    const slopes: number[] = []
+    for (let i = 1; i + 1 < x.length; i++) {
+      if (x[i] < from || x[i] > to) continue
+      if (!(y[i - 1] > 0) || !(y[i + 1] > 0)) continue
+      slopes.push(
+        (Math.log10(y[i + 1]) - Math.log10(y[i - 1])) /
+          (Math.log10(x[i + 1]) - Math.log10(x[i - 1])),
+      )
+    }
+    let sum = 0
+    for (let i = 1; i < slopes.length; i++) sum += Math.abs(slopes[i] - slopes[i - 1])
+    return slopes.length < 2 ? Number.NaN : sum / (slopes.length - 1)
   }
 
   it("regenerates HiContacts' break table, position by position", () => {
@@ -250,25 +288,73 @@ suite('P(s) as a density, against HiContacts::distanceLaw', () => {
     ])
   })
 
-  it('matches norm_p on every goldened chromosome', async () => {
+  it('puts the same contacts in the same breaks as HiContacts, on every chromosome', async () => {
     const g = golden!
-    for (const chrom of g.chroms) {
-      const curve = await curveOf([chrom], g.max_offset[chrom])
+    for (const chrom of [...g.chroms, 'pooled']) {
+      const spans = chrom === 'pooled' ? g.pooled : [chrom]
+      const curve = await curveOf(spans, g.max_offset[chrom])
       const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
       // Exactly, not to a tolerance: the abscissa is a break position, and a
       // curve drawn one break to the left of HiContacts' would still pass a
       // relative comparison on y at every point.
       expect(Array.from(ours.x), chrom).toEqual(g.curves[chrom].x)
-      expectSeries(ours.y, numbers(g.curves[chrom].norm_p), g.tolerance, `norm_p ${chrom}`)
+
+      // The numerator, recovered from the density by multiplying the width back
+      // in, against HiContacts' own `ninter` — both as a share of their own
+      // total, since ours is normalised and theirs is a count.
+      const held = offsetsPerBreak(g, g.max_offset[chrom])
+      const theirs = numbers(g.curves[chrom].ninter)
+      let sum = 0
+      for (const value of theirs) sum += value
+      const mine = new Float64Array(ours.x.length)
+      const yours = new Float64Array(ours.x.length)
+      for (let i = 0; i < ours.x.length; i++) {
+        mine[i] = ours.y[i] * (held.get(ours.x[i]) ?? 0) * g.binsize
+        yours[i] = theirs[i] / sum
+      }
+      expectSeries(mine, yours, g.tolerance, `share of contacts ${chrom}`)
     }
   })
 
-  it('matches norm_p over several spans pooled into one curve', async () => {
+  it('divides by the separation a break covers, not by the width of the break', async () => {
+    const g = golden!
+    const chrom = g.chroms[0]
+    const curve = await curveOf([chrom], g.max_offset[chrom])
+    const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+    const held = offsetsPerBreak(g, g.max_offset[chrom])
+    // Somewhere in the aliased decade, where a break is about as wide as a bin
+    // of the file and the two denominators are furthest apart.
+    const at = ours.x.findIndex((value) => value >= 10_000 && (held.get(value) ?? 0) >= 2)
+    expect(at).toBeGreaterThanOrEqual(0)
+    const covered = (held.get(ours.x[at]) ?? 0) * g.binsize
+    const nominal = g.breaks.width[g.breaks.pos.indexOf(ours.x[at])]
+    expect(covered).not.toBe(nominal)
+    // The share of contacts in that break, over the separation it covers.
+    expect(ours.y[at] * covered).toBeGreaterThan(0)
+  })
+
+  it('is smooth where the nominal width would saw', async () => {
     const g = golden!
     const curve = await curveOf(g.pooled, g.max_offset.pooled)
     const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
-    expect(Array.from(ours.x)).toEqual(g.curves.pooled.x)
-    expectSeries(ours.y, numbers(g.curves.pooled.norm_p), g.tolerance, 'norm_p pooled')
+    const x = Array.from(ours.x)
+    const y = Array.from(ours.y)
+    // What HiContacts' own denominator would have produced, from the same
+    // numerator: multiply the covered width back in and divide by the break's.
+    const held = offsetsPerBreak(g, g.max_offset.pooled)
+    const nominal = x.map((position, i) => {
+      const covered = (held.get(position) ?? 0) * g.binsize
+      const width = g.breaks.width[g.breaks.pos.indexOf(position)]
+      return (y[i] * covered) / width
+    })
+    const window: [number, number] = [4_000, 200_000]
+    const mine = roughness(x, y, ...window)
+    const theirs = roughness(x, nominal, ...window)
+    // The shoulder this decade is read for is a change of about 0.26 in slope.
+    // The sawtooth is an order of magnitude larger than the feature, which is
+    // the whole argument for the other denominator.
+    expect(mine).toBeLessThan(0.2)
+    expect(theirs).toBeGreaterThan(0.5)
   })
 
   it('folds the mirrored square, and is visibly wrong without it', async () => {
@@ -279,12 +365,11 @@ suite('P(s) as a density, against HiContacts::distanceLaw', () => {
     // twice, so the first break — which holds the diagonal and offset 1 — loses
     // weight against everything else and every other point gains it. A quiet
     // error: the curve still looks like a P(s).
+    const folded = densityCurve(curve, g.binsize, g.factor, 0, true)
     const unfolded = densityCurve(curve, g.binsize, g.factor, 0, false)
-    const theirs = numbers(g.curves[chrom].norm_p)
-    expect(unfolded.x.length).toBe(theirs.length)
-    expect(Math.abs(unfolded.y[0] / theirs[0] - 1)).toBeGreaterThan(0.1)
+    expect(unfolded.x.length).toBe(folded.x.length)
+    expect(Math.abs(unfolded.y[0] / folded.y[0] - 1)).toBeGreaterThan(0.1)
   })
-
 })
 
 // ---------------------------------------------------------------------------

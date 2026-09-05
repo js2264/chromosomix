@@ -2880,8 +2880,8 @@ one must be.
 producing the **expected** curve three later tasks consume. Those are two different curves off one
 accumulator, and the split is deliberate. What the panel **plots** is the probability density —
 contacts at a separation over the contacts in the whole map, then over the width of the separation bin
-in base pairs — which is `HiContacts::distanceLaw()`'s `norm_p`, reproduced exactly down to that
-package's gap distance and its break table (§18.10). What observed/expected, the compartment chain and
+in base pairs — which is `HiContacts::distanceLaw()`'s `norm_p`, down to that package's gap distance and
+its break table, and with one deliberate correction to its denominator that §18.10 sets out. What observed/expected, the compartment chain and
 the pileups **divide by** is the mean contact per pair of bins at that separation, which is
 `cooltools expected-cis` and never leaves `expectedAt`. Both are called P(s) in the literature and they
 are not interchangeable: they agree in shape at short range and part company as the separation
@@ -3155,8 +3155,10 @@ compares against an absolute floor.
 `HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
 separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
 pair*. The catalogue entry says why the app plots the first and divides by the second; this golden is
-what makes the first reproducible rather than merely similar, and it is exact at three places a
-near-miss would be invisible on a log-log plot. The
+what makes the first reproducible rather than merely similar. What it compares is the **numerator,
+break for break**, because that is where every way of getting this wrong shows: the gap distance off
+by one bin, the break table regenerated wrongly, the mirrored square not folded. It is exact at three
+places a near-miss would be invisible on a log-log plot. The
 **separation** is HiContacts' gap distance, `pairdist(type = 'gap')` over bins that HiCExperiment
 builds as `IRanges(start + 1, end)`, so two bins *k* apart are `(k − 1)·binsize` apart and the
 diagonal and the first off-diagonal share the first break — a one-bin shift, which is a factor of two
@@ -3165,6 +3167,23 @@ at the left edge. The **bins** are that package's 205 hard-coded breaks, which a
 than trusting the identity. And each unordered pair of bins counts **once**: the accumulator is fed
 mirrored dense squares, harmless to a mean and fatal to a share of a total, since the diagonal arrives
 once among off-diagonals that arrive twice.
+
+**The denominator is deliberately not HiContacts', and this is the one place the app disagrees with
+it.** That break table was built for a *pairs* file, where a distance is continuous and the counts in
+a break really are spread across its whole width. A contact matrix is not like that: its separations
+sit on a lattice of `binsize`, and the breaks near ten kilobases are about a kilobase wide — so on a
+1 kb map one break holds two lattice points and the next holds one, and dividing both by their
+nominal widths makes the first almost twice as dense as the second. The result is a sawtooth of a
+factor of two, alternating bin by bin, straight through the decade the cohesin shoulder is read in.
+On `demo/yeast/Yeast_microC_G2M_1kb.cool` the log-log slope of the nominal-width curve moves by
+**0.83 between neighbouring points** and swings between +1.7 and −2.9; the shoulder it is hiding is a
+change of about **0.26**. Dividing instead by the separation the bin actually covers —
+`offsets × binsize` — is the same quantity estimated on the lattice the data are on, moves the slope
+by **0.087** between neighbours, and agrees with the nominal width wherever a break is wide enough to
+hold several offsets, which is everywhere past about 50 kb at 1 kb bins. HiContacts says as much
+itself: its matrix branch prints *"the P(s) curve will be an approximation"* and its pairs branch does
+not. A test in the suite asserts both roughness figures from the golden's own numbers, so the
+sawtooth cannot come back unnoticed.
 
 The oracle is `scripts/hicontacts_ps.R`, which is HiContacts' own pipeline copied line for line with
 one substitution — the two lines that read the map — rather than a transcription into numpy. Two of
