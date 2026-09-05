@@ -956,6 +956,7 @@ Three families, in `render/derive.ts` and `render/compare.ts`:
 |---|---|---|
 | **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
 | **Baseline** — observed / expected | a toggle of its own | two passes |
+| **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -972,6 +973,17 @@ doubly stochastic — and converge to the same weights; KR is a Newton solver th
 passes. At §2's scale the fixed point converges in milliseconds, so the faster solver would buy a
 name in a menu and nothing a reader could see. A file balanced with `KR` elsewhere and read here
 under `ICE` shows the same picture.
+
+**The baseline can be looked at as well as divided by**, and it is in the picker rather than beside
+the toggle because it answers "what are these numbers" and not "compared to what". Every cell becomes
+the mean the ratio would have divided it by — a banded triangle fading from the diagonal, with a flat
+plate over every off-diagonal pair of sequences, and nothing else in it. The reason to offer it is
+that an O/E is only as good as its denominator: at long separations the curve is a mean over few
+cells and moves, and a ratio that swings there is swinging in the model rather than in the biology.
+It **overrides** the toggle rather than composing with it — O/E of the baseline is 1 wherever it is
+anything — so the toggle greys and says why, and it is drawn on a sequential ramp with no neutral,
+because a mean of counts is count-like and a diverging scale centred at 1 would be centred where
+nothing in the picture lives.
 
 **Normalisation and baseline compose, and their order is fixed.** Normalise first: the decay curve is
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on

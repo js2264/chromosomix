@@ -117,6 +117,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   position, density and unity-scaled value matches to 2e-6 on four chromosomes
   and on the four pooled.
 
+- **`expected` in the score picker: the denominator of O/E, drawn.** Every cell
+  replaced by the mean of the block at that bin separation, with one scalar
+  between each pair of sequences — a banded triangle fading from the diagonal
+  and nothing else in it. It is in the picker rather than beside the `O/E`
+  toggle because it answers what the numbers *are*, not what they are compared
+  to, and it overrides that toggle rather than composing with it: O/E of the
+  baseline is 1 wherever it is anything, so the toggle greys and its tooltip
+  says why.
+
+  The reason to look at it is that an O/E is only as trustworthy as its
+  denominator. At long separations the curve is a mean over few cells and it
+  moves, so a ratio that swings out there is swinging in the model rather than
+  in the biology — and until now there was no way to see which.
+
+  Drawn on a sequential ramp with no neutral, because a mean of counts is
+  count-like; measured after whichever normalisation is in force, like the ratio
+  it comes out of. Its id in a link is `baseline`, not `expected`, so a file
+  that carries a `/pixels/expected` column of its own still reaches it — that
+  column now reads `expected (column)` in the list, which is the only way two
+  entries could have carried one word.
 
 - **Pattern detection, and it is chromosight.** A fifteenth task on the map card:
   loops, borders, hairpins, centromeres and stripes, found by correlating a

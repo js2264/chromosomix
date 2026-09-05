@@ -4312,6 +4312,10 @@ export class Session {
       // one of the answers to "what are these numbers", and it carries the
       // balancing and the baseline it needs with it (`ui/scores.ts`).
       correlate: this.scoreOf(state).correlate === true,
+      // Also from the score, and for the same reason: "show me the denominator"
+      // is an answer to what the cells are, not a second switch beside the one
+      // that divides by it (`ui/scores.ts`).
+      baseline: this.scoreOf(state).baseline === true,
       onCorrelateChange: (on) => {
         // There is no correlation toggle to flip any more, so the only caller is
         // the failure path below, and the only thing "off" can mean is the score

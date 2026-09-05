@@ -335,6 +335,19 @@ const OE_HINT =
   'that decay is not what anybody is looking for; dividing it out makes the departures from it ' +
   'the picture. Drawn on a scale centred at 1, with a cell of nothing observed left as paper.'
 
+const OE_ON_BASELINE_HINT =
+  'The cells already are the expected values, so there is nothing left to divide by them — ' +
+  'observed over expected of the baseline is 1 wherever it is anything. Choose another score to ' +
+  'get the toggle back.'
+
+const BASELINE_HINT =
+  'The baseline `O/E` divides by, drawn instead of applied: every cell replaced by the mean of ' +
+  'this block at that bin separation, with one scalar between each pair of sequences. Nothing ' +
+  'but the distance decay is in it, which is what makes it worth a look — an O/E is only as ' +
+  'trustworthy as the curve underneath it, and at long separations that curve is averaged over ' +
+  'few cells and moves. Computed from the counts, so it is the denominator of `O/E` over ' +
+  'counts; over `balanced` the same baseline is measured on those instead.'
+
 /**
  * What a dragged box resolves to: one block, and how much of it.
  *
@@ -604,6 +617,15 @@ export interface DerivePresentation {
   correlate: boolean
   /** Absent on a panel that draws a correlation but does not own the control. */
   onCorrelateChange?(on: boolean): void
+  /**
+   * Whether every cell is replaced by the baseline {@link expected} divides by.
+   *
+   * Overrides it rather than combining with it — O/E of the baseline is 1
+   * wherever it is anything — so the toggle is greyed while this is on and says
+   * why. Carried by the score for the same reason the correlation is: it is one
+   * of the answers to "what are these numbers" (`ui/scores.ts`).
+   */
+  baseline: boolean
   /**
    * Compute one, off the main thread.
    *
@@ -1697,6 +1719,7 @@ export class MatrixPanel {
         // field's own hint below has no room to say what it does or what it
         // refuses. Per-option, because it is the only one that needs it.
         if (choice.correlate === true) option.title = CORRELATE_HINT
+        if (choice.baseline === true) option.title = BASELINE_HINT
         select.appendChild(option)
       }
       select.value = scores.current
@@ -1717,8 +1740,11 @@ export class MatrixPanel {
         select,
         'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
           'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
-          'dropped have no weight and show as blank. Anything below those is a further column ' +
-          'this file carries in /pixels, under its own name.',
+          'dropped have no weight and show as blank. Below those are the ones computed here ' +
+          'from the block on screen — `VC`, `VC √` and `ICE` correct the coverage, `expected` ' +
+          'replaces every cell by the distance decay `O/E` divides by, and `correlation` ' +
+          'replaces the square by the compartment matrix — each with its own note on hover. ' +
+          'Last come any further columns this file carries in /pixels, under their own names.',
       )
       // **First in both**, and not merely first in the card. It leads the Map
       // card because it is the question the other three answer *about* — what
@@ -1896,6 +1922,7 @@ export class MatrixPanel {
       })
       this.expectedButton = button
       this.paintExpected(derive.expected)
+      this.gateExpected(derive.baseline)
       picture.push(button)
     }
 
@@ -2575,6 +2602,23 @@ export class MatrixPanel {
     if (button === null) return
     button.setAttribute('aria-pressed', String(on))
     button.classList.toggle('is-on', on)
+  }
+
+  /**
+   * Grey the O/E toggle while the score picker is showing the baseline itself.
+   *
+   * Disabled rather than hidden, and with the reason in the tooltip: a control
+   * that vanishes when a *different* control moves reads as a bug, while one
+   * that greys and says "you are looking at the denominator" reads as an
+   * explanation of the picture on screen.
+   */
+  private gateExpected(baseline: boolean): void {
+    const button = this.expectedButton
+    if (button === null) return
+    const hint = baseline ? OE_ON_BASELINE_HINT : OE_HINT
+    button.toggleAttribute('disabled', baseline)
+    button.title = hint
+    button.setAttribute('aria-label', hint)
   }
 
   /**
@@ -5103,6 +5147,10 @@ export class MatrixPanel {
       // was asked for, and dropping back to plain counts would change the map
       // twice — once for the refusal and once for a baseline nobody withdrew.
       expected: wantsCorrelation || this.options.derive?.expected === true,
+      // Last word, and `deriveBlock` gives it one: a reader who left the toggle
+      // on and then asked to see the baseline gets the baseline, not a field of
+      // ones. The toggle is greyed to say so rather than silently ignored.
+      baseline: this.options.derive?.baseline === true,
       // Applied inside `deriveBlock`, which is what puts it on *each file* and
       // ahead of `combine` — the whole reason a ratio can be smoothed at all
       // (`render/smooth.ts`).
@@ -5211,7 +5259,17 @@ export class MatrixPanel {
     // existed and the commonest picture in the app should not have its legend
     // reworded by a feature it is not using.
     const barLabel = this.derivedLabel() ?? this.derived?.label ?? 'counts'
-    this.units = barLabel === 'counts' ? '' : barLabel
+    // Blank where the word would only be said twice. {@link keyFor} puts the
+    // picker's own label in front of this, so an entry whose derivation *is*
+    // what the picker calls it — `expected`, which names the baseline in both
+    // places — would come out as `Expected expected`. `counts` is the same case
+    // arrived at from the other side: the strip has said `count` since before
+    // any of this existed. A comparison keeps its label, because there the
+    // picker's word is suppressed instead and this is all the key has.
+    const picked = this.options.scores?.choices.find(
+      (entry) => entry.id === this.options.scores?.current,
+    )?.label
+    this.units = barLabel === 'counts' || barLabel === picked ? '' : barLabel
     return { dense: out, ...(turned === null ? {} : { gauge: dense }), presentationMoved, turned }
   }
 
@@ -5770,14 +5828,18 @@ export class MatrixPanel {
       held?.normalise === derive?.normalise &&
       (held?.expected === true) === (derive?.expected === true) &&
       (held?.smooth ?? 0) === (derive?.smooth ?? 0) &&
-      (held?.correlate === true) === (derive?.correlate === true)
+      (held?.correlate === true) === (derive?.correlate === true) &&
+      (held?.baseline === true) === (derive?.baseline === true)
     this.options.derive = derive
     // The toggle holds no state of its own — the setting is the session's, and
     // it can move from the command palette or from a link as easily as from a
     // click — so it is repainted from whatever arrives, exactly as the turn's is.
     // The O/E light follows the correlation, which forces it on: a lit map with
     // an unlit toggle is the picture disagreeing with the control that made it.
-    this.paintExpected(derive?.expected === true || derive?.correlate === true)
+    this.paintExpected(
+      derive?.baseline !== true && (derive?.expected === true || derive?.correlate === true),
+    )
+    this.gateExpected(derive?.baseline === true)
     this.paintSmooth(derive?.smooth ?? 0)
     return same
   }
@@ -6031,6 +6093,7 @@ export class MatrixPanel {
    * than the value. The caption has room for both and says both.
    */
   private derivedLabel(): string | null {
+    if (this.options.derive?.baseline === true) return this.comparisonLabel() ?? 'expected'
     return this.comparisonLabel() ?? (this.options.derive?.expected === true ? 'O/E' : null)
   }
 

@@ -29,7 +29,9 @@ import {
   BALANCE_TOLERANCE,
   balanceBlock,
   coverageNormalise,
+  deriveBlock,
   expectedModel,
+  expectedValues,
   isNormalisation,
   marginalsOf,
   observedOverExpected,
@@ -336,6 +338,101 @@ describe('expected, and observed over it', () => {
     expect(oe[0 * 2 + 1]).toBeCloseTo(-1, 6)
     expect(oe[1 * 2 + 0]).toBeCloseTo(3, 6)
     expect(oe[0]).toBeCloseTo(1, 6)
+  })
+})
+
+describe('the baseline, drawn instead of divided by', () => {
+  const runs = (label: string, end: number): AxisRun[] => [{ label, start: 0, end }]
+
+  it('replaces every cell by what its own O/E would divide it by', () => {
+    const decay = [10, 5, 2, 1]
+    const b = block(4, 4, (r, c) => (r === 0 && c === 2 ? 4 : decay[Math.abs(r - c)]))
+    const axes = { rows: runs('c', 4), cols: runs('c', 4) }
+    const baseline = expectedValues(b, axes)
+    const oe = observedOverExpected(b, axes)
+    // Separation 2 holds [0][2]=4 and three cells of 2, so its baseline is 2.5 —
+    // the same 2.5 the ratio above it was taken against, at every cell.
+    expect(baseline[0 * 4 + 2]).toBeCloseTo(2.5, 6)
+    expect(baseline[2 * 4 + 0]).toBeCloseTo(2.5, 6)
+    for (let i = 0; i < baseline.length; i++) {
+      expect(b.values[i] / baseline[i]).toBeCloseTo(oe[i], 5)
+    }
+    // Constant along each diagonal, which is the whole content of the picture.
+    expect(baseline[0]).toBeCloseTo(10, 6)
+    expect(baseline[1 * 4 + 1]).toBeCloseTo(10, 6)
+  })
+
+  it('carries the trans scalar onto every cell between two sequences', () => {
+    const axes: { rows: AxisRun[]; cols: AxisRun[] } = {
+      rows: [
+        { label: 'a', start: 0, end: 2 },
+        { label: 'b', start: 2, end: 4 },
+      ],
+      cols: [
+        { label: 'a', start: 0, end: 2 },
+        { label: 'b', start: 2, end: 4 },
+      ],
+    }
+    const b = block(4, 4, (r, c) => (r < 2 === c < 2 ? 8 : 1))
+    const baseline = expectedValues(b, axes)
+    expect(baseline[0 * 4 + 3]).toBeCloseTo(1, 6)
+    expect(baseline[3 * 4 + 0]).toBeCloseTo(1, 6)
+    expect(baseline[0]).toBeCloseTo(8, 6)
+  })
+
+  it('is absent exactly where the ratio has no denominator', () => {
+    // A cell the block has no value for stays absent — painting a model over a
+    // balancer-dropped row would put colour where every other map shows paper —
+    // and so does a separation whose baseline is not positive.
+    const b = block(3, 3, (r, c) => (r === 1 || c === 1 ? Number.NaN : Math.abs(r - c) === 2 ? 0 : 5))
+    const baseline = expectedValues(b, { rows: [], cols: [] })
+    expect(Number.isNaN(baseline[1 * 3 + 1])).toBe(true)
+    // Separation 2 is the two zero cells and nothing else, so its mean is 0 and
+    // there is nothing to divide by.
+    expect(Number.isNaN(baseline[0 * 3 + 2])).toBe(true)
+    expect(baseline[0]).toBeCloseTo(5, 6)
+  })
+
+  it('keeps a cell of nothing observed, which is a fact about the numerator', () => {
+    // `observedOverExpected` blanks this one — zero over anything is zero, which
+    // on a ramp centred at 1 is maximum depletion — but the *baseline* there is
+    // measured and real, so it is drawn.
+    const b = block(3, 3, (r, c) => (r === c ? 10 : Math.abs(r - c) === 1 && r === 0 ? 0 : 4))
+    const baseline = expectedValues(b, { rows: [], cols: [] })
+    expect(Number.isNaN(observedOverExpected(b, { rows: [], cols: [] })[0 * 3 + 1])).toBe(true)
+    // Separation 1 is that zero and three fours, so the baseline it was divided
+    // by is 3 — measured, and drawn, at the very cell the ratio abandoned.
+    expect(baseline[0 * 3 + 1]).toBeCloseTo(3, 6)
+  })
+
+  it('overrides the ratio rather than composing with it, and says so', () => {
+    const decay = [10, 5, 2, 1]
+    const b = block(4, 4, (r, c) => decay[Math.abs(r - c)])
+    const axes = { rows: runs('c', 4), cols: runs('c', 4) }
+    // Both asked for, which is what a reader who left the toggle on and then
+    // picked the baseline produces. O/E of the baseline is 1 in every cell, so
+    // honouring both would answer a question nobody asked.
+    const both = deriveBlock(b, { baseline: true, expected: true }, axes)
+    expect(both.label).toBe('expected')
+    expect(both.values[0]).toBeCloseTo(10, 6)
+    // And it is count-like, so it stays on a sequential ramp: a neutral of 1
+    // would centre a diverging scale where nothing in this picture lives.
+    expect(both.neutral).toBeNull()
+    expect(deriveBlock(b, { expected: true }, axes).neutral).toBe(1)
+  })
+
+  it('is measured after the normalisation, like the ratio it comes out of', () => {
+    const b = outerProduct([1, 4], [1, 4])
+    const axes = { rows: runs('c', 2), cols: runs('c', 2) }
+    const plain = deriveBlock(b, { baseline: true }, axes)
+    const corrected = deriveBlock(b, { baseline: true, normalise: 'vc' }, axes)
+    expect(corrected.label).toBe('VC · expected')
+    // The block is pure per-bin bias and nothing else, so its true decay is
+    // flat. Raw, the baseline is not: separation 0 averages 1 and 16 to 8.5
+    // while separation 1 averages 4 and 4. VC takes the bias out, and the
+    // baseline measured after it says what is really there.
+    expect(plain.values[0] / plain.values[1]).toBeCloseTo(8.5 / 4, 5)
+    expect(corrected.values[0]).toBeCloseTo(corrected.values[1], 6)
   })
 })
 

@@ -532,6 +532,66 @@ export function expectedModel(
 }
 
 /**
+ * The baseline itself, cell by cell: what {@link observedOverExpected} divides by.
+ *
+ * Every cell is replaced by its own expected value — the mean of the block at
+ * that bin separation within a sequence, the mean between the two sequences
+ * across one — so the picture is the distance decay with nothing else in it: a
+ * bright diagonal fading outward, banded, with a flat plate over every off-
+ * diagonal pair of sequences. It is not a reading of the file. It is the model
+ * the file's own cells were averaged into, and the reason to look at it is that
+ * an O/E is only as good as this: a block whose baseline is estimated from a
+ * handful of cells at long separation produces a ratio that swings, and the
+ * swing is in the denominator rather than in the biology.
+ *
+ * **Masked exactly where the ratio is.** A cell the block has no value for stays
+ * absent — the baseline exists there arithmetically, but painting a model over a
+ * balancer-dropped row would put colour where every other map this viewer draws
+ * shows paper. A separation the model has no mean for, and one whose mean is not
+ * positive, both go the same way, and those are precisely the two cases
+ * {@link observedOverExpected} refuses to divide by. So every cell drawn here is
+ * a cell that has an O/E, which is what makes this the denominator rather than a
+ * picture that resembles it.
+ *
+ * The `0` and the infinity that function blanks are *not* mirrored: those are
+ * properties of the ratio — nothing observed, or a baseline too small to divide
+ * by — and neither says the baseline is missing.
+ */
+export function expectedValues(
+  block: BlockValues,
+  runs: { rows: readonly AxisRun[]; cols: readonly AxisRun[] },
+  model: ExpectedModel = expectedModel(block, runs),
+): Float32Array {
+  const { nrows, ncols, values } = block
+  const rowLabel = labelsByIndex(runs.rows, nrows)
+  const colLabel = labelsByIndex(runs.cols, ncols)
+  const rowStart = block.rowExtent[0]
+  const colStart = block.colExtent[0]
+  const out = new Float32Array(nrows * ncols)
+
+  for (let r = 0; r < nrows; r++) {
+    const row = r * ncols
+    const rowBin = rowStart + r
+    const mine = rowLabel[r]
+    for (let c = 0; c < ncols; c++) {
+      if (!Number.isFinite(values[row + c])) {
+        out[row + c] = Number.NaN
+        continue
+      }
+      let expected: number
+      if (mine === colLabel[c]) {
+        const d = Math.abs(rowBin - (colStart + c)) - model.base
+        expected = d >= 0 && d < model.cis.length ? model.cis[d] : Number.NaN
+      } else {
+        expected = model.trans
+      }
+      out[row + c] = expected > 0 ? expected : Number.NaN
+    }
+  }
+  return out
+}
+
+/**
  * Observed over expected, cell by cell.
  *
  * The result is a **ratio**, neutral at `1`, and deliberately not a logarithm:
@@ -607,6 +667,16 @@ export interface Derivation {
   /** Divide by what the genomic distance predicts. */
   expected?: boolean
   /**
+   * Show what that division would be *by*, instead of doing it.
+   *
+   * Overrides {@link expected} rather than combining with it, and there is
+   * nothing to combine: a baseline over its own baseline is 1 in every cell that
+   * has one. The two are one control in the interface for the same reason — the
+   * score picker offers this and the O/E toggle is inert while it is chosen
+   * (`ui/scores.ts`).
+   */
+  baseline?: boolean
+  /**
    * Radius of the despeckling window, in cells; `0` or absent for none
    * (`render/smooth.ts`).
    */
@@ -674,7 +744,14 @@ export function deriveBlock(
       break
   }
 
-  if (derivation.expected === true) {
+  // The baseline first, and exclusive: it is the same estimate the ratio would
+  // have used, shown instead of applied. `expected` is not consulted at all
+  // under it, so a reader who leaves the O/E toggle on and picks the baseline
+  // gets the baseline rather than a field of ones.
+  if (derivation.baseline === true) {
+    values = expectedValues({ ...block, values }, runs)
+    parts.push('expected')
+  } else if (derivation.expected === true) {
     const stepped = { ...block, values }
     values = observedOverExpected(stepped, runs)
     parts.push('O/E')
@@ -704,7 +781,11 @@ export function deriveBlock(
     // `VC` alone stays on a sequential ramp and `O/E` does not. The despeckle is
     // not in this either: a mean of neighbours is in the units of its
     // neighbours, so it moves no floor and creates no middle.
-    neutral: derivation.expected === true ? 1 : null,
+    // The baseline is not in this either, and it is the near miss worth naming:
+    // it comes *out* of the ratio's denominator, but it is a mean of counts and
+    // so is a count-like quantity with a floor at zero and no middle. A neutral
+    // of 1 would put it on a diverging ramp centred where nothing in it lives.
+    neutral: derivation.expected === true && derivation.baseline !== true ? 1 : null,
     label: (parts.length === 0 ? 'counts' : parts.join(' · ')) + suffix,
     scope,
   }
