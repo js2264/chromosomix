@@ -351,6 +351,29 @@ async function measure(
   }
 }
 
+/**
+ * The separations the figure opens on, in base pairs.
+ *
+ * A default view, not a limit: the marquee, the axis boxes and a double-click
+ * all move it (`ui/interactivePlot.ts`), and the curve underneath runs from one
+ * base pair to the length of the longest sequence whatever this says.
+ *
+ * It is here because the full extent is a bad picture of a good curve. The first
+ * break holds the diagonal and the first off-diagonal — on a 1 kb map that is
+ * two thirds of every cis contact in the file — at a separation of 1 bp, so a
+ * log axis drawn over everything spends a third of its width on one point four
+ * orders of magnitude above the rest and squashes the decades anybody reads into
+ * the right-hand quarter. The other end is the mirror of it: past a megabase the
+ * curve is a handful of bins with a few cells each, and it is noise drawn at the
+ * same weight as the data.
+ *
+ * 4 kb to 1 Mb is the range a P(s) is read over on a yeast or a mammalian map
+ * alike — past the ligation artefacts at the bottom and inside the shortest
+ * chromosome at the top. HiContacts' own `plotPs` defaults to 5 kb–499 kb, which
+ * is the same judgement made slightly tighter.
+ */
+const WINDOW: [number, number] = [4_000, 1_000_000]
+
 export const runExpected: TaskRunner = async (job) => {
   const scope = strParam(job.params, 'scope', 'contig')
   const region = strParam(job.params, 'region', '').trim()
@@ -418,6 +441,7 @@ export const runExpected: TaskRunner = async (job) => {
       yLabel: 'Contact probability density (per bp)',
       xScale: 'log',
       yScale: 'log',
+      xDomain: WINDOW,
     },
   ]
   if (slopes.length > 0) {
@@ -433,6 +457,8 @@ export const runExpected: TaskRunner = async (job) => {
       // everywhere, and a decaying exponent has no logarithm.
       xScale: 'log',
       yScale: 'linear',
+      // The same window, so the two panels are read against one axis.
+      xDomain: WINDOW,
     })
   }
   return outputs

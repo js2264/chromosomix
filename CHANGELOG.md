@@ -117,6 +117,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   position, density and unity-scaled value matches to 2e-6 on four chromosomes
   and on the four pooled.
 
+- **Four text boxes on every curve, one per axis bound.** `x` from/to and `y`
+  from/to, beside the `log x` / `log y` toggles. Empty means "fit the data", so
+  clearing all four is how you get back to the whole curve; a marquee fills them
+  in, and typing in them is how two figures are set to the same window for a
+  figure panel rather than dragged towards it.
+
 - **`expected` in the score picker: the denominator of O/E, drawn.** Every cell
   replaced by the mean of the block at that bin separation, with one scalar
   between each pair of sequences — a banded triangle fading from the diagonal
@@ -212,6 +218,47 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   parameter key is an alias for it.
 
 ### Changed
+
+- **Zooming a curve is a rectangle now, and it keeps working.** Dragging across a
+  P(s), a slope or any other drawer curve selects a window on **both** axes
+  rather than only on the abscissa, and the marquee is drawn as the rectangle it
+  selects. A drag that is deliberately flat still means what it looks like: an
+  axis is only taken when the pointer travelled at least eight pixels along it,
+  so a horizontal sweep is still a band and a mis-click is still a click.
+
+  **And the marquee comes back.** It lived in the plot body, and the rebuild
+  after the first zoom replaced that body's children — so the first drag worked
+  and every drag after it selected an invisible rectangle, which read as the
+  gesture having broken. Double-click still resets, now to the window the figure
+  opened on rather than to the full extent.
+
+  The zoom is also no longer a clip of the series arrays. The window travels on
+  the output as `xDomain`/`yDomain` and the axes are drawn to it, which is what
+  makes a window in y expressible at all — a point above the top of the frame is
+  part of the line that leaves it, not a gap in the data — and the series are
+  clipped to the frame in the PDF exactly as on screen.
+
+- **P(s) and its slope open on 4 kb – 1 Mb.** Past the ligation artefacts at one
+  end and inside the shortest chromosome at the other. The full extent was a bad
+  picture of a good curve: the first break holds the diagonal and the first
+  off-diagonal — two thirds of every cis contact on a 1 kb map — at a separation
+  of 1 bp, so a log axis over all of it spent a third of its width on one point
+  and squashed the decades anybody reads into the right-hand quarter. It is a
+  default and not a limit: the marquee, the boxes and a double-click all move
+  it. The ordinate follows, because an automatic y axis now fits what is inside
+  the x window rather than the whole series.
+
+- **APA has no Quality settings.** *Most anchors to use* and *Minimum coverage of
+  a window* are gone, not defaulted: every anchor is piled up and every window is
+  summed. Both were quietly a change of subject rather than a budget — a cap
+  makes the figure a pileup of whichever anchors sorted first, and a coverage
+  floor drops exactly the windows in sparse regions, which are the ones a weak
+  pileup is weak because of. Two runs could then differ because they had thrown
+  away different windows, with nothing on the figure saying so. The accumulator
+  counts per cell, so a half-empty window contributes what it has and no more.
+
+- **APA's half-width defaults to 12 bins**, down from 25, and the note about the
+  classic APA square is off the control.
 
 - **P(s) is now the quantity HiContacts means by it.** The contact-probability
   task plots the **probability density** — contacts at a separation over all cis

@@ -24,7 +24,7 @@ import { BALANCE_PARAM } from './shared'
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
-  const value = typeof params.window === 'number' ? params.window : 25
+  const value = typeof params.window === 'number' ? params.window : 12
   return Math.max(1, Math.min(200, Math.round(value)))
 }
 
@@ -102,8 +102,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'window',
     label: 'Half-width',
-    hint: 'Bins either side of the centre. The classic APA square is 25.',
-    default: 25,
+    default: 12,
     min: 1,
     max: 200,
     integer: true,
@@ -257,28 +256,16 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.subset === 'groups',
     section: 'Ranking',
   },
-  {
-    kind: 'number',
-    key: 'maxAnchors',
-    label: 'Most anchors to use',
-    hint: 'A cap on the read, not on the science: the drawer says how many were left out.',
-    default: 5000,
-    min: 10,
-    integer: true,
-    section: 'Quality',
-  },
-  {
-    kind: 'number',
-    key: 'minValid',
-    label: 'Minimum coverage of a window',
-    hint: 'A window with less than this fraction of usable cells is dropped.',
-    default: 0.5,
-    min: 0,
-    max: 1,
-    step: 0.05,
-    slider: true,
-    section: 'Quality',
-  },
+  // **There is no Quality section, and its two settings are not defaults — they
+  // are gone.** *Most anchors to use* capped the read at five thousand, and
+  // *Minimum coverage of a window* dropped any window less than half filled.
+  // Both quietly changed what the pileup was *of*: the first made it a pileup of
+  // whichever anchors happened to sort first, and the second dropped exactly the
+  // windows in sparse regions — which are the ones a weak pileup is weak because
+  // of. A reader comparing two conditions could not tell whether a difference
+  // was in the data or in which windows each run had thrown away. Every anchor
+  // is used and every window is summed; `PileupAccumulator` already counts per
+  // cell, so a half-empty window contributes what it has and nothing more.
   BALANCE_PARAM,
 ]
 
@@ -330,7 +317,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const side = windowSide(params)
   const cells = side * side
   const controls = params.norm === 'matched' ? Math.round(Number(params.controls ?? 5)) : 0
-  const windows = anchors === null ? null : Math.min(anchors, Number(params.maxAnchors ?? 5000)) * (1 + controls)
+  // Every anchor, since there is no cap any more: the estimate has to price the
+  // run that will happen rather than the one a removed setting used to bound.
+  const windows = anchors === null ? null : anchors * (1 + controls)
 
   if (context.blockLoaded && context.framing?.binsPerCell === 1) {
     return {

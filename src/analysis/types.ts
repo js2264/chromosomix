@@ -536,6 +536,24 @@ export interface CurveOutput {
   yLabel: string
   xScale: 'linear' | 'log'
   yScale: 'linear' | 'log'
+  /**
+   * The window the axes should show, in data units; absent to fit the data.
+   *
+   * A *runner* sets these to say what the figure is worth opening on, which is
+   * not always its full extent: a P(s) runs from one base pair to a whole
+   * chromosome and the decade at each end is a spike and a handful of noisy
+   * points, so a curve drawn over all of it spends its height on the parts
+   * nobody reads. `ui/interactivePlot.ts` then treats them as the *initial*
+   * view — the marquee, the boxes and the reset all move them — so this is a
+   * default rather than a limit, and it is on the output rather than in the
+   * panel because which window is worth opening on is a fact about the
+   * quantity.
+   *
+   * Either may be given alone. An absent axis is fitted to whatever falls inside
+   * the one that was given, so a window in x carries the ordinate with it.
+   */
+  xDomain?: [number, number]
+  yDomain?: [number, number]
 }
 
 /**

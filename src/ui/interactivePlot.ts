@@ -11,8 +11,9 @@
  * The whole of the technique is instead: **an interactive figure is a plain
  * figure of a derived output**. Turning on a log axis produces a `CurveOutput`
  * with `xScale: 'log'` and hands it to the same `drawCurve`; hiding a series
- * produces one with fewer entries in `series`; dragging across the plot produces
- * one whose series are clipped to the dragged range. There is no zoom transform,
+ * produces one with fewer entries in `series`; dragging a rectangle across the
+ * plot produces one whose `xDomain` and `yDomain` are that rectangle. There is
+ * no zoom transform,
  * no second code path, and no way for what is exported to differ from what is on
  * screen — the export draws whatever object is current, which is the object the
  * controls built.
@@ -29,6 +30,7 @@ import { icon } from './icons'
 import {
   curveFigure,
   matrixFigure,
+  type CurveLayout,
   type PlotFigure,
 } from './analysisPlots'
 import { COLORMAP_NAMES } from '../render/colormaps'
@@ -40,8 +42,16 @@ interface CurveView {
   yLog: boolean
   /** Series names the reader has switched off. */
   hidden: Set<string>
-  /** The x range a drag selected, or `null` for the whole thing. */
-  domain: [number, number] | null
+  /**
+   * The window each axis shows, or `null` to fit the data.
+   *
+   * Two axes rather than one, which is the whole of the zoom: a curve is a
+   * shape in both directions and a drag that could only cut the abscissa left a
+   * reader who wanted to look at a shoulder half a decade deep with the entire
+   * ordinate still in the picture.
+   */
+  x: [number, number] | null
+  y: [number, number] | null
 }
 
 /** The same, for a matrix. */
@@ -51,6 +61,9 @@ interface MatrixView {
   colormap: string | null
 }
 
+/** How far a pointer must travel on an axis before the drag means that axis. */
+const DRAG_SLOP = 8
+
 /**
  * A curve, its controls, and the pointer gestures over it.
  *
@@ -59,24 +72,45 @@ interface MatrixView {
  * current derived output, whatever the reader has done to it.
  */
 export function interactiveCurve(output: CurveOutput): PlotFigure {
+  // What the task asked the figure to open on, kept apart from what the reader
+  // has done to it since: `reset` means "back to the picture I was given", and
+  // a reset that went to the full extent instead would undo the runner's own
+  // statement about which decade of a P(s) is worth looking at.
+  const opening: Pick<CurveView, 'x' | 'y'> = {
+    x: output.xDomain === undefined ? null : [...output.xDomain],
+    y: output.yDomain === undefined ? null : [...output.yDomain],
+  }
   const view: CurveView = {
     xLog: output.xScale === 'log',
     yLog: output.yScale === 'log',
     hidden: new Set(),
-    domain: null,
+    x: opening.x === null ? null : [...opening.x],
+    y: opening.y === null ? null : [...opening.y],
   }
 
-  let figure = curveFigure(derive(output, view))
+  let layout: CurveLayout | null = null
+  const onLayout = (next: CurveLayout | null): void => {
+    layout = next
+  }
+
+  let figure = curveFigure(derive(output, view), onLayout)
   const body = el('div', { class: 'plot-body' }, figure.el)
   const readout = el('span', { class: 'plot-readout' })
   const controls = el('div', { class: 'plot-controls' })
   const host = el('div', { class: 'plot-interactive' }, controls, body)
+  const marquee = el('div', { class: 'plot-marquee hidden' })
 
   const rebuild = (): void => {
     figure.destroy()
-    figure = curveFigure(derive(output, view))
-    body.replaceChildren(figure.el)
+    figure = curveFigure(derive(output, view), onLayout)
+    // **The marquee goes back in.** It lives in `body` because `body` is its
+    // positioning context, and `replaceChildren` used to drop it on the first
+    // rebuild — so the very first zoom worked and every drag after it selected
+    // an invisible rectangle. A gesture that stops drawing itself after one use
+    // reads as a broken control rather than as a missing element.
+    body.replaceChildren(figure.el, marquee)
     paintControls()
+    paintBoxes()
   }
 
   const toggle = (label: string, on: () => boolean, set: () => void, title: string): HTMLElement => {
@@ -85,6 +119,70 @@ export function interactiveCurve(output: CurveOutput): PlotFigure {
       rebuild()
     }, { class: `btn btn-quiet${on() ? ' is-on' : ''}`, title })
     return node
+  }
+
+  // -------------------------------------------------------------------------
+  // The axis boxes
+  // -------------------------------------------------------------------------
+
+  /**
+   * Built once and re-appended, never rebuilt.
+   *
+   * `paintControls` replaces the row on every change, and an input recreated
+   * under a reader's fingers loses the caret mid-number — so these four are made
+   * here, live for the life of the figure, and are only *read from* by the
+   * repaint.
+   */
+  const boxes = {
+    x0: axisBox('Left edge of the plot, in the units of the x axis. Empty fits the data.'),
+    x1: axisBox('Right edge of the plot, in the units of the x axis. Empty fits the data.'),
+    y0: axisBox('Bottom of the plot. Empty fits whatever falls inside the x window.'),
+    y1: axisBox('Top of the plot. Empty fits whatever falls inside the x window.'),
+  }
+
+  function axisBox(title: string): HTMLInputElement {
+    const input = el('input', {
+      class: 'input plot-axis-box',
+      type: 'text',
+      title,
+      attrs: { inputmode: 'decimal', spellcheck: 'false' },
+    }) as HTMLInputElement
+    const commit = (): void => {
+      readBoxes()
+      rebuild()
+    }
+    input.addEventListener('change', commit)
+    input.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Enter') commit()
+    })
+    return input
+  }
+
+  /** The four boxes into {@link view}: a pair is a window only when both parse. */
+  function readBoxes(): void {
+    const pair = (a: HTMLInputElement, b: HTMLInputElement): [number, number] | null => {
+      const lo = parseBound(a.value)
+      const hi = parseBound(b.value)
+      // Half a window is not a window. Filling one box and leaving the other
+      // empty is how a reader says "from here", and answering it with an axis
+      // that runs from a number to nowhere would be a plot with one edge.
+      if (lo === null || hi === null || lo === hi) return null
+      return [Math.min(lo, hi), Math.max(lo, hi)]
+    }
+    view.x = pair(boxes.x0, boxes.x1)
+    view.y = pair(boxes.y0, boxes.y1)
+  }
+
+  /** {@link view} into the four boxes, leaving whichever one has the caret alone. */
+  function paintBoxes(): void {
+    const put = (input: HTMLInputElement, value: number | undefined): void => {
+      if (document.activeElement === input) return
+      input.value = value === undefined ? '' : boundText(value)
+    }
+    put(boxes.x0, view.x?.[0])
+    put(boxes.x1, view.x?.[1])
+    put(boxes.y0, view.y?.[0])
+    put(boxes.y1, view.y?.[1])
   }
 
   function paintControls(): void {
@@ -143,16 +241,28 @@ export function interactiveCurve(output: CurveOutput): PlotFigure {
       }
     }
 
-    if (view.domain !== null) {
-      parts.push(el('span', { class: 'plot-sep' }))
+    // Each axis in a group of its own, so a control row that wraps — sixteen
+    // series on a yeast genome wraps it twice — takes the label with its boxes
+    // rather than leaving a lone `y` at the end of the line above them.
+    parts.push(el('span', { class: 'plot-sep' }))
+    parts.push(
+      el('span', { class: 'plot-axis-pair' }, el('span', { class: 'plot-axis-label', text: 'x' }), boxes.x0, boxes.x1),
+      el('span', { class: 'plot-axis-pair' }, el('span', { class: 'plot-axis-label', text: 'y' }), boxes.y0, boxes.y1),
+    )
+
+    if (!sameWindow(view.x, opening.x) || !sameWindow(view.y, opening.y)) {
       parts.push(
         button(
-          'reset zoom',
+          'reset',
           () => {
-            view.domain = null
+            view.x = opening.x === null ? null : [...opening.x]
+            view.y = opening.y === null ? null : [...opening.y]
             rebuild()
           },
-          { class: 'btn btn-quiet', title: 'Back to the whole range (or double-click the plot)' },
+          {
+            class: 'btn btn-quiet',
+            title: 'Back to the window this figure opened on (or double-click the plot)',
+          },
         ),
       )
     }
@@ -162,67 +272,78 @@ export function interactiveCurve(output: CurveOutput): PlotFigure {
   }
 
   // -------------------------------------------------------------------------
-  // Pointer: a hover readout, and a drag that selects an x range
+  // Pointer: a hover readout, and a drag that selects a rectangle
   // -------------------------------------------------------------------------
 
-  const marquee = el('div', { class: 'plot-marquee hidden' })
   body.append(marquee)
 
-  let dragFrom: number | null = null
+  let dragFrom: { x: number; y: number } | null = null
 
   /**
-   * Where the plot area sits inside the canvas.
+   * Where the plot area sits, and what its edges are worth.
    *
-   * The margins are `drawCurve`'s, restated rather than exported, and the
-   * comment is the reason: they are a property of how the figure is *drawn*, and
-   * a pointer mapping that imported them would couple the interaction to the
-   * renderer's internals so that changing a label's size moved the crosshair.
-   * An approximation that is visibly off is better than a coupling that is
-   * invisibly right, and these are within a pixel or two.
+   * From {@link drawCurve}'s own return value rather than from margins restated
+   * here. The margins are decided by the width of the widest tick label and the
+   * height of the legend, so an approximation drifts whenever either changes —
+   * which was tolerable while a drag only had to find an x, and is not once it
+   * has to find a rectangle whose top edge the reader can see.
    */
-  const plotBox = (): { left: number; right: number } => {
-    const rect = body.getBoundingClientRect()
-    return { left: rect.left + 54, right: rect.right - 12 }
+  const dataAt = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    if (layout === null) return null
+    const rect = figure.el.getBoundingClientRect()
+    const { plot } = layout
+    if (!(plot.width > 0) || !(plot.height > 0)) return null
+    const fx = (clientX - rect.left - plot.x) / plot.width
+    const fy = 1 - (clientY - rect.top - plot.y) / plot.height
+    return {
+      x: fromDrawSpace(layout.x.lo + fx * (layout.x.hi - layout.x.lo), layout.x.log),
+      y: fromDrawSpace(layout.y.lo + fy * (layout.y.hi - layout.y.lo), layout.y.log),
+    }
   }
 
-  const dataAt = (clientX: number): number | null => {
-    const { left, right } = plotBox()
-    if (right <= left) return null
-    const fraction = (clientX - left) / (right - left)
-    if (fraction < 0 || fraction > 1) return null
-    const current = derive(output, view)
-    const domain = xDomainOf(current)
-    if (domain === null) return null
-    const [lo, hi] = domain
-    if (current.xScale === 'log' && lo > 0 && hi > 0) {
-      return Math.exp(Math.log(lo) + fraction * (Math.log(hi) - Math.log(lo)))
-    }
-    return lo + fraction * (hi - lo)
+  /** The plot area in `body` coordinates, for placing the marquee. */
+  const plotRect = (): { left: number; top: number; right: number; bottom: number } | null => {
+    if (layout === null) return null
+    const rect = figure.el.getBoundingClientRect()
+    const host = body.getBoundingClientRect()
+    const left = rect.left - host.left + layout.plot.x
+    const top = rect.top - host.top + layout.plot.y
+    return { left, top, right: left + layout.plot.width, bottom: top + layout.plot.height }
+  }
+
+  const drawMarquee = (clientX: number, clientY: number): void => {
+    const area = plotRect()
+    if (area === null || dragFrom === null) return
+    const host = body.getBoundingClientRect()
+    const clamp = (value: number, lo: number, hi: number): number =>
+      Math.min(Math.max(value, lo), hi)
+    const x0 = clamp(dragFrom.x - host.left, area.left, area.right)
+    const x1 = clamp(clientX - host.left, area.left, area.right)
+    const y0 = clamp(dragFrom.y - host.top, area.top, area.bottom)
+    const y1 = clamp(clientY - host.top, area.top, area.bottom)
+    marquee.classList.remove('hidden')
+    marquee.style.left = `${Math.min(x0, x1)}px`
+    marquee.style.top = `${Math.min(y0, y1)}px`
+    marquee.style.width = `${Math.abs(x1 - x0)}px`
+    marquee.style.height = `${Math.abs(y1 - y0)}px`
   }
 
   body.addEventListener('pointermove', (event) => {
-    const x = dataAt(event.clientX)
-    if (x === null) {
+    const at = dataAt(event.clientX, event.clientY)
+    if (at === null) {
       readout.textContent = ''
       return
     }
     const current = derive(output, view)
     const parts = current.series
       .map((series) => {
-        const at = nearest(series.x, x)
-        return at < 0 ? null : `${series.name} ${format(series.y[at])}`
+        const index = nearest(series.x, at.x)
+        return index < 0 ? null : `${series.name} ${format(series.y[index])}`
       })
       .filter((part): part is string => part !== null)
       .slice(0, 3)
-    readout.textContent = `${current.xLabel} ${format(x)}${parts.length === 0 ? '' : ' · '}${parts.join(' · ')}`
-    if (dragFrom !== null) {
-      const { left } = plotBox()
-      const from = Math.min(dragFrom, event.clientX) - body.getBoundingClientRect().left
-      const to = Math.max(dragFrom, event.clientX) - body.getBoundingClientRect().left
-      marquee.classList.remove('hidden')
-      marquee.style.left = `${Math.max(left - body.getBoundingClientRect().left, from)}px`
-      marquee.style.width = `${Math.max(0, to - from)}px`
-    }
+    readout.textContent = `${current.xLabel} ${format(at.x)}${parts.length === 0 ? '' : ' · '}${parts.join(' · ')}`
+    if (dragFrom !== null) drawMarquee(event.clientX, event.clientY)
   })
 
   body.addEventListener('pointerleave', () => {
@@ -231,39 +352,70 @@ export function interactiveCurve(output: CurveOutput): PlotFigure {
 
   body.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return
-    dragFrom = event.clientX
+    dragFrom = { x: event.clientX, y: event.clientY }
     body.setPointerCapture(event.pointerId)
   })
 
   body.addEventListener('pointerup', (event) => {
     if (dragFrom === null) return
-    const from = dataAt(dragFrom)
-    const to = dataAt(event.clientX)
-    const travelled = Math.abs(event.clientX - dragFrom)
+    const from = dataAt(dragFrom.x, dragFrom.y)
+    const to = dataAt(event.clientX, event.clientY)
+    const moved = { x: Math.abs(event.clientX - dragFrom.x), y: Math.abs(event.clientY - dragFrom.y) }
     dragFrom = null
     marquee.classList.add('hidden')
     body.releasePointerCapture?.(event.pointerId)
-    // A drag of a few pixels is a click that moved, not a selection. Zooming to
-    // a two-pixel window on a mis-click is the fastest way to make a plot feel
-    // hostile.
-    if (travelled < 8 || from === null || to === null || from === to) return
-    view.domain = [Math.min(from, to), Math.max(from, to)]
+    if (from === null || to === null) return
+    // **Per axis**, so a drag that is deliberately flat still means something. A
+    // rectangle nine pixels wide and two tall is a horizontal band, and taking
+    // its height literally would zoom the ordinate onto two pixels of noise; a
+    // drag of a few pixels either way is a click that moved, and zooming to it
+    // is the fastest way to make a plot feel hostile.
+    const wantX = moved.x >= DRAG_SLOP && from.x !== to.x
+    const wantY = moved.y >= DRAG_SLOP && from.y !== to.y
+    if (!wantX && !wantY) return
+    if (wantX) view.x = [Math.min(from.x, to.x), Math.max(from.x, to.x)]
+    if (wantY) view.y = [Math.min(from.y, to.y), Math.max(from.y, to.y)]
     rebuild()
   })
 
   body.addEventListener('dblclick', () => {
-    if (view.domain === null) return
-    view.domain = null
+    if (sameWindow(view.x, opening.x) && sameWindow(view.y, opening.y)) return
+    view.x = opening.x === null ? null : [...opening.x]
+    view.y = opening.y === null ? null : [...opening.y]
     rebuild()
   })
 
   paintControls()
+  paintBoxes()
 
   return {
     el: host,
     draw: (ctx, box) => figure.draw(ctx, box),
     destroy: () => figure.destroy(),
   }
+}
+
+/** A bound as typed, or `null` for "fit the data". Accepts `4000` and `1e6` alike. */
+function parseBound(text: string): number | null {
+  const trimmed = text.trim()
+  if (trimmed === '') return null
+  const value = Number(trimmed)
+  return Number.isFinite(value) ? value : null
+}
+
+/** A bound in a box: short enough to read back, exact enough to retype. */
+function boundText(value: number): string {
+  return String(Number(value.toPrecision(6)))
+}
+
+function sameWindow(a: [number, number] | null, b: [number, number] | null): boolean {
+  if (a === null || b === null) return a === b
+  return a[0] === b[0] && a[1] === b[1]
+}
+
+/** {@link drawSpace}'s inverse: a drawing-space coordinate back to a data value. */
+function fromDrawSpace(value: number, log: boolean): number {
+  return log ? Math.pow(10, value) : value
 }
 
 /**
@@ -273,58 +425,22 @@ export function interactiveCurve(output: CurveOutput): PlotFigure {
  * get the same object.
  */
 function derive(output: CurveOutput, view: CurveView): CurveOutput {
-  const series = output.series
-    .filter((entry) => !view.hidden.has(entry.name))
-    .map((entry) => (view.domain === null ? entry : clip(entry, view.domain)))
-    .filter((entry) => entry.x.length > 0)
+  const series = output.series.filter((entry) => !view.hidden.has(entry.name))
   return {
     ...output,
+    // Never empty: hiding the last series is a reader isolating something, and
+    // an empty frame is a worse answer than the picture they started from.
     series: series.length > 0 ? series : output.series,
     xScale: view.xLog ? 'log' : 'linear',
     yScale: view.yLog ? 'log' : 'linear',
+    // The window travels *on the output*, so the PDF is cut where the screen is
+    // and the axes are relabelled for it. Nothing is dropped from `series`:
+    // clipping the arrays was how this used to zoom, and it cannot express a
+    // window in y at all — a point above the top of the frame is part of the
+    // line that leaves it, not a gap in the data.
+    ...(view.x === null ? {} : { xDomain: [view.x[0], view.x[1]] as [number, number] }),
+    ...(view.y === null ? {} : { yDomain: [view.y[0], view.y[1]] as [number, number] }),
   }
-}
-
-/**
- * One series, cut to an x range.
- *
- * **One point is kept either side of the window**, and it is not a nicety: a
- * line clipped exactly at the boundary stops short of the edge of the plot, so a
- * zoomed curve appears to have gaps at both ends that the data does not have.
- */
-function clip(
-  series: CurveOutput['series'][number],
-  [lo, hi]: [number, number],
-): CurveOutput['series'][number] {
-  let from = 0
-  let to = series.x.length
-  while (from < to && series.x[from] < lo) from += 1
-  while (to > from && series.x[to - 1] > hi) to -= 1
-  from = Math.max(0, from - 1)
-  to = Math.min(series.x.length, to + 1)
-  const slice = <T extends Float64Array | undefined>(values: T): T =>
-    (values === undefined ? undefined : values.slice(from, to)) as T
-  return {
-    ...series,
-    x: series.x.slice(from, to),
-    y: series.y.slice(from, to),
-    low: slice(series.low),
-    high: slice(series.high),
-  }
-}
-
-function xDomainOf(output: CurveOutput): [number, number] | null {
-  let lo = Number.POSITIVE_INFINITY
-  let hi = Number.NEGATIVE_INFINITY
-  for (const series of output.series) {
-    for (const value of series.x) {
-      if (!Number.isFinite(value)) continue
-      if (output.xScale === 'log' && value <= 0) continue
-      if (value < lo) lo = value
-      if (value > hi) hi = value
-    }
-  }
-  return lo <= hi ? [lo, hi] : null
 }
 
 /** Index of the point nearest `x`, by binary search over an ascending axis. */

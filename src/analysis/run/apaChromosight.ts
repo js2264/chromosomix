@@ -67,7 +67,6 @@ export function apaPreset(job: JobContext): ChromosightPreset {
 export async function chromosightPileup(
   job: JobContext,
   anchors: readonly ChromosightAnchor[],
-  options: { maxAnchors: number },
 ): Promise<TaskOutput[]> {
   const preset = apaPreset(job)
   const kernel = templatesOf(preset)[0]
@@ -77,8 +76,7 @@ export async function chromosightPileup(
 
   // `cmd_quantify`'s first act: the scan distance becomes the furthest pair in
   // the set, so the distance law is fitted over the separations that are
-  // actually being asked about. Taken over every anchor rather than over the
-  // capped subset, because that is what upstream would see given the same file.
+  // actually being asked about.
   const furthest = anchors.reduce((most, anchor) => Math.max(most, anchor.col - anchor.row), 0)
   const maxDist = Math.max(Math.min(furthest, job.mc.nBins), 1)
   const settings: ScanSettings = {
@@ -89,13 +87,10 @@ export async function chromosightPileup(
     onDiagonal: preset.onDiagonal,
   }
 
-  const used = anchors.slice(0, options.maxAnchors)
-  if (used.length < anchors.length) {
-    job.note(
-      `${(anchors.length - used.length).toLocaleString()} anchors past the cap were not scored. ` +
-        'Raise the cap to use them all.',
-    )
-  }
+  // Every anchor, with no cap: which anchors were scored is part of what the
+  // score means, and a subset chosen by whichever sorted first is not a subset
+  // anybody asked for.
+  const used = anchors
 
   // One square per sequence rather than one read per window, and this is the one
   // normalisation where that is required rather than merely cheaper: the

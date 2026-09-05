@@ -2791,6 +2791,30 @@ on the Annotations panel so a called boundary becomes an overlay on the map imme
 Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
 them a true vector figure rather than a photograph of a chart.
 
+**A curve is interactive, and an interactive figure is a plain figure of a derived output.** Turning
+on a log axis produces a `CurveOutput` with `xScale: 'log'`; hiding a series produces one with fewer
+entries in `series`; dragging a rectangle across the plot produces one whose `xDomain` and `yDomain`
+are that rectangle. There is no zoom transform and no second code path, so a reader who zooms into a
+shoulder and presses PDF gets *that* picture at vector resolution with its axes relabelled for it —
+which a canvas transform would have answered with the whole curve under a clipping rectangle.
+
+Three consequences are contract rather than detail:
+
+- **The window is a rectangle, on both axes.** A curve is a shape in two directions, and a drag that
+  could only cut the abscissa left a reader looking at a shoulder half a decade deep with the whole
+  ordinate still in the picture. The two bounds of each axis are also four text boxes, because a
+  figure that is going into a paper beside another one has to be set to the same window as it rather
+  than dragged towards it, and because a marquee cannot express "from exactly 4 kb".
+- **An automatic ordinate fits the window, not the series.** Otherwise a P(s) zoomed to 4 kb–1 Mb
+  still spends its height on the near-diagonal spike sitting off the left edge.
+- **A task may declare the window its figure opens on**, and P(s) does: 4 kb to 1 Mb, which is past
+  the ligation artefacts at one end and inside the shortest chromosome at the other. It is a
+  *default* — the marquee, the boxes and a double-click all move it, and the curve underneath runs
+  from one base pair to the length of the longest sequence whatever it says. The reason it is needed
+  is §18.8's first break: the diagonal and the first off-diagonal share a bin at 1 bp holding two
+  thirds of every cis contact in a 1 kb map, and a log axis drawn over all of it squashes every
+  decade anybody reads into its right-hand quarter.
+
 **The files this app writes gain one format, and it is bigWig.** A bigWig is what a reader wants at the
 end of the day — it is what a genome browser opens and what a colleague expects — and telling them to
 run `bedGraphToBigWig` is a command-line dependency in an application whose entire claim is that it has
@@ -2945,7 +2969,12 @@ mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis
 resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
 normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
-the app. The chromosight normalisation is `chromosight quantify` and is a fourth control rather than
+the app. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
+and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
+a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
+the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator
+counts per cell, so a half-empty window contributes what it has and nothing more. The chromosight
+normalisation is `chromosight quantify` and is a fourth control rather than
 a fourth task: the other three divide the pileup by something computed from the windows, and this one
 detrends **the map** by its own distance law before any window is cut, so a cell is
 observed-over-expected at that separation on that sequence — which is what chromosight's figures are.
