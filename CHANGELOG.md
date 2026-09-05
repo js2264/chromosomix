@@ -60,6 +60,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   once a pixel is a handful of bases, because at a kilobase to the pixel the
   mark would be the genome's background mismatch rate drawn everywhere.
 
+  The mark is drawn in a colour that is deliberately none of the four bases. It
+  shipped as the sequence palette's own T, which put one red in one column under
+  two opposite claims — *the reads disagree here* on the depth, and *this read
+  has a T here* in the pile — so a reader studying a T>C site would have read
+  the same ink two ways an inch apart.
+
   It costs no request: the residues come from a FASTA already open in the same
   worker, and a FASTA dropped *after* the BAM refreshes both lanes without a pan.
   It is not a variant call — substitutions and short deletions against whatever

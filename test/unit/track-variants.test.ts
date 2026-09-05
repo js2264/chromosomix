@@ -15,7 +15,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LaneFrame } from '@/render/lane'
-import { drawTrack, type PixelProfile, type TrackPaint } from '@/render/tracks'
+import { drawTrack, VARIANT_COLOUR, type PixelProfile, type TrackPaint } from '@/render/tracks'
+import { BASE_COLOURS } from '@/render/sequence'
 
 interface Rect {
   x: number
@@ -104,6 +105,57 @@ function profileOf(mean: number[], variant: number[] | null): PixelProfile {
 function marks(filled: Rect[]): Rect[] {
   return filled.filter((one) => one.fill !== LANE_COLOUR)
 }
+
+/**
+ * One ink, one claim.
+ *
+ * The mark shipped as `#c8483f`, which is byte-identical to `BASE_COLOURS[3]`
+ * — T. On a screen holding a BAM's two rows that put one red in one column
+ * under two opposite claims: *the reads disagree here* on the depth, and *this
+ * read has a T here* in the pile. Nothing errored, both lanes looked right, and
+ * a reader studying a T>C site would have read the same colour two ways an inch
+ * apart.
+ *
+ * Asserted as a *distance* rather than as a literal, because the failure was
+ * not that the constant was wrong — it was that nobody compared it to the
+ * palette. A test that pins the string would pass again the next time somebody
+ * picks a colour by eye.
+ */
+describe('the ink a variant mark is drawn in', () => {
+  /** Hue in degrees, from a `#rrggbb`. */
+  function hueOf(colour: string): number {
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16) / 255)
+    const hi = Math.max(r, g, b)
+    const lo = Math.min(r, g, b)
+    if (hi === lo) return 0
+    const span = hi - lo
+    const raw =
+      hi === r ? (g - b) / span + (g < b ? 6 : 0) : hi === g ? (b - r) / span + 2 : (r - g) / span + 4
+    return raw * 60
+  }
+
+  function apart(a: number, b: number): number {
+    const away = Math.abs(a - b) % 360
+    return away > 180 ? 360 - away : away
+  }
+
+  it('is none of the four bases', () => {
+    expect(BASE_COLOURS).not.toContain(VARIANT_COLOUR)
+  })
+
+  it('is far enough from every base to be told apart at a glance', () => {
+    // The four letters, not the fifth: `BASE_COLOURS[4]` is the grey N slot and
+    // is a neutral rather than a hue, so a hue distance from it means nothing.
+    const bases = BASE_COLOURS.slice(0, 4).map(hueOf)
+    const mark = hueOf(VARIANT_COLOUR)
+    const nearest = Math.min(...bases.map((base) => apart(mark, base)))
+    // Forty-five degrees is under the widest gap the base palette itself leaves
+    // and well over the zero the collision scored, so it fails on a colour
+    // picked from the palette's own neighbourhood and passes on one picked from
+    // the space between.
+    expect(nearest, `${VARIANT_COLOUR} is ${Math.round(nearest)}° from its nearest base`).toBeGreaterThan(45)
+  })
+})
 
 describe('the variant mark', () => {
   it('is drawn where a fifth or more of the depth disagrees', () => {

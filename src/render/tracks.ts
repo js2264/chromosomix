@@ -529,8 +529,18 @@ const VARIANT_LEAST = 0.2
  * shape rather than over it: the coloured part is a share of the bar, so a
  * quarter-height mark under a full-height curve reads as a quarter of the
  * reads, which is what it is.
+ *
+ * **Not a base colour, and that is the whole of why this hue.** It shipped as
+ * `#c8483f`, which is byte-identical to `BASE_COLOURS[3]` — T. On a screen
+ * holding a BAM's two rows, that put one red in one column under two different
+ * claims: *the reads disagree here* on the depth, and *this read has a T here*
+ * in the pile. A reader looking at a T>C site would have seen the same ink mean
+ * the opposite thing an inch apart. Magenta sits in the widest gap the base
+ * palette leaves — sixty degrees of hue from its nearest neighbour, where every
+ * other gap is under forty — so it reads as this application's ink without
+ * being any of the four letters. `baseColourClash` pins it.
  */
-const VARIANT_COLOUR = '#c8483f'
+export const VARIANT_COLOUR = '#9b3f9b'
 
 function drawVariants(
   ctx: CanvasRenderingContext2D,

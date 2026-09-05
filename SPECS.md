@@ -1737,7 +1737,12 @@ reads.
 One colour there and not four, because the pile beside it already says which
 base was seen at exactly the zooms where this is drawn, and a pixel is one
 column: what the depth row adds is *where* and *how much*, which is the question
-the curve alone cannot answer. Only above a fifth of the depth, which is IGV's
+the curve alone cannot answer. And that colour is deliberately **not one of the
+four bases**: it shipped as the sequence palette's own T, which put one red in
+one column under two opposite claims — *the reads disagree here* on the depth,
+and *this read has a T here* in the pile. The rule the test pins is a hue
+distance rather than a literal, because the fault was never the constant. It
+was that nobody compared it to the palette. Only above a fifth of the depth, which is IGV's
 own threshold and is roughly where a position stops looking like sequencing
 error and starts looking like an allele — under it, every pileup is speckled and
 a reader learns to ignore the mark.
