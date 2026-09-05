@@ -53,12 +53,20 @@ describe('the ink a variant takes', () => {
   })
 
   it('does not use the lane’s own colour for one, which would collide', () => {
-    // The reason this is not the lane's colour: the stock lane is `#1f5fa9` and
-    // C is `#2f6fb5`. On a default lane an insertion and a substitution to C
-    // were the same blue, which is exactly the collision the depth mark's own
-    // ink was moved for. Asserted as a distance so a new default cannot
-    // reintroduce it.
-    expect(variantInk(detail('G', 'GAA'), LANE)).not.toBe(LANE)
+    // The reason this is not the lane's colour: `ANNOTATION_PALETTE`'s first
+    // colour is `#0072b2` and C is `#2f6fb5`, ten degrees of hue apart. On a
+    // stock lane an insertion and a substitution to C were the same blue, which
+    // is the collision the depth mark's own ink was moved for.
+    //
+    // The grey is a *neutral*, not a hue, so what is asserted is that it is one
+    // — a saturation floor rather than a hue distance, since a hue distance
+    // from a grey is meaningless. That is what no lane colour a reader picks
+    // can collide with.
+    const ink = variantInk(detail('G', 'GAA'), LANE)
+    expect(ink).not.toBe(LANE)
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(ink.slice(at, at + 2), 16))
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b)
+    expect(chroma, `${ink} is not neutral enough`).toBeLessThan(30)
   })
 
   it('will not pick one of several ALTs', () => {

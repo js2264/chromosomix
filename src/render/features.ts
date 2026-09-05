@@ -259,6 +259,14 @@ export function drawSegments(
   // boxes in one colour is one path, and a variant lane's five inks are five —
   // which is the difference between one state change and ten thousand of them.
   // The common case, no `colourOf`, is the single group it always was.
+  //
+  // It does reorder the painting, and where two features in one row overlap the
+  // one on top is now the one whose *ink* was laid down last rather than the one
+  // later in the set — so it can differ from the feature `featureAt` names. That
+  // is bounded to a lane with more than one ink, which is a variant lane, where
+  // two records overlapping in one row means two calls at the same position;
+  // the hit test's answer is a real record at the place that was clicked either
+  // way, and the card names which.
   const byInk = new Map<string, FeaturePlacement[]>()
   for (const placement of layout.placements) {
     const ink = paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index)

@@ -1919,6 +1919,17 @@ in the part of the file that was deliberately not fetched. The sniffer therefore
 has two roads, the declaration and the column shape, and the shape one is
 load-bearing rather than a fallback.
 
+**How large a VCF this reads is the same question every text format here
+answers, and the answer is the same.** The file is decoded into one string and
+parsed whole, so a single-sample human call set — four to five million records,
+a gigabyte or two of text — is past what a JavaScript string can hold before it
+is past what the machine can. That is not a property of this format: it is
+§8.11's whole-file road, and the index is the same mitigation it always was,
+serving one contig at a time. A per-chromosome human VCF opens; a whole-genome
+one does not, and the honest place to say so is here rather than in a lane that
+falls over. Streaming the parse is the fix, it is a project rather than a patch,
+and nothing in this section pretends otherwise.
+
 **Not built.** The **genotype matrix**. A VCF's sample columns are a matrix of
 variants × samples, and that is a second application's worth of picture for a
 question a contact map is not asking — the same argument §13 makes about a

@@ -419,9 +419,13 @@ export function parseVcf(text: string): FeatureSet {
 export function samplesIn(text: string): number {
   let found = 0
   eachLine(text, (line) => {
-    if (found > 0 || !line.startsWith('#') || line.startsWith('##')) return
+    // The header ends at the first record, and `#CHROM` is its last line — so
+    // there is nothing left to find past here.
+    if (!line.startsWith('#')) return false
+    if (line.startsWith('##')) return
     const columns = splitColumns(line)
     if (/^#CHROM$/i.test(columns[0] ?? '')) found = Math.max(0, columns.length - 9)
+    return false
   })
   return found
 }
@@ -458,8 +462,14 @@ function detailOf(
   return parts.join(DETAIL_SEP)
 }
 
-/** Every line, blanks dropped and `#` lines *kept* — which is the whole point. */
-function eachLine(text: string, visit: (line: string) => void): void {
+/**
+ * Every line, blanks dropped and `#` lines *kept* — which is the whole point.
+ *
+ * `visit` returns `false` to stop. Both header readers do, at the first data
+ * row: what they are looking for is in the first few dozen lines and there is
+ * no reason to slice a string per line across the other four million.
+ */
+function eachLine(text: string, visit: (line: string) => boolean | void): void {
   let index = 0
   const length = text.length
   while (index < length) {
@@ -469,7 +479,7 @@ function eachLine(text: string, visit: (line: string) => void): void {
     if (stop > index && text.charCodeAt(stop - 1) === 13) stop--
     const line = text.slice(index, stop)
     index = end + 1
-    if (line !== '') visit(line)
+    if (line !== '' && visit(line) === false) return
   }
 }
 
@@ -493,6 +503,9 @@ function splitColumns(line: string): string[] {
 export function vcfContigs(text: string): Array<{ name: string; length: number }> {
   const out: Array<{ name: string; length: number }> = []
   eachLine(text, (line) => {
+    // Every `##contig` is in the header, so the first line that is not a `#`
+    // line is the end of the search.
+    if (!line.startsWith('#')) return false
     if (!line.startsWith('##contig=<')) return
     const id = /[<,]ID=([^,>]+)/.exec(line)
     const length = /[<,]length=(\d+)/.exec(line)
