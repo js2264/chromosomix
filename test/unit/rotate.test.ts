@@ -46,6 +46,7 @@ import {
   type RotatableBlock,
 } from '@/render/rotate'
 import { bpTicks } from '@/render/heatmap'
+import { anchorFor } from '@/ui/MatrixPanel'
 
 function block(
   n: number,
@@ -341,6 +342,21 @@ describe('the mirrored pair', () => {
       const below = cellAt(turned, (turned.fold as number) + 2, column)
       expect(below).toEqual(above)
     }
+  })
+
+  it('is pinned by its middle, where a single band is pinned by an edge', () => {
+    // Which edge a turned block stands on is which end its *diagonal* is at, and
+    // a mirrored pair's diagonal is the line down the middle rather than either
+    // edge. It decides what a band deeper than its box loses: an edge takes the
+    // whole surplus off one of the two files (`heatmap-navigation.test.ts`).
+    const paired = rotateBlock(twoSided(8), { maxSeparation: 3, mirror: true })
+    expect(anchorFor(paired)).toBe('middle')
+    expect(anchorFor(rotateBlock(twoSided(8), { maxSeparation: 3 }))).toBe('end')
+    expect(
+      anchorFor(rotateBlock(twoSided(8), { maxSeparation: 3, direction: 'down' })),
+    ).toBe('start')
+    // A square map is centred like any picture.
+    expect(anchorFor(null)).toBe('middle')
   })
 
   it('reaches no further than the block, on both sides', () => {

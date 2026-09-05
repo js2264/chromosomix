@@ -215,7 +215,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   against each other at every place without the eye having to reflect one of them
   through a diagonal first. The distance up the side runs outwards from the axis
   in both directions, both bands are named on the picture, and a pointer in the
-  lower band reads the lower band's file. A ratio or a difference stays one band,
+  lower band reads the lower band's file. The pair is pinned by its **middle**,
+  so a band cut deeper than its box — which is what a zoom in leaves — is clipped
+  equally from both and the two files stay the same depth, where an edge would
+  take the whole surplus off one of them. A ratio or a difference stays one band,
   its two triangles being the same numbers twice.
 
 - **A map of several chromosomes now carries coordinates.** A whole genome, or a

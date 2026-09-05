@@ -2318,7 +2318,9 @@ The band stands on the box's floor at every zoom, so rows past the top edge are 
 that already clips the columns past either end: the rows on screen are the same rows either way. So
 the band is re-cut only when it is too *shallow* — which is to say only on the way out. Zooming in
 asks for less distance at every notch and is answered by the picture already drawn, where re-cutting
-per notch is a rotation and a fresh pooling of the whole band per wheel event.
+per notch is a rotation and a fresh pooling of the whole band per wheel event. It holds for a mirrored
+pair too, and only because that pair is pinned by its middle rather than by an edge: the surplus is
+then clipped equally from both, so the two bands show the same depth at every zoom.
 
 And when it is too shallow it is cut **deeper than asked**, twice over, bounded by the block. Zooming
 out is a gesture rather than a step; buying twice the distance the box wants right now is one
@@ -2392,7 +2394,11 @@ is drawn in both because it is the row the two files share.
 
 The box is one box whether it holds one band or two, so a mirrored pair gets **half of it each**, and
 its two horizontal edges are both far edges — the diagonal being in the middle of the picture, there
-is no idle one. The ruler up the side runs outwards from the shared axis in both directions (§17.5),
+is no idle one. It is pinned by its **middle** for the same reason, which is where the paragraph above
+about a band standing on its floor stops applying: a pair deeper than its box, which is what a zoom in
+leaves, has a surplus to lose, and anchoring it by an edge takes the whole of that surplus off *one* of
+the two files. What a reader saw was a sliver of the first map above a whole one of the second — and,
+far enough in, the shared axis off the picture altogether and neither map identifiable. The ruler up the side runs outwards from the shared axis in both directions (§17.5),
 so a separation is written twice and neither band is labelled with a negative distance; a pointer in the
 lower band reads the lower band's file; and each band carries its map's name (§16.10) on its own side
 of the line, the four corners being spoken for by the two rulers and the colour key. A **ratio or a

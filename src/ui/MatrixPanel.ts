@@ -136,6 +136,7 @@ import {
   type AxisCoords,
   type Cell,
   type PlotOptions,
+  type VerticalAnchor,
   type DrawnBox,
   type SelectionBox,
   type SelectionText,
@@ -4693,9 +4694,16 @@ export class MatrixPanel {
     // is its top edge. Centring, which is right for a square map, is what left a
     // band floating half way up its panel with a stripe of paper between it and
     // the profiles it exists to be read against.
-    this.heatmap.setAnchor(
-      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
-    )
+    //
+    // A **mirrored pair** is centred, and for the same reason read the other way
+    // up: its diagonal is the line down the middle rather than either edge, so
+    // that is the line to pin. It also decides what a band deeper than its box
+    // loses. One band is cut to the box and clipped from the top, where there is
+    // nothing to see; two are cut to half of it each, and anchoring the pair by
+    // an edge takes the whole surplus off *one* file — which is what a zoom out
+    // and back in did, leaving the reader with a sliver of the first map above a
+    // whole one of the second.
+    this.heatmap.setAnchor(anchorFor(turned))
     // Both drags collapse onto the genomic axis under a turn; see
     // {@link HeatmapView.setSpanGestures}.
     this.heatmap.setSpanGestures(turned !== null)
@@ -4838,9 +4846,7 @@ export class MatrixPanel {
     this.turned = turned
     this.syncLegendSlots()
     this.painted = null
-    this.heatmap.setAnchor(
-      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
-    )
+    this.heatmap.setAnchor(anchorFor(turned))
     this.heatmap.setSpanGestures(turned !== null)
     this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
     this.refit()
@@ -7537,6 +7543,24 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
 }
 
 /** Which group covers a block-local offset. Absent list, absent answer. */
+/**
+ * Which edge of its box a turned block is pinned to — see the caller for why it
+ * is pinned at all.
+ *
+ * `middle` for a square map, which is centred like any picture, and for a
+ * **mirrored pair**, whose diagonal is the line down the middle of it rather
+ * than either edge. `end` and `start` are the one-band cases, standing on
+ * whichever edge their own diagonal is.
+ *
+ * Exported for the test: the whole of the bug it fixes is invisible until a
+ * band is deeper than its box, which is two zooms away from any state a test
+ * can set up directly.
+ */
+export function anchorFor(turned: RotatedBlock | null): VerticalAnchor {
+  if (turned === null || turned.fold !== undefined) return 'middle'
+  return turned.direction === 'down' ? 'start' : 'end'
+}
+
 /**
  * Where a cell of a turned map stands on the genomic axis, in cells of the
  * square block it was turned out of.
