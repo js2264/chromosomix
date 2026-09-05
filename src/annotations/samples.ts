@@ -138,6 +138,19 @@ export class SampleCache {
      * from one place rather than from a projection this cache chose.
      */
     reads?: ReadStyle
+    /**
+     * Which reference sequences are open, for a lane whose answer depends on
+     * them (§8.13).
+     *
+     * A token, not an address: this cache does not fetch residues and the
+     * worker looks up its own. What it is for is *invalidation* — an alignment
+     * lane's depth carries the share of each bin that disagrees with the
+     * reference, and a FASTA dropped after the BAM changes that answer without
+     * changing the entry, the window or the resolution. Without this the marks
+     * would appear on the next pan and not before it, which reads as the file
+     * not having worked.
+     */
+    reference?: string
   }): TrackSampleSet | null {
     // A derived lane fetches nothing of its own. Both operands are asked for the
     // same window at the same resolution — through this same method, so they are
@@ -153,7 +166,10 @@ export class SampleCache {
     }
 
     const key = `${options.entry}:${options.scope}`
-    const filter = options.reads === undefined ? '' : readFilterKey(options.reads)
+    const filter =
+      options.reads === undefined
+        ? ''
+        : `${readFilterKey(options.reads)}|${options.reference ?? ''}`
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.samples ?? null

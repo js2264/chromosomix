@@ -162,6 +162,7 @@ function samplesFor(vector: BinVector, region: Region): TrackSamples | null {
     values: values.slice(0, kept),
     min: mins === null ? null : mins.slice(0, kept),
     max: maxs === null ? null : maxs.slice(0, kept),
+    variant: null,
     summary: stride > 1,
   }
 }

@@ -1888,6 +1888,23 @@ export class BrowserView {
    * the moment the type grew. Zero where this surface draws no text at all —
    * an exported figure has no name on it and the whole lane is pile.
    */
+  /**
+   * A token for the reference sequences currently open, for the two caches
+   * whose answers depend on them (§8.13).
+   *
+   * The ids of the loaded FASTA rows, in the store's own order. It addresses
+   * nothing — the worker looks up its own residues — and exists only so that a
+   * FASTA dropped *after* a BAM invalidates the windows already in hand.
+   * Without it the mismatch marks appear on the reader's next pan and not on
+   * the drop, which reads as the file not having worked.
+   */
+  private referenceKey(): string {
+    return this.props.store.entries
+      .filter((entry) => entry.kind === 'sequence' && entry.status === 'ready')
+      .map((entry) => entry.id)
+      .join(',')
+  }
+
   private nameBand(): number {
     return this.text ? scaleLength(NAME_TOP + DETAIL_DROP + NAME_LINE) : 0
   }
@@ -1944,6 +1961,7 @@ export class BrowserView {
           basesPerPixel:
             (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
           style: readsOf(member.style),
+          reference: this.referenceKey(),
         })
         // Nothing in hand yet — the lane stays empty for this frame and the
         // reads land in the next, which is the contract every other cache here
@@ -1976,7 +1994,9 @@ export class BrowserView {
         domain: lane.frame.domain,
         pixels: this.scale.pixels,
         ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
-        ...(member.kind === 'alignments' ? { reads: readsOf(member.style) } : {}),
+        ...(member.kind === 'alignments'
+          ? { reads: readsOf(member.style), reference: this.referenceKey() }
+          : {}),
       })
       lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
     }

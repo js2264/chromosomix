@@ -1726,6 +1726,45 @@ empty rectangle. That is the same answer it gives when the reader is too far out
 wider than the ink it would take, and it costs no fetch: the rung is decided from the frame, and the
 depth over the same reads is the row beside it, drawn at every zoom.
 
+**A position the reads disagree with the reference at is coloured, on both
+rows.** In the pile it is the mismatch mark that was always there — a coloured
+column per read, from `=`/`X`, from `MD`, or from a FASTA open in the same
+session, and the lane names which of the three answered. On the depth row it is
+the *share of the bin* that disagrees, drawn from the baseline up in one colour
+so a quarter-height mark under a full-height curve reads as a quarter of the
+reads.
+
+One colour there and not four, because the pile beside it already says which
+base was seen at exactly the zooms where this is drawn, and a pixel is one
+column: what the depth row adds is *where* and *how much*, which is the question
+the curve alone cannot answer. Only above a fifth of the depth, which is IGV's
+own threshold and is roughly where a position stops looking like sequencing
+error and starts looking like an allele — under it, every pileup is speckled and
+a reader learns to ignore the mark.
+
+Two limits decide when it is computed at all, and they point the same way. The
+cost: finding the disagreements is a walk over every *aligned base* rather than
+over the CIGAR's blocks, and the depth scan is the most expensive read in this
+application (§12). The meaning: a variant is a claim about a position, and a bin
+holding two hundred bases reports the genome's background mismatch rate as a
+coloured pixel everywhere. So it is done only below sixteen bases per pixel, and
+only where a FASTA covering the window is already open — never fetched for, and
+never a second request.
+
+What it is **not** is a variant call, and the distinction is the same one §18.9
+makes about a half-good caller inside a viewer. It reports substitutions and
+short deletions against whatever residues happen to be loaded. An insertion has
+no reference position to be *at*, a soft clip is not aligned, and an `N` in
+either sequence is an absence of information rather than a disagreement — so
+none of the three is counted. Nothing here is filtered by base quality, tested
+for strand bias, or given a score.
+
+A FASTA dropped *after* the BAM has to reach the windows already in hand, or the
+marks appear on the reader's next pan and not on the drop — which reads as the
+file not having worked. Both caches therefore key on which reference rows are
+open, alongside the window and the controls. It is a token and not an address:
+the worker looks up its own residues, and this exists only to invalidate.
+
 **Thinning is a property of the zoom, so the cache key carries one.** The pile is thinned in the
 worker against the lane's row budget over the fetched window, so a window fetched for a wide view
 holds about a third of a narrow view's reads. Answering a zoom from it drew a third of the pile while
@@ -1923,6 +1962,7 @@ the cost it exists to police:
 | Pan inside the window already fetched | 0 requests |
 | Change a lane control | one window's reads again, and **0** for the depth row beside it — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count and the only two written through to both rows. Joining mates costs **nothing**: it is drawn from columns the pile already carries. Depth is a count and does not care how the reads were coloured, which is why the two caches watch keys of different widths (§8.13) |
 | A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
+| Colour the depth by variant | **0 extra requests** — the residues are read from a FASTA already open in the same worker, and never fetched for. It is bounded in CPU instead, by the sixteen-bases-per-pixel gate (§8.13) |
 
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to
 satisfy and is therefore the one that is tested first:

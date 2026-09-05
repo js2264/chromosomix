@@ -39,6 +39,7 @@ function samples(contig: string, from: number, to: number, value = 1): TrackSamp
     values: Float32Array.from([value]),
     min: null,
     max: null,
+    variant: null,
     summary: false,
   }
 }

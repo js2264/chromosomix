@@ -40,6 +40,16 @@ export interface PixelProfile {
   /** `true` when `low`/`high` are a genuine envelope rather than copies of the mean. */
   envelope: boolean
   /**
+   * The share of {@link mean} that disagrees with a reference, per pixel, or
+   * `null` where there was nothing to compare against.
+   *
+   * Only an alignment lane ever carries this (§8.13). Reduced through the same
+   * weights as the mean, so `variant[i] / mean[i]` is the non-reference fraction
+   * of that pixel — and `null` and an array of zeros stay different claims all
+   * the way to the paint.
+   */
+  variant: Float32Array | null
+  /**
    * Why this profile is empty, when the file could say.
    *
    * Carried through from {@link TrackSampleSet.note} rather than looked up
@@ -90,6 +100,7 @@ export function profileOf(
     low,
     high,
     envelope: false,
+    variant: null,
     extent: null,
     ...(note === undefined ? {} : { note }),
   }
@@ -97,6 +108,9 @@ export function profileOf(
 
   const sum = new Float64Array(slots)
   const weight = new Float64Array(slots)
+  // Filled only if some region carries one, so a stack of bigWigs allocates
+  // nothing and the `null` reaches the paint intact.
+  let differing: Float64Array | null = null
   let envelope = false
 
   for (const region of samples.regions) {
@@ -105,6 +119,8 @@ export function profileOf(
     const { starts, ends, values } = region
     const hasBand = region.min !== null && region.max !== null
     if (hasBand) envelope = true
+    const varied = region.variant
+    if (varied !== null && differing === null) differing = new Float64Array(slots)
 
     for (let i = 0; i < values.length; i++) {
       const value = values[i]
@@ -134,6 +150,9 @@ export function profileOf(
         const share = covered > 0 ? covered : 1e-3
         sum[slot] += value * share
         weight[slot] += share
+        // Through the same weights as the mean, which is what keeps the ratio
+        // of the two a fraction rather than two numbers reduced differently.
+        if (varied !== null && differing !== null) differing[slot] += varied[i] * share
         if (Number.isFinite(lo) && (Number.isNaN(low[slot]) || lo < low[slot])) low[slot] = lo
         if (Number.isFinite(hi) && (Number.isNaN(high[slot]) || hi > high[slot])) high[slot] = hi
       }
@@ -156,7 +175,16 @@ export function profileOf(
   }
   if (drawn === 0) return empty
 
-  return { from, mean, low, high, envelope, extent: { min, max } }
+  let variant: Float32Array | null = null
+  if (differing !== null) {
+    variant = new Float32Array(slots).fill(Number.NaN)
+    for (let slot = 0; slot < slots; slot++) {
+      if (weight[slot] <= 0) continue
+      variant[slot] = differing[slot] / weight[slot]
+    }
+  }
+
+  return { from, mean, low, high, envelope, variant, extent: { min, max } }
 }
 
 // ---------------------------------------------------------------------------
@@ -275,8 +303,11 @@ export function drawTrackScaling(
 ): void {
   drawTrack(ctx, frame, profile, { ...paint, opacity: paint.opacity * SCALING_GHOST })
   // No fill and no floor on the second pass: the fill is what is standing still,
-  // and a rule drawn twice is a rule drawn at double strength.
-  drawTrack(ctx, frame, profile, {
+  // and a rule drawn twice is a rule drawn at double strength. Nor the variant
+  // marks, for the same reason and one more — drawn again at the axis the hand
+  // is asking for they would be two sets of columns at two heights, which reads
+  // as two claims about the same positions.
+  drawTrack(ctx, frame, { ...profile, variant: null }, {
     ...paint,
     limits: moved,
     fills: false,
@@ -421,6 +452,7 @@ export function drawTrack(
       ctx.lineWidth = OUTLINE_WIDTH
       ctx.stroke()
     }
+    drawVariants(ctx, frame, profile, norm, baseAcross, paint)
     drawZeroLine(ctx, frame, baseAcross, paint)
     drawFloor(ctx, frame, paint)
     ctx.restore()
@@ -466,8 +498,65 @@ export function drawTrack(
     ctx.stroke()
   }
 
+  drawVariants(ctx, frame, profile, norm, baseAcross, paint)
   drawZeroLine(ctx, frame, baseAcross, paint)
   drawFloor(ctx, frame, paint)
+  ctx.restore()
+}
+
+/**
+ * The fraction of a pixel's depth that must disagree before it is coloured.
+ *
+ * Sequencing error puts a base or two of disagreement under any real pileup, so
+ * a mark drawn at the first mismatch is a lane speckled everywhere and a reader
+ * who learns to ignore it. A fifth is IGV's own default and is roughly where a
+ * position stops looking like noise and starts looking like an allele — well
+ * under the half a heterozygous site gives, and well over the one or two per
+ * cent a good run's error rate produces.
+ */
+const VARIANT_LEAST = 0.2
+
+/**
+ * The mark for a position the reads disagree with the reference at.
+ *
+ * One colour and not four. The *pile* beside this lane already colours a
+ * mismatch by the base that was seen, at exactly the zooms where this is drawn
+ * (§8.13), so painting four here would be the same claim twice — and this row
+ * has no room to make it: a pixel is one column. What this says is *where*, and
+ * *how much of the depth*, which is the question the curve alone cannot answer.
+ *
+ * Drawn from the baseline to the disagreeing depth, inside the track's own
+ * shape rather than over it: the coloured part is a share of the bar, so a
+ * quarter-height mark under a full-height curve reads as a quarter of the
+ * reads, which is what it is.
+ */
+const VARIANT_COLOUR = '#c8483f'
+
+function drawVariants(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  profile: PixelProfile,
+  norm: (value: number) => number,
+  baseAcross: number,
+  paint: TrackPaint,
+): void {
+  const variant = profile.variant
+  if (variant === null) return
+  ctx.save()
+  ctx.globalAlpha = paint.opacity
+  ctx.fillStyle = VARIANT_COLOUR
+  ctx.beginPath()
+  for (let slot = 0; slot < variant.length; slot++) {
+    const differing = variant[slot]
+    const depth = profile.mean[slot]
+    if (!Number.isFinite(differing) || !Number.isFinite(depth) || depth <= 0) continue
+    if (differing / depth < VARIANT_LEAST) continue
+    const along = profile.from + slot
+    const across = valueAcross(frame, norm(differing))
+    const [x, y, width, height] = laneRect(frame, along, along + 1, baseAcross, across)
+    ctx.rect(x, y, width, height)
+  }
+  ctx.fill()
   ctx.restore()
 }
 

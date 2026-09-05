@@ -51,6 +51,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   used, or that it had nothing to compare against, rather than drawing an
   agreement it did not check.
 
+  **A variant is coloured on both rows, where a FASTA is open.** In the pile it
+  is the mismatch mark it always was, one coloured column per read. On the depth
+  row it is the share of each position that disagrees with the reference, drawn
+  from the baseline up — so a heterozygous site is a mark half the height of the
+  curve over it, and a homozygous one fills it. Above a fifth of the depth only,
+  because under that every pileup is speckled with sequencing error; and only
+  once a pixel is a handful of bases, because at a kilobase to the pixel the
+  mark would be the genome's background mismatch rate drawn everywhere.
+
+  It costs no request: the residues come from a FASTA already open in the same
+  worker, and a FASTA dropped *after* the BAM refreshes both lanes without a pan.
+  It is not a variant call — substitutions and short deletions against whatever
+  is loaded, with no base-quality filter, no strand-bias test and no score.
+
   **The controls are the pile's, not a track's.** Colour by strand, by pair, by
   insert size, by where the mate went, or by mapping quality, with a key under
   the picker naming every category. It colours; it does not *group* — the rows

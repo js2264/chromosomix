@@ -17,7 +17,9 @@ indexed BAM opens as **two** lanes: its depth, which is a coverage track like an
 reads themselves in packed rows — coloured by strand, pair, insert size, mate or mapping quality,
 with mates joined, split reads outlined, and a click on any read opening its flags, its CIGAR, its
 clips, where its mate went and how far away. Close either one and keep the other; the filters that
-decide which reads count are kept in step across both.
+decide which reads count are kept in step across both. Open a FASTA beside them
+and the positions where the reads disagree with the reference are coloured in
+the pile and marked on the depth, at the share of the depth that differs.
 
 And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fifteen tasks:
 P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, **pattern detection**

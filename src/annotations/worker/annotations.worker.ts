@@ -1097,6 +1097,7 @@ function gcSamples(
       values: bins.values,
       min: null,
       max: null,
+      variant: null,
       summary: true,
     })
   }
@@ -1300,7 +1301,9 @@ function signalSamples(
       if (value < min) min = value
       if (value > max) max = value
     }
-    out.push({ contig: region.contig, start: region.start, end: region.end, ...got })
+    // A bigWig has no reference to disagree with; only an alignment lane fills
+    // this in, and it is `null` rather than empty so the two states stay apart.
+    out.push({ contig: region.contig, start: region.start, end: region.end, variant: null, ...got })
   }
   return { basesPerPixel, regions: out, extent: min <= max ? { min, max } : null }
 }
@@ -1413,6 +1416,7 @@ async function sample(
       values,
       min: packed.isSummary ? packed.minScores.slice(from, to) : null,
       max: packed.isSummary ? packed.maxScores.slice(from, to) : null,
+      variant: null,
       summary: packed.isSummary,
     })
   }
@@ -1718,6 +1722,14 @@ async function alignmentSamples(
     const span = plan.region.end - plan.region.start
     const bins = Math.max(1, Math.min(4096, Math.round(span / Math.max(1, basesPerPixel))))
     const depth = new Float64Array(bins)
+    // Residues for this window, if some FASTA in this worker happens to hold
+    // them — the same free source the pile's mismatches use. Only below
+    // `VARIANT_BELOW`: finding the disagreements is a walk over every aligned
+    // base, which is the one thing here that scales with depth times read
+    // length, and a bin a kilobase wide would report the genome's background
+    // mismatch rate as a variant at every pixel.
+    const reference = basesPerPixel <= VARIANT_BELOW ? residuesFor(plan.region) : undefined
+    const variant = reference === undefined ? null : new Float64Array(bins)
     for (const byteSpan of plan.spans) {
       // Between blocks, so a pan that has moved on stops this rather than
       // holding the one thread every other lane's `sample` is waiting on.
@@ -1735,20 +1747,26 @@ async function alignmentSamples(
         Math.ceil(plan.region.end),
         bins,
         filterOf(style),
+        reference,
       )
       // Summed across spans rather than concatenated: a read overlapping the
       // window may live in any of them, and the bins are the same bins.
       for (let i = 0; i < bins; i++) depth[i] += result.depth[i]
+      if (variant !== null && result.variant !== null) {
+        for (let i = 0; i < bins; i++) variant[i] += result.variant[i]
+      }
     }
 
     const starts = new Int32Array(bins)
     const ends = new Int32Array(bins)
     const values = new Float32Array(bins)
+    const differing = variant === null ? null : new Float32Array(bins)
     const width = span / bins
     for (let i = 0; i < bins; i++) {
       starts[i] = Math.round(plan.region.start + i * width)
       ends[i] = Math.round(plan.region.start + (i + 1) * width)
       values[i] = depth[i]
+      if (differing !== null && variant !== null) differing[i] = variant[i]
       if (depth[i] < min) min = depth[i]
       if (depth[i] > max) max = depth[i]
     }
@@ -1759,6 +1777,7 @@ async function alignmentSamples(
       starts,
       ends,
       values,
+      variant: differing,
       min: null,
       max: null,
       // Depth *is* the summary — there is no finer value behind it to have
@@ -1943,6 +1962,20 @@ async function readsFor(
 
 /** A hard ceiling on reads, whatever the rows allow. */
 const MAX_READS = 20_000
+
+/**
+ * The bases-per-pixel below which the depth row is checked against a reference.
+ *
+ * Two limits meet here and both point the same way. The cost: finding the
+ * disagreements means walking every *aligned base* of every kept read rather
+ * than the blocks of its CIGAR, and the depth scan is the most expensive read
+ * in this application (§12) — it must not grow that way at whole-genome widths.
+ * The meaning: a variant is a claim about a *position*, and a bin holding two
+ * hundred bases reports the genome's background mismatch rate as a coloured
+ * pixel everywhere. Sixteen is about the width at which a pixel is still a
+ * handful of bases, which is where a reader starts looking for one.
+ */
+const VARIANT_BELOW = 16
 
 /**
  * Residues covering a region, from any FASTA this worker already holds.

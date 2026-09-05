@@ -184,13 +184,14 @@ async function window(
   start: number,
   end: number,
   reads?: ReadStyle,
+  basesPerPixel = 100,
 ): Promise<{ requests: number; samples: TrackSampleSet }> {
   const before = seen.requests
   const response = await ask({
     kind: 'sample',
     entry,
     regions: [{ contig: 'chrI', start, end }],
-    basesPerPixel: 100,
+    basesPerPixel,
     ...(reads === undefined ? {} : { reads }),
   })
   expect(response.type, JSON.stringify(response)).toBe('result')
@@ -268,6 +269,70 @@ describe('§12: changing a lane control', () => {
     })
     expect(open0.samples.extent?.max ?? 0).toBeGreaterThan(0)
     expect(floored.samples.extent?.max ?? 0).toBe(0)
+  })
+})
+
+/**
+ * Colouring the depth by variant is bounded in CPU, never in requests.
+ *
+ * The residues come from a FASTA the reader already opened in this same worker.
+ * If that ever became a *fetch* — a range request per window against a remote
+ * reference — the depth scan would go from the most expensive read in the
+ * application to something no budget could hold, and it would do it silently,
+ * because the picture would be identical.
+ */
+describe('§12: colouring the depth by variant', () => {
+  /** A FASTA over the fixture's own contig, loaded as a row of its own. */
+  async function reference(entry: string): Promise<void> {
+    const length = 1_100_000
+    const bases = new Uint8Array(length)
+    const letters = 'ACGT'
+    for (let i = 0; i < length; i++) bases[i] = letters.charCodeAt(i % 4)
+    const lines = ['>chrI']
+    for (let i = 0; i < length; i += 60) {
+      lines.push(new TextDecoder().decode(bases.subarray(i, Math.min(length, i + 60))))
+    }
+    const file = new File([lines.join('\n') + '\n'], 'ref.fa')
+    const response = await ask({
+      kind: 'load',
+      entry,
+      source: { kind: 'local', file, name: 'ref.fa' },
+      mapContigs: [],
+    })
+    expect(response.type, JSON.stringify(response)).toBe('result')
+  }
+
+  it('spends no request on the reference, at any zoom', async () => {
+    await serve()
+    await open('b-var')
+    await reference('b-var-ref')
+    // Warm, so the blocks are the previous window's cost and not this one's.
+    await window('b-var', 1_000_000, 1_010_000, defaultReadStyle(), 1)
+    const cost = await window('b-var', 1_000_000, 1_010_000, defaultReadStyle(), 1)
+    expect(cost.requests).toBeLessThanOrEqual(5)
+    // …and it actually did the comparison, so the zero above is a zero and not
+    // a feature that quietly did not run.
+    expect(cost.samples.regions[0]?.variant).not.toBeNull()
+  })
+
+  it('does not compare at all where a bin is wider than a variant is a place', async () => {
+    // The CPU gate. A bin holding a hundred bases would report the genome's
+    // background mismatch rate as a coloured pixel everywhere, and it would pay
+    // a walk over every aligned base to do it.
+    await serve()
+    await open('b-var-wide')
+    await reference('b-var-wide-ref')
+    const cost = await window('b-var-wide', 1_000_000, 1_010_000, defaultReadStyle(), 100)
+    expect(cost.samples.regions[0]?.variant).toBeNull()
+  })
+
+  it('says nothing about variants when no reference is open', async () => {
+    await serve()
+    await open('b-var-none')
+    await ask({ kind: 'drop', entry: 'b-var-ref' })
+    await ask({ kind: 'drop', entry: 'b-var-wide-ref' })
+    const cost = await window('b-var-none', 1_000_000, 1_010_000, defaultReadStyle(), 1)
+    expect(cost.samples.regions[0]?.variant).toBeNull()
   })
 })
 

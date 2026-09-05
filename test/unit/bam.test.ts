@@ -592,6 +592,89 @@ describe('coverage', () => {
     expect(result.depth[0]).toBeCloseTo(1, 6)
   })
 
+  it('says nothing about variants when there is nothing to compare against', () => {
+    // `null` and an array of zeros are different claims — "these reads agree
+    // with the reference" against "no reference was loaded" — and the second
+    // must not be drawn as the first.
+    const bytes = bamBytes(REFS, [{ refId: 0, pos: 0, cigar: '4M', seq: 'ACGT' }])
+    expect(coverageOf(bytes, from(bytes), 0, 0, 4, 4).variant).toBeNull()
+  })
+
+  it('counts the depth that disagrees with the reference, in the depth’s own units', () => {
+    // Three reads over four bases, one of them carrying a T where the reference
+    // says A. One bin per base, so `variant / depth` is the allele fraction and
+    // the bin the substitution is in is the only one that has any.
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '4M', seq: 'ACGT', name: 'a' },
+      { refId: 0, pos: 0, cigar: '4M', seq: 'ACGT', name: 'b' },
+      { refId: 0, pos: 0, cigar: '4M', seq: 'TCGT', name: 'c' },
+    ])
+    const reference = { start: 0, bases: new TextEncoder().encode('ACGT') }
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 4, undefined, reference)
+    expect([...result.depth]).toEqual([3, 3, 3, 3])
+    expect(result.variant).not.toBeNull()
+    expect([...(result.variant as Float32Array)]).toEqual([1, 0, 0, 0])
+  })
+
+  it('keeps the two in the same units when a bin is wider than a base', () => {
+    // The reason the disagreement goes through the same accumulator as the
+    // depth: at four bases to a bin the depth is a mean over the bin, so a raw
+    // count of mismatching bases beside it would be a fraction four times too
+    // large — and the mark on the lane is drawn from the ratio of the two.
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '4M', seq: 'ACGT', name: 'a' },
+      { refId: 0, pos: 0, cigar: '4M', seq: 'TCGT', name: 'b' },
+    ])
+    const reference = { start: 0, bases: new TextEncoder().encode('ACGT') }
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 1, undefined, reference)
+    expect(result.depth[0]).toBeCloseTo(2, 6)
+    // One mismatching base out of four, in one of two reads: a quarter of one.
+    expect((result.variant as Float32Array)[0]).toBeCloseTo(0.25, 6)
+  })
+
+  it('counts a deletion as a disagreement, since the read says the bases are absent', () => {
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '1M2D1M', seq: 'AT', name: 'a' },
+    ])
+    const reference = { start: 0, bases: new TextEncoder().encode('ACGT') }
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 4, undefined, reference)
+    expect([...(result.variant as Float32Array)]).toEqual([0, 1, 1, 0])
+  })
+
+  it('does not call an intron a disagreement', () => {
+    // The same claim `depth` makes: a read is aligned *across* an `N`, not over
+    // it, and reporting every intron as a variant would light up every
+    // RNA-seq file from end to end.
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '1M2N1M', seq: 'AT', name: 'a' },
+    ])
+    const reference = { start: 0, bases: new TextEncoder().encode('ACGT') }
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 4, undefined, reference)
+    expect([...(result.variant as Float32Array)]).toEqual([0, 0, 0, 0])
+  })
+
+  it('steps the read alongside the CIGAR, so an insertion does not shift the comparison', () => {
+    // The commonest way to get this wrong, and it is wrong *silently*: compare
+    // the read's bases to the reference by offset from the start and every
+    // position after the first insertion is off by its length, so a read that
+    // matches perfectly reports a run of variants.
+    const bytes = bamBytes(REFS, [
+      { refId: 0, pos: 0, cigar: '2M3I2M', seq: 'ACTTTGT', name: 'a' },
+    ])
+    const reference = { start: 0, bases: new TextEncoder().encode('ACGT') }
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 4, undefined, reference)
+    expect([...(result.variant as Float32Array)]).toEqual([0, 0, 0, 0])
+  })
+
+  it('treats an N in either sequence as no information rather than a disagreement', () => {
+    const bytes = bamBytes(REFS, [{ refId: 0, pos: 0, cigar: '4M', seq: 'ANGT', name: 'a' }])
+    const result = coverageOf(bytes, from(bytes), 0, 0, 4, 4, undefined, {
+      start: 0,
+      bases: new TextEncoder().encode('ANGT'),
+    })
+    expect([...(result.variant as Float32Array)]).toEqual([0, 0, 0, 0])
+  })
+
   it('clips a read that hangs off both ends of the window', () => {
     const bytes = bamBytes(REFS, [{ refId: 0, pos: 0, cigar: '1000M' }])
     const result = coverageOf(bytes, from(bytes), 0, 400, 600, 1)

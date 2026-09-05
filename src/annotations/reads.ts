@@ -132,10 +132,17 @@ export class ReadCache {
     basesPerPixel: number
     /** The lane's read controls, which decide what is fetched as well as how it looks. */
     style: ReadStyle
+    /**
+     * Which reference sequences are open, for the same reason `SampleCache`
+     * takes one: a mismatch column is drawn against whatever residues the
+     * worker holds, and a FASTA dropped after the BAM changes the answer
+     * without changing the entry, the window, the zoom or the style.
+     */
+    reference?: string
   }): ReadWindow | null {
     const rows = Math.max(ROW_STEP, Math.ceil(options.rows / ROW_STEP) * ROW_STEP)
     const key = `${options.entry}:${options.scope}`
-    const style = readStyleKey(options.style)
+    const style = `${readStyleKey(options.style)}|${options.reference ?? ''}`
     const cached = this.held.get(key) ?? null
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.window ?? null

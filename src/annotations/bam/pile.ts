@@ -35,12 +35,15 @@
  */
 
 import {
+  consumesQuery,
   consumesReference,
   DEFAULT_EXCLUDE,
   forEachRecord,
   longCigarOf,
+  SEQ_ALPHABET,
   type RecordCursor,
 } from './format'
+import { BASE_CODE } from '../fasta'
 
 /** Which records a pass counts. */
 export interface PileFilter {
@@ -55,6 +58,16 @@ export const DEFAULT_FILTER: PileFilter = { exclude: DEFAULT_EXCLUDE, minMapq: 0
 export interface CoverageResult {
   /** Mean depth per bin, over the region the caller asked about. */
   depth: Float32Array
+  /**
+   * The part of {@link depth} that disagrees with the reference, or `null`.
+   *
+   * Same units and same bins, so `variant[i] / depth[i]` is the non-reference
+   * fraction of that bin however wide the bins are. `null` whenever no
+   * reference was handed in — which is not the same claim as an array of zeros,
+   * and must not draw like one: "nothing disagrees here" and "there is nothing
+   * to disagree with" are different sentences (§8.13).
+   */
+  variant: Float32Array | null
   /** Records the pass looked at, whether or not they were counted. */
   total: number
   /** Records that passed the filter and overlapped the region. */
@@ -80,10 +93,21 @@ export function coverageOf(
   end: number,
   bins: number,
   filter: PileFilter = DEFAULT_FILTER,
+  /**
+   * Reference residues covering the region, where some FASTA in this session
+   * holds them — see {@link eachMismatch}.
+   *
+   * Absent is the normal case and costs nothing. Present turns on a walk over
+   * every *aligned base* rather than over the CIGAR's blocks, which is the one
+   * thing in this function that scales with depth × read length, so the caller
+   * hands one in only where a bin is narrow enough for "there is a variant
+   * here" to name a place (§8.13).
+   */
+  reference?: { start: number; bases: Uint8Array },
 ): CoverageResult {
   const span = end - start
   if (bins <= 0 || span <= 0) {
-    return { depth: new Float32Array(0), total: 0, kept: 0, max: 0 }
+    return { depth: new Float32Array(0), variant: null, total: 0, kept: 0, max: 0 }
   }
   const binWidth = span / bins
   // `partial` takes the fractional ends of every interval; `whole` is a
@@ -91,6 +115,12 @@ export function coverageOf(
   // across a thousand bins costs two writes instead of a thousand.
   const partial = new Float64Array(bins)
   const whole = new Float64Array(bins + 1)
+  // The disagreeing part, through the same two accumulators — which is what
+  // keeps it in the same units as the depth at every bin width. A mismatching
+  // base is the interval `[p, p + 1)`, so a bin narrower than a base gets the
+  // whole of it and a bin wider than one gets its share.
+  const varPartial = reference === undefined ? null : new Float64Array(bins)
+  const varWhole = reference === undefined ? null : new Float64Array(bins + 1)
   let total = 0
   let kept = 0
 
@@ -107,6 +137,11 @@ export function coverageOf(
       if (b <= a) return
       addInterval(partial, whole, (a - start) / binWidth, (b - start) / binWidth, bins)
     })
+    if (reference === undefined || varPartial === null || varWhole === null) return
+    eachMismatch(bytes, cursor, reference, (at) => {
+      if (at < start || at >= end) return
+      addInterval(varPartial, varWhole, (at - start) / binWidth, (at + 1 - start) / binWidth, bins)
+    })
   })
 
   let running = 0
@@ -118,7 +153,88 @@ export function coverageOf(
     depth[i] = value
     if (value > max) max = value
   }
-  return { depth, total, kept, max }
+  let variant: Float32Array | null = null
+  if (varPartial !== null && varWhole !== null) {
+    variant = new Float32Array(bins)
+    let carried = 0
+    for (let i = 0; i < bins; i++) {
+      carried += varWhole[i]
+      variant[i] = carried + varPartial[i]
+    }
+  }
+  return { depth, variant, total, kept, max }
+}
+
+/**
+ * Every reference position where one record disagrees with the reference.
+ *
+ * A substitution and a deletion, and nothing else. An insertion has no
+ * reference position to be *at* — it sits between two of them — and a soft clip
+ * is not aligned, so neither is a disagreement about a base; they are drawn in
+ * the pile, where a mark can sit between two columns, and they are silent here.
+ * The result is therefore a claim about substitutions and short deletions and
+ * is not a variant call (SPECS §8.13's non-features).
+ *
+ * The CIGAR is walked with a reference cursor *and* a query cursor, because the
+ * two only line up between indels: comparing the read's bases against the
+ * reference by offset from the start is the standard way to get this wrong, and
+ * it is wrong silently — the mismatches simply land a few bases off after the
+ * first insertion.
+ *
+ * `N` advances the reference and emits nothing: the read is aligned across it
+ * and asserts nothing about what it skipped, so counting it would report every
+ * intron as a variant in every RNA-seq file.
+ */
+export function eachMismatch(
+  bytes: Uint8Array,
+  cursor: RecordCursor,
+  reference: { start: number; bases: Uint8Array },
+  emit: (position: number) => void,
+): void {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const long = longCigarOf(bytes, cursor)
+  const ops = long === null ? cursor.cigarOps : long.length
+  const opAt = (i: number): number =>
+    long === null ? view.getUint32(cursor.cigarAt + i * 4, true) : long[i]
+
+  let refPos = cursor.pos
+  let queryPos = 0
+  for (let i = 0; i < ops; i++) {
+    const packed = opAt(i)
+    const op = packed & 0xf
+    const length = packed >>> 4
+    if (op === 2) {
+      // `D`: the read spans these and says they are not there, which is the
+      // disagreement itself — there is no base to compare.
+      for (let k = 0; k < length; k++) emit(refPos + k)
+      refPos += length
+      continue
+    }
+    if (consumesReference(op) && consumesQuery(op)) {
+      for (let k = 0; k < length; k++) {
+        const at = refPos + k - reference.start
+        if (at < 0 || at >= reference.bases.length) continue
+        const want = BASE_CODE[reference.bases[at]]
+        // `N` in either the read or the reference is an absence of information
+        // rather than a disagreement, so neither is reported.
+        if (want === 4) continue
+        const got = baseAt(bytes, cursor.seqAt, queryPos + k)
+        if (got !== 4 && got !== want) emit(refPos + k)
+      }
+      refPos += length
+      queryPos += length
+      continue
+    }
+    if (consumesReference(op)) refPos += length
+    if (consumesQuery(op)) queryPos += length
+  }
+}
+
+/** The `BASE_CODE` value of the read's base at `index`, from the packed nibbles. */
+function baseAt(bytes: Uint8Array, seqAt: number, index: number): number {
+  const byte = bytes[seqAt + (index >> 1)]
+  const nibble = index % 2 === 0 ? byte >> 4 : byte & 0xf
+  return BASE_CODE[SEQ_ALPHABET.charCodeAt(nibble)]
 }
 
 /**

@@ -51,6 +51,8 @@ function frameOf(domain: [number, number], pixels: number): LaneFrame {
 function samples(
   intervals: Array<[number, number, number]>,
   band?: Array<[number, number]>,
+  /** The disagreeing share of each interval, for an alignment lane (§8.13). */
+  variant?: number[],
 ): TrackSampleSet {
   return {
     basesPerPixel: 1,
@@ -64,6 +66,7 @@ function samples(
         values: Float32Array.from(intervals.map((row) => row[2])),
         min: band === undefined ? null : Float32Array.from(band.map((row) => row[0])),
         max: band === undefined ? null : Float32Array.from(band.map((row) => row[1])),
+        variant: variant === undefined ? null : Float32Array.from(variant),
         summary: band !== undefined,
       },
     ],
@@ -179,6 +182,66 @@ describe('per-pixel reduction', () => {
     const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), null)
     expect(profile.extent).toBeNull()
     expect(profile.mean.every(Number.isNaN)).toBe(true)
+  })
+})
+
+/**
+ * The disagreeing share of a depth lane, reduced the same way the depth is.
+ *
+ * The whole point of the column is the *ratio* of the two, so the two have to
+ * come through `profileOf` under the same weights: reduced any other way the
+ * fraction is right at one pixel per interval and wrong everywhere else, which
+ * is the width nobody tests at.
+ */
+describe('a lane that disagrees with its reference', () => {
+  it('carries no variant column at all where nothing carried one', () => {
+    // `null` and zeros are different claims and must stay different: "these
+    // reads agree with the reference" against "no reference was loaded".
+    const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples([[0, 1000, 4]]))
+    expect(profile.variant).toBeNull()
+  })
+
+  it('reduces the disagreement under the same weights as the depth', () => {
+    // Two intervals into one pixel each: the fraction out is the fraction in.
+    const profile = profileOf(
+      frameOf([0, 2], 2),
+      yeastAxis(),
+      samples(
+        [
+          [0, 1000, 8],
+          [1000, 2000, 4],
+        ],
+        undefined,
+        [2, 0],
+      ),
+    )
+    const variant = profile.variant as Float32Array
+    expect(variant).not.toBeNull()
+    expect(variant[0] / profile.mean[0]).toBeCloseTo(0.25, 6)
+    expect(variant[1]).toBeCloseTo(0, 6)
+  })
+
+  it('keeps the fraction when several intervals fall into one pixel', () => {
+    // The case a naive sum gets wrong. Four bins into one pixel, half of the
+    // depth disagreeing in each: the pixel's fraction is still a half, not four
+    // halves.
+    const profile = profileOf(
+      frameOf([0, 4], 1),
+      yeastAxis(),
+      samples(
+        [
+          [0, 1000, 4],
+          [1000, 2000, 4],
+          [2000, 3000, 4],
+          [3000, 4000, 4],
+        ],
+        undefined,
+        [2, 2, 2, 2],
+      ),
+    )
+    const variant = profile.variant as Float32Array
+    expect(profile.mean[0]).toBeCloseTo(4, 6)
+    expect(variant[0] / profile.mean[0]).toBeCloseTo(0.5, 6)
   })
 })
 

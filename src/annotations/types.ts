@@ -422,6 +422,20 @@ export interface TrackSamples {
   values: Float32Array
   min: Float32Array | null
   max: Float32Array | null
+  /**
+   * The share of {@link values} that disagrees with a reference, or `null`.
+   *
+   * Only an alignment lane ever carries this, and only where a FASTA covering
+   * the window is open in the same session and the bins are narrow enough for
+   * "there is a variant here" to name a place (§8.13). Same units and same
+   * intervals as `values`, so the ratio of the two is the non-reference
+   * fraction.
+   *
+   * `null` rather than zeros wherever there was nothing to compare against:
+   * "these reads agree with the reference" and "no reference was loaded" are
+   * different claims, and an array of zeros would draw them alike.
+   */
+  variant: Float32Array | null
   /** `true` when these came from a zoom level rather than from base resolution. */
   summary: boolean
 }

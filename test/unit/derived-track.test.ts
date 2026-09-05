@@ -39,6 +39,7 @@ function region(
     values: Float32Array.from(intervals.map((i) => i[2])),
     min: null,
     max: null,
+    variant: null,
     summary: false,
   }
 }
