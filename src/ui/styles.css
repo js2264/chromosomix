@@ -7306,14 +7306,38 @@ canvas.is-frozen {
   position: relative;
 }
 
+/* A rectangle, not a band: the drag selects a window on both axes, so all four
+   edges are drawn and the height is set from the gesture rather than pinned to
+   the plot. `top`/`height` are written by the pointer handler alongside
+   `left`/`width`. */
 .plot-marquee {
   position: absolute;
-  top: 0;
-  bottom: 1.6rem;
   background: color-mix(in srgb, var(--accent, #3b82f6) 18%, transparent);
-  border-left: 1px solid var(--accent, #3b82f6);
-  border-right: 1px solid var(--accent, #3b82f6);
+  border: 1px solid var(--accent, #3b82f6);
   pointer-events: none;
+}
+
+/* The four axis-window boxes. Narrow on purpose — they hold `4000` and `1e6`,
+   and a box wide enough for a sentence invites one. */
+.plot-axis-box {
+  width: 5.2rem;
+  min-width: 0;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.25rem;
+}
+
+.plot-axis-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  padding-left: 0.15rem;
+}
+
+/* An axis and its two bounds are one control: the row wraps, and a label that
+   wrapped away from its boxes would name whatever came after it. */
+.plot-axis-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 /* ---------------------------------------------------------------------------

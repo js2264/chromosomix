@@ -956,6 +956,7 @@ Three families, in `render/derive.ts` and `render/compare.ts`:
 |---|---|---|
 | **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
 | **Baseline** — observed / expected | a toggle of its own | two passes |
+| **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -972,6 +973,17 @@ doubly stochastic — and converge to the same weights; KR is a Newton solver th
 passes. At §2's scale the fixed point converges in milliseconds, so the faster solver would buy a
 name in a menu and nothing a reader could see. A file balanced with `KR` elsewhere and read here
 under `ICE` shows the same picture.
+
+**The baseline can be looked at as well as divided by**, and it is in the picker rather than beside
+the toggle because it answers "what are these numbers" and not "compared to what". Every cell becomes
+the mean the ratio would have divided it by — a banded triangle fading from the diagonal, with a flat
+plate over every off-diagonal pair of sequences, and nothing else in it. The reason to offer it is
+that an O/E is only as good as its denominator: at long separations the curve is a mean over few
+cells and moves, and a ratio that swings there is swinging in the model rather than in the biology.
+It **overrides** the toggle rather than composing with it — O/E of the baseline is 1 wherever it is
+anything — so the toggle greys and says why, and it is drawn on a sequential ramp with no neutral,
+because a mean of counts is count-like and a diverging scale centred at 1 would be centred where
+nothing in the picture lives.
 
 **Normalisation and baseline compose, and their order is fixed.** Normalise first: the decay curve is
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on
@@ -2779,6 +2791,30 @@ on the Annotations panel so a called boundary becomes an overlay on the map imme
 Every drawer plot is drawn through a 2D context, which means the vector PDF page (§7.2) gives each of
 them a true vector figure rather than a photograph of a chart.
 
+**A curve is interactive, and an interactive figure is a plain figure of a derived output.** Turning
+on a log axis produces a `CurveOutput` with `xScale: 'log'`; hiding a series produces one with fewer
+entries in `series`; dragging a rectangle across the plot produces one whose `xDomain` and `yDomain`
+are that rectangle. There is no zoom transform and no second code path, so a reader who zooms into a
+shoulder and presses PDF gets *that* picture at vector resolution with its axes relabelled for it —
+which a canvas transform would have answered with the whole curve under a clipping rectangle.
+
+Three consequences are contract rather than detail:
+
+- **The window is a rectangle, on both axes.** A curve is a shape in two directions, and a drag that
+  could only cut the abscissa left a reader looking at a shoulder half a decade deep with the whole
+  ordinate still in the picture. The two bounds of each axis are also four text boxes, because a
+  figure that is going into a paper beside another one has to be set to the same window as it rather
+  than dragged towards it, and because a marquee cannot express "from exactly 4 kb".
+- **An automatic ordinate fits the window, not the series.** Otherwise a P(s) zoomed to 4 kb–1 Mb
+  still spends its height on the near-diagonal spike sitting off the left edge.
+- **A task may declare the window its figure opens on**, and P(s) does: 4 kb to 1 Mb, which is past
+  the ligation artefacts at one end and inside the shortest chromosome at the other. It is a
+  *default* — the marquee, the boxes and a double-click all move it, and the curve underneath runs
+  from one base pair to the length of the longest sequence whatever it says. The reason it is needed
+  is §18.8's first break: the diagonal and the first off-diagonal share a bin at 1 bp holding two
+  thirds of every cis contact in a 1 kb map, and a log axis drawn over all of it squashes every
+  decade anybody reads into its right-hand quarter.
+
 **The files this app writes gain one format, and it is bigWig.** A bigWig is what a reader wants at the
 end of the day — it is what a genome browser opens and what a colleague expects — and telling them to
 run `bedGraphToBigWig` is a command-line dependency in an application whose entire claim is that it has
@@ -2837,11 +2873,25 @@ them, which is a header a BED consumer would choke on and a reader needs.
 
 ### 18.8 The catalogue
 
-Sixteen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each one
-must be.
+Seventeen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
+one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
-producing the **expected** curve three later tasks consume. *Coverage and marginals* — total, cis, trans
+producing the **expected** curve three later tasks consume. Two quantities are called P(s) and the task
+offers both, because they answer different questions and a figure that mixes them reads a difference of
+convention as biology: the **probability density**, which is the default — contacts at a separation over
+the contacts in the whole map, then over the separation the bin covers, which is
+`HiContacts::distanceLaw()`'s `norm_p` down to that package's gap distance and its break table, with one
+correction to its denominator that §18.10 sets out — and the **expected**, which is
+`cooltools expected-cis`: contacts over the bin pairs that could have held one, the polymer-physics
+reading, and the number most published scaling exponents refer to. `density / expected = pairs(s) /
+constant`, so they are the same picture while the separation is short against the sequences and diverge
+as it approaches the longest one: on the yeast demo, within 1 % below 10 kb, 13 % apart at 100 kb, a
+factor of fifty apart at 1.2 Mb — and on a mammalian map, whose chromosomes are two orders of magnitude
+longer, indistinguishable over everything anybody fits. The second is also what observed/expected, the
+compartment chain and the pileups **divide by**, and they reach it through `expectedAt` rather than
+through the panel: the plotted curve is a figure and the denominator is a denominator, and changing what
+is on screen must not change what an O/E is taken against. *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
@@ -2882,6 +2932,21 @@ fragments, the largest cells in the matrix and the least structural — from car
 diamond sum that then reads as structure. It emits **A/B segments** from E1's sign beside the eigenvector,
 because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
 comparison against zero. *Saddle*, which follows from the two above.
+*Pattern detection*, which is chromosight — loops, borders, hairpins, centromeres and stripes, by
+normalised cross-correlation against a template, over a map detrended by its own distance law, with
+neighbour suppression and a Benjamini-Hochberg q-value on every call. **The pattern is a parameter
+and not five tasks**: they are one computation with different templates, and every threshold under
+the picker follows the picker because chromosight tuned each of them per template — a form that
+baked one preset's `pearson` into a box would report borders at twice the threshold upstream uses.
+It emits four things and the split is the point: a **loop set** (a bedpe, or a BED for the patterns
+that live on the diagonal) that lands on the map as an overlay the moment the run finishes; the
+**pileup** of every window it called, drawn on chromosight's own fixed 0–2 seismic scale so it can
+be laid beside a published figure; the **spectrum** of the scores behind that pileup, because a
+smooth shoulder running down to the threshold says the calling stopped where the threshold was
+rather than where the pattern did; and a table of the strongest calls. This is the one task whose
+output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
+against loop calling is answered in that section rather than here, and why its golden is the
+package's own output rather than a re-derivation (§18.10).
 *CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the
 panel for now**, since everything it does is reachable through insulation's own boundary calls and an
 APA over them, and a composite whose two halves disagree about their units is worth holding back rather
@@ -2906,8 +2971,23 @@ of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature
 mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
 resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
-normalised by **distance-matched controls by default**, or by observed/expected, or not at all; with
-the P2LL enrichment reported under it and a per-feature score table that can leave the app.
+normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
+not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
+the app. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
+and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
+a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
+the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator
+counts per cell, so a half-empty window contributes what it has and nothing more. The chromosight
+normalisation is `chromosight quantify` and is a fourth control rather than
+a fourth task: the other three divide the pileup by something computed from the windows, and this one
+detrends **the map** by its own distance law before any window is cut, so a cell is
+observed-over-expected at that separation on that sequence — which is what chromosight's figures are.
+Three things follow and none is optional: the window is the **template's** size rather than the
+reader's half-width, since the score under the picture is a correlation against those cells; the scan
+distance is the **loop set's own reach**, which is what `cmd_quantify` sets it to, so a short-range
+set is detrended against a curve fitted to short ranges; and **every anchor comes back**, scored or
+not, because quantification answers about the positions it was given. It reports the same score
+spectrum the detector does, over the same templates.
 *Track correlation* across any set of tracks, over fixed bins or over a feature set's intervals.
 *Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
 on a boundary" is the question that follows every domain call.
@@ -2961,10 +3041,26 @@ the reasons are worth recording where the descriptions are:
 
 In the spirit of §13, and for reasons rather than for lack of time.
 
-**No loop or dot calling.** A HiCCUPS-class caller needs false-discovery control across several local
-backgrounds, and a half-good one inside a viewer is a liability precisely because its output looks like
-a result. Scoring a loop set that already exists is the aggregate pileup, and that is the honest version
-of the same want.
+**No loop or dot caller of this app's own invention.** ~~No loop or dot calling.~~ The original rule
+was the second sentence, and its reason still stands: a HiCCUPS-class caller needs false-discovery
+control across several local backgrounds, and a half-good one inside a viewer is a liability
+*precisely because its output looks like a result*. What that argument is against is **writing** a
+caller. It is not an argument against **porting** one, and the distinction is the whole of the
+reversal: `analysis/chromosight.ts` is chromosight — a published, benchmarked method that arrives
+with the two things the objection demands, a background model (the distance law the map is detrended
+by) and false-discovery control (Benjamini-Hochberg over Fisher-transformed correlations) — and its
+golden is that package's **own output** over `demo/yeast/`, compared call for call rather than in
+spirit (§18.10). A number a reader can reproduce by running `chromosight detect` on the same file is
+the opposite of the failure mode this paragraph names; the alternative was a viewer that displays a
+loop set it can neither produce nor check.
+
+Two consequences are worth stating so the rule keeps its teeth. **A second caller needs a second
+upstream**: anything added here must be a port of a published method with a golden built from that
+method's own implementation, not a variation on this one that seemed reasonable. And **the port does
+not get to improve on it** — the `>= 10 → 1` clamp, the `half = size // 2 + 1` window, the asymmetric
+frame rules and the sub-diagonal band of `NaN` are all reproduced, including where a first reading
+takes them for oversights, because changing one is changing what the score means and the agreement is
+the entire value of having it.
 
 **No contact-based contig reordering or scaffolding.** It would only be useful if the reordering could
 be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
@@ -2996,8 +3092,9 @@ carries over, and only its arithmetic changes, since these outputs are floats ra
 
 - **`scripts/make_golden.py` gains an analysis section**, guarded so that a machine without the extra
   packages still produces every existing golden. The new developer-side Python dependencies are
-  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups), **deeptools**
-  (`computeMatrix`, for the 1D metaplots) and **pyBigWig** (the writer cross-check).
+  **cooltools** (expected, insulation, eigenvectors, saddle), **coolpuppy** (pileups),
+  **chromosight** (detection and quantification), **deeptools** (`computeMatrix`, for the 1D
+  metaplots) and **pyBigWig** (the writer cross-check).
 - **The tolerance is recorded per task in the golden file**, not written into the test, so it is data
   that can be tightened: relative `1e-6` for anything that is a sum or a ratio of sums, `1e-4` for
   eigenvectors, where solvers legitimately differ, and exact for counts, bin indices and interval
@@ -3039,6 +3136,71 @@ windows are excluded. **Insulation is not**, and cannot be: the two diamonds dif
 diagonals, by a sum against a mean, by a median against a mean, and by a bad-bin mask. The golden lists
 all five, records the correlation *measured* per chromosome and window, and the test asserts that it has
 not degraded — which is a claim that is true, where equality would have been a claim that is false.
+
+**And one golden has no `direct` half at all, deliberately.** There is no second definition of *what
+chromosight detects* to recompute in numpy: the algorithm is the definition, so the oracle is the
+package's own output at each stage — the detrended map it scans, the correlation map it thresholds,
+every call that survives its filters with its score, p-value and q-value, and the pileup it plots.
+Those are five separate comparisons rather than one end-to-end check, because a single failure would
+say only "different loops" while these say whether the disagreement is in the distance law, the
+convolution, the focus picking, the window filters or the multiple-testing correction — five bugs
+with nothing in common but their symptom. The chromosomes are part of the answer rather than a sample
+of it: neighbour suppression and the FDR are global, so a q-value over two chromosomes is not the
+q-value of the same call over sixteen, and the golden fixes the set. What survives the comparison at
+`1e-6` is everything a reader sees — the calls, the scores, the p-values, the q-values, the pileup —
+and the one place a **relative** bound does not describe the difference is the correlation map itself:
+a dense block reaches a task as `Float32Array` while chromosight works in float64 from the same
+pixels, the distance law is a mean of those values so the error does not stay where it started, and
+the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousandths. That is four
+orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
+compares against an absolute floor.
+
+**And one golden is against R rather than Python, for the curve the panel actually draws.**
+`HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
+separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
+pair*. The catalogue entry says why the app plots the first and divides by the second; this golden is
+what makes the first reproducible rather than merely similar. What it compares is the **numerator,
+break for break**, because that is where every way of getting this wrong shows: the gap distance off
+by one bin, the break table regenerated wrongly, the mirrored square not folded. It is exact at three
+places a near-miss would be invisible on a log-log plot. The
+**separation** is HiContacts' gap distance, `pairdist(type = 'gap')` over bins that HiCExperiment
+builds as `IRanges(start + 1, end)`, so two bins *k* apart are `(k − 1)·binsize` apart and the
+diagonal and the first off-diagonal share the first break — a one-bin shift, which is a factor of two
+at the left edge. The **bins** are that package's 205 hard-coded breaks, which are exactly
+`unique(round(1.1^n))`, so `logRoundedBreaks` regenerates them and the test compares all 205 rather
+than trusting the identity. And each unordered pair of bins counts **once**: the accumulator is fed
+mirrored dense squares, harmless to a mean and fatal to a share of a total, since the diagonal arrives
+once among off-diagonals that arrive twice.
+
+**The denominator is deliberately not HiContacts', and this is the one place the app disagrees with
+it.** That break table was built for a *pairs* file, where a distance is continuous and the counts in
+a break really are spread across its whole width. A contact matrix is not like that: its separations
+sit on a lattice of `binsize`, and the breaks near ten kilobases are about a kilobase wide — so on a
+1 kb map one break holds two lattice points and the next holds one, and dividing both by their
+nominal widths makes the first almost twice as dense as the second. The result is a sawtooth of a
+factor of two, alternating bin by bin, straight through the decade the cohesin shoulder is read in.
+On `demo/yeast/Yeast_microC_G2M_1kb.cool` the log-log slope of the nominal-width curve moves by
+**0.83 between neighbouring points** and swings between +1.7 and −2.9; the shoulder it is hiding is a
+change of about **0.26**. Dividing instead by the separation the bin actually covers —
+`offsets × binsize` — is the same quantity estimated on the lattice the data are on, moves the slope
+by **0.087** between neighbours, and agrees with the nominal width wherever a break is wide enough to
+hold several offsets, which is everywhere past about 50 kb at 1 kb bins. HiContacts says as much
+itself: its matrix branch prints *"the P(s) curve will be an approximation"* and its pairs branch does
+not. A test in the suite asserts both roughness figures from the golden's own numbers, so the
+sawtooth cannot come back unnoticed.
+
+The oracle is `scripts/hicontacts_ps.R`, which is HiContacts' own pipeline copied line for line with
+one substitution — the two lines that read the map — rather than a transcription into numpy. Two of
+that function's output columns are left out because nothing here computes them: `slope`, which it
+loess-smooths where `logLogSlope` draws the raw central difference, and `norm_p_unity`, which is a
+rescaling of the goldened column rather than a second curve. That is
+the same rule the chromosight golden follows for the same reason: reproducing R's `findInterval(...,
+all.inside = TRUE)`, its `left_join` and its group semantics in another language would make the oracle
+a second implementation of the thing it checks. It is the first golden whose dependency is a program
+rather than an importable module, which is what the `bin:` prefix in the generator's `have()` is for,
+and like every other it is *named* in the manifest when it is skipped. One test in the suite is not a
+comparison at all: it drives the kernel with the mirror fold switched off and records what that
+produces, because what it produces still looks like a P(s).
 
 ---
 

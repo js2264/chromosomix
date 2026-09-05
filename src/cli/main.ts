@@ -3,8 +3,8 @@
  *
  * ## Why this exists
  *
- * The Analysis panel computes fourteen things and every one of them is goldened
- * against cooltools, coolpuppy, pyBigWig and numpy (§18.10). That is a lot of
+ * The Analysis panel computes fifteen things and every one of them is goldened
+ * against cooltools, coolpuppy, chromosight, pyBigWig and numpy (§18.10). That is a lot of
  * verified arithmetic reachable only by clicking, and the moment a reader has
  * two hundred files rather than one, clicking stops being the interface. They
  * leave — for cooltools, which is the right tool and a different set of
@@ -406,6 +406,40 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
   return inputs
 }
 
+/**
+ * File each loaded set under the **parameter key** that chose it.
+ *
+ * {@link TaskInputs} is keyed by parameter key — `analysis/job.ts`'s
+ * `chosenInput` is a whole paragraph about not indexing it by the entry id —
+ * and this side had been filing everything by file name and then setting the
+ * parameter to a *path*. The two never met: every task that takes a feature or
+ * pair set found `undefined` under its own key and reported "the set chosen is
+ * no longer loaded" about a file it had just parsed. It type-checks, it reads
+ * as though it must work, and it is the exact mistake that function exists to
+ * stop, made from the one venue that has no store to allocate ids in.
+ *
+ * So the name a reader typed still names the input, and the parameter key is an
+ * alias for it. Both, because `labels` is keyed by the first and the runners
+ * look up the second.
+ */
+function bindInputs(task: AnalysisTask, params: Params, inputs: TaskInputs): TaskInputs {
+  const bound: TaskInputs = { ...inputs }
+  for (const spec of task.params) {
+    if (spec.kind !== 'featureSet' && spec.kind !== 'pairSet') continue
+    const chosen = params[spec.key]
+    if (typeof chosen !== 'string' || chosen === '') continue
+    const name = basename(chosen)
+    if (spec.kind === 'pairSet') {
+      const set = inputs.pairs?.[chosen] ?? inputs.pairs?.[name]
+      if (set !== undefined) bound.pairs = { ...bound.pairs, [spec.key]: set }
+    } else {
+      const set = inputs.features?.[chosen] ?? inputs.features?.[name]
+      if (set !== undefined) bound.features = { ...bound.features, [spec.key]: set }
+    }
+  }
+  return bound
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -470,7 +504,7 @@ async function runCommand(args: Args): Promise<number> {
   let inputs: TaskInputs
   try {
     params = paramsFor(task, args)
-    inputs = await loadInputs(args)
+    inputs = bindInputs(task, params, await loadInputs(args))
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -486,7 +520,15 @@ async function runCommand(args: Args): Promise<number> {
         task,
         params,
         path,
-        window: one(args, 'window'),
+        // Not `one(args, 'window')`. `apa` declares a parameter of that name —
+        // a half-width in bins — and `paramsFor` already gives a task's own
+        // parameters the flag where the two collide. The framing was reading it
+        // anyway, so `apa --window 8` set the half-width *and* tried to resolve
+        // `8` as a locus, and the run died with "Unknown sequence label: 8".
+        // One name, one meaning, decided by whether the task claims it.
+        window: task.params.some((param) => param.key === 'window')
+          ? undefined
+          : one(args, 'window'),
         balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
         inputs,
         quiet,
@@ -553,7 +595,7 @@ async function replayCommand(args: Args): Promise<number> {
   const files = over.length > 0 ? over : [config.state.uri]
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
-  const inputs = await loadInputs(args)
+  const loaded = await loadInputs(args)
 
   process.stderr.write(
     `${recorded.length} task${recorded.length === 1 ? '' : 's'} from ${basename(path)}, ` +
@@ -577,7 +619,9 @@ async function replayCommand(args: Args): Promise<number> {
           params: entry.params,
           path: file,
           balance: undefined,
-          inputs,
+          // Per task, because a replayed workspace can hold several that name
+          // different sets under different keys.
+          inputs: bindInputs(task, entry.params, loaded),
           quiet,
         })
         await writeOutputs(result, stemOf(file), directory, result.contigs, quiet)

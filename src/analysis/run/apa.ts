@@ -46,8 +46,9 @@ import {
   type TaskRunner,
 } from '../job'
 import { makeRandom } from '../random'
-import { isScaled, onDiagonal, windowBins } from '../tasks/apa'
+import { isChromosight, isScaled, onDiagonal, windowBins } from '../tasks/apa'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
+import { chromosightPileup } from './apaChromosight'
 import { usableBlock, type Span } from './blocks'
 
 /** A rectangle of the matrix, in absolute bins. */
@@ -107,7 +108,6 @@ export const runApa: TaskRunner = async (job) => {
   const side = isScaled(job.params)
     ? Math.max(11, Math.round(numParam(job.params, 'grid', 51)))
     : windowBins(job.params) * 2 + 1
-  const maxAnchors = Math.max(10, Math.round(numParam(job.params, 'maxAnchors', 5000)))
   const norm = strParam(job.params, 'norm', 'matched')
 
   const anchors = usingPairs
@@ -118,15 +118,28 @@ export const runApa: TaskRunner = async (job) => {
     return []
   }
 
-  const groups = groupAnchors(job, anchors, usingPairs ? null : (features as FeatureSet))
-  const kept = groups.map((group) => group.slice(0, maxAnchors))
-  const dropped = groups.reduce((sum, group, i) => sum + (group.length - kept[i].length), 0)
-  if (dropped > 0) {
-    job.note(
-      `${dropped.toLocaleString()} anchors past the cap of ${maxAnchors.toLocaleString()} were ` +
-        'not read. Raise the cap to use them all.',
+  // The chromosight pileup is a different computation over the same anchors —
+  // the map is detrended before anything is cut out of it, so it reads whole
+  // sequences rather than windows — and it answers with its own three outputs.
+  // Branching here rather than at the top is deliberate: the anchor resolution
+  // above, including §5.9's naming, is shared and must stay shared.
+  if (isChromosight(job.params)) {
+    return chromosightPileup(
+      job,
+      anchors.map((anchor) => ({
+        row: anchor.pair.row,
+        col: anchor.pair.col,
+        bounds: anchor.bounds,
+        label: anchor.label,
+      })),
     )
   }
+
+  // Every anchor of every group. There used to be a cap here, and it was not a
+  // budget so much as a silent change of subject: a pileup of the first five
+  // thousand anchors is a pileup of whichever ones sorted first, under a caption
+  // saying how many were left out — which nobody compares across two runs.
+  const kept = groupAnchors(job, anchors, usingPairs ? null : (features as FeatureSet))
 
   const plans: Plan[] = []
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
@@ -162,7 +175,6 @@ export const runApa: TaskRunner = async (job) => {
   const controls = kept.map(() => new PileupAccumulator(side, side))
   const expected = new ExpectedAccumulator(job.mc.nBins)
   const perAnchor: Array<{ label: string; separation: number; score: number }> = []
-  const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
 
   const block = usableBlock(job, plans.map(spanOf), balance)
   const batches = coalesce(plans)
@@ -182,11 +194,14 @@ export const runApa: TaskRunner = async (job) => {
     if (norm === 'oe') accumulateExpected(expected, dense, batch.rect)
     for (const plan of batch.plans) {
       done++
+      // Every window that could be cut is summed, however little of it carries
+      // a value. There used to be a minimum here, and what it dropped was the
+      // windows in the sparsest regions — which are exactly the ones a weak
+      // pileup is weak because of, so removing them made every pileup look
+      // better than the data. `PileupAccumulator` counts per cell, so a
+      // half-empty window contributes what it has and nothing more.
       const window = cut(dense, batch.rect, plan.rect, side)
       if (window === null) continue
-      let seen = 0
-      for (const cell of window) if (Number.isFinite(cell)) seen++
-      if (seen < window.length * minValid) continue
       if (plan.control) {
         controls[plan.group].add(window)
         continue

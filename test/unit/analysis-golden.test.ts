@@ -53,7 +53,12 @@ import {
   usableBins,
 } from '@/analysis/compartments'
 import { CoverageAccumulator } from '@/analysis/coverage'
-import { ExpectedAccumulator } from '@/analysis/expected'
+import {
+  ExpectedAccumulator,
+  densityCurve,
+  logBinCurve,
+  logRoundedBreaks,
+} from '@/analysis/expected'
 import { diamondSums, insulationScore } from '@/analysis/insulation'
 import { leadingEigenpairs } from '@/analysis/linalg'
 import { referenceWindows, windowRow } from '@/analysis/metaplot'
@@ -177,6 +182,46 @@ suite('P(s), against cooltools.expected_cis', () => {
     })
   }
 
+  it('log-bins cooltools\' curve as a weighted mean, which is what the panel plots', async () => {
+    // The suite above pins the per-offset means. What the P(s) task actually
+    // draws under `quantity: expected` is those means pooled into log bins, and
+    // the pooling rule is the part that can be wrong on its own: a bin at long
+    // range spans hundreds of offsets whose evidence differs by orders of
+    // magnitude, and averaging their means as equals would let the emptiest
+    // offset in the bin count as much as the fullest.
+    const g = golden!
+    for (const chrom of g.chroms) {
+      const dense = await demo.square(chrom, false)
+      const accumulator = new ExpectedAccumulator(dense.nrows - 1)
+      accumulator.addBlock(dense)
+      const curve = accumulator.finish()
+      const binned = logBinCurve(curve, 1000, 1.1, 0)
+
+      // The same bins, filled with cooltools' means and this repo's counts. The
+      // means are goldened equal above, so what is left under test is the
+      // weighting — and a mistake in it moves every point at long range.
+      const theirs = numbers(g.reference.raw[chrom].mean)
+      const edges: number[] = [1]
+      while (edges[edges.length - 1] < curve.maxOffset + 1) {
+        edges.push(edges[edges.length - 1] * 1.1)
+      }
+      const wanted: number[] = []
+      for (let e = 0; e + 1 < edges.length; e++) {
+        const from = Math.max(1, Math.ceil(edges[e]))
+        const to = Math.min(curve.maxOffset + 1, Math.ceil(edges[e + 1]))
+        let total = 0
+        let cells = 0
+        for (let k = from; k < to; k++) {
+          if (!(curve.count[k] > 0) || !Number.isFinite(theirs[k])) continue
+          total += theirs[k] * curve.count[k]
+          cells += curve.count[k]
+        }
+        if (cells > 0) wanted.push(total / cells)
+      }
+      expectSeries(binned.y, Float64Array.from(wanted), g.reference.tolerance, `binned ${chrom}`)
+    }
+  })
+
   it('agrees with cooltools cell for cell, not merely in shape', async () => {
     const g = golden!
     for (const chrom of g.chroms) {
@@ -191,6 +236,184 @@ suite('P(s), against cooltools.expected_cis', () => {
       expect(g.reference.raw[chrom].dist[1], chrom).toBe(1)
       expectSeries(ours, theirs, g.reference.tolerance, `cooltools ${chrom}`)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P(s), the other convention
+// ---------------------------------------------------------------------------
+
+interface HiContactsGolden {
+  binsize: number
+  chroms: string[]
+  pooled: string[]
+  factor: number
+  tolerance: number
+  breaks: { pos: number[]; width: number[] }
+  max_offset: Record<string, number>
+  curves: Record<string, { x: number[]; ninter: GoldenNumbers; norm_p: GoldenNumbers }>
+}
+
+/**
+ * The curve the panel draws, against the package it is the curve of.
+ *
+ * The suite above compares the **expected** value — contacts over the pairs of
+ * bins that could have held them — against cooltools, and that quantity is still
+ * what observed/expected, the compartment chain and the pileups are taken
+ * against. It is not what P(s) plots. What P(s) plots is the **probability
+ * density** — contacts over all cis contacts, then over the separation the bin
+ * covers — and the oracle for it is `HiContacts::distanceLaw()` itself, run as R
+ * by `scripts/hicontacts_ps.R`.
+ *
+ * **What is compared is the numerator, break for break.** That is where every
+ * way of getting this wrong shows up: the gap distance being off by one bin, the
+ * break table being regenerated wrongly, the mirrored square not being folded so
+ * the diagonal is outweighed two to one. The *denominator* is deliberately not
+ * HiContacts' — see {@link densityCurve} — and the last test here is why: on a
+ * binned map, dividing by the nominal width of a break produces a sawtooth
+ * bigger than the biology, and the golden's own numbers are enough to show it.
+ */
+suite('P(s) as a density, against HiContacts::distanceLaw', () => {
+  const golden = ready ? loadAnalysisGolden<HiContactsGolden>('hicontacts_ps') : null
+
+  /** One unit's per-offset curve, from mirrored dense squares as the runner reads them. */
+  async function curveOf(chroms: string[], maxOffset: number) {
+    const accumulator = new ExpectedAccumulator(maxOffset)
+    for (const chrom of chroms) accumulator.addBlock(await demo.square(chrom, false))
+    return accumulator.finish()
+  }
+
+  /**
+   * How many bin separations each break holds, which is what the density divides
+   * by. Recomputed here from the golden's own break positions rather than taken
+   * from the kernel, so the two have to agree rather than being the same line
+   * read twice.
+   */
+  function offsetsPerBreak(g: HiContactsGolden, maxOffset: number): Map<number, number> {
+    const out = new Map<number, number>()
+    for (let k = 0; k <= maxOffset; k++) {
+      const gap = (k - 1) * g.binsize
+      let at = 0
+      for (let i = 0; i < g.breaks.pos.length - 1; i++) {
+        if (g.breaks.pos[i] <= gap) at = i
+      }
+      out.set(g.breaks.pos[at], (out.get(g.breaks.pos[at]) ?? 0) + 1)
+    }
+    return out
+  }
+
+  /** Mean absolute change in log-log slope between neighbouring points. */
+  function roughness(x: readonly number[], y: readonly number[], from: number, to: number): number {
+    const slopes: number[] = []
+    for (let i = 1; i + 1 < x.length; i++) {
+      if (x[i] < from || x[i] > to) continue
+      if (!(y[i - 1] > 0) || !(y[i + 1] > 0)) continue
+      slopes.push(
+        (Math.log10(y[i + 1]) - Math.log10(y[i - 1])) /
+          (Math.log10(x[i + 1]) - Math.log10(x[i - 1])),
+      )
+    }
+    let sum = 0
+    for (let i = 1; i < slopes.length; i++) sum += Math.abs(slopes[i] - slopes[i - 1])
+    return slopes.length < 2 ? Number.NaN : sum / (slopes.length - 1)
+  }
+
+  it("regenerates HiContacts' break table, position by position", () => {
+    const g = golden!
+    // Far enough to reach the table's own last entry; `logRoundedBreaks` stops
+    // one step past what it is asked for, so the last width is the one HiContacts
+    // has no successor for and is not compared.
+    const ours = logRoundedBreaks(g.factor, g.breaks.pos[g.breaks.pos.length - 1] - 1)
+    expect(Array.from(ours.pos)).toEqual(g.breaks.pos)
+    expect(Array.from(ours.width)).toEqual(g.breaks.width.slice(0, ours.width.length))
+    // The head is where the rounding collapses distinct powers onto one integer,
+    // and where an off-by-one would be least visible in a log-log plot.
+    expect(Array.from(ours.pos.slice(0, 16))).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17,
+    ])
+  })
+
+  it('puts the same contacts in the same breaks as HiContacts, on every chromosome', async () => {
+    const g = golden!
+    for (const chrom of [...g.chroms, 'pooled']) {
+      const spans = chrom === 'pooled' ? g.pooled : [chrom]
+      const curve = await curveOf(spans, g.max_offset[chrom])
+      const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+      // Exactly, not to a tolerance: the abscissa is a break position, and a
+      // curve drawn one break to the left of HiContacts' would still pass a
+      // relative comparison on y at every point.
+      expect(Array.from(ours.x), chrom).toEqual(g.curves[chrom].x)
+
+      // The numerator, recovered from the density by multiplying the width back
+      // in, against HiContacts' own `ninter` — both as a share of their own
+      // total, since ours is normalised and theirs is a count.
+      const held = offsetsPerBreak(g, g.max_offset[chrom])
+      const theirs = numbers(g.curves[chrom].ninter)
+      let sum = 0
+      for (const value of theirs) sum += value
+      const mine = new Float64Array(ours.x.length)
+      const yours = new Float64Array(ours.x.length)
+      for (let i = 0; i < ours.x.length; i++) {
+        mine[i] = ours.y[i] * (held.get(ours.x[i]) ?? 0) * g.binsize
+        yours[i] = theirs[i] / sum
+      }
+      expectSeries(mine, yours, g.tolerance, `share of contacts ${chrom}`)
+    }
+  })
+
+  it('divides by the separation a break covers, not by the width of the break', async () => {
+    const g = golden!
+    const chrom = g.chroms[0]
+    const curve = await curveOf([chrom], g.max_offset[chrom])
+    const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+    const held = offsetsPerBreak(g, g.max_offset[chrom])
+    // Somewhere in the aliased decade, where a break is about as wide as a bin
+    // of the file and the two denominators are furthest apart.
+    const at = ours.x.findIndex((value) => value >= 10_000 && (held.get(value) ?? 0) >= 2)
+    expect(at).toBeGreaterThanOrEqual(0)
+    const covered = (held.get(ours.x[at]) ?? 0) * g.binsize
+    const nominal = g.breaks.width[g.breaks.pos.indexOf(ours.x[at])]
+    expect(covered).not.toBe(nominal)
+    // The share of contacts in that break, over the separation it covers.
+    expect(ours.y[at] * covered).toBeGreaterThan(0)
+  })
+
+  it('is smooth where the nominal width would saw', async () => {
+    const g = golden!
+    const curve = await curveOf(g.pooled, g.max_offset.pooled)
+    const ours = densityCurve(curve, g.binsize, g.factor, 0, true)
+    const x = Array.from(ours.x)
+    const y = Array.from(ours.y)
+    // What HiContacts' own denominator would have produced, from the same
+    // numerator: multiply the covered width back in and divide by the break's.
+    const held = offsetsPerBreak(g, g.max_offset.pooled)
+    const nominal = x.map((position, i) => {
+      const covered = (held.get(position) ?? 0) * g.binsize
+      const width = g.breaks.width[g.breaks.pos.indexOf(position)]
+      return (y[i] * covered) / width
+    })
+    const window: [number, number] = [4_000, 200_000]
+    const mine = roughness(x, y, ...window)
+    const theirs = roughness(x, nominal, ...window)
+    // The shoulder this decade is read for is a change of about 0.26 in slope.
+    // The sawtooth is an order of magnitude larger than the feature, which is
+    // the whole argument for the other denominator.
+    expect(mine).toBeLessThan(0.2)
+    expect(theirs).toBeGreaterThan(0.5)
+  })
+
+  it('folds the mirrored square, and is visibly wrong without it', async () => {
+    const g = golden!
+    const chrom = g.chroms[0]
+    const curve = await curveOf([chrom], g.max_offset[chrom])
+    // Not folding leaves the diagonal counted once among off-diagonals counted
+    // twice, so the first break — which holds the diagonal and offset 1 — loses
+    // weight against everything else and every other point gains it. A quiet
+    // error: the curve still looks like a P(s).
+    const folded = densityCurve(curve, g.binsize, g.factor, 0, true)
+    const unfolded = densityCurve(curve, g.binsize, g.factor, 0, false)
+    expect(unfolded.x.length).toBe(folded.x.length)
+    expect(Math.abs(unfolded.y[0] / folded.y[0] - 1)).toBeGreaterThan(0.1)
   })
 })
 

@@ -139,6 +139,45 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => scopeOf(params) === 'contig',
   },
   {
+    kind: 'choice',
+    key: 'quantity',
+    label: 'Quantity',
+    default: 'density',
+    /**
+     * Two things are called P(s) and the difference is one denominator.
+     *
+     * Both divide the contacts at a separation by something. The **density**
+     * divides by the contacts in the whole map and then by the separation the
+     * bin covers — the share of all cis contacts that fall at this distance, per
+     * base pair, which is `HiContacts::distanceLaw()`'s `norm_p`. The
+     * **expected** divides by the number of bin pairs that could have held a
+     * contact — `cooltools expected-cis`, the probability that two loci that far
+     * apart touch, and the reading a scaling exponent is compared against −1 or
+     * −1.5 as.
+     *
+     * So `density / expected = pairs(s) / constant`, and the pair count is flat
+     * while the separation is short against the sequences and falls to zero at
+     * the longest one. On the yeast demo the two are within 1 % below 10 kb,
+     * 13 % apart at 100 kb and a factor of fifty apart at 1.2 Mb — and on a
+     * mammalian map, where the chromosomes are two orders of magnitude longer,
+     * they agree over everything anybody fits. Which is why this is a choice
+     * rather than a correction: at the separations most figures are read at they
+     * are the same picture, and past that they answer different questions.
+     */
+    options: [
+      {
+        value: 'density',
+        label: 'Probability density',
+        hint: "Share of all cis contacts, per base pair. HiContacts' norm_p.",
+      },
+      {
+        value: 'expected',
+        label: 'Expected (cooltools)',
+        hint: 'Mean contact per pair of bins that far apart. What `cooltools expected-cis` reports.',
+      },
+    ],
+  },
+  {
     kind: 'number',
     key: 'factor',
     label: 'Log bins per step',
@@ -169,6 +208,12 @@ const PARAMS: readonly ParamSpec[] = [
      */
     label: 'Minimum separation',
     hint: 'Drops the near-diagonal, where unligated fragments dominate.',
+    // Under the density it also floors the *total* every point is a share of,
+    // since the curve is a share of the contacts it was built from, and its
+    // default of zero keeps the diagonal — which HiContacts puts in the first
+    // break rather than dropping. Under the expected the floor is one offset
+    // whatever this says: the diagonal is not a contact between two loci and has
+    // no place on a log axis.
     default: 0,
     min: 0,
     integer: true,

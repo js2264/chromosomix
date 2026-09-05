@@ -14,7 +14,13 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { ExpectedAccumulator, expectedAt, logBinCurve, logLogSlope } from '@/analysis/expected'
+import {
+  ExpectedAccumulator,
+  densityCurve,
+  expectedAt,
+  logBinCurve,
+  logLogSlope,
+} from '@/analysis/expected'
 import { makeRandom, randomInt, shuffled } from '@/analysis/random'
 import {
   bootstrapBand,
@@ -303,6 +309,25 @@ describe('logBinCurve', () => {
     expect(binned.n[1]).toBe(6)
   })
 
+  // The mirror is what makes this the *same* number as cooltools' `balanced.avg`
+  // rather than half or twice it: a dense square read back from an
+  // upper-triangular store doubles the sum and the count together, and a mean is
+  // what survives that. The density beside it has to fold the mirror by hand,
+  // for exactly the reason this one does not.
+  it('is unmoved by the mirrored square, which is why it is a mean', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.addBlock(block(0, 0, SQUARE))
+    const curve = acc.finish()
+    const half = {
+      ...curve,
+      sum: curve.sum.map((value) => value / 2),
+      count: curve.count.map((value) => value / 2),
+    }
+    const binned = logBinCurve(curve, 1000, 2, 0)
+    const halved = logBinCurve(half, 1000, 2, 0)
+    for (let i = 0; i < binned.y.length; i++) expect(halved.y[i]).toBeCloseTo(binned.y[i], 12)
+  })
+
   it('drops empty log bins instead of punching holes in the plot', () => {
     const acc = new ExpectedAccumulator(3)
     acc.add(1, 8)
@@ -312,19 +337,118 @@ describe('logBinCurve', () => {
     // and offset 2 was never observed; only the two populated offsets survive.
     expect(Array.from(binned.x)).toEqual([1000, 3000])
     expect(Array.from(binned.y)).toEqual([8, 1])
+  })
+
+  // In **bins**, not base pairs: the near-diagonal is a fact about the grid, so
+  // the same typed number has to mean the same trim at every resolution. And the
+  // floor is never below one, whatever is asked for — the mean at offset zero is
+  // the diagonal, which is not a contact between two loci.
+  it('floors the first bin at minOffset, and never below one offset', () => {
+    const acc = new ExpectedAccumulator(4)
+    for (let k = 0; k <= 4; k++) acc.add(k, k + 1)
+    expect(logBinCurve(acc.finish(), 1000, 2, 0).x[0]).toBeCloseTo(1000, 9)
+    const binned = logBinCurve(acc.finish(), 1000, 2, 3)
+    expect(binned.x[0]).toBeGreaterThanOrEqual(3000)
+    const coarse = logBinCurve(acc.finish(), 10_000, 2, 3)
+    expect(coarse.x[0]).toBeGreaterThanOrEqual(30_000)
+  })
+})
+
+describe('densityCurve', () => {
+  // `SQUARE` mirrored, so the accumulator holds sum[0..3] = 100, 12, 18, 12 over
+  // counts 4, 6, 4, 2. Folded to one entry per unordered pair — the diagonal
+  // already is one — that is 100, 6, 9, 6 contacts over 4, 3, 2, 1 pairs, and
+  // 121 contacts in all. At a factor of two the breaks are 1, 2, 4 … 2048, and
+  // the gap distances (k − 1) · 1000 are −1000, 0, 1000 and 2000, so offsets 0
+  // and 1 share the first break, offset 2 falls in [512, 1024) and offset 3 in
+  // [1024, 2048).
+  //
+  // Each break is divided by the separation it *covers* — the number of bin
+  // offsets in it times the bin size — and not by its own width. The first
+  // holds two offsets and so covers 2 kb, where its nominal width is 1 bp; the
+  // other two hold one each and cover 1 kb against nominal widths of 512 and
+  // 1024. Dividing by the nominal width is what puts a factor-of-two sawtooth
+  // through a real curve wherever a break is about as wide as a bin of the file.
+  const TOTAL = 121
+
+  it('divides by the map total and by the separation the break covers', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.addBlock(block(0, 0, SQUARE))
+    const binned = densityCurve(acc.finish(), 1000, 2, 0, true)
+
+    expect(Array.from(binned.x)).toEqual([1, 512, 1024])
+    expect(binned.y[0]).toBeCloseTo(106 / TOTAL / 2000, 12)
+    expect(binned.y[1]).toBeCloseTo(9 / TOTAL / 1000, 12)
+    expect(binned.y[2]).toBeCloseTo(6 / TOTAL / 1000, 12)
+    expect(Array.from(binned.n)).toEqual([7, 2, 1])
+  })
+
+  it('counts an offset the map has nothing at, since the break still covers it', () => {
+    // Two offsets in the first break and one contact between them. The break
+    // stands for 2 kb of separation whether or not both of its offsets carry
+    // anything, and dividing by 1 kb because only one did would report twice the
+    // density in exactly the sparse stretches a curve is least sure about.
+    const acc = new ExpectedAccumulator(1)
+    acc.add(1, 5)
+    const binned = densityCurve(acc.finish(), 1000, 2, 0, false)
+    expect(Array.from(binned.x)).toEqual([1])
+    expect(binned.y[0]).toBeCloseTo(1 / 2000, 12)
+  })
+
+  it('folds the mirrored square, so the diagonal is not outweighed two to one', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.addBlock(block(0, 0, SQUARE))
+    const curve = acc.finish()
+    const folded = densityCurve(curve, 1000, 2, 0, true)
+    const raw = densityCurve(curve, 1000, 2, 0, false)
+    // Unfolded, the total is 100 + 12 + 18 + 12 = 142 and the first break holds
+    // 112 of it. The curve still looks like a P(s), which is the danger.
+    expect(raw.y[0]).toBeCloseTo(112 / 142 / 2000, 12)
+    expect(raw.y[0]).not.toBeCloseTo(folded.y[0], 6)
+  })
+
+  it('keeps the diagonal, which shares the first break with offset one', () => {
+    const acc = new ExpectedAccumulator(1)
+    acc.add(0, 7)
+    acc.add(1, 3)
+    const binned = densityCurve(acc.finish(), 1000, 2, 0, false)
+    // One point: −1000 bp and 0 bp both land below the first break at 1 bp, so
+    // it holds all ten contacts and covers the 2 kb its two offsets span.
+    expect(Array.from(binned.x)).toEqual([1])
+    expect(binned.y[0]).toBeCloseTo(1 / 2000, 12)
+    expect(binned.n[0]).toBe(2)
+  })
+
+  it('drops empty breaks instead of punching holes in the plot', () => {
+    const acc = new ExpectedAccumulator(3)
+    acc.add(1, 8)
+    acc.add(3, 1)
+    const binned = densityCurve(acc.finish(), 1000, 1.1, 0, false)
+    // At a factor of 1.1 most breaks are narrower than a bin of the file, and
+    // offset 2 was never observed; only the two populated offsets survive.
+    expect(binned.x.length).toBe(2)
     for (const value of binned.y) expect(Number.isNaN(value)).toBe(false)
   })
 
   // In **bins**, not base pairs: the near-diagonal is a fact about the grid, so
   // the same typed number has to mean the same trim at every resolution.
-  it('floors the first bin at minOffset, in bins', () => {
+  it('floors at minOffset in bins, and rescales the total to what is left', () => {
     const acc = new ExpectedAccumulator(4)
     for (let k = 1; k <= 4; k++) acc.add(k, k)
-    const binned = logBinCurve(acc.finish(), 1000, 2, 3)
-    expect(binned.x[0]).toBeGreaterThanOrEqual(3000)
-    // …and the same three bins at another resolution, three times further along.
-    const coarse = logBinCurve(acc.finish(), 10_000, 2, 3)
-    expect(coarse.x[0]).toBeGreaterThanOrEqual(30_000)
+    const binned = densityCurve(acc.finish(), 1000, 2, 3, false)
+    // Offsets 3 and 4 survive, at gap distances 2000 and 3000, and they are a
+    // share of 3 + 4 rather than of 1 + 2 + 3 + 4. One offset each, so each
+    // break covers one bin of separation.
+    expect(Array.from(binned.x)).toEqual([1024, 2048])
+    expect(binned.y[0]).toBeCloseTo(3 / 7 / 1000, 12)
+    expect(binned.y[1]).toBeCloseTo(4 / 7 / 1000, 12)
+    // The same two offsets at another resolution are ten times further along —
+    // far enough that one break at a factor of two now swallows both, which is
+    // the whole reason the floor is in bins and the abscissa is in base pairs.
+    const coarse = densityCurve(acc.finish(), 10_000, 2, 3, false)
+    expect(Array.from(coarse.x)).toEqual([16384])
+    // Both offsets in one break, which therefore covers 20 kb of separation.
+    expect(coarse.y[0]).toBeCloseTo(1 / 20_000, 12)
   })
 })
 

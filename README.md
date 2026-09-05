@@ -14,11 +14,13 @@ is how they differ. And a plain 1D genome browser for when there is no contact m
 same tab into its map. Tick a few chromosomes and the axis becomes those chromosomes; open a FASTA
 and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in.
 
-And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fourteen tasks:
-P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, metaplots and APA
-with bootstrap confidence bands, loop ranking, track correlation, interval overlap, and four that
-only a metagenome has — per-MAG contact QC, contig-level contamination calls, chimera detection and
-the inter-MAG network. Each runs in a worker of its own, so the map stays live and pannable while a
+And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fifteen tasks:
+P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, **pattern detection**
+— loops, borders, hairpins, centromeres and stripes, by template matching, as a faithful port of
+[chromosight](https://github.com/koszullab/chromosight) that is goldened against that package's own
+output — metaplots and APA with bootstrap confidence bands, loop ranking, track correlation, interval
+overlap, and four that only a metagenome has — per-MAG contact QC, contig-level contamination calls,
+chimera detection and the inter-MAG network. Each runs in a worker of its own, so the map stays live and pannable while a
 whole-file scan is running. Results land in a resizable drawer, and every one of them exports:
 bigWig for a signal, bedGraph, BED, TSV, PNG, and true vector PDF. The bigWig is written here, byte
 by byte — no `bedGraphToBigWig` step, because a bigWig is what you actually wanted.
@@ -145,13 +147,15 @@ open somebody else's.
 
 ### The analysis from a shell
 
-The fourteen tasks are reachable without the panel, over as many files as you
+The fifteen tasks are reachable without the panel, over as many files as you
 like, through the same kernels and the same writers:
 
 ```bash
 npm run build:cli
 node dist-cli/metacooler-run.mjs tasks
 node dist-cli/metacooler-run.mjs insulation *.mcool --window chrII --out results/
+node dist-cli/metacooler-run.mjs chromosight sample.cool --pattern borders --balance --out results/
+node dist-cli/metacooler-run.mjs apa sample.cool --pairs loops.bedpe --norm chromosight --balance
 node dist-cli/metacooler-run.mjs replay workspace.metacooler.json --over 'data/*.hic'
 ```
 
@@ -161,6 +165,26 @@ other files: parameters chosen by looking at a picture, applied to the other
 hundred and ninety-nine without retyping. It replays the tab that was in front
 unless `--tab <n>` names another. Local files only: the reader's range requests
 are synchronous and exist in a worker rather than in Node.
+
+### Goldens from the reference tools
+
+`scripts/make_goldens.sh` builds a set of oracles from the published tools' own
+command lines — no Python of ours in the path — over two maps on the demo bucket:
+
+```bash
+./scripts/make_goldens.sh
+```
+
+`chromosight detect` calls loops on the yeast micro-C map and borders on a
+chicken G2 map, written out as BEDPE and BED; `cooltools` writes coverage, E1,
+insulation and a virtual 4C off the chicken map as bigWig; and `cooltools
+pileup` piles up both call sets. Every line runs every time — nothing is
+cached, nothing is conditional — into `goldens/`, with a `sha256sum` of the lot
+at the end. Delete the directory to start over.
+
+It needs `pandas<3` (bioframe still passes `verbose=` to `read_table`) and
+`bedGraphToBigWig` on `PATH` (cooltools' `--bigwig` shells out to it); the
+header of the script says so.
 
 `npm run fixtures` shells out to Python and needs an interpreter with `metacooler` installed:
 
@@ -201,7 +225,7 @@ src/
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
                  the 1D browser, its vector-PDF page, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
-  analysis/      the fourteen tasks (§18): descriptors, pure kernels, a worker of its
+  analysis/      the fifteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
                  and a bigWig writer with no dependency behind it
   app/           App (the window, the tabs, the address bar) and Session (one file)
@@ -384,9 +408,13 @@ this repo's own definition recomputed in numpy and is compared to **equality**: 
 transposed index or a doubled diagonal. `reference` is the other tool's number under *its* definition,
 compared to whatever relation actually holds — and three of those relations are exact:
 
-- **P(s)** equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the
-  first two offsets. The mirrored dense block doubles both the sum and the count, and the mean is
-  what survives.
+- **P(s)** is two curves off one accumulator and both are goldened. The **expected** value — the
+  mean contact per pair of bins at a separation, which observed/expected and the pileups divide by —
+  equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the first two
+  offsets; the mirrored dense block doubles both the sum and the count, and the mean is what
+  survives. The curve the panel **plots** is the probability density, and it equals
+  `HiContacts::distanceLaw()`'s `norm_p` — same break positions, same values — against that
+  package's own pipeline run in R by `scripts/hicontacts_ps.R`.
 - **Coverage** satisfies `cooltools_cis == ours + diagonal`, exactly. cooltools sums the pixel table
   by both ends so a diagonal pixel counts twice; this repo counts it once, deliberately, and the
   identity is the proof that the difference is the one intended and not an off-by-something.

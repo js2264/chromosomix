@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BALANCED_SCORE,
+  BASELINE_SCORE,
   CORRELATION_SCORE,
   COUNT_SCORE,
   scoreChoices,
@@ -25,7 +26,7 @@ describe('what the cells can be', () => {
   // and the answer to "can I see this normalised" was no.
   it('offers the computed normalisations on a file that carries nothing but counts', () => {
     const choices = scoreChoices({ hasWeights: false, scoreColumns: ['count'] })
-    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, 'vc', 'vcsqrt', 'ice'])
+    expect(choices.map((c) => c.id)).toEqual([COUNT_SCORE, 'vc', 'vcsqrt', 'ice', BASELINE_SCORE])
     // Counts first: everything else is an alternative *to* them.
     expect(choices[0].normalise).toBeUndefined()
     // None of them reads anything the file has not got.
@@ -43,6 +44,9 @@ describe('what the cells can be', () => {
       'vc',
       'vcsqrt',
       'ice',
+      // Needs nothing of the file, so it is on every map — and sits where it
+      // sits in the pipeline, one step inside the correlation.
+      BASELINE_SCORE,
       // Needs the weights too, and for a reason of its own: a correlation of
       // unbalanced O/E is a correlation of the coverage bias, which is per-bin
       // and therefore looks exactly like a compartment.
@@ -84,11 +88,12 @@ describe('what the cells can be', () => {
       'vc',
       'vcsqrt',
       'ice',
+      BASELINE_SCORE,
       CORRELATION_SCORE,
       'expected',
       'qvalue',
     ])
-    expect(choices[6]).toMatchObject({ value: 'expected', balance: false })
+    expect(choices[7]).toMatchObject({ value: 'expected', balance: false })
   })
 
   it('resolves what a link asks for', () => {
@@ -153,6 +158,38 @@ describe('a choice unflattened, which is what an analysis needs', () => {
     // from counts: the only field it adds is its own.
     expect(correlation?.value).toBeUndefined()
     expect(correlation?.normalise).toBeUndefined()
+  })
+
+  it('offers the baseline everywhere, since it asks the file for nothing', () => {
+    const bare = scoreChoices({ hasWeights: false, scoreColumns: ['count'] })
+    const baseline = bare.find((c) => c.id === BASELINE_SCORE)
+    expect(baseline).toMatchObject({ label: 'expected', baseline: true, balance: false })
+    // A derivation, not a reading and not a correction: it names no column and
+    // asks for no normalisation, exactly as the correlation does.
+    expect(baseline?.value).toBeUndefined()
+    expect(baseline?.normalise).toBeUndefined()
+    expect(baseline?.correlate).toBeUndefined()
+  })
+
+  // The collision this is written against is not hypothetical: `expected` is the
+  // first example the module header gives of a column a file may carry, and the
+  // suite above passes one in every case. Two entries labelled `expected` would
+  // be a picker that cannot say which one was clicked, and two entries *with the
+  // same id* would be worse — `scoreFor` finds one, and the file's own data
+  // becomes unreachable through the control that exists to reach it.
+  it('does not take the name of a column a file may carry', () => {
+    const choices = scoreChoices({ hasWeights: true, scoreColumns: ['count', 'expected'] })
+    const ids = choices.map((c) => c.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const labels = choices.map((c) => c.label)
+    expect(new Set(labels).size).toBe(labels.length)
+    // The derived one keeps the word, because it has no other name; the column
+    // is marked as what it is, because it does.
+    expect(choices.find((c) => c.id === BASELINE_SCORE)?.label).toBe('expected')
+    expect(choices.find((c) => c.value === 'expected')?.label).toBe('expected (column)')
+    // And a link naming the column still lands on the column.
+    expect(scoreFor(choices, { score: 'expected' }).value).toBe('expected')
+    expect(scoreFor(choices, { score: BASELINE_SCORE }).baseline).toBe(true)
   })
 
   it('offers the correlation only where there are weights to balance with', () => {

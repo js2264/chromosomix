@@ -42,6 +42,7 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
 import {
   ExpectedAccumulator,
+  densityCurve,
   logBinCurve,
   logLogSlope,
   type ExpectedCurve,
@@ -297,7 +298,7 @@ async function measure(
   units: Unit[],
   balance: boolean,
   value: string,
-): Promise<ExpectedCurve[]> {
+): Promise<{ curves: ExpectedCurve[]; mirrored: boolean }> {
   // Flattened, because the shared helper asks about spans and a unit is a
   // *named group* of them — a genome-scope curve covers every contig of one MAG.
   const block = usableBlock(job, units.flatMap((unit) => unit.spans), balance)
@@ -310,7 +311,11 @@ async function measure(
       for (const span of units[u].spans) accumulator.addBlock(squareOf(block, span))
       out.push(accumulator.finish())
     }
-    return out
+    // A dense square read back from an upper-triangular store carries every
+    // off-diagonal pair twice, so this path is mirrored whatever the file's
+    // storage says. Invisible to a mean and not to a share of a total, which is
+    // why the flag travels with the curves rather than being rederived later.
+    return { curves: out, mirrored: true }
   }
 
   if (units.length === 1 && units[0].spans.length === 1) {
@@ -325,7 +330,7 @@ async function measure(
     job.throwIfCancelled()
     const accumulator = new ExpectedAccumulator(units[0].maxOffset)
     accumulator.addBlock(matrix)
-    return [accumulator.finish()]
+    return { curves: [accumulator.finish()], mirrored: true }
   }
 
   if (value !== DEFAULT_COUNT_COLUMN) {
@@ -338,14 +343,48 @@ async function measure(
         'from was not used. Narrow the scope to one sequence to measure that column instead.',
     )
   }
-  return scanUnits(job, units, balance)
+  // The pixel table, on the other hand, is mirrored only where the file itself
+  // stores both triangles — the same condition `countPairs` doubles its pair
+  // counts under.
+  return {
+    curves: await scanUnits(job, units, balance),
+    mirrored: job.mc.storageMode === 'square',
+  }
 }
+
+/**
+ * The separations the figure opens on, in base pairs.
+ *
+ * A default view, not a limit: the marquee, the axis boxes and a double-click
+ * all move it (`ui/interactivePlot.ts`), and the curve underneath runs from one
+ * base pair to the length of the longest sequence whatever this says.
+ *
+ * It is here because the full extent is a bad picture of a good curve. The first
+ * break holds the diagonal and the first off-diagonal — on a 1 kb map that is
+ * two thirds of every cis contact in the file — at a separation of 1 bp, so a
+ * log axis drawn over everything spends a third of its width on one point four
+ * orders of magnitude above the rest and squashes the decades anybody reads into
+ * the right-hand quarter. The other end is the mirror of it: past a megabase the
+ * curve is a handful of bins with a few cells each, and it is noise drawn at the
+ * same weight as the data.
+ *
+ * 4 kb to 1 Mb is the range a P(s) is read over on a yeast or a mammalian map
+ * alike — past the ligation artefacts at the bottom and inside the shortest
+ * chromosome at the top. HiContacts' own `plotPs` defaults to 5 kb–499 kb, which
+ * is the same judgement made slightly tighter.
+ */
+const WINDOW: [number, number] = [4_000, 1_000_000]
 
 export const runExpected: TaskRunner = async (job) => {
   const scope = strParam(job.params, 'scope', 'contig')
   const region = strParam(job.params, 'region', '').trim()
   const factor = numParam(job.params, 'factor', 1.1)
   const minSeparation = numParam(job.params, 'minSeparation', 0)
+  // Unrecognised falls back to the density, which is what the panel has drawn
+  // since the choice existed — the same rule `planUnits` follows for the scope,
+  // and for the same reason: a stored session from a later build must not
+  // silently change what the numbers on screen mean.
+  const expectedCis = strParam(job.params, 'quantity', 'density') === 'expected'
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
@@ -368,14 +407,16 @@ export const runExpected: TaskRunner = async (job) => {
   // them are capped, by the drawer that has to fit them (`analysisPlots.ts`).
   const units = planned
 
-  const curves = await measure(job, units, balance, job.framing.value)
+  const { curves, mirrored } = await measure(job, units, balance, job.framing.value)
   job.throwIfCancelled()
 
   const series: CurveSeries[] = []
   const slopes: CurveSeries[] = []
   let silent = 0
   for (let u = 0; u < units.length; u++) {
-    const binned = logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
+    const binned = expectedCis
+      ? logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
+      : densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
     if (binned.x.length === 0) {
       silent++
       continue
@@ -405,9 +446,12 @@ export const runExpected: TaskRunner = async (job) => {
       label: 'Contact probability P(s)',
       series,
       xLabel: 'Genomic separation (bp)',
-      yLabel: 'Contact probability',
+      yLabel: expectedCis
+        ? 'Mean contact per bin pair'
+        : 'Contact probability density (per bp)',
       xScale: 'log',
       yScale: 'log',
+      xDomain: WINDOW,
     },
   ]
   if (slopes.length > 0) {
@@ -423,6 +467,8 @@ export const runExpected: TaskRunner = async (job) => {
       // everywhere, and a decaying exponent has no logarithm.
       xScale: 'log',
       yScale: 'linear',
+      // The same window, so the two panels are read against one axis.
+      xDomain: WINDOW,
     })
   }
   return outputs

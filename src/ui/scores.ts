@@ -35,6 +35,19 @@
  * `balanced` and `O/E` mutually exclusive, which is not a limitation of the
  * arithmetic but only of the control; it gets a toggle of its own.
  *
+ * **The baseline is in the list, and the O/E argument is what puts it there.**
+ * `expected` does not answer "compared to what" — it *is* the what: every cell
+ * replaced by the mean the ratio would have divided it by, so the picture is the
+ * distance decay alone. That composes with nothing either, for the same reason
+ * the correlation does not: O/E of the baseline is 1 wherever it is anything, so
+ * the toggle has nothing left to do and goes inert while this is chosen. It is
+ * computed from the counts rather than from balanced counts, which is what makes
+ * it the denominator of the O/E this app draws by default — the picker opens on
+ * `counts`, and `balanced` is a choice a reader makes, not the one they are
+ * given. Pick `balanced` and turn O/E on and the baseline is recomputed from
+ * those; this entry is the one you can *see*, not a claim that it is the only
+ * one there is.
+ *
  * **The correlation is in the list, and the O/E argument is exactly why.** It is
  * the one derived field that does not compose with anything: the cell no longer
  * holds a contact at all, it holds a coefficient between −1 and 1 for a *pair of
@@ -80,6 +93,17 @@ export interface ScoreChoice {
    * picking it is one act — see this module's header.
    */
   correlate?: boolean
+  /**
+   * Replace every cell by the expected value at its separation — the
+   * denominator of an observed/expected, drawn instead of divided by
+   * (`render/derive.ts`).
+   *
+   * Like {@link correlate} it is a derivation rather than a reading, and like it
+   * the entry carries what it needs so that picking it is one act. Unlike it, it
+   * needs nothing of the file and can be refused for nothing, so it is offered
+   * on every map.
+   */
+  baseline?: boolean
 }
 
 /** The id of the plain, always-present choice. */
@@ -88,6 +112,18 @@ export const COUNT_SCORE = 'count'
 export const BALANCED_SCORE = 'balanced'
 /** The id of the compartment pipeline: balanced, over expected, correlated. */
 export const CORRELATION_SCORE = 'correlation'
+/**
+ * The id of the distance-decay baseline — the denominator of O/E, drawn.
+ *
+ * `baseline` and not `expected`, which is the label. A `/pixels` column called
+ * `expected` is the *first* example this module's header gives of what a file
+ * may carry, and it would arrive in {@link scoreChoices}'s extras under exactly
+ * that id — two entries with one id, of which {@link scoreFor} would find one
+ * and the file's own data would become unreachable. The label is disambiguated
+ * the other way round, in the extras, so that the reader still sees the word
+ * they are looking for on the thing this computes.
+ */
+export const BASELINE_SCORE = 'baseline'
 
 /**
  * Everything this file can be drawn from, in the order it should be offered.
@@ -118,6 +154,11 @@ export function scoreChoices(info: {
     { id: 'vc', label: 'VC', balance: false, normalise: 'vc' as const },
     { id: 'vcsqrt', label: 'VC √', balance: false, normalise: 'vcsqrt' as const },
     { id: 'ice', label: 'ICE', balance: false, normalise: 'ice' as const },
+    // Between the normalisations and the correlation, because that is where it
+    // sits in the pipeline they are ordered by: it is a step *of* the O/E the
+    // correlation is taken over, and the list runs outward from the numbers in
+    // the file.
+    { id: BASELINE_SCORE, label: 'expected', balance: false, baseline: true },
     // Only on a file that carries weights, and that is the pipeline's own
     // requirement rather than a preference: a correlation of unbalanced O/E is a
     // correlation of the coverage bias, which is per-bin and therefore looks
@@ -127,9 +168,23 @@ export function scoreChoices(info: {
     ...(info.hasWeights
       ? [{ id: CORRELATION_SCORE, label: 'correlation', balance: true, correlate: true }]
       : []),
-    ...extras.map((key) => ({ id: key, label: key, balance: false, value: key })),
+    // Under the file's own names, except where one of those names is already the
+    // label of something computed above — `expected` is the collision that
+    // actually happens, and two entries reading `expected` would be a picker
+    // that cannot say which one the reader clicked. The *column* is the one that
+    // moves, because the derived entry has no other name to go by and a column
+    // does: its own, said plainly.
+    ...extras.map((key) => ({
+      id: key,
+      label: DERIVED_LABELS.has(key) ? `${key} (column)` : key,
+      balance: false,
+      value: key,
+    })),
   ]
 }
+
+/** Labels {@link scoreChoices} computes, which a `/pixels` column may not reuse. */
+const DERIVED_LABELS = new Set(['counts', 'balanced', 'VC', 'VC √', 'ICE', 'expected', 'correlation'])
 
 /**
  * The choice a view state names, or counts.

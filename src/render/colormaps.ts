@@ -151,6 +151,24 @@ const BUWTRD_STOPS = [
 const BUWTRD_AT = [0, 0.125, 0.25, 0.375, 0.5, 2 / 3, 5 / 6, 1]
 
 /**
+ * `seismic`: matplotlib's own, and here because chromosight draws with it.
+ *
+ * The five segment ends of `matplotlib.cm.seismic`, which is a
+ * `LinearSegmentedColormap` with breakpoints at exactly 0, ¼, ½, ¾ and 1 — so
+ * the evenly-spaced form of {@link rampFromStops} reproduces it rather than
+ * approximating it. It is in the picker for one reason: `pileup_plot` uses
+ * `cmap="seismic", vmin=0, vmax=2`, and a pileup of the same windows in a
+ * different ramp is a picture a reader cannot lay beside the paper's.
+ *
+ * Not in {@link COLOR_VISION_SAFE_COLORMAPS}, and it is worth saying why it is
+ * offered anyway: red–blue through white is the one thing deuteranopia and
+ * protanopia handle worst, and this map exists for parity with a published
+ * figure rather than because it is the best way to read a ratio. `RdBu_r` is one
+ * item away in the picker and carries lightness as well as hue.
+ */
+const SEISMIC_STOPS = ['#00004D', '#0000FF', '#FFFFFF', '#FF0000', '#800000']
+
+/**
  * Interpolate hex stops to a flat `size * 3` RGB table, as the tables are.
  *
  * `at` places the stops; absent, they are spread evenly, which is
@@ -203,6 +221,7 @@ const RGB_TABLES: Record<string, readonly number[]> = {
   magma: MAGMA_RGB,
   RdBu_r: rampFromStops(RDBU_R_STOPS, COLORMAP_SIZE),
   BuWtRd: rampFromStops(BUWTRD_STOPS, COLORMAP_SIZE, BUWTRD_AT),
+  seismic: rampFromStops(SEISMIC_STOPS, COLORMAP_SIZE),
 }
 
 /** Every colormap the viewer offers, in the order the picker should list them. */
@@ -220,7 +239,7 @@ export const COLORMAP_NAMES: string[] = Object.keys(RGB_TABLES)
  * that a reader who never touches the control is never shown a ratio on a ramp
  * that cannot express one.
  */
-export const DIVERGING_COLORMAPS: string[] = ['RdBu_r', 'BuWtRd']
+export const DIVERGING_COLORMAPS: string[] = ['RdBu_r', 'BuWtRd', 'seismic']
 
 /** What a derived map with a neutral value opens on. */
 export const DEFAULT_DIVERGING_COLORMAP = 'RdBu_r'

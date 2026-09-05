@@ -20,9 +20,25 @@
  * comes out of it — is an immutable record that a later task can hold on to
  * without worrying about who else is still adding to it.
  *
- * Everything here is in **bins**, because that is what an offset is. Base pairs
- * appear exactly once, in {@link logBinCurve}, which is the function whose output
- * gets an axis drawn on it.
+ * **Two quantities are called P(s) and this module produces both**, which is the
+ * whole of §18.8's entry. {@link logBinCurve} is the contacts at a separation
+ * over the **bin pairs that could have held one** — cooltools' `expected-cis`,
+ * the polymer-physics reading, and the number most published scaling exponents
+ * refer to; {@link expectedAt} is the same quantity per offset and is what the
+ * three downstream tasks divide by. {@link densityCurve} is the contacts over
+ * **all cis contacts**, per base pair — `HiContacts::distanceLaw()`'s `norm_p`,
+ * and the panel's default.
+ *
+ * They are not two smoothings of one curve. `ours/expected = pairs(s)/constant`,
+ * and the pair count runs out as a separation approaches the length of a
+ * sequence while the contact total does not, so the two agree in shape at short
+ * range and part company at long. On the yeast demo they are within 1 % below
+ * 10 kb, 13 % apart at 100 kb and a factor of fifty apart at 1.2 Mb. Nothing
+ * here converts one into the other or treats a difference between them as an
+ * error; the task offers both and says which is on screen.
+ *
+ * Everything is in **bins**, because that is what an offset is. Base pairs appear
+ * only in the two functions whose output gets an axis drawn on it.
  */
 
 import { logSpacedEdges } from './stats'
@@ -179,7 +195,21 @@ export class ExpectedAccumulator {
 // ---------------------------------------------------------------------------
 
 /**
- * The curve rebinned onto logarithmic separations, ready to plot.
+ * The **expected** curve rebinned onto logarithmic separations, ready to plot.
+ *
+ * `y` is the contacts at a separation over **the bin pairs that could have held
+ * one** — `cooltools expected-cis`'s `balanced.avg`, and the quantity
+ * {@link expectedAt} hands the three downstream tasks. It is offered beside
+ * {@link densityCurve} because that is the number most published scaling
+ * exponents refer to: it is the polymer-physics reading of P(s), the probability
+ * that two loci that far apart are in contact, and it is what a slope is
+ * compared against −1 or −1.5 as.
+ *
+ * **The quantity is cooltools'; the bins are this file's.** `factor` is the same
+ * control the density uses, so a run at the default 1.1 is finer than cooltools'
+ * `logbin_expected`, which is ten bins to the decade — 1.2589. Matching it is
+ * typing that number, and the per-offset means underneath are identical either
+ * way (`test/golden/analysis/expected.json`).
  *
  * `x` is in **base pairs** — the only place in this module that leaves bins,
  * because it is the axis a reader reads, and §18.2's rule that a length is a
@@ -191,6 +221,10 @@ export class ExpectedAccumulator {
  * averaging their means as equals would let the emptiest offset in the bin count
  * as much as the fullest. `n` is the cells behind the point, which is what the
  * drawer prints when somebody asks why the tail is noisy.
+ *
+ * Unlike the density this **floors at one offset whatever `minOffset` says**:
+ * the mean at offset zero is the diagonal, which has no place on a log axis and
+ * no meaning as a contact between two loci.
  *
  * `minOffset` floors the first bin, **in bins of this file**. The near-diagonal
  * offsets are dominated by unligated fragments and self-ligation rather than by
@@ -336,4 +370,184 @@ export function expectedAt(curve: ExpectedCurve, offsetBins: number): number {
   if (left < 0 || right > curve.maxOffset) return Number.NaN
   const fraction = (offsetBins - left) / (right - left)
   return mean[left] + fraction * (mean[right] - mean[left])
+}
+
+// ---------------------------------------------------------------------------
+// The HiContacts convention
+// ---------------------------------------------------------------------------
+
+/**
+ * `unique(round(factor^n))`, with the width of each bin beside it.
+ *
+ * This is HiContacts' `PsBreaks()` table, generated rather than tabulated. That
+ * package ships 205 hard-coded break positions from 1 bp to 1.16 Gb and the 205
+ * widths beside them; the positions are exactly `unique(round(1.1^(0:219)))` and
+ * the widths exactly the differences between successive ones, which
+ * `test/unit/analysis-golden.test.ts` asserts against the shipped numbers one by
+ * one. Generating them means the file's own reach decides how far the
+ * table goes and {@link densityCurve}'s `factor` still means what it says, rather
+ * than a genome larger than 1.16 Gb quietly piling its longest separations into
+ * a final bin.
+ *
+ * `pos` is one longer than `width`, because the width of the last usable bin is
+ * the distance to the break after it. The generator therefore runs one step past
+ * `maxDistance` — a table that stopped exactly at the data would have nothing to
+ * measure its own last bin with.
+ *
+ * The rounding is `Math.round`, which differs from R's `round` on an exact `.5`;
+ * no power of 1.1 lands there, and the test compares every entry against R's own
+ * output rather than trusting that.
+ */
+export function logRoundedBreaks(
+  factor: number,
+  maxDistance: number,
+): { pos: Float64Array; width: Float64Array } {
+  const step = Number.isFinite(factor) && factor > 1 ? factor : 1.1
+  const reach = Number.isFinite(maxDistance) && maxDistance > 0 ? maxDistance : 0
+  const pos: number[] = []
+  let last = -1
+  for (let n = 0; pos.length < 4096; n++) {
+    const value = Math.round(Math.pow(step, n))
+    if (value === last) continue
+    pos.push(value)
+    last = value
+    if (value > reach && pos.length >= 2) break
+  }
+  const width = new Float64Array(pos.length - 1)
+  for (let i = 0; i + 1 < pos.length; i++) width[i] = pos[i + 1] - pos[i]
+  return { pos: Float64Array.from(pos), width }
+}
+
+/**
+ * R's `findInterval(x, vec, all.inside = TRUE)`, for a sorted `pos`.
+ *
+ * The largest `i` with `pos[i] <= distance`, clamped into the bins that have a
+ * width — so a separation below the first break falls in the first bin rather
+ * than off the table, which is what puts the diagonal and the first off-diagonal
+ * of a binned map into the same 1 bp bin in HiContacts.
+ */
+function breakIndex(pos: Float64Array, distance: number): number {
+  const last = pos.length - 2
+  if (last < 0) return 0
+  if (distance < pos[0]) return 0
+  let lo = 0
+  let hi = last
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (pos[mid] <= distance) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
+/**
+ * P(s) as HiContacts reports it, and as the panel draws it: a probability
+ * density over separation.
+ *
+ * The contacts at a separation, over **the contacts in the whole map**, over the
+ * **width of the separation bin in base pairs** — the share of all cis contacts
+ * that fall at this distance, per base pair. `HiContacts::distanceLaw()`'s
+ * `norm_p`, and the only curve this task plots.
+ *
+ * It is not {@link logBinCurve}'s quantity rebinned. That one divides instead by
+ * **the number of bin pairs that could have held a contact**, which is what an
+ * observed/expected is taken against and what cooltools' `expected-cis` reports;
+ * the two agree in shape at short range and diverge as the separation approaches
+ * the length of the sequence, where the pair count is heading for zero and the
+ * contact total is not. Both live in this module on purpose and neither is
+ * derived from the other.
+ *
+ * **The width is the separation the bin covers, not the width of the break**, and
+ * this is the one place the arithmetic departs from `HiContacts::distanceLaw()`
+ * on a binned map. It departs because that break table was built for a *pairs*
+ * file, where a distance is continuous and the counts in a break really are
+ * spread across its whole width. A contact matrix does not work like that: its
+ * separations sit on a lattice of `binsize`, and the breaks near ten kilobases
+ * are about a kilobase wide — so on a 1 kb map one break holds two lattice
+ * points and the next holds one, and dividing both by their nominal widths
+ * makes the first almost twice as dense as the second. The result is a sawtooth
+ * of a factor of two, alternating bin by bin, right through the decade where the
+ * cohesin shoulder is. Measured on `demo/yeast/Yeast_microC_G2M_1kb.cool`, the
+ * log-log slope of the nominal-width curve moves by **0.83 between neighbouring
+ * points** and swings between +1.7 and −2.9; against the width the data occupy
+ * it moves by **0.087**, and the shoulder at ten to twenty kilobases — a change
+ * of about 0.26 in slope — is a feature rather than a third of one tooth.
+ *
+ * HiContacts says as much itself: the matrix branch of `distanceLaw` prints
+ * *"the P(s) curve will be an approximation"* and the pairs branch does not, and
+ * this is what that approximation costs. Dividing by `offsets · binsize` is the
+ * same quantity — a share of all contacts, per base pair — estimated on the
+ * lattice the data are actually on, and the two agree wherever a break is wide
+ * enough to hold several offsets, which is everywhere past about 50 kb on a 1 kb
+ * map. `analysis-golden.test.ts` therefore compares the **numerator** and the
+ * break positions against HiContacts exactly, which is where a real
+ * disagreement would show, and asserts this denominator separately.
+ *
+ * Three further details are HiContacts' and are reproduced exactly, because a
+ * curve that is off by one bin or by a factor of two is worse than one that is
+ * openly a different convention:
+ *
+ * - **The separation is the gap, not the offset.** `InteractionSet::pairdist(…,
+ *   type = 'gap')` is `max(start) − min(end) − 1` over the two anchors, and
+ *   HiCExperiment builds cooler bins as `IRanges(start + 1, end)`, so two bins
+ *   `k` apart are `(k − 1) · binsize` apart by that measure. Offset 1 lands at
+ *   0 bp and the diagonal at −binsize; both fall in the first break.
+ * - **Each unordered pair counts once.** The accumulator is fed dense squares
+ *   read back from an upper-triangular store, so every off-diagonal cell arrives
+ *   twice — harmless for a mean, fatal for a share of a total, since it would
+ *   halve the diagonal's weight against everything else. `mirrored` folds them.
+ * - **Empty bins are dropped**, as a `group_by` drops them, rather than drawn as
+ *   a gap.
+ *
+ * `minOffset` is in bins and floors the curve, and it does **not** silently
+ * floor at 1: the diagonal belongs to the first break here, and dropping it
+ * would change the total that everything else is a share of.
+ */
+export function densityCurve(
+  curve: ExpectedCurve,
+  binsize: number,
+  factor: number,
+  minOffset: number,
+  mirrored: boolean,
+): { x: Float64Array; y: Float64Array; n: Float64Array } {
+  const bp = binsize > 0 ? binsize : 1
+  const floorOffset = Math.max(0, Math.ceil(Number.isFinite(minOffset) ? minOffset : 0))
+  const fold = mirrored ? 2 : 1
+  const breaks = logRoundedBreaks(factor, Math.max(0, curve.maxOffset - 1) * bp)
+  const bins = breaks.width.length
+  const contacts = new Float64Array(bins)
+  const cells = new Float64Array(bins)
+  const offsets = new Int32Array(bins)
+
+  let total = 0
+  for (let k = floorOffset; k <= curve.maxOffset; k++) {
+    const at = breakIndex(breaks.pos, (k - 1) * bp)
+    // Counted whether or not this offset carries anything. It is a separation
+    // the map *has*, so it is part of the range the bin stands for, and a bin
+    // whose only empty offset went uncounted would be a bin whose density was
+    // divided by less than it covers.
+    offsets[at] += 1
+    const count = curve.count[k]
+    if (!(count > 0)) continue
+    const share = k === 0 ? 1 : fold
+    const value = curve.sum[k] / share
+    if (Number.isNaN(value)) continue
+    contacts[at] += value
+    cells[at] += count / share
+    total += value
+  }
+  if (!(total > 0)) {
+    return { x: new Float64Array(0), y: new Float64Array(0), n: new Float64Array(0) }
+  }
+
+  const xs: number[] = []
+  const ys: number[] = []
+  const ns: number[] = []
+  for (let i = 0; i < bins; i++) {
+    if (cells[i] <= 0) continue
+    xs.push(breaks.pos[i])
+    ys.push(contacts[i] / total / (offsets[i] * bp))
+    ns.push(cells[i])
+  }
+  return { x: Float64Array.from(xs), y: Float64Array.from(ys), n: Float64Array.from(ns) }
 }

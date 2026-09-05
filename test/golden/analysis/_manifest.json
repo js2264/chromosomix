@@ -7,9 +7,12 @@
  ],
  "coverage": {
   "apa": "a raw loop pileup, against numpy and coolpuppy",
+  "chromosight": "detection of loops and borders, against chromosight itself",
+  "chromosight_quantify": "scores and the pileup for a given loop set, against chromosight quantify",
   "compartments": "O/E, correlation and the leading eigenvector, against numpy and cooltools.eigs_cis",
   "coverage": "cis marginals, against numpy and cooltools.coverage",
   "expected": "P(s) per chromosome, raw and balanced, against numpy and cooltools.expected_cis",
+  "hicontacts_ps": "P(s) contacts per break, against HiContacts::distanceLaw in R",
   "insulation": "diamond sums and scores at three windows, against numpy and cooltools.insulation",
   "metaplot": "mean bigWig signal around a real peak set, against pyBigWig",
   "overlap": "Jaccard and hit counts, against a per-base boolean mask",
@@ -56,6 +59,21 @@
    "bytes": 487,
    "golden": "overlap.json",
    "name": "overlap"
+  },
+  {
+   "bytes": 18177,
+   "golden": "hicontacts_ps.json",
+   "name": "hicontacts_ps"
+  },
+  {
+   "bytes": 279693,
+   "golden": "chromosight.json",
+   "name": "chromosight"
+  },
+  {
+   "bytes": 13687,
+   "golden": "chromosight_quantify.json",
+   "name": "chromosight_quantify"
   }
  ],
  "source": "demo/yeast/Yeast_microC_G2M_1kb.cool",
@@ -65,6 +83,7 @@
   "sums": 1e-06
  },
  "versions": {
+  "chromosight": "1.6.3",
   "cooler": "0.10.4",
   "coolpuppy": "1.1.0",
   "cooltools": "0.7.1",

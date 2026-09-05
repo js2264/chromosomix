@@ -536,6 +536,24 @@ export interface CurveOutput {
   yLabel: string
   xScale: 'linear' | 'log'
   yScale: 'linear' | 'log'
+  /**
+   * The window the axes should show, in data units; absent to fit the data.
+   *
+   * A *runner* sets these to say what the figure is worth opening on, which is
+   * not always its full extent: a P(s) runs from one base pair to a whole
+   * chromosome and the decade at each end is a spike and a handful of noisy
+   * points, so a curve drawn over all of it spends its height on the parts
+   * nobody reads. `ui/interactivePlot.ts` then treats them as the *initial*
+   * view — the marquee, the boxes and the reset all move them — so this is a
+   * default rather than a limit, and it is on the output rather than in the
+   * panel because which window is worth opening on is a fact about the
+   * quantity.
+   *
+   * Either may be given alone. An absent axis is fitted to whatever falls inside
+   * the one that was given, so a window in x carries the ordinate with it.
+   */
+  xDomain?: [number, number]
+  yDomain?: [number, number]
 }
 
 /**
@@ -570,6 +588,22 @@ export interface MatrixOutput {
    * data, which is the one thing a diverging scale must not do.
    */
   centre?: number
+  /**
+   * A colour scale the *task* fixes, rather than one fitted to the data.
+   *
+   * Absent almost everywhere, because a scale fitted to the picture is what
+   * makes a picture readable. It is here for the one thing a fitted scale cannot
+   * do: reproduce somebody else's figure. chromosight's pileup is drawn at
+   * `vmin=0, vmax=2` on `seismic` whatever the numbers turn out to be, so two
+   * pileups from two files are the same picture where they are the same result —
+   * and a viewer that autoscaled would show a flat pileup and a strong one in
+   * identical colours and call it the same plot.
+   *
+   * Takes precedence over {@link centre}, which is the *derived* version of the
+   * same idea. `[lo, hi]`, and cells outside it clamp to the end colours, which
+   * is matplotlib's `set_under`/`set_over` default and `colormapIndex`'s.
+   */
+  range?: [number, number]
   /** Numbers printed under the picture: P2LL, AA/BB strength, an r. */
   stats?: Array<{ label: string; value: number; digits?: number; hint?: string }>
 }

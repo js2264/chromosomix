@@ -268,12 +268,23 @@ describe('every descriptor', () => {
  * group's is an argument: what every bin *has* (coverage and the marginals),
  * then how contact falls away from it (P(s)), then one locus's slice of that
  * decay (4C), then the domains it resolves into (insulation), then the
- * compartments those domains sit in. Pinned because the argument is invisible in
- * an array literal and reordering it is one line.
+ * compartments those domains sit in — and last, detection, which is the only one
+ * that makes a claim rather than a summary: it needs the decay the tasks above
+ * it describe, and what it produces is what the aggregation tasks take as input.
+ * Pinned because the argument is invisible in an array literal and reordering it
+ * is one line.
  */
 describe('the map card', () => {
   it('reads outward from the axis', () => {
     const map = TASKS.filter((task) => task.group === 'map').map((task) => task.id)
-    expect(map).toEqual(['coverage', 'expected', 'fourc', 'insulation', 'compartments', 'cid'])
+    expect(map).toEqual([
+      'coverage',
+      'expected',
+      'fourc',
+      'insulation',
+      'compartments',
+      'cid',
+      'chromosight',
+    ])
   })
 })

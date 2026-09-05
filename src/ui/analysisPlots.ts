@@ -205,6 +205,26 @@ interface Axis {
 }
 
 /**
+ * Where a curve was drawn, and on what axes — the figure's answer to "what is
+ * under this pixel".
+ *
+ * Returned by {@link drawCurve} rather than recomputed by the caller, and that
+ * is the whole point: the margins are decided by the widths of the tick labels
+ * and the height of the legend, so anything that measured them from outside
+ * would be an approximation that drifts every time a label changes. A marquee
+ * has to land on the number the reader is pointing at, and a rectangle that is
+ * eight pixels out is a rectangle that selects the wrong range.
+ *
+ * `lo` and `hi` are in **drawing space** — log10 units on a log axis — because
+ * that is the space the pixel mapping is linear in.
+ */
+export interface CurveLayout {
+  plot: Rect
+  x: { log: boolean; lo: number; hi: number }
+  y: { log: boolean; lo: number; hi: number }
+}
+
+/**
  * A data value in the space the axis is linear in, or `NaN` if it has none.
  *
  * The `NaN` for a non-positive value on a log axis is the whole point of this
@@ -371,6 +391,7 @@ function axisTicks(axis: Axis, maxTicks: number): AxisTicks {
 function curveDomains(output: CurveOutput): { x: Span; y: Span } | null {
   const xLog = output.xScale === 'log'
   const yLog = output.yScale === 'log'
+  const asked = { x: askedSpan(output.xDomain, xLog), y: askedSpan(output.yDomain, yLog) }
   const x: Span = { lo: Number.POSITIVE_INFINITY, hi: Number.NEGATIVE_INFINITY }
   const y: Span = { lo: Number.POSITIVE_INFINITY, hi: Number.NEGATIVE_INFINITY }
 
@@ -379,12 +400,19 @@ function curveDomains(output: CurveOutput): { x: Span; y: Span } | null {
     for (let i = 0; i < series.x.length; i++) {
       const at = drawSpace(series.x[i], xLog)
       if (Number.isNaN(at)) continue
+      // **The y fit is over the x window, not over the series.** With a window
+      // asked for, the points outside it are not on the picture, and letting
+      // them set the ordinate is how a P(s) zoomed to 4 kb–1 Mb still came out
+      // with its whole height spent on the near-diagonal spike sitting off the
+      // left edge. Auto means "fit what is shown".
+      const inside = asked.x === null || (at >= asked.x.lo && at <= asked.x.hi)
       let seen = false
       for (const column of columns) {
         if (column === undefined || i >= column.length) continue
         const value = drawSpace(column[i], yLog)
         if (Number.isNaN(value)) continue
         seen = true
+        if (!inside) continue
         if (value < y.lo) y.lo = value
         if (value > y.hi) y.hi = value
       }
@@ -393,8 +421,30 @@ function curveDomains(output: CurveOutput): { x: Span; y: Span } | null {
       if (at > x.hi) x.hi = at
     }
   }
-  if (!(x.lo <= x.hi) || !(y.lo <= y.hi)) return null
-  return { x: padSpan(x, 0), y: padSpan(y, 0.05) }
+  // A window an axis cannot be fitted in — nothing inside the x window, so no y
+  // to draw against — is `null`, and the figure says "nothing to plot". Widening
+  // back out to the whole series instead would answer a question nobody asked
+  // and look exactly like a figure that had not been asked one.
+  const xSpan = asked.x ?? (x.lo <= x.hi ? padSpan(x, 0) : null)
+  const ySpan = asked.y ?? (y.lo <= y.hi ? padSpan(y, 0.05) : null)
+  if (xSpan === null || ySpan === null) return null
+  return { x: xSpan, y: ySpan }
+}
+
+/**
+ * An explicit axis window in drawing space, or `null` for "fit the data".
+ *
+ * Either bound may be absent or unusable — a reader clears one box, or asks for
+ * zero on a log axis — and the answer is to fall back to the data for *that*
+ * axis rather than to refuse the pair. Reversed bounds are sorted rather than
+ * rejected: a marquee dragged right to left is the same rectangle.
+ */
+function askedSpan(domain: readonly [number, number] | undefined, log: boolean): Span | null {
+  if (domain === undefined) return null
+  const lo = drawSpace(domain[0], log)
+  const hi = drawSpace(domain[1], log)
+  if (Number.isNaN(lo) || Number.isNaN(hi) || lo === hi) return null
+  return { lo: Math.min(lo, hi), hi: Math.max(lo, hi) }
 }
 
 function seriesColour(series: CurveSeries, index: number, theme: PlotTheme): string {
@@ -593,7 +643,7 @@ export function drawCurve(
   output: CurveOutput,
   box: { width: number; height: number },
   theme: PlotTheme,
-): void {
+): CurveLayout | null {
   paintBackground(ctx, box, theme)
 
   const size = fontSizeOf(theme.font)
@@ -604,7 +654,7 @@ export function drawCurve(
   const domains = curveDomains(output)
   if (domains === null) {
     drawEmpty(ctx, box, theme, 'nothing to plot')
-    return
+    return null
   }
   const x = makeAxis(output.xScale === 'log', domains.x)
   const y = makeAxis(output.yScale === 'log', domains.y)
@@ -641,7 +691,7 @@ export function drawCurve(
   }
   if (plot.width < MIN_PLOT_SIDE || plot.height < MIN_PLOT_SIDE) {
     drawEmpty(ctx, box, theme, 'too small to draw')
-    return
+    return null
   }
 
   // Gridlines under everything, so a line crossing one is unambiguously on top.
@@ -664,6 +714,15 @@ export function drawCurve(
   }
   ctx.stroke()
 
+  // Clipped to the frame, which matters only once an axis window can be asked
+  // for: a series then runs off the edge of the plot rather than ending at it,
+  // and unclipped it would be drawn across the tick labels and the legend. The
+  // clip is a path in the PDF as much as on the canvas (`ui/vector.ts`), so the
+  // export is cut the same way rather than differently.
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(plot.x, plot.y, plot.width, plot.height)
+  ctx.clip()
   // Every band before any line: within a series the band belongs under its own
   // line, and across series it belongs under all of them — a translucent wash
   // laid over a neighbour's line tints it into a colour the legend does not
@@ -674,6 +733,7 @@ export function drawCurve(
   output.series.forEach((series, index) => {
     drawSeriesLine(ctx, series, x, y, plot, seriesColour(series, index, theme))
   })
+  ctx.restore()
 
   // The frame last, so it closes over the ends of the data rather than being
   // painted through by them.
@@ -781,6 +841,8 @@ export function drawCurve(
       at += swatch + gap * 0.5 + ctx.measureText(text).width + gap * 1.5
     }
   })
+
+  return { plot, x: { log: x.log, lo: x.lo, hi: x.hi }, y: { log: y.log, lo: y.lo, hi: y.hi } }
 }
 
 // ---------------------------------------------------------------------------
@@ -818,6 +880,11 @@ function colourTable(name: string): string[] {
  * amount their tails differ.
  */
 function matrixRange(output: MatrixOutput): { vmin: number; vmax: number } | null {
+  // A scale the task fixed is not a suggestion: it is there so the picture can
+  // be laid beside the one the tool it agrees with draws. See `MatrixOutput.range`.
+  if (output.range !== undefined && output.range[1] > output.range[0]) {
+    return { vmin: output.range[0], vmax: output.range[1] }
+  }
   let lo = Number.POSITIVE_INFINITY
   let hi = Number.NEGATIVE_INFINITY
   for (const value of output.values) {
@@ -1175,9 +1242,19 @@ function watchTheme(onChange: () => void): () => void {
  * PDF export calls with a `VectorPage`'s context. There is one implementation of
  * each figure, and the file the reader downloads is drawn by it.
  */
-function canvasFigure(
-  paint: (ctx: CanvasRenderingContext2D, box: PlotBox, theme: PlotTheme) => void,
+function canvasFigure<T>(
+  paint: (ctx: CanvasRenderingContext2D, box: PlotBox, theme: PlotTheme) => T,
   heightFor: (width: number) => number,
+  /**
+   * What the last *on-screen* paint laid out, for a caller that maps pointers
+   * onto it.
+   *
+   * Called from {@link redraw} and never from `draw`, and the distinction is
+   * load-bearing rather than tidiness: `draw` is the export path, which paints
+   * the same figure into a PDF page eight inches wide, and a layout recorded
+   * from that would put the marquee somewhere the reader is not.
+   */
+  onLayout?: (layout: T) => void,
 ): PlotFigure {
   // The width is stated inline as well as in the class. `canvas.width` is the
   // backing store in *device* pixels, and a canvas whose stylesheet never
@@ -1200,7 +1277,8 @@ function canvasFigure(
     if (ctx === null) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, cssWidth, cssHeight)
-    paint(ctx, { width: cssWidth, height: cssHeight }, plotTheme(host))
+    const layout = paint(ctx, { width: cssWidth, height: cssHeight }, plotTheme(host))
+    onLayout?.(layout)
   }
 
   const observer =
@@ -1280,10 +1358,14 @@ function matrixHeight(output: MatrixOutput, width: number): number {
   return Math.round(furniture + Math.max(80, Math.min(420, cells * aspect)))
 }
 
-export function curveFigure(output: CurveOutput): PlotFigure {
+export function curveFigure(
+  output: CurveOutput,
+  onLayout?: (layout: CurveLayout | null) => void,
+): PlotFigure {
   return canvasFigure(
     (ctx, box, theme) => drawCurve(ctx, output, box, theme),
     curveHeight,
+    onLayout,
   )
 }
 

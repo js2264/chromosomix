@@ -76,7 +76,122 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   companions' clips and closing the window used to lose all four, because a clip
   is not a navigation and nothing on the state road ever fired.
 
+- **`Expected (cooltools)` beside the density on P(s).** A *Quantity* choice on
+  the contact-probability task. The default is unchanged — the probability
+  density, `HiContacts::distanceLaw()`'s `norm_p` — and the other setting plots
+  contacts at a separation over the **bin pairs that could have held one**,
+  which is what `cooltools expected-cis` reports and what a scaling exponent is
+  compared against −1 or −1.5 as.
+
+  They differ by exactly one denominator: `density / expected = pairs(s) /
+  constant`. The pair count is flat while the separation is short against the
+  sequences and falls to zero at the longest one, so on the yeast demo the two
+  are within 1 % below 10 kb, 13 % apart at 100 kb and a factor of fifty apart
+  at 1.2 Mb — and on a mammalian map they agree over everything anybody fits.
+
+  Verified end to end rather than by construction: pooled genome-wide over the
+  yeast demo, `--quantity expected` reproduces `cooltools.expected_cis` to 4e-6,
+  which is the printing precision of the TSV. The quantity is cooltools'; the
+  bins are the task's own `factor`, so 1.2589 matches `logbin_expected`'s ten to
+  the decade. What O/E and the pileups divide by is untouched — they reach the
+  same numbers through `expectedAt`, never through the panel.
+
+- **Four text boxes on every curve, one per axis bound.** `x` from/to and `y`
+  from/to, beside the `log x` / `log y` toggles. Empty means "fit the data", so
+  clearing all four is how you get back to the whole curve; a marquee fills them
+  in, and typing in them is how two figures are set to the same window for a
+  figure panel rather than dragged towards it.
+
+- **`expected` in the score picker: the denominator of O/E, drawn.** Every cell
+  replaced by the mean of the block at that bin separation, with one scalar
+  between each pair of sequences — a banded triangle fading from the diagonal
+  and nothing else in it. It is in the picker rather than beside the `O/E`
+  toggle because it answers what the numbers *are*, not what they are compared
+  to, and it overrides that toggle rather than composing with it: O/E of the
+  baseline is 1 wherever it is anything, so the toggle greys and its tooltip
+  says why.
+
+  The reason to look at it is that an O/E is only as trustworthy as its
+  denominator. At long separations the curve is a mean over few cells and it
+  moves, so a ratio that swings out there is swinging in the model rather than
+  in the biology — and until now there was no way to see which.
+
+  Drawn on a sequential ramp with no neutral, because a mean of counts is
+  count-like; measured after whichever normalisation is in force, like the ratio
+  it comes out of. Its id in a link is `baseline`, not `expected`, so a file
+  that carries a `/pixels/expected` column of its own still reaches it — that
+  column now reads `expected (column)` in the list, which is the only way two
+  entries could have carried one word.
+
+- **Pattern detection, and it is chromosight.** A fifteenth task on the map card:
+  loops, borders, hairpins, centromeres and stripes, found by correlating a
+  template against a map detrended by its own distance law, with the smears
+  suppressed and a Benjamini-Hochberg q-value on every call. It is a port of
+  [chromosight](https://github.com/koszullab/chromosight) rather than a caller of
+  this app's own invention, and the difference is the whole reason it exists —
+  §18.9 refused the second and gave a reason that the first answers: a background
+  model and false-discovery control, both of them the published method's.
+
+  **It agrees with that package rather than resembling it.** On
+  `demo/yeast/Yeast_microC_G2M_1kb.cool` at the loops preset, `chromosight detect`
+  and this task both call **1,100 loops** — the same 1,100, with scores agreeing
+  to 5e-7. `test/golden/analysis/chromosight.json` is built by running the package
+  itself and compares five stages separately: the undetectable bins, the detrended
+  map, the correlation map, every call with its score, p-value and q-value, and
+  the pileup. A single end-to-end check would have said "different loops"; these
+  say which of five things moved.
+
+  Four outputs, and they are different in kind on purpose. The **loop set** is a
+  bedpe — a BED for the patterns that live on the diagonal — offered to the
+  Annotations panel, so a call lands on the map it was called from before the
+  reader has to decide whether to believe it. The **pileup** is every window it
+  found, on chromosight's own fixed 0–2 seismic scale, which is what lets it be
+  laid beside a published figure. The **spectrum** is the distribution of the
+  scores behind that pileup: a smooth shoulder running down to the threshold says
+  the calling stopped where the threshold was rather than where the pattern did,
+  and no list of coordinates ever says that. And a table of the strongest calls.
+
+  The pattern is a parameter rather than five tasks, and every threshold under
+  the picker follows the picker — upstream tuned `pearson`, the scan distance and
+  the two window-quality percentages *per template*, so a form that baked one
+  preset's numbers into a box would report borders at twice the threshold
+  chromosight uses. **Set them myself** takes them over, and says so in the
+  provenance.
+
+- **APA has a fourth normalisation, and it is `chromosight quantify`.** The same
+  anchors and the same averaging as the other three, with the control moved: the
+  map is detrended by its own distance law *before* any window is cut, so a cell
+  is observed-over-expected at that separation on that sequence — which is what
+  chromosight's pileups are, drawn on the same fixed scale. Three things follow
+  and none of them is a detail: the window is the **template's** size rather than
+  the reader's half-width, because the score under the picture is a correlation
+  against those cells; the scan distance is the **loop set's own reach**, which is
+  what `cmd_quantify` sets it to; and **every anchor comes back**, scored or not.
+  It reports the per-anchor Pearson correlation, its p-value and its q-value
+  beside the pileup, and the same score spectrum the detector draws — which is the
+  half of the answer a pileup cannot carry, since two sets with the same mean
+  window can be a hundred good loops and four hundred coordinates of which fifty
+  are loops.
+
+  Checked the same way: over the demo loop table, this and `chromosight quantify`
+  produce the same 1,506 scores and the same pileup, and
+  `test/golden/analysis/chromosight_quantify.json` is that package's output.
+
+- **`seismic`, in the colormap picker.** matplotlib's own five stops, here
+  because `pileup_plot` draws with it. A matrix output can now also fix its
+  colour range rather than fitting one to the data — used by exactly the two
+  pileups above, for the reason a fitted scale cannot serve: a pileup running
+  from 0.98 to 1.02 and one running from 0 to 4 would otherwise be the same
+  picture in the same colours, and the difference between them is the result.
+
 ### Fixed
+
+- **`metacooler-run apa --window 8` set the half-width and then died.** The CLI
+  reserves `--window` for the framing locus, and `apa` declares a parameter of
+  the same name — a half-width in bins. `paramsFor` already gives a task's own
+  parameters the flag where the two collide, but the framing read it anyway, so
+  the run set the half-width correctly and then failed with *"Unknown sequence
+  label: 8"*. One name, one meaning, decided by whether the task claims it.
 
 - **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
   in the file has always recorded them — the dividers, the breaks, the labels,
@@ -89,6 +204,116 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and looking exactly like the toggles had not been saved. The tab that ends up
   in front now decides, which is what a window-level preference carried per tab
   can honestly mean.
+
+- **P(s) is smooth again: the density is divided by the separation a bin covers,
+  not by the width of the break.** The curve had developed a sawtooth of a factor
+  of two through the 10–30 kb decade, which buried the cohesin shoulder the
+  derivative is read for.
+
+  It is an aliasing artefact and `HiContacts::distanceLaw()` has it too. That
+  break table is `unique(round(1.1^n))` in base pairs and was built for a *pairs*
+  file, where a distance is continuous and the counts in a break really are
+  spread over its whole width. A contact matrix is not like that: its separations
+  sit on a lattice of `binsize`, and near 10 kb the breaks are about a kilobase
+  wide — so on a 1 kb map one break holds two lattice points and the next holds
+  one. Dividing both by their nominal widths makes the first almost twice as
+  dense as the second, bin after bin. On the yeast demo the log-log slope of that
+  curve moves by **0.83 between neighbouring points** and swings between +1.7 and
+  −2.9; the shoulder it hides is a change of about **0.26**, so the artefact was
+  an order of magnitude bigger than the feature.
+
+  Dividing by `offsets × binsize` is the same quantity — a share of all cis
+  contacts, per base pair — estimated on the lattice the data are actually on. It
+  moves the slope by **0.087** between neighbours, and it agrees with the nominal
+  width wherever a break is wide enough to hold several offsets, which is
+  everywhere past about 50 kb at 1 kb bins. HiContacts says as much itself: its
+  matrix branch prints *"the P(s) curve will be an approximation"* and its pairs
+  branch does not.
+
+  The golden now compares the **numerator** — the contacts in each break, break
+  for break — against HiContacts exactly, which is where a real disagreement
+  would show, and a new test asserts both roughness figures from the golden's own
+  numbers so the sawtooth cannot come back unnoticed.
+
+- **The CLI can use a loop set again.** `--pairs loops.bedpe` parsed the file,
+  filed it under its *file name*, and then set the task's parameter to a *path*;
+  every task that takes a feature or pair set looked under its own parameter key,
+  found nothing, and reported "the set chosen is no longer loaded" about a file it
+  had just read. `TaskInputs` is keyed by parameter key — `analysis/job.ts` has a
+  whole paragraph about not indexing it any other way — and the CLI was the one
+  venue that had no store to allocate ids in, so it invented a second convention
+  and lost. Both work now: the name a reader typed still names the input, and the
+  parameter key is an alias for it.
+
+### Changed
+
+- **Zooming a curve is a rectangle now, and it keeps working.** Dragging across a
+  P(s), a slope or any other drawer curve selects a window on **both** axes
+  rather than only on the abscissa, and the marquee is drawn as the rectangle it
+  selects. A drag that is deliberately flat still means what it looks like: an
+  axis is only taken when the pointer travelled at least eight pixels along it,
+  so a horizontal sweep is still a band and a mis-click is still a click.
+
+  **And the marquee comes back.** It lived in the plot body, and the rebuild
+  after the first zoom replaced that body's children — so the first drag worked
+  and every drag after it selected an invisible rectangle, which read as the
+  gesture having broken. Double-click still resets, now to the window the figure
+  opened on rather than to the full extent.
+
+  The zoom is also no longer a clip of the series arrays. The window travels on
+  the output as `xDomain`/`yDomain` and the axes are drawn to it, which is what
+  makes a window in y expressible at all — a point above the top of the frame is
+  part of the line that leaves it, not a gap in the data — and the series are
+  clipped to the frame in the PDF exactly as on screen.
+
+- **P(s) and its slope open on 4 kb – 1 Mb.** Past the ligation artefacts at one
+  end and inside the shortest chromosome at the other. The full extent was a bad
+  picture of a good curve: the first break holds the diagonal and the first
+  off-diagonal — two thirds of every cis contact on a 1 kb map — at a separation
+  of 1 bp, so a log axis over all of it spent a third of its width on one point
+  and squashed the decades anybody reads into the right-hand quarter. It is a
+  default and not a limit: the marquee, the boxes and a double-click all move
+  it. The ordinate follows, because an automatic y axis now fits what is inside
+  the x window rather than the whole series.
+
+- **APA has no Quality settings.** *Most anchors to use* and *Minimum coverage of
+  a window* are gone, not defaulted: every anchor is piled up and every window is
+  summed. Both were quietly a change of subject rather than a budget — a cap
+  makes the figure a pileup of whichever anchors sorted first, and a coverage
+  floor drops exactly the windows in sparse regions, which are the ones a weak
+  pileup is weak because of. Two runs could then differ because they had thrown
+  away different windows, with nothing on the figure saying so. The accumulator
+  counts per cell, so a half-empty window contributes what it has and no more.
+
+- **APA's half-width defaults to 12 bins**, down from 25, and the note about the
+  classic APA square is off the control.
+
+- **P(s) is now the quantity HiContacts means by it.** The contact-probability
+  task plots the **probability density** — contacts at a separation over all cis
+  contacts, then over the width of the separation bin in base pairs — which is
+  `HiContacts::distanceLaw()`'s `norm_p`. It used to plot the mean contact per
+  *pair of bins*, which is `cooltools expected-cis`. Both are called P(s); they
+  agree in shape at short range and part company as the separation approaches
+  the length of a chromosome, where the pair count is heading for zero and the
+  contact total is not, so an exponent read off the tail of one is not an
+  exponent of the other. **This changes the numbers every existing P(s) figure
+  was drawn from**, and the ordinate now says `Contact probability density
+  (per bp)` to make that visible.
+
+  The expected curve itself is unchanged and is still what observed/expected,
+  the compartment chain and the pileups divide by — it just never was the curve
+  on screen, and now it is not pretending to be.
+
+  **It reproduces that package rather than resembling it.** The separation is
+  HiContacts' gap distance — two bins *k* apart are `(k − 1)·binsize` apart
+  there, so the diagonal and the first off-diagonal share the first break — and
+  the bins are its break table, which turns out to be exactly
+  `unique(round(1.1^n))` and is regenerated from the task's own factor rather
+  than tabulated. `test/golden/analysis/hicontacts_ps.json` is built by running
+  HiContacts' own pipeline in R (`scripts/hicontacts_ps.R`, the first golden
+  whose dependency is a program rather than a Python module), and every break
+  position and density matches to 2e-6 on four chromosomes and on the four
+  pooled.
 
 ## [0.11.0] - 2026-08-14
 
