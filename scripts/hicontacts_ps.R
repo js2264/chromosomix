@@ -24,12 +24,14 @@
 # such bins k apart is (i+k)·w + 1 − (i+1)·w − 1 = (k − 1)·w. So offset 1 sits at
 # 0 bp, the diagonal at −w, and both fall in the first break.
 #
-# One column of `distanceLaw()`'s output is left out: `slope`, which HiContacts
-# forms as a forward difference of log10(norm_p) and then replaces with a loess
-# fit of span 0.5. The app draws the *unsmoothed* central difference of the same
-# curve (`logLogSlope`), so goldening the smoothed one would assert a
-# correspondence that is deliberately not there. The curve it is a slope *of* is
-# goldened below, which is the part the two share.
+# Two columns of `distanceLaw()`'s output are left out, both because nothing in
+# the app computes them. `slope` HiContacts forms as a forward difference of
+# log10(norm_p) and then replaces with a loess fit of span 0.5; the app draws the
+# *unsmoothed* central difference of the same curve (`logLogSlope`), so goldening
+# the smoothed one would assert a correspondence that is deliberately not there.
+# `norm_p_unity` is `norm_p` divided by its own value at the break nearest
+# 100 kb, which is a rescaling of the curve below rather than a second curve.
+# What is goldened is `norm_p`, which is what the panel plots.
 #
 # Needs R with dplyr, tibble and tidyr. The R install is the reason this is a
 # separate file rather than a few lines of numpy: reproducing `findInterval(...,
@@ -122,12 +124,7 @@ out <- lapply(unique(raw$unit), function(unit) {
         dplyr::mutate(p = ninter/sum(ninter)) |>
         dplyr::left_join(PsBreaks(), by = c('binned_distance' = 'break_pos')) |>
         dplyr::mutate(norm_p = p / binwidth)
-    ps <- dplyr::group_split(d) |>
-        lapply(function(x) {
-            dplyr::mutate(x, norm_p_unity = norm_p / {dplyr::slice(x, which.min(abs(x$binned_distance - 100000))) |> dplyr::pull(norm_p)})
-        }) |>
-        dplyr::bind_rows()
-    ps <- dplyr::select(ps, binned_distance, ninter, p, norm_p, norm_p_unity) |>
+    ps <- dplyr::select(d, binned_distance, ninter, p, norm_p) |>
         dplyr::arrange(binned_distance)
     dplyr::mutate(ps, unit = unit)
 }) |> dplyr::bind_rows()

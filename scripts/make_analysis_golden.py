@@ -366,13 +366,10 @@ def hicontacts_golden(chroms: list[str]) -> dict:
         curves: dict[str, dict[str, list]] = {}
         with result.open() as handle:
             for row in csv.DictReader(handle, delimiter="\t"):
-                curve = curves.setdefault(
-                    row["unit"], {"x": [], "ninter": [], "norm_p": [], "norm_p_unity": []}
-                )
+                curve = curves.setdefault(row["unit"], {"x": [], "ninter": [], "norm_p": []})
                 curve["x"].append(float(row["binned_distance"]))
                 curve["ninter"].append(float(row["ninter"]))
                 curve["norm_p"].append(float(row["norm_p"]))
-                curve["norm_p_unity"].append(float(row["norm_p_unity"]))
 
     version = subprocess.run(
         ["Rscript", "-e", 'cat(as.character(packageVersion("dplyr")))'],
@@ -386,7 +383,6 @@ def hicontacts_golden(chroms: list[str]) -> dict:
         "chroms": list(chroms),
         "pooled": list(chroms),
         "factor": 1.1,
-        "unity_at": 100000,
         "balance": False,
         # The break table HiContacts ships, read back out of the oracle rather
         # than restated: `logRoundedBreaks(1.1, ...)` has to reproduce it, and a
@@ -399,7 +395,6 @@ def hicontacts_golden(chroms: list[str]) -> dict:
                 "x": curve["x"],
                 "ninter": rounded(curve["ninter"]),
                 "norm_p": rounded(curve["norm_p"]),
-                "norm_p_unity": rounded(curve["norm_p_unity"]),
             }
             for unit, curve in curves.items()
         },

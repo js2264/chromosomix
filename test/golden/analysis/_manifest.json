@@ -61,7 +61,7 @@
    "name": "overlap"
   },
   {
-   "bytes": 22878,
+   "bytes": 18177,
    "golden": "hicontacts_ps.json",
    "name": "hicontacts_ps"
   },

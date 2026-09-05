@@ -43,9 +43,7 @@ import { parseRegionString } from '../../metacooler/range'
 import {
   ExpectedAccumulator,
   densityCurve,
-  logBinCurve,
   logLogSlope,
-  scaleToUnityAt,
   type ExpectedCurve,
 } from '../expected'
 import {
@@ -353,34 +351,11 @@ async function measure(
   }
 }
 
-/**
- * Where `norm: 'unity'` pins the curve, in base pairs.
- *
- * HiContacts' number, and hard-coded there too. It is a sensible place for a
- * yeast or a mammalian map alike — far enough out to be past the near-diagonal
- * and short enough to be inside every chromosome — and making it a parameter
- * would mean two runs pinned at different separations could be plotted together
- * and read as different biology.
- */
-const UNITY_AT = 100_000
-
-/** What the ordinate is, per normalisation. */
-const Y_LABEL: Record<string, string> = {
-  perPair: 'Contact probability',
-  density: 'Contact probability density (per bp)',
-  unity: 'Contact probability density (1 at 100 kb)',
-}
-
 export const runExpected: TaskRunner = async (job) => {
   const scope = strParam(job.params, 'scope', 'contig')
   const region = strParam(job.params, 'region', '').trim()
   const factor = numParam(job.params, 'factor', 1.1)
   const minSeparation = numParam(job.params, 'minSeparation', 0)
-  // Unrecognised falls back to the expected curve rather than to a HiContacts
-  // one, for the reason `planUnits` gives about the scope: a stored session from
-  // a later build must not silently change what the numbers mean.
-  const normValue = strParam(job.params, 'norm', 'perPair')
-  const norm = normValue === 'density' || normValue === 'unity' ? normValue : 'perPair'
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
@@ -409,42 +384,21 @@ export const runExpected: TaskRunner = async (job) => {
   const series: CurveSeries[] = []
   const slopes: CurveSeries[] = []
   let silent = 0
-  let unscaled = 0
   for (let u = 0; u < units.length; u++) {
-    const binned =
-      norm === 'perPair'
-        ? logBinCurve(curves[u], job.mc.binsize, factor, minSeparation)
-        : densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
+    const binned = densityCurve(curves[u], job.mc.binsize, factor, minSeparation, mirrored)
     if (binned.x.length === 0) {
       silent++
       continue
     }
     let cells = 0
     for (const n of binned.n) cells += n
-    // Per curve, exactly as HiContacts scales per group: the point of the column
-    // is that two samples cross at 100 kb, and a shared scale factor taken from
-    // one of them would put the crossing somewhere neither of them has.
-    let y = binned.y
-    if (norm === 'unity') {
-      const scaled = scaleToUnityAt(binned.x, y, UNITY_AT)
-      y = scaled.y
-      if (!scaled.scaled) unscaled++
-    }
-    series.push({ name: units[u].name, x: binned.x, y, n: cells })
+    series.push({ name: units[u].name, x: binned.x, y: binned.y, n: cells })
     if (derivative) {
-      const slope = logLogSlope(binned.x, y)
+      const slope = logLogSlope(binned.x, binned.y)
       // Two points give no central difference at all, and a one-sided one at the
       // ends is a different estimator drawn on the same line — see `logLogSlope`.
       if (slope.x.length > 0) slopes.push({ name: units[u].name, x: slope.x, y: slope.y, n: cells })
     }
-  }
-  if (unscaled > 0) {
-    job.note(
-      `${unscaled.toLocaleString()} ${unscaled === 1 ? 'curve' : 'curves'} had no contacts at ` +
-        '100 kb, so ' +
-        `${unscaled === 1 ? 'it is' : 'they are'} drawn as the unscaled density. A sequence ` +
-        'shorter than 100 kb is the usual reason.',
-    )
   }
   if (silent > 0) {
     job.note(
@@ -461,7 +415,7 @@ export const runExpected: TaskRunner = async (job) => {
       label: 'Contact probability P(s)',
       series,
       xLabel: 'Genomic separation (bp)',
-      yLabel: Y_LABEL[norm],
+      yLabel: 'Contact probability density (per bp)',
       xScale: 'log',
       yScale: 'log',
     },

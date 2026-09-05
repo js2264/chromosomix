@@ -2841,16 +2841,17 @@ Seventeen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what fo
 one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
-producing the **expected** curve three later tasks consume. It offers the two normalisations the field
-means by *P(s)*, because they are different quantities and only one of them is the expected curve: the
-default divides the contacts at a separation by the **bin pairs that could have held one**, which is
-`cooltools expected-cis`; the other divides by the **contacts in the whole map** and then by the width
-of the separation bin in base pairs, which is `HiContacts::distanceLaw()`, optionally scaled through 1
-at 100 kb as that package's `norm_p_unity`. They agree in shape at short range and part company as the
-separation approaches the length of a sequence, where the pair count is heading for zero and the
-contact total is not — so a figure that mixes them reads a difference of convention as biology.
-Choosing the second switches the separation and the bins with it (§18.10), because a curve that is
-comparable in quantity but not in abscissa is not comparable. *Coverage and marginals* — total, cis, trans
+producing the **expected** curve three later tasks consume. Those are two different curves off one
+accumulator, and the split is deliberate. What the panel **plots** is the probability density —
+contacts at a separation over the contacts in the whole map, then over the width of the separation bin
+in base pairs — which is `HiContacts::distanceLaw()`'s `norm_p`, reproduced exactly down to that
+package's gap distance and its break table (§18.10). What observed/expected, the compartment chain and
+the pileups **divide by** is the mean contact per pair of bins at that separation, which is
+`cooltools expected-cis` and never leaves `expectedAt`. Both are called P(s) in the literature and they
+are not interchangeable: they agree in shape at short range and part company as the separation
+approaches the length of a sequence, where the pair count is heading for zero and the contact total is
+not. There is **no switch between them** — one is a figure and the other is a denominator, and a task
+that offered both as a choice would be inviting a reader to plot the denominator. *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
@@ -3109,11 +3110,12 @@ the residue lands as `3.2e-8` **absolute** on coefficients of a few ten-thousand
 orders below the 0.15–0.3 a call has to reach, which is why the calls compare exactly and the map
 compares against an absolute floor.
 
-**And one golden is against R rather than Python, for the one task that has two published definitions.**
+**And one golden is against R rather than Python, for the curve the panel actually draws.**
 `HiContacts::distanceLaw()` is P(s) as a *probability density* — the share of all cis contacts at a
-separation, per base pair — where cooltools' `expected-cis` is P(s) as a *mean per bin pair*. Both are
-in the catalogue entry above; the golden is what makes the second reproducible rather than merely
-similar, and it is exact at three places a near-miss would be invisible on a log-log plot. The
+separation, per base pair — where cooltools' `expected-cis`, goldened above, is P(s) as a *mean per bin
+pair*. The catalogue entry says why the app plots the first and divides by the second; this golden is
+what makes the first reproducible rather than merely similar, and it is exact at three places a
+near-miss would be invisible on a log-log plot. The
 **separation** is HiContacts' gap distance, `pairdist(type = 'gap')` over bins that HiCExperiment
 builds as `IRanges(start + 1, end)`, so two bins *k* apart are `(k − 1)·binsize` apart and the
 diagonal and the first off-diagonal share the first break — a one-bin shift, which is a factor of two
@@ -3124,14 +3126,17 @@ mirrored dense squares, harmless to a mean and fatal to a share of a total, sinc
 once among off-diagonals that arrive twice.
 
 The oracle is `scripts/hicontacts_ps.R`, which is HiContacts' own pipeline copied line for line with
-one substitution — the two lines that read the map — rather than a transcription into numpy. That is
+one substitution — the two lines that read the map — rather than a transcription into numpy. Two of
+that function's output columns are left out because nothing here computes them: `slope`, which it
+loess-smooths where `logLogSlope` draws the raw central difference, and `norm_p_unity`, which is a
+rescaling of the goldened column rather than a second curve. That is
 the same rule the chromosight golden follows for the same reason: reproducing R's `findInterval(...,
 all.inside = TRUE)`, its `left_join` and its group semantics in another language would make the oracle
 a second implementation of the thing it checks. It is the first golden whose dependency is a program
 rather than an importable module, which is what the `bin:` prefix in the generator's `have()` is for,
-and like every other it is *named* in the manifest when it is skipped. The last test in the suite is
-not a comparison at all: it asserts that the two conventions **disagree**, and in which direction, so
-that nobody folds one into the other on the grounds that both are called P(s).
+and like every other it is *named* in the manifest when it is skipped. One test in the suite is not a
+comparison at all: it drives the kernel with the mirror fold switched off and records what that
+produces, because what it produces still looks like a P(s).
 
 ---
 

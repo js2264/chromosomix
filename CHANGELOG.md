@@ -117,6 +117,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   position, density and unity-scaled value matches to 2e-6 on four chromosomes
   and on the four pooled.
 
+
 - **Pattern detection, and it is chromosight.** A fifteenth task on the map card:
   loops, borders, hairpins, centromeres and stripes, found by correlating a
   template against a map detrended by its own distance law, with the smears
@@ -189,6 +190,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   venue that had no store to allocate ids in, so it invented a second convention
   and lost. Both work now: the name a reader typed still names the input, and the
   parameter key is an alias for it.
+
+### Changed
+
+- **P(s) is now the quantity HiContacts means by it.** The contact-probability
+  task plots the **probability density** — contacts at a separation over all cis
+  contacts, then over the width of the separation bin in base pairs — which is
+  `HiContacts::distanceLaw()`'s `norm_p`. It used to plot the mean contact per
+  *pair of bins*, which is `cooltools expected-cis`. Both are called P(s); they
+  agree in shape at short range and part company as the separation approaches
+  the length of a chromosome, where the pair count is heading for zero and the
+  contact total is not, so an exponent read off the tail of one is not an
+  exponent of the other. **This changes the numbers every existing P(s) figure
+  was drawn from**, and the ordinate now says `Contact probability density
+  (per bp)` to make that visible.
+
+  The expected curve itself is unchanged and is still what observed/expected,
+  the compartment chain and the pileups divide by — it just never was the curve
+  on screen, and now it is not pretending to be.
+
+  **It reproduces that package rather than resembling it.** The separation is
+  HiContacts' gap distance — two bins *k* apart are `(k − 1)·binsize` apart
+  there, so the diagonal and the first off-diagonal share the first break — and
+  the bins are its break table, which turns out to be exactly
+  `unique(round(1.1^n))` and is regenerated from the task's own factor rather
+  than tabulated. `test/golden/analysis/hicontacts_ps.json` is built by running
+  HiContacts' own pipeline in R (`scripts/hicontacts_ps.R`, the first golden
+  whose dependency is a program rather than a Python module), and every break
+  position and density matches to 2e-6 on four chromosomes and on the four
+  pooled.
 
 ## [0.11.0] - 2026-08-14
 

@@ -408,12 +408,13 @@ this repo's own definition recomputed in numpy and is compared to **equality**: 
 transposed index or a doubled diagonal. `reference` is the other tool's number under *its* definition,
 compared to whatever relation actually holds — and three of those relations are exact:
 
-- **P(s)** equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the
-  first two offsets. The mirrored dense block doubles both the sum and the count, and the mean is
-  what survives. Under its other normalisation it equals `HiContacts::distanceLaw()` instead —
-  same break positions, same densities, same `norm_p_unity` — against that package's own pipeline
-  run in R by `scripts/hicontacts_ps.R`. The two are different quantities, not two smoothings of
-  one, and the suite ends by asserting that they disagree.
+- **P(s)** is two curves off one accumulator and both are goldened. The **expected** value — the
+  mean contact per pair of bins at a separation, which observed/expected and the pileups divide by —
+  equals cooltools' `expected_cis` cell for cell, once cooltools is told not to mask the first two
+  offsets; the mirrored dense block doubles both the sum and the count, and the mean is what
+  survives. The curve the panel **plots** is the probability density, and it equals
+  `HiContacts::distanceLaw()`'s `norm_p` — same break positions, same values — against that
+  package's own pipeline run in R by `scripts/hicontacts_ps.R`.
 - **Coverage** satisfies `cooltools_cis == ours + diagonal`, exactly. cooltools sums the pixel table
   by both ends so a diagonal pixel counts twice; this repo counts it once, deliberately, and the
   identity is the proof that the difference is the one intended and not an off-by-something.
