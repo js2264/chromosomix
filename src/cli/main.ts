@@ -520,7 +520,15 @@ async function runCommand(args: Args): Promise<number> {
         task,
         params,
         path,
-        window: one(args, 'window'),
+        // Not `one(args, 'window')`. `apa` declares a parameter of that name —
+        // a half-width in bins — and `paramsFor` already gives a task's own
+        // parameters the flag where the two collide. The framing was reading it
+        // anyway, so `apa --window 8` set the half-width *and* tried to resolve
+        // `8` as a locus, and the run died with "Unknown sequence label: 8".
+        // One name, one meaning, decided by whether the task claims it.
+        window: task.params.some((param) => param.key === 'window')
+          ? undefined
+          : one(args, 'window'),
         balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
         inputs,
         quiet,

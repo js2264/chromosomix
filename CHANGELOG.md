@@ -186,6 +186,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **`metacooler-run apa --window 8` set the half-width and then died.** The CLI
+  reserves `--window` for the framing locus, and `apa` declares a parameter of
+  the same name — a half-width in bins. `paramsFor` already gives a task's own
+  parameters the flag where the two collide, but the framing read it anyway, so
+  the run set the half-width correctly and then failed with *"Unknown sequence
+  label: 8"*. One name, one meaning, decided by whether the task claims it.
+
 - **Opening a saved workspace ignored the overlay toggles it carried.** Every tab
   in the file has always recorded them — the dividers, the breaks, the labels,
   the ticks, the crosshair, the tooltip — and the one road that could not apply
