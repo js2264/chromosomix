@@ -285,6 +285,24 @@ export interface MapPanelProps {
    * memory key is. See `panels/deck.ts`'s `DeckLook`.
    */
   onLook?(look: Omit<DeckLook, 'uri'>): void
+  /**
+   * What this map is called: the reader's name for it, or its file's.
+   *
+   * A thunk, because a rename happens outside this panel — the names belong to
+   * the session, which is what holds the maps (`ui/mapNames.ts`) — and because
+   * a panel that resolves itself into an entry of a collection has to ask again
+   * under the address it ended up at.
+   */
+  label?(): string | undefined
+  /**
+   * The reader typed a name into this panel's heading, or emptied the box.
+   *
+   * `null` is the empty box, which hands the map back to its file name and is
+   * what makes a rename undoable. Reported rather than written here, for
+   * {@link onLook}'s reason: the memory is the session's and a panel does not
+   * know its key.
+   */
+  onRename?(name: string | null): void
 }
 
 export class MapPanel {
@@ -326,7 +344,7 @@ export class MapPanel {
    */
   private readonly renameNoteEl = el('p', { class: 'deck-note deck-rename-note hidden' })
   private refusal: string | null = null
-  private readonly nameEl: HTMLElement
+  private readonly nameEl: HTMLInputElement
   private readonly lockButton: HTMLElement
   /** This panel's half of the deck's star; the deck decides which is filled. */
   private readonly starButton: HTMLButtonElement
@@ -425,15 +443,16 @@ export class MapPanel {
   private readonly entryPicker: HTMLSelectElement
 
   constructor(private readonly props: MapPanelProps) {
-    // The *file's* name only. The entry beside it is the picker below, and a
-    // heading that printed `rep1.mcool::1000` and then offered `::1000` again
-    // would be saying the same thing twice, once as a fact and once as a
-    // control.
-    this.nameEl = el('span', {
-      class: 'deck-name',
-      text: fileBaseLabel(props.uri),
-      title: props.uri,
-    })
+    // The *file's* name only, until a reader says otherwise. The entry beside it
+    // is the picker below, and a heading that printed `rep1.mcool::1000` and
+    // then offered `::1000` again would be saying the same thing twice, once as
+    // a fact and once as a control.
+    //
+    // An `<input>` that looks like text rather than a label that swaps itself
+    // for one, which is `ui/AnnotationCard.ts`'s reasoning for a track's lane
+    // label: the swap is a frame of flicker and a lost first keystroke, and
+    // there is nothing the plain text could do that the quiet input does not.
+    this.nameEl = this.name()
     this.entryPicker = el('select', { class: 'select select-tiny deck-entry hidden' })
     this.entryPicker.addEventListener('change', () => {
       void this.openEntry(this.entryPicker.value)
@@ -485,6 +504,72 @@ export class MapPanel {
       this.body,
     )
     this.say('opening…')
+  }
+
+  /**
+   * What this map is called, on its heading and in its exported figure.
+   *
+   * Editable in place, by clicking it: the file name is a starting point rather
+   * than an answer, and a deck of four replicates is four labels differing in a
+   * digit. An empty box hands the map back to its file name, which is what
+   * makes a rename undoable — the same rule the tab strip follows, and the same
+   * refusal a track's lane label makes for a name that would leave a row it
+   * cannot be told from its neighbour by.
+   *
+   * The pointer events are stopped because the heading is a *deck* heading: the
+   * grip beside this makes the panel draggable, and a browser reads a drag that
+   * begins in a text box as a drag of the panel rather than as a selection.
+   */
+  private name(): HTMLInputElement {
+    const input = el('input', {
+      class: 'input deck-name',
+      type: 'text',
+      value: this.props.label?.() ?? fileBaseLabel(this.props.uri),
+      title: this.props.uri,
+    })
+    const revert = (): void => {
+      input.value = this.props.label?.() ?? fileBaseLabel(this.props.uri)
+    }
+    input.addEventListener('change', () => {
+      const typed = input.value.trim()
+      if (typed === (this.props.label?.() ?? fileBaseLabel(this.props.uri))) {
+        revert()
+        return
+      }
+      this.props.onRename?.(typed === '' ? null : typed)
+      revert()
+    })
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        input.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        revert()
+        input.blur()
+      }
+      event.stopPropagation()
+    })
+    input.addEventListener('pointerdown', (event) => event.stopPropagation())
+    return input
+  }
+
+  /**
+   * Put the name back in the box after somebody else changed it.
+   *
+   * Pushed by the deck rather than read per frame, and skipped while the caret
+   * is in it: the panel repaints on every read and every lock change, and
+   * rewriting the box under a reader mid-word is the one way an editable
+   * heading is worse than a printed one.
+   */
+  syncName(): void {
+    if (document.activeElement === this.nameEl) return
+    const label = this.props.label?.() ?? fileBaseLabel(this.props.uri)
+    if (this.nameEl.value !== label) this.nameEl.value = label
+    // Both, because a companion's heading *is* its map's name — see
+    // `ui/MatrixPanel.ts`'s {@link MatrixPanel.retitle}.
+    this.panel?.setMapLabels(label)
+    this.panel?.retitle(label)
   }
 
   /**
@@ -1251,8 +1336,12 @@ export class MapPanel {
     // Both on every block, not only at construction: a panel outlives a change
     // of rung, and an exported figure captioned with the entry this map *was*
     // at is wrong in the one place nobody re-checks.
-    this.panel.setCaptionFile(fileLabel(this.uri))
-    this.panel.setData(result, fileLabel(this.uri))
+    // The reader's name where they have given one, on `ui/mapNames.ts`'s rule
+    // that a map is called the same thing everywhere it is named — the heading,
+    // the readout, the key, and the caption on the figure this exports.
+    const label = this.props.label?.() ?? fileLabel(this.uri)
+    this.panel.setCaptionFile(label)
+    this.panel.setData(result, label)
     this.armRefine(result, info, state)
     this.nameEl.title =
       `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +

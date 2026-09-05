@@ -103,6 +103,7 @@ import {
   BIN_FRACTION,
   anchorColumns,
   anchorRays,
+  bandAt,
   binsForColumns,
   cellAt,
   cellLoci,
@@ -130,9 +131,12 @@ import {
   DEFAULT_LABEL_FONT,
   HeatmapView,
   type AxisCoordSet,
+  type AxisSpan,
+  type AxisSpanSet,
   type AxisCoords,
   type Cell,
   type PlotOptions,
+  type VerticalAnchor,
   type DrawnBox,
   type SelectionBox,
   type SelectionText,
@@ -2924,8 +2928,16 @@ export class MatrixPanel {
     // `down` is the mirrored half of a comparison, where separation grows towards
     // the bottom of the picture and the far edge is the bottom one. The other
     // horizontal edge is the diagonal the band stands on, and is not a handle.
+    //
+    // A **mirrored pair** has no idle edge at all: the diagonal is in the middle
+    // of the picture, both horizontal edges are far edges, and each of them sets
+    // the same one number — how tall the box is — from its own side.
     const idle: PlotEdge | null =
-      turned === null ? null : turned.direction === 'up' ? 'bottom' : 'top'
+      turned === null || turned.fold !== undefined
+        ? null
+        : turned.direction === 'up'
+          ? 'bottom'
+          : 'top'
     for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
       this.grips[edge].classList.toggle('hidden', edge === idle)
     }
@@ -3562,20 +3574,34 @@ export class MatrixPanel {
       // mirrored half — and the rays go from there towards the far edge only.
       // Both ways along the genome, because a place is an anchor of everything
       // to its left as well as everything to its right.
-      const apex = {
-        col: frame.colScale.toUnit(guide.along - frame.plot.x),
-        row: rowForSeparation(turned, 0) + 0.5,
-      }
-      const far = turned.direction === 'up' ? 0 : turned.nrows
-      for (const ray of anchorRays(apex, [far])) {
-        ctx.moveTo(
-          frame.plot.x + frame.colScale.toPixel(ray.from.col),
-          frame.plot.y + frame.rowScale.toPixel(ray.from.row),
-        )
-        ctx.lineTo(
-          frame.plot.x + frame.colScale.toPixel(ray.to.col),
-          frame.plot.y + frame.rowScale.toPixel(ray.to.row),
-        )
+      const col = frame.colScale.toUnit(guide.along - frame.plot.x)
+      // One V per band, because a mirrored pair has two diagonals and the place
+      // being pointed at is on the genome rather than in a file: it anchors
+      // contacts in both maps, and a guide drawn in one of them would say
+      // otherwise.
+      const arms: Array<{ apex: { col: number; row: number }; far: number }> =
+        turned.fold === undefined
+          ? [
+              {
+                apex: { col, row: rowForSeparation(turned, 0) + 0.5 },
+                far: turned.direction === 'up' ? 0 : turned.nrows,
+              },
+            ]
+          : [
+              { apex: { col, row: rowForSeparation(turned, 0) + 0.5 }, far: 0 },
+              { apex: { col, row: turned.fold + 0.5 }, far: turned.nrows },
+            ]
+      for (const arm of arms) {
+        for (const ray of anchorRays(arm.apex, [arm.far])) {
+          ctx.moveTo(
+            frame.plot.x + frame.colScale.toPixel(ray.from.col),
+            frame.plot.y + frame.rowScale.toPixel(ray.from.row),
+          )
+          ctx.lineTo(
+            frame.plot.x + frame.colScale.toPixel(ray.to.col),
+            frame.plot.y + frame.rowScale.toPixel(ray.to.row),
+          )
+        }
       }
     } else if (laneIsHorizontal(guide.edge)) {
       ctx.moveTo(at, data.y)
@@ -4668,9 +4694,16 @@ export class MatrixPanel {
     // is its top edge. Centring, which is right for a square map, is what left a
     // band floating half way up its panel with a stripe of paper between it and
     // the profiles it exists to be read against.
-    this.heatmap.setAnchor(
-      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
-    )
+    //
+    // A **mirrored pair** is centred, and for the same reason read the other way
+    // up: its diagonal is the line down the middle rather than either edge, so
+    // that is the line to pin. It also decides what a band deeper than its box
+    // loses. One band is cut to the box and clipped from the top, where there is
+    // nothing to see; two are cut to half of it each, and anchoring the pair by
+    // an edge takes the whole surplus off *one* file — which is what a zoom out
+    // and back in did, leaving the reader with a sliver of the first map above a
+    // whole one of the second.
+    this.heatmap.setAnchor(anchorFor(turned))
     // Both drags collapse onto the genomic axis under a turn; see
     // {@link HeatmapView.setSpanGestures}.
     this.heatmap.setSpanGestures(turned !== null)
@@ -4715,13 +4748,19 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
+    this.heatmap.setAxisSpans(this.axisSpansOf(data, turned))
     // The guides follow the two anchors rather than the two axes while this is
     // set, which is the whole of what the view is told about the turn.
     this.heatmap.setTurn(
       turned === null
         ? null
-        : { maxSeparation: turned.maxSeparation, direction: turned.direction },
+        : {
+            maxSeparation: turned.maxSeparation,
+            direction: turned.direction,
+            ...(turned.fold === undefined ? {} : { fold: turned.fold }),
+          },
     )
+    this.heatmap.setTurnLabels(this.bandLabels(turned))
     const axes = this.locusAxesOf(data, turned)
     this.locusAxes = axes.drawn
     this.squareAxes = axes.square
@@ -4807,9 +4846,7 @@ export class MatrixPanel {
     this.turned = turned
     this.syncLegendSlots()
     this.painted = null
-    this.heatmap.setAnchor(
-      turned === null ? 'middle' : turned.direction === 'down' ? 'start' : 'end',
-    )
+    this.heatmap.setAnchor(anchorFor(turned))
     this.heatmap.setSpanGestures(turned !== null)
     this.heatmap.setFitAxis(turned === null ? 'both' : 'cols')
     this.refit()
@@ -4825,11 +4862,17 @@ export class MatrixPanel {
       data.level === 'bin' ? LABEL_MIN_SPAN_BP / Math.max(1, this.options.binsize) : 0,
     )
     this.heatmap.setAxisCoords(this.axisCoordsOf(data, turned))
+    this.heatmap.setAxisSpans(this.axisSpansOf(data, turned))
     this.heatmap.setTurn(
       turned === null
         ? null
-        : { maxSeparation: turned.maxSeparation, direction: turned.direction },
+        : {
+            maxSeparation: turned.maxSeparation,
+            direction: turned.direction,
+            ...(turned.fold === undefined ? {} : { fold: turned.fold }),
+          },
     )
+    this.heatmap.setTurnLabels(this.bandLabels(turned))
     this.locusAxes = axes.drawn
     this.squareAxes = axes.square
     if (presentationMoved) {
@@ -4937,6 +4980,31 @@ export class MatrixPanel {
         this.options.binsize,
         turned === null ? 1 : BIN_FRACTION,
       ),
+    }
+  }
+
+  /**
+   * The per-sequence rulers for the same two axes, where the axis has no single
+   * one.
+   *
+   * A whole genome, a selection of chromosomes, a `contig × contig` block: the
+   * axis is several sequences and {@link axisCoordsFor} refuses it, correctly,
+   * because no one line describes it. But the reader looking at it is asking
+   * the question they ask of a single chromosome — *where in this one am I* —
+   * and until now the answer on those views was the contig names and nothing
+   * else. One ruler per sequence answers it, each measured from that sequence's
+   * own first base, with the boundaries the axis already draws saying where one
+   * stops and the next begins.
+   *
+   * Empty wherever the single ruler already covers the axis, so the two never
+   * both draw, and empty under a turn on both axes: the column axis there is one
+   * sequence by {@link isTurnable}'s gate, and the row axis is a distance.
+   */
+  private axisSpansOf(data: MatrixResult, turned: RotatedBlock | null): AxisSpanSet {
+    if (turned !== null) return { rows: [], cols: [] }
+    return {
+      rows: axisSpansFor(data.rowGroups, data.rowExtent, data.level, this.options.binsize),
+      cols: axisSpansFor(data.colGroups, data.colExtent, data.level, this.options.binsize),
     }
   }
 
@@ -5078,6 +5146,55 @@ export class MatrixPanel {
     else this.options.caption = { ...this.options.caption, file }
   }
 
+  /**
+   * Rename the maps this panel is drawing.
+   *
+   * A rename changes every place a map is *named* and nothing about what is in
+   * the picture, so it must not go through {@link setData} or {@link rederive}:
+   * the first re-reads the block and the second re-derives it, and on a gated
+   * whole-genome map (§7.3) rebuilding the view puts a full pixel scan back
+   * behind its button — the reader types a name and their map disappears.
+   *
+   * Written in place, as {@link setResolution} and {@link setCaptionFile} write
+   * the two facts beside it, and for the same reason: the readout, the derived
+   * label and the colour key all read the name at the moment they are drawn, so
+   * the only things that have to be *pushed* are the two that are painted once
+   * — the heading and the names on a mirrored pair's two bands.
+   *
+   * `second` is absent on a map with one file behind it, which is every map but
+   * one. The **heading** is not touched here, and that is not an oversight: on
+   * this session's own panel it names the *region*, and only a deck companion's
+   * heading is the file's name — {@link retitle} is that panel's own door.
+   */
+  setMapLabels(own: string, second?: string): void {
+    if (own !== '') this.setCaptionFile(own)
+    const compare = this.options.compare
+    if (compare !== undefined && second !== undefined) {
+      this.options.compare = { ...compare, labels: [own, second] }
+    }
+    this.heatmap.setTurnLabels(this.bandLabels(this.turned))
+    // The key's title carries the comparison — `rep1 / rep2` under a ratio — and
+    // is only rewritten when the colour scale moves. Forgetting what was painted
+    // is what makes the next frame write it again.
+    this.painted = null
+  }
+
+
+  /**
+   * Rewrite the heading, for a panel whose heading is the map's name.
+   *
+   * A deck companion is the only one: everywhere else the heading names the
+   * region, the genome, or the pair of them, and is a fact about the *view*
+   * rather than about the file. Kept apart from {@link setMapLabels} for that
+   * reason, and it moves `exportName` with it because a figure saved out of a
+   * companion is named after the map it is of.
+   */
+  retitle(title: string): void {
+    if (title === '') return
+    this.lastTitle = title
+    this.exportName = title
+    this.titleNode.textContent = title
+  }
 
   /**
    * Turn the block that was read into the block that is drawn.
@@ -5221,15 +5338,28 @@ export class MatrixPanel {
     this.turnButton?.classList.toggle('is-disabled', !canTurn)
     if (this.turnButton instanceof HTMLButtonElement) this.turnButton.disabled = !canTurn
     let out = dense
+    // **Two files under a split get two bands.** The square is the first file
+    // above the matrix diagonal and the second below it, and turning it keeps
+    // only the upper triangle — so the second file, which is the whole reason
+    // the picture is split, disappeared the moment the reader turned it.
+    // Mirrored, the pair meets at one shared genomic axis and is read against
+    // itself at every position (`render/rotate.ts`'s `mirror`).
+    //
+    // The split alone, and that is not an omission: a ratio or a difference is
+    // one derived field over the whole square, so its two triangles are the
+    // same numbers twice and the mirror would draw the picture under its own
+    // reflection.
+    const mirror = merged !== undefined && op === 'split'
     const turned =
       canTurn && this.options.turn?.on === true
         ? rotateBlock(
             { ...data, values: dense.values },
             {
-              maxSeparation: depth ?? this.turnDepth(data),
+              maxSeparation: depth ?? this.turnDepth(data, mirror),
               ...(this.options.turn.direction === undefined
                 ? {}
                 : { direction: this.options.turn.direction }),
+              ...(mirror ? { mirror: true } : {}),
             },
           )
         : null
@@ -5271,6 +5401,19 @@ export class MatrixPanel {
     )?.label
     this.units = barLabel === 'counts' || barLabel === picked ? '' : barLabel
     return { dense: out, ...(turned === null ? {} : { gauge: dense }), presentationMoved, turned }
+  }
+
+  /**
+   * What to write in each band of a mirrored pair, or `null` for one band.
+   *
+   * The two files' own names, which are what the compare card and the readout
+   * already call them — so the picture names them the same way rather than
+   * inventing a second vocabulary for the same two things.
+   */
+  private bandLabels(turned: RotatedBlock | null): [string, string] | null {
+    if (turned === null || turned.fold === undefined) return null
+    const labels = this.options.compare?.labels
+    return labels === undefined ? null : [labels[0], labels[1]]
   }
 
   /**
@@ -5405,16 +5548,24 @@ export class MatrixPanel {
    * it is about the geometry rather than about this panel, and so is the clamp:
    * a band cannot be deeper than the block has cells to fill.
    */
-  private turnDepth(data: MatrixResult): number {
+  private turnDepth(data: MatrixResult, mirror = false): number {
     // A deck's distance, where a deck has set one. Every panel of a deck cuts
     // the *same* band or the pictures are not comparable, and the box is the one
     // input that cannot deliver that: the cells of a grid are laid out over
     // several frames, so two panels asking their own boxes at their own moments
     // get two answers, and neither is wrong. See {@link setTurnReach}.
+    //
+    // Per **band**, not per picture, which is why the deck's number needs no
+    // halving: what it promises is that every panel reaches the same distance
+    // from the diagonal, and a mirrored panel reaches it on both sides.
     const asked = this.deckReach
     if (asked !== null) return turnDepthFor(data, rowsForReach(asked, this.options.binsize) - 1)
+    // The box is one box whether it holds one band or two, so a mirrored pair
+    // gets half of it each. Without this the two bands are cut for the whole
+    // height, drawn to twice it, and the picture leaves its own rectangle —
+    // taking the tracks under it with it.
     const rows = this.plotRows()
-    return turnDepthFor(data, separationForRows(rows) - 1)
+    return turnDepthFor(data, separationForRows(mirror ? Math.floor(rows / 2) : rows) - 1)
   }
 
   /**
@@ -5431,7 +5582,10 @@ export class MatrixPanel {
   turnReach(): number | null {
     const turned = this.turned
     if (turned === null) return null
-    return reachForRows(turned.nrows, this.options.binsize)
+    // The **band**, not the picture: a mirrored pair is two bands of this depth
+    // meeting at a shared axis, and the distance a deck locks on is how far
+    // either of them reaches from the diagonal.
+    return reachForRows(turned.maxSeparation + 1, this.options.binsize)
   }
 
   /**
@@ -5458,10 +5612,9 @@ export class MatrixPanel {
     const data = this.data
     if (this.turned === null || this.square === null || data === null) return
     this.recutBand(
-      turnDepthFor(
-        data,
-        (asked === null ? this.plotRows() : rowsForReach(asked, this.options.binsize)) - 1,
-      ),
+      asked === null
+        ? this.turnDepth(data, this.turned.fold !== undefined)
+        : turnDepthFor(data, rowsForReach(asked, this.options.binsize) - 1),
     )
   }
 
@@ -5501,7 +5654,7 @@ export class MatrixPanel {
     const square = this.square
     const data = this.data
     if (turned === null || square === null || data === null) return
-    const wanted = this.turnDepth(data)
+    const wanted = this.turnDepth(data, turned.fold !== undefined)
     // Only when the band is too **shallow** for the box. A band deeper than the
     // box needs is not a different picture: it stands on the box's floor either
     // way, and the rows past the top edge are clipped by the same rule that
@@ -5521,7 +5674,14 @@ export class MatrixPanel {
     // panel was given rather than an appetite this one has, and reaching twice
     // as far as it says is exactly the disagreement {@link setTurnReach} exists
     // to end.
-    this.recutBand(this.deckReach === null ? turnDepthFor(data, wanted * 2) : wanted)
+    //
+    // Nor on a **mirrored pair**, where the spare rows are not spare. One band
+    // stands on the box's floor and the rows past the top edge are clipped by
+    // the same rule that clips the columns; two bands stand on the fold between
+    // them, so buying twice the depth pushes that fold — and the whole of the
+    // first file with it — off the top of the picture.
+    const cheap = this.deckReach === null && turned.fold === undefined
+    this.recutBand(cheap ? turnDepthFor(data, wanted * 2) : wanted)
   }
 
   /**
@@ -5544,6 +5704,10 @@ export class MatrixPanel {
       {
         maxSeparation: cut,
         ...(turned.direction === 'up' ? {} : { direction: turned.direction }),
+        // A re-cut is the same picture at another depth, so a mirrored pair
+        // stays a mirrored pair: dropping the second band here would put the
+        // second file away on the first zoom after it was drawn.
+        ...(turned.fold === undefined ? {} : { mirror: true }),
       },
     )
     // Nothing to gain from a band the block could not fill: `rotateBlock` clamps
@@ -5553,7 +5717,11 @@ export class MatrixPanel {
     this.turned = next
     this.heatmap.reshape(turnedDense(next))
     // The depth is half of where the guides go, so it moves with the band.
-    this.heatmap.setTurn({ maxSeparation: next.maxSeparation, direction: next.direction })
+    this.heatmap.setTurn({
+      maxSeparation: next.maxSeparation,
+      direction: next.direction,
+      ...(next.fold === undefined ? {} : { fold: next.fold }),
+    })
     // The ruler up the side is `maxSeparation`'s, so it has to be rewritten with
     // the band — a band re-cut under a ruler measured for the previous depth is
     // a picture labelled with somebody else's distances.
@@ -5699,6 +5867,19 @@ export class MatrixPanel {
    * ways, and a reader who typed `[-1, 1]` reads `-1` and `1` rather than the
    * `0.5` and `2` an inverse transform would have shown them.
    */
+  /**
+   * The glyph the second file's key is marked with — where it is on the picture.
+   *
+   * `◣` is the lower-left triangle of a split square, and it stops being true
+   * the moment the map is turned into a mirrored pair: the second file is then
+   * the band *below the shared axis*, which is what `▼` says. The mark is the
+   * one part of the key that is about geometry rather than about numbers, so it
+   * has to follow the geometry.
+   */
+  private secondMark(): string {
+    return this.turned?.fold === undefined ? '◣' : '▼'
+  }
+
   private keyFor(scale: ColorScale, prefix = ''): KeyContent {
     const scores = this.options.scores
     const choice = scores?.choices.find((entry) => entry.id === scores.current)
@@ -5776,7 +5957,7 @@ export class MatrixPanel {
         ctx,
         right,
         box.y + box.height + 4,
-        this.keyFor(rescaledBy(painted, this.second.gain), '◣'),
+        this.keyFor(rescaledBy(painted, this.second.gain), this.secondMark()),
         style,
       )
     }
@@ -5899,7 +6080,17 @@ export class MatrixPanel {
     // whether or not a reader touched anything, and recomputing a 16 M-cell
     // block for an equal object would make every unrelated repaint expensive.
     if (data === null || (unchanged && compare === undefined)) return
-    if (turnMoved) {
+    // A change of **operation** is a change of grid as surely as a change of
+    // turn is: a turned split is two bands and a turned ratio is one, so the
+    // values a swap would install are read with a stride they were not computed
+    // for. Asked of the block on screen against what the settings now want,
+    // rather than of the setting alone, because the same op means one band on a
+    // map with a single file behind it.
+    const bandsMoved =
+      this.turned !== null &&
+      (this.turned.fold !== undefined) !==
+        (this.second !== null && (this.options.compare?.op ?? 'split') === 'split')
+    if (turnMoved || bandsMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
       // axes change meaning, and the view has to be refitted around them.
@@ -6236,7 +6427,7 @@ export class MatrixPanel {
         // worth drawing: what it says then is that the two are on one scale,
         // which is exactly the claim the reader is relying on.
         if (this.second !== null) {
-          this.key2.set(this.keyFor(rescaledBy(effective, this.second.gain), '◣'))
+          this.key2.set(this.keyFor(rescaledBy(effective, this.second.gain), this.secondMark()))
         }
         this.placeKey()
       }
@@ -7140,7 +7331,17 @@ export class MatrixPanel {
     // contacts" is what tells you whether to believe it. A departure computed
     // from three counts against a baseline of two is noise, and only the raw
     // numbers beside it say so.
-    const reading = this.derivedReading(square.row, square.col)
+    //
+    // **Transposed in the mirrored band**, because that is the band's own file:
+    // the drawn square holds the first file above the matrix diagonal and the
+    // second below it, and a pointer under the shared axis is on the second.
+    // Read the untransposed cell there and a reader hovering the lower band is
+    // told the upper one's O/E, which is a real number from a real cell and not
+    // the cell they are pointing at.
+    const lower = this.turned !== null && bandAt(this.turned, cell.row) === 1
+    const reading = lower
+      ? this.derivedReading(square.col, square.row)
+      : this.derivedReading(square.row, square.col)
     // The genome each end belongs to, read before the distance because the
     // distance needs them: two MAGs may each have a `contig_1`, and on a
     // coarsened axis the name is most of what is left to tell them apart.
@@ -7343,6 +7544,24 @@ function sameColorScale(a: ColorScale, b: ColorScale | null): boolean {
 
 /** Which group covers a block-local offset. Absent list, absent answer. */
 /**
+ * Which edge of its box a turned block is pinned to — see the caller for why it
+ * is pinned at all.
+ *
+ * `middle` for a square map, which is centred like any picture, and for a
+ * **mirrored pair**, whose diagonal is the line down the middle of it rather
+ * than either edge. `end` and `start` are the one-band cases, standing on
+ * whichever edge their own diagonal is.
+ *
+ * Exported for the test: the whole of the bug it fixes is invisible until a
+ * band is deeper than its box, which is two zooms away from any state a test
+ * can set up directly.
+ */
+export function anchorFor(turned: RotatedBlock | null): VerticalAnchor {
+  if (turned === null || turned.fold !== undefined) return 'middle'
+  return turned.direction === 'down' ? 'start' : 'end'
+}
+
+/**
  * Where a cell of a turned map stands on the genomic axis, in cells of the
  * square block it was turned out of.
  *
@@ -7487,6 +7706,60 @@ export function axisCoordsFor(
   const first = group.unitStart ?? extent[0] + group.start
   return { bpPerCell: binsize * fraction, bpAtOrigin: (extent[0] - first) * binsize }
 }
+
+/**
+ * A ruler per sequence, for an axis that has no single one.
+ *
+ * {@link axisCoordsFor}'s complement, and its refusals inverted: it answers for
+ * an axis of *one* contig at bin level, this answers for an axis of several,
+ * and above bin level neither answers at all — a cell there *is* a contig or a
+ * genome, and a position inside one would be an invention.
+ *
+ * Each stretch's line is stated in the **block's** coordinate frame, which is
+ * `axisCoordsFor`'s own arithmetic applied per group: `bpAtOrigin` is what this
+ * contig's ruler would read at cell zero of the block, negative for every
+ * contig but the first, so a tick's `unit` needs no offsetting to be a matrix
+ * coordinate like any other.
+ *
+ * A cell that several short sequences share is skipped, on {@link describeAxis}'s
+ * rule: the pixel is all of them, and a coordinate inside one of them names a
+ * place the picture does not show.
+ *
+ * And nothing at all past {@link MAX_RULED_SPANS}. A metagenome's axis is
+ * thousands of contigs, each a pixel or less: there is no room for a position on
+ * any of them, the names are already elided for the same reason, and building
+ * the list would cost more than the ruler it cannot draw.
+ */
+export function axisSpansFor(
+  groups: AxisGroup[],
+  extent: readonly [number, number],
+  level: 'bin' | 'contig' | 'genome',
+  binsize: number,
+): AxisSpan[] {
+  if (level !== 'bin' || !(binsize > 0)) return []
+  if (groups.length < 2 || groups.length > MAX_RULED_SPANS) return []
+  const out: AxisSpan[] = []
+  for (const group of groups) {
+    if ((group.merged?.length ?? 1) > 1) continue
+    if (!(group.end > group.start)) continue
+    const first = group.unitStart ?? extent[0] + group.start
+    out.push({
+      from: group.start,
+      to: group.end,
+      coords: { bpPerCell: binsize, bpAtOrigin: (extent[0] - first) * binsize },
+    })
+  }
+  return out
+}
+
+/**
+ * How many sequences an axis may carry and still be ruled one at a time.
+ *
+ * A genome's worth, generously: sixteen chromosomes, or a few hundred scaffolds.
+ * Past that the stretches are narrower than a label and the answer is the same
+ * one the block names give — none — so the list is not built at all.
+ */
+const MAX_RULED_SPANS = 512
 
 /**
  * One side of the hover readout. At bin level the position inside the contig is

@@ -88,6 +88,27 @@ export interface RotateOptions {
    */
   maxSeparation: number
   direction?: RotateDirection
+  /**
+   * Draw the block's *other* triangle as a second band, mirrored beneath the
+   * first.
+   *
+   * The two-file comparison, and the only thing this is for. A split map holds
+   * one file above the matrix diagonal and the other below it
+   * (`render/compare.ts`), and turning that square keeps only the upper
+   * triangle — so the second file, which is the entire reason the picture is
+   * split, vanishes the moment the reader turns it. Mirrored, the pair becomes
+   * two bands meeting at **one shared genomic axis**: the same position is the
+   * same column in both, and the two are read against each other at every place
+   * without the eye having to reflect one of them through a diagonal first.
+   *
+   * It is the same block read twice — `[i][j]` into the first band and `[j][i]`
+   * into the second — so nothing has to be rotated twice and no second square
+   * has to be kept. The diagonal itself is drawn in both, because it is the one
+   * row the two files share: `blendAcrossDiagonal` gives it to the first, and a
+   * dashed line of alternating owners down the middle of the picture would be
+   * an artefact of nothing.
+   */
+  mirror?: boolean
 }
 
 /**
@@ -113,6 +134,18 @@ export interface RotatedBlock {
   /** Separation, in bins, of the row furthest from the axis. */
   maxSeparation: number
   direction: RotateDirection
+  /**
+   * First row of the mirrored band, or `undefined` for a single band.
+   *
+   * `maxSeparation + 1` whenever it is set, which is to say the row just past
+   * the first band's diagonal — so the two diagonals are adjacent rows and the
+   * shared genomic axis is the line between them. It is carried rather than
+   * recomputed because it is what every reader of a turned block has to branch
+   * on: which band a row is in decides the separation it stands for
+   * ({@link separationAt}), which file it came from ({@link bandAt}), and which
+   * way the ruler beside it runs ({@link separationCoords}).
+   */
+  fold?: number
 }
 
 /**
@@ -139,7 +172,12 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
   // to draw, and asking for one would allocate rows that could only be NaN.
   const maxSeparation = Math.max(0, Math.min(Math.trunc(options.maxSeparation), Math.max(0, n - 1)))
   const width = Math.max(1, 2 * n - 1)
-  const height = maxSeparation + 1
+  const band = maxSeparation + 1
+  // The second band starts where the first ends, so the two diagonals are
+  // adjacent rows. `undefined` — not zero — where there is only one band, so
+  // that every reader below has one test rather than two.
+  const fold = options.mirror === true ? band : undefined
+  const height = fold === undefined ? band : band * 2
   // Not filled with `NaN` up front, and that is worth a line: the loop below
   // writes every cell of the band except the two corner triangles, so a blanket
   // fill is a second pass over the whole array to set values that are about to
@@ -150,27 +188,42 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
   // distinction `rotateBlock`'s header insists on.
   const values = new Float32Array(width * height)
 
-  for (let separation = 0; separation <= maxSeparation; separation++) {
-    // Rows are emitted in the order they are drawn, so the renderer needs no
-    // notion of which way up this is: `up` puts the widest separation in row 0,
-    // which a top-to-bottom raster then draws as an apex over an axis along the
-    // bottom edge.
-    const row = direction === 'up' ? maxSeparation - separation : separation
-    const base = row * width
-    // A row of separation `s` reaches from column `s` to `2n - s - 1`: the
-    // further from the diagonal, the more of both ends needs a partner off the
-    // end of the block. Those are the two triangles that come back empty.
-    values.fill(Number.NaN, base, base + Math.min(separation, width))
-    values.fill(Number.NaN, base + Math.max(0, 2 * n - separation - 1), base + width)
-    for (let i = 0; i + separation < n; i++) {
-      const j = i + separation
-      const value = block.values[i * block.ncols + j]
-      // Two columns per cell, which is what makes the output dense rather than
-      // a checkerboard: `i + j` and `i + j + 1` are the two half-bin columns the
-      // cell covers, and the second is where the parity gap would otherwise be.
-      const x = 2 * i + separation
-      values[base + x] = value
-      if (x + 1 < width) values[base + x + 1] = value
+  // One pass per band. The second reads the block **transposed** — the cells
+  // below the matrix diagonal, which under a split are the second file — and
+  // lays them out growing downward from the row just past the first band's
+  // diagonal. Everything else about the two passes is identical, which is the
+  // point: a mirrored map is not a second picture, it is this one read from its
+  // other side.
+  for (let pass = 0; pass < (fold === undefined ? 1 : 2); pass++) {
+    const transposed = pass === 1
+    for (let separation = 0; separation <= maxSeparation; separation++) {
+      // Rows are emitted in the order they are drawn, so the renderer needs no
+      // notion of which way up this is: `up` puts the widest separation in row 0,
+      // which a top-to-bottom raster then draws as an apex over an axis along the
+      // bottom edge.
+      const row = transposed
+        ? (fold as number) + separation
+        : direction === 'up'
+          ? maxSeparation - separation
+          : separation
+      const base = row * width
+      // A row of separation `s` reaches from column `s` to `2n - s - 1`: the
+      // further from the diagonal, the more of both ends needs a partner off the
+      // end of the block. Those are the two triangles that come back empty.
+      values.fill(Number.NaN, base, base + Math.min(separation, width))
+      values.fill(Number.NaN, base + Math.max(0, 2 * n - separation - 1), base + width)
+      for (let i = 0; i + separation < n; i++) {
+        const j = i + separation
+        const value = transposed
+          ? block.values[j * block.ncols + i]
+          : block.values[i * block.ncols + j]
+        // Two columns per cell, which is what makes the output dense rather than
+        // a checkerboard: `i + j` and `i + j + 1` are the two half-bin columns the
+        // cell covers, and the second is where the parity gap would otherwise be.
+        const x = 2 * i + separation
+        values[base + x] = value
+        if (x + 1 < width) values[base + x + 1] = value
+      }
     }
   }
 
@@ -181,6 +234,7 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
     originBin: block.rowExtent[0],
     maxSeparation,
     direction,
+    ...(fold === undefined ? {} : { fold }),
   }
 }
 
@@ -195,7 +249,10 @@ export function rotateBlock(block: RotatableBlock, options: RotateOptions): Rota
  * neighbour, so the answer is the same cell either way.
  */
 export function cellAt(
-  rotated: Pick<RotatedBlock, 'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'>,
+  rotated: Pick<
+    RotatedBlock,
+    'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin' | 'fold'
+  >,
   row: number,
   column: number,
 ): { row: number; col: number; separation: number } | null {
@@ -232,7 +289,7 @@ export function cellLoci(
   square: { rows: LocusAxis | null; cols: LocusAxis | null },
   turned: Pick<
     RotatedBlock,
-    'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'
+    'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin' | 'fold'
   > | null,
   cell: { row: number; col: number },
 ): { rows: Locus; cols: Locus } | null {
@@ -253,7 +310,10 @@ export function cellLoci(
  * one line.
  */
 export function anchorColumns(
-  rotated: Pick<RotatedBlock, 'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin'>,
+  rotated: Pick<
+    RotatedBlock,
+    'nrows' | 'ncols' | 'maxSeparation' | 'direction' | 'originBin' | 'fold'
+  >,
   row: number,
   column: number,
 ): number[] | null {
@@ -308,7 +368,7 @@ export interface TurnedPoint {
  * bin to the side, which at bin zoom is a line pointing next to the answer.
  */
 export function turnedCentre(
-  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction' | 'fold'>,
   row: number,
   column: number,
 ): TurnedPoint {
@@ -350,20 +410,51 @@ export function anchorRays(
   return out
 }
 
-/** The separation, in bins, that a row of the turned block stands for. */
+/**
+ * The separation, in bins, that a row of the turned block stands for.
+ *
+ * Two lines on a mirrored block, meeting at the fold: the first band counts
+ * away from its own diagonal and the second counts away from the same diagonal
+ * the other way, so both bands read `0` on the two rows that touch the shared
+ * axis and grow outwards from there. That is what makes a mirrored pair one
+ * measurement rather than two pictures — a contact 100 kb apart stands the same
+ * height above the axis in the upper band and below it in the lower one.
+ */
 export function separationAt(
-  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction' | 'fold'>,
   row: number,
 ): number {
+  const fold = rotated.fold
+  if (fold !== undefined && row >= fold) return row - fold
   return rotated.direction === 'up' ? rotated.maxSeparation - row : row
 }
 
-/** The row that draws a given separation. Inverse of {@link separationAt}. */
+/**
+ * The row that draws a given separation. Inverse of {@link separationAt}.
+ *
+ * The **first** band's row on a mirrored block, because a separation is drawn
+ * twice there and the callers that ask this are placing one thing: a mark is a
+ * claim about the genome rather than about a file, and drawing it in both bands
+ * would say the reader had drawn two.
+ */
 export function rowForSeparation(
   rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
   separation: number,
 ): number {
   return rotated.direction === 'up' ? rotated.maxSeparation - separation : separation
+}
+
+/**
+ * Which band of a mirrored pair a row is in — `0` for the first, `1` for the
+ * band beneath it, and always `0` where there is only one.
+ *
+ * The one question a mirrored map adds to every reading of a cell: the two
+ * bands are two *files*, so the number under the pointer, the derived value
+ * beside it and the name it should be given all depend on which side of the
+ * shared axis the pointer is.
+ */
+export function bandAt(rotated: Pick<RotatedBlock, 'fold'>, row: number): 0 | 1 {
+  return rotated.fold !== undefined && row >= rotated.fold ? 1 : 0
 }
 
 /**
@@ -535,10 +626,24 @@ export function turnDepthFor(block: { nrows: number; ncols: number }, asked: num
  * difference between a tick on a cell and a tick between two.
  */
 export function separationCoords(
-  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction'>,
+  rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction' | 'fold'>,
   binsize: number,
-): { bpPerCell: number; bpAtOrigin: number; tickGapPx: number } {
+): { bpPerCell: number; bpAtOrigin: number; tickGapPx: number; fold?: number } {
   const gap = { tickGapPx: SEPARATION_TICK_GAP_PX }
+  // A mirrored pair is that same line and its own reflection, meeting at the
+  // fold — one ruler read outwards in both directions, which is what says the
+  // two bands are the same measurement of two files rather than two pictures.
+  // The reflection is `AxisCoords.fold`'s to make; stating it here as a row
+  // index and letting the ruler do the arithmetic is what keeps this an affine
+  // line, which is all `AxisCoords` has ever been.
+  if (rotated.fold !== undefined) {
+    return {
+      ...gap,
+      bpPerCell: -binsize,
+      bpAtOrigin: (rotated.maxSeparation + 0.5) * binsize,
+      fold: rotated.fold,
+    }
+  }
   return rotated.direction === 'up'
     ? { ...gap, bpPerCell: -binsize, bpAtOrigin: (rotated.maxSeparation + 0.5) * binsize }
     : { ...gap, bpPerCell: binsize, bpAtOrigin: -0.5 * binsize }

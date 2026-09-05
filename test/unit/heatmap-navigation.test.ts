@@ -1133,6 +1133,46 @@ describe('fitting a band', () => {
     expect(floor()).toBe(299)
   })
 
+  /**
+   * The regression, and it is the one thing a mirrored pair asks of the view
+   * that a single band does not.
+   *
+   * A band deeper than its box is not a different picture: it stands on the
+   * box's floor and the rows past the top edge are clipped, which is why the
+   * panel only ever re-cuts a band that is too *shallow* and a zoom in costs
+   * nothing. Two bands meeting at a shared axis break that reasoning, because
+   * anchoring the pair by an edge takes the whole surplus off one of the two
+   * files — so a zoom in left the reader with a sliver of the first map above a
+   * whole one of the second, and far enough in, with the axis off the picture
+   * altogether and neither map identifiable.
+   */
+  it('keeps a mirrored pair on its shared axis, and clips both bands alike', () => {
+    // 600 rows at 2 px a cell into a 400 px plot: 200 fit, so two thirds of the
+    // block is surplus. The fold — the row the two bands meet at — is row 300.
+    const middle = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    middle.setFitAxis('cols')
+    middle.setAnchor('middle')
+    middle.setMatrix(band(600, 200), [])
+    const plot = middle.plotRect
+    const rowAt = (view: HeatmapView, fraction: number): number | undefined =>
+      view.cellAt(plot.x + plot.width / 2, plot.y + plot.height * fraction)?.row
+
+    expect(rowAt(middle, 0.5)).toBe(300)
+    // …and the same depth either side of it, which is the whole claim a
+    // mirrored pair makes: the same separation stands the same height above the
+    // axis in one file and below it in the other.
+    const top = rowAt(middle, 0) as number
+    const bottom = rowAt(middle, 0.999) as number
+    expect(300 - top).toBe(bottom - 300 + 1)
+
+    // Anchored by an edge, the same block shows one band and none of the other.
+    const end = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
+    end.setFitAxis('cols')
+    end.setAnchor('end')
+    end.setMatrix(band(600, 200), [])
+    expect(rowAt(end, 0) as number).toBeGreaterThan(300)
+  })
+
   it('re-cuts without moving the window', () => {
     const heatmap = new HeatmapView(fakeCanvas(400), { devicePixelRatio: 1 })
     heatmap.setFitAxis('cols')

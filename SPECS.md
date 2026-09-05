@@ -369,6 +369,18 @@ Either file can be closed. Closing the second returns to one map; closing the fi
 second, so the map that remains is an ordinary one. `uri2` is part of the view state, so a comparison
 is a link — for two remote files, which is the same limit `uri` has always had (§11).
 
+**The second file follows the first across a change of resolution.** A comparison belongs to the file
+it is a comparison *of*, so opening another file puts it down; changing rung is not that, and the
+reader closed nothing. What carries is the **bin size** rather than the URI, since the second file has
+a ladder of its own: `rep2.mcool::/resolutions/1000` beside a 1 kb map is `…/5000` beside a 5 kb one,
+looked up in that file's own entries and refused where it has no such rung — which is the bin-size
+clause above, seen from the other side, and is said on the card rather than left to be discovered.
+The reading carries with it: the operation, the depth match, and whether the second triangle was
+hidden.
+
+**Turned, the pair is two bands rather than two triangles** (§17.2). Either map, here or in a deck,
+can also be given a name of its own (§16.10).
+
 One colour scale by default, because the same colour meaning the same count is the stronger claim.
 A **match-depth** option scales the second file so its 99th percentile meets the first's — the same
 order statistic §7.1 picks `vmax` with — for the case that motivates it, two libraries of different
@@ -754,7 +766,15 @@ diverges from what a reader reproduces locally.
 - separators at genome or contig boundaries, thin grey
 - ticks in base pairs on any axis that stays inside one contig, and the contig names on any axis that
   does not — `_bin_axis`'s rule, because a bin index is not a position and does not restart at zero
-  where the block does
+  where the block does. An axis of **several** contigs is then ruled one contig at a time on top of
+  those names, each measured from its own first base, because "where in this one am I" is the
+  question a reader asks of a whole genome as much as of a single chromosome. Each stretch gets the
+  room it actually has — a chromosome with room for no tick carries its name and nothing more, which
+  is the rule the names themselves are elided by, and a metagenome's thousands of pixel-wide contigs
+  carry none — its own step, since one chosen for the longest chromosome puts no tick on the
+  shortest, and no tick on either of its own edges, where the boundary line already is. Above bin
+  level there is still nothing: a cell there *is* a contig, and a position inside one would be an
+  invention
 
 Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
 URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
@@ -2178,6 +2198,37 @@ there the aim is the tie-breaker. A map arriving by any other road — the bar's
 chooser, the command palette — takes the first empty cell instead, because those name no position
 and the empty cells are the reader's own instruction about where the next map goes.
 
+### 16.10 Naming the maps
+
+A map is labelled by its file, which is the right default and a poor name for the work: four
+replicates of one experiment are four labels differing in a digit, and two conditions being compared
+are `mat_G1.mcool::1000` and `mat_G2M.mcool::1000`, whose two informative characters are the last
+thing anybody reads. So **any map a session is holding can be called something** — the one it is of,
+the one it is compared against (§5.7), and every companion of a deck. The control is the Tracks
+card's own, in both places it appears: an `<input>` that looks like text until it has the caret, on
+the **Contact maps** card and on a deck cell's heading. Enter commits, Escape abandons, and an empty
+box hands the map back to its file name, which is what makes a rename undoable.
+
+The name is used **everywhere the map is named**, through one function: the card that lists it, the
+heading over its cell, the two bands of a turned comparison (§17.2), the readout and the tooltip
+under the pointer, the derived label on a ratio, and the caption on an exported figure. A rename is
+not a rebuild — it changes what the picture is called and nothing about what is in it, and rebuilding
+the view would put a gated whole-genome scan (§7.3) back behind its button.
+
+Three things about where the name lives:
+
+- **One record per session, not one note per file.** Every name sits under the session's own memory
+  key, keyed by the file each one is for — `deck:looks`'s arrangement, and for its reason: a
+  workspace is gathered from one key, so a name filed under a companion's own key would be a name
+  the saved session did not contain. It travels in the workspace, in the durable record and in a
+  share link, beside the tab's own name.
+- **Keyed by the file, never by the rung**, so a name survives a change of resolution the way every
+  other per-file fact does (§5.5). One consequence, which the deck's saved looks already had: one
+  file open twice in a session has one name.
+- **An empty name is not a name.** It is dropped rather than stored, so a map with no name is a map
+  the record says nothing about — and a config that says nothing leaves the importing tab's names
+  alone.
+
 ## 17. The turn: 45°, distance up the side
 
 A contact map is symmetric about its diagonal, and the diagonal is where all the signal is. So a
@@ -2231,7 +2282,7 @@ control exists and find out what it wants of them.
 explicit `false` meaning square (§11). A block with a diagonal is a band along a genomic axis with
 tracks under it — that is what a contact map is *for* at this scale, and it is what every published
 figure of one looks like; the square is the special view, wanted for looking at the far corners and
-for reading a comparison across the diagonal. The hash of an ordinary view stays short because only
+for reading a two-file comparison as one asymmetric square. The hash of an ordinary view stays short because only
 the reader's "no" is written down, and a link with no `flip` in it opens the way this viewer opens.
 
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
@@ -2267,11 +2318,16 @@ The band stands on the box's floor at every zoom, so rows past the top edge are 
 that already clips the columns past either end: the rows on screen are the same rows either way. So
 the band is re-cut only when it is too *shallow* — which is to say only on the way out. Zooming in
 asks for less distance at every notch and is answered by the picture already drawn, where re-cutting
-per notch is a rotation and a fresh pooling of the whole band per wheel event.
+per notch is a rotation and a fresh pooling of the whole band per wheel event. It holds for a mirrored
+pair too, and only because that pair is pinned by its middle rather than by an edge: the surplus is
+then clipped equally from both, so the two bands show the same depth at every zoom.
 
 And when it is too shallow it is cut **deeper than asked**, twice over, bounded by the block. Zooming
 out is a gesture rather than a step; buying twice the distance the box wants right now is one
-rotation instead of the several the rest of the gesture would have asked for.
+rotation instead of the several the rest of the gesture would have asked for. Not on a mirrored pair,
+where the spare rows are not spare: one band stands on the box's floor and the rows past the top edge
+are clipped, while two stand on the fold between them, so buying twice the depth pushes that fold —
+and the whole of the first file with it — off the top of the picture.
 
 The **colour scale is not re-measured** by a re-cut, and this is the other half of the same
 sentence. The range is the square block's (§17.6) and measuring it is a pooling and a percentile
@@ -2325,8 +2381,29 @@ assembly is still centred across the column, where the box really can be narrowe
 
 There is nothing to align to the bottom either: a band fills its box by construction, so the diagonal
 is on the box's own floor at every zoom — and there is no vertical pan at all, because a band dragged
-off its own diagonal has lost the axis it is measured from. The mirrored half of a comparison stands
-on the box's ceiling, by the same rule read the other way up.
+off its own diagonal has lost the axis it is measured from.
+
+**A two-file split is turned into two bands, not one** (§5.7). The square holds the first file above
+the matrix diagonal and the second below it, and a turn that kept only the upper triangle would throw
+away the entire reason the picture is split. Mirrored, the pair meets at **one shared genomic axis**:
+the same position is the same column in both, the first file grows upward from the line and the second
+downward, and the two are read against each other at every place without the eye having to reflect one
+of them through a diagonal first. It is the same block read twice — `[i][j]` into the first band and
+`[j][i]` into the second — so nothing is rotated twice and no second square is kept, and the diagonal
+is drawn in both because it is the row the two files share.
+
+The box is one box whether it holds one band or two, so a mirrored pair gets **half of it each**, and
+its two horizontal edges are both far edges — the diagonal being in the middle of the picture, there
+is no idle one. It is pinned by its **middle** for the same reason, which is where the paragraph above
+about a band standing on its floor stops applying: a pair deeper than its box, which is what a zoom in
+leaves, has a surplus to lose, and anchoring it by an edge takes the whole of that surplus off *one* of
+the two files. What a reader saw was a sliver of the first map above a whole one of the second — and,
+far enough in, the shared axis off the picture altogether and neither map identifiable. The ruler up the side runs outwards from the shared axis in both directions (§17.5),
+so a separation is written twice and neither band is labelled with a negative distance; a pointer in the
+lower band reads the lower band's file; and each band carries its map's name (§16.10) on its own side
+of the line, the four corners being spoken for by the two rulers and the colour key. A **ratio or a
+difference** stays one band: there is one derived field over the whole square there, so its two
+triangles are the same numbers twice.
 
 ### 17.3 The turn is the deck's, not one map's
 
@@ -2379,6 +2456,14 @@ towards the bottom. The tick *spacing* is the one thing that could not be shared
 the width of a base-pair label, because a horizontal ruler is what it was chosen for, and a turned
 band is a hundred pixels tall, which at that spacing fits one tick, on the diagonal, in the corner
 the column labels have already claimed.
+
+A **mirrored pair** (§17.2) is measured outwards from a line in the middle of it, which is two
+affine lines rather than one — and `AxisCoords`, which every ruler in the app is, is one. What it
+carries instead is the row that line is *reflected about*: the ruler as written is the whole of it
+before the fold, and past the fold it is the same line run the other way. So each half is an
+ordinary ruler over an ordinary domain, walked by the same ladder twice; there is no second tick
+mechanism, and no half labelled in negative distance for a reader to read as "100 kb, in the other
+file".
 
 ### 17.6 What a drag means on a turned map
 
@@ -2465,23 +2550,6 @@ a percentile is invariant under duplicating every value, so counting both triang
 the range nor changes it at all. Nothing needs halving on the square side. And nothing *could* be
 done on that side anyway: §7.1 fixes the square's rule to `metacooler show`'s, to the bit. So the two
 can only be made to agree in one direction, and the band adopts the block's range.
-
-### 17.7 Not yet: the butterfly
-
-Two files compared under a turn should be **two rectangles meeting at one genomic axis**, the second
-growing downward — which is a better presentation of that comparison than the square, the two being
-read against each other at every position without the eye reflecting one through a diagonal first.
-`RotateDirection` exists for it and `rotate.ts` will draw a `down` band today; what is missing is the
-block that holds both halves at once, and the decision it forces.
-
-The two halves' diagonals are **adjacent rows, not the same row**, so the combined block's y axis is
-two affine lines meeting in the middle rather than one — and `AxisCoords`, which every ruler in the
-app is, is one line. Three ways out, none free: share the diagonal row between the files, which
-loses one file's self-contacts at the join; give the row ruler a supplier seam so it can be
-piecewise, which is a second tick mechanism beside the one §17.5 uses; or label the lower half in
-negative distance, which makes one affine line serve both and asks the reader to read `-100 kb` as
-"100 kb, in the other file". Until one of those is chosen the compare stays square under a turn,
-which is correct and is not what it should be.
 
 ---
 

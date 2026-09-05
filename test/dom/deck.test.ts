@@ -248,10 +248,17 @@ function viewWithHead(): HTMLElement {
   return view
 }
 
-/** The heading of every cell of the grid, lead first. */
+/**
+ * The heading of every cell of the grid, lead first.
+ *
+ * A companion's name is an `<input>` — a map can be renamed, and the control is
+ * a box that looks like text until it has the caret (`ui/mapNames.ts`) — while
+ * the lead's and a vacancy's are plain text. Both are read here, so the test is
+ * about what a cell is *called* rather than about which element says it.
+ */
 function cellNames(deck: PanelDeck): string[] {
   return all<HTMLElement>(deck.el, '.deck-grid > .deck-panel .deck-name').map((node) =>
-    (node.textContent ?? '').trim(),
+    (node instanceof HTMLInputElement ? node.value : (node.textContent ?? '')).trim(),
   )
 }
 

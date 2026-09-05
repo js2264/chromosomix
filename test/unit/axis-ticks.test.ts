@@ -11,8 +11,10 @@
  *    are recomputed from the axis scale on the frame they are drawn. Asserted
  *    here through `Scale.toPixel`, the conversion the canvas itself uses, so the
  *    test fails if the ticks and the transform ever disagree.
- * 3. An axis with **no single coordinate system** — more than one contig, or a
- *    cell that *is* a contig — draws none, which is Python's rule.
+ * 3. An axis with **no single coordinate system** draws none *of these*, which
+ *    is Python's rule — and an axis of several contigs is then ruled one contig
+ *    at a time instead, each measured from its own first base. Above bin level
+ *    there is still nothing to draw: a cell there *is* a contig.
  *
  * `draw()` is never called: it needs `OffscreenCanvas`, which Node does not
  * have. Everything asserted here is state the view computes before painting.
@@ -21,7 +23,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { HeatmapView, bpTicks, chooseBpStep, formatBpTick } from '@/render/heatmap'
-import { axisCoordsFor } from '@/ui/MatrixPanel'
+import { axisCoordsFor, axisSpansFor } from '@/ui/MatrixPanel'
 import type { DenseMatrix } from '@/types'
 import type { AxisGroup } from '@/worker/protocol'
 
@@ -249,6 +251,152 @@ describe('HeatmapView position ticks', () => {
       expect(px).toBeGreaterThanOrEqual(data.x - 1)
       expect(px).toBeLessThanOrEqual(data.x + data.width + 1)
     }
+  })
+})
+
+describe('axisSpansFor', () => {
+  const two: AxisGroup[] = [
+    { label: 'c1', start: 0, end: 10, unitStart: 0 },
+    { label: 'c2', start: 10, end: 30, unitStart: 10 },
+  ]
+
+  it('gives every sequence a ruler of its own, in the block\u2019s own frame', () => {
+    // The second contig's line reads zero at cell 10, which is where it starts:
+    // stated at cell 0 of the *block* that is -10 kb, so a tick's `unit` is a
+    // matrix coordinate like any other and needs no offsetting.
+    expect(axisSpansFor(two, [0, 30], 'bin', BIN)).toEqual([
+      { from: 0, to: 10, coords: { bpPerCell: BIN, bpAtOrigin: 0 } },
+      { from: 10, to: 30, coords: { bpPerCell: BIN, bpAtOrigin: -10_000 } },
+    ])
+  })
+
+  it('carries the offset of a block that opens part-way into a contig', () => {
+    const groups: AxisGroup[] = [
+      { label: 'c1', start: 0, end: 10, unitStart: 0 },
+      { label: 'c2', start: 10, end: 20, unitStart: 149 },
+    ]
+    const spans = axisSpansFor(groups, [139, 159], 'bin', BIN)
+    // The block opens at bin 139 of `c1` and `c2` itself begins at bin 149, so
+    // the second ruler reads 0 at cell 10 — `(139 - 149) * 1000` at cell 0.
+    expect(spans[0].coords).toEqual({ bpPerCell: BIN, bpAtOrigin: 139_000 })
+    expect(spans[1].coords).toEqual({ bpPerCell: BIN, bpAtOrigin: -10_000 })
+  })
+
+  it('leaves an axis that already has one ruler to it', () => {
+    // One contig is `axisCoordsFor`'s case, and the two must never both draw.
+    expect(axisSpansFor([two[0]], [0, 10], 'bin', BIN)).toEqual([])
+  })
+
+  it('refuses above bin level, where a cell is a whole sequence', () => {
+    expect(axisSpansFor(two, [0, 30], 'contig', BIN)).toEqual([])
+    expect(axisSpansFor(two, [0, 30], 'genome', BIN)).toEqual([])
+  })
+
+  it('skips a cell several sequences share, which has no position in any', () => {
+    const merged: AxisGroup[] = [
+      { label: 'c1', start: 0, end: 10, unitStart: 0 },
+      {
+        label: 'c2',
+        start: 10,
+        end: 11,
+        unitStart: 10,
+        merged: [
+          { label: 'c2', unitLength: 400 },
+          { label: 'c3', unitLength: 300 },
+        ],
+      },
+      { label: 'c4', start: 11, end: 30, unitStart: 11 },
+    ]
+    expect(axisSpansFor(merged, [0, 30], 'bin', BIN).map((span) => span.from)).toEqual([0, 11])
+  })
+
+  it('draws no ruler at all for an axis of thousands of contigs', () => {
+    // A metagenome: every stretch is a pixel or less, there is no room for a
+    // position on any of them, and the names are already elided for the reason.
+    const many: AxisGroup[] = Array.from({ length: 4000 }, (_unused, i) => ({
+      label: `NODE_${i}`,
+      start: i,
+      end: i + 1,
+      unitStart: i,
+    }))
+    expect(axisSpansFor(many, [0, 4000], 'bin', BIN)).toEqual([])
+  })
+})
+
+describe('HeatmapView per-sequence ticks', () => {
+  /** Four contigs of 100 bins each, on one 400-bin axis. */
+  const groups: AxisGroup[] = Array.from({ length: 4 }, (_unused, i) => ({
+    label: `c${i + 1}`,
+    start: i * 100,
+    end: (i + 1) * 100,
+    unitStart: i * 100,
+  }))
+
+  function view(): HeatmapView {
+    const v = new HeatmapView(fakeCanvas(600, 600), { devicePixelRatio: 1, autoMargin: true })
+    v.setMatrix(block(400), groups.map((g) => ({ at: g.start, label: g.label })))
+    // No single ruler on either axis: this is precisely the case.
+    v.setAxisCoords({ rows: null, cols: null })
+    v.setAxisSpans({
+      rows: axisSpansFor(groups, [0, 400], 'bin', BIN),
+      cols: axisSpansFor(groups, [0, 400], 'bin', BIN),
+    })
+    return v
+  }
+
+  it('restarts the coordinates at every sequence', () => {
+    const v = view()
+    const ticks = v.positionTicks('cols')
+    expect(ticks.length).toBeGreaterThan(1)
+    // Every tick is a position inside the contig it stands on, so none of them
+    // is past the 100 kb that contig is long — which is exactly what a ruler
+    // running across the whole axis would have produced.
+    for (const tick of ticks) {
+      expect(tick.bp).toBeGreaterThan(0)
+      expect(tick.bp).toBeLessThan(100 * BIN)
+    }
+  })
+
+  it('names a position rather than repeating the boundary', () => {
+    // A stretch with room for one tick gets a step at least as long as itself
+    // from the 1-2-5 ladder, whose only multiples inside the stretch are the
+    // ones on its two edges — which the contig breaks already draw.
+    const v = view()
+    for (const tick of v.positionTicks('cols')) {
+      for (const group of groups) {
+        expect(tick.unit).not.toBeCloseTo(group.start, 6)
+        expect(tick.unit).not.toBeCloseTo(group.end, 6)
+      }
+    }
+  })
+
+  it('keeps every tick on the cell its own contig puts it in', () => {
+    const v = view()
+    for (const tick of v.positionTicks('cols')) {
+      const span = groups.find((g) => tick.unit > g.start && tick.unit <= g.end)
+      expect(span).toBeDefined()
+      // `bpWithin`'s arithmetic, from the same `unitStart`: the readout and the
+      // ruler cannot be allowed to disagree about where a base pair is.
+      expect(tick.unit).toBeCloseTo((span as AxisGroup).start + tick.bp / BIN, 6)
+    }
+  })
+
+  it('draws none on an axis that has neither ruler', () => {
+    const v = view()
+    v.setAxisSpans({ rows: [], cols: [] })
+    expect(v.positionTicks('cols')).toEqual([])
+  })
+
+  it('gives a finer ruler to a sequence with more of the picture', () => {
+    const stepOf = (t: Array<{ bp: number }>): number =>
+      Math.min(...t.slice(1).map((tick, i) => Math.abs(tick.bp - t[i].bp)).filter((d) => d > 0))
+    const v = view()
+    const fitted = v.positionTicks('cols')
+    expect(fitted.length).toBeGreaterThan(1)
+    v.zoomAt(v.plotRect.x + v.plotRect.width / 2, v.plotRect.y + v.plotRect.height / 2, 6)
+    const zoomed = v.positionTicks('cols')
+    expect(zoomed.length).toBeGreaterThan(1)
+    expect(stepOf(zoomed)).toBeLessThan(stepOf(fitted))
   })
 })
 

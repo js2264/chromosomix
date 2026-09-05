@@ -57,8 +57,23 @@ export interface CompareCardProps {
   onClose(which: 1 | 2): void
   /** Swap which file is above the diagonal. */
   onSwap(): void
-  /** The name of the file already open, for the labels. */
+  /** What to call the map already open — the reader's name for it, or its file's. */
   primaryLabel(): string
+  /**
+   * What to call the second map. `undefined` before there is one.
+   *
+   * Asked of the session rather than taken from {@link CompareState}, which
+   * carries the file's own label: a map can be renamed, and the names belong to
+   * the session that is holding the maps (`ui/mapNames.ts`).
+   */
+  secondLabel?(): string | undefined
+  /**
+   * The reader typed a name into one of the two rows, or emptied the box.
+   *
+   * `null` is the empty box, which hands the map back to its file name — the
+   * same rule that makes renaming a tab or a track undoable.
+   */
+  onRename?(which: 1 | 2, name: string | null): void
   /**
    * Whether there is a map open at all.
    *
@@ -160,7 +175,7 @@ export class CompareCard {
       : this.slots[0].zone
     const bottom =
       this.state.kind === 'open'
-        ? this.mapRow(2, this.state.label, true)
+        ? this.mapRow(2, this.props.secondLabel?.() ?? this.state.label, true)
         : this.state.kind === 'loading'
           ? this.pendingRow('loading', `Opening ${this.state.label}…`)
           : this.state.kind === 'error'
@@ -210,11 +225,7 @@ export class CompareCard {
               }),
             ]
           : []),
-        el('span', {
-          class: 'ann-name ann-name-static',
-          text: label,
-          title: paired ? (which === 1 ? 'Upper-right triangle' : 'Lower-left triangle') : label,
-        }),
+        this.name(which, label, paired),
         eye,
         iconButton(
           'x',
@@ -245,6 +256,57 @@ export class CompareCard {
           ]
         : []),
     )
+  }
+
+  /**
+   * What a map is called, on this row and everywhere else it is named.
+   *
+   * The Tracks card's own control, to the class: an `<input>` that looks like
+   * text until it has the caret, rather than a label that swaps itself for one.
+   * The argument is the same argument, and it is stronger here — a file name is
+   * a starting point rather than an answer, and two conditions being compared
+   * are `mat_G1.mcool::1000` and `mat_G2M.mcool::1000`, whose two informative
+   * characters are the last thing anybody reads.
+   *
+   * An empty box hands the map back to its file name, which is what makes the
+   * rename undoable; a session with no rename offered ({@link
+   * CompareCardProps.onRename} absent) keeps the plain text it always had.
+   */
+  private name(which: 1 | 2, label: string, paired: boolean): HTMLElement {
+    const rename = this.props.onRename
+    const where = paired
+      ? which === 1
+        ? 'Upper-right triangle, and the upper band of a turned pair'
+        : 'Lower-left triangle, and the lower band of a turned pair'
+      : label
+    if (rename === undefined) {
+      return el('span', { class: 'ann-name ann-name-static', text: label, title: where })
+    }
+    const input = el('input', {
+      class: 'input ann-name',
+      type: 'text',
+      value: label,
+      title: `${where} — click to rename`,
+    })
+    input.addEventListener('change', () => {
+      const typed = input.value.trim()
+      if (typed === label) {
+        input.value = label
+        return
+      }
+      rename(which, typed === '' ? null : typed)
+    })
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        input.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        input.value = label
+        input.blur()
+      }
+    })
+    return input
   }
 
   /** The second slot while its file is being read, or after it was refused. */

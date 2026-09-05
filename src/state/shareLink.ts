@@ -39,6 +39,7 @@
 
 import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
+import { sharedMapNames } from '../ui/mapNames'
 
 /** The fragment key a shared session travels under. */
 export const SHARE_KEY = 's'
@@ -164,6 +165,13 @@ export function forSharing(config: SessionConfig): SessionConfig {
       ...(looks.length === 0 ? {} : { looks }),
     },
   }
+  // The names of the maps a recipient can actually open, and only those: a name
+  // is keyed on its map's address, and for a local file that address is a bare
+  // filename off the sender's own disk. Same rule as `looks` above, applied per
+  // member because this field too has members of both kinds.
+  const names = sharedMapNames(config.mapNames ?? {})
+  if (Object.keys(names).length === 0) delete shared.mapNames
+  else shared.mapNames = names
   // Deleted rather than set to `undefined`: a key holding nothing is a third
   // state, it survives `JSON.stringify` as an absence anyway, and every reader
   // downstream treats absence as the answer.

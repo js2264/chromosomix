@@ -897,11 +897,57 @@ export interface AxisCoords {
    * the axis that is the whole reason to turn the picture came out blank.
    */
   tickGapPx?: number
+  /**
+   * The matrix coordinate the ruler turns around, for an axis that is measured
+   * outwards in two directions from a line in the middle of it.
+   *
+   * One case, and it is the mirrored two-file comparison: two turned bands
+   * meeting at a shared genomic axis, each labelled by how far its own contacts
+   * are from the diagonal (`render/rotate.ts`'s {@link separationCoords}). The
+   * line above is the whole of the ruler before the fold; past it the same line
+   * runs the other way, reflected about this coordinate — so `100 kb` appears
+   * twice, once on each side, which is exactly what the picture says.
+   *
+   * `undefined` for every ordinary axis, which is one line and one coordinate
+   * system throughout.
+   */
+  fold?: number
 }
 
 export interface AxisCoordSet {
   rows: AxisCoords | null
   cols: AxisCoords | null
+}
+
+/**
+ * One sequence's stretch of an axis, and the coordinates inside it.
+ *
+ * The answer to the case {@link AxisCoords} refuses. An axis spanning several
+ * contigs has no single coordinate system — that refusal is right, and
+ * `framedRange` and the export caption still depend on it — but it does have
+ * *one per contig*, and a reader looking at a whole genome is asking the same
+ * question they ask of a single chromosome: **where in this one am I**. So the
+ * ruler is drawn per stretch rather than not at all, each contig measured from
+ * its own first base, and the contig boundaries the axis already draws are what
+ * say where one ruler stops and the next begins.
+ *
+ * `coords` is stated in the **block's** coordinate frame, not the stretch's, so
+ * a tick's `unit` is a matrix coordinate like every other and needs no
+ * offsetting: `bpAtOrigin` is where this contig's ruler would read at cell zero
+ * of the block, which for every contig but the first is a negative number.
+ */
+export interface AxisSpan {
+  /** First cell of the stretch, in matrix coordinates. */
+  from: number
+  /** One past its last cell. */
+  to: number
+  /** How that stretch maps to base pairs — the same line every ruler is. */
+  coords: AxisCoords
+}
+
+export interface AxisSpanSet {
+  rows: readonly AxisSpan[]
+  cols: readonly AxisSpan[]
 }
 
 /** Position ticks per axis, as `_MAX_POSITION_TICKS` in `ops/show.py`. */
@@ -910,8 +956,36 @@ export const MAX_POSITION_TICKS = 6
 /** On-screen room one tick label needs before another may be placed. */
 const TICK_MIN_GAP_PX = 78
 
+/**
+ * The same, for an axis ruled one sequence at a time ({@link AxisSpan}).
+ *
+ * Tighter than {@link TICK_MIN_GAP_PX}, and the difference is what makes the
+ * per-sequence ruler exist at all. That figure is a whole chromosome's worth of
+ * air, which is right when the axis is one sequence and the labels run the
+ * width of the plot; here the stretches are the sequences, and at 78 pixels a
+ * yeast genome had room for a position on one chromosome out of sixteen. This
+ * is a short position label — `1 Mb` — and enough air to tell two apart.
+ *
+ * The same number on both axes, unlike the turned map's ruler, because a
+ * contact map is symmetric and a picture whose left edge names more
+ * chromosomes than its bottom edge reads as a picture of two different things.
+ */
+const SPAN_TICK_GAP_PX = 48
+
 /** Length of a tick mark, drawn inward from the data edge, in CSS pixels. */
 const TICK_LENGTH = 5
+
+/** How far a band's name sits from the line the two bands meet at, in pixels. */
+const BAND_LABEL_GAP = 5
+
+/**
+ * How far in from the left edge a band's name starts, in CSS pixels.
+ *
+ * Past the ruler up the side, which is drawn *inside* the plot whenever the
+ * left gutter is too narrow to hold it — which is the app's default, the
+ * gutters being sized for contig names a turned map does not draw.
+ */
+const BAND_LABEL_INDENT = 56
 
 /**
  * A round step covering `span` base pairs in at most `maxTicks` intervals.
@@ -940,6 +1014,28 @@ export function bpTicks(
   domain: readonly [number, number],
   maxTicks: number,
 ): Array<{ bp: number; unit: number }> {
+  // A **folded** axis is two rulers, so it is two calls: the line as written up
+  // to the fold, and its reflection past it. Split here rather than inside the
+  // ladder below, because each half is an ordinary ruler over an ordinary
+  // domain and the alternative — a ladder that knows about folds — would put a
+  // special case in the arithmetic every axis in the app goes through.
+  const fold = coords.fold
+  if (fold !== undefined) {
+    const plain = { bpPerCell: coords.bpPerCell, bpAtOrigin: coords.bpAtOrigin }
+    // Reflected about the fold: `bpAtOrigin + (2 * fold - unit) * bpPerCell`,
+    // written as a line of its own so the recursion below has nothing to fold.
+    const mirrored = {
+      bpPerCell: -coords.bpPerCell,
+      bpAtOrigin: coords.bpAtOrigin + 2 * fold * coords.bpPerCell,
+    }
+    // Half the ticks each. The two halves are the same height whenever both are
+    // on screen, so they choose the same step and the pair reads as one ruler.
+    const half = Math.max(1, Math.floor(maxTicks / 2))
+    const out: Array<{ bp: number; unit: number }> = []
+    if (fold > domain[0]) out.push(...bpTicks(plain, [domain[0], Math.min(domain[1], fold)], half))
+    if (fold < domain[1]) out.push(...bpTicks(mirrored, [Math.max(domain[0], fold), domain[1]], half))
+    return out
+  }
   const near = coords.bpAtOrigin + domain[0] * coords.bpPerCell
   const far = coords.bpAtOrigin + domain[1] * coords.bpPerCell
   // A **descending** axis is not a special case so much as a turned one: up the
@@ -1413,6 +1509,13 @@ export class HeatmapView {
   private matrix: DenseMatrix | null = null
   /** Base-pair mapping per axis; `null` where the axis has no single one. */
   private axisCoords: AxisCoordSet = { rows: null, cols: null }
+  /**
+   * Per-contig rulers, for an axis that has no single one — see {@link AxisSpan}.
+   *
+   * Read only where {@link axisCoords} is `null` on that axis, so an axis that
+   * has one coordinate system is drawn by exactly the code that always drew it.
+   */
+  private axisSpans: AxisSpanSet = { rows: [], cols: [] }
   private raster: Raster | null = null
   /**
    * The pooled display values behind {@link raster}, kept so that a change of
@@ -1514,7 +1617,23 @@ export class HeatmapView {
    * a turned map that reading runs along two 45° rays rather than along the two
    * axes. See {@link anchorRays}.
    */
-  private turn: { maxSeparation: number; direction: RotateDirection } | null = null
+  private turn: {
+    maxSeparation: number
+    direction: RotateDirection
+    /** First row of the mirrored band — see `render/rotate.ts`'s `RotatedBlock`. */
+    fold?: number
+  } | null = null
+  /**
+   * What each band of a mirrored pair is called, or `null` for one band.
+   *
+   * Two stacked rectangles are not self-describing the way a split square is:
+   * the square at least has a diagonal, and the card beside it draws the two
+   * triangles as ◥ and ◣. A mirrored pair meets at a straight line, so which
+   * file is which is a fact only the picture can carry — and it has to carry it
+   * on the canvas rather than in the DOM around it, because the reason to turn a
+   * map is to export it.
+   */
+  private turnLabels: [string, string] | null = null
   /** What the owner draws on the data; see {@link setOverlayPainter}. */
   private overlayPainter: OverlayPainter | null = null
 
@@ -1820,6 +1939,7 @@ export class HeatmapView {
     // never calls `setAxisCoords` draws no ticks, rather than drawing the
     // previous block's coordinates over this one's data.
     this.axisCoords = { rows: null, cols: null }
+    this.axisSpans = { rows: [], cols: [] }
     this.dirtyRaster = true
     this.pooled = null
     this.gauge = gauge ?? null
@@ -2005,6 +2125,11 @@ export class HeatmapView {
    * geometry: the ticks are drawn inside the data, so an axis gaining or losing
    * its coordinates never moves the plot.
    */
+  setAxisSpans(spans: AxisSpanSet): void {
+    this.axisSpans = spans
+    this.changed()
+  }
+
   setAxisCoords(coords: AxisCoordSet): void {
     this.axisCoords = coords
     this.changed()
@@ -2735,6 +2860,7 @@ export class HeatmapView {
         ncols: matrix.ncols,
         maxSeparation: turn.maxSeparation,
         direction: turn.direction,
+        ...(turn.fold === undefined ? {} : { fold: turn.fold }),
         originBin: 0,
       },
       cell.row,
@@ -3297,6 +3423,7 @@ export class HeatmapView {
     if (this.plot.dividers) this.drawSeparators()
     if (this.plot.breaks) this.drawBreaks()
     this.drawLabels()
+    this.drawBandLabels()
     this.drawOverlay()
     if (this.plot.ticks) this.drawTicks()
     if (this.plot.crosshair) {
@@ -3434,7 +3561,9 @@ export class HeatmapView {
    */
   framedRange(axis: 'rows' | 'cols'): { start: number; end: number; whole: boolean } | null {
     const coords = axis === 'rows' ? this.axisCoords.rows : this.axisCoords.cols
-    if (coords === null) return null
+    // A folded axis is measured outwards from a line in the middle of it, so it
+    // names no single range — the same reason a multi-contig axis answers `null`.
+    if (coords === null || coords.fold !== undefined) return null
     const scale = axis === 'rows' ? this.rowScale : this.colScale
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     const [d0, d1] = scale.domain
@@ -4047,12 +4176,22 @@ export class HeatmapView {
       // The apex is on the diagonal — separation zero, which is the bottom row
       // of an ordinary band and the top row of the mirrored half — and the two
       // arms leave it towards the far edge, which is the direction separation
-      // grows in. No snap: a 45° line cannot be put on the device grid.
-      const y = origin.y + this.rowScale.toPixel(rowForSeparation(turn, 0) + 0.5)
-      const away = turn.direction === 'up' ? -1 : 1
-      ctx.moveTo(x - ECHO_ARM, y + away * ECHO_ARM)
-      ctx.lineTo(x, y)
-      ctx.lineTo(x + ECHO_ARM, y + away * ECHO_ARM)
+      // grows in. A mirrored pair has one of these per band, meeting nose to
+      // nose on the shared axis, because the position is in both files. No
+      // snap: a 45° line cannot be put on the device grid.
+      const apexes: Array<{ row: number; away: number }> =
+        turn.fold === undefined
+          ? [{ row: rowForSeparation(turn, 0) + 0.5, away: turn.direction === 'up' ? -1 : 1 }]
+          : [
+              { row: rowForSeparation(turn, 0) + 0.5, away: -1 },
+              { row: turn.fold + 0.5, away: 1 },
+            ]
+      for (const apex of apexes) {
+        const y = origin.y + this.rowScale.toPixel(apex.row)
+        ctx.moveTo(x - ECHO_ARM, y + apex.away * ECHO_ARM)
+        ctx.lineTo(x, y)
+        ctx.lineTo(x + ECHO_ARM, y + apex.away * ECHO_ARM)
+      }
     }
     ctx.stroke()
     ctx.restore()
@@ -4063,14 +4202,17 @@ export class HeatmapView {
    *
    * `null` for an ordinary square block, which is every map but one.
    */
-  setTurn(turn: { maxSeparation: number; direction: RotateDirection } | null): void {
+  setTurn(
+    turn: { maxSeparation: number; direction: RotateDirection; fold?: number } | null,
+  ): void {
     const held = this.turn
     const same =
       (turn === null && held === null) ||
       (turn !== null &&
         held !== null &&
         turn.maxSeparation === held.maxSeparation &&
-        turn.direction === held.direction)
+        turn.direction === held.direction &&
+        turn.fold === held.fold)
     if (same) return
     // A band and a square pool differently — one stride for both axes against
     // one per axis ({@link Raster.strideX}) — so arriving at or leaving the turn
@@ -4080,6 +4222,21 @@ export class HeatmapView {
     // shape's pixels while it works that out.
     if ((turn === null) !== (held === null)) this.dirtyRaster = true
     this.turn = turn
+    this.changed()
+  }
+
+  /**
+   * Name the two bands of a mirrored pair, or `null` to draw neither.
+   *
+   * Kept apart from {@link setTurn} because it changes on its own: the geometry
+   * is re-cut on every zoom and the names are not, and a re-cut that carried
+   * them would make the panel restate a fact it has not learned anything new
+   * about.
+   */
+  setTurnLabels(labels: [string, string] | null): void {
+    const held = this.turnLabels
+    if (labels === null ? held === null : held?.[0] === labels[0] && held[1] === labels[1]) return
+    this.turnLabels = labels
     this.changed()
   }
 
@@ -4391,9 +4548,8 @@ export class HeatmapView {
    * has no single coordinate system. Exposed for the tests, which cannot call
    * `draw` under Node.
    */
-  positionTicks(axis: 'rows' | 'cols'): Array<{ bp: number; unit: number }> {
+  positionTicks(axis: 'rows' | 'cols'): Array<{ bp: number; unit: number; step?: number }> {
     const coords = axis === 'rows' ? this.axisCoords.rows : this.axisCoords.cols
-    if (coords === null) return []
     const scale = axis === 'rows' ? this.rowScale : this.colScale
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     // The *visible data*, not the visible domain: zoomed out the domain runs
@@ -4403,10 +4559,139 @@ export class HeatmapView {
     const lo = Math.max(d0, 0)
     const hi = Math.min(d1, n)
     if (!(hi > lo)) return []
+    // No single coordinate system on this axis, but one per sequence on it —
+    // see {@link AxisSpan}. Empty where there are none of those either, which
+    // is the answer this used to give in every such case.
+    if (coords === null) return this.spanTicks(axis, lo, hi)
     const pixels = (hi - lo) * scale.pixelsPerUnit
     const gap = coords.tickGapPx ?? TICK_MIN_GAP_PX
     const maxTicks = Math.min(MAX_POSITION_TICKS, Math.max(1, Math.floor(pixels / gap)))
     return bpTicks(coords, [lo, hi], maxTicks)
+  }
+
+  /**
+   * Ticks for an axis ruled one sequence at a time.
+   *
+   * Each stretch gets the room it actually has on screen, and a stretch with
+   * room for none gets none: on a whole genome the long chromosomes carry a
+   * position each and the short ones carry their name and nothing more, which
+   * is the same rule the *names* are elided by one line up.
+   *
+   * The step is per stretch, because the stretches are: a shared step chosen
+   * for the longest chromosome puts no tick at all on the shortest, and the
+   * shortest is exactly where a reader most needs telling that the coordinates
+   * have started again. It travels with each tick so the label can be written
+   * to the precision its own ruler needs ({@link formatBpTick}).
+   *
+   * **One interval more than there is room for**, which is the difference
+   * between a ruler and a decoration here. The 1–2–5 ladder covers a span in at
+   * most the intervals it is given, so a stretch with room for one tick gets a
+   * step at least as long as itself — and the only multiple of it inside the
+   * stretch is the one at the start, which is the boundary the axis already
+   * draws. Asked for one interval more, the same stretch gets a step that lands
+   * *inside* it, and the reader is told a position rather than told again where
+   * the chromosome begins.
+   *
+   * Which is also why a tick on either of a stretch's **own** edges is dropped:
+   * at best it repeats the boundary line drawn there, and at worst it writes
+   * `0 bp` on a chromosome the view has cut into. Its own edges, not the ones
+   * the view clipped it to — those are the edge of the screen, where a position
+   * is worth as much as anywhere else.
+   *
+   * The last guard is against the two rulers either side of a boundary putting
+   * a label each within a few pixels of it. Within one stretch that cannot
+   * happen — the ladder is chosen from the room — and between two of them
+   * nothing was watching, so the spacing is enforced here across the lot.
+   */
+  private spanTicks(
+    axis: 'rows' | 'cols',
+    lo: number,
+    hi: number,
+  ): Array<{ bp: number; unit: number; step?: number }> {
+    const spans = axis === 'rows' ? this.axisSpans.rows : this.axisSpans.cols
+    if (spans.length === 0) return []
+    const scale = axis === 'rows' ? this.rowScale : this.colScale
+    const out: Array<{ bp: number; unit: number; step?: number }> = []
+    let last = -Infinity
+    for (const span of spans) {
+      if (span.to <= lo) continue
+      if (span.from >= hi) break
+      const from = Math.max(lo, span.from)
+      const to = Math.min(hi, span.to)
+      if (!(to > from)) continue
+      const gap = span.coords.tickGapPx ?? SPAN_TICK_GAP_PX
+      const room = Math.floor(((to - from) * scale.pixelsPerUnit) / gap)
+      if (room < 1) continue
+      const ticks = bpTicks(span.coords, [from, to], Math.min(MAX_POSITION_TICKS, room) + 1)
+      // Before the filtering, so the labels are written to the precision of the
+      // ladder that was actually walked rather than of whatever survived it.
+      const step = stepOf(ticks)
+      for (const tick of ticks) {
+        if (tick.unit <= span.from + 0.5 || tick.unit >= span.to - 0.5) continue
+        const at = scale.toPixel(tick.unit)
+        if (at - last < gap) continue
+        last = at
+        out.push(step === undefined ? tick : { ...tick, step })
+      }
+    }
+    return out
+  }
+
+  /**
+   * Which file each band of a mirrored pair is, written on its own side of the
+   * line where the two meet.
+   *
+   * **At the fold, not in the corners.** The corners are where a picture
+   * normally puts a caption and all four of them are already spoken for: the
+   * ruler up the side is drawn *inside* the plot on the left, the base-pair
+   * ruler along the bottom edge, and the colour key floats over the top right.
+   * The fold is the one line on the picture that belongs to neither band and is
+   * the one a reader is already looking at — it is what makes this two maps
+   * rather than one — so a name on each side of it is read in the same glance
+   * as the thing it names.
+   *
+   * Indented past the ruler, and drawn with the halo every label on the canvas
+   * has, because near the fold both bands are data: the diagonal reaches the
+   * left-hand edge and is the brightest row in the picture.
+   *
+   * Nothing at all on an ordinary map: one band is named by the key in the
+   * corner and by the file card beside it, and a picture of one file that
+   * writes its own name on itself is a picture with a caption drawn twice.
+   */
+  private drawBandLabels(): void {
+    const labels = this.turnLabels
+    const fold = this.turn?.fold
+    if (labels === null || fold === undefined) return
+    const data = this.dataRect
+    if (data.width <= 0 || data.height <= 0) return
+    const plot = this.plotRect
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(data.x, data.y, data.width, data.height)
+    ctx.clip()
+    ctx.font = this.opts.labelFont
+    ctx.strokeStyle = this.opts.labelHaloColor
+    ctx.lineWidth = 3
+    ctx.lineJoin = 'round'
+    ctx.fillStyle = this.opts.labelColor
+    ctx.textAlign = 'left'
+    const x = data.x + BAND_LABEL_INDENT
+    // The fold in pixels, so a name never crosses into the other band however
+    // the picture is panned: each is placed against its own side of the line.
+    const axis = plot.y + this.rowScale.toPixel(fold)
+    for (const [which, label] of labels.entries()) {
+      if (label === '') continue
+      ctx.textBaseline = which === 0 ? 'alphabetic' : 'top'
+      const y = which === 0 ? axis - BAND_LABEL_GAP : axis + BAND_LABEL_GAP
+      // Clipped rather than clamped: a fold panned off the picture takes its
+      // labels with it, where clamping would leave both names stacked on
+      // whichever edge the line went out by, naming bands that are not there.
+      if (y < data.y || y > data.y + data.height) continue
+      ctx.strokeText(label, x, y)
+      ctx.fillText(label, x, y)
+    }
+    ctx.restore()
   }
 
   /**
@@ -4450,11 +4735,13 @@ export class HeatmapView {
     ctx.textBaseline = 'alphabetic'
     // The gap between two ticks, which is what decides how many digits each one
     // needs — see {@link formatBpTick}. Taken from the ticks themselves rather
-    // than recomputed, so it is the step that was actually used.
+    // than recomputed, so it is the step that was actually used — and from the
+    // *tick* where it carries one, an axis ruled a sequence at a time having one
+    // step per sequence rather than one for the axis ({@link spanTicks}).
     const colStep = stepOf(cols)
     for (const tick of cols) {
       const x = this.snap(plot.x + this.colScale.toPixel(tick.unit))
-      const text = formatBpTick(tick.bp, colStep)
+      const text = formatBpTick(tick.bp, tick.step ?? colStep)
       const half = ctx.measureText(text).width / 2 + 2
       const at = clamp(x, data.x + half, data.x + data.width - half)
       ctx.strokeText(text, at, bottom - TICK_LENGTH - 3)
@@ -4475,7 +4762,7 @@ export class HeatmapView {
       this.tickMark(data.x, y, data.x + TICK_LENGTH, y)
       const at = clamp(y, data.y + 8, data.y + data.height - 8)
       if (at > corner) continue
-      const text = formatBpTick(tick.bp, rowStep)
+      const text = formatBpTick(tick.bp, tick.step ?? rowStep)
       ctx.strokeText(text, data.x + TICK_LENGTH + 3, at)
       ctx.fillText(text, data.x + TICK_LENGTH + 3, at)
     }

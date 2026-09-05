@@ -122,6 +122,14 @@ import { el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
+import {
+  MAP_NAMES_SCOPE,
+  mapLabelIn,
+  mapNameIn,
+  readMapNames,
+  withMapName,
+  type MapNames,
+} from '../ui/mapNames'
 import { rungsOf } from '../ui/refine'
 import { credentialFor } from '../s3/credentials'
 import { signS3Request } from '../s3/sigv4'
@@ -294,6 +302,38 @@ interface OpenCompare {
   info: OpenResult
   /** Name and length per chromosome, in file order — what the gate compared. */
   contigs: Array<[string, number]>
+}
+
+/**
+ * The second file, held across a change of resolution rather than dropped with
+ * the first.
+ *
+ * A comparison belongs to the file it is a comparison *of*, which is why
+ * opening another file puts it down. Switching rung is the one case where that
+ * reasoning does not apply: it is the same file at another bin size, the reader
+ * did not close anything, and the two maps were being read against each other a
+ * moment ago. Dropping the second there is losing a file the reader would have
+ * to find and open again at every zoom level — and losing it *silently*, since
+ * the first map is a complete picture on its own and nothing on screen says the
+ * other one has gone.
+ *
+ * What is kept is deliberately not the worker: the second file has to be
+ * re-opened at its *own* rung, because the gate refuses two different bin sizes
+ * and is right to. So this is the four facts that address it again — where it
+ * came from, which rungs it has, and how the reader was reading it — and
+ * {@link Session.restoreCarriedCompare} is where they are spent.
+ */
+export interface CompareCarry {
+  uri: string
+  source: SourceSpec
+  /** Sibling rungs of the second file's own collection; `[]` for a plain file. */
+  entries: readonly string[]
+  /** The group they live under — `resolutions` for an mcool. */
+  entryGroup: string
+  /** The bin size it was open at, so an unchanged one needs no arithmetic. */
+  binsize: number | null
+  /** Whether its triangle was hidden, which is a fact about the reading. */
+  hidden: boolean
 }
 
 /**
@@ -498,6 +538,16 @@ export class Session {
   private compareCard: CompareCard | null = null
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private compareOpening: string | null = null
+  /**
+   * The second file, waiting out a change of resolution — see {@link CompareCarry}.
+   *
+   * Set the moment an open is known to be a re-open of the file already here,
+   * and spent by the first {@link restoreCarriedCompare} after it lands. `null`
+   * at every other moment, including a failed open: the catch re-enters
+   * {@link open} for the entry it was redirected to, and the carry is taken
+   * again there from a comparison that is still standing.
+   */
+  private compareCarry: CompareCarry | null = null
   /**
    * Further files, each in a panel of its own beside this one (§16).
    *
@@ -1769,6 +1819,10 @@ export class Session {
     // opened over a genome browser is the same genome by a different file, and
     // the tracks were drawn against it.
     this.carry(uri)
+    // …and the second file, on the same terms and for the same reason: a change
+    // of resolution is not a change of subject. Taken here, before `this.file`
+    // is replaced, because {@link reopeningSameFile} reads it.
+    this.carryCompare(uri)
     this.opening = uri
     this.noteGrant(uri, source)
     this.showContent(loading(`Opening ${fileLabel(uri)}`))
@@ -1865,14 +1919,31 @@ export class Session {
       // saying "browser" over an open matrix — which the router then answers by
       // trying to open the genome again. Closing the map is what produces that
       // state, and it does so deliberately (see `closeMap`).
-      const target =
+      const wantedTarget =
         wanted !== null && wanted.uri === uri && wanted.view !== 'browser'
           ? wanted
           : landingState(uri, rootView)
+      // A carried comparison names the rung it was *at*, and that rung is the
+      // one this open has just left. The state is stripped of it here and the
+      // second file is re-addressed below, so the reconciliation in `render`
+      // does not spend the interval opening a file the gate is about to refuse
+      // for having the bin size the reader has just moved away from.
+      //
+      // `compareCarry` is left standing until {@link restoreCarriedCompare}
+      // spends it, because it is also what tells `render` to leave the
+      // comparison alone in the meantime — see the note there.
+      const carried = this.compareCarry
+      const target = carried === null ? wantedTarget : withoutSecond(wantedTarget)
       // Asked of {@link navigate} rather than compared here, because what lands
       // in the store is the target *plus whatever it carried* — so a comparison
       // against the bare target says "this is a move" for a re-drop of the file
       // already open under a deck, and nothing renders at all.
+      // Before the navigation, and that is the whole of the ordering: the render
+      // it triggers reconciles the comparison against the state, and a second
+      // file that is being re-opened must already be *in flight* by then or that
+      // reconciliation will start one of its own from this session's memory —
+      // which still names the rung the reader has just left.
+      if (carried !== null) this.restoreCarriedCompare(carried, uri, info)
       const moved = this.navigate(target, { replace: true })
       // `set` is a no-op when the state is already exactly what arrived, so
       // render explicitly in that case — and only in that case, to avoid
@@ -1918,6 +1989,10 @@ export class Session {
       this.showError(err, uri, source)
     } finally {
       this.opening = null
+      // An open that failed, or was redirected into an entry and handled there,
+      // leaves nothing to carry: a note still standing would go on telling
+      // `render` that a second file is on its way when nothing is coming.
+      this.compareCarry = null
       this.host.sessionChanged(this)
     }
   }
@@ -2876,7 +2951,12 @@ export class Session {
    */
   private newCompareCard(uri: string): CompareCard {
     return new CompareCard({
-      primaryLabel: () => fileLabel(this.file?.uri ?? uri),
+      primaryLabel: () => this.mapLabel(this.file?.uri ?? uri),
+      secondLabel: () => (this.compare === null ? undefined : this.mapLabel(this.compare.uri)),
+      onRename: (which, name) => {
+        const target = which === 1 ? (this.file?.uri ?? uri) : this.compare?.uri
+        if (target !== undefined) this.renameMap(target, name)
+      },
       hasPrimary: () => this.file !== null,
       onOpen: (source) => {
         // With a map already open this is the *second* file, which is a
@@ -3005,6 +3085,11 @@ export class Session {
   /** Everything a session holds for one file, released before it holds another. */
   private tearDown(): void {
     this.parkedMap = null
+    // A genome browser replacing a map is a change of subject, whatever the two
+    // files are called: nothing here is coming back at another bin size, so the
+    // carry is spent before the drop rather than kept for an open that will
+    // never happen.
+    this.compareCarry = null
     this.annotations?.client.destroy()
     this.annotations = null
     this.manualCard = null
@@ -3407,6 +3492,70 @@ export class Session {
     return fileMemoryKey(this.id, uri)
   }
 
+  /**
+   * The key this session's *own* memory hangs on, whatever is on screen.
+   *
+   * {@link memoryKey} for the file this session is of, and `null` before there
+   * is one. What it is for is the handful of facts that are about the session
+   * rather than about one of the files in it — the names of every map it is
+   * holding, above all, which have to sit under one key or a saved workspace
+   * would carry the lead's and none of the others' (`ui/mapNames.ts`).
+   */
+  private sessionKey(): string | null {
+    const uri = this.store.state?.uri ?? this.file?.uri ?? this.assembly?.uri
+    return uri === undefined ? null : this.memoryKey(uri)
+  }
+
+  /** Every map name this session is holding; `{}` before there is a file. */
+  private mapNames(): MapNames {
+    const key = this.sessionKey()
+    return key === null ? {} : readMapNames(key)
+  }
+
+  /**
+   * What to call one of this session's maps — the reader's name, else the file's.
+   *
+   * Every label on screen goes through here: the Contact maps card, a deck
+   * panel's heading, the readout under the pointer, the two bands of a turned
+   * comparison, and the caption on an exported figure. One function, so a map
+   * renamed in the card is renamed in the figure without anything having to be
+   * told.
+   */
+  mapLabel(uri: string): string {
+    return mapLabelIn(this.mapNames(), uri)
+  }
+
+  /**
+   * Call one of this session's maps something, or hand it back to its file name.
+   *
+   * `null` — or a box the reader emptied — is what makes a rename undoable, on
+   * the tab strip's rule. Everything on screen is rebuilt afterwards rather than
+   * patched: the name is on the card, in the heading, in the readout, in the
+   * key and in the caption, and a rename that moved four of those and not the
+   * fifth is the one way this can be quietly wrong.
+   */
+  private renameMap(uri: string, name: string | null): void {
+    const key = this.sessionKey()
+    if (key === null) return
+    const held = this.mapNames()
+    const next = withMapName(held, uri, name)
+    if (mapNameIn(next, uri) === mapNameIn(held, uri)) return
+    remember(key, MAP_NAMES_SCOPE, next)
+    this.compareCard?.sync()
+    this.deck?.renamed()
+    // Written into the mounted panel rather than through {@link remount}: a
+    // rename changes what the picture is *called* and nothing about what is in
+    // it, and rebuilding the view would put a gated whole-genome scan (§7.3)
+    // back behind its button — the reader types a name and their map goes away.
+    const own = this.file === null ? undefined : this.mapLabel(this.file.uri)
+    if (own !== undefined) {
+      this.current?.panel?.setMapLabels(
+        own,
+        this.compare === null ? undefined : this.mapLabel(this.compare.uri),
+      )
+    }
+  }
+
   // -------------------------------------------------------------------------
   // The second file (`render/compare.ts`)
   // -------------------------------------------------------------------------
@@ -3639,8 +3788,86 @@ export class Session {
     // next reload would open again the one thing the reader just closed — the
     // `uri2` half of the same act is a patch on the hash, and this is its
     // counterpart for the half the hash never held.
+    //
+    // Not while one is being *carried* across a change of resolution: the note
+    // is how a local second file finds its way back, and forgetting it there
+    // would put down the very comparison the carry exists to keep. The re-open
+    // writes it again under the same key — the key is the file rather than the
+    // rung (`state/UiMemory.ts`) — so nothing has to be moved.
     const uri = this.store.state?.uri
-    if (local && uri !== undefined) remember(this.memoryKey(uri), 'compare:local', undefined)
+    if (local && uri !== undefined && this.compareCarry === null) {
+      remember(this.memoryKey(uri), 'compare:local', undefined)
+    }
+  }
+
+  /**
+   * Hold on to the second file, if the open about to happen is a change of
+   * resolution rather than a change of subject.
+   *
+   * The test is {@link reopeningSameFile}'s, which is the path before `::` and
+   * therefore already says "the same `.mcool` at another bin size". Every other
+   * open — a different file, a genome, the picker — leaves this `null` and the
+   * comparison is dropped with the file it belonged to, which is what it has
+   * always meant.
+   */
+  private carryCompare(next: string): void {
+    const held = this.compare
+    this.compareCarry =
+      held === null || !this.reopeningSameFile(next)
+        ? null
+        : {
+            uri: held.uri,
+            source: held.source,
+            entries: held.info.entries,
+            entryGroup: held.info.entryGroup,
+            binsize: held.info.binsize,
+            hidden: this.compareHidden,
+          }
+  }
+
+  /**
+   * Put the carried second file back, at the rung the first one has moved to.
+   *
+   * **The bin size carries, not the URI.** The second file has a ladder of its
+   * own, so `rep2.mcool::/resolutions/1000` beside a 1 kb map is
+   * `…/resolutions/5000` beside a 5 kb one — and the rung is looked up in the
+   * second file's own entries rather than assumed to be spelled the same way.
+   * A plain `.cool` has no entries and needs none: it is already at one bin size,
+   * and if that is the new one it comes straight back.
+   *
+   * A file with no rung at the new resolution **cannot be compared there**, and
+   * that is the gate's rule rather than a shortcoming here: two bin sizes in one
+   * square would draw a pixel that means 1 kb on one side of the diagonal and
+   * 5 kb on the other. So it is put down with the reason on the card, where the
+   * reader is already looking for the name of the file that has gone — rather
+   * than carried into a refusal they would have to read as a bug.
+   */
+  private restoreCarriedCompare(carried: CompareCarry, uri: string, info: OpenResult): void {
+    // Spent here, and here only: while it stands, `render` leaves the
+    // comparison alone, and the whole point of the next two lines is that
+    // something is about to be in flight for it.
+    this.compareCarry = null
+    const moved = compareRung(carried, info.binsize)
+    if (moved === null) {
+      this.compareCard?.set({
+        kind: 'error',
+        label: fileLabel(carried.uri),
+        message:
+          `${fileLabel(carried.uri)} has no ${fmt.bp(info.binsize ?? 0)} level, so it cannot be ` +
+          `compared at this resolution — two bin sizes in one square would draw a pixel that ` +
+          `means one thing above the diagonal and another below it.`,
+      })
+      remember(this.memoryKey(uri), 'compare:local', undefined)
+      return
+    }
+    // Restored before the open rather than after it: the eye is a fact about
+    // the *reading* and the reader did not touch it, so a hidden triangle has
+    // to stay hidden while the file behind it is read again. Set now because
+    // `openCompare` is asynchronous and `compareContext` is consulted in
+    // between — and it is only ever read with a second file open, which is
+    // exactly when this is true again.
+    this.compareHidden = carried.hidden
+    void this.openCompare(moved, carried.source)
   }
 
   /**
@@ -3668,7 +3895,7 @@ export class Session {
     if (held === null || file === null || this.compareHidden) return undefined
     return {
       client: held.client,
-      labels: [fileLabel(file.uri), fileLabel(held.uri)],
+      labels: [this.mapLabel(file.uri), this.mapLabel(held.uri)],
       normalise: this.normalising(),
       onNormaliseChange: (on) => {
         remember(this.memoryKey(file.uri), 'compare:normalise', on)
@@ -3821,7 +4048,7 @@ export class Session {
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
       memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
-      leadName: () => (this.file === null ? undefined : fileLabel(this.file.uri)),
+      leadName: () => (this.file === null ? undefined : this.mapLabel(this.file.uri)),
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.
       derive: () => {
@@ -3849,7 +4076,13 @@ export class Session {
         const names = this.contigNames()
         return names === null ? undefined : NameIndex.for(names).context
       },
-      leadLabel: () => fileLabel(this.file?.uri ?? ''),
+      leadLabel: () => this.mapLabel(this.file?.uri ?? ''),
+      mapLabel: (uri) => this.mapLabel(uri),
+      onRenameMap: (uri, name) => this.renameMap(uri, name),
+      onRenameLead: (name) => {
+        const uri = this.file?.uri
+        if (uri !== undefined) this.renameMap(uri, name)
+      },
       // Stripped the same way and for the same two reasons. `onChange` would be
       // a sixth copy of a control over something the deck shares; `onAvailable`
       // would let a companion whose block has no diagonal un-turn the whole
@@ -4587,7 +4820,15 @@ export class Session {
     // × on the card is what closes it, and that goes through `closeCompare`.
     const shareable = this.compare !== null && this.compare.source.kind === 'remote'
     const held = shareable ? (this.compare?.uri ?? null) : null
-    if (wanted !== held) {
+    // …and nothing at all while a second file is being **carried across a
+    // change of resolution**. This runs during the open — the first file is
+    // read, its annotations are rebuilt, and both of those are awaits — and the
+    // state it reconciles against is still the one being left, whose `uri2`
+    // names the previous rung. Acting on it opens the second file at the bin
+    // size the reader has just moved away from, and the gate refuses the pair
+    // it has itself just assembled: the comparison is on screen, and the card
+    // beside it says the two files' resolutions differ.
+    if (wanted !== held && this.compareCarry === null) {
       if (wanted === null) {
         if (shareable) this.dropCompare()
       } else {
@@ -4610,7 +4851,12 @@ export class Session {
     // as on `compare`, because the open is asynchronous and `render` runs many
     // times before it lands; without it a reload would start the same file four
     // times and each would terminate the last one's worker.
-    if (this.compare === null && this.compareOpening === null && state.uri2 === undefined) {
+    if (
+      this.compare === null &&
+      this.compareOpening === null &&
+      this.compareCarry === null &&
+      state.uri2 === undefined
+    ) {
       const local = recall<string>(this.memoryKey(state.uri), 'compare:local')
       if (typeof local === 'string' && local !== '') void this.reopenCompare(local)
     }
@@ -4846,7 +5092,7 @@ export class Session {
    */
   private captionFor(state: ViewState): { file: string; genome?: string } {
     return {
-      file: fileLabel(state.uri),
+      file: this.mapLabel(state.uri),
       ...(state.genome === undefined ? {} : { genome: state.genome }),
     }
   }
@@ -6042,6 +6288,44 @@ function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): Sc
  * Both, because both have to match: a renamed assembly and a re-scaffolded one
  * are different failures and the gate names each of them (`ui/CompareCard.ts`).
  */
+/**
+ * The same view with the second file **said to be gone**.
+ *
+ * Present and `undefined`, which is not the same thing as absent here and is
+ * the whole of why this is a function rather than a destructuring at the call
+ * site. {@link Session.withCompanions} carries `uri2` forward across a
+ * navigation *unless the caller has said something about it*, and the test it
+ * uses is `key in next` — so a state that merely omits the key is a state that
+ * has said nothing, and the previous rung's second file is put straight back
+ * into it. The hash is written from the keys whose value is defined
+ * (`serialiseViewState`), so this serialises exactly as an absent key does.
+ */
+export function withoutSecond(state: ViewState): ViewState {
+  return { ...state, uri2: undefined }
+}
+
+/**
+ * Where a carried comparison is addressed at `binsize`, or `null` for a file
+ * that has no rung there.
+ *
+ * `null` is not a failure to look it up: it is the answer that the two files
+ * cannot be compared at this resolution, which is the gate's own rule seen from
+ * the other side. **Exact**, on {@link Session.openAtBinsize}'s rule and for its
+ * reason — the nearest rung is a different picture, and drawing it under a
+ * label that says the reader's own resolution would be a lie the picture cannot
+ * betray.
+ *
+ * Exported for the test: it is the one piece of arithmetic in the carry, and
+ * everything around it needs a worker and two open files to reach.
+ */
+export function compareRung(carried: CompareCarry, binsize: number | null): string | null {
+  if (binsize === null || !(binsize > 0)) return null
+  if (carried.binsize === binsize) return carried.uri
+  const match = rungsOf(carried.entries).find((rung) => rung.binsize === binsize)
+  if (match === undefined) return null
+  return `${splitUri(carried.uri).path}::${carried.entryGroup || 'entries'}/${match.name}`
+}
+
 function contigPairs(contigs: ContigsResult | null): Array<[string, number]> {
   const names = contigNames(contigs)
   const lengths = contigs?.table.data['length']

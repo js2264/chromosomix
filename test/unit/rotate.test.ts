@@ -29,6 +29,7 @@ import {
   BIN_FRACTION,
   anchorColumns,
   anchorRays,
+  bandAt,
   binsForColumns,
   cellAt,
   isTurnable,
@@ -45,6 +46,7 @@ import {
   type RotatableBlock,
 } from '@/render/rotate'
 import { bpTicks } from '@/render/heatmap'
+import { anchorFor } from '@/ui/MatrixPanel'
 
 function block(
   n: number,
@@ -258,6 +260,149 @@ describe('what may be turned at all', () => {
   it('refuses a level where a cell is a whole sequence', () => {
     expect(isTurnable({ ...square, level: 'contig' })).toBe(false)
     expect(isTurnable({ ...square, level: 'genome' })).toBe(false)
+  })
+})
+
+describe('the mirrored pair', () => {
+  /**
+   * A matrix that is *not* symmetric, so the two triangles can be told apart:
+   * every cell above the matrix diagonal holds its separation, and every cell
+   * below it holds the negative of the same number. Turned with the mirror on,
+   * the first band must then be all non-negative and the second all
+   * non-positive — which is one assertion that the second band is the other
+   * file and not a second copy of the first.
+   */
+  function twoSided(n: number): RotatableBlock {
+    return block(n, (r, c) => (r > c ? -(r - c) : c - r))
+  }
+
+  it('draws the block\u2019s other triangle beneath the first', () => {
+    const turned = rotateBlock(twoSided(8), { maxSeparation: 3, mirror: true })
+    expect(turned.fold).toBe(4)
+    expect(turned.nrows).toBe(8)
+    for (let separation = 0; separation <= 3; separation++) {
+      const upper = rowOf(turned, rowForSeparation(turned, separation)).filter((v) =>
+        Number.isFinite(v),
+      )
+      const lower = rowOf(turned, (turned.fold as number) + separation).filter((v) =>
+        Number.isFinite(v),
+      )
+      expect(upper.length).toBeGreaterThan(0)
+      expect(lower.length).toBe(upper.length)
+      for (const value of upper) expect(value).toBe(separation)
+      // The transpose: the same separation, taken from the other triangle.
+      // `toBeCloseTo` rather than `toBe`, for the one cell where the two
+      // triangles agree: the diagonal negates to `-0`, which is the same number.
+      for (const value of lower) expect(value).toBeCloseTo(-separation, 10)
+    }
+  })
+
+  it('gives both bands the same separation at the same height from the axis', () => {
+    // The whole claim a mirrored pair makes: a contact 100 kb apart stands the
+    // same distance above the shared axis in one file and below it in the other,
+    // so the two are read against each other without reflecting either.
+    const turned = rotateBlock(twoSided(10), { maxSeparation: 4, mirror: true })
+    for (let separation = 0; separation <= 4; separation++) {
+      expect(separationAt(turned, rowForSeparation(turned, separation))).toBe(separation)
+      expect(separationAt(turned, (turned.fold as number) + separation)).toBe(separation)
+    }
+  })
+
+  it('leaves the diagonal in both bands, since both files hold it', () => {
+    // `blendAcrossDiagonal` gives the diagonal to the first file, and the
+    // mirror reads the same cells for its own axis row: the alternative is a
+    // dashed line of alternating owners down the middle of the picture.
+    const turned = rotateBlock(twoSided(6), { maxSeparation: 2, mirror: true })
+    const above = rowOf(turned, rowForSeparation(turned, 0)).filter((v) => Number.isFinite(v))
+    const below = rowOf(turned, turned.fold as number).filter((v) => Number.isFinite(v))
+    expect(above.every((v) => v === 0)).toBe(true)
+    expect(below.every((v) => v === 0)).toBe(true)
+  })
+
+  it('says which band a row is in, and always the first without a mirror', () => {
+    const turned = rotateBlock(twoSided(8), { maxSeparation: 3, mirror: true })
+    expect(bandAt(turned, 0)).toBe(0)
+    expect(bandAt(turned, 3)).toBe(0)
+    expect(bandAt(turned, 4)).toBe(1)
+    expect(bandAt(turned, 7)).toBe(1)
+    const plain = rotateBlock(twoSided(8), { maxSeparation: 3 })
+    expect(plain.fold).toBeUndefined()
+    expect(bandAt(plain, 0)).toBe(0)
+    expect(bandAt(plain, 3)).toBe(0)
+  })
+
+  it('names the same pair of bins from either band', () => {
+    // A cell of the mirrored band came from `[j][i]`, and the pair it names is
+    // still `(i, j)`: a contact is between two places whichever file drew it,
+    // and everything downstream — the readout, a mark, the two hairlines under
+    // the picture — indexes the square by that pair.
+    const turned = rotateBlock(twoSided(8), { maxSeparation: 3, mirror: true })
+    for (let column = 0; column < turned.ncols; column++) {
+      const above = cellAt(turned, rowForSeparation(turned, 2), column)
+      const below = cellAt(turned, (turned.fold as number) + 2, column)
+      expect(below).toEqual(above)
+    }
+  })
+
+  it('is pinned by its middle, where a single band is pinned by an edge', () => {
+    // Which edge a turned block stands on is which end its *diagonal* is at, and
+    // a mirrored pair's diagonal is the line down the middle rather than either
+    // edge. It decides what a band deeper than its box loses: an edge takes the
+    // whole surplus off one of the two files (`heatmap-navigation.test.ts`).
+    const paired = rotateBlock(twoSided(8), { maxSeparation: 3, mirror: true })
+    expect(anchorFor(paired)).toBe('middle')
+    expect(anchorFor(rotateBlock(twoSided(8), { maxSeparation: 3 }))).toBe('end')
+    expect(
+      anchorFor(rotateBlock(twoSided(8), { maxSeparation: 3, direction: 'down' })),
+    ).toBe('start')
+    // A square map is centred like any picture.
+    expect(anchorFor(null)).toBe('middle')
+  })
+
+  it('reaches no further than the block, on both sides', () => {
+    // `maxSeparation` is clamped to what the block has cells for, and the
+    // mirror is twice that band rather than twice whatever was asked for.
+    const turned = rotateBlock(twoSided(4), { maxSeparation: 99, mirror: true })
+    expect(turned.maxSeparation).toBe(3)
+    expect(turned.fold).toBe(4)
+    expect(turned.nrows).toBe(8)
+  })
+})
+
+describe('the folded ruler', () => {
+  it('runs outwards from the shared axis in both directions', () => {
+    // One ruler read twice, which is what says the two bands are the same
+    // measurement of two files. Without the fold the line simply carries on and
+    // the lower band is labelled with negative distances.
+    const turned = rotateBlock(separationMatrix(24), { maxSeparation: 11, mirror: true })
+    const coords = separationCoords(turned, 1000)
+    expect(coords.fold).toBe(12)
+    const ticks = bpTicks(coords, [0, turned.nrows], 8)
+    expect(ticks.length).toBeGreaterThan(1)
+    for (const tick of ticks) expect(tick.bp).toBeGreaterThanOrEqual(0)
+    // Every tick lands where the row it names actually stands: the separation
+    // at that row, in base pairs.
+    for (const tick of ticks) {
+      const row = Math.floor(tick.unit)
+      if (row < 0 || row >= turned.nrows) continue
+      expect(separationAt(turned, row) * 1000).toBeCloseTo(tick.bp, 6)
+    }
+  })
+
+  it('puts the same distance on both sides of the fold', () => {
+    const turned = rotateBlock(separationMatrix(24), { maxSeparation: 11, mirror: true })
+    const coords = separationCoords(turned, 1000)
+    const ticks = bpTicks(coords, [0, turned.nrows], 8)
+    const fold = coords.fold as number
+    const above = ticks.filter((tick) => tick.unit < fold).map((tick) => tick.bp)
+    const below = ticks.filter((tick) => tick.unit > fold).map((tick) => tick.bp)
+    expect(above.length).toBeGreaterThan(0)
+    expect(new Set(above)).toEqual(new Set(below))
+  })
+
+  it('leaves an unmirrored band exactly as it was', () => {
+    const turned = rotateBlock(separationMatrix(24), { maxSeparation: 11 })
+    expect(separationCoords(turned, 1000).fold).toBeUndefined()
   })
 })
 
