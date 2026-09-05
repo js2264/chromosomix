@@ -1,6 +1,13 @@
 {
-  "latest": "0b25002",
+  "latest": "7a74b65",
   "versions": [
+    {
+      "commit": "7a74b65",
+      "version": "0.11.0",
+      "date": "2026-09-05T22:13:23+02:00",
+      "subject": "Support mirrored contact map comparisons and per-contig rulers (#34)",
+      "tag": ""
+    },
     {
       "commit": "0b25002",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.9.0",
       "date": "2026-08-11T13:51:43+02:00",
       "subject": "feat(deck): n maps under one navigation, and the DOM suites that found the bugs in them",
-      "tag": ""
-    },
-    {
-      "commit": "ceffee3",
-      "version": "0.9.0",
-      "date": "2026-08-10T18:56:14+02:00",
-      "subject": "feat: synthetic tracks survive a resolution switch, and the bar's marquee",
       "tag": ""
     },
     {
