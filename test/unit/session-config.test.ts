@@ -501,6 +501,22 @@ describe('resolveConfig', () => {
     expect(config.tracks[1].source).toEqual({ kind: 'local', name: 'dropped.bw' })
   })
 
+  it('resolves the file a name is for, so the name still finds its map', () => {
+    // A name is keyed on its map's file, and a key left relative names a file
+    // nothing will ever ask about — the same silence a lane resolved one way and
+    // a companion the other produces, and as invisible: a map with no name is a
+    // map called what its file is called.
+    const published = parseTab({
+      state: { uri: 'yeast.cool', view: 'region', region: 'IV' },
+      mapNames: { 'yeast.cool': 'wild type', 'https://elsewhere.example/b.cool': 'kept' },
+    })
+    const config = resolveConfig(published as NonNullable<typeof published>, base)
+    expect(config.mapNames).toEqual({
+      'https://example.org/app/demo/yeast.cool': 'wild type',
+      'https://elsewhere.example/b.cool': 'kept',
+    })
+  })
+
   it('leaves an exported session exactly as it was', () => {
     const exported = parseTab({ state: STATE, tracks: [TRACK] })
     const config = resolveConfig(exported as NonNullable<typeof exported>, base)

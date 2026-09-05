@@ -101,6 +101,48 @@ export function withMapName(names: MapNames, uri: string, name: string | null): 
 }
 
 /**
+ * The same record with every key put through `resolve`.
+ *
+ * For a config **published beside its data**, whose names may be relative to the
+ * config's own URL (`state/SessionConfig.ts`'s `resolveConfig`). A key that is
+ * not resolved the same way every other URI in that config is resolved is a name
+ * for a file nothing will ever ask about — the same failure `lanes` and
+ * `deck.looks` are resolved to avoid, and as silent, since a map with no name is
+ * a map called what its file is called.
+ *
+ * The result is re-split, so a resolver that hands back a `file::group` URI
+ * still leaves this record keyed by the *file* — which is the one thing every
+ * lookup here depends on.
+ */
+export function resolveMapNames(names: MapNames, resolve: (uri: string) => string): MapNames {
+  const out: MapNames = {}
+  for (const [path, name] of Object.entries(names)) out[splitUri(resolve(path)).path] = name
+  return out
+}
+
+/**
+ * The names a **link** may carry: the ones for files a recipient could open.
+ *
+ * A key is a file's address, and for a local file that address is a bare
+ * filename off somebody's own disk. `state/shareLink.ts` already strips the two
+ * other fields that carry one — the local second file and a deck's local
+ * companions — for a reason that applies here word for word: it is a private
+ * name, and posting it to a stranger is what that function exists to prevent.
+ *
+ * The test is the one `canShare` applies to the session's own URI, so what
+ * travels is exactly what a recipient can address. Dropping a name costs a
+ * label and nothing else, which is the rule that decides every one of these:
+ * a private name is stripped where the structure survives without it.
+ */
+export function sharedMapNames(names: MapNames): MapNames {
+  const out: MapNames = {}
+  for (const [path, name] of Object.entries(names)) {
+    if (/^(https?|s3):\/\//i.test(path)) out[path] = name
+  }
+  return out
+}
+
+/**
  * What to *call* this map: the reader's name where there is one, and the file's
  * where there is not.
  *

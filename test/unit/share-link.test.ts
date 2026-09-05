@@ -255,6 +255,45 @@ describe('reading a link', () => {
     ])
   })
 
+  it('sends a remote map’s name and holds a local one’s back', async () => {
+    // A name is keyed on its map's address, so the names of local maps carry the
+    // same private filename `locals` and `compare` are stripped for. Dropping
+    // one costs a label and nothing else, which is the rule that decides every
+    // field here.
+    const config = configOf({
+      compare: 'secret.cool',
+      mapNames: {
+        'https://example.org/lead.cool': 'wild type',
+        'https://example.org/a.cool': 'replicate 2',
+        'secret.cool': 'the unpublished one',
+        'rep2.cool': 'also unpublished',
+      },
+      deck: { locals: [{ index: 1, uri: 'rep2.cool' }] },
+      state: { uri: 'https://example.org/lead.cool', view: 'region' },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    const json = JSON.stringify(decoded(await decodeShare(payload)))
+    expect(json).not.toContain('unpublished')
+    expect(json).not.toContain('secret.cool')
+    expect(decoded(await decodeShare(payload))?.mapNames).toEqual({
+      'https://example.org/lead.cool': 'wild type',
+      'https://example.org/a.cool': 'replicate 2',
+    })
+  })
+
+  it('says nothing about names where every map is a local one', async () => {
+    const config = configOf({
+      mapNames: { 'rep1.cool': 'wild type' },
+      state: { uri: 'lead.cool', view: 'region' },
+    } as Partial<SessionConfig>)
+    const back = decoded(await decodeShare(await encodeShare(config)))
+    // Absent rather than empty, on the same rule the field itself follows: `{}`
+    // would tell the recipient that none of these maps has a name, and clear
+    // the ones they had given their own.
+    expect(back?.mapNames).toBeUndefined()
+  })
+
   it('keeps a local track, because dropping one would lose the row', async () => {
     // The rule that decides all four: a private name is stripped only where the
     // structure survives without it.

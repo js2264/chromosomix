@@ -44,6 +44,7 @@ import {
   MAP_NAMES_SCOPE,
   cleanMapNames,
   readMapNames,
+  resolveMapNames,
   type MapNames,
 } from '../ui/mapNames'
 
@@ -847,6 +848,11 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
     ...(config.lanes === undefined
       ? {}
       : { lanes: config.lanes.map((lane) => ({ ...lane, uri: at(lane.uri) })) }),
+    // Through the same `at()` for the same reason: a name is keyed on the file
+    // it is for, so one left relative names a file nothing will ever ask about.
+    ...(config.mapNames === undefined
+      ? {}
+      : namesOf(resolveMapNames(config.mapNames, at))),
   }
   // Deleted rather than set to `undefined`, so the field is *absent* exactly as
   // `parseConfig` leaves it for a config that never had one — a key present and

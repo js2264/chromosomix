@@ -201,8 +201,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the tooltip, the derived label on a ratio, and the caption on an exported
   figure. It is kept against the *file*, so it survives a change of resolution,
   and it travels in the workspace, in the durable record and in a share link
-  beside the tab's own name. One consequence, which the deck's saved looks
-  already had: one file open twice in a session has one name.
+  beside the tab's own name — a link carrying only the names of maps a recipient
+  could open, since the address of a local one is a filename off the sender's own
+  disk. One consequence, which the deck's saved looks already had: one file open
+  twice in a session has one name.
 
 - **The turned view of a comparison shows both files.** A split map is the first
   file above the matrix diagonal and the second below it, and turning it kept
