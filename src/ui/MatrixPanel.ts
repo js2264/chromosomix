@@ -1497,7 +1497,12 @@ export class MatrixPanel {
             'Single-cell features are averaged away with them, which is why it is off by default. ' +
             'The three adaptive settings size each window separately, widening it where the ' +
             'counts thin out — which is away from the diagonal, where a fixed window averages ' +
-            'mostly empty cells and stays noisy. Each starts at the fixed window above it.',
+            'mostly empty cells and stays noisy. Each starts at the fixed window above it. ' +
+            'The serpentine settings go further and drop the window altogether: cells are ' +
+            'grouped into regions grown until each holds enough to average, so a region can ' +
+            'follow a stripe instead of straddling it, and there is no ceiling on how far it ' +
+            'may grow. `sampled` is the published algorithm, which picks each merge at random ' +
+            'and averages several partitions — slower, and limited to smaller blocks.',
         ),
       )
     }

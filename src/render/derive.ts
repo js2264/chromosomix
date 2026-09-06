@@ -28,6 +28,7 @@
  */
 
 import { adaptiveSmoothValues, parseSmooth, smoothingCaption, smoothValues } from './smooth'
+import { MAX_SAMPLED_CELLS, MAX_SERPENTINE_CELLS, serpentineBin } from './serpentine'
 
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
@@ -800,10 +801,40 @@ export function deriveBlock(
         scope: null,
       }
     }
-    // The adaptive width is measured on the block's **as-read** values whatever
-    // stage this is called from, because the thing it compensates for — counts
-    // thinning out with distance — is a property of the measurement rather than
-    // of the arithmetic done to it since.
+    // Both of the self-sizing shapes measure on the block's **as-read** values
+    // whatever stage this is called from, because the thing they compensate for
+    // — counts thinning out with distance — is a property of the measurement
+    // rather than of the arithmetic done to it since.
+    if (smoothing.kind === 'serpentine') {
+      const cells = block.nrows * block.ncols
+      const cap = smoothing.merge === 'sampled' ? MAX_SAMPLED_CELLS : MAX_SERPENTINE_CELLS
+      if (cells <= cap) {
+        const binned = serpentineBin({ ...block, values: source }, block.values, smoothing, over)
+        if (binned.scope === null) {
+          return {
+            values: binned.values,
+            over: binned.over,
+            suffix: ` · binned ${smoothingCaption(smoothing)}`,
+            scope: `${binned.regions.toLocaleString()} regions`,
+          }
+        }
+      }
+      // Refused, and handed to the nearest thing that is local and cheap. The
+      // adaptive filter is the same criterion without the partition, so what is
+      // drawn is the same idea at a lower price rather than a different picture.
+      const fallback = adaptiveSmoothValues(
+        { ...block, values: source },
+        block.values,
+        { kind: 'adaptive', target: smoothing.target * 4, floor: smoothing.floor, name: smoothing.name },
+        over,
+      )
+      return {
+        values: fallback.values,
+        over: fallback.over,
+        suffix: ` · smoothed ${smoothingCaption(fallback.applied)}`,
+        scope: `serpentine not applied — block too large`,
+      }
+    }
     const adapted = adaptiveSmoothValues(
       { ...block, values: source },
       block.values,

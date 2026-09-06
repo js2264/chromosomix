@@ -987,6 +987,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
+| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, ~0.4 s at 841²; ~1.4 s per partition under the reference's random merge |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1093,6 +1094,59 @@ instead, with the caption saying so — the three cumulative tables are the bloc
 view whose pooled cells are not short of evidence in the first place. This is §7.3's refusal shape
 and the correlation's: a real picture, and a caption that does not claim to be the one asked for.
 
+**Serpentine binning is offered beside the filter, and it is a different object.** Everything above
+is a *kernel*: each cell gets its own window and the answer for one cell does not depend on where the
+viewport starts, which is what lets a reader pan a smoothed map and believe what moves. Serpentine
+([Baudry *et al.*, 2020](https://doi.org/10.1093/bioinformatics/btaa249)) answers the same question
+with a **partition** — every pixel starts as its own region, a region under the threshold absorbs a
+neighbour, and every cell ends up holding its region's mean. `render/serpentine.ts`.
+
+Three things a partition has that a window does not, and they are why it is here rather than being
+approximated away:
+
+- **Regions are not square.** They grow along whatever direction carries signal, so a stripe is
+  followed rather than straddled. A box centred on a stripe averages it with the empty space either
+  side.
+- **The target is met, with no ceiling.** The adaptive window stops at a radius of 192 and a cell that
+  has not reached its target by then stays noisy. A region keeps growing.
+- **It is the published method**, which is what a reviewer recognises in a figure legend.
+
+**The second matrix is the expected map, and that is the interesting part.** Serpentine is a
+differential method: it grows regions on two maps at once, merging while *both* are short, and reports
+`log2(B/A)`. There is no single-matrix path in the reference implementation despite its README
+mentioning one. Both shapes are available here. With one field the criterion degenerates to
+`sum < threshold` and the result is an adaptively binned map — honest, and mostly a denoised picture
+of the decay everybody already knows. Pass the **expected** map as the second field and the ratio of
+the two region means is an O/E computed on serpentine regions, numerator and denominator averaged
+over exactly the same cells — which is the same matched-window property the ordinary despeckle needs,
+arrived at from the other direction. Depths match by construction, so none of serpentine's
+trend-finding is wanted; and `minthreshold`, which exists to catch a coverage hole in one experiment
+and not the other, has nothing to catch, so region growth stops depending on which cells happened to
+catch a read.
+
+**The merge order is offered twice, and the default is not the reference's.** The reference picks a
+**random** neighbour, which is what forces its ten iterations: one random partition is arbitrary and
+averaging many washes that out. It is also what makes serpentine awkward in a viewer — the partition
+is global and stochastic, so panning by one bin redraws every boundary and the map reshuffles under
+the reader, at ten times the price. So `evidence` is offered beside it and is what the three plain
+`serpentine ·` settings use: absorb the neighbour holding the most signal, **among the neighbours that
+are themselves still short**, neediest region first. Deterministic, one partition instead of ten, and
+the greedy choice reaches the target in the fewest cells — which is the smallest region that can carry
+an estimate, and the direction a stripe runs in.
+
+The restriction to needy neighbours is not a detail. Absorbing the richest neighbour outright is the
+obvious rule and it collapses the whole block into a single region: the richest neighbour has almost
+always met the threshold already, so every needy region eats a satisfied one and the result is needy
+again. Randomness hides this in the reference, because a random neighbour is usually another needy
+one. A needy region ringed entirely by satisfied ones merges into the **smallest** of them, which
+cannot cascade and keeps it from being stranded below the threshold for good.
+
+Blocks are capped at **1.5 M cells**, and at **500 k** under the random merge, above which the
+adaptive filter — the same criterion without the partition — is used and the caption says so. A square
+block on the diagonal is binned on one triangle and mirrored, because growing regions over the whole
+square would grow two independent partitions of the same data and draw a map that disagreed with its
+own transpose.
+
 **The two ends of a ratio are paper, not colour.** A cell where nothing was observed is `0`, and on a
 scale centred at 1 that is the strongest depletion the ramp can draw — so an O/E map of a sparse
 block came out as a wall of "maximally depleted" over every empty pixel, which is the loudest
@@ -1134,7 +1188,8 @@ cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made 
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
 `oe`, the comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
-radius (`smooth=2` is 5 × 5) or an adaptive target (`smooth=a200`). All four are part of *what is
+radius (`smooth=2` is 5 × 5), an adaptive target (`smooth=a200`) or a serpentine one (`smooth=s50`,
+`smooth=sx50` for the sampled merge). All four are part of *what is
 being looked at* rather than how it is shaded, so §11's rule applies: a recipient sees the numbers the
 sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
 key would send a recipient a picture whose single-cell features had been averaged away with nothing

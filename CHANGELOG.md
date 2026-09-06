@@ -14,6 +14,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Serpentine binning, in the same `smooth` picker.** Six settings below the
+  adaptive ones: `serpentine · light`, `· medium`, `· strong`, and the same three
+  `(sampled)`. Cells are grouped into **regions** grown until each holds enough to
+  average, rather than each cell getting a window — serpentine's own answer
+  ([Baudry *et al.*, 2020](https://doi.org/10.1093/bioinformatics/btaa249)) rather
+  than only its criterion. Carried in the link as `smooth=s50` and `smooth=sx50`,
+  and captioned `counts · binned into serpentine regions (medium)` with the region
+  count beside it, because the number of regions *is* the resolution of the
+  picture.
+
+  Three things a partition has that a window does not, and they are why this sits
+  beside the adaptive filter rather than replacing it: regions are **not square**,
+  so a stripe is followed rather than straddled; the target is met with **no
+  ceiling**, where a window stops at radius 192 and a cell that has not reached
+  its target stays noisy; and it is the **published method**, which is what a
+  reviewer recognises in a figure legend.
+
+  **The second matrix is the expected map.** Serpentine is differential — it grows
+  regions on two maps at once and reports `log2(B/A)`, and there is no
+  single-matrix path in the reference despite its README mentioning one. Both
+  shapes work here: with one field the criterion degenerates to `sum < threshold`
+  and you get an adaptively binned map, and with the **expected** map as the
+  second field the ratio of the two region means is an O/E computed on serpentine
+  regions — numerator and denominator averaged over exactly the same cells, which
+  is the matched-window property the ordinary despeckle needs, arrived at from the
+  other direction. Depths match by construction, so none of serpentine's
+  trend-finding is wanted.
+
+  **The default merge rule is not the reference's.** The reference picks a random
+  neighbour, which is what forces its ten iterations and what makes the partition
+  reshuffle under a reader who pans. The three plain `serpentine ·` settings use a
+  deterministic rule instead — absorb the neighbour holding the most signal, among
+  those that are themselves still short, neediest region first — which needs one
+  partition rather than ten and gives the same picture twice. It costs **~0.4 s at
+  841²** against ~1.4 s *per partition* for the sampled rule, which is why the two
+  carry different caps: **1.5 M cells** deterministic, **500 k** sampled, above
+  which the adaptive filter is used and the caption says so.
+
+  Restricting the choice to needy neighbours is not a detail. Absorbing the
+  richest neighbour outright is the obvious greedy rule and it collapsed the whole
+  block into **a single region**: the richest neighbour has almost always met the
+  threshold already, so every needy region ate a satisfied one and the result was
+  needy again. Randomness hides this in the reference, because a random neighbour
+  is usually another needy one.
+
 - **A despeckle whose window sizes itself, in the `smooth` picker.** Three new
   settings beside the fixed `3 × 3`, `5 × 5` and `7 × 7` — `adaptive · light`,
   `· medium` and `· strong`. Each cell's window grows until it covers enough
@@ -583,6 +628,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   parameter key is an alias for it.
 
 ### Changed
+
+- **The adaptive window may now grow to radius 192, up from 64.** At 64 every one
+  of the three adaptive settings ran into the cap beyond about 200 bins of
+  separation on a yeast map at 500 bp, so `light`, `medium` and `strong` drew the
+  same picture out there and differed only nearer the diagonal — the cap, not the
+  target, was choosing the width for exactly the cells with the least data. At 192
+  the target decides, which is the point of the setting: the three now separate
+  where it matters, at a coefficient of variation of 0.09, 0.05 and 0.02 against a
+  flat 0.09 before. The search is binary, so this costs one more trial radius per
+  cell and nothing else.
 
 - **The despeckle now runs before the O/E division, and divides by a baseline
   averaged over the same windows.** Both halves of this were needed to make the

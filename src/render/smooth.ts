@@ -231,9 +231,30 @@ export function smoothValues(block: Cells, radius: number): Float32Array {
  * counts thin out, which is where the O/E is noisiest.
  */
 
-/** How much smoothing a reader asked for: a fixed window, or a target to reach. */
+/**
+ * How much smoothing a reader asked for.
+ *
+ * Three shapes of one idea, in order of how far they go: a fixed window, a
+ * window that sizes itself, and a partition grown until each region has what it
+ * needs (`render/serpentine.ts`). The first two are kernels and stay local; the
+ * third is serpentine's own answer and is not.
+ */
 export type Smoothing =
   | { kind: 'fixed'; radius: number }
+  | {
+      kind: 'serpentine'
+      /** Evidence a region must gather, in multiples of the block's mean cell. */
+      target: number
+      /** `evidence` is deterministic; `sampled` is the reference's random merge. */
+      merge: 'evidence' | 'sampled'
+      /** Partitions to average. Only `sampled` has more than one. */
+      iterations: number
+      /** Seed for `sampled`, so a figure comes out the same twice (§18.4). */
+      seed: number
+      /** The despeckle radius to fall back to where the binning is refused. */
+      floor: number
+      name: string
+    }
   | {
       kind: 'adaptive'
       /**
@@ -267,14 +288,24 @@ export type Smoothing =
 /**
  * The widest window a cell may grow to, as a radius.
  *
- * 64 is a 129 × 129 box, which is a sixth of a 780-cell viewport and past the
- * point where a smoothed cell is still making a statement about a place rather
- * than about the region. A cell that has not met its target by then keeps this
- * width and stays noisy, which is the honest outcome: the alternative is a
- * window that grows without limit until it has averaged the map into its own
- * mean, and a flat field is not a better picture of thin data than a noisy one.
+ * A cell that has not met its target by here keeps this width and stays noisy,
+ * which is the honest outcome: the alternative is a window growing without limit
+ * until it has averaged the map into its own mean, and a flat field is not a
+ * better picture of thin data than a noisy one.
+ *
+ * It was 64, and 64 was too low to tell the three settings apart where it
+ * mattered most. On a yeast map at 500 bp every one of them ran into the cap
+ * beyond about 200 bins of separation, so `light`, `medium` and `strong` drew the
+ * same picture out there and differed only nearer the diagonal — the cap, not the
+ * target, was choosing the width for the cells with the least data. At 192 the
+ * target is what decides, which is the whole point of the setting.
+ *
+ * The search is a binary one, so the cost of raising it is a fourth trial radius
+ * per cell and nothing else; the ceiling is about meaning rather than time. It is
+ * still clamped to the block, so a small block cannot ask for a window larger
+ * than itself.
  */
-export const ADAPTIVE_MAX_RADIUS = 64
+export const ADAPTIVE_MAX_RADIUS = 192
 
 /**
  * The largest block the adaptive filter will run on, in cells.
@@ -342,6 +373,90 @@ export const SMOOTH_CHOICES: readonly SmoothChoice[] = [
     label: 'adaptive · strong',
     smoothing: { kind: 'adaptive', target: 800, floor: 3, name: 'strong' },
   },
+  // The serpentine targets are an order of magnitude below the adaptive ones and
+  // that is not an inconsistency: a *region* keeps growing until it reaches its
+  // target with no cap, while a window stops at 64 and often falls short, so the
+  // same number would mean a far coarser picture here. `medium` is set at the
+  // reference's own default — 50 counts, on a map whose mean occupied cell is
+  // about one.
+  {
+    id: 's20',
+    label: 'serpentine · light',
+    smoothing: {
+      kind: 'serpentine',
+      target: 20,
+      merge: 'evidence',
+      iterations: 1,
+      seed: 1,
+      floor: 1,
+      name: 'light',
+    },
+  },
+  {
+    id: 's50',
+    label: 'serpentine · medium',
+    smoothing: {
+      kind: 'serpentine',
+      target: 50,
+      merge: 'evidence',
+      iterations: 1,
+      seed: 1,
+      floor: 2,
+      name: 'medium',
+    },
+  },
+  {
+    id: 's120',
+    label: 'serpentine · strong',
+    smoothing: {
+      kind: 'serpentine',
+      target: 120,
+      merge: 'evidence',
+      iterations: 1,
+      seed: 1,
+      floor: 3,
+      name: 'strong',
+    },
+  },
+  {
+    id: 'sx20',
+    label: 'serpentine · light (sampled)',
+    smoothing: {
+      kind: 'serpentine',
+      target: 20,
+      merge: 'sampled',
+      iterations: 3,
+      seed: 1,
+      floor: 1,
+      name: 'light, sampled',
+    },
+  },
+  {
+    id: 'sx50',
+    label: 'serpentine · medium (sampled)',
+    smoothing: {
+      kind: 'serpentine',
+      target: 50,
+      merge: 'sampled',
+      iterations: 3,
+      seed: 1,
+      floor: 2,
+      name: 'medium, sampled',
+    },
+  },
+  {
+    id: 'sx120',
+    label: 'serpentine · strong (sampled)',
+    smoothing: {
+      kind: 'serpentine',
+      target: 120,
+      merge: 'sampled',
+      iterations: 3,
+      seed: 1,
+      floor: 3,
+      name: 'strong, sampled',
+    },
+  },
 ]
 
 /**
@@ -363,9 +478,10 @@ export function parseSmooth(token: number | string | undefined): Smoothing | nul
 export function smoothToken(smoothing: Smoothing | null): string {
   if (smoothing === null) return '0'
   const same = (offered: Smoothing): boolean =>
-    smoothing.kind === 'fixed'
+    offered.kind === smoothing.kind &&
+    (smoothing.kind === 'fixed'
       ? offered.kind === 'fixed' && offered.radius === smoothing.radius
-      : offered.kind === 'adaptive' && offered.name === smoothing.name
+      : offered.kind !== 'fixed' && offered.name === smoothing.name)
   return SMOOTH_CHOICES.find((choice) => choice.smoothing !== null && same(choice.smoothing))?.id ?? '0'
 }
 
@@ -379,9 +495,9 @@ export function smoothToken(smoothing: Smoothing | null): string {
  * that is not true of most of it.
  */
 export function smoothingCaption(smoothing: Smoothing): string {
-  return smoothing.kind === 'fixed'
-    ? smoothLabel(smoothing.radius)
-    : `adaptively (${smoothing.name})`
+  if (smoothing.kind === 'fixed') return smoothLabel(smoothing.radius)
+  if (smoothing.kind === 'serpentine') return `into serpentine regions (${smoothing.name})`
+  return `adaptively (${smoothing.name})`
 }
 
 /** A cumulative table and the row stride its box queries need. */
