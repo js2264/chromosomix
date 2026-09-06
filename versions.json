@@ -1,6 +1,13 @@
 {
-  "latest": "7a74b65",
+  "latest": "d80a470",
   "versions": [
+    {
+      "commit": "d80a470",
+      "version": "0.11.0",
+      "date": "2026-09-06T12:52:38+02:00",
+      "subject": "Add BAM and VCF support to annotations (#35)",
+      "tag": ""
+    },
     {
       "commit": "7a74b65",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.9.0",
       "date": "2026-08-11T13:57:28+02:00",
       "subject": "chores: update CHANGELOG",
-      "tag": ""
-    },
-    {
-      "commit": "18e57a7",
-      "version": "0.9.0",
-      "date": "2026-08-11T13:51:43+02:00",
-      "subject": "feat(deck): n maps under one navigation, and the DOM suites that found the bugs in them",
       "tag": ""
     },
     {
