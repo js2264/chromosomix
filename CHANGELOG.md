@@ -14,6 +14,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Two more adaptive settings, `· trimmed` and `· despeckled`.** A cap bounds a
+  wild cell's damage and does not remove it — the leverage rule permits a flagged
+  cell to inflate its window by half by construction, which is `log2 0.58` on a
+  scale clipping at 0.84, so what is left of a hot pixel is still visible. These
+  two remove it instead.
+
+  All three share the **same detector**, which is deliberate: deciding whether a
+  cell is an outlier is the part that is hard to get right on Poisson-sparse data,
+  and it should not vary between them. What differs is the answer. `adaptive`
+  caps the cell at the limit; `adaptive · trimmed` drops it from the sum **and
+  from the divisor**, so it contributes nothing at the price of its own mass; and
+  `adaptive · despeckled` replaces it with the mean of its own eight neighbours,
+  which also removes it and — unlike the trim — leaves a plausible local number at
+  the cell rather than a gap.
+
+  Measured against a cell at 400× its neighbourhood on a yeast map at 500 bp, as a
+  peak in `log2` O/E where the scale clips at 0.84 and the same map with no spike
+  peaks at **0.24**: `cap` leaves **0.66**, trimmed **0.35**, despeckled **0.33**.
+  Neither of the new two costs anything in bias — the O/E's mean stays at 1.00 in
+  every separation band under all three. Carried in the link as `a50t` and `a50d`,
+  and captioned apart, because they are different numbers.
+
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
   window grows until it covers enough evidence to average, so it stays narrow

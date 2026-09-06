@@ -272,6 +272,27 @@ export type Smoothing =
        * above it in the picker, widening where the counts thin out.
        */
       floor: number
+      /**
+       * What is done with a cell the leverage test flags ({@link LEVERAGE}).
+       *
+       * Three answers to one question, offered side by side because they differ
+       * in what they cost rather than in which is correct:
+       *
+       * - **`cap`** holds it to the limit. Bounds the damage and does not remove
+       *   it — the rule permits a flagged cell to inflate its window by half by
+       *   construction, which is `log2 0.58` on a scale that clips at 0.84, so
+       *   what is left of a hot pixel is still visible.
+       * - **`trim`** drops it from the mean and from the divisor. The outlier
+       *   then contributes nothing at all, at the price of the cell's own mass.
+       * - **`despeckle`** replaces it with the mean of its own eight neighbours.
+       *   Also removes it completely, and unlike `trim` leaves a value at the
+       *   cell rather than a gap — a plausible local number instead of none.
+       *
+       * The test that flags a cell is the same in all three; only the answer
+       * differs. That is deliberate: the detector is the part that is hard to get
+       * right on Poisson-sparse data, and it should not vary between them.
+       */
+      robust: 'cap' | 'trim' | 'despeckle'
       /** What the caption calls it. */
       name: string
     }
@@ -390,7 +411,23 @@ export const SMOOTH_CHOICES: readonly SmoothChoice[] = [
   {
     id: 'a50',
     label: 'adaptive',
-    smoothing: { kind: 'adaptive', target: 50, floor: 1, name: 'adaptive' },
+    smoothing: { kind: 'adaptive', target: 50, floor: 1, robust: 'cap', name: 'adaptive' },
+  },
+  {
+    id: 'a50t',
+    label: 'adaptive · trimmed',
+    smoothing: { kind: 'adaptive', target: 50, floor: 1, robust: 'trim', name: 'trimmed' },
+  },
+  {
+    id: 'a50d',
+    label: 'adaptive · despeckled',
+    smoothing: {
+      kind: 'adaptive',
+      target: 50,
+      floor: 1,
+      robust: 'despeckle',
+      name: 'despeckled',
+    },
   },
 ]
 
@@ -415,7 +452,7 @@ export function smoothToken(smoothing: Smoothing | null): string {
   const same = (offered: Smoothing): boolean =>
     smoothing.kind === 'fixed'
       ? offered.kind === 'fixed' && offered.radius === smoothing.radius
-      : offered.kind === 'adaptive'
+      : offered.kind === 'adaptive' && offered.robust === smoothing.robust
   return SMOOTH_CHOICES.find((choice) => choice.smoothing !== null && same(choice.smoothing))?.id ?? '0'
 }
 
@@ -429,7 +466,8 @@ export function smoothToken(smoothing: Smoothing | null): string {
  * most of it.
  */
 export function smoothingCaption(smoothing: Smoothing): string {
-  return smoothing.kind === 'fixed' ? smoothLabel(smoothing.radius) : 'adaptively'
+  if (smoothing.kind === 'fixed') return smoothLabel(smoothing.radius)
+  return smoothing.robust === 'cap' ? 'adaptively' : `adaptively (${smoothing.name})`
 }
 
 /**
@@ -468,6 +506,14 @@ const STRIP_ENTRIES = 4_000_000
  * neighbours corroborate. In a sparse region the window is 21 × 21 and the cap is
  * 200× the local mean, which leaves every honest isolated count alone and still
  * cuts a cell of four hundred to single digits.
+ *
+ * **A cap bounds the damage; it does not remove it.** By construction the rule
+ * lets a flagged cell inflate its window by half — `log2 0.58` on a scale that
+ * clips at 0.84 — so what is left of a hot pixel is still visible, which is what
+ * `trim` and `despeckle` are for. Measured on a yeast map at 500 bp, a cell at
+ * 400× its neighbourhood leaves a peak of 0.66 under `cap` against 0.24 with no
+ * spike at all, and 0.35 and 0.33 under the other two. See
+ * {@link Smoothing}'s `robust`.
  *
  * The mean is taken **without the cell itself**, which is the one place the old
  * zero-centre kernel was right: excluding the centre is the correct thing for
@@ -756,6 +802,37 @@ export function adaptiveSmoothValues(
    * lifted by 90% and is still cut by a factor of forty.
    */
   const capped = new Float32Array(nrows * ncols)
+  /** Under `trim`, which cells are allowed into the mean at all. */
+  const keep = smoothing.robust === 'trim' ? new Uint8Array(nrows * ncols).fill(1) : null
+
+  /**
+   * The mean of a cell's eight neighbours, for `despeckle` to put in its place.
+   *
+   * Radius one and computed only for the handful of cells the test flags, so its
+   * nine reads cost nothing across the block. It is the *local* answer — a hot
+   * pixel is replaced by what its immediate surroundings say should be there,
+   * rather than by a limit derived from a window that may be hundreds of cells
+   * wide.
+   */
+  const neighbourMean = (r: number, c: number): number => {
+    let sum = 0
+    let seen = 0
+    for (let dr = -1; dr <= 1; dr++) {
+      const rr = r + dr
+      if (rr < 0 || rr >= nrows) continue
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue
+        const cc = c + dc
+        if (cc < 0 || cc >= ncols) continue
+        const i = rr * ncols + cc
+        if (!usable(i)) continue
+        sum += values[i]
+        seen++
+      }
+    }
+    return seen > 0 ? sum / seen : Number.NaN
+  }
+
   for (const [top, bottom, from, to] of bands) {
     const evidence = summed(from, to, ncols, (i) => {
       const v = counts[i]
@@ -783,11 +860,26 @@ export function adaptiveSmoothValues(
         const c1 = c + radius >= ncols ? ncols - 1 : c + radius
         const n = box(seenCells, r0, c0, r1, c1) - 1
         const without = n > 0 ? (box(sums, r0, c0, r1, c1) - centre) / n : 0
-        // Nothing around it to be an outlier against. A cap of zero would delete
-        // a measurement rather than moderate one, and a cell whose whole window
-        // is empty is the only evidence there is about that place.
-        capped[base + c] =
-          without > 0 ? Math.min(centre, without * (1 + LEVERAGE * n)) : centre
+        // Nothing around it to be an outlier against. A cell whose whole window
+        // is empty is the only evidence there is about that place, and deleting a
+        // measurement is worse than keeping an unverifiable one.
+        const limit = without * (1 + LEVERAGE * n)
+        if (!(without > 0) || centre <= limit) {
+          capped[base + c] = centre
+          continue
+        }
+        // Flagged. What happens next is the setting's, not the detector's.
+        if (keep !== null) {
+          // `trim`: out of the sum and out of the divisor, so it contributes
+          // nothing rather than contributing a bounded amount.
+          keep[base + c] = 0
+          capped[base + c] = centre
+        } else if (smoothing.robust === 'despeckle') {
+          const local = neighbourMean(r, c)
+          capped[base + c] = Number.isNaN(local) ? limit : local
+        } else {
+          capped[base + c] = limit
+        }
       }
     }
   }
@@ -804,10 +896,14 @@ export function adaptiveSmoothValues(
       const v = counts[i]
       return Number.isFinite(v) && v > 0 ? v : 0
     })
-    const sums = summed(from, to, ncols, (i) => (usable(i) ? capped[i] : 0))
+    // One predicate for all three tables, so the trimmed cells leave the divisor
+    // exactly as they leave the sums — the ratio's bias only cancels if the two
+    // halves were averaged over the same cells.
+    const counted = (i: number): boolean => usable(i) && (keep === null || keep[i] === 1)
+    const sums = summed(from, to, ncols, (i) => (counted(i) ? capped[i] : 0))
     const overSums =
-      over === undefined ? null : summed(from, to, ncols, (i) => (usable(i) ? over[i] : 0))
-    const seenCells = summed(from, to, ncols, (i) => (usable(i) ? 1 : 0))
+      over === undefined ? null : summed(from, to, ncols, (i) => (counted(i) ? over[i] : 0))
+    const seenCells = summed(from, to, ncols, (i) => (counted(i) ? 1 : 0))
 
     let rowStart = floor
     for (let r = top; r <= bottom; r++) {

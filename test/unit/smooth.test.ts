@@ -194,7 +194,7 @@ describe('smoothing inside the derivation', () => {
  * smoothed with one is still noisy away from the diagonal.
  */
 describe('adaptiveSmoothValues', () => {
-  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'light' } as const
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, robust: 'cap', name: 'light' } as const
 
   /**
    * How far a lone spike reaches, which is the width of its neighbours' windows.
@@ -347,7 +347,7 @@ describe('adaptiveSmoothValues', () => {
     expect(n * n).toBeGreaterThan(MAX_ADAPTIVE_CELLS)
     const values = new Float32Array(n * n).fill(1)
     const b = { ...block(1, 1, []), values, nrows: n, ncols: n }
-    const strong = { kind: 'adaptive', target: 800, floor: 3, name: 'strong' } as const
+    const strong = { kind: 'adaptive', target: 800, floor: 3, robust: 'cap', name: 'strong' } as const
     const { applied, scope } = adaptiveSmoothValues(b, values, strong)
     expect(applied).toEqual({ kind: 'fixed', radius: 3 })
     expect(scope).toBe('adaptive smoothing not applied — block too large')
@@ -355,7 +355,7 @@ describe('adaptiveSmoothValues', () => {
 })
 
 describe('adaptiveSmoothValues, against one wild cell', () => {
-  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'adaptive' } as const
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, robust: 'cap', name: 'adaptive' } as const
 
   it('does not turn a point into a hard-edged rectangle', () => {
     // The reported artefact, at the level it was seen. A box filter's impulse
@@ -400,6 +400,92 @@ describe('adaptiveSmoothValues, against one wild cell', () => {
     expect(out[30 * n + 30]).toBeGreaterThan(1.5)
     // …and is not levelled to the background it sits on.
     expect(out[30 * n + 30]).toBeGreaterThan(out[10 * n + 50])
+  })
+})
+
+describe('the three answers to a flagged cell', () => {
+  const spec = (robust: 'cap' | 'trim' | 'despeckle') =>
+    ({ kind: 'adaptive', target: 50, floor: 1, robust, name: robust } as const)
+
+  /** A flat field with one wild cell in the middle of it. */
+  function field(n: number, spike: number) {
+    const values = new Float32Array(n * n).fill(1)
+    values[((n - 1) / 2) * n + (n - 1) / 2] = spike
+    return values
+  }
+
+  it('caps: bounded, and still visible', () => {
+    // The limit the leverage rule allows, which is what `cap` holds it to. It
+    // does not remove the cell — the rule permits a flagged cell to inflate its
+    // window by half by construction — and that residual is what the other two
+    // exist to get rid of.
+    const n = 21
+    const values = field(n, 500)
+    const centre = 10 * n + 10
+    const out = adaptiveSmoothValues(
+      { ...block(1, 1, []), nrows: n, ncols: n, values },
+      values,
+      spec('cap'),
+    ).values
+    expect(out[centre]).toBeCloseTo((1 * (1 + 0.5 * 8) + 8) / 9, 3)
+    expect(out[centre]).toBeGreaterThan(1.2)
+  })
+
+  it('trims: out of the sum and out of the divisor, so it is gone', () => {
+    const n = 21
+    const values = field(n, 500)
+    const centre = 10 * n + 10
+    const out = adaptiveSmoothValues(
+      { ...block(1, 1, []), nrows: n, ncols: n, values },
+      values,
+      spec('trim'),
+    ).values
+    // Every cell that could see it reads the background exactly, including the
+    // cell it was at: dropped from the divisor as well as the sum, so what is
+    // left is the mean of the ones that remain.
+    expect(out[centre]).toBeCloseTo(1, 6)
+    expect(out[centre + 1]).toBeCloseTo(1, 6)
+    expect(out[centre + n]).toBeCloseTo(1, 6)
+  })
+
+  it('despeckles: replaced by its own neighbours, so it is gone and still drawn', () => {
+    const n = 21
+    const values = field(n, 500)
+    const centre = 10 * n + 10
+    const out = adaptiveSmoothValues(
+      { ...block(1, 1, []), nrows: n, ncols: n, values },
+      values,
+      spec('despeckle'),
+    ).values
+    expect(out[centre]).toBeCloseTo(1, 6)
+    expect(out[centre + 1]).toBeCloseTo(1, 6)
+  })
+
+  it('leaves a cell its neighbours corroborate alone, under all three', () => {
+    // The check that matters against over-correction: a feature is a cell whose
+    // surroundings rise with it, and none of the three may level that.
+    const n = 41
+    for (const robust of ['cap', 'trim', 'despeckle'] as const) {
+      const values = new Float32Array(n * n).fill(1)
+      for (let r = 19; r <= 21; r++) for (let c = 19; c <= 21; c++) values[r * n + c] = 4
+      const out = adaptiveSmoothValues(
+        { ...block(1, 1, []), nrows: n, ncols: n, values },
+        values,
+        spec(robust),
+      ).values
+      expect(out[20 * n + 20]).toBeGreaterThan(1.5)
+    }
+  })
+
+  it('captions the three apart, because they are different numbers', () => {
+    const b = block(9, 9, new Array<number>(81).fill(1))
+    expect(deriveBlock(b, { smooth: 'a50' }, NO_RUNS).label).toBe('counts · smoothed adaptively')
+    expect(deriveBlock(b, { smooth: 'a50t' }, NO_RUNS).label).toBe(
+      'counts · smoothed adaptively (trimmed)',
+    )
+    expect(deriveBlock(b, { smooth: 'a50d' }, NO_RUNS).label).toBe(
+      'counts · smoothed adaptively (despeckled)',
+    )
   })
 })
 
@@ -525,7 +611,7 @@ describe('the smoothing picker', () => {
 })
 
 describe('adaptiveSmoothValues, on the shapes a real block arrives in', () => {
-  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'light' } as const
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, robust: 'cap', name: 'light' } as const
 
   it('ignores a padded tail when it measures the block', () => {
     // `BlockValues.values` is documented as *at least* `nrows * ncols` long, and

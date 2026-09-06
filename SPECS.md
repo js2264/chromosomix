@@ -1117,6 +1117,18 @@ diagonal and two hundredfold in a sparse 21 × 21. The mean is taken **without t
 one thing the old zero-centre kernel had right: excluding the centre is correct for deciding whether a
 cell is an outlier and wrong for estimating what to draw there, and the two passes do one each.
 
+**A cap bounds the damage and does not remove it**, and that is why the picker offers three answers
+rather than one. The rule permits a flagged cell to inflate its window by half by construction, which
+is `log2 0.58` on a scale clipping at 0.84 — visible. So the same detector drives three settings that
+differ only in what happens to a flagged cell: `adaptive` **caps** it at the limit, `adaptive ·
+trimmed` **drops** it from the sum and from the divisor so it contributes nothing, and `adaptive ·
+despeckled` **replaces** it with the mean of its own eight neighbours — also gone, and unlike the trim
+it leaves a plausible local number at the cell rather than a gap. Measured against a cell at 400× its
+neighbourhood: a peak of 0.66 under `cap`, 0.35 trimmed and 0.33 despeckled, against 0.24 with no
+spike present. None of the three shifts the O/E's mean, which stays at 1.00 in every band under all
+of them. Keeping the *detector* common is deliberate — it is the part that is hard to get right on
+Poisson-sparse data and should not vary between the three.
+
 The second is a **shoulder on the kernel**. The mean is taken over three nested windows — `r/2`, `r`
 and `3r/2` — and averaged, which puts a step in the weights instead of a cliff: the outermost shell
 carries about 8% of the weight the centre does, so what remains of an outlier fades rather than
@@ -1195,7 +1207,8 @@ cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made 
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
 `oe`, the comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
-radius (`smooth=2` is 5 × 5) or the adaptive window (`smooth=a50`). All four are part of *what is
+radius (`smooth=2` is 5 × 5) or one of the adaptive windows (`smooth=a50`, `a50t`, `a50d`). All four
+are part of *what is
 being looked at* rather than how it is shaded, so §11's rule applies: a recipient sees the numbers the
 sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
 key would send a recipient a picture whose single-cell features had been averaged away with nothing
